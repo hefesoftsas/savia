@@ -1,0 +1,1704 @@
+[
+  {
+    "id": "sbs-producto-8",
+    "name": "SBS · Autos Producto 8",
+    "provider": "SBS",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-032-sbs-product-8-create-session-bru",
+        "name": "SBS Producto 8: cotizar auto",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_CrearSesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_CrearSesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <tipoDocAseg>{{auto_light.applicant.documentType}}</tipoDocAseg>\n    <numDocAseg>{{auto_light.applicant.documentNumber}}</numDocAseg>\n    <digitoVerifAseg>{{sbs_product_8_digito_verif_aseg}}</digitoVerifAseg>\n    <apellido1Aseg>{{auto_light.applicant.surname}}</apellido1Aseg>\n    <apellido2Aseg>{{auto_light.applicant.secondSurname}}</apellido2Aseg>\n    <nombresAseg>{{auto_light.applicant.firstName}}</nombresAseg>\n    <idNacionalidad>{{sbs_product_8_id_nacionalidad}}</idNacionalidad>\n    <idPaisNacimiento>{{sbs_product_8_id_pais_nacimiento}}</idPaisNacimiento>\n    <tipoDocConduc>{{auto_light.applicant.documentType}}</tipoDocConduc>\n    <numDocConduc>{{auto_light.applicant.documentNumber}}</numDocConduc>\n    <digitoVerifConduc>{{sbs_product_8_digito_verif_conduc}}</digitoVerifConduc>\n    <apellido1Conduc>{{auto_light.applicant.surname}}</apellido1Conduc>\n    <apellido2Conduc>{{auto_light.applicant.secondSurname}}</apellido2Conduc>\n    <nombresConduc>{{auto_light.applicant.firstName}}</nombresConduc>\n    <idGeneroConduc>{{auto_light.applicant.gender}}</idGeneroConduc>\n    <fechaNacimientoConduc>{{auto_light.applicant.birthDate}}</fechaNacimientoConduc>\n    <nomCompletoContacto>{{auto_light.applicant.firstName}}</nomCompletoContacto>\n    <idCiudadContacto>{{auto_light.applicant.city}}</idCiudadContacto>\n    <direccionContacto>{{auto_light.applicant.address}}</direccionContacto>\n    <telFijoContacto>{{sbs_product_8_tel_fijo_contacto}}</telFijoContacto>\n    <celularContacto>{{auto_light.applicant.phone}}</celularContacto>\n    <mailContacto>{{auto_light.applicant.email}}</mailContacto>\n    <codFasecolda>{{auto_light.vehicle.fasecoldaCode}}</codFasecolda>\n    <modelo>{{auto_light.vehicle.productionYear}}</modelo>\n    <autoEsCeroKm>{{auto_light.vehicle.isNew}}</autoEsCeroKm>\n    <idCiudad>{{auto_light.vehicle.circulationCity}}</idCiudad>\n    <placa>{{auto_light.vehicle.plate}}</placa>\n    <valAccesorios>{{auto_light.vehicle.accessoriesValue}}</valAccesorios>\n    <valVehiculoOpcional>{{auto_light.vehicle.declaredValue}}</valVehiculoOpcional>\n    <idOpcionRC>{{sbs_product_8_id_opcion_rc}}</idOpcionRC>\n    <idOpcionRCExceso>{{sbs_product_8_id_opcion_rcexceso}}</idOpcionRCExceso>\n    <idOpcionDeducPPD>{{sbs_product_8_id_opcion_deduc_ppd}}</idOpcionDeducPPD>\n    <idOpcionDeducPTD>{{sbs_product_8_id_opcion_deduc_ptd}}</idOpcionDeducPTD>\n    <idOpcionDeducPPH>{{sbs_product_8_id_opcion_deduc_pph}}</idOpcionDeducPPH>\n    <idOpcionDeducPTH>{{sbs_product_8_id_opcion_deduc_pth}}</idOpcionDeducPTH>\n    <codFactComision>{{sbs_product_8_cod_fact_comision}}</codFactComision>\n  </AIGAutos_CrearSesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "const documentTypeCodes = { CC: \"1\" };\nconst genderCodes = { F: \"2\" };\n\nfunction environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nfunction replaceNumericCode(xml, element, value, codes) {\n  const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n  const match = xml.match(expression);\n  if (!match) throw new Error(\"SBS request is missing \" + element);\n  const normalized = String(value ?? \"\").trim().toUpperCase();\n  const code = /^\\d+$/.test(normalized) ? normalized : codes[normalized];\n  if (!code) throw new Error(\"Unsupported SBS value for \" + element);\n  return xml.replace(expression, match[1] + code + match[3]);\n}\n\nfunction replaceXmlValue(xml, element, value) {\n  const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n  const match = xml.match(expression);\n  if (!match) throw new Error(\"SBS request is missing \" + element);\n  return xml.replace(expression, match[1] + value + match[3]);\n}\n\nfunction requiredInput(name) {\n  const value = String(environmentValue(name) ?? \"\").trim();\n  if (!value) throw new Error(\"SBS requires a value for \" + name);\n  return value;\n}\n\nfunction sbsBirthDate(value) {\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value + \"T00:00:00\";\n  if (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$/.test(value)) return value;\n  throw new Error(\"SBS requires auto_light.applicant.birthDate as YYYY-MM-DD\");\n}\n\nfunction sbsNewVehicleCode(value) {\n  const normalized = value.toLowerCase();\n  if (normalized === \"true\" || normalized === \"1\") return \"1\";\n  if (normalized === \"false\" || normalized === \"0\") return \"0\";\n  throw new Error(\"SBS requires auto_light.vehicle.isNew as true or false\");\n}\n\nfunction escapeXml(value) {\n  return value.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\");\n}\n\nlet body = String(req.getBody({ raw: true }));\nconst input = Object.fromEntries([\n  \"auto_light.applicant.documentType\",\n  \"auto_light.applicant.documentNumber\",\n  \"auto_light.applicant.firstName\",\n  \"auto_light.applicant.surname\",\n  \"auto_light.applicant.gender\",\n  \"auto_light.applicant.birthDate\",\n  \"auto_light.applicant.city\",\n  \"auto_light.applicant.address\",\n  \"auto_light.applicant.phone\",\n  \"auto_light.applicant.email\",\n  \"auto_light.vehicle.fasecoldaCode\",\n  \"auto_light.vehicle.productionYear\",\n  \"auto_light.vehicle.isNew\",\n  \"auto_light.vehicle.circulationCity\",\n  \"auto_light.vehicle.plate\",\n  \"auto_light.vehicle.accessoriesValue\",\n  \"auto_light.vehicle.declaredValue\",\n].map((name) => [name, requiredInput(name)]));\nconst documentType = input[\"auto_light.applicant.documentType\"];\nconst gender = input[\"auto_light.applicant.gender\"];\nconst contactName = [\n  input[\"auto_light.applicant.firstName\"],\n  input[\"auto_light.applicant.surname\"],\n  String(environmentValue(\"auto_light.applicant.secondSurname\") ?? \"\").trim(),\n].filter(Boolean).join(\" \");\nbody = replaceNumericCode(body, \"tipoDocAseg\", documentType, documentTypeCodes);\nbody = replaceNumericCode(body, \"tipoDocConduc\", documentType, documentTypeCodes);\nbody = replaceNumericCode(body, \"idGeneroConduc\", gender, genderCodes);\nbody = replaceXmlValue(body, \"fechaNacimientoConduc\", sbsBirthDate(input[\"auto_light.applicant.birthDate\"]));\nbody = replaceXmlValue(body, \"nomCompletoContacto\", escapeXml(contactName));\nbody = replaceXmlValue(body, \"autoEsCeroKm\", sbsNewVehicleCode(input[\"auto_light.vehicle.isNew\"]));\nreq.setBody(body);",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst match = responseBody.match(/<(?:[\\w-]+:)?No_Sesion\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?No_Sesion>/i);\nif (!match?.[1]) throw new Error(\"SBS did not return a session identifier\");\nbru.setVar(\"sbs_product_8_session_id\", match[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/032-sbs-product-8-create-session.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-033-sbs-product-8-add-coverage-1-bru",
+        "name": "SBS Producto 8: agregar cobertura 1",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_8_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_8_coverage_1_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_8_coverage_1_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 1\");\nbru.setVar(\"sbs_product_8_coverage_1_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/033-sbs-product-8-add-coverage-1.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-034-sbs-product-8-add-coverage-2-bru",
+        "name": "SBS Producto 8: agregar cobertura 2",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_8_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_8_coverage_2_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_8_coverage_2_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 2\");\nbru.setVar(\"sbs_product_8_coverage_2_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/034-sbs-product-8-add-coverage-2.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-035-sbs-product-8-quote-and-close-bru",
+        "name": "SBS Producto 8: cotizar y cerrar",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_CotizaryCerrarSesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_CotizaryCerrarSesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_8_session_id}}</idSesion>\n  </AIGAutos_CotizaryCerrarSesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nfunction result(name) {\n  const expression = new RegExp(\"<(?:[\\\\w-]+:)?\" + name + \"\\\\b[^>]*>\\\\s*([^<\\\\s]+)\\\\s*<\\\\/(?:[\\\\w-]+:)?\" + name + \">\", \"i\");\n  const match = responseBody.match(expression);\n  if (!match?.[1]) throw new Error(\"SBS did not return \" + name);\n  return match[1];\n}\nbru.setVar(\"sbs_product_8_quote_number\", result(\"No_Cotizacion\"));\nbru.setVar(\"sbs_product_8_premium_total\", result(\"Prima_Total\"));",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/035-sbs-product-8-quote-and-close.bru"
+      }
+    ],
+    "resultPrefix": "sbs_product_8",
+    "description": "4 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "auto_light.applicant.address": "",
+      "auto_light.applicant.birthDate": "",
+      "auto_light.applicant.city": "",
+      "auto_light.applicant.documentNumber": "",
+      "auto_light.applicant.documentType": "",
+      "auto_light.applicant.email": "",
+      "auto_light.applicant.firstName": "",
+      "auto_light.applicant.gender": "",
+      "auto_light.applicant.phone": "",
+      "auto_light.applicant.secondSurname": "",
+      "auto_light.applicant.surname": "",
+      "auto_light.vehicle.accessoriesValue": "",
+      "auto_light.vehicle.circulationCity": "",
+      "auto_light.vehicle.declaredValue": "",
+      "auto_light.vehicle.fasecoldaCode": "",
+      "auto_light.vehicle.isNew": "",
+      "auto_light.vehicle.plate": "",
+      "auto_light.vehicle.productionYear": ""
+    },
+    "variables": [
+      {
+        "key": "sbs_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "sbs_product_8_cod_fact_comision",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_coverage_1_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_coverage_1_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_coverage_2_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_coverage_2_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_digito_verif_aseg",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_digito_verif_conduc",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_nacionalidad",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_ppd",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_pph",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_ptd",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_pth",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_rc",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_rcexceso",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_pais_nacimiento",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_tel_fijo_contacto",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_username",
+        "value": "",
+        "secret": true
+      }
+    ],
+    "allowedOrigins": [
+      "https://www.cotizadoresgenerales.com"
+    ]
+  },
+  {
+    "id": "sbs-producto-10",
+    "name": "SBS · Gold",
+    "provider": "SBS",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-01-bru",
+        "name": "SBS Gold: crear sesión",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_CrearSesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_CrearSesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <tipoDocAseg>{{auto_light.applicant.documentType}}</tipoDocAseg>\n    <numDocAseg>{{auto_light.applicant.documentNumber}}</numDocAseg>\n    <digitoVerifAseg>{{sbs_product_8_digito_verif_aseg}}</digitoVerifAseg>\n    <apellido1Aseg>{{auto_light.applicant.surname}}</apellido1Aseg>\n    <apellido2Aseg>{{auto_light.applicant.secondSurname}}</apellido2Aseg>\n    <nombresAseg>{{auto_light.applicant.firstName}}</nombresAseg>\n    <idNacionalidad>{{sbs_product_8_id_nacionalidad}}</idNacionalidad>\n    <idPaisNacimiento>{{sbs_product_8_id_pais_nacimiento}}</idPaisNacimiento>\n    <tipoDocConduc>{{auto_light.applicant.documentType}}</tipoDocConduc>\n    <numDocConduc>{{auto_light.applicant.documentNumber}}</numDocConduc>\n    <digitoVerifConduc>{{sbs_product_8_digito_verif_conduc}}</digitoVerifConduc>\n    <apellido1Conduc>{{auto_light.applicant.surname}}</apellido1Conduc>\n    <apellido2Conduc>{{auto_light.applicant.secondSurname}}</apellido2Conduc>\n    <nombresConduc>{{auto_light.applicant.firstName}}</nombresConduc>\n    <idGeneroConduc>{{auto_light.applicant.gender}}</idGeneroConduc>\n    <fechaNacimientoConduc>{{auto_light.applicant.birthDate}}</fechaNacimientoConduc>\n    <nomCompletoContacto>{{auto_light.applicant.firstName}}</nomCompletoContacto>\n    <idCiudadContacto>{{auto_light.applicant.city}}</idCiudadContacto>\n    <direccionContacto>{{auto_light.applicant.address}}</direccionContacto>\n    <telFijoContacto>{{sbs_product_8_tel_fijo_contacto}}</telFijoContacto>\n    <celularContacto>{{auto_light.applicant.phone}}</celularContacto>\n    <mailContacto>{{auto_light.applicant.email}}</mailContacto>\n    <codFasecolda>{{auto_light.vehicle.fasecoldaCode}}</codFasecolda>\n    <modelo>{{auto_light.vehicle.productionYear}}</modelo>\n    <autoEsCeroKm>{{auto_light.vehicle.isNew}}</autoEsCeroKm>\n    <idCiudad>{{auto_light.vehicle.circulationCity}}</idCiudad>\n    <placa>{{auto_light.vehicle.plate}}</placa>\n    <valAccesorios>{{auto_light.vehicle.accessoriesValue}}</valAccesorios>\n    <valVehiculoOpcional>{{auto_light.vehicle.declaredValue}}</valVehiculoOpcional>\n    <idOpcionRC>{{sbs_product_8_id_opcion_rc}}</idOpcionRC>\n    <idOpcionRCExceso>{{sbs_product_8_id_opcion_rcexceso}}</idOpcionRCExceso>\n    <idOpcionDeducPPD>{{sbs_product_8_id_opcion_deduc_ppd}}</idOpcionDeducPPD>\n    <idOpcionDeducPTD>{{sbs_product_8_id_opcion_deduc_ptd}}</idOpcionDeducPTD>\n    <idOpcionDeducPPH>{{sbs_product_8_id_opcion_deduc_pph}}</idOpcionDeducPPH>\n    <idOpcionDeducPTH>{{sbs_product_8_id_opcion_deduc_pth}}</idOpcionDeducPTH>\n    <codFactComision>{{sbs_product_8_cod_fact_comision}}</codFactComision>\n  </AIGAutos_CrearSesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "const documentTypeCodes = { CC: \"1\" };\nconst genderCodes = { F: \"2\" };\n\nfunction environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nfunction replaceNumericCode(xml, element, value, codes) {\n  const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n  const match = xml.match(expression);\n  if (!match) throw new Error(\"SBS request is missing \" + element);\n  const normalized = String(value ?? \"\").trim().toUpperCase();\n  const code = /^\\d+$/.test(normalized) ? normalized : codes[normalized];\n  if (!code) throw new Error(\"Unsupported SBS value for \" + element);\n  return xml.replace(expression, match[1] + code + match[3]);\n}\n\nfunction replaceXmlValue(xml, element, value) {\n  const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n  const match = xml.match(expression);\n  if (!match) throw new Error(\"SBS request is missing \" + element);\n  return xml.replace(expression, match[1] + value + match[3]);\n}\n\nfunction requiredInput(name) {\n  const value = String(environmentValue(name) ?? \"\").trim();\n  if (!value) throw new Error(\"SBS requires a value for \" + name);\n  return value;\n}\n\nfunction sbsBirthDate(value) {\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value + \"T00:00:00\";\n  if (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$/.test(value)) return value;\n  throw new Error(\"SBS requires auto_light.applicant.birthDate as YYYY-MM-DD\");\n}\n\nfunction sbsNewVehicleCode(value) {\n  const normalized = value.toLowerCase();\n  if (normalized === \"true\" || normalized === \"1\") return \"1\";\n  if (normalized === \"false\" || normalized === \"0\") return \"0\";\n  throw new Error(\"SBS requires auto_light.vehicle.isNew as true or false\");\n}\n\nfunction escapeXml(value) {\n  return value.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\");\n}\n\nlet body = String(req.getBody({ raw: true }));\nconst input = Object.fromEntries([\n  \"auto_light.applicant.documentType\",\n  \"auto_light.applicant.documentNumber\",\n  \"auto_light.applicant.firstName\",\n  \"auto_light.applicant.surname\",\n  \"auto_light.applicant.gender\",\n  \"auto_light.applicant.birthDate\",\n  \"auto_light.applicant.city\",\n  \"auto_light.applicant.address\",\n  \"auto_light.applicant.phone\",\n  \"auto_light.applicant.email\",\n  \"auto_light.vehicle.fasecoldaCode\",\n  \"auto_light.vehicle.productionYear\",\n  \"auto_light.vehicle.isNew\",\n  \"auto_light.vehicle.circulationCity\",\n  \"auto_light.vehicle.plate\",\n  \"auto_light.vehicle.accessoriesValue\",\n  \"auto_light.vehicle.declaredValue\",\n].map((name) => [name, requiredInput(name)]));\nconst documentType = input[\"auto_light.applicant.documentType\"];\nconst gender = input[\"auto_light.applicant.gender\"];\nconst contactName = [\n  input[\"auto_light.applicant.firstName\"],\n  input[\"auto_light.applicant.surname\"],\n  String(environmentValue(\"auto_light.applicant.secondSurname\") ?? \"\").trim(),\n].filter(Boolean).join(\" \");\nbody = replaceNumericCode(body, \"tipoDocAseg\", documentType, documentTypeCodes);\nbody = replaceNumericCode(body, \"tipoDocConduc\", documentType, documentTypeCodes);\nbody = replaceNumericCode(body, \"idGeneroConduc\", gender, genderCodes);\nbody = replaceXmlValue(body, \"fechaNacimientoConduc\", sbsBirthDate(input[\"auto_light.applicant.birthDate\"]));\nbody = replaceXmlValue(body, \"nomCompletoContacto\", escapeXml(contactName));\nbody = replaceXmlValue(body, \"autoEsCeroKm\", sbsNewVehicleCode(input[\"auto_light.vehicle.isNew\"]));\nreq.setBody(body);",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst match = responseBody.match(/<(?:[\\w-]+:)?No_Sesion\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?No_Sesion>/i);\nif (!match?.[1]) throw new Error(\"SBS did not return a session identifier\");\nbru.setVar(\"sbs_product_10_session_id\", match[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/01.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-02-bru",
+        "name": "SBS Gold: agregar cobertura 1",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_1_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_1_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 1\");\nbru.setVar(\"sbs_product_10_coverage_1_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/02.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-03-bru",
+        "name": "SBS Gold: agregar cobertura 2",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_2_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_2_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 2\");\nbru.setVar(\"sbs_product_10_coverage_2_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/03.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-04-bru",
+        "name": "SBS Gold: agregar cobertura 3",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_3_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_3_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 3\");\nbru.setVar(\"sbs_product_10_coverage_3_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/04.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-05-bru",
+        "name": "SBS Gold: agregar cobertura 4",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_4_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_4_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 4\");\nbru.setVar(\"sbs_product_10_coverage_4_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/05.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-06-bru",
+        "name": "SBS Gold: agregar cobertura 5",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_5_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_5_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 5\");\nbru.setVar(\"sbs_product_10_coverage_5_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/06.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-07-bru",
+        "name": "SBS Gold: agregar cobertura 6",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_6_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_6_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 6\");\nbru.setVar(\"sbs_product_10_coverage_6_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/07.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-08-bru",
+        "name": "SBS Gold: agregar cobertura 7",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_10_coverage_7_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_10_coverage_7_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 7\");\nbru.setVar(\"sbs_product_10_coverage_7_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/08.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-10-gold-09-bru",
+        "name": "SBS Gold: cotizar y cerrar",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_CotizaryCerrarSesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_CotizaryCerrarSesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_10_session_id}}</idSesion>\n  </AIGAutos_CotizaryCerrarSesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nfunction result(name) {\n  const expression = new RegExp(\"<(?:[\\\\w-]+:)?\" + name + \"\\\\b[^>]*>\\\\s*([^<\\\\s]+)\\\\s*<\\\\/(?:[\\\\w-]+:)?\" + name + \">\", \"i\");\n  const match = responseBody.match(expression);\n  if (!match?.[1]) throw new Error(\"SBS did not return \" + name);\n  return match[1];\n}\nbru.setVar(\"sbs_product_10_quote_number\", result(\"No_Cotizacion\"));\nbru.setVar(\"sbs_product_10_premium_total\", result(\"Prima_Total\"));",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-10-Gold/09.bru"
+      }
+    ],
+    "resultPrefix": "sbs_product_10",
+    "description": "9 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "auto_light.applicant.address": "",
+      "auto_light.applicant.birthDate": "",
+      "auto_light.applicant.city": "",
+      "auto_light.applicant.documentNumber": "",
+      "auto_light.applicant.documentType": "",
+      "auto_light.applicant.email": "",
+      "auto_light.applicant.firstName": "",
+      "auto_light.applicant.gender": "",
+      "auto_light.applicant.phone": "",
+      "auto_light.applicant.secondSurname": "",
+      "auto_light.applicant.surname": "",
+      "auto_light.vehicle.accessoriesValue": "",
+      "auto_light.vehicle.circulationCity": "",
+      "auto_light.vehicle.declaredValue": "",
+      "auto_light.vehicle.fasecoldaCode": "",
+      "auto_light.vehicle.isNew": "",
+      "auto_light.vehicle.plate": "",
+      "auto_light.vehicle.productionYear": ""
+    },
+    "variables": [
+      {
+        "key": "sbs_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "sbs_product_10_coverage_1_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_1_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_2_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_2_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_3_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_3_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_4_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_4_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_5_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_5_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_6_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_6_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_7_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_10_coverage_7_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_cod_fact_comision",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_digito_verif_aseg",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_digito_verif_conduc",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_nacionalidad",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_ppd",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_pph",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_ptd",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_pth",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_rc",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_rcexceso",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_pais_nacimiento",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_tel_fijo_contacto",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_username",
+        "value": "",
+        "secret": true
+      }
+    ],
+    "allowedOrigins": [
+      "https://www.cotizadoresgenerales.com"
+    ]
+  },
+  {
+    "id": "sbs-producto-11",
+    "name": "SBS · Plata",
+    "provider": "SBS",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-01-bru",
+        "name": "SBS Plata: crear sesión",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_CrearSesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_CrearSesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <tipoDocAseg>{{auto_light.applicant.documentType}}</tipoDocAseg>\n    <numDocAseg>{{auto_light.applicant.documentNumber}}</numDocAseg>\n    <digitoVerifAseg>{{sbs_product_8_digito_verif_aseg}}</digitoVerifAseg>\n    <apellido1Aseg>{{auto_light.applicant.surname}}</apellido1Aseg>\n    <apellido2Aseg>{{auto_light.applicant.secondSurname}}</apellido2Aseg>\n    <nombresAseg>{{auto_light.applicant.firstName}}</nombresAseg>\n    <idNacionalidad>{{sbs_product_8_id_nacionalidad}}</idNacionalidad>\n    <idPaisNacimiento>{{sbs_product_8_id_pais_nacimiento}}</idPaisNacimiento>\n    <tipoDocConduc>{{auto_light.applicant.documentType}}</tipoDocConduc>\n    <numDocConduc>{{auto_light.applicant.documentNumber}}</numDocConduc>\n    <digitoVerifConduc>{{sbs_product_8_digito_verif_conduc}}</digitoVerifConduc>\n    <apellido1Conduc>{{auto_light.applicant.surname}}</apellido1Conduc>\n    <apellido2Conduc>{{auto_light.applicant.secondSurname}}</apellido2Conduc>\n    <nombresConduc>{{auto_light.applicant.firstName}}</nombresConduc>\n    <idGeneroConduc>{{auto_light.applicant.gender}}</idGeneroConduc>\n    <fechaNacimientoConduc>{{auto_light.applicant.birthDate}}</fechaNacimientoConduc>\n    <nomCompletoContacto>{{auto_light.applicant.firstName}}</nomCompletoContacto>\n    <idCiudadContacto>{{auto_light.applicant.city}}</idCiudadContacto>\n    <direccionContacto>{{auto_light.applicant.address}}</direccionContacto>\n    <telFijoContacto>{{sbs_product_8_tel_fijo_contacto}}</telFijoContacto>\n    <celularContacto>{{auto_light.applicant.phone}}</celularContacto>\n    <mailContacto>{{auto_light.applicant.email}}</mailContacto>\n    <codFasecolda>{{auto_light.vehicle.fasecoldaCode}}</codFasecolda>\n    <modelo>{{auto_light.vehicle.productionYear}}</modelo>\n    <autoEsCeroKm>{{auto_light.vehicle.isNew}}</autoEsCeroKm>\n    <idCiudad>{{auto_light.vehicle.circulationCity}}</idCiudad>\n    <placa>{{auto_light.vehicle.plate}}</placa>\n    <valAccesorios>{{auto_light.vehicle.accessoriesValue}}</valAccesorios>\n    <valVehiculoOpcional>{{auto_light.vehicle.declaredValue}}</valVehiculoOpcional>\n    <idOpcionRC>{{sbs_product_8_id_opcion_rc}}</idOpcionRC>\n    <idOpcionRCExceso>{{sbs_product_8_id_opcion_rcexceso}}</idOpcionRCExceso>\n    <idOpcionDeducPPD>{{sbs_product_8_id_opcion_deduc_ppd}}</idOpcionDeducPPD>\n    <idOpcionDeducPTD>{{sbs_product_8_id_opcion_deduc_ptd}}</idOpcionDeducPTD>\n    <idOpcionDeducPPH>{{sbs_product_8_id_opcion_deduc_pph}}</idOpcionDeducPPH>\n    <idOpcionDeducPTH>{{sbs_product_8_id_opcion_deduc_pth}}</idOpcionDeducPTH>\n    <codFactComision>{{sbs_product_8_cod_fact_comision}}</codFactComision>\n  </AIGAutos_CrearSesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "const documentTypeCodes = { CC: \"1\" };\nconst genderCodes = { F: \"2\" };\n\nfunction environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nfunction replaceNumericCode(xml, element, value, codes) {\n  const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n  const match = xml.match(expression);\n  if (!match) throw new Error(\"SBS request is missing \" + element);\n  const normalized = String(value ?? \"\").trim().toUpperCase();\n  const code = /^\\d+$/.test(normalized) ? normalized : codes[normalized];\n  if (!code) throw new Error(\"Unsupported SBS value for \" + element);\n  return xml.replace(expression, match[1] + code + match[3]);\n}\n\nfunction replaceXmlValue(xml, element, value) {\n  const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n  const match = xml.match(expression);\n  if (!match) throw new Error(\"SBS request is missing \" + element);\n  return xml.replace(expression, match[1] + value + match[3]);\n}\n\nfunction requiredInput(name) {\n  const value = String(environmentValue(name) ?? \"\").trim();\n  if (!value) throw new Error(\"SBS requires a value for \" + name);\n  return value;\n}\n\nfunction sbsBirthDate(value) {\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value + \"T00:00:00\";\n  if (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$/.test(value)) return value;\n  throw new Error(\"SBS requires auto_light.applicant.birthDate as YYYY-MM-DD\");\n}\n\nfunction sbsNewVehicleCode(value) {\n  const normalized = value.toLowerCase();\n  if (normalized === \"true\" || normalized === \"1\") return \"1\";\n  if (normalized === \"false\" || normalized === \"0\") return \"0\";\n  throw new Error(\"SBS requires auto_light.vehicle.isNew as true or false\");\n}\n\nfunction escapeXml(value) {\n  return value.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\");\n}\n\nlet body = String(req.getBody({ raw: true }));\nconst input = Object.fromEntries([\n  \"auto_light.applicant.documentType\",\n  \"auto_light.applicant.documentNumber\",\n  \"auto_light.applicant.firstName\",\n  \"auto_light.applicant.surname\",\n  \"auto_light.applicant.gender\",\n  \"auto_light.applicant.birthDate\",\n  \"auto_light.applicant.city\",\n  \"auto_light.applicant.address\",\n  \"auto_light.applicant.phone\",\n  \"auto_light.applicant.email\",\n  \"auto_light.vehicle.fasecoldaCode\",\n  \"auto_light.vehicle.productionYear\",\n  \"auto_light.vehicle.isNew\",\n  \"auto_light.vehicle.circulationCity\",\n  \"auto_light.vehicle.plate\",\n  \"auto_light.vehicle.accessoriesValue\",\n  \"auto_light.vehicle.declaredValue\",\n].map((name) => [name, requiredInput(name)]));\nconst documentType = input[\"auto_light.applicant.documentType\"];\nconst gender = input[\"auto_light.applicant.gender\"];\nconst contactName = [\n  input[\"auto_light.applicant.firstName\"],\n  input[\"auto_light.applicant.surname\"],\n  String(environmentValue(\"auto_light.applicant.secondSurname\") ?? \"\").trim(),\n].filter(Boolean).join(\" \");\nbody = replaceNumericCode(body, \"tipoDocAseg\", documentType, documentTypeCodes);\nbody = replaceNumericCode(body, \"tipoDocConduc\", documentType, documentTypeCodes);\nbody = replaceNumericCode(body, \"idGeneroConduc\", gender, genderCodes);\nbody = replaceXmlValue(body, \"fechaNacimientoConduc\", sbsBirthDate(input[\"auto_light.applicant.birthDate\"]));\nbody = replaceXmlValue(body, \"nomCompletoContacto\", escapeXml(contactName));\nbody = replaceXmlValue(body, \"autoEsCeroKm\", sbsNewVehicleCode(input[\"auto_light.vehicle.isNew\"]));\nreq.setBody(body);",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst match = responseBody.match(/<(?:[\\w-]+:)?No_Sesion\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?No_Sesion>/i);\nif (!match?.[1]) throw new Error(\"SBS did not return a session identifier\");\nbru.setVar(\"sbs_product_11_session_id\", match[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/01.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-02-bru",
+        "name": "SBS Plata: agregar cobertura 1",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_1_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_1_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 1\");\nbru.setVar(\"sbs_product_11_coverage_1_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/02.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-03-bru",
+        "name": "SBS Plata: agregar cobertura 2",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_2_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_2_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 2\");\nbru.setVar(\"sbs_product_11_coverage_2_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/03.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-04-bru",
+        "name": "SBS Plata: agregar cobertura 3",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_3_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_3_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 3\");\nbru.setVar(\"sbs_product_11_coverage_3_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/04.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-05-bru",
+        "name": "SBS Plata: agregar cobertura 4",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_4_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_4_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 4\");\nbru.setVar(\"sbs_product_11_coverage_4_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/05.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-06-bru",
+        "name": "SBS Plata: agregar cobertura 5",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_5_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_5_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 5\");\nbru.setVar(\"sbs_product_11_coverage_5_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/06.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-07-bru",
+        "name": "SBS Plata: agregar cobertura 6",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_6_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_6_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 6\");\nbru.setVar(\"sbs_product_11_coverage_6_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/07.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-08-bru",
+        "name": "SBS Plata: agregar cobertura 7",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n    <tipoCobertura>{{sbs_product_11_coverage_7_type}}</tipoCobertura>\n    <idCobertura>{{sbs_product_11_coverage_7_id}}</idCobertura>\n  </AIGAutos_AdicionarCoberturaASesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nconst accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\nif (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 7\");\nbru.setVar(\"sbs_product_11_coverage_7_result\", accepted[1]);",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/08.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-sbs-producto-11-plata-09-bru",
+        "name": "SBS Plata: cotizar y cerrar",
+        "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "SOAPAction": "http://tempuri.org/AIGAutos_CotizaryCerrarSesion"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n  <AIGAutos_CotizaryCerrarSesion xmlns=\"http://tempuri.org/\">\n    <nomUsu>{{sbs_username}}</nomUsu>\n    <passwd>{{sbs_password}}</passwd>\n    <idSesion>{{sbs_product_11_session_id}}</idSesion>\n  </AIGAutos_CotizaryCerrarSesion>\n</soap:Body>\n</soap:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "const responseBody = String(res.getBody());\nconst fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\nif (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n  throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n}\nfunction result(name) {\n  const expression = new RegExp(\"<(?:[\\\\w-]+:)?\" + name + \"\\\\b[^>]*>\\\\s*([^<\\\\s]+)\\\\s*<\\\\/(?:[\\\\w-]+:)?\" + name + \">\", \"i\");\n  const match = responseBody.match(expression);\n  if (!match?.[1]) throw new Error(\"SBS did not return \" + name);\n  return match[1];\n}\nbru.setVar(\"sbs_product_11_quote_number\", result(\"No_Cotizacion\"));\nbru.setVar(\"sbs_product_11_premium_total\", result(\"Prima_Total\"));",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/SBS/Producto-11-Plata/09.bru"
+      }
+    ],
+    "resultPrefix": "sbs_product_11",
+    "description": "9 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "auto_light.applicant.address": "",
+      "auto_light.applicant.birthDate": "",
+      "auto_light.applicant.city": "",
+      "auto_light.applicant.documentNumber": "",
+      "auto_light.applicant.documentType": "",
+      "auto_light.applicant.email": "",
+      "auto_light.applicant.firstName": "",
+      "auto_light.applicant.gender": "",
+      "auto_light.applicant.phone": "",
+      "auto_light.applicant.secondSurname": "",
+      "auto_light.applicant.surname": "",
+      "auto_light.vehicle.accessoriesValue": "",
+      "auto_light.vehicle.circulationCity": "",
+      "auto_light.vehicle.declaredValue": "",
+      "auto_light.vehicle.fasecoldaCode": "",
+      "auto_light.vehicle.isNew": "",
+      "auto_light.vehicle.plate": "",
+      "auto_light.vehicle.productionYear": ""
+    },
+    "variables": [
+      {
+        "key": "sbs_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "sbs_product_11_coverage_1_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_1_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_2_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_2_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_3_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_3_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_4_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_4_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_5_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_5_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_6_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_6_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_7_id",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_11_coverage_7_type",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_cod_fact_comision",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_digito_verif_aseg",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_digito_verif_conduc",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_nacionalidad",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_ppd",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_pph",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_ptd",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_deduc_pth",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_rc",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_opcion_rcexceso",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_id_pais_nacimiento",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_product_8_tel_fijo_contacto",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "sbs_username",
+        "value": "",
+        "secret": true
+      }
+    ],
+    "allowedOrigins": [
+      "https://www.cotizadoresgenerales.com"
+    ]
+  },
+  {
+    "id": "equidad-basico-quote",
+    "name": "Equidad · BÁSICO: cotizar por proveedor",
+    "provider": "Equidad",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-equidad-039-equidad-basico-quote-bru",
+        "name": "Equidad BÁSICO: cotizar por proveedor",
+        "url": "https://provider.example.invalid/ServiciosREST/api/Vehiculos/TarificarProductoCompania",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"equidad_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set equidad_run_consent to ALLOW_NON_READ_ONLY before a live Equidad provider request.\");\n}\n\nconst body = environmentValue(\"equidad_basico_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set equidad_basico_request_body.\");\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.CorredorID || !parsed?.AgrupadorCatalogo?.ListaCatalogos?.some((product) => product?.CompaniaID === 20)) {\n    throw new Error(\"missing Equidad quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"equidad_basico_request_body must be a complete Equidad JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Equidad/039-equidad-basico-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "equidad_basico_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "equidad_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://provider.example.invalid"
+    ]
+  },
+  {
+    "id": "equidad-full-quote",
+    "name": "Equidad · FULL: cotizar por proveedor",
+    "provider": "Equidad",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-equidad-040-equidad-full-quote-bru",
+        "name": "Equidad FULL: cotizar por proveedor",
+        "url": "https://provider.example.invalid/ServiciosREST/api/Vehiculos/TarificarProductoCompania",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"equidad_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set equidad_run_consent to ALLOW_NON_READ_ONLY before a live Equidad provider request.\");\n}\n\nconst body = environmentValue(\"equidad_full_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set equidad_full_request_body.\");\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.CorredorID || !parsed?.AgrupadorCatalogo?.ListaCatalogos?.some((product) => product?.CompaniaID === 20)) {\n    throw new Error(\"missing Equidad quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"equidad_full_request_body must be a complete Equidad JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Equidad/040-equidad-full-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "equidad_full_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "equidad_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://provider.example.invalid"
+    ]
+  },
+  {
+    "id": "equidad-ligero-quote",
+    "name": "Equidad · LIGERO: cotizar por proveedor",
+    "provider": "Equidad",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-equidad-041-equidad-ligero-quote-bru",
+        "name": "Equidad LIGERO: cotizar por proveedor",
+        "url": "https://provider.example.invalid/ServiciosREST/api/Vehiculos/TarificarProductoCompania",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"equidad_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set equidad_run_consent to ALLOW_NON_READ_ONLY before a live Equidad provider request.\");\n}\n\nconst body = environmentValue(\"equidad_ligero_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set equidad_ligero_request_body.\");\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.CorredorID || !parsed?.AgrupadorCatalogo?.ListaCatalogos?.some((product) => product?.CompaniaID === 20)) {\n    throw new Error(\"missing Equidad quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"equidad_ligero_request_body must be a complete Equidad JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Equidad/041-equidad-ligero-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "equidad_ligero_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "equidad_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://provider.example.invalid"
+    ]
+  },
+  {
+    "id": "equidad-rce-quote",
+    "name": "Equidad · RCE: cotizar por proveedor",
+    "provider": "Equidad",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-equidad-042-equidad-rce-quote-bru",
+        "name": "Equidad RCE: cotizar por proveedor",
+        "url": "https://provider.example.invalid/ServiciosREST/api/Vehiculos/TarificarProductoCompania",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"equidad_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set equidad_run_consent to ALLOW_NON_READ_ONLY before a live Equidad provider request.\");\n}\n\nconst body = environmentValue(\"equidad_rce_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set equidad_rce_request_body.\");\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.CorredorID || !parsed?.AgrupadorCatalogo?.ListaCatalogos?.some((product) => product?.CompaniaID === 20)) {\n    throw new Error(\"missing Equidad quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"equidad_rce_request_body must be a complete Equidad JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Equidad/042-equidad-rce-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "equidad_rce_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "equidad_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://provider.example.invalid"
+    ]
+  },
+  {
+    "id": "equidad-vehicle-by-plate",
+    "name": "Equidad · Consultar vehículo por placa (SOAP directo)",
+    "provider": "Equidad",
+    "kind": "lookup",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-equidad-049-equidad-vehicle-by-plate-bru",
+        "name": "Consultar vehículo por placa (SOAP directo)",
+        "url": "https://servicios.laequidadseguros.coop/ServicioInfoVehiculo/",
+        "method": "POST",
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=utf-8",
+          "soapaction": "http://www.example.org/ServicioInfoVehiculo/getByPlaca"
+        },
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:ser=\"http://www.example.org/ServicioInfoVehiculo/\"><soapenv:Header/><soapenv:Body><ser:getByPlaca><placa>{{equidad_v2_test_plate}}</placa></ser:getByPlaca></soapenv:Body></soapenv:Envelope>",
+        "bodyType": "xml",
+        "pre": "",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Equidad/049-equidad-vehicle-by-plate.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Consulta de vehículo.",
+    "input": {
+      "equidad_v2_test_plate": ""
+    },
+    "variables": [],
+    "allowedOrigins": [
+      "https://servicios.laequidadseguros.coop"
+    ]
+  },
+  {
+    "id": "liberty-get-oauth-token",
+    "name": "Liberty · obtener token OAuth",
+    "provider": "Liberty",
+    "kind": "auth",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-043-liberty-get-oauth-token-bru",
+        "name": "Liberty: obtener token OAuth",
+        "url": "{{liberty_autos_token_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "grant_type=client_credentials",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\n}",
+        "post": "let response;\ntry {\n  const responseBody = res.getBody();\n  response = typeof responseBody === \"string\"\n    ? JSON.parse(responseBody)\n    : responseBody;\n} catch {\n  throw new Error(\"Liberty token response is not valid JSON.\");\n}\nif (!response?.access_token) throw new Error(\"Liberty did not return an access token.\");\nbru.setVar(\"liberty_autos_access_token\", response.access_token);",
+        "auth": {
+          "username": "{{liberty_autos_username}}",
+          "password": "{{liberty_autos_password}}"
+        },
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/043-liberty-get-oauth-token.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Obtención de token.",
+    "input": {},
+    "variables": [
+      {
+        "key": "liberty_autos_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_autos_token_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_username",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://apis-auto.hdiseguros.com.co"
+    ]
+  },
+  {
+    "id": "liberty-basico-quote",
+    "name": "Liberty · BÁSICO: cotizar auto",
+    "provider": "Liberty",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-043-liberty-get-oauth-token-bru",
+        "name": "Liberty: obtener token OAuth",
+        "url": "{{liberty_autos_token_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "grant_type=client_credentials",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\n}",
+        "post": "let response;\ntry {\n  const responseBody = res.getBody();\n  response = typeof responseBody === \"string\"\n    ? JSON.parse(responseBody)\n    : responseBody;\n} catch {\n  throw new Error(\"Liberty token response is not valid JSON.\");\n}\nif (!response?.access_token) throw new Error(\"Liberty did not return an access token.\");\nbru.setVar(\"liberty_autos_access_token\", response.access_token);",
+        "auth": {
+          "username": "{{liberty_autos_username}}",
+          "password": "{{liberty_autos_password}}"
+        },
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/043-liberty-get-oauth-token.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-044-liberty-basico-quote-bru",
+        "name": "Liberty BÁSICO: cotizar auto",
+        "url": "{{liberty_autos_quote_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "Bearer {{liberty_autos_access_token}}"
+        },
+        "body": "{{liberty_basico_request_body}}",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\nif (!(bru.getVar(\"liberty_autos_access_token\") ?? bru.getEnvVar(\"liberty_autos_access_token\"))) throw new Error(\"Run Liberty: obtener token OAuth before quoting.\");\nconst body = bru.getEnvVar(\"liberty_basico_request_body\") ?? bru.getGlobalEnvVar(\"liberty_basico_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set liberty_basico_request_body.\");\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/044-liberty-basico-quote.bru"
+      }
+    ],
+    "description": "2 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "liberty_basico_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "liberty_autos_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_autos_quote_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_token_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_username",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://apis-auto.hdiseguros.com.co"
+    ]
+  },
+  {
+    "id": "liberty-basico-pt-quote",
+    "name": "Liberty · BÁSICO + PT: cotizar auto",
+    "provider": "Liberty",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-043-liberty-get-oauth-token-bru",
+        "name": "Liberty: obtener token OAuth",
+        "url": "{{liberty_autos_token_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "grant_type=client_credentials",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\n}",
+        "post": "let response;\ntry {\n  const responseBody = res.getBody();\n  response = typeof responseBody === \"string\"\n    ? JSON.parse(responseBody)\n    : responseBody;\n} catch {\n  throw new Error(\"Liberty token response is not valid JSON.\");\n}\nif (!response?.access_token) throw new Error(\"Liberty did not return an access token.\");\nbru.setVar(\"liberty_autos_access_token\", response.access_token);",
+        "auth": {
+          "username": "{{liberty_autos_username}}",
+          "password": "{{liberty_autos_password}}"
+        },
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/043-liberty-get-oauth-token.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-045-liberty-basico-pt-quote-bru",
+        "name": "Liberty BÁSICO + PT: cotizar auto",
+        "url": "{{liberty_autos_quote_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "Bearer {{liberty_autos_access_token}}"
+        },
+        "body": "{{liberty_basico_pt_request_body}}",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\nif (!(bru.getVar(\"liberty_autos_access_token\") ?? bru.getEnvVar(\"liberty_autos_access_token\"))) throw new Error(\"Run Liberty: obtener token OAuth before quoting.\");\nconst body = bru.getEnvVar(\"liberty_basico_pt_request_body\") ?? bru.getGlobalEnvVar(\"liberty_basico_pt_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set liberty_basico_pt_request_body.\");\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/045-liberty-basico-pt-quote.bru"
+      }
+    ],
+    "description": "2 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "liberty_basico_pt_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "liberty_autos_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_autos_quote_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_token_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_username",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://apis-auto.hdiseguros.com.co"
+    ]
+  },
+  {
+    "id": "liberty-full-quote",
+    "name": "Liberty · FULL: cotizar auto",
+    "provider": "Liberty",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-043-liberty-get-oauth-token-bru",
+        "name": "Liberty: obtener token OAuth",
+        "url": "{{liberty_autos_token_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "grant_type=client_credentials",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\n}",
+        "post": "let response;\ntry {\n  const responseBody = res.getBody();\n  response = typeof responseBody === \"string\"\n    ? JSON.parse(responseBody)\n    : responseBody;\n} catch {\n  throw new Error(\"Liberty token response is not valid JSON.\");\n}\nif (!response?.access_token) throw new Error(\"Liberty did not return an access token.\");\nbru.setVar(\"liberty_autos_access_token\", response.access_token);",
+        "auth": {
+          "username": "{{liberty_autos_username}}",
+          "password": "{{liberty_autos_password}}"
+        },
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/043-liberty-get-oauth-token.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-046-liberty-full-quote-bru",
+        "name": "Liberty FULL: cotizar auto",
+        "url": "{{liberty_autos_quote_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "Bearer {{liberty_autos_access_token}}"
+        },
+        "body": "{{liberty_full_request_body}}",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\nif (!(bru.getVar(\"liberty_autos_access_token\") ?? bru.getEnvVar(\"liberty_autos_access_token\"))) throw new Error(\"Run Liberty: obtener token OAuth before quoting.\");\nconst body = bru.getEnvVar(\"liberty_full_request_body\") ?? bru.getGlobalEnvVar(\"liberty_full_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set liberty_full_request_body.\");\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/046-liberty-full-quote.bru"
+      }
+    ],
+    "description": "2 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "liberty_full_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "liberty_autos_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_autos_quote_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_token_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_username",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://apis-auto.hdiseguros.com.co"
+    ]
+  },
+  {
+    "id": "liberty-integral-quote",
+    "name": "Liberty · INTEGRAL: cotizar auto",
+    "provider": "Liberty",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-043-liberty-get-oauth-token-bru",
+        "name": "Liberty: obtener token OAuth",
+        "url": "{{liberty_autos_token_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "grant_type=client_credentials",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\n}",
+        "post": "let response;\ntry {\n  const responseBody = res.getBody();\n  response = typeof responseBody === \"string\"\n    ? JSON.parse(responseBody)\n    : responseBody;\n} catch {\n  throw new Error(\"Liberty token response is not valid JSON.\");\n}\nif (!response?.access_token) throw new Error(\"Liberty did not return an access token.\");\nbru.setVar(\"liberty_autos_access_token\", response.access_token);",
+        "auth": {
+          "username": "{{liberty_autos_username}}",
+          "password": "{{liberty_autos_password}}"
+        },
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/043-liberty-get-oauth-token.bru"
+      },
+      {
+        "id": "06-cotizaciones-autos-livianos-liberty-047-liberty-integral-quote-bru",
+        "name": "Liberty INTEGRAL: cotizar auto",
+        "url": "{{liberty_autos_quote_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "Bearer {{liberty_autos_access_token}}"
+        },
+        "body": "{{liberty_integral_request_body}}",
+        "bodyType": "text",
+        "pre": "if ((bru.getEnvVar(\"liberty_run_consent\") ?? bru.getGlobalEnvVar(\"liberty_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set liberty_run_consent to ALLOW_NON_READ_ONLY before a live Liberty request.\");\nif (!(bru.getVar(\"liberty_autos_access_token\") ?? bru.getEnvVar(\"liberty_autos_access_token\"))) throw new Error(\"Run Liberty: obtener token OAuth before quoting.\");\nconst body = bru.getEnvVar(\"liberty_integral_request_body\") ?? bru.getGlobalEnvVar(\"liberty_integral_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set liberty_integral_request_body.\");\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Liberty/047-liberty-integral-quote.bru"
+      }
+    ],
+    "description": "2 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "liberty_integral_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "liberty_autos_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_autos_quote_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_token_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "liberty_autos_username",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "liberty_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://apis-auto.hdiseguros.com.co"
+    ]
+  },
+  {
+    "id": "mapfre-para-la-mujer-quote",
+    "name": "Mapfre · Para la Mujer: cotizar auto",
+    "provider": "Mapfre",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-mapfre-048-mapfre-para-la-mujer-quote-bru",
+        "name": "Mapfre Para la Mujer: cotizar auto",
+        "url": "{{mapfre_autos_quote_endpoint}}",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{{mapfre_autos_quote_request_body}}",
+        "bodyType": "json",
+        "pre": "if ((bru.getEnvVar(\"mapfre_run_consent\") ?? bru.getGlobalEnvVar(\"mapfre_run_consent\")) !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set mapfre_run_consent to ALLOW_NON_READ_ONLY before a live Mapfre request.\");\nconst body = bru.getEnvVar(\"mapfre_autos_quote_request_body\") ?? bru.getGlobalEnvVar(\"mapfre_autos_quote_request_body\");\nif (!body) throw new Error(\"Run the local Savia environment hydration to set mapfre_autos_quote_request_body.\");\nreq.setBody(body);",
+        "post": "",
+        "auth": {
+          "username": "{{mapfre_autos_username}}",
+          "password": "{{mapfre_autos_password}}"
+        },
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Mapfre/048-mapfre-para-la-mujer-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "mapfre_autos_quote_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "mapfre_autos_password",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "mapfre_autos_quote_endpoint",
+        "value": "",
+        "secret": false
+      },
+      {
+        "key": "mapfre_autos_username",
+        "value": "",
+        "secret": true
+      },
+      {
+        "key": "mapfre_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://sgo.mapfre.com.co"
+    ]
+  },
+  {
+    "id": "qualitas-direct-research",
+    "name": "Qualitas · AMPLIA: cotizar auto",
+    "provider": "Qualitas",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-qualitas-036-qualitas-direct-research-bru",
+        "name": "Qualitas AMPLIA: cotizar auto",
+        "url": "https://sw.qualitascolombia.com.co:9443/Emision/api/Emision",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"qualitas_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set qualitas_run_consent to ALLOW_NON_READ_ONLY before a live Qualitas request.\");\n}\n\nconst body = environmentValue(\"qualitas_amplia_request_body\");\nif (!body) {\n  throw new Error(\"Run the local Savia environment hydration to set qualitas_amplia_request_body.\");\n}\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.correlationalID || !Array.isArray(parsed.Movimientos)) {\n    throw new Error(\"missing Qualitas quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"qualitas_amplia_request_body must be a complete Qualitas JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Qualitas/036-qualitas-direct-research.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "qualitas_amplia_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "qualitas_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://sw.qualitascolombia.com.co:9443"
+    ]
+  },
+  {
+    "id": "qualitas-base-quote",
+    "name": "Qualitas · BASE: cotizar auto",
+    "provider": "Qualitas",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-qualitas-037-qualitas-base-quote-bru",
+        "name": "Qualitas BASE: cotizar auto",
+        "url": "https://sw.qualitascolombia.com.co:9443/Emision/api/Emision",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"qualitas_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set qualitas_run_consent to ALLOW_NON_READ_ONLY before a live Qualitas request.\");\n}\n\nconst body = environmentValue(\"qualitas_base_request_body\");\nif (!body) {\n  throw new Error(\"Run the local Savia environment hydration to set qualitas_base_request_body.\");\n}\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.correlationalID || !Array.isArray(parsed.Movimientos)) {\n    throw new Error(\"missing Qualitas quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"qualitas_base_request_body must be a complete Qualitas JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Qualitas/037-qualitas-base-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "qualitas_base_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "qualitas_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://sw.qualitascolombia.com.co:9443"
+    ]
+  },
+  {
+    "id": "qualitas-plus-quote",
+    "name": "Qualitas · PLUS: cotizar auto",
+    "provider": "Qualitas",
+    "kind": "request",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-qualitas-038-qualitas-plus-quote-bru",
+        "name": "Qualitas PLUS: cotizar auto",
+        "url": "https://sw.qualitascolombia.com.co:9443/Emision/api/Emision",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) {\n  return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n}\n\nif (environmentValue(\"qualitas_run_consent\") !== \"ALLOW_NON_READ_ONLY\") {\n  throw new Error(\"Set qualitas_run_consent to ALLOW_NON_READ_ONLY before a live Qualitas request.\");\n}\n\nconst body = environmentValue(\"qualitas_plus_request_body\");\nif (!body) {\n  throw new Error(\"Run the local Savia environment hydration to set qualitas_plus_request_body.\");\n}\n\ntry {\n  const parsed = JSON.parse(body);\n  if (!parsed?.correlationalID || !Array.isArray(parsed.Movimientos)) {\n    throw new Error(\"missing Qualitas quote fields\");\n  }\n} catch (error) {\n  throw new Error(\"qualitas_plus_request_body must be a complete Qualitas JSON request: \" + error.message);\n}\n\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Qualitas/038-qualitas-plus-quote.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Operación del proveedor; revisar la respuesta JSON.",
+    "input": {
+      "qualitas_plus_request_body": ""
+    },
+    "variables": [
+      {
+        "key": "qualitas_run_consent",
+        "value": "",
+        "secret": false
+      }
+    ],
+    "allowedOrigins": [
+      "https://sw.qualitascolombia.com.co:9443"
+    ]
+  },
+  {
+    "id": "previsora-clasica-quote",
+    "name": "Previsora · Clásica",
+    "provider": "Previsora",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-previsora-clasica-quote-json",
+        "name": "Previsora Clásica: cotizar auto",
+        "url": "https://sise3gr2.previsora.gov.co/SISE3GRestServices/api/Quote/VehiclePolicy",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "{{previsora_auth_header}}"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) { return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name); }\n\nif (environmentValue(\"previsora_run_consent\") !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set previsora_run_consent to ALLOW_NON_READ_ONLY before a live Previsora request.\");\nconst body = environmentValue(\"previsora_clasica_request_body\");\nif (!body) throw new Error(\"Configure previsora_clasica_request_body in Savia Request.\");\ntry { const parsed = JSON.parse(body); if (!parsed?.LicensePlate || !parsed?.RiskQuotation?.InsuredQuotation?.NaturalPerson) throw new Error(\"missing Previsora quote fields\"); } catch (error) { throw new Error(\"previsora_clasica_request_body must be a complete Previsora JSON request: \" + error.message); }\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Previsora/050-previsora-clasica-quote.bru"
+      }
+    ],
+    "description": "Contrato de cotización Previsora · Clásica. El payload y la autorización se configuran como secretos en Savia Request.",
+    "input": {},
+    "variables": [
+      { "key": "previsora_auth_header", "value": "", "secret": true },
+      { "key": "previsora_clasica_request_body", "value": "", "secret": true },
+      { "key": "previsora_run_consent", "value": "", "secret": false }
+    ],
+    "allowedOrigins": ["https://sise3gr2.previsora.gov.co"]
+  },
+  {
+    "id": "previsora-preferente-quote",
+    "name": "Previsora · Preferente",
+    "provider": "Previsora",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-previsora-preferente-quote-json",
+        "name": "Previsora Preferente: cotizar auto",
+        "url": "https://sise3gr2.previsora.gov.co/SISE3GRestServices/api/Quote/VehiclePolicy",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "{{previsora_auth_header}}"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) { return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name); }\n\nif (environmentValue(\"previsora_run_consent\") !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set previsora_run_consent to ALLOW_NON_READ_ONLY before a live Previsora request.\");\nconst body = environmentValue(\"previsora_preferente_request_body\");\nif (!body) throw new Error(\"Configure previsora_preferente_request_body in Savia Request.\");\ntry { const parsed = JSON.parse(body); if (!parsed?.LicensePlate || !parsed?.RiskQuotation?.InsuredQuotation?.NaturalPerson) throw new Error(\"missing Previsora quote fields\"); } catch (error) { throw new Error(\"previsora_preferente_request_body must be a complete Previsora JSON request: \" + error.message); }\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Previsora/051-previsora-preferente-quote.bru"
+      }
+    ],
+    "description": "Contrato de cotización Previsora · Preferente. El payload y la autorización se configuran como secretos en Savia Request.",
+    "input": {},
+    "variables": [
+      { "key": "previsora_auth_header", "value": "", "secret": true },
+      { "key": "previsora_preferente_request_body", "value": "", "secret": true },
+      { "key": "previsora_run_consent", "value": "", "secret": false }
+    ],
+    "allowedOrigins": ["https://sise3gr2.previsora.gov.co"]
+  },
+  {
+    "id": "previsora-premium-quote",
+    "name": "Previsora · Premium",
+    "provider": "Previsora",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-previsora-premium-quote-json",
+        "name": "Previsora Premium: cotizar auto",
+        "url": "https://sise3gr2.previsora.gov.co/SISE3GRestServices/api/Quote/VehiclePolicy",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "{{previsora_auth_header}}"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) { return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name); }\n\nif (environmentValue(\"previsora_run_consent\") !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set previsora_run_consent to ALLOW_NON_READ_ONLY before a live Previsora request.\");\nconst body = environmentValue(\"previsora_premium_request_body\");\nif (!body) throw new Error(\"Configure previsora_premium_request_body in Savia Request.\");\ntry { const parsed = JSON.parse(body); if (!parsed?.LicensePlate || !parsed?.RiskQuotation?.InsuredQuotation?.NaturalPerson) throw new Error(\"missing Previsora quote fields\"); } catch (error) { throw new Error(\"previsora_premium_request_body must be a complete Previsora JSON request: \" + error.message); }\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Previsora/052-previsora-premium-quote.bru"
+      }
+    ],
+    "description": "Contrato de cotización Previsora · Premium. El payload y la autorización se configuran como secretos en Savia Request.",
+    "input": {},
+    "variables": [
+      { "key": "previsora_auth_header", "value": "", "secret": true },
+      { "key": "previsora_premium_request_body", "value": "", "secret": true },
+      { "key": "previsora_run_consent", "value": "", "secret": false }
+    ],
+    "allowedOrigins": ["https://sise3gr2.previsora.gov.co"]
+  },
+  {
+    "id": "previsora-sin-asistencia-quote",
+    "name": "Previsora · Sin asistencia",
+    "provider": "Previsora",
+    "kind": "quote",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-previsora-sin-asistencia-quote-json",
+        "name": "Previsora Sin asistencia: cotizar auto",
+        "url": "https://sise3gr2.previsora.gov.co/SISE3GRestServices/api/Quote/VehiclePolicy",
+        "method": "POST",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "authorization": "{{previsora_auth_header}}"
+        },
+        "body": "{}",
+        "bodyType": "json",
+        "pre": "function environmentValue(name) { return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name); }\n\nif (environmentValue(\"previsora_run_consent\") !== \"ALLOW_NON_READ_ONLY\") throw new Error(\"Set previsora_run_consent to ALLOW_NON_READ_ONLY before a live Previsora request.\");\nconst body = environmentValue(\"previsora_sin_asistencia_request_body\");\nif (!body) throw new Error(\"Configure previsora_sin_asistencia_request_body in Savia Request.\");\ntry { const parsed = JSON.parse(body); if (!parsed?.LicensePlate || !parsed?.RiskQuotation?.InsuredQuotation?.NaturalPerson) throw new Error(\"missing Previsora quote fields\"); } catch (error) { throw new Error(\"previsora_sin_asistencia_request_body must be a complete Previsora JSON request: \" + error.message); }\nreq.setBody(body);",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Previsora/053-previsora-sin-asistencia-quote.bru"
+      }
+    ],
+    "description": "Contrato de cotización Previsora · Sin asistencia. El payload y la autorización se configuran como secretos en Savia Request.",
+    "input": {},
+    "variables": [
+      { "key": "previsora_auth_header", "value": "", "secret": true },
+      { "key": "previsora_sin_asistencia_request_body", "value": "", "secret": true },
+      { "key": "previsora_run_consent", "value": "", "secret": false }
+    ],
+    "allowedOrigins": ["https://sise3gr2.previsora.gov.co"]
+  },
+  {
+    "id": "sura-autos-provider",
+    "name": "Sura · Consultar vehículo por placa (v1 directo)",
+    "provider": "Sura",
+    "kind": "lookup",
+    "steps": [
+      {
+        "id": "06-cotizaciones-autos-livianos-sura-031-sura-autos-provider-bru",
+        "name": "Consultar vehículo por placa (v1 directo)",
+        "url": "https://apisura.segurossura.com/apimovilidad/v1/vehiculo/placa/{{sura_test_plate}}",
+        "method": "GET",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "x-apikey": "{{sura_api_key}}"
+        },
+        "body": "",
+        "bodyType": "none",
+        "pre": "",
+        "post": "",
+        "sourcePath": "06-Cotizaciones/Autos-livianos/Sura/031-sura-autos-provider.bru"
+      }
+    ],
+    "description": "1 request(s) de Bruno. Consulta de vehículo.",
+    "input": {
+      "sura_test_plate": ""
+    },
+    "variables": [
+      {
+        "key": "sura_api_key",
+        "value": "",
+        "secret": true
+      }
+    ],
+    "allowedOrigins": [
+      "https://apisura.segurossura.com"
+    ]
+  }
+]

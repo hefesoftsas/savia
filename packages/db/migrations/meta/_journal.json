@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788239207989,
+      "tag": "0000_agencies",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788261460834,
+      "tag": "0001_magenta_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788263064403,
+      "tag": "0002_geographic_catalogs",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788264225450,
+      "tag": "0003_business_taxonomy",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788265500250,
+      "tag": "0004_agency_branches",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788266167705,
+      "tag": "0005_insurer_companies",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@savia/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run $VITEST_SHARD_ARGS"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.2",
+    "miniflare": "5.20260828.0-alpha",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.127.1"
+  },
+  "dependencies": {
+    "@savia/crm-server": "workspace:*",
+    "@savia/crm-shared": "workspace:*",
+    "@savia/tenant-host": "workspace:*",
+    "@savia/release-catalog": "workspace:*",
+    "@savia/insurance-portfolio-dashboard": "workspace:*",
+    "@ai-sdk/mcp": "2.0.43",
+    "@better-auth/oauth-provider": "1.7.2",
+    "@hono/zod-openapi": "^1.6.1",
+    "@openrouter/ai-sdk-provider": "3.0.0",
+    "@savia/db": "workspace:*",
+    "@savia/provider-contracts": "workspace:*",
+    "@scalar/hono-api-reference": "^0.12.0",
+    "ai": "7.0.91",
+    "aws4fetch": "^1.0.20",
+    "better-auth": "1.7.2",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.13.5",
+    "jose": "^6.2.10",
+    "openapi-fetch": "^0.17.0"
+  }
+}

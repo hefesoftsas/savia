@@ -1,0 +1,81 @@
+{
+  "name": "vehicle_cascade",
+  "label": "Vehículos con selección dependiente",
+  "description": "Ejemplo Marca → Modelo",
+  "config": {
+    "version": 2,
+    "fieldOrder": [
+      "brand",
+      "model"
+    ],
+    "fields": {
+      "brand": {
+        "type": "Dropdown",
+        "label": "Marca",
+        "required": true,
+        "options": [
+          {
+            "value": "Toyota",
+            "label": "Toyota"
+          },
+          {
+            "value": "Renault",
+            "label": "Renault"
+          }
+        ],
+        "config": {
+          "step": "brand"
+        }
+      },
+      "model": {
+        "type": "Dropdown",
+        "label": "Modelo",
+        "required": true,
+        "options": [
+          {
+            "value": "Corolla",
+            "label": "Corolla"
+          },
+          {
+            "value": "Yaris",
+            "label": "Yaris"
+          },
+          {
+            "value": "Clio",
+            "label": "Clio"
+          }
+        ],
+        "config": {
+          "step": "model",
+          "optionsWhen": {
+            "field": "brand",
+            "cases": {
+              "Toyota": [
+                "Corolla",
+                "Yaris"
+              ],
+              "Renault": [
+                "Clio"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "studio": {
+      "wizard": {
+        "enabled": true,
+        "steps": [
+          {
+            "id": "brand",
+            "title": "Marca"
+          },
+          {
+            "id": "model",
+            "title": "Modelo"
+          }
+        ]
+      }
+    }
+  }
+}

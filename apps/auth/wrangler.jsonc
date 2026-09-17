@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "savia-auth",
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/index.ts",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "savia-auth",
+      "database_id": "local",
+    },
+  ],
+  "vars": {
+    "BETTER_AUTH_URL": "http://127.0.0.1:8787",
+    "BETTER_AUTH_SECRET": "local-better-auth-secret-change-this-before-production",
+    "BETTER_AUTH_BOOTSTRAP_EMAIL": "savia.admin@example.test",
+    "BETTER_AUTH_BOOTSTRAP_PASSWORD": "TestUser321!",
+    "BETTER_AUTH_BOOTSTRAP_NAME": "Savia Local Administrator",
+    "SAVIA_API_RESOURCE": "http://127.0.0.1:8787",
+    "SAVIA_ADMIN_REDIRECT_URI": "http://127.0.0.1:5173/auth/callback",
+    "SAVIA_SCALAR_REDIRECT_URI": "http://127.0.0.1:8787/docs",
+  },
+}

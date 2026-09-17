@@ -1,0 +1,31 @@
+name: Import Savia Request variables
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savia-production
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Import missing variables with production encryption
+        run: node scripts/import-savia-request-variables.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_DATABASE_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          SAVIA_REQUEST_IMPORT_VARIABLES_JSON: ${{ secrets.SAVIA_REQUEST_IMPORT_VARIABLES_JSON }}

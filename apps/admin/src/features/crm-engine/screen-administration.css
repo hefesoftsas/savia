@@ -1,0 +1,557 @@
+.savia-surface-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(15 50 65 / 0.04);
+  overflow: hidden;
+}
+.screen-admin {
+  max-width: 980px;
+  margin: 0 auto;
+  display: grid;
+  gap: 28px;
+  padding-bottom: 64px;
+}
+.screen-admin header h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.screen-admin p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  max-width: 65ch;
+}
+.screen-admin-kicker {
+  font-size: 12px;
+}
+.screen-admin-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.screen-admin-tabs-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.screen-admin-overview {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.screen-admin-overview-copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.screen-admin-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.screen-admin-overview p {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 13px;
+}
+.screen-admin-count,
+.screen-admin-list-heading > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.screen-admin-list {
+  display: grid;
+  gap: 20px;
+  padding: 8px 12px 12px;
+}
+.screen-admin-list.savia-surface-card {
+  gap: 0;
+  padding: 0;
+}
+.screen-admin-list.savia-surface-card .screen-admin-list-heading {
+  padding: 16px 16px 8px;
+}
+.screen-admin-list.savia-surface-card .screen-admin-row {
+  margin: 0;
+  padding: 16px;
+}
+.screen-admin-list.savia-surface-card .screen-admin-empty {
+  padding: 40px 24px;
+}
+.screen-admin-screen-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.screen-admin-screen-toolbar .screen-admin-menu-filter {
+  flex: 1;
+  margin-top: 0;
+}
+.screen-admin-screen-group + .screen-admin-screen-group {
+  border-top: 1px solid var(--border);
+}
+.screen-admin-options.savia-surface-card {
+  padding: 24px;
+}
+.screen-admin-options.savia-surface-card .screen-admin-option-row {
+  width: 100%;
+  margin: 0;
+  padding-right: 0;
+  padding-left: 0;
+}
+.screen-admin-screen-group {
+  display: grid;
+}
+.screen-admin-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+.screen-admin-list-heading h2 {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+.screen-admin-options {
+  display: grid;
+  gap: 28px;
+}
+.screen-admin-detail-header {
+  display: grid;
+  gap: 8px;
+}
+.screen-admin-detail-header h1 {
+  margin: 0;
+}
+.screen-admin .screen-admin-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.screen-admin-source svg {
+  width: 16px;
+  height: 16px;
+  color: var(--primary);
+}
+.screen-admin-option-group {
+  display: grid;
+  gap: 8px;
+}
+.screen-admin-option-group > h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.screen-admin-option-list {
+  border-top: 1px solid var(--border);
+}
+.screen-admin-option-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 24px;
+  width: calc(100% + 24px);
+  height: auto;
+  gap: 12px;
+  margin: 0 -12px;
+  padding: 16px 12px;
+  color: inherit;
+  text-align: left;
+  white-space: normal;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px;
+}
+.screen-admin-option-row:hover {
+  background: var(--accent);
+}
+.screen-admin-option-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: var(--primary);
+  background: var(--accent);
+  border-radius: 10px;
+}
+.screen-admin-option-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.screen-admin-option-copy {
+  min-width: 0;
+}
+.screen-admin-option-title,
+.screen-admin-option-description {
+  display: block;
+}
+.screen-admin-option-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.screen-admin-option-description {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.screen-admin-option-chevron {
+  align-self: center;
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+}
+.screen-admin-empty {
+  display: grid;
+  min-height: 260px;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+.screen-admin-empty-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--primary);
+}
+.screen-admin-empty h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.screen-admin-empty .inline-flex {
+  margin-top: 8px;
+}
+.screen-admin-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -12px;
+  padding: 16px 12px;
+  border-top: 1px solid var(--border);
+  border-radius: 8px;
+  transition: background-color 160ms ease-out;
+}
+.screen-admin-group-help {
+  margin: 0 0 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.screen-admin-row-drag,
+.screen-admin-row-drag-spacer {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+}
+.screen-admin-row-drag {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: grab;
+}
+.screen-admin-row-drag:active {
+  cursor: grabbing;
+}
+.screen-admin-row.is-dragging {
+  opacity: 0.55;
+}
+.screen-admin-row.is-drop-target,
+.screen-admin-drop-end.is-drop-target {
+  background: color-mix(in oklab, var(--primary) 10%, var(--accent));
+  outline: 1px dashed color-mix(in oklab, var(--primary) 35%, var(--border));
+}
+.screen-admin-drop-end {
+  display: none;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+.screen-admin-drop-end.is-visible {
+  display: block;
+}
+.screen-admin-row-delete-permanent {
+  color: var(--destructive);
+}
+.screen-admin-row-delete-permanent:hover {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+.screen-admin-removal-permanent {
+  border-color: color-mix(in oklab, var(--destructive) 25%, var(--border));
+}
+.screen-admin-row:hover,
+.screen-admin-row:focus-within {
+  background: var(--accent);
+}
+.screen-admin-row.is-inactive .screen-admin-row-icon {
+  color: var(--muted-foreground);
+}
+.screen-admin-row-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--muted);
+  color: var(--primary);
+}
+.screen-admin-row-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.screen-admin-row-open {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.screen-admin-row-open:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: 2px;
+}
+.screen-admin-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.screen-admin-row-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.screen-admin-row-meta {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.screen-admin-row h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.screen-admin-row p {
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.screen-admin-row-actions,
+.screen-admin-row-visibility {
+  display: flex;
+  align-items: center;
+}
+.screen-admin-row-actions {
+  gap: 10px;
+}
+.screen-admin-row-group {
+  display: grid;
+  gap: 8px;
+}
+.screen-admin-row-delete {
+  color: var(--destructive);
+}
+.screen-admin-row-delete:hover {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+.screen-admin-removal {
+  margin: 0 12px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 70%, var(--card));
+  font-size: 13px;
+  line-height: 1.5;
+}
+.screen-admin-removal p {
+  margin: 0;
+}
+.screen-admin-removal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.screen-admin-row-visibility {
+  gap: 7px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.screen-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+@media (max-width: 560px) {
+  .screen-admin-row {
+    gap: 12px;
+    margin: 0 -8px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+  .screen-admin {
+    gap: 22px;
+  }
+  .screen-admin-overview {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .screen-admin-actions {
+    justify-content: flex-start;
+  }
+  .screen-admin-option-row {
+    width: calc(100% + 16px);
+    margin: 0 -8px;
+    padding: 14px 8px;
+  }
+  .screen-admin-options.savia-surface-card {
+    padding: 16px;
+  }
+  .screen-admin-options.savia-surface-card .screen-admin-option-row {
+    width: 100%;
+    margin: 0;
+    padding: 14px 0;
+  }
+}
+.screen-admin-delete-dialog {
+  max-width: 480px;
+}
+.screen-admin-delete-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--foreground);
+}
+.screen-admin-delete-warning {
+  margin: 0;
+  font-size: 13px;
+  color: var(--destructive);
+}
+.screen-admin-menu-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px 12px;
+}
+.screen-admin-menu-toolbar-content {
+  min-width: 0;
+  flex: 1;
+}
+.screen-admin-menu-toolbar .screen-admin-group-help {
+  margin: 0;
+}
+.screen-admin-menu-filter {
+  position: relative;
+  width: min(100%, 320px);
+  margin-top: 10px;
+}
+.screen-admin-menu-filter > svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  transform: translateY(-50%);
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.screen-admin-menu-filter input {
+  height: 32px;
+  padding-left: 34px;
+}
+.screen-admin-menu-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 1px;
+}
+.screen-admin-menu-filter-empty {
+  margin: 4px 16px 16px;
+  color: var(--muted-foreground);
+}
+.screen-admin-menu-section {
+  display: grid;
+  gap: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+}
+.screen-admin-menu-section.is-drop-target {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.screen-admin-menu-section.is-dragging {
+  opacity: 0.72;
+}
+.screen-admin-menu-section-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 6px;
+}
+.screen-admin-menu-section-label {
+  height: 32px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding-inline: 0;
+}
+.screen-admin-menu-section-label:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 2px;
+}
+.screen-admin-menu-section .screen-admin-row {
+  padding-left: 28px;
+}

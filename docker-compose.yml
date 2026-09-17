@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    platform: linux/amd64
+    profiles:
+      - legacy-source
+    environment:
+      POSTGRES_DB: savia_source
+      POSTGRES_USER: savia
+      POSTGRES_PASSWORD: savia
+    ports:
+      - "127.0.0.1:${SAVIA_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ${SAVIA_SOURCE_DUMP_PATH:-./infra/postgres/source.dump}:/backups/source.dump:ro
+      - ./infra/postgres/skip-default-postgis-init.sh:/docker-entrypoint-initdb.d/10_postgis.sh:ro
+      - ./infra/postgres/restore.sh:/docker-entrypoint-initdb.d/10-restore.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U savia -d savia_source"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10m
+
+volumes:
+  postgres_data:

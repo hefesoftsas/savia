@@ -1,0 +1,171 @@
+import type { ReactNode } from "react";
+import { CheckCircle2, CircleDashed, CircleHelp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+
+export type CredentialRequirementKind =
+  "required" | "optional" | "none" | "per-item";
+
+const requirementLabels: Record<CredentialRequirementKind, string> = {
+  required: "Requiere clave",
+  optional: "Opcional",
+  none: "Sin clave",
+  "per-item": "Por elemento",
+};
+
+export function formatConfiguredDate(
+  dateString: string | undefined | null,
+): string {
+  if (!dateString) return "";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return new Intl.DateTimeFormat("es-ES", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return dateString;
+  }
+}
+
+export function CredentialRequirementBadge({
+  kind,
+  className,
+}: {
+  kind: CredentialRequirementKind;
+  className?: string;
+}) {
+  return (
+    <Badge
+      variant={kind === "required" ? "default" : "outline"}
+      className={cn(
+        kind === "none" &&
+          "border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
+        kind === "optional" &&
+          "border-amber-500/30 text-amber-800 dark:text-amber-400",
+        kind === "per-item" &&
+          "border-sky-500/30 text-sky-800 dark:text-sky-400",
+        className,
+      )}
+    >
+      {requirementLabels[kind]}
+    </Badge>
+  );
+}
+
+export function CredentialStatusBadge({
+  configured,
+  label,
+}: {
+  configured: boolean;
+  label: string;
+}) {
+  return (
+    <Badge variant={configured ? "default" : "secondary"}>
+      {configured ? (
+        <CheckCircle2 aria-hidden="true" />
+      ) : (
+        <CircleDashed aria-hidden="true" />
+      )}
+      {label}
+    </Badge>
+  );
+}
+
+export function CredentialsHelpTooltip() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Ayuda sobre credenciales"
+        >
+          <CircleHelp className="size-4" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={8} className="max-w-xs">
+        Cada servicio indica si necesita clave, dónde se guarda y si ya está
+        configurado. Globales: una clave por espacio. Integraciones: credencial
+        por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y
+        Nominatim.
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function CredentialGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="credentials-group">
+      <header className="credentials-group-header">
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </header>
+      <div className="credentials-group-body">{children}</div>
+    </section>
+  );
+}
+
+export function CredentialEntry({
+  title,
+  description,
+  requirement,
+  status,
+  children,
+}: {
+  title: string;
+  description: string;
+  requirement: CredentialRequirementKind;
+  status?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <article className="credentials-entry">
+      <header className="credentials-entry-header">
+        <div className="credentials-entry-heading">
+          <div className="credentials-entry-badges">
+            <CredentialRequirementBadge kind={requirement} />
+            {status}
+          </div>
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
+      </header>
+      <div className="credentials-entry-body">{children}</div>
+    </article>
+  );
+}
+
+export function CredentialFreeServiceList({
+  items,
+}: {
+  items: Array<{ name: string; detail: string }>;
+}) {
+  return (
+    <ul className="credentials-free-list">
+      {items.map((item) => (
+        <li key={item.name}>
+          <strong>{item.name}</strong>
+          <span>{item.detail}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}

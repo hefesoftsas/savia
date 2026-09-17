@@ -1,0 +1,39 @@
+.display-text-field {
+  margin: 0;
+  min-width: 0;
+  color: var(--foreground);
+}
+.display-text-field--title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.display-text-field--subtitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: color-mix(in oklab, var(--foreground) 84%, transparent);
+}
+.display-text-field--span {
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+.display-text-field--caption {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: color-mix(in oklab, var(--foreground) 62%, transparent);
+}
+.display-text-field--help {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: color-mix(in oklab, var(--foreground) 58%, transparent);
+}
+.display-text-field--align-center {
+  text-align: center;
+}
+.display-text-field--align-right {
+  text-align: right;
+}
+.display-text-empty {
+  margin: 0;
+}

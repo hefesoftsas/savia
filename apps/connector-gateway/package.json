@@ -1,0 +1,22 @@
+{
+  "name": "@savia/connector-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/crm-server": "workspace:*",
+    "@savia/crm-shared": "workspace:*",
+    "@savia/release-catalog": "workspace:*",
+    "hono": "^4.13.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.2",
+    "miniflare": "5.20260828.0-alpha",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.127.1"
+  }
+}

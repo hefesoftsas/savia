@@ -1,0 +1,18 @@
+.git
+.worktrees
+.superpowers
+node_modules
+**/node_modules
+**/.wrangler
+dist
+volumes
+.env
+.env.*
+**/.env
+**/.env.*
+.dev.vars
+
+# Local provider configuration reaches containers through Docker/Coolify
+# environment variables or an explicit read-only mount instead.
+**/.dev.vars
+*.log

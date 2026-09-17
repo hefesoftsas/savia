@@ -1,0 +1,410 @@
+{
+  "name": "cotizador_wizard",
+  "label": "Cotizador por pasos",
+  "description": "Cotizador generado con consulta de placa y tres pasos.",
+  "config": {
+    "version": 2,
+    "fields": {
+      "applicant_address": {
+        "type": "Textbox",
+        "label": "Dirección",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 8,
+          "requestSectionOrder": 1,
+          "step": "contact"
+        }
+      },
+      "applicant_birth_date": {
+        "type": "DateControl",
+        "label": "Fecha de nacimiento",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 6,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        }
+      },
+      "applicant_city": {
+        "type": "Textbox",
+        "label": "Código de ciudad de residencia",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 7,
+          "requestSectionOrder": 1,
+          "step": "contact"
+        }
+      },
+      "applicant_document_number": {
+        "type": "Textbox",
+        "label": "Número de documento",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 1,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        }
+      },
+      "applicant_document_type": {
+        "type": "Dropdown",
+        "label": "Tipo de documento",
+        "required": true,
+        "options": [
+          {
+            "value": "CC",
+            "label": "Cédula de ciudadanía"
+          }
+        ],
+        "config": {
+          "section": "applicant",
+          "requestOrder": 0,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        },
+        "defaultValue": "CC"
+      },
+      "applicant_email": {
+        "type": "Textbox",
+        "label": "Correo electrónico",
+        "required": true,
+        "config": {
+          "format": "email",
+          "section": "applicant",
+          "requestOrder": 10,
+          "requestSectionOrder": 1,
+          "step": "contact"
+        }
+      },
+      "applicant_first_name": {
+        "type": "Textbox",
+        "label": "Nombres",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 2,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        }
+      },
+      "applicant_gender": {
+        "type": "Dropdown",
+        "label": "Sexo",
+        "required": true,
+        "options": [
+          {
+            "value": "F",
+            "label": "Femenino"
+          }
+        ],
+        "config": {
+          "section": "applicant",
+          "requestOrder": 5,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        }
+      },
+      "applicant_phone": {
+        "type": "Textbox",
+        "label": "Teléfono",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 9,
+          "requestSectionOrder": 1,
+          "step": "contact"
+        }
+      },
+      "applicant_second_surname": {
+        "type": "Textbox",
+        "label": "Segundo apellido",
+        "required": false,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 4,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        }
+      },
+      "applicant_surname": {
+        "type": "Textbox",
+        "label": "Primer apellido",
+        "required": true,
+        "config": {
+          "section": "applicant",
+          "requestOrder": 3,
+          "requestSectionOrder": 1,
+          "step": "applicant"
+        }
+      },
+      "vehicle_accessories_value": {
+        "type": "Number",
+        "label": "Valor de accesorios",
+        "required": true,
+        "config": {
+          "minimum": 0,
+          "section": "vehicle",
+          "requestOrder": 16,
+          "requestSectionOrder": 0,
+          "step": "vehicle"
+        },
+        "defaultValue": 0
+      },
+      "vehicle_circulation_city": {
+        "type": "Textbox",
+        "label": "Código de ciudad de circulación",
+        "required": true,
+        "config": {
+          "section": "vehicle",
+          "requestOrder": 15,
+          "requestSectionOrder": 0,
+          "step": "vehicle"
+        }
+      },
+      "vehicle_declared_value": {
+        "type": "Number",
+        "label": "Valor asegurado",
+        "required": true,
+        "config": {
+          "minimum": 1,
+          "section": "vehicle",
+          "requestOrder": 17,
+          "requestSectionOrder": 0,
+          "step": "vehicle"
+        }
+      },
+      "vehicle_fasecolda_code": {
+        "type": "Textbox",
+        "label": "Código Fasecolda",
+        "required": true,
+        "config": {
+          "section": "vehicle",
+          "requestOrder": 12,
+          "requestSectionOrder": 0,
+          "step": "vehicle"
+        }
+      },
+      "vehicle_is_new": {
+        "type": "Dropdown",
+        "label": "Vehículo nuevo",
+        "required": true,
+        "options": [
+          {
+            "value": "false",
+            "label": "No"
+          },
+          {
+            "value": "true",
+            "label": "Sí"
+          }
+        ],
+        "config": {
+          "section": "vehicle",
+          "requestOrder": 14,
+          "requestSectionOrder": 0,
+          "step": "vehicle"
+        },
+        "defaultValue": "false"
+      },
+      "vehicle_plate": {
+        "type": "Textbox",
+        "label": "Placa",
+        "required": true,
+        "config": {
+          "section": "vehicle",
+          "requestOrder": 11,
+          "requestSectionOrder": 0,
+          "requestTransform": "uppercase",
+          "step": "vehicle"
+        }
+      },
+      "vehicle_production_year": {
+        "type": "Number",
+        "label": "Año del vehículo",
+        "required": true,
+        "config": {
+          "minimum": 1900,
+          "integer": true,
+          "section": "vehicle",
+          "requestOrder": 13,
+          "requestSectionOrder": 0,
+          "step": "vehicle"
+        }
+      }
+    },
+    "fieldOrder": [
+      "vehicle_plate",
+      "vehicle_fasecolda_code",
+      "vehicle_production_year",
+      "vehicle_is_new",
+      "vehicle_circulation_city",
+      "vehicle_accessories_value",
+      "vehicle_declared_value",
+      "applicant_document_type",
+      "applicant_document_number",
+      "applicant_first_name",
+      "applicant_surname",
+      "applicant_second_surname",
+      "applicant_gender",
+      "applicant_birth_date",
+      "applicant_city",
+      "applicant_address",
+      "applicant_phone",
+      "applicant_email"
+    ],
+    "studio": {
+      "columns": 3,
+      "requestPage": {
+        "version": 1,
+        "source": "savia-request",
+        "resultColumns": [
+          {
+            "label": "Producto",
+            "pointer": "/product/name",
+            "format": "text"
+          },
+          {
+            "label": "Prima",
+            "pointer": "/premium/total",
+            "format": "money"
+          },
+          {
+            "label": "Referencia",
+            "pointer": "/reference",
+            "format": "text"
+          }
+        ],
+        "submitLabel": "Cotizar",
+        "actions": [
+          {
+            "id": "sbs-producto-10",
+            "operationId": "execute_sbs-producto-10",
+            "label": "SBS · Gold",
+            "kind": "submit",
+            "input": {
+              "auto_light.applicant.address": "applicant_address",
+              "auto_light.applicant.birthDate": "applicant_birth_date",
+              "auto_light.applicant.city": "applicant_city",
+              "auto_light.applicant.documentNumber": "applicant_document_number",
+              "auto_light.applicant.documentType": "applicant_document_type",
+              "auto_light.applicant.email": "applicant_email",
+              "auto_light.applicant.firstName": "applicant_first_name",
+              "auto_light.applicant.gender": "applicant_gender",
+              "auto_light.applicant.phone": "applicant_phone",
+              "auto_light.applicant.secondSurname": "applicant_second_surname",
+              "auto_light.applicant.surname": "applicant_surname",
+              "auto_light.vehicle.accessoriesValue": "vehicle_accessories_value",
+              "auto_light.vehicle.circulationCity": "vehicle_circulation_city",
+              "auto_light.vehicle.declaredValue": "vehicle_declared_value",
+              "auto_light.vehicle.fasecoldaCode": "vehicle_fasecolda_code",
+              "auto_light.vehicle.isNew": "vehicle_is_new",
+              "auto_light.vehicle.plate": "vehicle_plate",
+              "auto_light.vehicle.productionYear": "vehicle_production_year"
+            },
+            "output": {}
+          },
+          {
+            "id": "sbs-producto-11",
+            "operationId": "execute_sbs-producto-11",
+            "label": "SBS · Plata",
+            "kind": "submit",
+            "input": {
+              "auto_light.applicant.address": "applicant_address",
+              "auto_light.applicant.birthDate": "applicant_birth_date",
+              "auto_light.applicant.city": "applicant_city",
+              "auto_light.applicant.documentNumber": "applicant_document_number",
+              "auto_light.applicant.documentType": "applicant_document_type",
+              "auto_light.applicant.email": "applicant_email",
+              "auto_light.applicant.firstName": "applicant_first_name",
+              "auto_light.applicant.gender": "applicant_gender",
+              "auto_light.applicant.phone": "applicant_phone",
+              "auto_light.applicant.secondSurname": "applicant_second_surname",
+              "auto_light.applicant.surname": "applicant_surname",
+              "auto_light.vehicle.accessoriesValue": "vehicle_accessories_value",
+              "auto_light.vehicle.circulationCity": "vehicle_circulation_city",
+              "auto_light.vehicle.declaredValue": "vehicle_declared_value",
+              "auto_light.vehicle.fasecoldaCode": "vehicle_fasecolda_code",
+              "auto_light.vehicle.isNew": "vehicle_is_new",
+              "auto_light.vehicle.plate": "vehicle_plate",
+              "auto_light.vehicle.productionYear": "vehicle_production_year"
+            },
+            "output": {}
+          },
+          {
+            "id": "sbs-producto-8",
+            "operationId": "execute_sbs-producto-8",
+            "label": "SBS · Autos Producto 8",
+            "kind": "submit",
+            "input": {
+              "auto_light.applicant.documentType": "applicant_document_type",
+              "auto_light.applicant.documentNumber": "applicant_document_number",
+              "auto_light.applicant.firstName": "applicant_first_name",
+              "auto_light.applicant.surname": "applicant_surname",
+              "auto_light.applicant.secondSurname": "applicant_second_surname",
+              "auto_light.applicant.gender": "applicant_gender",
+              "auto_light.applicant.birthDate": "applicant_birth_date",
+              "auto_light.applicant.city": "applicant_city",
+              "auto_light.applicant.address": "applicant_address",
+              "auto_light.applicant.phone": "applicant_phone",
+              "auto_light.applicant.email": "applicant_email",
+              "auto_light.vehicle.fasecoldaCode": "vehicle_fasecolda_code",
+              "auto_light.vehicle.productionYear": "vehicle_production_year",
+              "auto_light.vehicle.isNew": "vehicle_is_new",
+              "auto_light.vehicle.circulationCity": "vehicle_circulation_city",
+              "auto_light.vehicle.plate": "vehicle_plate",
+              "auto_light.vehicle.accessoriesValue": "vehicle_accessories_value",
+              "auto_light.vehicle.declaredValue": "vehicle_declared_value"
+            },
+            "output": {}
+          },
+          {
+            "id": "sura-autos-provider",
+            "operationId": "execute_sura-autos-provider",
+            "label": "Consultar placa",
+            "kind": "lookup",
+            "input": {
+              "sura_test_plate": "vehicle_plate"
+            },
+            "output": {
+              "vehicle_fasecolda_code": "/data/vehicle/fasecoldaCode",
+              "vehicle_production_year": "/data/vehicle/year",
+              "vehicle_declared_value": "/data/vehicle/insuredValue",
+              "vehicle_accessories_value": "/data/vehicle/accessoriesValue"
+            }
+          }
+        ]
+      },
+      "sections": [
+        {
+          "id": "vehicle",
+          "label": "Vehículo"
+        },
+        {
+          "id": "applicant",
+          "label": "Solicitante y conductor"
+        }
+      ],
+      "wizard": {
+        "enabled": true,
+        "presentation": "steps",
+        "steps": [
+          {
+            "id": "vehicle",
+            "title": "Vehículo"
+          },
+          {
+            "id": "applicant",
+            "title": "Solicitante y conductor"
+          },
+          {
+            "id": "contact",
+            "title": "Contacto y cotización"
+          }
+        ]
+      }
+    }
+  }
+}

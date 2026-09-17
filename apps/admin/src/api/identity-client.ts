@@ -1,0 +1,113 @@
+import type { ApiClient } from "./api-client";
+import type { paths } from "./generated/openapi";
+
+type CurrentIdentityResponse =
+  paths["/v1/identity/me"]["get"]["responses"][200]["content"]["application/json"];
+type IdentityUsersResponse =
+  paths["/v1/identity/users"]["get"]["responses"][200]["content"]["application/json"];
+type IdentityUser = IdentityUsersResponse["data"][number];
+
+export type AgencyAccessRole = "tenant_admin" | "agency_admin" | "operator" | "viewer";
+export type SaviaIdentity = CurrentIdentityResponse["data"];
+export type ManagedIdentityUser = Omit<IdentityUser, "relationships"> & {
+  relationships: { memberships: Array<Omit<IdentityUser["relationships"]["memberships"][number], "role"> & {
+    role: AgencyAccessRole;
+    relationships: { agency: { id: string }; tenant?: { id: string } };
+  }> };
+};
+export type UserProvisionInput = Omit<
+  paths["/v1/identity/users"]["post"]["requestBody"]["content"]["application/json"], "membership"
+> & { membership?: { tenantId?: number; agencyId?: number; role: AgencyAccessRole } };
+export type UserUpdateInput =
+  paths["/v1/identity/users/{principalId}"]["patch"]["requestBody"]["content"]["application/json"];
+
+export class IdentityClient {
+  constructor(private readonly client: ApiClient) {}
+
+  async me(): Promise<CurrentIdentityResponse["data"]> {
+    return (await this.client.get<CurrentIdentityResponse>("/v1/identity/me"))
+      .data;
+  }
+
+  async list(): Promise<ManagedIdentityUser[]> {
+    return (await this.client.get<IdentityUsersResponse>("/v1/identity/users"))
+      .data;
+  }
+
+  async get(principalId: string): Promise<ManagedIdentityUser> {
+    return (
+      await this.client.get<{ data: ManagedIdentityUser }>(
+        `/v1/identity/users/${encodeURIComponent(principalId)}`,
+      )
+    ).data;
+  }
+
+  async provision(input: UserProvisionInput): Promise<ManagedIdentityUser> {
+    return (
+      await this.client.post<{ data: ManagedIdentityUser }>(
+        "/v1/identity/users",
+        input,
+      )
+    ).data;
+  }
+
+  async update(
+    principalId: string,
+    input: UserUpdateInput,
+  ): Promise<ManagedIdentityUser> {
+    return (
+      await this.client.patch<{ data: ManagedIdentityUser }>(
+        `/v1/identity/users/${encodeURIComponent(principalId)}`,
+        input,
+      )
+    ).data;
+  }
+
+  async grantMembership(
+    principalId: string,
+    input: { tenantId?: number; agencyId?: number; role: AgencyAccessRole },
+  ): Promise<ManagedIdentityUser> {
+    return (
+      await this.client.post<{ data: ManagedIdentityUser }>(
+        `/v1/identity/users/${encodeURIComponent(principalId)}/memberships`,
+        input,
+      )
+    ).data;
+  }
+
+  removeMembership(principalId: string, agencyId: number): Promise<void> {
+    return this.client.delete(
+      `/v1/identity/users/${encodeURIComponent(principalId)}/memberships/${agencyId}`,
+    );
+  }
+
+  suspend(principalId: string): Promise<void> {
+    return this.client.post(
+      `/v1/identity/users/${encodeURIComponent(principalId)}/suspension`,
+    );
+  }
+
+  reactivate(principalId: string): Promise<void> {
+    return this.client.delete(
+      `/v1/identity/users/${encodeURIComponent(principalId)}/suspension`,
+    );
+  }
+
+  revokeSessions(principalId: string): Promise<void> {
+    return this.client.post(
+      `/v1/identity/users/${encodeURIComponent(principalId)}/sessions/revoke`,
+    );
+  }
+
+  sendPasswordReset(principalId: string): Promise<void> {
+    return this.client.post(
+      `/v1/identity/users/${encodeURIComponent(principalId)}/password-reset`,
+    );
+  }
+
+  remove(principalId: string): Promise<void> {
+    return this.client.delete(
+      `/v1/identity/users/${encodeURIComponent(principalId)}`,
+    );
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "id": "sbs-producto-8",
+  "name": "SBS · Autos Producto 8",
+  "description": "Crear sesión, agregar dos coberturas y cotizar. Cuatro solicitudes SOAP; no emite pólizas.",
+  "steps": [
+    {
+      "id": "032-sbs-product-8-create-session",
+      "name": "cotizar auto",
+      "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+      "method": "POST",
+      "headers": {
+        "accept": "text/xml",
+        "content-type": "text/xml; charset=utf-8",
+        "SOAPAction": "http://tempuri.org/AIGAutos_CrearSesion"
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AIGAutos_CrearSesion xmlns=\"http://tempuri.org/\">\n      <nomUsu>{{sbs_username}}</nomUsu>\n      <passwd>{{sbs_password}}</passwd>\n      <tipoDocAseg>{{auto_light.applicant.documentType}}</tipoDocAseg>\n      <numDocAseg>{{auto_light.applicant.documentNumber}}</numDocAseg>\n      <digitoVerifAseg>{{sbs_product_8_digito_verif_aseg}}</digitoVerifAseg>\n      <apellido1Aseg>{{auto_light.applicant.surname}}</apellido1Aseg>\n      <apellido2Aseg>{{auto_light.applicant.secondSurname}}</apellido2Aseg>\n      <nombresAseg>{{auto_light.applicant.firstName}}</nombresAseg>\n      <idNacionalidad>{{sbs_product_8_id_nacionalidad}}</idNacionalidad>\n      <idPaisNacimiento>{{sbs_product_8_id_pais_nacimiento}}</idPaisNacimiento>\n      <tipoDocConduc>{{auto_light.applicant.documentType}}</tipoDocConduc>\n      <numDocConduc>{{auto_light.applicant.documentNumber}}</numDocConduc>\n      <digitoVerifConduc>{{sbs_product_8_digito_verif_conduc}}</digitoVerifConduc>\n      <apellido1Conduc>{{auto_light.applicant.surname}}</apellido1Conduc>\n      <apellido2Conduc>{{auto_light.applicant.secondSurname}}</apellido2Conduc>\n      <nombresConduc>{{auto_light.applicant.firstName}}</nombresConduc>\n      <idGeneroConduc>{{auto_light.applicant.gender}}</idGeneroConduc>\n      <fechaNacimientoConduc>{{auto_light.applicant.birthDate}}</fechaNacimientoConduc>\n      <nomCompletoContacto>{{auto_light.applicant.firstName}}</nomCompletoContacto>\n      <idCiudadContacto>{{auto_light.applicant.city}}</idCiudadContacto>\n      <direccionContacto>{{auto_light.applicant.address}}</direccionContacto>\n      <telFijoContacto>{{sbs_product_8_tel_fijo_contacto}}</telFijoContacto>\n      <celularContacto>{{auto_light.applicant.phone}}</celularContacto>\n      <mailContacto>{{auto_light.applicant.email}}</mailContacto>\n      <codFasecolda>{{auto_light.vehicle.fasecoldaCode}}</codFasecolda>\n      <modelo>{{auto_light.vehicle.productionYear}}</modelo>\n      <autoEsCeroKm>{{auto_light.vehicle.isNew}}</autoEsCeroKm>\n      <idCiudad>{{auto_light.vehicle.circulationCity}}</idCiudad>\n      <placa>{{auto_light.vehicle.plate}}</placa>\n      <valAccesorios>{{auto_light.vehicle.accessoriesValue}}</valAccesorios>\n      <valVehiculoOpcional>{{auto_light.vehicle.declaredValue}}</valVehiculoOpcional>\n      <idOpcionRC>{{sbs_product_8_id_opcion_rc}}</idOpcionRC>\n      <idOpcionRCExceso>{{sbs_product_8_id_opcion_rcexceso}}</idOpcionRCExceso>\n      <idOpcionDeducPPD>{{sbs_product_8_id_opcion_deduc_ppd}}</idOpcionDeducPPD>\n      <idOpcionDeducPTD>{{sbs_product_8_id_opcion_deduc_ptd}}</idOpcionDeducPTD>\n      <idOpcionDeducPPH>{{sbs_product_8_id_opcion_deduc_pph}}</idOpcionDeducPPH>\n      <idOpcionDeducPTH>{{sbs_product_8_id_opcion_deduc_pth}}</idOpcionDeducPTH>\n      <codFactComision>{{sbs_product_8_cod_fact_comision}}</codFactComision>\n    </AIGAutos_CrearSesion>\n  </soap:Body>\n</soap:Envelope>",
+      "pre": "  const documentTypeCodes = { CC: \"1\" };\n  const genderCodes = { F: \"2\" };\n  \n  function environmentValue(name) {\n    return bru.getEnvVar(name) ?? bru.getGlobalEnvVar(name);\n  }\n  \n  function replaceNumericCode(xml, element, value, codes) {\n    const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n    const match = xml.match(expression);\n    if (!match) throw new Error(\"SBS request is missing \" + element);\n    const normalized = String(value ?? \"\").trim().toUpperCase();\n    const code = /^\\d+$/.test(normalized) ? normalized : codes[normalized];\n    if (!code) throw new Error(\"Unsupported SBS value for \" + element);\n    return xml.replace(expression, match[1] + code + match[3]);\n  }\n  \n  function replaceXmlValue(xml, element, value) {\n    const expression = new RegExp(\"(<\" + element + \">)([^<]*)(</\" + element + \">)\", \"i\");\n    const match = xml.match(expression);\n    if (!match) throw new Error(\"SBS request is missing \" + element);\n    return xml.replace(expression, match[1] + value + match[3]);\n  }\n  \n  function requiredInput(name) {\n    const value = String(environmentValue(name) ?? \"\").trim();\n    if (!value) throw new Error(\"SBS requires a value for \" + name);\n    return value;\n  }\n  \n  function sbsBirthDate(value) {\n    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value + \"T00:00:00\";\n    if (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$/.test(value)) return value;\n    throw new Error(\"SBS requires auto_light.applicant.birthDate as YYYY-MM-DD\");\n  }\n  \n  function sbsNewVehicleCode(value) {\n    const normalized = value.toLowerCase();\n    if (normalized === \"true\" || normalized === \"1\") return \"1\";\n    if (normalized === \"false\" || normalized === \"0\") return \"0\";\n    throw new Error(\"SBS requires auto_light.vehicle.isNew as true or false\");\n  }\n  \n  function escapeXml(value) {\n    return value.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\");\n  }\n  \n  let body = String(req.getBody({ raw: true }));\n  const input = Object.fromEntries([\n    \"auto_light.applicant.documentType\",\n    \"auto_light.applicant.documentNumber\",\n    \"auto_light.applicant.firstName\",\n    \"auto_light.applicant.surname\",\n    \"auto_light.applicant.gender\",\n    \"auto_light.applicant.birthDate\",\n    \"auto_light.applicant.city\",\n    \"auto_light.applicant.address\",\n    \"auto_light.applicant.phone\",\n    \"auto_light.applicant.email\",\n    \"auto_light.vehicle.fasecoldaCode\",\n    \"auto_light.vehicle.productionYear\",\n    \"auto_light.vehicle.isNew\",\n    \"auto_light.vehicle.circulationCity\",\n    \"auto_light.vehicle.plate\",\n    \"auto_light.vehicle.accessoriesValue\",\n    \"auto_light.vehicle.declaredValue\",\n  ].map((name) => [name, requiredInput(name)]));\n  const documentType = input[\"auto_light.applicant.documentType\"];\n  const gender = input[\"auto_light.applicant.gender\"];\n  const contactName = [\n    input[\"auto_light.applicant.firstName\"],\n    input[\"auto_light.applicant.surname\"],\n    String(environmentValue(\"auto_light.applicant.secondSurname\") ?? \"\").trim(),\n  ].filter(Boolean).join(\" \");\n  body = replaceNumericCode(body, \"tipoDocAseg\", documentType, documentTypeCodes);\n  body = replaceNumericCode(body, \"tipoDocConduc\", documentType, documentTypeCodes);\n  body = replaceNumericCode(body, \"idGeneroConduc\", gender, genderCodes);\n  body = replaceXmlValue(body, \"fechaNacimientoConduc\", sbsBirthDate(input[\"auto_light.applicant.birthDate\"]));\n  body = replaceXmlValue(body, \"nomCompletoContacto\", escapeXml(contactName));\n  body = replaceXmlValue(body, \"autoEsCeroKm\", sbsNewVehicleCode(input[\"auto_light.vehicle.isNew\"]));\n  req.setBody(body);",
+      "post": "  const responseBody = String(res.getBody());\n  const fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\n  if (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n    throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n  }\n  const match = responseBody.match(/<(?:[\\w-]+:)?No_Sesion\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?No_Sesion>/i);\n  if (!match?.[1]) throw new Error(\"SBS did not return a session identifier\");\n  bru.setVar(\"sbs_product_8_session_id\", match[1]);"
+    },
+    {
+      "id": "033-sbs-product-8-add-coverage-1",
+      "name": "agregar cobertura 1",
+      "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+      "method": "POST",
+      "headers": {
+        "accept": "text/xml",
+        "content-type": "text/xml; charset=utf-8",
+        "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n      <nomUsu>{{sbs_username}}</nomUsu>\n      <passwd>{{sbs_password}}</passwd>\n      <idSesion>{{sbs_product_8_session_id}}</idSesion>\n      <tipoCobertura>{{sbs_product_8_coverage_1_type}}</tipoCobertura>\n      <idCobertura>{{sbs_product_8_coverage_1_id}}</idCobertura>\n    </AIGAutos_AdicionarCoberturaASesion>\n  </soap:Body>\n</soap:Envelope>",
+      "pre": "",
+      "post": "  const responseBody = String(res.getBody());\n  const fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\n  if (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n    throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n  }\n  const accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\n  if (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 1\");\n  bru.setVar(\"sbs_product_8_coverage_1_result\", accepted[1]);"
+    },
+    {
+      "id": "034-sbs-product-8-add-coverage-2",
+      "name": "agregar cobertura 2",
+      "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+      "method": "POST",
+      "headers": {
+        "accept": "text/xml",
+        "content-type": "text/xml; charset=utf-8",
+        "SOAPAction": "http://tempuri.org/AIGAutos_AdicionarCoberturaASesion"
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AIGAutos_AdicionarCoberturaASesion xmlns=\"http://tempuri.org/\">\n      <nomUsu>{{sbs_username}}</nomUsu>\n      <passwd>{{sbs_password}}</passwd>\n      <idSesion>{{sbs_product_8_session_id}}</idSesion>\n      <tipoCobertura>{{sbs_product_8_coverage_2_type}}</tipoCobertura>\n      <idCobertura>{{sbs_product_8_coverage_2_id}}</idCobertura>\n    </AIGAutos_AdicionarCoberturaASesion>\n  </soap:Body>\n</soap:Envelope>",
+      "pre": "",
+      "post": "  const responseBody = String(res.getBody());\n  const fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\n  if (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n    throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n  }\n  const accepted = responseBody.match(/<(?:[\\w-]+:)?CoberturaAgregada\\b[^>]*>\\s*([^<\\s]+)\\s*<\\/(?:[\\w-]+:)?CoberturaAgregada>/i);\n  if (!accepted?.[1] || /^(false|0)$/i.test(accepted[1])) throw new Error(\"SBS did not confirm coverage 2\");\n  bru.setVar(\"sbs_product_8_coverage_2_result\", accepted[1]);"
+    },
+    {
+      "id": "035-sbs-product-8-quote-and-close",
+      "name": "cotizar y cerrar",
+      "url": "https://www.cotizadoresgenerales.com/wsCotizaAutos/CotizaAutos.asmx",
+      "method": "POST",
+      "headers": {
+        "accept": "text/xml",
+        "content-type": "text/xml; charset=utf-8",
+        "SOAPAction": "http://tempuri.org/AIGAutos_CotizaryCerrarSesion"
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AIGAutos_CotizaryCerrarSesion xmlns=\"http://tempuri.org/\">\n      <nomUsu>{{sbs_username}}</nomUsu>\n      <passwd>{{sbs_password}}</passwd>\n      <idSesion>{{sbs_product_8_session_id}}</idSesion>\n    </AIGAutos_CotizaryCerrarSesion>\n  </soap:Body>\n</soap:Envelope>",
+      "pre": "",
+      "post": "  const responseBody = String(res.getBody());\n  const fault = responseBody.match(/<(?:[\\w-]+:)?faultstring\\b[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:[\\w-]+:)?faultstring>/i);\n  if (fault || /<(?:[\\w-]+:)?Fault\\b/i.test(responseBody)) {\n    throw new Error(\"SBS SOAP Fault: \" + String(fault?.[1] ?? \"unknown SOAP fault\").replace(/<[^>]+>/g, \" \").replace(/\\s+/g, \" \").trim());\n  }\n  function result(name) {\n    const expression = new RegExp(\"<(?:[\\\\w-]+:)?\" + name + \"\\\\b[^>]*>\\\\s*([^<\\\\s]+)\\\\s*<\\\\/(?:[\\\\w-]+:)?\" + name + \">\", \"i\");\n    const match = responseBody.match(expression);\n    if (!match?.[1]) throw new Error(\"SBS did not return \" + name);\n    return match[1];\n  }\n  bru.setVar(\"sbs_product_8_quote_number\", result(\"No_Cotizacion\"));\n  bru.setVar(\"sbs_product_8_premium_total\", result(\"Prima_Total\"));"
+    }
+  ],
+  "variables": [
+    {
+      "key": "sbs_password",
+      "value": "",
+      "secret": true,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_cod_fact_comision",
+      "value": "A70",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_coverage_1_id",
+      "value": "6",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_coverage_1_type",
+      "value": "Base",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_coverage_2_id",
+      "value": "31",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_coverage_2_type",
+      "value": "Adicional",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_digito_verif_aseg",
+      "value": "0",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_digito_verif_conduc",
+      "value": "0",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_nacionalidad",
+      "value": "45",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_opcion_deduc_ppd",
+      "value": "1",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_opcion_deduc_pph",
+      "value": "1",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_opcion_deduc_ptd",
+      "value": "1",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_opcion_deduc_pth",
+      "value": "1",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_opcion_rc",
+      "value": "8",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_opcion_rcexceso",
+      "value": "10",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_id_pais_nacimiento",
+      "value": "45",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_product_8_tel_fijo_contacto",
+      "value": "",
+      "secret": false,
+      "required": true
+    },
+    {
+      "key": "sbs_username",
+      "value": "",
+      "secret": true,
+      "required": true
+    }
+  ],
+  "input": {
+    "auto_light.applicant.documentType": "CC",
+    "auto_light.applicant.documentNumber": "",
+    "auto_light.applicant.firstName": "",
+    "auto_light.applicant.surname": "",
+    "auto_light.applicant.secondSurname": "",
+    "auto_light.applicant.gender": "F",
+    "auto_light.applicant.birthDate": "",
+    "auto_light.applicant.city": "",
+    "auto_light.applicant.address": "",
+    "auto_light.applicant.phone": "",
+    "auto_light.applicant.email": "",
+    "auto_light.vehicle.fasecoldaCode": "",
+    "auto_light.vehicle.productionYear": "",
+    "auto_light.vehicle.isNew": "false",
+    "auto_light.vehicle.circulationCity": "",
+    "auto_light.vehicle.plate": "",
+    "auto_light.vehicle.accessoriesValue": "0",
+    "auto_light.vehicle.declaredValue": ""
+  }
+}

@@ -1,0 +1,37 @@
+CREATE TABLE `agencies` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`address` text NOT NULL,
+	`id_check_digit` text NOT NULL,
+	`id_number` text NOT NULL,
+	`phone` text,
+	`logo` text,
+	`city_id` integer,
+	`coordinates` text,
+	`lr_id_number` text NOT NULL,
+	`lr_id_type` text NOT NULL,
+	`lr_name` text NOT NULL,
+	`payments_email` text NOT NULL,
+	`is_active` integer NOT NULL,
+	`email` text NOT NULL,
+	`is_in_house` integer NOT NULL,
+	`email_domain` text NOT NULL,
+	`birthday_from_email` text NOT NULL,
+	`payment_from_email` text NOT NULL,
+	`renewal_from_email` text NOT NULL,
+	`home_url` text NOT NULL,
+	`short_name` text NOT NULL,
+	`seller_required` integer NOT NULL,
+	`has_compliance` integer NOT NULL,
+	`default_cc_emails` text,
+	`surnames` text NOT NULL,
+	`type` text NOT NULL,
+	`theme` text NOT NULL,
+	`retirement_date` text
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `agencies_id_slug_unique` ON `agencies` (`id_slug`);--> statement-breakpoint
+CREATE UNIQUE INDEX `agencies_short_name_unique` ON `agencies` (`short_name`);

@@ -1,0 +1,191 @@
+import type { OpenAPIHono } from "@hono/zod-openapi";
+import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
+import { actorFromContext } from "../auth/middleware";
+import { AuthenticationError } from "../auth/types";
+import { createCollectionGateway } from "../crm/collection-gateway";
+import type { SqlBridgeClient } from "../crm/sql-bridge";
+import { dynamicOpenApi } from "../crm/dynamic-openapi";
+import { dynamicScalar } from "../crm/dynamic-scalar";
+import type { CrmRouteDependencies } from "./crm";
+import { genericSeed } from "./data-domains";
+import type { SolutionOptions } from "@savia/crm-server/solutions";
+
+export function registerDynamicCrmRoutes(
+  app: OpenAPIHono,
+  db: D1Database,
+  files?: R2Bucket,
+  integrationKey?: string,
+  dependencies?: CrmRouteDependencies,
+  externalService?: { fetch(request: Request): Promise<Response> },
+  gatewayFactory = createCollectionGateway,
+  sqlBridge?: SqlBridgeClient,
+  actionExecutor?: ExtensionActionExecutor,
+  extensionConnectionsEncryptionKey?: string,
+  beforeInstall?: SolutionOptions["beforeInstall"],
+) {
+  app.all("/v1/dynamic-crm/:agencyId/api/*", async (c) => {
+    const actor = actorFromContext(c);
+    const agencyId = Number(c.req.param("agencyId"));
+    if (!Number.isSafeInteger(agencyId) || agencyId <= 0)
+      return c.json(
+        {
+          error: {
+            code: "INVALID_AGENCY",
+            message: "Selecciona un tenant válido.",
+          },
+        },
+        400,
+      );
+    if (
+      !actor.globalRoles.includes("platform_admin") &&
+      !actor.memberships.some(
+        (m) =>
+          m.isActive &&
+          (m.tenantId ?? m.agencyId) === agencyId &&
+          ["agency_admin", "tenant_admin"].includes(m.role),
+      )
+    )
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "El CRM requiere administrar este tenant.",
+      );
+    const tenant = await db
+      .prepare(
+        "SELECT t.id FROM tenants t WHERE t.id=? AND t.kind='commercial' AND t.is_active=1",
+      )
+      .bind(agencyId)
+      .first<{ id: number; agency_id: number | null }>();
+    if (!tenant)
+      return c.json(
+        {
+          error: {
+            code: "TENANT_NOT_FOUND",
+            message: "El tenant no existe o está inactivo.",
+          },
+        },
+        404,
+      );
+    if (!files)
+      return c.json(
+        {
+          error: {
+            code: "CRM_UNAVAILABLE",
+            message: "El almacenamiento del CRM no está disponible.",
+          },
+        },
+        503,
+      );
+    const url = new URL(c.req.url);
+    let path = url.pathname.slice(
+      `/v1/dynamic-crm/${c.req.param("agencyId")}`.length,
+    );
+    if (
+      c.req.method === "GET" &&
+      ["/api/openapi.json", "/api/docs"].includes(path)
+    ) {
+      const document = await dynamicOpenApi(db, agencyId);
+      c.header("cache-control", "no-store");
+      if (path === "/api/openapi.json") return c.json(document);
+      return dynamicScalar(c, document, agencyId);
+    }
+    if (path.startsWith("/api/published/")) {
+      const match =
+        /^\/api\/published\/([a-z][a-z0-9_]{0,47})(?:\/([0-9a-f-]{36}))?$/.exec(
+          path,
+        );
+      if (!match)
+        return c.json(
+          { error: { code: "CRM_NOT_FOUND", message: "Ruta no encontrada." } },
+          404,
+        );
+      const allowed = match[2] ? ["GET", "PATCH", "DELETE"] : ["GET", "POST"];
+      if (!allowed.includes(c.req.method))
+        return c.json(
+          {
+            error: {
+              code: "CRM_METHOD_NOT_ALLOWED",
+              message: "Método no permitido.",
+            },
+          },
+          405,
+        );
+      path = `/api/records/${match[1]}${match[2] ? "/" + match[2] : ""}`;
+    }
+    const headers = new Headers();
+    for (const name of ["content-type", "idempotency-key"]) {
+      const value = c.req.header(name);
+      if (value) headers.set(name, value);
+    }
+    const request = new Request("https://crm.internal" + path + url.search, {
+      method: c.req.method,
+      headers,
+      body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
+    });
+    const gateway = gatewayFactory({
+      db,
+      files,
+      tenant: `agency:${agencyId}`,
+      actor,
+      crm: dependencies,
+      integrationKey,
+      extensionConnectionsEncryptionKey,
+      seedObjects: genericSeed,
+      sqlBridge,
+      externalCollections: externalService
+        ? {
+            fetch: async (request: Request) => {
+              const target = new URL(request.url);
+              target.pathname = `/v1/dynamic-crm/${agencyId}` + target.pathname;
+              const forwarded = new Headers(request.headers);
+              for (const name of ["authorization", "cookie"]) {
+                const value = c.req.header(name);
+                if (value) forwarded.set(name, value);
+              }
+              return externalService.fetch(
+                new Request(target, {
+                  method: request.method,
+                  headers: forwarded,
+                  body: ["GET", "HEAD"].includes(request.method)
+                    ? undefined
+                    : request.body,
+                }),
+              );
+            },
+          }
+        : undefined,
+      actionExecutor,
+      beforeInstall,
+    });
+    await gateway.prepare();
+    const response = await gateway.fetch(request);
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.set("cache-control", "no-store");
+    if (
+      !response.ok &&
+      responseHeaders.get("content-type")?.includes("application/json")
+    ) {
+      const body = (await response.json()) as { error?: unknown };
+      return Response.json(
+        {
+          error: {
+            code: "CRM_ERROR",
+            message:
+              typeof body.error === "string"
+                ? body.error
+                : body.error &&
+                    typeof body.error === "object" &&
+                    "message" in body.error &&
+                    typeof body.error.message === "string"
+                  ? body.error.message
+                  : "No se pudo completar la operación.",
+          },
+        },
+        { status: response.status, headers: responseHeaders },
+      );
+    }
+    return new Response(response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  });
+}

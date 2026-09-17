@@ -1,0 +1,18 @@
+title = "Savia public source secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic avatar integration test key"
+condition = "AND"
+paths = ['''^apps/api/test/account-avatar-auth\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^avatar-integration-test-secret-at-least-32-characters$''']
+
+[[allowlists]]
+description = "Synthetic CRM integration test key"
+condition = "AND"
+paths = ['''^apps/api/test/dynamic-crm\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^integration-test-key-with-at-least-32-characters$''']

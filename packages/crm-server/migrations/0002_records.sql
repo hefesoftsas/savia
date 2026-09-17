@@ -1,0 +1,11 @@
+ALTER TABLE crm_objects ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE crm_records ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE crm_records ADD COLUMN deleted_at TEXT;
+CREATE TABLE crm_unique_values (tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, field_name TEXT NOT NULL, value TEXT NOT NULL, record_id TEXT NOT NULL, PRIMARY KEY(tenant_id,object_name,field_name,value));
+CREATE INDEX crm_unique_record ON crm_unique_values(tenant_id,record_id);
+CREATE TABLE crm_write_guards(id TEXT PRIMARY KEY, valid INTEGER NOT NULL CHECK(valid=1));
+CREATE TABLE crm_requests(tenant_id TEXT NOT NULL, request_key TEXT NOT NULL, fingerprint TEXT NOT NULL, response TEXT NOT NULL, PRIMARY KEY(tenant_id,request_key));
+CREATE TABLE crm_schema_versions(tenant_id TEXT NOT NULL,object_name TEXT NOT NULL,version INTEGER NOT NULL,definition TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),PRIMARY KEY(tenant_id,object_name,version));
+CREATE TABLE crm_schema_data(tenant_id TEXT NOT NULL,object_name TEXT NOT NULL,version INTEGER NOT NULL,record_id TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(tenant_id,object_name,version,record_id));
+INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) SELECT tenant_id,name,version,json_object('name',name,'label',label,'description',description,'config',json(config),'version',version) FROM crm_objects;
+CREATE INDEX crm_records_active ON crm_records(tenant_id,object_name,deleted_at,updated_at);

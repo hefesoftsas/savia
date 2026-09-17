@@ -1,0 +1,156 @@
+.connection-panel {
+  margin-top: 28px;
+  padding: 20px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+}
+.connection-panel h3 {
+  margin: 0;
+}
+.connection-panel small,
+.integration-hint,
+.integration-support {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.integration-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+.integration-check input {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.integration-support {
+  margin: 20px 0;
+}
+.integration-support summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.integration-support p {
+  margin: 8px 0;
+}
+.integration-runs {
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 24px;
+}
+.integration-runs-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.integration-runs-heading h2 {
+  font-size: 20px;
+  font-weight: 650;
+}
+.integration-runs-heading p {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.integration-table-scroll {
+  overflow: auto;
+}
+.integration-table-scroll table {
+  width: 100%;
+  font-size: 13px;
+  text-align: left;
+  border-collapse: collapse;
+}
+.integration-table-scroll th,
+.integration-table-scroll td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.integration-table-scroll small {
+  display: block;
+  max-width: 320px;
+  margin-top: 4px;
+  color: var(--destructive);
+}
+.integration-execution {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.integration-execution-fields {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.integration-execution-fields:disabled {
+  opacity: 0.55;
+}
+.integration-param {
+  display: grid;
+  gap: 7px;
+}
+.integration-mapping {
+  margin-top: 24px;
+  display: grid;
+  gap: 12px;
+}
+.integration-mapping h3 {
+  font-weight: 600;
+}
+.integration-mapping p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.integration-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 2fr;
+  gap: 12px;
+  align-items: center;
+}
+.integration-source > label {
+  display: block;
+  margin: 12px 0 6px;
+}
+.integration-source h3 {
+  margin-top: 28px;
+}
+.saved-integration[aria-pressed="true"] {
+  background: var(--card);
+  color: var(--primary);
+}
+.integration-detail label {
+  margin-top: 6px;
+}
+.operation-result pre {
+  max-height: 360px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.operation-row:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+@media (max-width: 640px) {
+  .integration-runs {
+    padding: 16px;
+  }
+  .integration-runs-heading {
+    align-items: flex-start;
+  }
+  .integration-mapping-row {
+    grid-template-columns: 1fr;
+  }
+  .connection-panel {
+    padding: 14px;
+  }
+}

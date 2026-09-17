@@ -1,0 +1,48 @@
+# Local workspaces and agent artifacts
+.worktrees/
+.superpowers/
+
+# Dependencies and build output
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+.turbo/
+.cache/
+*.tsbuildinfo
+*.d.ts.map
+
+# Cloudflare Workers and Miniflare local state
+.wrangler/
+.mf/
+.dev.vars
+.dev.vars.*
+.savia-replacement/
+**/wrangler.production.jsonc
+**/wrangler.preview.jsonc
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# External-provider credentials and Bruno runtime artifacts
+infra/secrets/
+integrations/bruno/**/.env
+integrations/bruno/**/.savia-secrets/
+integrations/bruno/**/environments/*.local.bru
+reports/external-providers/
+
+# Local databases and Compose bind volumes
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+postgres-data/
+volumes/
+
+# Logs and operating-system/editor files
+*.log
+.DS_Store
+.idea/
+*.swp
