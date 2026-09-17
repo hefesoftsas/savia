@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
 import { actorFromContext } from "../auth/middleware";
 import { AuthenticationError } from "../auth/types";
+import { canAccessSharedCrm, canManageSharedCrm } from "../crm/hubspot-access";
 import { createCollectionGateway } from "../crm/collection-gateway";
 import type { SqlBridgeClient } from "../crm/sql-bridge";
 import { dynamicOpenApi } from "../crm/dynamic-openapi";
@@ -36,19 +37,47 @@ export function registerDynamicCrmRoutes(
         },
         400,
       );
-    if (
-      !actor.globalRoles.includes("platform_admin") &&
-      !actor.memberships.some(
-        (m) =>
-          m.isActive &&
-          (m.tenantId ?? m.agencyId) === agencyId &&
-          ["agency_admin", "tenant_admin"].includes(m.role),
+    const tenantKey = `agency:${agencyId}`;
+    const manager = canManageSharedCrm(actor, tenantKey);
+    let sharedNames: Set<string> | undefined;
+    const requestedPath = new URL(c.req.url).pathname.slice(
+      `/v1/dynamic-crm/${c.req.param("agencyId")}`.length,
+    );
+    const readOnlyBootstrap =
+      c.req.method === "POST" &&
+      ["/api/bootstrap", "/api/business/setup"].includes(requestedPath);
+    if (!manager) {
+      if (
+        !canAccessSharedCrm(actor, tenantKey) ||
+        (c.req.method !== "GET" && !readOnlyBootstrap)
       )
-    )
-      throw new AuthenticationError(
-        "AUTHORIZATION_FORBIDDEN",
-        "El CRM requiere administrar este tenant.",
-      );
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "No tienes permiso para esta operación en el tenant.",
+        );
+      const rows = await db
+        .prepare(
+          "SELECT object_name FROM crm_collection_bindings WHERE tenant_id=? AND json_extract(config,'$.kind')='crm' AND json_extract(config,'$.provider')='hubspot' AND json_extract(config,'$.accessScope')='tenant'",
+        )
+        .bind(tenantKey)
+        .all<{ object_name: string }>();
+      sharedNames = new Set(rows.results.map((row) => row.object_name));
+      const path = requestedPath;
+      const match =
+        /^\/api\/(?:objects|records|record-detail|record-activity|record-notes|record-links|views)\/([^/]+)(?:\/|$)/.exec(
+          path,
+        );
+      if (
+        !sharedNames.size ||
+        (!readOnlyBootstrap &&
+          path !== "/api/objects" &&
+          (!match || !sharedNames.has(decodeURIComponent(match[1]))))
+      )
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "Esta colección no está compartida con el tenant.",
+        );
+    }
     const tenant = await db
       .prepare(
         "SELECT t.id FROM tenants t WHERE t.id=? AND t.kind='commercial' AND t.is_active=1",
@@ -75,6 +104,8 @@ export function registerDynamicCrmRoutes(
         },
         503,
       );
+    // Members use already-installed shared collections; bootstrapping must not mutate schema.
+    if (!manager && readOnlyBootstrap) return c.json({ ok: true });
     const url = new URL(c.req.url);
     let path = url.pathname.slice(
       `/v1/dynamic-crm/${c.req.param("agencyId")}`.length,
@@ -158,6 +189,16 @@ export function registerDynamicCrmRoutes(
     });
     await gateway.prepare();
     const response = await gateway.fetch(request);
+    if (sharedNames && path === "/api/objects" && response.ok) {
+      const body = (await response.json()) as { data: Array<{ name: string }> };
+      return Response.json(
+        {
+          data: body.data.filter((object) => sharedNames!.has(object.name)),
+          menuLayout: null,
+        },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
     const responseHeaders = new Headers(response.headers);
     responseHeaders.set("cache-control", "no-store");
     if (

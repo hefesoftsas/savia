@@ -106,9 +106,7 @@ export function registerDataDomainRoutes(
     const actor = actorFromContext(c),
       platform = actor.globalRoles.includes("platform_admin");
     const allowed = actor.memberships
-      .filter(
-        (m) => m.isActive && ["agency_admin", "tenant_admin"].includes(m.role),
-      )
+      .filter((m) => m.isActive)
       .map((m) => m.tenantId ?? m.agencyId);
     if (!platform && !allowed.length)
       throw new AuthenticationError(

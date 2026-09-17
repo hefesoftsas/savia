@@ -4,11 +4,13 @@ import type { CollectionGatewayContext } from "./collection-gateway";
 import { createCrmRepository } from "./repository";
 import { hubspotObjects, hubspotObject } from "./hubspot-workspace-catalog";
 import { objectSchema } from "@savia/crm-shared/metadata";
-import { getObject } from "@savia/crm-server/services";
+import { canAccessSharedCrm, canManageSharedCrm } from "./hubspot-access";
+import { audit, getObject } from "@savia/crm-server/services";
 import type { ActiveCrmConnection } from "./contracts";
 
 type Binding = {
   kind: "crm";
+  accessScope?: "tenant";
   provider: "hubspot";
   resource: string;
   principalId: string;
@@ -85,24 +87,40 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
       ? c.json({ error: e.message }, e.status)
       : c.json({ error: "No se pudo completar la operación en HubSpot." }, 502),
   );
+  app.use("*", async (c, next) => {
+    if (!canAccessSharedCrm(actor, tenant))
+      fail("No tienes acceso a este tenant.", 403);
+    if (c.req.method !== "GET" && !canManageSharedCrm(actor, tenant))
+      fail("Esta operación requiere administrar el tenant.", 403);
+    await next();
+  });
   async function connection(binding?: Binding) {
+    if (
+      binding &&
+      binding.accessScope !== "tenant" &&
+      binding.principalId !== actor.principal.id
+    )
+      fail("Esta colección pertenece a otra conexión de HubSpot.", 403);
+    const owner = binding?.principalId ?? actor.principal.id;
     const current = await createCrmRepository(
       db,
-    ).findActiveConnectionForPrincipal("hubspot", actor.principal.id);
+    ).findActiveConnectionForPrincipal("hubspot", owner);
     if (
       !current ||
       current.status !== "connected" ||
       !current.externalAccountId
     )
-      fail("Conecta HubSpot para acceder a esta colección.", 409);
+      fail("La conexión de HubSpot del tenant debe reconectarse.", 409);
     if (
       binding &&
-      (binding.principalId !== actor.principal.id ||
-        binding.connectionId !== current.id ||
+      (binding.connectionId !== current.id ||
         binding.accountId !== current.externalAccountId ||
         !hubspotObject(binding.resource))
     )
-      fail("Esta colección pertenece a otra conexión de HubSpot.", 403);
+      fail(
+        "La conexión de esta colección ha cambiado. Un administrador debe revisarla.",
+        403,
+      );
     if (!crm) fail("HubSpot no está disponible.", 503);
     return current;
   }
@@ -118,6 +136,25 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
       method: method as any,
       ...(body === undefined ? {} : { body }),
     });
+    await audit(
+      db,
+      tenant,
+      method === "GET" ||
+        (method === "POST" &&
+          /\/(?:search|batch\/read)$/.test(path.split("?")[0]))
+        ? "hubspot.read"
+        : "hubspot.write",
+      "hubspot",
+      null,
+      {
+        principalId: actor.principal.id,
+        connectionId: conn.id,
+        method,
+        // Keep search terms, payloads, credentials, and provider records out of audit logs.
+        resource: path.split("?")[0].split("/").slice(0, 5).join("/"),
+        status: response.status,
+      },
+    ).run();
     if (!response.ok)
       fail(
         response.status === 403
@@ -328,6 +365,7 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
       }
       const binding: Binding = {
         kind: "crm",
+        accessScope: "tenant",
         provider: "hubspot",
         resource: item.resource,
         principalId: actor.principal.id,
@@ -562,7 +600,8 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
           const currentRelationId = `hubspot:${name}:${row.object_name}`;
           if (relationId && relationId !== currentRelationId) return;
           if (
-            target.principalId !== actor.principal.id ||
+            (target.accessScope !== "tenant" &&
+              target.principalId !== actor.principal.id) ||
             target.connectionId !== conn.id ||
             target.accountId !== conn.externalAccountId
           )

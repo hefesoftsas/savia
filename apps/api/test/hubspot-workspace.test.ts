@@ -15,7 +15,11 @@ let conn: any = {
 vi.mock("../src/crm/repository", () => ({
   createCrmRepository: () => ({
     findActiveConnectionForPrincipal: async (_: string, principal: string) =>
-      principal === "owner" ? conn : undefined,
+      principal === "owner"
+        ? conn
+        : principal === "member"
+          ? { ...conn, id: "unrelated-connection", externalAccountId: "456" }
+          : undefined,
   }),
 }));
 const calls: any[] = [];
@@ -23,7 +27,11 @@ const context: any = {
   db: env.DB,
   files: env.FILES,
   tenant: "domain:workspace-test",
-  actor: { principal: { id: "owner", isActive: true } },
+  actor: {
+    principal: { id: "owner", isActive: true },
+    globalRoles: ["platform_admin"],
+    memberships: [],
+  },
   seedObjects: [],
   crm: {
     nango: {
@@ -151,14 +159,21 @@ it("reads remote pages and rejects invalid fields before writes", async () => {
   ).toBe(200);
 });
 it("enforces principal, tenant, active connection, account and current grants", async () => {
-  const foreign = { ...context, actor: { principal: { id: "other" } } };
+  const foreign = {
+    ...context,
+    actor: {
+      principal: { id: "other", isActive: true },
+      globalRoles: [],
+      memberships: [],
+    },
+  };
   expect(
     (
       await createHubspotWorkspaceApp(foreign).request(
         "/api/records/hubspot_contacts",
       )
     ).status,
-  ).toBe(409);
+  ).toBe(403);
   expect(
     (
       await createHubspotWorkspaceApp({ ...context, tenant: "other" }).request(
@@ -417,4 +432,175 @@ it("refreshes generated datetime labels and flags while preserving customized la
   } finally {
     context.crm.nango.proxy = proxy;
   }
+});
+
+it("shares installed collections with authorized domain users without their own connection", async () => {
+  const teammate = {
+    ...context,
+    actor: {
+      principal: { id: "teammate", isActive: true },
+      globalRoles: ["platform_admin"],
+      memberships: [],
+    },
+  };
+  const response = await createHubspotWorkspaceApp(teammate).request(
+    "/api/records/hubspot_contacts",
+  );
+  expect(response.status).toBe(200);
+  expect(calls.at(-1).connection.id).toBe(conn.id);
+  const audit = await env.DB.prepare(
+    "SELECT detail FROM crm_audit WHERE tenant_id=? AND action='hubspot.read' ORDER BY rowid DESC LIMIT 1",
+  )
+    .bind(context.tenant)
+    .first<{ detail: string }>();
+  expect(JSON.parse(audit!.detail).principalId).toBe("teammate");
+});
+it("does not share a legacy personal binding or allow inactive actors", async () => {
+  const row = await env.DB.prepare(
+    "SELECT config FROM crm_collection_bindings WHERE tenant_id=? AND object_name='hubspot_contacts'",
+  )
+    .bind(context.tenant)
+    .first<{ config: string }>();
+  const original = row!.config;
+  const privateBinding = JSON.parse(original);
+  delete privateBinding.accessScope;
+  await env.DB.prepare(
+    "UPDATE crm_collection_bindings SET config=? WHERE tenant_id=? AND object_name='hubspot_contacts'",
+  )
+    .bind(JSON.stringify(privateBinding), context.tenant)
+    .run();
+  const teammate = {
+    ...context,
+    actor: {
+      principal: { id: "teammate", isActive: true },
+      globalRoles: ["platform_admin"],
+      memberships: [],
+    },
+  };
+  expect(
+    (
+      await createHubspotWorkspaceApp(teammate).request(
+        "/api/records/hubspot_contacts",
+      )
+    ).status,
+  ).toBe(403);
+  await env.DB.prepare(
+    "UPDATE crm_collection_bindings SET config=? WHERE tenant_id=? AND object_name='hubspot_contacts'",
+  )
+    .bind(original, context.tenant)
+    .run();
+  teammate.actor.principal.isActive = false;
+  expect(
+    (
+      await createHubspotWorkspaceApp(teammate).request(
+        "/api/records/hubspot_contacts",
+      )
+    ).status,
+  ).toBe(403);
+});
+
+it("lets a tenant member read the shared connection but blocks writes, inactive membership and revoked connections", async () => {
+  const tenantContext = { ...context, tenant: "agency:101" };
+  expect(
+    (
+      await createHubspotWorkspaceApp(tenantContext).request(
+        "/api/crm-workspace/install",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        },
+      )
+    ).status,
+  ).toBe(200);
+  const member = {
+    ...tenantContext,
+    actor: {
+      principal: { id: "member", isActive: true },
+      globalRoles: [],
+      memberships: [{ tenantId: 101, isActive: true, role: "viewer" }],
+    },
+  };
+  expect(
+    (
+      await createHubspotWorkspaceApp(member as any).request(
+        "/api/records/hubspot_contacts",
+      )
+    ).status,
+  ).toBe(200);
+  expect(calls.at(-1).connection.id).toBe(conn.id);
+  expect(
+    (
+      await createHubspotWorkspaceApp(member as any).request(
+        "/api/records/hubspot_contacts/7",
+        { method: "DELETE" },
+      )
+    ).status,
+  ).toBe(403);
+  member.actor.memberships[0].isActive = false;
+  expect(
+    (
+      await createHubspotWorkspaceApp(member as any).request(
+        "/api/records/hubspot_contacts",
+      )
+    ).status,
+  ).toBe(403);
+  member.actor.memberships[0].isActive = true;
+  const before = conn;
+  conn = { ...conn, status: "disconnected" };
+  expect(
+    (
+      await createHubspotWorkspaceApp(member as any).request(
+        "/api/records/hubspot_contacts",
+      )
+    ).status,
+  ).toBe(409);
+  conn = before;
+});
+
+it("shares related records while excluding private targets and auditing batch reads as reads", async () => {
+  const member = {
+    ...context,
+    tenant: "agency:101",
+    actor: {
+      principal: { id: "member", isActive: true },
+      globalRoles: [],
+      memberships: [{ tenantId: 101, isActive: true, role: "viewer" }],
+    },
+  };
+  const response = await createHubspotWorkspaceApp(member as any).request(
+    "/api/record-links/hubspot_contacts/7",
+  );
+  expect(response.status).toBe(200);
+  const data = ((await response.json()) as any).data;
+  expect(
+    data.find((item: any) => item.targetObject === "hubspot_companies").records,
+  ).toEqual([{ id: "9", label: "Acme" }]);
+  const events = await env.DB.prepare(
+    "SELECT action,detail FROM crm_audit WHERE tenant_id=?",
+  )
+    .bind(member.tenant)
+    .all<{ action: string; detail: string }>();
+  const memberPosts = events.results.filter((event) => {
+    const detail = JSON.parse(event.detail);
+    return detail.principalId === "member" && detail.method === "POST";
+  });
+  expect(memberPosts.length).toBeGreaterThan(0);
+  expect(memberPosts.every((event) => event.action === "hubspot.read")).toBe(
+    true,
+  );
+  await env.DB.prepare(
+    "UPDATE crm_collection_bindings SET config=json_remove(config,'$.accessScope') WHERE tenant_id=? AND object_name='hubspot_companies'",
+  )
+    .bind(member.tenant)
+    .run();
+  const privateResponse = await createHubspotWorkspaceApp(
+    member as any,
+  ).request("/api/record-links/hubspot_contacts/7");
+  expect(privateResponse.status).toBe(200);
+  expect(
+    ((await privateResponse.json()) as any).data.some(
+      (item: any) => item.targetObject === "hubspot_companies",
+    ),
+  ).toBe(false);
 });

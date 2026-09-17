@@ -66,3 +66,26 @@ También se verificaron la edición de fecha y hora y el archivado recuperable d
 la nota sintética desde Savia.
 Los registros de demostración llevan el nombre **Savia CRM QA** y el contacto
 usa `savia-crm-qa-20260911@example.com`.
+
+## Tenant-shared access
+
+Installing HubSpot collections shares those collections with every active member
+of the selected tenant. Requests use the installing owner's bound connection;
+viewers do not need a personal HubSpot connection, and their personal connection
+cannot redirect a shared collection to another account.
+
+Members can list and read shared collections. Tenant administrators retain write
+and installation access, subject to the provider's current scopes. Other local
+collections, settings, source management, and schema changes remain protected.
+Platform/custom domains remain restricted to platform administrators.
+
+The server checks the tenant, binding scope, connection ID, account ID, and
+connection status for every operation. Reconnecting requires the administrator
+to reinstall against the same account. Disconnecting the source connection stops
+access for the team. Audit records identify the actual caller and operation,
+without recording credentials, search queries, or provider payloads.
+
+Existing bindings without `accessScope: "tenant"` remain personal. Their owner
+can explicitly share them by reinstalling; an operator may migrate a specifically
+authorized tenant's existing bindings after verifying the owner and account.
+Do not blanket-enable bindings in other tenants.

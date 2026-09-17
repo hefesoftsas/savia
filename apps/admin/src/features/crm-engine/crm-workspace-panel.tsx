@@ -102,7 +102,10 @@ export default function CrmWorkspacePanel({
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <CardTitle id="connected-crm-title" className="text-base font-semibold">
+            <CardTitle
+              id="connected-crm-title"
+              className="text-base font-semibold"
+            >
               CRM conectado · HubSpot
             </CardTitle>
             {workspace.data?.connected ? (
@@ -192,14 +195,15 @@ export default function CrmWorkspacePanel({
         {error && (
           <Alert variant="destructive" className="py-2.5">
             <AlertCircle className="size-4" />
-            <AlertDescription className="text-xs">
-              {error}
-            </AlertDescription>
+            <AlertDescription className="text-xs">{error}</AlertDescription>
           </Alert>
         )}
 
         {notice && (
-          <Alert className="border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 py-2.5" role="status">
+          <Alert
+            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 py-2.5"
+            role="status"
+          >
             <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
             <AlertDescription className="text-xs font-medium">
               {notice}
@@ -208,6 +212,11 @@ export default function CrmWorkspacePanel({
         )}
       </CardContent>
 
+      <p className="px-6 pb-4 text-sm text-muted-foreground">
+        Al instalar, todos los miembros activos de este tenant podrán consultar
+        estas colecciones usando tu conexión. Solo los administradores podrán
+        modificar registros, según los permisos de HubSpot.
+      </p>
       <CardFooter className="flex flex-wrap items-center gap-2 border-t bg-muted/20 py-3">
         <Button
           type="button"

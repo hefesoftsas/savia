@@ -205,3 +205,75 @@ it("encrypts integration credentials using the configured Savia CRM key", async 
   expect(row?.encrypted_secret).toBeTruthy();
   expect(row?.encrypted_secret).not.toContain("test-private-value");
 });
+
+it("allows members to discover only shared CRM collections and rejects writes and foreign tenants", async () => {
+  const manager = admin();
+  for (const name of ["shared_contacts", "private_contacts"]) {
+    await manager.request(prefix + "/objects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        label: name,
+        config: {
+          version: 2,
+          fields: { name: { type: "Textbox", label: "Name" } },
+          fieldOrder: ["name"],
+        },
+      }),
+    });
+  }
+  await env.DB.prepare(
+    "INSERT INTO crm_collection_bindings(tenant_id,object_name,source_id,resource,config) VALUES(?,?,?,?,?)",
+  )
+    .bind(
+      "agency:101",
+      "shared_contacts",
+      "hubspot",
+      "contacts",
+      JSON.stringify({
+        kind: "crm",
+        provider: "hubspot",
+        resource: "contacts",
+        accessScope: "tenant",
+        principalId: "owner",
+        connectionId: "shared-connection",
+        accountId: "123",
+      }),
+    )
+    .run();
+  const member = createApp(
+    env.DB,
+    env.DOCUMENTS,
+    undefined,
+    agencyMemberAuthenticator(),
+  );
+  const response = await member.request(prefix + "/objects");
+  expect(response.status).toBe(200);
+  expect(((await response.json()) as any).data.map((x: any) => x.name)).toEqual(
+    ["shared_contacts"],
+  );
+  expect(
+    (await member.request(prefix + "/bootstrap", { method: "POST" })).status,
+  ).toBe(200);
+  expect(
+    (await member.request(prefix + "/objects/private_contacts")).status,
+  ).toBe(403);
+  expect(
+    (
+      await member.request(prefix + "/records/shared_contacts", {
+        method: "POST",
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await member.request(prefix + "/crm-workspace/install", {
+        method: "POST",
+      })
+    ).status,
+  ).toBe(403);
+  expect((await member.request("/v1/dynamic-crm/202/api/objects")).status).toBe(
+    403,
+  );
+});
