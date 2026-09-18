@@ -198,7 +198,7 @@ await expect(page.getByText("ana@example.test")).toBeVisible();
 - [ ] Cover source deletes and permission removals; a missing row in an incomplete provider page is not proof of deletion.
 - [ ] Start external sources read-only. Enable writes only after confirming conditional updates, deduplication, failure recovery and action semantics.
 - [ ] Handle low-code field addition/removal/type changes while unsent edits exist; preserve conflicting old values in the conflict record.
-- [ ] Commit each independently verified source adapter with its supported capability matrix. Do not label unsupported sources fully offline.
+- [ ] Commit each independently verified source adapter with its supported capability grid. Do not label unsupported sources fully offline.
 
 ## Task 8: Complete offline boot, rollout and operational verification
 
