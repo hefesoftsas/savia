@@ -17,6 +17,7 @@ import { PasswordResetPage } from "@/features/users/password-reset-page";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { Admin } from "@/components/admin";
 import { OfflineBanner } from "@/offline/offline-banner";
+import { OutboxStatus } from "@/offline/outbox-status";
 import { createOfflinePersister } from "@/offline/query-persister";
 import { shouldPersistQueryKey } from "@/offline/persisted-keys";
 import {
@@ -179,6 +180,7 @@ export function App({ services }: { services?: AppServices } = {}) {
     <AppServicesProvider services={appServices}>
       <TenantTitleSync title={pageTitle} />
       <OfflineBanner />
+      <OutboxStatus />
       <Admin
         authProvider={appServices.authProvider}
         dataProvider={appServices.dataProvider}

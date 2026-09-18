@@ -82,6 +82,8 @@ import { UserMenu } from "@/components/admin/user-menu";
 import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useAppServices } from "@/features/assistant/assistant-context";
+import { isOfflineError } from "@/offline/offline-error";
+import { enqueueOutboxOp } from "@/offline/outbox";
 import { useSaviaRequestWorkspace } from "@/features/savia-request/savia-request-provider";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 
@@ -537,7 +539,23 @@ export function AppSidebar() {
         : nextLayout;
       setLayout(saved);
       setConfirmedLayout(saved);
-    } catch {
+    } catch (error) {
+      if (isOfflineError(error)) {
+        // Offline: keep the local layout and queue the save. The server
+        // converges on reconnect; nothing is reverted.
+        try {
+          await enqueueOutboxOp({
+            resource: "user-preferences",
+            action: "save-sidebar",
+            payload: nextLayout,
+          });
+          setConfirmedLayout(nextLayout);
+          return;
+        } catch {
+          // Queue unavailable (not eligible or no storage): fall through
+          // to the revert below.
+        }
+      }
       setLayout(lastConfirmed);
       const message = translate(navigationSaveErrorKey);
       setSaveError(message);
