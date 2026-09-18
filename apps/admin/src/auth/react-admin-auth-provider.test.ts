@@ -35,6 +35,50 @@ describe("React Admin authentication provider", () => {
     expect(session.clearSession).toHaveBeenCalledTimes(2);
   });
 
+  it("wipes offline data on logout without breaking the redirect", async () => {
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn().mockResolvedValue(undefined),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn(),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn().mockResolvedValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+      getAuthorizeUrl: vi.fn().mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+    };
+    const onLogout = vi.fn();
+    const provider = createReactAdminAuthProvider(session, { onLogout });
+
+    await expect(provider.logout({})).resolves.toBe(
+      "http://127.0.0.1:8787/api/auth/admin/authorize",
+    );
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it("still redirects when the offline wipe itself fails", async () => {
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn().mockResolvedValue(undefined),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn(),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      getAuthorizeUrl: vi.fn().mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+    };
+    const provider = createReactAdminAuthProvider(session, {
+      onLogout: () => {
+        throw new Error("storage locked");
+      },
+    });
+
+    await expect(provider.logout({})).resolves.toBe(
+      "http://127.0.0.1:8787/api/auth/admin/authorize",
+    );
+  });
+
   it("shows user administration only to platform administrators", async () => {
     const session = {
       checkSession: vi.fn(),

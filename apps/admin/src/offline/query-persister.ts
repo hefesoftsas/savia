@@ -1,6 +1,10 @@
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import type { Persister } from "@tanstack/react-query-persist-client";
 import { getOfflineDb, type QueryCacheRow } from "./db";
+import { isPiiQueryKey } from "./persisted-keys";
+
+/** PII collections expire from the persisted cache after 12 hours. */
+export const PII_COLLECTION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Minimal key-value table surface. Dexie's Table satisfies it, and unit
@@ -51,15 +55,49 @@ function createMemoryStorage(): StringStorage {
 }
 
 /**
+ * Drops expired PII entries at restore time. Metadata and admin lists keep
+ * the global maxAge; opted-in customer lists additionally expire after
+ * PII_COLLECTION_MAX_AGE_MS. Fails closed per query, open overall: a broken
+ * shape drops that entry, never the whole cache.
+ */
+function filterExpiredPiiQueries<T>(parsed: T): T {
+  try {
+    const holder = parsed as {
+      clientState?: { queries?: unknown[] };
+    };
+    const queries = holder?.clientState?.queries;
+    if (!Array.isArray(queries)) return parsed;
+    const now = Date.now();
+    holder.clientState!.queries = queries.filter((query) => {
+      try {
+        const key = (query as { queryKey?: unknown })?.queryKey;
+        if (!isPiiQueryKey(key)) return true;
+        const updatedAt = (query as { state?: { dataUpdatedAt?: unknown } })
+          ?.state?.dataUpdatedAt;
+        return (
+          typeof updatedAt === "number" && now - updatedAt < PII_COLLECTION_MAX_AGE_MS
+        );
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    // Unexpected shapes keep the previous behavior (restore as-is).
+  }
+  return parsed;
+}
+/**
  * Persister for the TanStack Query cache. Uses Dexie/IndexedDB in browsers
  * and falls back to memory where IndexedDB is unavailable (tests, SSR), so
- * mounting the provider never crashes outside a real browser.
+ * mounting the provider never crashes outside a real browser. Customer
+ * lists additionally expire via `deserialize` (see PII_COLLECTION_MAX_AGE_MS).
  */
 export function createOfflinePersister(table?: QueryCacheTable): Persister {
   if (table) {
     return createAsyncStoragePersister({
       key: "savia-query-cache",
       storage: createDexieStorage(table),
+      deserialize: (cached) => filterExpiredPiiQueries(JSON.parse(cached)),
     });
   }
   const storage =
@@ -69,5 +107,6 @@ export function createOfflinePersister(table?: QueryCacheTable): Persister {
   return createAsyncStoragePersister({
     key: "savia-query-cache",
     storage,
+    deserialize: (cached) => filterExpiredPiiQueries(JSON.parse(cached)),
   });
 }

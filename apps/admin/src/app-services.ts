@@ -10,6 +10,8 @@ import { createSaviaDataProvider } from "./api/savia-data-provider";
 import { UserPreferencesClient } from "./api/user-preferences-client";
 import { BetterAuthOAuthSession } from "./auth/better-auth-oauth-session";
 import { createReactAdminAuthProvider } from "./auth/react-admin-auth-provider";
+import { createOfflinePersister } from "./offline/query-persister";
+import { createOfflineQueryClient } from "./offline/query-client";
 
 const apiUrl = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
 
@@ -21,11 +23,28 @@ export function createAppServices() {
     baseUrl: apiUrl,
     tokenSource: authSession,
   });
+  // Offline-first cache shared by React Admin and every useQuery. Owned
+  // here (not in components) so logout can wipe it: no client data stays
+  // on disk after the session ends.
+  const queryClient = createOfflineQueryClient();
+  const persister = createOfflinePersister();
+  const clearOfflineData = () => {
+    try {
+      queryClient.clear();
+    } catch {
+      // ignore cleanup failures on the way out
+    }
+    void Promise.resolve(persister.removeClient()).catch(() => undefined);
+  };
 
   return {
     authSession,
-    authProvider: createReactAdminAuthProvider(authSession),
+    authProvider: createReactAdminAuthProvider(authSession, {
+      onLogout: clearOfflineData,
+    }),
     apiClient,
+    queryClient,
+    persister,
     requestResults: new RequestResultClient(apiClient),
     assistantConfiguration: new AssistantConfigurationClient(apiClient),
     dataProvider: createSaviaDataProvider(apiClient),

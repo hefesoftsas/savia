@@ -175,11 +175,14 @@ export function App({ services }: { services?: AppServices } = {}) {
     () => services ?? getDefaultAppServices(),
     [services],
   );
-  // Offline-first QueryClient (persisted reads) shared by React Admin and
-  // every useQuery in the app. Mutations keep failing fast online-style;
-  // only reads are served from the persisted cache.
-  const [queryClient] = useState(() => createOfflineQueryClient());
-  const [persister] = useState(() => createOfflinePersister());
+  // Offline-first cache owned by app-services (so logout can wipe it);
+  // injected services in tests may omit it, hence the fallback.
+  const [queryClient] = useState(
+    () => appServices.queryClient ?? createOfflineQueryClient(),
+  );
+  const [persister] = useState(
+    () => appServices.persister ?? createOfflinePersister(),
+  );
   const [handlingCallback, setHandlingCallback] = useState(
     () => window.location.pathname === "/auth/callback",
   );

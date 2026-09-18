@@ -19,8 +19,7 @@ describe("shouldPersistQueryKey", () => {
     );
   });
 
-  it("persists CRM studio metadata reads", () => {
-    expect(shouldPersistQueryKey(["business-setup", "agency:101"])).toBe(true);
+  it("persists CRM studio metadata reads", () => {    expect(shouldPersistQueryKey(["business-setup", "agency:101"])).toBe(true);
     expect(
       shouldPersistQueryKey([
         "collection-relations",
@@ -33,6 +32,22 @@ describe("shouldPersistQueryKey", () => {
     );
     expect(shouldPersistQueryKey(["views", "clientes"])).toBe(true);
     expect(shouldPersistQueryKey(["objects"])).toBe(true);
+  });
+
+  it("persists opted-in customer lists but never record details", () => {
+    expect(
+      shouldPersistQueryKey(["pipeline", "cotizaciones", { page: 1 }]),
+    ).toBe(true);
+    expect(
+      shouldPersistQueryKey(["pipeline", "cotizaciones_detalle", {}]),
+    ).toBe(true);
+    expect(shouldPersistQueryKey(["summary", "cotizaciones", {}])).toBe(true);
+    expect(shouldPersistQueryKey(["pipeline", "clientes", {}])).toBe(false);
+    expect(shouldPersistQueryKey(["summary", "clientes", {}])).toBe(false);
+    expect(
+      shouldPersistQueryKey(["record-detail", "cotizaciones", "r-1"]),
+    ).toBe(false);
+    expect(shouldPersistQueryKey(["record-files", "cotizaciones"])).toBe(false);
   });
 
   it("never persists credentials-adjacent reads", () => {

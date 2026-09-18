@@ -94,6 +94,8 @@ Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño
 
 **Decision 2026-09-17 (implemented): delta via monotonic collection versions, not row mirrors.** `crm_collection_versions` (migration 0051) is bumped by the dynamic-crm proxy on every records/views mutation and the version travels in the realtime event; clients keep a Dexie version map and skip covered events. Full row mirrors were rejected: record backends are heterogeneous (local D1, HubSpot-shared, Postgres) and tombstoning all of them is disproportionate while push already scopes every invalidation.
 
+**Decision 2026-09-18 (implemented): customer lists are opt-in per collection, never global.** `OFFLINE_PII_COLLECTIONS` (`cotizaciones`, `cotizaciones_detalle` pilot); only `pipeline`/`summary` list queries persist, never `record-detail`/files/links. PII additionally expires at restore after 12 h and the whole persisted cache is wiped on logout (`onLogout` → `queryClient.clear()` + `persister.removeClient()`). Rationale: IndexedDB is unencrypted and outlives the session; stale offers are worse than a clear error; credential endpoints never persist.
+
 ## Fase 3 (implemented 2026-09-17): Service worker + app shell
 
 `vite-plugin-pwa` (generateSW, autoUpdate) precaches only the boot shell (index.html, entry JS/CSS, icons ≈ 2.8 MB): dist ships ~9k chunks (43 MB) and precaching all of it would tax first visits, so remaining same-origin assets cache on first use (CacheFirst `savia-shell`). `/v1/*` and `/api/*` are excluded from Cache Storage on purpose — API payloads live only in the Dexie query cache under the persisted-keys allowlist. Served by the existing gateway worker (static assets + SPA fallback), no config change needed.

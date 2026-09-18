@@ -13,15 +13,26 @@ function hasAnyRole(
 
 export function createReactAdminAuthProvider(
   session: AuthSession,
+  options?: { onLogout?: () => void },
 ): AuthProvider {
   return {
     login: () => session.login(),
     logout: async (params?: { logoutFromProvider?: boolean }) => {
-      if (params?.logoutFromProvider) {
-        return session.logout();
+      try {
+        if (params?.logoutFromProvider) {
+          return session.logout();
+        }
+        await session.clearSession();
+        return session.getAuthorizeUrl();
+      } finally {
+        // Persisted API cache must not survive the session: no client data
+        // stays on disk after logout. Never breaks logout itself.
+        try {
+          options?.onLogout?.();
+        } catch {
+          // ignore cleanup failures on the way out
+        }
       }
-      await session.clearSession();
-      return session.getAuthorizeUrl();
     },
     checkAuth: () => session.checkSession(),
     checkError: async (error: unknown) => {
