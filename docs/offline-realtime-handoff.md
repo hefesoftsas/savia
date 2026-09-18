@@ -114,7 +114,7 @@ está. Vigilar dashboard el primer mes.
 - Local: `pnpm dev` (admin 5173, api 8787, auth 8788). Legacy `:8790` **no lo
   levanta `dev-local.sh`** — normal sin Docker.
 - CI honesto a recordar: `public-release-hygiene` rechaza placas literales
-  (rompió un build por `ABC123` en un test), `schema.test.ts` exige conteo
+  (rompió un build por poner una placa de ejemplo en un test), `schema.test.ts` exige conteo
   exacto de tablas (actualizar por migración: va en 286).
 - `main` se mueve con commits de otro agente en el mismo directorio
   (i18n, `crm/nango`, skeletons). Sus archivos sin commitear se dejaron
