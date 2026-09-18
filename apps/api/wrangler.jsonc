@@ -15,6 +15,13 @@
       "service": "savia-auth",
     },
   ],
+  "ratelimits": [
+    {
+      "name": "REALTIME_RATE_LIMITER",
+      "namespace_id": "879101",
+      "simple": { "limit": 30, "period": 60 },
+    },
+  ],
   "durable_objects": {
     "bindings": [{ "name": "REALTIME_HUB", "class_name": "RealtimeHub" }],
   },

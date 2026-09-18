@@ -1,3 +1,4 @@
+import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./combined-app";
@@ -149,7 +150,9 @@ async function connectSocket(stub: DurableObjectStub, ticket: string) {
   // workerd test sockets require accept(); real browsers do not.
   (socket as unknown as { accept?: () => void }).accept?.();
   socket!.addEventListener("message", (event) => {
-    received.push(JSON.parse(String(event.data)));
+    received.push(
+      event.data === "pong" ? { type: "pong" } : JSON.parse(String(event.data)),
+    );
   });
   return { socket: socket!, received };
 }
@@ -206,9 +209,9 @@ describe("Realtime hub", () => {
     );
     expect(created).toMatchObject({ v: 1, topic: "users", id: "principal-9" });
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(
-      tenants.received.some((message) => message.type === "created"),
-    ).toBe(false);
+    expect(tenants.received.some((message) => message.type === "created")).toBe(
+      false,
+    );
   });
 
   it("isolates rooms from each other", async () => {
@@ -264,6 +267,88 @@ describe("Realtime hub", () => {
       { headers: { Upgrade: "websocket" } },
     );
     expect(second.status).toBe(401);
+  });
+
+  it("auto-responds to pings without invoking the message handler", async () => {
+    const stub = roomStub("tenant:8802");
+    const ticket = await issueTicket(stub, {
+      principalId: "ping-user",
+      topics: ["records"],
+    });
+    const { socket, received } = await connectSocket(stub, ticket);
+    socket.send("ping");
+    await waitFor(received, (message) => message.type === "pong");
+    const closed = new Promise<number>((resolve) =>
+      socket.addEventListener("close", (event) => resolve(event.code)),
+    );
+    socket.send('{"type":"subscribe"}');
+    expect(await closed).toBe(1008);
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(state.getWebSocketAutoResponse()?.request).toBe("ping");
+      expect(state.getWebSocketAutoResponse()?.response).toBe("pong");
+    });
+  });
+
+  it("bounds expiry cleanup and leaves valid tickets usable", async () => {
+    const stub = roomStub("tenant:8803");
+    const ticket = await issueTicket(stub, {
+      principalId: "cleanup-user",
+      topics: ["records"],
+    });
+    await runInDurableObject(stub, async (_instance, state) => {
+      for (let i = 0; i < 200; i++)
+        state.storage.sql.exec(
+          "INSERT INTO realtime_tickets VALUES (?, ?, ?, ?)",
+          `expired-${i}`,
+          "old",
+          '["records"]',
+          0,
+        );
+    });
+    await issueTicket(stub, {
+      principalId: "cleanup-user",
+      topics: ["records"],
+    });
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec<{ count: number }>(
+            "SELECT count(*) AS count FROM realtime_tickets WHERE expires = 0",
+          )
+          .one().count,
+      ).toBe(72);
+    });
+    (await connectSocket(stub, ticket)).socket.close();
+  });
+
+  it("propagates capacity throttling through the hub client", async () => {
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    for (let i = 0; i < 8; i++)
+      await hub.issue("tenant:8804", {
+        principalId: "pending",
+        topics: ["records"],
+      });
+    await expect(
+      hub.issue("tenant:8804", { principalId: "pending", topics: ["records"] }),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+
+  it("caps simultaneous connections per principal", async () => {
+    const stub = roomStub("tenant:8801");
+    const sockets: WebSocket[] = [];
+    for (let i = 0; i < 8; i++) {
+      const ticket = await issueTicket(stub, {
+        principalId: "limited",
+        topics: ["records"],
+      });
+      sockets.push((await connectSocket(stub, ticket)).socket);
+    }
+    const response = await stub.fetch("https://realtime.internal/issue", {
+      method: "POST",
+      body: JSON.stringify({ principalId: "limited", topics: ["records"] }),
+    });
+    expect(response.status).toBe(429);
+    for (const socket of sockets) socket.close();
   });
 
   it("issues tickets by role and publishes user mutations", async () => {
@@ -334,7 +419,10 @@ describe("Realtime hub", () => {
     const ticketBody = (await ticketed.json()) as {
       data: { room: string; ticket: string; topics: string[] };
     };
-    expect(ticketBody.data).toMatchObject({ room: "platform", topics: ["users"] });
+    expect(ticketBody.data).toMatchObject({
+      room: "platform",
+      topics: ["users"],
+    });
 
     const viewing = await connectSocket(
       roomStub("platform"),
@@ -389,6 +477,12 @@ describe("Realtime hub", () => {
       hub,
     );
 
+    const foreignSocket = await memberApp.request(
+      `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(foreignSocket.status).toBe(403);
+
     const missingTenant = await memberApp.request("/v1/realtime/ticket", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -412,5 +506,39 @@ describe("Realtime hub", () => {
     expect(await allowed.json()).toMatchObject({
       data: { room: "tenant:101", topics: ["records"] },
     });
+    for (let i = 0; i < 7; i++) {
+      const response = await memberApp.request("/v1/realtime/ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["records"], tenantId: 101 }),
+      });
+      expect(response.status).toBe(201);
+    }
+    const capacity = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"], tenantId: 101 }),
+    });
+    expect(capacity.status).toBe(429);
+    expect(capacity.headers.get("Retry-After")).toBe("60");
+    expect(await capacity.json()).toMatchObject({
+      error: { code: "REALTIME_LIMIT" },
+    });
+
+    for (let i = 0; i < 30; i++) {
+      const response = await memberApp.request(
+        `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+        { headers: { Upgrade: "websocket" } },
+        env,
+      );
+      expect(response.status).toBe(403);
+    }
+    const throttled = await memberApp.request(
+      `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+      env,
+    );
+    expect(throttled.status).toBe(429);
+    expect(throttled.headers.get("Retry-After")).toBe("60");
   });
 });

@@ -24,7 +24,8 @@ type TicketResponse = {
   };
 };
 
-const MAX_BACKOFF_MS = 30_000;
+const MAX_BACKOFF_MS = 60_000;
+const STABLE_CONNECTION_MS = 60_000;
 const PING_INTERVAL_MS = 25_000;
 
 function subscribeUrl(apiUrl: string, room: string, ticket: string): string {
@@ -86,12 +87,16 @@ export function useRealtimeTopics({
     let pingTimer: ReturnType<typeof setInterval> | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let backoffMs = 1000;
+    let openedAt: number | undefined;
     const wanted = topicsKey.split(",");
 
     const scheduleRetry = () => {
       if (stopped) return;
       setStatus("connecting");
-      retryTimer = setTimeout(() => void connect(), backoffMs);
+      retryTimer = setTimeout(
+        () => void connect(),
+        backoffMs + Math.random() * backoffMs,
+      );
       backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
     };
 
@@ -102,9 +107,17 @@ export function useRealtimeTopics({
       try {
         ticket = await apiClient.post<TicketResponse>(
           "/v1/realtime/ticket",
-          tenantId === undefined ? { topics: wanted } : { topics: wanted, tenantId },
+          tenantId === undefined
+            ? { topics: wanted }
+            : { topics: wanted, tenantId },
         );
-      } catch {
+      } catch (error) {
+        const status = (error as { status?: number } | null)?.status;
+        if (status && [400, 401, 403, 404, 422].includes(status)) {
+          setStatus("unavailable");
+          return;
+        }
+        if (status === 429) backoffMs = MAX_BACKOFF_MS;
         scheduleRetry();
         return;
       }
@@ -120,7 +133,7 @@ export function useRealtimeTopics({
         return;
       }
       socket.onopen = () => {
-        backoffMs = 1000;
+        openedAt = Date.now();
         pingTimer = setInterval(() => {
           // Plain "ping" is auto-answered by the hub without waking it, so
           // idle connections cost nothing.
@@ -152,9 +165,19 @@ export function useRealtimeTopics({
       socket.onerror = () => {
         socket?.close();
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        if (
+          openedAt !== undefined &&
+          Date.now() - openedAt >= STABLE_CONNECTION_MS
+        )
+          backoffMs = 1000;
+        openedAt = undefined;
         if (pingTimer) clearInterval(pingTimer);
         socket = null;
+        if (event?.code === 1008) {
+          setStatus("unavailable");
+          return;
+        }
         scheduleRetry();
       };
     };

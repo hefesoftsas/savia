@@ -54,6 +54,7 @@ function Probe({
 afterEach(() => {
   cleanup();
   MockWebSocket.instances = [];
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -138,6 +139,73 @@ describe("useRealtimeTopics", () => {
     });
     expect(onEvent).not.toHaveBeenCalled();
     expect(screen.getByTestId("last")).toHaveTextContent("none");
+  });
+
+  it("backs off repeated short-lived connections instead of resetting on open", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    const post = vi
+      .fn()
+      .mockResolvedValue({ data: { room: "platform", ticket: "ticket" } });
+    render(
+      <AppServicesProvider services={servicesWith(post)}>
+        <Probe />
+      </AppServicesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      MockWebSocket.instances[0].onopen?.();
+      MockWebSocket.instances[0].close();
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(MockWebSocket.instances).toHaveLength(2);
+    await act(async () => {
+      MockWebSocket.instances[1].onopen?.();
+      MockWebSocket.instances[1].close();
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(MockWebSocket.instances).toHaveLength(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(MockWebSocket.instances).toHaveLength(3);
+  });
+
+  it("waits at least Retry-After on capacity errors", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const post = vi.fn().mockRejectedValue({ status: 429 });
+    render(
+      <AppServicesProvider services={servicesWith(post)}>
+        <Probe />
+      </AppServicesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(59_999);
+    });
+    expect(post).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops retrying permanent authorization failures", async () => {
+    vi.useFakeTimers();
+    const post = vi.fn().mockRejectedValue({ status: 403 });
+    render(
+      <AppServicesProvider services={servicesWith(post)}>
+        <Probe />
+      </AppServicesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(screen.getByTestId("status")).toHaveTextContent("unavailable");
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it("stays quiet without reconnecting the indicator while offline", () => {

@@ -1,3 +1,14 @@
+import { HTTPException } from "hono/http-exception";
+export class RealtimeHubError extends HTTPException {
+  constructor(message: string) {
+    super(429, {
+      res: Response.json(
+        { error: { code: "REALTIME_LIMIT", message } },
+        { status: 429, headers: { "Retry-After": "60" } },
+      ),
+    });
+  }
+}
 import type { RealtimeEventInput } from "./protocol";
 
 /**
@@ -50,6 +61,8 @@ export function createRealtimeHubClient(
         headers: { "content-type": "application/json" },
         body: JSON.stringify(grant),
       });
+      if (response.status === 429)
+        throw new RealtimeHubError("Realtime capacity exceeded.");
       if (!response.ok) throw new Error("Unable to issue realtime ticket");
       const body = (await response.json()) as {
         data?: { ticket?: unknown; expiresAt?: unknown };

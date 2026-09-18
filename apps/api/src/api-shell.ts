@@ -1,3 +1,4 @@
+import { RealtimeHubError } from "./realtime/hub-client";
 import { installRequestResultEnvelope } from "./request-results/routes";
 
 import { HTTPException } from "hono/http-exception";
@@ -18,10 +19,7 @@ import { AuthenticationError, type Authenticator } from "./auth/types";
 import { publicAuthUrls, type PublicAuthUrls } from "./public-origin";
 
 import { registerHealthRoute } from "./routes/health";
-import {
-  canonicalHostForApi,
-  tenantHostGuard,
-} from "./auth/tenant-host-guard";
+import { canonicalHostForApi, tenantHostGuard } from "./auth/tenant-host-guard";
 
 export const openApiDocument = {
   openapi: "3.1.0" as const,
@@ -360,6 +358,7 @@ export function createApiShell(
   });
 
   app.onError((exception, context) => {
+    if (exception instanceof RealtimeHubError) return exception.getResponse();
     if (exception instanceof HTTPException)
       return context.json(
         { error: { code: "CRM_SYNC_ERROR", message: exception.message } },

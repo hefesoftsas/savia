@@ -62,6 +62,13 @@ function apiConfig({ documentsBucket, domainD1Id, publicOrigin }) {
       { binding: "SAVIA_REQUEST", service: "savia-request" },
       { binding: "CONNECTOR_GATEWAY", service: "savia-connectors" },
     ],
+    ratelimits: [
+      {
+        name: "REALTIME_RATE_LIMITER",
+        namespace_id: "879101",
+        simple: { limit: 30, period: 60 },
+      },
+    ],
     durable_objects: {
       bindings: [{ name: "REALTIME_HUB", class_name: "RealtimeHub" }],
     },

@@ -34,6 +34,7 @@ const ticketRoute = createRoute({
       },
       description: "Ticket bound to the authorized room and topics",
     },
+    429: { description: "Realtime request or connection limit exceeded" },
     403: { description: "Topic or tenant is not authorized for this actor" },
     404: { description: "Tenant was not found" },
     503: { description: "Realtime is not configured" },
@@ -44,6 +45,30 @@ export function registerRealtimeRoutes(
   app: OpenAPIHono,
   hub?: RealtimeHubClient,
 ): void {
+  app.use("/v1/realtime/*", async (c, next) => {
+    const limiter = (c.env as { REALTIME_RATE_LIMITER?: RateLimit } | undefined)
+      ?.REALTIME_RATE_LIMITER;
+    if (
+      limiter &&
+      !(
+        await limiter.limit({
+          key: `principal:${actorFromContext(c).principal.id}`,
+        })
+      ).success
+    ) {
+      return c.json(
+        {
+          error: {
+            code: "REALTIME_LIMIT",
+            message: "Too many realtime attempts.",
+          },
+        },
+        429,
+        { "Retry-After": "60" },
+      );
+    }
+    await next();
+  });
   app.openapi(ticketRoute, async (context) => {
     const actor = actorFromContext(context);
     const input = context.req.valid("json");
@@ -147,6 +172,23 @@ export function registerRealtimeRoutes(
         503,
       );
     }
+    const actor = actorFromContext(c);
+    if (room === PLATFORM_ROOM) requirePlatformAdministrator(actor);
+    else if (
+      !actor.globalRoles.includes("platform_admin") &&
+      !actor.memberships.some(
+        (m) => m.isActive && tenantRoom(m.tenantId ?? m.agencyId) === room,
+      )
+    )
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "Room is not authorized.",
+      );
+    if (!/^[0-9a-f-]{36}$/.test(ticket))
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid ticket." } },
+        400,
+      );
     return hub.forward(room, c.req.raw);
   });
 }
