@@ -33,7 +33,8 @@ export function createEmbeddedTransport(client: ApiClient, prefix: string) {
         );
       }
       return response;
-    } catch {
+    } catch (error) {
+      if ((error as { name?: string })?.name === "AbortError") throw error;
       return Response.json(
         { error: "No se pudo conectar con Savia. Reintenta." },
         { status: 503 },

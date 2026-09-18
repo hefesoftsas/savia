@@ -49,7 +49,7 @@ export function useCrmSidebarNavigation(enabled: boolean): {
     return () => {
       active = false;
     };
-  }, [enabled, services, catalogVersion, location.pathname]);
+  }, [enabled, services, catalogVersion]);
   const domain = selectCrmDomain(domains, current.domain, current.agencyId);
   useEffect(() => {
     if (!enabled || !domain) return;
@@ -85,7 +85,7 @@ export function useCrmSidebarNavigation(enabled: boolean): {
     return () => {
       active = false;
     };
-  }, [domain?.id, domain?.apiBasePath, enabled, services, location.search]);
+  }, [domain?.id, domain?.apiBasePath, enabled, services]);
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (

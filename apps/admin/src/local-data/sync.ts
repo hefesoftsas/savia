@@ -64,11 +64,13 @@ export async function syncOnce(
     if (requestedCollection && collection.name !== requestedCollection)
       continue;
     if (collection.capability === "remote") continue;
+    let hadMutations = false;
     if (collection.capability === "read-write") {
       const mutations = await store.db.outbox
         .where("collection")
         .equals(collection.name)
         .sortBy("sequence");
+      hadMutations = mutations.length > 0;
       const blocked = new Set<string>();
       for (const queued of mutations) {
         if (blocked.has(queued.id)) continue;
@@ -115,17 +117,27 @@ export async function syncOnce(
         } else throw new Error(`Local sync HTTP ${response.status}`);
       }
     }
+    const state = await store.db.syncState.get(collection.name);
+    if (
+      !requestedCollection &&
+      !hadMutations &&
+      state?.hydrated &&
+      typeof state.lastSyncedAt === "number" &&
+      Date.now() - state.lastSyncedAt < 30_000
+    ) {
+      continue;
+    }
     let more = true;
     while (more) {
-      const state = await store.db.syncState.get(collection.name);
+      const currentState = await store.db.syncState.get(collection.name);
       const query = new URLSearchParams({ limit: "250" });
-      if (state?.cursor) query.set("cursor", state.cursor);
+      if (currentState?.cursor) query.set("cursor", currentState.cursor);
       const batch = await json<PullBatch>(
         await transport(
           `/api/local-sync/pull/${encodeURIComponent(collection.name)}?${query}`,
         ),
       );
-      if (batch.hasMore && batch.cursor === state?.cursor)
+      if (batch.hasMore && batch.cursor === currentState?.cursor)
         throw new Error("Local sync cursor did not advance");
       await store.applyPull(collection.name, batch);
       more = batch.hasMore;
@@ -296,7 +308,7 @@ export function createSyncCoordinator(
     const cleanup = () => {
       if (foreground.get(key) === pending) foreground.delete(key);
       if (started) {
-        if (collection) requestSync();
+        if (collection) schedule(250);
         else schedule(60_000);
       }
     };

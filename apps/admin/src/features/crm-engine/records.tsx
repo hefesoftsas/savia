@@ -475,6 +475,7 @@ export default function Records({
   const views = useQuery({
     queryKey: ["views", object.name],
     queryFn: () => api(`/views/${object.name}`),
+    staleTime: 60_000,
   });
   const savedViews = Array.isArray(views.data?.data)
     ? (views.data.data as SavedView[])
@@ -2186,6 +2187,7 @@ function RelatedValue({
         ),
       ),
     enabled: !!ids.length,
+    staleTime: 5 * 60_000,
   });
   return <>{query.data?.join(", ") ?? (ids.length ? "…" : "—")}</>;
 }

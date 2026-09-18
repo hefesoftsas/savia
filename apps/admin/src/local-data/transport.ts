@@ -202,8 +202,21 @@ export function createLocalTransport(
     const cached = cacheable
       ? await readWorkspaceMetadata<unknown>(key)
       : undefined;
-    if (cached !== undefined && navigator.onLine === false)
+    if (cached !== undefined) {
+      if (navigator.onLine !== false) {
+        void network(path, init)
+          .then(async (result) => {
+            if (result.ok) {
+              const body = await result.json();
+              await writeWorkspaceMetadata(key, body);
+              if (segments[1] === "objects" && segments.length === 2)
+                await writeWorkspaceMetadata(`${store.scope}:objects`, body);
+            }
+          })
+          .catch(() => undefined);
+      }
       return Response.json(cached);
+    }
     let result: Response;
     try {
       result = await network(path, init);

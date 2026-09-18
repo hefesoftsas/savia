@@ -309,7 +309,9 @@ function App({
       active = false;
     };
   }, []);
-  const objectsQuery = useListObjects({ query: { enabled: ready } });
+  const objectsQuery = useListObjects({
+    query: { enabled: ready, staleTime: 5 * 60_000 },
+  });
   const objectsResponse = objectsQuery.data as unknown as {
     data?: CrmObject[];
     menuLayout?: ScreenMenuLayout | null;

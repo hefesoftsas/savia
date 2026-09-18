@@ -34,7 +34,14 @@ export function createWorkspaceManager(
       const scope = await principalScope();
       const key = `${scope}:${name}`;
       const saved = await readWorkspaceMetadata<T>(key);
-      if (navigator.onLine === false && saved !== undefined) return saved;
+      if (saved !== undefined) {
+        if (navigator.onLine !== false) {
+          void load()
+            .then((value) => writeWorkspaceMetadata(key, value))
+            .catch(() => undefined);
+        }
+        return saved;
+      }
       try {
         const value = await load();
         await writeWorkspaceMetadata(key, value);
