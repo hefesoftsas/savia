@@ -88,9 +88,8 @@ async function connectRecords(): Promise<{
     body: JSON.stringify({ topics: ["records"], tenantId: 101 }),
   });
   expect(ticketed.status).toBe(201);
-  const { ticket } = (
-    (await ticketed.json()) as { data: { ticket: string } }
-  ).data;
+  const { ticket } = ((await ticketed.json()) as { data: { ticket: string } })
+    .data;
   const stub = env.REALTIME_HUB.get(env.REALTIME_HUB.idFromName("tenant:101"));
   const upgrade = await stub.fetch(
     `https://realtime.internal/session?ticket=${encodeURIComponent(ticket)}`,
@@ -165,4 +164,43 @@ describe("Collection versions for delta sync", () => {
     expect(second).toMatchObject({ version: 2 });
     expect(await versionRow()).toMatchObject({ version: 2 });
   });
+});
+
+it("publishes collection wakeups with the actual synchronization action and stable ID", async () => {
+  const { received } = await connectRecords();
+  for (const [index, action] of ["create", "update", "delete"].entries()) {
+    const response = await app().request(
+      `${prefix}/local-sync/push/delta_widgets`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          mutationId: `sync-event-${action}`,
+          action,
+          id: "sync-event-record",
+          ...(index ? { baseVersion: index } : {}),
+          ...(action !== "delete" ? { data: { name: "Sync" } } : {}),
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    const message = await waitFor(
+      received,
+      (m) =>
+        m.id === "sync-event-record" &&
+        m.type ===
+          (
+            {
+              create: "created",
+              update: "updated",
+              delete: "deleted",
+            } as Record<string, string>
+          )[action],
+    );
+    expect(message).toMatchObject({
+      topic: "records",
+      collection: "delta_widgets",
+      version: index + 3,
+    });
+  }
 });

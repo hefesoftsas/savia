@@ -1,3 +1,4 @@
+import { reconcileLocalQueries } from "./local-query-sync";
 import { RecordOriginLinks } from "./record-origin-links";
 import ScreenAdministration from "./screen-administration";
 import ScreenMenuReorder from "./screen-menu-reorder";
@@ -1583,10 +1584,55 @@ export default function Root({
   const [queryClient] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+        defaultOptions: {
+          queries: {
+            retry: 0,
+            refetchOnWindowFocus: false,
+            networkMode: "always",
+          },
+          mutations: { networkMode: "always", retry: false },
+        },
       }),
   );
   const [store] = useState(() => memoryStore());
+  const [authorizationError, setAuthorizationError] = useState<string>();
+  useEffect(() => {
+    const workspace = getCrmRuntime().localWorkspace;
+    if (!workspace) return;
+    let previous = new Set<string>();
+    let active = true;
+    let generation = 0;
+    const unsubscribe = workspace.store.subscribe(() => {
+      const currentGeneration = ++generation;
+      void Promise.all([
+        workspace.store.db.collections.toArray(),
+        workspace.store.authorizationError(),
+      ])
+        .then(async ([collections, blocked]) => {
+          if (!active || currentGeneration !== generation) return;
+          setAuthorizationError(blocked);
+          const names = new Set(
+            collections
+              .filter((c) => c.capability !== "remote")
+              .map((c) => c.name),
+          );
+          const before = previous;
+          previous = names;
+          if (blocked) {
+            await queryClient.cancelQueries();
+            queryClient.clear();
+            return;
+          }
+          await reconcileLocalQueries(queryClient, before, names);
+        })
+        .catch(() => undefined);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [queryClient]);
+
   useEffect(
     () => () => {
       void queryClient.cancelQueries();
@@ -1594,6 +1640,13 @@ export default function Root({
     },
     [queryClient],
   );
+  if (authorizationError)
+    return (
+      <div role="alert">
+        Tu acceso a este espacio cambió. Conecta y verifica tu sesión para
+        continuar.
+      </div>
+    );
   return (
     <div className={embedded ? "savia-crm savia-embedded" : "savia-crm"}>
       <CoreAdminContext

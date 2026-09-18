@@ -133,20 +133,18 @@ describe("BetterAuthOAuthSession", () => {
   });
 
   it("exchanges a callback code and returns the returnOrigin if provided", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            access_token: "better-auth-access-token",
-            token_type: "Bearer",
-            expires_in: 300,
-            scope: "openid savia.api.read savia.api.write",
-            returnOrigin: "https://merkaseguros.savia-preview.hefesoft.com",
-          }),
-          { headers: { "content-type": "application/json" } },
-        ),
-      );
+    const fetcher = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          access_token: "better-auth-access-token",
+          token_type: "Bearer",
+          expires_in: 300,
+          scope: "openid savia.api.read savia.api.write",
+          returnOrigin: "https://merkaseguros.savia-preview.hefesoft.com",
+        }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
     const session = new BetterAuthOAuthSession({
       apiUrl: "http://127.0.0.1:8787",
       navigation: {
@@ -580,4 +578,53 @@ describe("BetterAuthOAuthSession", () => {
       memberships: [],
     });
   });
+});
+
+it("requires a fresh identity response for lease verification despite cached credentials", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({
+        access_token: "token",
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "savia.api.read",
+      }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({
+        data: { id: "user", attributes: { displayName: "User" } },
+      }),
+    )
+    .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  const session = new BetterAuthOAuthSession({
+    apiUrl: "https://savia.test",
+    fetcher,
+  });
+  await session.checkSession();
+  await session.getPermissions();
+  await expect(session.checkSession()).resolves.toBeUndefined();
+  await expect(session.verifySession()).rejects.toThrow("Failed to fetch");
+  expect(fetcher.mock.calls.at(-1)?.[0]).toBe(
+    "https://savia.test/v1/identity/me",
+  );
+});
+
+it("preserves the network error on a cold offline start so a persisted workspace lease can be used", async () => {
+  const session = new BetterAuthOAuthSession({
+    apiUrl: "https://savia.test",
+    fetcher: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+  });
+  await expect(session.checkSession()).rejects.toThrow("Failed to fetch");
+});
+it("keeps server unavailability distinguishable from rejected credentials during refresh", async () => {
+  const session = new BetterAuthOAuthSession({
+    apiUrl: "https://savia.test",
+    fetcher: vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ error: { message: "Unavailable" } }, { status: 503 }),
+      ),
+  });
+  await expect(session.checkSession()).rejects.toMatchObject({ status: 503 });
 });

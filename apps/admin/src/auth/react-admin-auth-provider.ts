@@ -7,13 +7,15 @@ function hasAnyRole(
   roles: readonly string[],
 ): boolean {
   return permissions.memberships.some((membership) =>
-    roles.includes(membership.role === "tenant_admin" ? "agency_admin" : membership.role),
+    roles.includes(
+      membership.role === "tenant_admin" ? "agency_admin" : membership.role,
+    ),
   );
 }
 
 export function createReactAdminAuthProvider(
   session: AuthSession,
-  options?: { onLogout?: () => void },
+  options?: { onLogout?: () => void | Promise<void> },
 ): AuthProvider {
   return {
     login: () => session.login(),
@@ -28,7 +30,7 @@ export function createReactAdminAuthProvider(
         // Persisted API cache must not survive the session: no client data
         // stays on disk after logout. Never breaks logout itself.
         try {
-          options?.onLogout?.();
+          await options?.onLogout?.();
         } catch {
           // ignore cleanup failures on the way out
         }
@@ -55,10 +57,9 @@ export function createReactAdminAuthProvider(
       const isPlatformAdmin = permissions.canManageIdentity;
       if (resource === "dynamic-crm")
         return isPlatformAdmin || hasAnyRole(permissions, ["agency_admin"]);
-      if (resource === "offline-policies")
-        return isPlatformAdmin || hasAnyRole(permissions, ["agency_admin"]);
       if (resource === "savia-request") return isPlatformAdmin;
-      if (resource === "users" || resource === "tenants") return isPlatformAdmin;
+      if (resource === "users" || resource === "tenants")
+        return isPlatformAdmin;
       if (resource === "crm-connections") {
         return action === "list";
       }

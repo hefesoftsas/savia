@@ -1,3 +1,5 @@
+> Obsolete: replaced by the local collection replica architecture in `docs/local-first-collections.md`.
+
 # Offline-first Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -36,57 +38,57 @@
 
 ## File Structure
 
-| Archivo | Responsabilidad |
-| --- | --- |
-| `apps/admin/src/offline/db.ts` | Base Dexie `savia-offline` v1 (`queryCache`); misma base alojará la tabla outbox en Fase 2. |
-| `apps/admin/src/offline/persisted-keys.ts` | Allowlist de prefijos de queryKey seguros para IndexedDB + denylist (sesión, cuenta, password, asistente). |
-| `apps/admin/src/offline/query-persister.ts` | Persister TanStack sobre tabla Dexie con filtro `shouldDehydrateQuery`; fallback en memoria donde no hay IndexedDB (tests). |
-| `apps/admin/src/offline/query-client.ts` | `createOfflineQueryClient()`: `gcTime` 7 días, `staleTime` 5 min, sin retry sin red, mutaciones sin retry. |
-| `apps/admin/src/offline/use-online-status.ts` | Hook `navigator.onLine` + eventos online/offline. |
-| `apps/admin/src/offline/offline-banner.tsx` | Banner fijo "Sin conexión — mostrando datos guardados" (igual en todas las pantallas). |
-| `apps/admin/src/offline/offline-error.ts` | `isOfflineError(error)` reutilizable (`Failed to fetch`, `NetworkError`, `code AUTHENTICATION_UNAVAILABLE` con causa red). La rama offline de `deleteUserErrorMessage` vive aquí. |
-| `apps/admin/src/auth/better-auth-oauth-session.ts` | Refresh tolerante a red (conserva token) + últimos permisos en memoria para no cerrar sesión ni ocultar recursos sin red. |
-| `apps/admin/src/offline/mutation-outbox.ts` (Fase 2) | Cola IndexedDB: `enqueue/flush/discard`, elegibilidad por recurso, `last-write-wins` + revalidación contra servidor, reporte de rechazos. |
-| `apps/admin/src/app.tsx` | Pasa `queryClient` al `Admin` y monta el banner en el layout. |
-| `apps/admin/src/offline/*.test.ts` | Tests de allowlist, banner online/offline, persister filter y (Fase 2) flush con rechazo. |
-| `apps/admin/package.json` | Nueva dep: `idb-keyval`. |
+| Archivo                                              | Responsabilidad                                                                                                                                                                   |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/admin/src/offline/db.ts`                       | Base Dexie `savia-offline` v1 (`queryCache`); misma base alojará la tabla outbox en Fase 2.                                                                                       |
+| `apps/admin/src/offline/persisted-keys.ts`           | Allowlist de prefijos de queryKey seguros para IndexedDB + denylist (sesión, cuenta, password, asistente).                                                                        |
+| `apps/admin/src/offline/query-persister.ts`          | Persister TanStack sobre tabla Dexie con filtro `shouldDehydrateQuery`; fallback en memoria donde no hay IndexedDB (tests).                                                       |
+| `apps/admin/src/offline/query-client.ts`             | `createOfflineQueryClient()`: `gcTime` 7 días, `staleTime` 5 min, sin retry sin red, mutaciones sin retry.                                                                        |
+| `apps/admin/src/offline/use-online-status.ts`        | Hook `navigator.onLine` + eventos online/offline.                                                                                                                                 |
+| `apps/admin/src/offline/offline-banner.tsx`          | Banner fijo "Sin conexión — mostrando datos guardados" (igual en todas las pantallas).                                                                                            |
+| `apps/admin/src/offline/offline-error.ts`            | `isOfflineError(error)` reutilizable (`Failed to fetch`, `NetworkError`, `code AUTHENTICATION_UNAVAILABLE` con causa red). La rama offline de `deleteUserErrorMessage` vive aquí. |
+| `apps/admin/src/auth/better-auth-oauth-session.ts`   | Refresh tolerante a red (conserva token) + últimos permisos en memoria para no cerrar sesión ni ocultar recursos sin red.                                                         |
+| `apps/admin/src/offline/mutation-outbox.ts` (Fase 2) | Cola IndexedDB: `enqueue/flush/discard`, elegibilidad por recurso, `last-write-wins` + revalidación contra servidor, reporte de rechazos.                                         |
+| `apps/admin/src/app.tsx`                             | Pasa `queryClient` al `Admin` y monta el banner en el layout.                                                                                                                     |
+| `apps/admin/src/offline/*.test.ts`                   | Tests de allowlist, banner online/offline, persister filter y (Fase 2) flush con rechazo.                                                                                         |
+| `apps/admin/package.json`                            | Nueva dep: `idb-keyval`.                                                                                                                                                          |
 
 ## Fase 0: Red obligatoria explícita (base, ~0.5 día)
 
 Sin dependencias nuevas. Hace visible el estado offline en vez de fallar en silencio.
 
 - [ ] **Step 1: helper offline compartido con prueba que falla.**
-  Extraer la rama offline de `deleteUserErrorMessage` a `isOfflineError()` en `offline-error.ts`; test con `Error("Failed to fetch")`, `{ code: "AUTHENTICATION_UNAVAILABLE", status: 503 }` y un 403 real (debe dar NO offline).
+      Extraer la rama offline de `deleteUserErrorMessage` a `isOfflineError()` en `offline-error.ts`; test con `Error("Failed to fetch")`, `{ code: "AUTHENTICATION_UNAVAILABLE", status: 503 }` y un 403 real (debe dar NO offline).
 - [ ] **Step 2: hook + banner mínimo.**
-  `use-online-status.ts` (listeners `online`/`offline` + heartbeat cada 30 s solo si hay sesión) y `offline-banner.tsx` montado en el layout: visible solo offline, texto "Sin conexión. Los cambios requieren conexión." Test con mocks de `navigator.onLine` y `fetch`.
+      `use-online-status.ts` (listeners `online`/`offline` + heartbeat cada 30 s solo si hay sesión) y `offline-banner.tsx` montado en el layout: visible solo offline, texto "Sin conexión. Los cambios requieren conexión." Test con mocks de `navigator.onLine` y `fetch`.
 - [ ] **Step 3: verificar.**
-  `pnpm --filter @savia/admin test -- offline` + `typecheck` + `impeccable detect` sobre banner y páginas tocadas. Criterio: sin red, cada mutación de identidad muestra mensaje offline en español en <1 s (sin toasts optimistas previos).
+      `pnpm --filter @savia/admin test -- offline` + `typecheck` + `impeccable detect` sobre banner y páginas tocadas. Criterio: sin red, cada mutación de identidad muestra mensaje offline en español en <1 s (sin toasts optimistas previos).
 
 ## Fase 1 (recomendada): Lectura en caché — la mejor opción costo/valor (~2–3 días)
 
 - [ ] **Step 1: allowlist de queryKeys con prueba que falla.**
-  `persisted-keys.ts`: permite `users`, `tenants`, lecturas CRM/dominios públicos; deniega `auth`, `me`, `account`, `password`, `assistant`, `sessions`, `savia-request` en vivo. Test: cada clave del dataProvider clasificada correctamente.
+      `persisted-keys.ts`: permite `users`, `tenants`, lecturas CRM/dominios públicos; deniega `auth`, `me`, `account`, `password`, `assistant`, `sessions`, `savia-request` en vivo. Test: cada clave del dataProvider clasificada correctamente.
 - [ ] **Step 2: persister + QueryClient offline.**
-  `pnpm add dexie @tanstack/react-query-persist-client @tanstack/query-async-storage-persister -F @savia/admin`; `query-persister.ts` con `shouldDehydrateQuery` = allowlist; `query-client.ts` con `gcTime: 7d`, `staleTime: 5min`, `retry` apagado sin red, `refetchOnReconnect: "always"`, mutaciones sin retry. Test del filtro del persister (una query `users` se deshidrata, una `me` no).
+      `pnpm add dexie @tanstack/react-query-persist-client @tanstack/query-async-storage-persister -F @savia/admin`; `query-persister.ts` con `shouldDehydrateQuery` = allowlist; `query-client.ts` con `gcTime: 7d`, `staleTime: 5min`, `retry` apagado sin red, `refetchOnReconnect: "always"`, mutaciones sin retry. Test del filtro del persister (una query `users` se deshidrata, una `me` no).
 - [ ] **Step 3: cablear en `app.tsx`.**
-  `createOfflineQueryClient()` + `PersistQueryClientProvider`, banner con hora de la caché ("datos guardados de 18:38"). Sin red tras una visita previa: Usuarios/Tenants listan desde caché con banner; nunca pantalla en blanco ni logout falso (el `checkError` 401 por fallo de red NO limpia sesión: distinguir `TypeError` de red de un 401 real).
+      `createOfflineQueryClient()` + `PersistQueryClientProvider`, banner con hora de la caché ("datos guardados de 18:38"). Sin red tras una visita previa: Usuarios/Tenants listan desde caché con banner; nunca pantalla en blanco ni logout falso (el `checkError` 401 por fallo de red NO limpia sesión: distinguir `TypeError` de red de un 401 real).
 - [ ] **Step 4: no-logout-offline en el auth provider.**
-  `react-admin-auth-provider.ts`: `checkSession`/`getPermissions` ante error de red lanzan error reintentable, no limpian sesión ni redirigen a login. Test: `fetch` rechazado ≠ sesión inválida.
+      `react-admin-auth-provider.ts`: `checkSession`/`getPermissions` ante error de red lanzan error reintentable, no limpian sesión ni redirigen a login. Test: `fetch` rechazado ≠ sesión inválida.
 - [ ] **Step 5: verificar.**
-  Suite admin completa, `typecheck`, `impeccable detect` en lista/detalle con banner. Criterio manual: DevTools → Offline → recargar con caché previa: listas visibles + banner; mutar → mensaje offline en español.
+      Suite admin completa, `typecheck`, `impeccable detect` en lista/detalle con banner. Criterio manual: DevTools → Offline → recargar con caché previa: listas visibles + banner; mutar → mensaje offline en español.
 
 ## Fase 2 (opcional): Outbox solo para dominios tolerantes (~1 semana)
 
 Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño.**
 
 - [ ] **Step 1: registro de elegibilidad.**
-  Solo `user-preferences`, borradores CRM locales y campos de diseñador; jamás `users`, `tenants`, `suspension`, `sessions`, `password-reset`, `memberships`, comandos savia ni ejecución de cotizadores. Test: `canQueue("users","delete") === false`.
+      Solo `user-preferences`, borradores CRM locales y campos de diseñador; jamás `users`, `tenants`, `suspension`, `sessions`, `password-reset`, `memberships`, comandos savia ni ejecución de cotizadores. Test: `canQueue("users","delete") === false`.
 - [ ] **Step 2: cola + flush.**
-  `mutation-outbox.ts`: `enqueue` con `{ resource, id, op, payload, queuedAt, baseVersion }`, flush secuencial al volver la red, `last-write-wins` con relectura del servidor, rechazos visibles uno a uno ("No se pudo sincronizar X: …") con reintentar/descartar. Nunca reintento automático de 409 de invariantes.
+      `mutation-outbox.ts`: `enqueue` con `{ resource, id, op, payload, queuedAt, baseVersion }`, flush secuencial al volver la red, `last-write-wins` con relectura del servidor, rechazos visibles uno a uno ("No se pudo sincronizar X: …") con reintentar/descartar. Nunca reintento automático de 409 de invariantes.
 - [ ] **Step 3: indicador "Cambios pendientes (N)".**
-  Integrado al banner; al pulsar muestra la cola con estado por operación. Test de flush con un éxito + un 409.
+      Integrado al banner; al pulsar muestra la cola con estado por operación. Test de flush con un éxito + un 409.
 - [ ] **Step 4: verificar.**
-  Criterio: crear preferencia offline → aparece "pendiente (1)" → online → se sincroniza sin duplicados; un 409 se reporta y no se reintenta solo.
+      Criterio: crear preferencia offline → aparece "pendiente (1)" → online → se sincroniza sin duplicados; un 409 se reporta y no se reintenta solo.
 
 **Decision 2026-09-17 (implemented): push realtime via per-tenant Durable Object, not polling.** `RealtimeHub` DO with one instance per room (`platform`, `tenant:<id>`); single-use ticket auth (`POST /v1/realtime/ticket`); hint-only events (`topic` + `type` + id, no payload/PII); clients refetch. Publish points: identity/tenant mutations + dynamic-crm proxy (`records`/`views`). Deletes stay pessimistic; realtime only invalidates. Hibernation API on (topics as socket tags, tickets in SQLite storage, ping auto-answered) so idle connections bill ~nothing. No `subscribe`/`unsubscribe` dynamism: the grant at connect time is the subscription, which is all our screens use.
 

@@ -10,31 +10,33 @@ import { createSaviaDataProvider } from "./api/savia-data-provider";
 import { UserPreferencesClient } from "./api/user-preferences-client";
 import { BetterAuthOAuthSession } from "./auth/better-auth-oauth-session";
 import { createReactAdminAuthProvider } from "./auth/react-admin-auth-provider";
-import { createOfflinePersister } from "./offline/query-persister";
-import { createOfflineQueryClient } from "./offline/query-client";
+import { createLocalSession } from "./local-data/session";
+import { createWorkspaceManager } from "./local-data/workspaces";
+import { QueryClient } from "@tanstack/react-query";
 
 const apiUrl = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
 
 export function createAppServices() {
-  const authSession = new BetterAuthOAuthSession({
+  const remoteSession = new BetterAuthOAuthSession({ apiUrl });
+  const authSession = createLocalSession(
+    remoteSession,
     apiUrl,
-  });
+    () => remoteSession.verifySession(),
+  );
   const apiClient = new ApiClient({
     baseUrl: apiUrl,
     tokenSource: authSession,
   });
-  // Offline-first cache shared by React Admin and every useQuery. Owned
-  // here (not in components) so logout can wipe it: no client data stays
-  // on disk after the session ends.
-  const queryClient = createOfflineQueryClient();
-  const persister = createOfflinePersister();
-  const clearOfflineData = () => {
-    try {
-      queryClient.clear();
-    } catch {
-      // ignore cleanup failures on the way out
-    }
-    void Promise.resolve(persister.removeClient()).catch(() => undefined);
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { networkMode: "always", retry: 1 },
+      mutations: { networkMode: "always", retry: false },
+    },
+  });
+  const localData = createWorkspaceManager(authSession, apiClient, apiUrl);
+  const clearOfflineData = async () => {
+    queryClient.clear();
+    await localData.clear();
   };
 
   return {
@@ -44,7 +46,7 @@ export function createAppServices() {
     }),
     apiClient,
     queryClient,
-    persister,
+    localData,
     requestResults: new RequestResultClient(apiClient),
     assistantConfiguration: new AssistantConfigurationClient(apiClient),
     dataProvider: createSaviaDataProvider(apiClient),

@@ -2,7 +2,11 @@ import { beforeAll, afterAll, it, expect } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
 import app from "../src/index";
-import { makeConfig, validateRecord, objectSchema } from "@savia/crm-shared/metadata";
+import {
+  makeConfig,
+  validateRecord,
+  objectSchema,
+} from "@savia/crm-shared/metadata";
 let platform: Awaited<ReturnType<typeof getPlatformProxy<any>>>;
 const request = (path: string, method = "GET", body?: unknown, headers = {}) =>
   app.request(
@@ -34,7 +38,7 @@ beforeAll(async () => {
     .filter((n) => n.endsWith(".sql"))
     .sort())
     for (const sql of readFileSync(`migrations/${name}`, "utf8")
-      .split(";")
+      .split(/;(?!(?:\s*END\b))/i)
       .filter((s) => s.trim()))
       await platform.env.DB.prepare(sql).run();
   await json("/bootstrap", "POST");

@@ -147,7 +147,11 @@ export function registerDynamicCrmRoutes(
       path = `/api/records/${match[1]}${match[2] ? "/" + match[2] : ""}`;
     }
     const headers = new Headers();
-    for (const name of ["content-type", "idempotency-key"]) {
+    for (const name of [
+      "content-type",
+      "idempotency-key",
+      "x-savia-sync-principal",
+    ]) {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
     }
@@ -192,14 +196,40 @@ export function registerDynamicCrmRoutes(
       beforeInstall,
     });
     await gateway.prepare();
+    const syncMatch = /^\/api\/local-sync\/push\/([^/]+)$/.exec(path);
+    const syncMutation =
+      syncMatch && c.req.method === "POST"
+        ? ((await request
+            .clone()
+            .json()
+            .catch(() => undefined)) as
+            { action?: string; id?: string } | undefined)
+        : undefined;
     const response = await gateway.fetch(request);
-    if (response.ok && ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
+    if (
+      response.ok &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
+    ) {
       const segments = path.split("/").filter(Boolean);
       if (
         segments[0] === "api" &&
-        (segments[1] === "records" || segments[1] === "views") &&
-        segments[2]
+        (((segments[1] === "records" || segments[1] === "views") &&
+          segments[2]) ||
+          syncMatch)
       ) {
+        const collection = decodeURIComponent(syncMatch?.[1] ?? segments[2]);
+        const recordId = syncMutation?.id ?? segments[3];
+        const mutationType = syncMutation
+          ? syncMutation.action === "create"
+            ? "created"
+            : syncMutation.action === "delete"
+              ? "deleted"
+              : "updated"
+          : c.req.method === "POST"
+            ? "created"
+            : c.req.method === "DELETE"
+              ? "deleted"
+              : "updated";
         // Monotonic version for delta sync. Best-effort: a missing table
         // must never break the mutation it versions.
         let collectionVersion: number | undefined;
@@ -211,7 +241,7 @@ export function registerDynamicCrmRoutes(
                ON CONFLICT(tenant_id, collection) DO UPDATE SET version = version + 1, updated_at = excluded.updated_at
                RETURNING version`,
             )
-            .bind(tenantKey, segments[2], new Date().toISOString())
+            .bind(tenantKey, collection, new Date().toISOString())
             .first<{ version: number }>();
           collectionVersion = bumped?.version;
         } catch {
@@ -219,15 +249,12 @@ export function registerDynamicCrmRoutes(
         }
         publishRealtime(realtime, tenantRoom(agencyId), {
           topic: "records",
-          type:
-            c.req.method === "POST"
-              ? "created"
-              : c.req.method === "DELETE"
-                ? "deleted"
-                : "updated",
-          collection: segments[2],
-          ...(segments[3] ? { id: segments[3] } : {}),
-          ...(collectionVersion !== undefined ? { version: collectionVersion } : {}),
+          type: mutationType,
+          collection,
+          ...(recordId ? { id: recordId } : {}),
+          ...(collectionVersion !== undefined
+            ? { version: collectionVersion }
+            : {}),
           actor: actor.principal.id,
         });
       }
@@ -248,7 +275,11 @@ export function registerDynamicCrmRoutes(
       !response.ok &&
       responseHeaders.get("content-type")?.includes("application/json")
     ) {
-      const body = (await response.json()) as { error?: unknown };
+      const body = (await response.json()) as {
+        error?: unknown;
+        data?: unknown;
+        master?: unknown;
+      };
       return Response.json(
         {
           error: {
@@ -263,6 +294,9 @@ export function registerDynamicCrmRoutes(
                   ? body.error.message
                   : "No se pudo completar la operación.",
           },
+          ...(path.startsWith("/api/local-sync/") && response.status === 409
+            ? { data: body.data ?? null, master: body.master ?? null }
+            : {}),
         },
         { status: response.status, headers: responseHeaders },
       );

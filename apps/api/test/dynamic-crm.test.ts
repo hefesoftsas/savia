@@ -1,3 +1,4 @@
+import { makeConfig } from "@savia/crm-shared/metadata";
 import { seedTenantAgency } from "./tenant-fixtures";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -276,4 +277,86 @@ it("allows members to discover only shared CRM collections and rejects writes an
   expect((await member.request("/v1/dynamic-crm/202/api/objects")).status).toBe(
     403,
   );
+});
+
+describe("local synchronization transport", () => {
+  it("preserves authentication, stable IDs and conflict master data", async () => {
+    const app = admin();
+    expect(
+      (await app.request("/v1/dynamic-crm/202/api/local-sync/manifest")).status,
+    ).toBe(403);
+    const manifest = await app.request(prefix + "/local-sync/manifest");
+    expect(manifest.status).toBe(200);
+    const objects: any = await (await app.request(prefix + "/objects")).json();
+    const name = objects.data.find(
+      (o: any) => !o.config.studio?.collection,
+    )?.name;
+    expect(name).toBeTruthy();
+    const response = await app.request(prefix + "/local-sync/push/" + name, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mutationId: "missing-sync-master",
+        action: "update",
+        id: "missing-record",
+        baseVersion: 1,
+        data: {},
+      }),
+    });
+    expect(response.status).toBe(409);
+    const conflict: any = await response.json();
+    expect(conflict).toHaveProperty("master", null);
+    expect(conflict).toHaveProperty("data", null);
+  });
+});
+
+it("preserves conflict master through the platform data-domain transport", async () => {
+  const app = createApp(
+    env.DB,
+    env.DOCUMENTS,
+    undefined,
+    platformAdministratorAuthenticator(),
+  );
+  const base = "/v1/data-domains/platform/api";
+  const object = await app.request(base + "/objects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "sync_platform",
+      label: "Sync",
+      config: makeConfig({ name: { type: "Textbox", label: "Name" } }),
+    }),
+  });
+  expect(object.status, await object.text()).toBe(201);
+  const response = await app.request(base + "/local-sync/push/sync_platform", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mutationId: "platform-sync-conflict",
+      action: "update",
+      id: "missing",
+      baseVersion: 1,
+      data: {},
+    }),
+  });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toHaveProperty("master", null);
+});
+
+it("forwards principal binding through both authenticated synchronization gateways", async () => {
+  const app = createApp(
+    env.DB,
+    env.DOCUMENTS,
+    undefined,
+    platformAdministratorAuthenticator(),
+  );
+  for (const base of [
+    "/v1/data-domains/platform/api",
+    "/v1/dynamic-crm/101/api",
+  ]) {
+    const response = await app.request(base + "/local-sync/manifest", {
+      headers: { "X-Savia-Sync-Principal": "wrong-principal" },
+    });
+    expect(response.status).toBe(403);
+  }
 });

@@ -68,9 +68,11 @@ function defaultNavigation(): BrowserNavigation {
 }
 
 async function responseMessage(response: Response): Promise<string> {
-  const payload = (await response.json().catch(() => undefined)) as {
-    error?: { message?: unknown };
-  } | undefined;
+  const payload = (await response.json().catch(() => undefined)) as
+    | {
+        error?: { message?: unknown };
+      }
+    | undefined;
   return typeof payload?.error?.message === "string"
     ? payload.error.message
     : response.statusText || "No fue posible completar el inicio de sesión.";
@@ -250,6 +252,13 @@ export class BetterAuthOAuthSession implements AuthSession {
     await this.requireAccessToken();
   }
 
+  /** Fresh server proof for offline lease renewal; never use the identity cache. */
+  async verifySession(): Promise<void> {
+    const token = await this.requireAccessToken();
+    this.identityPromise = null;
+    await this.saviaIdentity(token);
+  }
+
   private async exchangeCallback(): Promise<CallbackResult> {
     const callback = new URL(this.navigation.currentUrl());
     const code = callback.searchParams.get("code");
@@ -277,7 +286,9 @@ export class BetterAuthOAuthSession implements AuthSession {
     };
     this.applyToken(readToken(payload));
     const returnOrigin =
-      typeof payload.returnOrigin === "string" ? payload.returnOrigin : undefined;
+      typeof payload.returnOrigin === "string"
+        ? payload.returnOrigin
+        : undefined;
     return { returnOrigin };
   }
 
@@ -299,10 +310,14 @@ export class BetterAuthOAuthSession implements AuthSession {
           // of wiping the session. Reads keep serving the persisted cache
           // and checkSession still resolves, so the app never "logs out"
           // just because the network did.
-          if (isOfflineError(exception)) return;
+          if (isOfflineError(exception) && this.accessToken) return;
           throw exception;
         }
         if (!response.ok) {
+          if (response.status >= 500)
+            throw Object.assign(new Error(await responseMessage(response)), {
+              status: response.status,
+            });
           this.accessToken = null;
           this.accessTokenExpiresAt = 0;
           this.scopes.clear();
@@ -372,7 +387,10 @@ export class BetterAuthOAuthSession implements AuthSession {
             },
           },
         );
-        if (!response.ok) throw new Error(await responseMessage(response));
+        if (!response.ok)
+          throw Object.assign(new Error(await responseMessage(response)), {
+            status: response.status,
+          });
         const identity = ((await response.json()) as IdentityResponse).data;
         if (
           !identity ||
@@ -409,7 +427,10 @@ function activeMemberships(identity: SaviaIdentity) {
       attributes?: { isActive?: unknown };
       relationships?: { agency?: { id?: unknown }; tenant?: { id?: unknown } };
     };
-    const agencyId = Number(candidate.relationships?.tenant?.id ?? candidate.relationships?.agency?.id);
+    const agencyId = Number(
+      candidate.relationships?.tenant?.id ??
+        candidate.relationships?.agency?.id,
+    );
     if (
       candidate.attributes?.isActive !== true ||
       typeof candidate.role !== "string" ||

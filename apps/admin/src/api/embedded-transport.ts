@@ -23,7 +23,11 @@ export function createEmbeddedTransport(client: ApiClient, prefix: string) {
         const body = await response.json();
         return Response.json(
           {
-            error: body.error?.message ?? "No se pudo completar la operación.",
+            ...body,
+            error:
+              typeof body.error === "string"
+                ? body.error
+                : (body.error?.message ?? "No se pudo completar la operación."),
           },
           { status: response.status },
         );

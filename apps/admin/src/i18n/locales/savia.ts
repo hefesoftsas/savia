@@ -114,7 +114,8 @@ const saviaEnglish = {
         confirmPassword: "Confirm new password",
         submit: "Update password",
         submitting: "Updating…",
-        success: "Your password was updated and other sessions were signed out.",
+        success:
+          "Your password was updated and other sessions were signed out.",
       },
       mfa: {
         title: "Multi-factor authentication",
@@ -219,10 +220,13 @@ const saviaEnglish = {
         platformRole: "Platform role",
         platformAdmin: "Platform administrator",
         noGlobalAccess: "No global access",
-        platformAdminHelper: "Can manage users, roles, and platform operations.",
-        platformAdminRemoveHelper: "When removing, select the commercial tenant and role below.",
+        platformAdminHelper:
+          "Can manage users, roles, and platform operations.",
+        platformAdminRemoveHelper:
+          "When removing, select the commercial tenant and role below.",
         commercialTenant: "Commercial tenant",
-        commercialTenantRemove: "Commercial tenant after removing global access",
+        commercialTenantRemove:
+          "Commercial tenant after removing global access",
         tenantRole: "Role in tenant",
         tenantRoleRemove: "Role after removing global access",
         mfa: "Multi-factor authentication",
@@ -234,19 +238,26 @@ const saviaEnglish = {
         identity: "Identity",
         identityDetailsDesc:
           "Information identifying the account and its access to Savia.",
-        identityEditDesc: "Update personal details. Email is kept as login identifier.",
-        identityCreateDesc: "You can send a secure link or set a temporary password for first login.",
+        identityEditDesc:
+          "Update personal details. Email is kept as login identifier.",
+        identityCreateDesc:
+          "You can send a secure link or set a temporary password for first login.",
         initialAccess: "Initial access",
-        initialAccessDesc: "Assign the user's commercial tenant or make them a platform administrator.",
+        initialAccessDesc:
+          "Assign the user's commercial tenant or make them a platform administrator.",
         platformAccess: "Platform access",
-        platformAccessDesc: "Platform administrators can manage all Savia workspaces.",
+        platformAccessDesc:
+          "Platform administrators can manage all Savia workspaces.",
         assignedTenant: "Assigned tenant",
-        assignedTenantDesc: "Each user belongs to a tenant. Use transfer to move them without losing access.",
+        assignedTenantDesc:
+          "Each user belongs to a tenant. Use transfer to move them without losing access.",
         assignedRoleDesc: "The role applies within the assigned tenant.",
         security: "Security",
-        securityDesc: "MFA is managed from the user's account; administrators can inspect its status.",
+        securityDesc:
+          "MFA is managed from the user's account; administrators can inspect its status.",
         accountActions: "Account actions",
-        accountActionsDesc: "These actions do not change passwords or disable MFA for others.",
+        accountActionsDesc:
+          "These actions do not change passwords or disable MFA for others.",
       },
       actions: {
         transfer: "Transfer user",
@@ -283,14 +294,11 @@ const saviaEnglish = {
         unsuspendContent:
           "Are you sure you want to restore access for %{name}?",
         revokeTitle: "Sign out all sessions",
-        revokeContent:
-          "This will end all active sessions for %{name}.",
+        revokeContent: "This will end all active sessions for %{name}.",
         resetPasswordTitle: "Reset password",
-        resetPasswordContent:
-          "A password reset link will be sent to %{email}.",
+        resetPasswordContent: "A password reset link will be sent to %{email}.",
         reactivateTitle: "Reactivate user",
-        reactivateContent:
-          "Are you sure you want to reactivate %{name}?",
+        reactivateContent: "Are you sure you want to reactivate %{name}?",
         deleteTitle: "Delete user",
         deleteContent:
           "Are you sure you want to permanently delete %{name}? This action cannot be undone.",
@@ -359,15 +367,13 @@ const saviaEnglish = {
       },
     },
     offline: {
-      banner:
-        "Offline — showing saved data. Changes require a connection.",
+      banner: "Offline — local collections remain available.",
       pendingChanges: "Pending changes (%{count})",
       willSyncOnReconnect: "Will sync upon reconnecting.",
       syncFailed: "Sync failed.",
       retry: "Retry %{label}",
       discard: "Discard %{label}",
-      safeNotice:
-        "Nothing destructive is queued: only personal preferences.",
+      safeNotice: "Nothing destructive is queued: only personal preferences.",
       appearanceOp: "Appearance",
       sidebarOp: "Sidebar menu",
     },
@@ -531,7 +537,8 @@ const saviaSpanish = {
         personalInfoTitle: "Información personal",
         name: "Nombre",
         email: "Correo",
-        emailHint: "Se utiliza para iniciar sesión y notificaciones de la plataforma.",
+        emailHint:
+          "Se utiliza para iniciar sesión y notificaciones de la plataforma.",
       },
       security: {
         title: "Contraseña",
@@ -576,7 +583,8 @@ const saviaSpanish = {
         avatarUpload: "No fue posible subir tu avatar. Inténtalo de nuevo.",
         avatarRemove: "No fue posible quitar tu avatar. Inténtalo de nuevo.",
         passwordMismatch: "Las contraseñas nuevas no coinciden.",
-        passwordMinLength: "La nueva contraseña debe tener al menos 12 caracteres.",
+        passwordMinLength:
+          "La nueva contraseña debe tener al menos 12 caracteres.",
         passwordChange: "No fue posible actualizar tu contraseña.",
         mfaDisable: "No fue posible desactivar la MFA.",
       },
@@ -590,7 +598,8 @@ const saviaSpanish = {
         idSlug: "Identificador",
         idSlugHelper: "Identificador único del tenant.",
         isActive: "Activo",
-        isActiveHelper: "Desactivar el tenant suspende el acceso de sus miembros.",
+        isActiveHelper:
+          "Desactivar el tenant suspende el acceso de sus miembros.",
         initialAdminEmail: "Correo del primer administrador",
         initialAdminFirstName: "Nombres del primer administrador",
         initialAdminLastName: "Apellidos del primer administrador",
@@ -648,8 +657,10 @@ const saviaSpanish = {
         platformRole: "Rol de plataforma",
         platformAdmin: "Administrador de plataforma",
         noGlobalAccess: "Sin acceso global",
-        platformAdminHelper: "Puede administrar usuarios, roles y toda la operación.",
-        platformAdminRemoveHelper: "Al retirarlo, selecciona abajo el tenant comercial y el rol que conservará el usuario.",
+        platformAdminHelper:
+          "Puede administrar usuarios, roles y toda la operación.",
+        platformAdminRemoveHelper:
+          "Al retirarlo, selecciona abajo el tenant comercial y el rol que conservará el usuario.",
         commercialTenant: "Tenant comercial",
         commercialTenantRemove: "Tenant comercial al retirar acceso global",
         tenantRole: "Rol en el tenant",
@@ -663,19 +674,26 @@ const saviaSpanish = {
         identity: "Identidad",
         identityDetailsDesc:
           "Datos que identifican la cuenta y su acceso a Savia.",
-        identityEditDesc: "Actualiza el nombre de la persona. El correo se conserva como identificador de acceso.",
-        identityCreateDesc: "Puedes enviar un enlace seguro o definir una contraseña temporal para el primer ingreso.",
+        identityEditDesc:
+          "Actualiza el nombre de la persona. El correo se conserva como identificador de acceso.",
+        identityCreateDesc:
+          "Puedes enviar un enlace seguro o definir una contraseña temporal para el primer ingreso.",
         initialAccess: "Acceso inicial",
-        initialAccessDesc: "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma.",
+        initialAccessDesc:
+          "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma.",
         platformAccess: "Acceso de plataforma",
-        platformAccessDesc: "Los administradores de plataforma pueden gestionar toda Savia.",
+        platformAccessDesc:
+          "Los administradores de plataforma pueden gestionar toda Savia.",
         assignedTenant: "Tenant asignado",
-        assignedTenantDesc: "Cada usuario pertenece a un tenant. Usa la transferencia para cambiarlo sin dejarlo sin acceso.",
+        assignedTenantDesc:
+          "Cada usuario pertenece a un tenant. Usa la transferencia para cambiarlo sin dejarlo sin acceso.",
         assignedRoleDesc: "El rol se aplica dentro del tenant asignado.",
         security: "Seguridad",
-        securityDesc: "La MFA se gestiona desde la cuenta del usuario; el administrador puede ver su estado.",
+        securityDesc:
+          "La MFA se gestiona desde la cuenta del usuario; el administrador puede ver su estado.",
         accountActions: "Acciones de cuenta",
-        accountActionsDesc: "Estas acciones no modifican la contraseña ni desactivan MFA de otra persona.",
+        accountActionsDesc:
+          "Estas acciones no modifican la contraseña ni desactivan MFA de otra persona.",
       },
       actions: {
         transfer: "Transferir usuario",
@@ -709,17 +727,14 @@ const saviaSpanish = {
         suspendContent:
           "¿Seguro que deseas suspender a %{name}? No podrá acceder a la plataforma.",
         unsuspendTitle: "Desbloquear usuario",
-        unsuspendContent:
-          "¿Seguro que deseas restablecer el acceso a %{name}?",
+        unsuspendContent: "¿Seguro que deseas restablecer el acceso a %{name}?",
         revokeTitle: "Desconectar sesiones",
-        revokeContent:
-          "Esto cerrará todas las sesiones activas de %{name}.",
+        revokeContent: "Esto cerrará todas las sesiones activas de %{name}.",
         resetPasswordTitle: "Restablecer contraseña",
         resetPasswordContent:
           "Se enviará un enlace de restablecimiento a %{email}.",
         reactivateTitle: "Reactivar usuario",
-        reactivateContent:
-          "¿Seguro que deseas reactivar a %{name}?",
+        reactivateContent: "¿Seguro que deseas reactivar a %{name}?",
         deleteTitle: "Eliminar usuario",
         deleteContent:
           "¿Seguro que deseas eliminar definitivamente a %{name}? Esta acción no se puede deshacer.",
@@ -775,8 +790,7 @@ const saviaSpanish = {
       submit: "Guardar contraseña",
       submitting: "Actualizando…",
       successTitle: "Contraseña actualizada",
-      successDescription:
-        "Ya puedes ingresar a Savia con tu nueva contraseña.",
+      successDescription: "Ya puedes ingresar a Savia con tu nueva contraseña.",
       goToSavia: "Ir a Savia",
       backToLogin: "Volver a iniciar sesión",
       errors: {
@@ -788,15 +802,13 @@ const saviaSpanish = {
       },
     },
     offline: {
-      banner:
-        "Sin conexión — mostrando datos guardados. Los cambios requieren conexión.",
+      banner: "Sin conexión — las colecciones locales siguen disponibles.",
       pendingChanges: "Cambios pendientes (%{count})",
       willSyncOnReconnect: "Se sincronizará al reconectar.",
       syncFailed: "Falló la sincronización.",
       retry: "Reintentar %{label}",
       discard: "Descartar %{label}",
-      safeNotice:
-        "Nada destructivo se encola: solo preferencias personales.",
+      safeNotice: "Nada destructivo se encola: solo preferencias personales.",
       appearanceOp: "Apariencia",
       sidebarOp: "Menú lateral",
     },
@@ -972,7 +984,8 @@ const saviaPortuguese = {
         confirmPassword: "Confirmar nova senha",
         submit: "Atualizar senha",
         submitting: "Atualizando…",
-        success: "Sua senha foi atualizada e as outras sessões foram encerradas.",
+        success:
+          "Sua senha foi atualizada e as outras sessões foram encerradas.",
       },
       mfa: {
         title: "Autenticação multifator",
@@ -1073,12 +1086,15 @@ const saviaPortuguese = {
         active: "Ativo",
         suspended: "Suspenso",
         temporaryPassword: "Senha temporária",
-        temporaryPasswordHint: "Deixe em branco para enviar um link por e-mail.",
+        temporaryPasswordHint:
+          "Deixe em branco para enviar um link por e-mail.",
         platformRole: "Função na plataforma",
         platformAdmin: "Administrador da plataforma",
         noGlobalAccess: "Sem acesso global",
-        platformAdminHelper: "Pode gerenciar usuários, funções e toda a operação.",
-        platformAdminRemoveHelper: "Ao remover, selecione abaixo o tenant comercial e a função que o usuário manterá.",
+        platformAdminHelper:
+          "Pode gerenciar usuários, funções e toda a operação.",
+        platformAdminRemoveHelper:
+          "Ao remover, selecione abaixo o tenant comercial e a função que o usuário manterá.",
         commercialTenant: "Tenant comercial",
         commercialTenantRemove: "Tenant comercial ao remover acesso global",
         tenantRole: "Função no tenant",
@@ -1092,19 +1108,26 @@ const saviaPortuguese = {
         identity: "Identidade",
         identityDetailsDesc:
           "Dados que identificam a conta e seu acesso à Savia.",
-        identityEditDesc: "Atualize os dados da pessoa. O e-mail é mantido como identificador de acesso.",
-        identityCreateDesc: "Você pode enviar um link seguro ou definir uma senha temporária para o primeiro acesso.",
+        identityEditDesc:
+          "Atualize os dados da pessoa. O e-mail é mantido como identificador de acesso.",
+        identityCreateDesc:
+          "Você pode enviar um link seguro ou definir uma senha temporária para o primeiro acesso.",
         initialAccess: "Acesso inicial",
-        initialAccessDesc: "Atribua o tenant comercial do usuário ou transforme-o em administrador da plataforma.",
+        initialAccessDesc:
+          "Atribua o tenant comercial do usuário ou transforme-o em administrador da plataforma.",
         platformAccess: "Acesso da plataforma",
-        platformAccessDesc: "Administradores da plataforma podem gerenciar toda a Savia.",
+        platformAccessDesc:
+          "Administradores da plataforma podem gerenciar toda a Savia.",
         assignedTenant: "Tenant atribuído",
-        assignedTenantDesc: "Cada usuário pertence a um tenant. Use a transferência para alterá-lo sem deixá-lo sem acesso.",
+        assignedTenantDesc:
+          "Cada usuário pertence a um tenant. Use a transferência para alterá-lo sem deixá-lo sem acesso.",
         assignedRoleDesc: "A função se aplica dentro do tenant atribuído.",
         security: "Segurança",
-        securityDesc: "O MFA é gerenciado na conta do usuário; o administrador pode consultar seu status.",
+        securityDesc:
+          "O MFA é gerenciado na conta do usuário; o administrador pode consultar seu status.",
         accountActions: "Ações da conta",
-        accountActionsDesc: "Estas ações não alteram senhas nem desativam o MFA de terceiros.",
+        accountActionsDesc:
+          "Estas ações não alteram senhas nem desativam o MFA de terceiros.",
       },
       actions: {
         transfer: "Transferir usuário",
@@ -1141,14 +1164,12 @@ const saviaPortuguese = {
         unsuspendContent:
           "Tem certeza de que deseja restaurar o acesso para %{name}?",
         revokeTitle: "Encerrar sessões",
-        revokeContent:
-          "Isso encerrará todas as sessões ativas de %{name}.",
+        revokeContent: "Isso encerrará todas as sessões ativas de %{name}.",
         resetPasswordTitle: "Redefinir senha",
         resetPasswordContent:
           "Um link de redefinição de senha será enviado para %{email}.",
         reactivateTitle: "Reativar usuário",
-        reactivateContent:
-          "Tem certeza de que deseja reativar %{name}?",
+        reactivateContent: "Tem certeza de que deseja reativar %{name}?",
         deleteTitle: "Excluir usuário",
         deleteContent:
           "Tem certeza de que deseja excluir permanentemente %{name}? Esta ação não pode ser desfeita.",
@@ -1217,8 +1238,7 @@ const saviaPortuguese = {
       },
     },
     offline: {
-      banner:
-        "Sem conexão — exibindo dados salvos. As alterações exigem conexão.",
+      banner: "Sem conexão — as coleções locais continuam disponíveis.",
       pendingChanges: "Alterações pendentes (%{count})",
       willSyncOnReconnect: "Será sincronizado ao reconectar.",
       syncFailed: "Falha na sincronização.",

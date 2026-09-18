@@ -38,7 +38,7 @@ beforeAll(async () => {
     .filter((n) => n.endsWith(".sql"))
     .sort())
     for (const statement of readFileSync(`migrations/${name}`, "utf8")
-      .split(";")
+      .split(/;(?!(?:\s*END\b))/i)
       .filter((s) => s.trim()))
       await platform.env.DB.prepare(statement).run();
   await json("/bootstrap", "POST");

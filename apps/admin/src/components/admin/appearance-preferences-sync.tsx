@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import type { ColorTheme } from "@/color-theme";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { useTheme } from "@/components/admin/use-theme";
-import { useOutbox } from "@/offline/use-outbox";
 import { setCachedAppearance } from "./appearance-cache";
 
 /**
@@ -11,7 +10,6 @@ import { setCachedAppearance } from "./appearance-cache";
 export function AppearancePreferencesSync() {
   const { theme, setTheme, colorTheme, setColorTheme } = useTheme();
   const services = useAppServices();
-  const { saveOrQueue } = useOutbox();
   const hydrated = useRef(false);
   const applying = useRef(false);
 
@@ -49,15 +47,12 @@ export function AppearancePreferencesSync() {
     if (!services?.userPreferences?.saveAppearance) return;
     const timer = window.setTimeout(() => {
       const settings = { version: 1 as const, theme, colorTheme };
-      void saveOrQueue(
-        "user-preferences",
-        "save-appearance",
-        settings,
-        () => services.userPreferences.saveAppearance(settings),
-      ).catch(() => undefined);
+      void services.userPreferences
+        .saveAppearance(settings)
+        .catch(() => undefined);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [colorTheme, saveOrQueue, services, theme]);
+  }, [colorTheme, services, theme]);
 
   return null;
 }

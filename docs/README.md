@@ -17,6 +17,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [local-first-collections.md](local-first-collections.md) — local replicas, synchronization, recovery and deployment.
+
 - [realtime-cost-controls.md](realtime-cost-controls.md) — realtime limits, hibernation and cost controls.
 
 - [solution-packages.md](solution-packages.md) — installing/exporting solution packages.

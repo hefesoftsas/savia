@@ -17,7 +17,6 @@ export const sidebarNavigationItemIds = [
   "service-credentials",
   "users",
   "tenants",
-  "offline-policies",
   "page-administrator",
 ] as const;
 

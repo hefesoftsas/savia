@@ -111,7 +111,7 @@ beforeAll(async () => {
     "0011_solutions.sql",
   ])
     for (const sql of readFileSync(`migrations/${name}`, "utf8")
-      .split(";")
+      .split(/;(?!(?:\s*END\b))/i)
       .filter((sql) => sql.trim()))
       await platform.env.DB.prepare(sql).run();
   await platform.env.DB.prepare(

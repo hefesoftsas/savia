@@ -74,7 +74,7 @@ async function applyMigrations() {
     .filter((file) => file.endsWith(".sql"))
     .sort())
     for (const statement of readFileSync(`migrations/${name}`, "utf8")
-      .split(";")
+      .split(/;(?!(?:\s*END\b))/i)
       .filter((value) => value.trim()))
       await platform.env.DB.prepare(statement).run();
 }
@@ -214,7 +214,7 @@ describe("extension connection and action routes", () => {
           connectionId: "warehouse",
           input: { since: "2026-09-15T00:00:00.000Z" },
         })
-    ).status,
+      ).status,
     ).toBe(404);
   });
 

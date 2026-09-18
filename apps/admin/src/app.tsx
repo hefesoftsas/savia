@@ -7,8 +7,14 @@ import {
   useState,
 } from "react";
 import { Building2, LoaderCircle } from "lucide-react";
-import { CustomRoutes, I18nContextProvider, memoryStore, Resource, useTranslate } from "ra-core";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import {
+  CustomRoutes,
+  I18nContextProvider,
+  memoryStore,
+  Resource,
+  useTranslate,
+} from "ra-core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
 import { tenants } from "@/features/tenants";
@@ -18,13 +24,6 @@ import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { Admin } from "@/components/admin";
 import { i18nProvider } from "@/lib/i18nProvider";
 import { OfflineBanner } from "@/offline/offline-banner";
-import { OutboxStatus } from "@/offline/outbox-status";
-import { createOfflinePersister } from "@/offline/query-persister";
-import { shouldPersistQueryKey } from "@/offline/persisted-keys";
-import {
-  OFFLINE_CACHE_MAX_AGE_MS,
-  createOfflineQueryClient,
-} from "@/offline/query-client";
 import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
@@ -50,10 +49,6 @@ const ServiceCredentialsPage = lazy(async () => {
 const AccountPage = lazy(async () => {
   const module = await import("@/features/account/account-page");
   return { default: module.AccountPage };
-});
-const OfflinePoliciesPage = lazy(async () => {
-  const module = await import("@/features/offline-policies");
-  return { default: module.OfflinePoliciesPage };
 });
 
 const adminStore = memoryStore();
@@ -146,24 +141,8 @@ function ServiceCredentialsRoute({ services }: { services: AppServices }) {
   );
 }
 
-function OfflinePoliciesRoute({ services }: { services: AppServices }) {
+function AccountRoute({ apiUrl }: { apiUrl: string }) {
   const translate = useTranslate();
-  return (
-    <Suspense
-      fallback={
-        <RouteLoading
-          label={translate("savia.routes.loadingOffline", {
-            _: "Cargando modo sin conexión…",
-          })}
-        />
-      }
-    >
-      <OfflinePoliciesPage services={services} />
-    </Suspense>
-  );
-}
-
-function AccountRoute({ apiUrl }: { apiUrl: string }) {  const translate = useTranslate();
   return (
     <Suspense
       fallback={
@@ -195,13 +174,17 @@ export function App({ services }: { services?: AppServices } = {}) {
     () => services ?? getDefaultAppServices(),
     [services],
   );
-  // Offline-first cache owned by app-services (so logout can wipe it);
+  // In-memory derived query results owned by app-services;
   // injected services in tests may omit it, hence the fallback.
   const [queryClient] = useState(
-    () => appServices.queryClient ?? createOfflineQueryClient(),
-  );
-  const [persister] = useState(
-    () => appServices.persister ?? createOfflinePersister(),
+    () =>
+      appServices.queryClient ??
+      new QueryClient({
+        defaultOptions: {
+          queries: { networkMode: "always", retry: false },
+          mutations: { networkMode: "always", retry: false },
+        },
+      }),
   );
   const [handlingCallback, setHandlingCallback] = useState(
     () => window.location.pathname === "/auth/callback",
@@ -235,96 +218,84 @@ export function App({ services }: { services?: AppServices } = {}) {
   if (handlingCallback) {
     return (
       <I18nContextProvider value={i18nProvider}>
-        <BetterAuthCallback services={appServices} onComplete={finishCallback} />
+        <BetterAuthCallback
+          services={appServices}
+          onComplete={finishCallback}
+        />
       </I18nContextProvider>
     );
   }
 
   return (
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{
-        persister,
-        maxAge: OFFLINE_CACHE_MAX_AGE_MS,
-        dehydrateOptions: {
-          shouldDehydrateQuery: (query) =>
-            shouldPersistQueryKey(query.queryKey),
-        },
-      }}
-    >
-    <AppServicesProvider services={appServices}>
-      <TenantTitleSync title={pageTitle} />
-      <OfflineBanner />
-      <OutboxStatus />
-      <Admin
-        authProvider={appServices.authProvider}
-        dataProvider={appServices.dataProvider}
-        disableTelemetry
-        error={TenantHostMismatchError}
-        requireAuth
-        queryClient={queryClient}
-        store={adminStore}
-        title={pageTitle}
-      >
-        <Resource {...users} />
-        <Resource {...tenants} />
-        <CustomRoutes>
-          <Route path="/" element={<Navigate to="/my-day" replace />} />
-          <Route path="/crm" element={<CrmRoute services={appServices} />} />
-          <Route
-            path="/savia-request"
-            element={<SaviaRequestRoute services={appServices} />}
-          />
-          <Route
-            path="/savia-request/docs"
-            element={<SaviaRequestRoute docs services={appServices} />}
-          />
-          <Route
-            path="/auto-light-quotes/*"
-            element={<Navigate replace to="/savia-request" />}
-          />
-          <Route
-            path="/crm-connections"
-            element={<Navigate replace to="/my-integrations" />}
-          />
-          <Route
-            path="/my-integrations"
-            element={<PersonalIntegrationsRoute services={appServices} />}
-          />
-          <Route
-            path="/my-day"
-            element={<MyDayRoute services={appServices} />}
-          />
-          <Route
-            path="/provider-credentials"
-            element={<Navigate to="/savia-request" replace />}
-          />
-          <Route
-            path="/account"
-            element={
-              <AccountRoute
-                apiUrl={
-                  import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin
-                }
-              />
-            }
-          />
-          <Route
-            path="/service-credentials"
-            element={<ServiceCredentialsRoute services={appServices} />}
-          />
-          <Route
-            path="/offline-policies"
-            element={<OfflinePoliciesRoute services={appServices} />}
-          />
-          <Route
-            path="/assistant-configuration"
-            element={<Navigate to="/service-credentials" replace />}
-          />
-        </CustomRoutes>
-      </Admin>
-    </AppServicesProvider>
-    </PersistQueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <AppServicesProvider services={appServices}>
+        <TenantTitleSync title={pageTitle} />
+        <OfflineBanner />
+        <Admin
+          authProvider={appServices.authProvider}
+          dataProvider={appServices.dataProvider}
+          disableTelemetry
+          error={TenantHostMismatchError}
+          requireAuth
+          queryClient={queryClient}
+          store={adminStore}
+          title={pageTitle}
+        >
+          <Resource {...users} />
+          <Resource {...tenants} />
+          <CustomRoutes>
+            <Route path="/" element={<Navigate to="/my-day" replace />} />
+            <Route path="/crm" element={<CrmRoute services={appServices} />} />
+            <Route
+              path="/savia-request"
+              element={<SaviaRequestRoute services={appServices} />}
+            />
+            <Route
+              path="/savia-request/docs"
+              element={<SaviaRequestRoute docs services={appServices} />}
+            />
+            <Route
+              path="/auto-light-quotes/*"
+              element={<Navigate replace to="/savia-request" />}
+            />
+            <Route
+              path="/crm-connections"
+              element={<Navigate replace to="/my-integrations" />}
+            />
+            <Route
+              path="/my-integrations"
+              element={<PersonalIntegrationsRoute services={appServices} />}
+            />
+            <Route
+              path="/my-day"
+              element={<MyDayRoute services={appServices} />}
+            />
+            <Route
+              path="/provider-credentials"
+              element={<Navigate to="/savia-request" replace />}
+            />
+            <Route
+              path="/account"
+              element={
+                <AccountRoute
+                  apiUrl={
+                    import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin
+                  }
+                />
+              }
+            />
+            <Route
+              path="/service-credentials"
+              element={<ServiceCredentialsRoute services={appServices} />}
+            />
+            <Route
+              path="/assistant-configuration"
+              element={<Navigate to="/service-credentials" replace />}
+            />
+          </CustomRoutes>
+        </Admin>
+      </AppServicesProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -205,7 +205,7 @@ export async function createRecord(
   tenant: string,
   name: string,
   input: Record<string, unknown>,
-  options: { idempotencyKey?: string } = {},
+  options: { idempotencyKey?: string; id?: string } = {},
 ) {
   await assertLocalCollection(db, tenant, name);
   const object = await getObject(db, tenant, name),
@@ -234,7 +234,7 @@ export async function createRecord(
   };
   const previous = await replay();
   if (previous) return previous;
-  const id = crypto.randomUUID(),
+  const id = options.id ?? crypto.randomUUID(),
     now = new Date().toISOString(),
     result = {
       ...data,

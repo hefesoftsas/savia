@@ -12,10 +12,12 @@ export const CRM_DOMAINS_CHANGED = "savia-crm-domains-changed";
 export async function listCrmDomains(
   services: AppServices,
 ): Promise<CrmDomain[]> {
-  const response = await services.apiClient.get<{ data: CrmDomain[] }>(
-    "/v1/data-domains",
-  );
-  return response.data;
+  const load = async () =>
+    (await services.apiClient.get<{ data: CrmDomain[] }>("/v1/data-domains"))
+      .data;
+  return services.localData
+    ? services.localData.cachedMetadata("domains", load)
+    : load();
 }
 export function selectCrmDomain(
   domains: CrmDomain[],

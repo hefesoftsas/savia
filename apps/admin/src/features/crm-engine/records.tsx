@@ -49,12 +49,6 @@ import {
 import { api, downloadCrm } from "./api";
 import { getListObjectsQueryKey } from "./generated/crm";
 import { getCrmRuntime } from "./runtime";
-import {
-  getCollectionVersion,
-  isCoveredByVersion,
-  setCollectionVersion,
-} from "@/offline/collection-versions";
-import { useOfflinePolicy } from "@/offline/use-offline-policy";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {
   fieldEntries,
@@ -63,7 +57,10 @@ import {
   type CrmObject,
   type CrmRecord,
 } from "@savia/crm-shared/metadata";
-import { formatMapLocationSummary, parseMapLocation } from "@savia/crm-shared/map-location";
+import {
+  formatMapLocationSummary,
+  parseMapLocation,
+} from "@savia/crm-shared/map-location";
 import { recordsCsvFilename } from "@savia/crm-shared/records-csv-export";
 import { getScrollParent, syncScrollButtonPosition } from "./table-scroll";
 import "./records.css";
@@ -299,16 +296,18 @@ function normalizeTablePreferences(
         ]
       : columns;
   const orderedColumns = orderColumns(
-      preferences?.columnOrder ?? preferences?.columns ?? defaults.columnOrder,
-      available,
-    );
+    preferences?.columnOrder ?? preferences?.columns ?? defaults.columnOrder,
+    available,
+  );
   return {
     columns: hasCrmColumn
       ? [
           ...(normalizedColumns.includes(CRM_INTEGRATION_COLUMN_KEY)
             ? [CRM_INTEGRATION_COLUMN_KEY]
             : []),
-          ...normalizedColumns.filter((key) => key !== CRM_INTEGRATION_COLUMN_KEY),
+          ...normalizedColumns.filter(
+            (key) => key !== CRM_INTEGRATION_COLUMN_KEY,
+          ),
         ]
       : normalizedColumns,
     columnOrder: hasCrmColumn
@@ -341,7 +340,9 @@ function hasSameTablePreferences(
     )
   );
 }
-function tenantIdFromDomainId(domainId: string | undefined): number | undefined {
+function tenantIdFromDomainId(
+  domainId: string | undefined,
+): number | undefined {
   const match = /^tenant:([1-9]\d*)$/.exec(domainId ?? "");
   return match ? Number(match[1]) : undefined;
 }
@@ -353,66 +354,20 @@ function tenantIdFromDomainId(domainId: string | undefined): number | undefined 
  */
 function RecordsLiveSync({ objectName }: { objectName: string }) {
   const client = useQueryClient();
-  const pending = useRef(0);
-  const pendingVersion = useRef<number | undefined>(undefined);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const domainId = getCrmRuntime().domainId;
-  const tenantId = tenantIdFromDomainId(domainId);
-
-  // Loads the tenant's offline policy (enabled collections + refresh
-  // intervals). Degrades silently outside providers; the static fallback
-  // keeps working.
-  useOfflinePolicy(tenantId);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
+  const runtime = getCrmRuntime();
+  const tenantId = tenantIdFromDomainId(runtime.domainId);
   useRealtimeTopics({
     topics: ["records"],
     tenantId,
     enabled: tenantId !== undefined,
     onEvent: (event) => {
+      if (runtime.localWorkspace) {
+        runtime.localWorkspace.requestSync();
+        return;
+      }
       if (event.collection && event.collection !== objectName) return;
-      // Delta gate: skip events this client already covered. Unversioned
-      // events (old servers) always refetch.
-      void (async () => {
-        if (event.collection && event.version !== undefined && domainId) {
-          const known = await getCollectionVersion(
-            `${domainId}:${event.collection}`,
-          );
-          if (isCoveredByVersion(known, event.version)) return;
-          pendingVersion.current =
-            pendingVersion.current === undefined
-              ? event.version
-              : Math.max(pendingVersion.current, event.version);
-        }
-        pending.current += 1;
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => {
-          const count = pending.current;
-          const version = pendingVersion.current;
-          pending.current = 0;
-          pendingVersion.current = undefined;
-          void client.invalidateQueries({ queryKey: ["pipeline", objectName] });
-          void client.invalidateQueries({ queryKey: ["summary", objectName] });
-          void client.invalidateQueries({ queryKey: ["views", objectName] });
-          if (event.collection && version !== undefined && domainId) {
-            void setCollectionVersion(
-              `${domainId}:${event.collection}`,
-              version,
-            );
-          }
-          toast.success(
-            count === 1
-              ? "Cambio recibido — lista actualizada"
-              : `Se recibieron ${count} cambios — lista actualizada`,
-          );
-        }, 1500);
-      })();
+      void client.invalidateQueries({ queryKey: [objectName] });
+      void client.invalidateQueries({ queryKey: ["summary", objectName] });
     },
   });
   return null;
@@ -686,7 +641,9 @@ export default function Records({
   };
   const [formFields, setFormFields] = useState(object.config.fields);
   const [savedFormFields, setSavedFormFields] = useState(object.config.fields);
-  const formColumnsDirty = formColumns !== savedFormColumns || JSON.stringify(formFields) !== JSON.stringify(savedFormFields);
+  const formColumnsDirty =
+    formColumns !== savedFormColumns ||
+    JSON.stringify(formFields) !== JSON.stringify(savedFormFields);
   const saveFormColumns = async () => {
     setSavingFormColumns(true);
     try {
@@ -729,186 +686,192 @@ export default function Records({
       <div className="records-panel">
         <RecordsLiveSync objectName={object.name} />
         <div className="records-panel-toolbar">
-      <div className="view-tabs">
-        <button
-          className={!viewId ? "selected" : ""}
-          onClick={applyDefaultView}
-        >
-          Todos los registros
-        </button>
-        {savedViews.map((view) => (
-          <span className="view-tab" key={view.id}>
+          <div className="view-tabs">
             <button
-              className={viewId === view.id ? "selected" : ""}
-              onClick={() => applySavedView(view)}
+              className={!viewId ? "selected" : ""}
+              onClick={applyDefaultView}
             >
-              {view.name}
+              Todos los registros
             </button>
+            {savedViews.map((view) => (
+              <span className="view-tab" key={view.id}>
+                <button
+                  className={viewId === view.id ? "selected" : ""}
+                  onClick={() => applySavedView(view)}
+                >
+                  {view.name}
+                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Eliminar vista ${view.name}`}
+                      onClick={() => setPendingViewDeletion(view)}
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Eliminar vista
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+            ))}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Eliminar vista ${view.name}`}
-                  onClick={() => setPendingViewDeletion(view)}
+                  className="save-view-trigger"
+                  aria-label="Configurar vista"
+                  aria-expanded={config}
+                  onClick={() => {
+                    setColumnQuery("");
+                    setConfigTab("table");
+                    setConfig(true);
+                  }}
                 >
-                  <Trash2 size={13} />
-                </Button>
+                  <SlidersHorizontal size={14} />
+                </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Eliminar vista
+                Configurar vista
               </TooltipContent>
             </Tooltip>
-          </span>
-        ))}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="save-view-trigger"
-              aria-label="Configurar vista"
-              aria-expanded={config}
-              onClick={() => {
-                setColumnQuery("");
-                setConfigTab("table");
-                setConfig(true);
-              }}
-            >
-              <SlidersHorizontal size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            Configurar vista
-          </TooltipContent>
-        </Tooltip>
-      </div>
-      <RecordsCommandToolbar
-        object={object}
-        capabilities={capabilities}
-        searchField={s.searchField}
-        searchQuery={s.q}
-        onSearchFieldChange={(searchField) => patch({ searchField })}
-        onSearchQueryChange={(q) => patch({ q })}
-        searchOptions={visibleColumnKeys.map((key) => ({
-          key,
-          label: columnLabel(key),
-        }))}
-        filters={s.filters}
-        onFiltersChange={(filters) => patch({ filters })}
-        canExportCsv={canExportCsv}
-        onExportCsv={() => void exportCsv()}
-        trash={trash}
-        onTrashToggle={() => {
-          setTrash(!trash);
-          patch({ mode: "table" });
-        }}
-        showPipelineToggle={Boolean(pipeline)}
-        mode={s.mode}
-        onModeChange={(mode) => patch({ mode })}
-        stage={s.stage}
-        onStageChange={(stage) => patch({ stage })}
-        pipelineFieldLabel={pipeline?.field ? object.config.fields[pipeline.field]?.label : undefined}
-        stageOptions={
-          pipeline?.field
-            ? (object.config.fields[pipeline.field].options ?? []).map((option) => ({
-                value: String(option.value),
-                label: option.label,
-              }))
-            : []
-        }
-        supportsLocalRecordTools={supportsLocalRecordTools(object)}
-        showDelete={collectionCapabilities(object).delete}
-      />
+          </div>
+          <RecordsCommandToolbar
+            object={object}
+            capabilities={capabilities}
+            searchField={s.searchField}
+            searchQuery={s.q}
+            onSearchFieldChange={(searchField) => patch({ searchField })}
+            onSearchQueryChange={(q) => patch({ q })}
+            searchOptions={visibleColumnKeys.map((key) => ({
+              key,
+              label: columnLabel(key),
+            }))}
+            filters={s.filters}
+            onFiltersChange={(filters) => patch({ filters })}
+            canExportCsv={canExportCsv}
+            onExportCsv={() => void exportCsv()}
+            trash={trash}
+            onTrashToggle={() => {
+              setTrash(!trash);
+              patch({ mode: "table" });
+            }}
+            showPipelineToggle={Boolean(pipeline)}
+            mode={s.mode}
+            onModeChange={(mode) => patch({ mode })}
+            stage={s.stage}
+            onStageChange={(stage) => patch({ stage })}
+            pipelineFieldLabel={
+              pipeline?.field
+                ? object.config.fields[pipeline.field]?.label
+                : undefined
+            }
+            stageOptions={
+              pipeline?.field
+                ? (object.config.fields[pipeline.field].options ?? []).map(
+                    (option) => ({
+                      value: String(option.value),
+                      label: option.label,
+                    }),
+                  )
+                : []
+            }
+            supportsLocalRecordTools={supportsLocalRecordTools(object)}
+            showDelete={collectionCapabilities(object).delete}
+          />
         </div>
         <div className="records-panel-body">
-      {summary.error && <p role="alert">{summary.error.message}</p>}
-      {summary.data && (
-        <div className="summary-strip">
-          {summary.data.data.map((g: any) => (
-            <div key={String(g.value)}>
-              <span>{display(g.value)}</span>
-              <strong>{g.count} registros</strong>
-              {pipeline?.amountField && (
-                <small>
-                  {money(
-                    g.amount,
-                    String(
-                      object.config.fields[pipeline.amountField]?.config
-                        ?.currency || "COP",
-                    ),
-                    typeof object.config.fields[pipeline.amountField]?.config
-                      ?.decimals === "number"
-                      ? Number(
+          {summary.error && <p role="alert">{summary.error.message}</p>}
+          {summary.data && (
+            <div className="summary-strip">
+              {summary.data.data.map((g: any) => (
+                <div key={String(g.value)}>
+                  <span>{display(g.value)}</span>
+                  <strong>{g.count} registros</strong>
+                  {pipeline?.amountField && (
+                    <small>
+                      {money(
+                        g.amount,
+                        String(
                           object.config.fields[pipeline.amountField]?.config
-                            ?.decimals,
-                        )
-                      : object.config.fields[pipeline.amountField]?.config
-                            ?.integer
-                        ? 0
-                        : 2,
+                            ?.currency || "COP",
+                        ),
+                        typeof object.config.fields[pipeline.amountField]
+                          ?.config?.decimals === "number"
+                          ? Number(
+                              object.config.fields[pipeline.amountField]?.config
+                                ?.decimals,
+                            )
+                          : object.config.fields[pipeline.amountField]?.config
+                                ?.integer
+                            ? 0
+                            : 2,
+                      )}
+                    </small>
                   )}
-                </small>
+                </div>
+              ))}
+            </div>
+          )}
+          {s.mode === "pipeline" && pipeline && !trash ? (
+            <div className="kanban">
+              {(object.config.fields[pipeline.field].options ?? [])
+                .filter((o) => !s.stage || o.value === s.stage)
+                .map((o) => (
+                  <PipelineColumn
+                    key={String(o.value)}
+                    object={object}
+                    settings={s}
+                    stage={String(o.value)}
+                    label={o.label}
+                    onOpen={onOpen}
+                  />
+                ))}
+              {!s.stage && (
+                <PipelineColumn
+                  object={object}
+                  settings={s}
+                  stage=""
+                  label="Sin etapa"
+                  onOpen={onOpen}
+                />
               )}
             </div>
-          ))}
-        </div>
-      )}
-      {s.mode === "pipeline" && pipeline && !trash ? (
-        <div className="kanban">
-          {(object.config.fields[pipeline.field].options ?? [])
-            .filter((o) => !s.stage || o.value === s.stage)
-            .map((o) => (
-              <PipelineColumn
-                key={String(o.value)}
+          ) : (
+            <ListBase
+              resource={object.name}
+              perPage={s.perPage}
+              sort={s.sort}
+              filter={{
+                ...params(s, trash),
+                __collectionSearch: capabilities.search,
+                __collectionFilter: capabilities.filter,
+                __collectionSort: capabilities.sort,
+              }}
+              disableSyncWithLocation
+              storeKey={false}
+            >
+              <RecordTable
                 object={object}
-                settings={s}
-                stage={String(o.value)}
-                label={o.label}
+                columnAliases={s.columnAliases}
+                columns={visibleColumnKeys}
+                trash={trash}
                 onOpen={onOpen}
+                desiredSort={s.sort}
+                desiredPerPage={s.perPage}
+                onPerPage={(perPage) => setS((prev) => ({ ...prev, perPage }))}
+                onSort={(sort) => setS((prev) => ({ ...prev, sort }))}
+                onConfigureColumns={() => {
+                  setConfigTab("table");
+                  setConfig(true);
+                }}
               />
-            ))}
-          {!s.stage && (
-            <PipelineColumn
-              object={object}
-              settings={s}
-              stage=""
-              label="Sin etapa"
-              onOpen={onOpen}
-            />
+            </ListBase>
           )}
-        </div>
-      ) : (
-        <ListBase
-          resource={object.name}
-          perPage={s.perPage}
-          sort={s.sort}
-          filter={{
-            ...params(s, trash),
-            __collectionSearch: capabilities.search,
-            __collectionFilter: capabilities.filter,
-            __collectionSort: capabilities.sort,
-          }}
-          disableSyncWithLocation
-          storeKey={false}
-        >
-          <RecordTable
-            object={object}
-            columnAliases={s.columnAliases}
-            columns={visibleColumnKeys}
-            trash={trash}
-            onOpen={onOpen}
-            desiredSort={s.sort}
-            desiredPerPage={s.perPage}
-            onPerPage={(perPage) => setS((prev) => ({ ...prev, perPage }))}
-            onSort={(sort) => setS((prev) => ({ ...prev, sort }))}
-            onConfigureColumns={() => {
-              setConfigTab("table");
-              setConfig(true);
-            }}
-          />
-        </ListBase>
-      )}
         </div>
       </div>
       {config && (
@@ -989,8 +952,15 @@ export default function Records({
                     value={formColumns}
                     onChange={setFormColumns}
                   />
-                  <FormLabelsEditor fields={formFields} onChange={setFormFields} />
-                  <CollectionOptionsEditor object={object} fields={formFields} onChange={setFormFields} />
+                  <FormLabelsEditor
+                    fields={formFields}
+                    onChange={setFormFields}
+                  />
+                  <CollectionOptionsEditor
+                    object={object}
+                    fields={formFields}
+                    onChange={setFormFields}
+                  />
                 </section>
               )}
               <section
@@ -1451,13 +1421,8 @@ function RecordTable({
     perPage,
     setPerPage,
   } = useListContext<CrmRecord>();
-  const {
-    canScrollLeft,
-    canScrollRight,
-    hasOverflow,
-    scrollByPage,
-    shellRef,
-  } = useHorizontalTableScroll(columns, data.length);
+  const { canScrollLeft, canScrollRight, hasOverflow, scrollByPage, shellRef } =
+    useHorizontalTableScroll(columns, data.length);
   useEffect(() => {
     setSort(desiredSort);
   }, [desiredSort.field, desiredSort.order]);
@@ -1477,7 +1442,10 @@ function RecordTable({
   if (isPending)
     return (
       <TableSkeleton
-        columns={Math.max(columns.filter((k) => k !== CRM_INTEGRATION_COLUMN_KEY).length, 4)}
+        columns={Math.max(
+          columns.filter((k) => k !== CRM_INTEGRATION_COLUMN_KEY).length,
+          4,
+        )}
         rows={Math.min(perPage || 6, 8)}
         hasCheckbox={true}
         ariaLabel="Cargando registros…"
@@ -1558,7 +1526,8 @@ function RecordTable({
                     disableSort={collectionCapabilities(object).sort === false}
                     source={key}
                     label={
-                      columnAliases[key]?.trim() || object.config.fields[key].label
+                      columnAliases[key]?.trim() ||
+                      object.config.fields[key].label
                     }
                     render={(r) => {
                       const cell = (
@@ -1582,8 +1551,7 @@ function RecordTable({
                               typeof object.config.fields[key].config
                                 ?.decimals === "number"
                                 ? Number(
-                                    object.config.fields[key].config
-                                      ?.decimals,
+                                    object.config.fields[key].config?.decimals,
                                   )
                                 : object.config.fields[key].config?.integer
                                   ? 0
@@ -1625,7 +1593,7 @@ function RecordTable({
                   />
                 ),
               )}
-            <RecordTableRowActions object={object} trash={trash} />
+              <RecordTableRowActions object={object} trash={trash} />
             </DataTable>
             {hasOverflow && (
               <div className="records-table-scroll-controls">
@@ -1733,7 +1701,8 @@ async function recordVersionsForBulkDelete(
       ),
     );
     for (const record of fetched) {
-      if (record._version != null) versions[String(record.id)] = record._version;
+      if (record._version != null)
+        versions[String(record.id)] = record._version;
     }
   }
   const unresolved = ids.filter((id) => versions[String(id)] == null);
@@ -1816,19 +1785,27 @@ function RecordsBulkActionsToolbar({ object }: { object: CrmObject }) {
       </BulkActionsToolbar>
       <Confirm
         isOpen={confirmOpen}
-        title={count === 1 ? "Eliminar registro" : `Eliminar ${count} registros`}
+        title={
+          count === 1 ? "Eliminar registro" : `Eliminar ${count} registros`
+        }
         content={
           hubspotArchive
             ? `¿Archivar ${count === 1 ? "este registro" : `${count} registros`} en HubSpot?`
             : permanent
-            ? count === 1
-              ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
-              : `¿Eliminar permanentemente ${count} registros? Esta acción no se puede deshacer.`
-            : count === 1
-              ? "¿Mover este registro a la papelera?"
-              : `¿Mover ${count} registros a la papelera?`
+              ? count === 1
+                ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
+                : `¿Eliminar permanentemente ${count} registros? Esta acción no se puede deshacer.`
+              : count === 1
+                ? "¿Mover este registro a la papelera?"
+                : `¿Mover ${count} registros a la papelera?`
         }
-        confirm={hubspotArchive ? "Archivar en HubSpot" : permanent ? "Eliminar permanentemente" : "Mover a papelera"}
+        confirm={
+          hubspotArchive
+            ? "Archivar en HubSpot"
+            : permanent
+              ? "Eliminar permanentemente"
+              : "Mover a papelera"
+        }
         confirmColor="warning"
         loading={busy}
         onClose={() => setConfirmOpen(false)}
@@ -1871,9 +1848,7 @@ function RecordRowAction({
           "DELETE",
         );
         toast.success(
-          permanent
-            ? "Registro eliminado"
-            : "Registro movido a la papelera",
+          permanent ? "Registro eliminado" : "Registro movido a la papelera",
         );
       }
       close();
@@ -1932,10 +1907,16 @@ function RecordRowAction({
           hubspotArchive
             ? "¿Archivar este registro en HubSpot?"
             : permanent
-            ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
-            : "¿Mover este registro a la papelera?"
+              ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
+              : "¿Mover este registro a la papelera?"
         }
-        confirm={hubspotArchive ? "Archivar en HubSpot" : permanent ? "Eliminar permanentemente" : "Mover a papelera"}
+        confirm={
+          hubspotArchive
+            ? "Archivar en HubSpot"
+            : permanent
+              ? "Eliminar permanentemente"
+              : "Mover a papelera"
+        }
         confirmColor="warning"
         loading={busy}
         onClose={close}
@@ -2023,7 +2004,10 @@ function PipelineColumn({
           }),
       ),
   });
-  useEffect(() => setPage(1), [settings.q, settings.searchField, settings.filters]);
+  useEffect(
+    () => setPage(1),
+    [settings.q, settings.searchField, settings.filters],
+  );
   async function move(record: CrmRecord, next: string) {
     try {
       await api(`/records/${object.name}/${record.id}`, "PATCH", {
@@ -2057,7 +2041,11 @@ function PipelineColumn({
       {query.error ? (
         <p role="alert">{query.error.message}</p>
       ) : query.isPending ? (
-        <div className="space-y-2 py-2" role="status" aria-label="Cargando tarjetas…">
+        <div
+          className="space-y-2 py-2"
+          role="status"
+          aria-label="Cargando tarjetas…"
+        >
           <span className="sr-only">Cargando tarjetas…</span>
           <div className="rounded-lg border bg-card p-3 space-y-2">
             <Skeleton className="h-4 w-28" />

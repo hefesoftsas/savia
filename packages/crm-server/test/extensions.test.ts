@@ -207,7 +207,7 @@ beforeAll(async () => {
     .filter((name) => name.endsWith(".sql"))
     .sort())
     for (const sql of readFileSync(`migrations/${file}`, "utf8")
-      .split(";")
+      .split(/;(?!(?:\s*END\b))/i)
       .filter((statement) => statement.trim()))
       await platform.env.DB.prepare(sql).run();
 });

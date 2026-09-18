@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { registerLocalSync } from "./local-sync";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
@@ -696,6 +697,7 @@ export function createCrmApp(
   registerIntegrations(app);
   registerGeocoding(app);
   registerGeocodingSettings(app);
+  registerLocalSync(app, trigger);
   registerOperations(app);
   return app;
 }

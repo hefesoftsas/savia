@@ -12,15 +12,25 @@ describe("React Admin authentication provider", () => {
       getPermissions: vi.fn(),
       handleCallback: vi.fn(),
       login: vi.fn(),
-      logout: vi.fn().mockResolvedValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
-      getAuthorizeUrl: vi.fn().mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+      logout: vi
+        .fn()
+        .mockResolvedValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+      getAuthorizeUrl: vi
+        .fn()
+        .mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
     };
     const provider = createReactAdminAuthProvider(session);
 
-    const providerLogoutRedirect = await provider.logout({ logoutFromProvider: true });
+    const providerLogoutRedirect = await provider.logout({
+      logoutFromProvider: true,
+    });
     const localLogoutRedirect = await provider.logout({});
-    expect(providerLogoutRedirect).toBe("http://127.0.0.1:8787/api/auth/admin/authorize");
-    expect(localLogoutRedirect).toBe("http://127.0.0.1:8787/api/auth/admin/authorize");
+    expect(providerLogoutRedirect).toBe(
+      "http://127.0.0.1:8787/api/auth/admin/authorize",
+    );
+    expect(localLogoutRedirect).toBe(
+      "http://127.0.0.1:8787/api/auth/admin/authorize",
+    );
     await expect(
       provider.checkError(
         new ApiClientError(
@@ -44,8 +54,12 @@ describe("React Admin authentication provider", () => {
       getPermissions: vi.fn(),
       handleCallback: vi.fn(),
       login: vi.fn(),
-      logout: vi.fn().mockResolvedValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
-      getAuthorizeUrl: vi.fn().mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+      logout: vi
+        .fn()
+        .mockResolvedValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+      getAuthorizeUrl: vi
+        .fn()
+        .mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
     };
     const onLogout = vi.fn();
     const provider = createReactAdminAuthProvider(session, { onLogout });
@@ -66,7 +80,9 @@ describe("React Admin authentication provider", () => {
       handleCallback: vi.fn(),
       login: vi.fn(),
       logout: vi.fn(),
-      getAuthorizeUrl: vi.fn().mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
+      getAuthorizeUrl: vi
+        .fn()
+        .mockReturnValue("http://127.0.0.1:8787/api/auth/admin/authorize"),
     };
     const provider = createReactAdminAuthProvider(session, {
       onLogout: () => {
@@ -104,7 +120,10 @@ describe("React Admin authentication provider", () => {
       provider.canAccess?.({ resource: "tenants", action: "list" }),
     ).resolves.toBe(false);
     await expect(
-      provider.canAccess?.({ resource: "provider-credentials", action: "list" }),
+      provider.canAccess?.({
+        resource: "provider-credentials",
+        action: "list",
+      }),
     ).resolves.toBe(true);
   });
 
@@ -135,7 +154,8 @@ describe("React Admin authentication provider", () => {
     ).resolves.toBe(true);
   });
 
-  it("exposes private provider credentials to authenticated users", async () => {    const session = {
+  it("exposes private provider credentials to authenticated users", async () => {
+    const session = {
       checkSession: vi.fn(),
       clearSession: vi.fn(),
       getAccessToken: vi.fn(),
@@ -172,51 +192,5 @@ describe("React Admin authentication provider", () => {
         action: "list",
       }),
     ).resolves.toBe(true);
-  });
-
-  it("gates offline policies to admins and tenant admins", async () => {
-    const baseSession = {
-      checkSession: vi.fn(),
-      clearSession: vi.fn(),
-      getAccessToken: vi.fn(),
-      getIdentity: vi.fn(),
-      handleCallback: vi.fn(),
-      login: vi.fn(),
-      logout: vi.fn(),
-      getAuthorizeUrl: vi.fn(),
-    };
-    const withPermissions = (permissions: unknown) =>
-      createReactAdminAuthProvider({
-        ...baseSession,
-        getPermissions: vi.fn().mockResolvedValue(permissions),
-      });
-    const platformAdmin = withPermissions({
-      canReadDocuments: true,
-      canExecuteCommands: true,
-      canManageIdentity: true,
-      memberships: [],
-    });
-    const tenantAdmin = withPermissions({
-      canReadDocuments: true,
-      canExecuteCommands: true,
-      canManageIdentity: false,
-      memberships: [{ agencyId: 101, role: "tenant_admin" }],
-    });
-    const viewer = withPermissions({
-      canReadDocuments: true,
-      canExecuteCommands: false,
-      canManageIdentity: false,
-      memberships: [{ agencyId: 101, role: "viewer" }],
-    });
-
-    await expect(
-      platformAdmin.canAccess?.({ resource: "offline-policies", action: "edit" }),
-    ).resolves.toBe(true);
-    await expect(
-      tenantAdmin.canAccess?.({ resource: "offline-policies", action: "edit" }),
-    ).resolves.toBe(true);
-    await expect(
-      viewer.canAccess?.({ resource: "offline-policies", action: "edit" }),
-    ).resolves.toBe(false);
   });
 });

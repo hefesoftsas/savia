@@ -38,7 +38,6 @@ import { registerCrmRoutes, type CrmRouteDependencies } from "./routes/crm";
 import type { SqlBridgeClient } from "./crm/sql-bridge";
 import { registerCrmAutomaticSyncRoutes } from "./routes/crm-automatic-sync";
 import { registerIdentityRoutes } from "./routes/identity";
-import { registerOfflinePolicyRoutes } from "./routes/offline-policies";
 import { registerRealtimeRoutes } from "./realtime/routes";
 import type { RealtimeHubClient } from "./realtime/hub-client";
 import {
@@ -106,7 +105,6 @@ export function createApp(
     realtime,
   );
   registerRealtimeRoutes(app, realtime);
-  registerOfflinePolicyRoutes(app, db);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerLookupRoutes(app, saviaRequestService);
   registerRequestPageRoutes(app, db, saviaRequestService);

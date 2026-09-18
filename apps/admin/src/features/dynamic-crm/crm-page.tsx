@@ -29,6 +29,8 @@ import {
   type CrmDomain,
 } from "./crm-domains";
 import { setCrmRuntime } from "@/features/crm-engine/runtime";
+import { LocalSyncStatus } from "@/local-data/sync-status";
+import type { LocalWorkspace } from "@/local-data/workspaces";
 import "./embedded.css";
 
 const CrmRoot = lazy(() => import("@/features/crm-engine/app"));
@@ -227,10 +229,7 @@ export function CrmPage({ services }: { services: AppServices }) {
             {contextOpen && (
               <Suspense
                 fallback={
-                  <RouteLoading
-                    compact
-                    label="Cargando integraciones…"
-                  />
+                  <RouteLoading compact label="Cargando integraciones…" />
                 }
               >
                 <BusinessPanel
@@ -410,24 +409,61 @@ function CrmWorkspace({
   const [readyTransport, setReadyTransport] = useState<typeof transport | null>(
     null,
   );
+  const [workspace, setWorkspace] = useState<LocalWorkspace>();
+  const [startupError, setStartupError] = useState<string>();
   useLayoutEffect(() => {
-    setCrmRuntime({
-      embedded: true,
-      domainId: domain.id,
-      businessSetupEnabled: domain.kind === "agency",
-      apiBasePath: domain.apiBasePath,
-      transport,
-      requestTransport: (path, init) => services.apiClient.requestResponse("/v1/request-pages" + path, init),
-      navigate: (query, replace) => navigate.current(query, replace),
-    });
-    setReadyTransport(() => transport);
-    return () => setCrmRuntime({ embedded: false });
+    let active = true;
+    let opened: LocalWorkspace | undefined;
+    const install = (local?: LocalWorkspace) => {
+      if (!active) {
+        local?.close();
+        return;
+      }
+      opened = local;
+      setCrmRuntime({
+        embedded: true,
+        domainId: domain.id,
+        businessSetupEnabled: domain.kind === "agency",
+        apiBasePath: domain.apiBasePath,
+        transport: local?.transport ?? transport,
+        localWorkspace: local,
+        requestTransport: (path, init) =>
+          services.apiClient.requestResponse("/v1/request-pages" + path, init),
+        navigate: (query, replace) => navigate.current(query, replace),
+      });
+      setWorkspace(local);
+      setReadyTransport(() => transport);
+    };
+    if (services.localData) {
+      void services.localData
+        .open(domain.apiBasePath)
+        .then(install)
+        .catch((error) => {
+          if (active)
+            setStartupError(
+              error instanceof Error
+                ? error.message
+                : "No se pudo abrir el espacio local.",
+            );
+        });
+    } else install();
+    return () => {
+      active = false;
+      opened?.close();
+      setCrmRuntime({ embedded: false });
+    };
   }, [transport]);
-  if (readyTransport !== transport) {
-    return <RouteLoading variant="screens" />;
-  }
+  if (startupError)
+    return (
+      <div role="alert" className="p-4 text-sm text-destructive">
+        {startupError} Recarga para reintentar. No se guardaron cambios
+        localmente.
+      </div>
+    );
+  if (readyTransport !== transport) return <RouteLoading variant="screens" />;
   return (
     <div className="min-w-0 w-full" title="Estudio del dominio de datos">
+      {workspace && <LocalSyncStatus workspace={workspace} />}
       <Suspense fallback={<RouteLoading variant="screens" />}>
         <CrmRoot embedded search={query} />
       </Suspense>

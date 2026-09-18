@@ -26,7 +26,7 @@ describe("OfflineBanner", () => {
     render(<OfflineBanner />);
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent(/sin conexión/i);
-    expect(status).toHaveTextContent(/datos guardados/i);
+    expect(status).toHaveTextContent(/colecciones locales/i);
   });
 
   it("reacts to connectivity changes", async () => {

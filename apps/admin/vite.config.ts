@@ -53,14 +53,44 @@ function precompressionPlugin(): Plugin {
   };
 }
 
+// Include the CRM route and its static dependencies without precaching the
+// thousands of optional icon/editor chunks shipped by the application.
+const offlineShellAssets = new Map<string, number>();
+function offlineShellPlugin(): Plugin {
+  return {
+    name: "savia-offline-shell",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      offlineShellAssets.clear();
+      const visit = (name: string) => {
+        if (offlineShellAssets.has(name)) return;
+        const item = bundle[name];
+        if (!item || item.type !== "chunk") return;
+        offlineShellAssets.set(name, Buffer.byteLength(item.code));
+        item.imports.forEach(visit);
+      };
+      for (const item of Object.values(bundle)) {
+        if (
+          item.type === "chunk" &&
+          (item.isEntry ||
+            item.facadeModuleId?.endsWith("/dynamic-crm/crm-page.tsx") ||
+            item.facadeModuleId?.endsWith("/crm-engine/app.tsx"))
+        )
+          visit(item.fileName);
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     reactSandboxPlugin(),
     precompressionPlugin(),
+    offlineShellPlugin(),
     // App shell precache for airplane-mode boot. Data stays in the Dexie
-    // query cache on purpose: no runtime caching of /v1/* here, so no API
+    // collection replica: no runtime caching of /v1/* here, so no API
     // payload (or credential-adjacent response) ever lands in Cache Storage.
     VitePWA({
       registerType: "autoUpdate",
@@ -80,11 +110,22 @@ export default defineConfig({
           "assets/*.css",
           "*.{ico,png,svg,webp,webmanifest}",
         ],
+        manifestTransforms: [
+          async (entries) => ({
+            manifest: [
+              ...entries,
+              ...[...offlineShellAssets]
+                .filter(([url]) => !entries.some((entry) => entry.url === url))
+                .map(([url, size]) => ({ url, size, revision: null })),
+            ],
+            warnings: [],
+          }),
+        ],
         runtimeCaching: [
           {
             // Same-origin app assets only. /v1/* and /api/* are excluded
-            // on purpose: API payloads live in the Dexie query cache under
-            // the persisted-keys allowlist, never in Cache Storage.
+            // on purpose: API payloads live in scoped IndexedDB replicas,
+            // never in Cache Storage.
             urlPattern: ({ url, sameOrigin }) =>
               sameOrigin &&
               !url.pathname.startsWith("/v1") &&

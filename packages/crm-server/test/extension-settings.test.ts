@@ -23,7 +23,7 @@ async function applyMigrations() {
     .filter((file) => file.endsWith(".sql"))
     .sort())
     for (const statement of readFileSync(`migrations/${name}`, "utf8")
-      .split(";")
+      .split(/;(?!(?:\s*END\b))/i)
       .filter((value) => value.trim()))
       await platform.env.DB.prepare(statement).run();
 }

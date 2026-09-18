@@ -275,7 +275,11 @@ export function registerDataDomainRoutes(
       path = `/api/records/${match[1]}${match[2] ? "/" + match[2] : ""}`;
     }
     const headers = new Headers();
-    for (const name of ["content-type", "idempotency-key"]) {
+    for (const name of [
+      "content-type",
+      "idempotency-key",
+      "x-savia-sync-principal",
+    ]) {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
     }
@@ -291,7 +295,11 @@ export function registerDataDomainRoutes(
       !response.ok &&
       responseHeaders.get("content-type")?.includes("application/json")
     ) {
-      const body = (await response.json()) as { error?: unknown };
+      const body = (await response.json()) as {
+        error?: unknown;
+        data?: unknown;
+        master?: unknown;
+      };
       const message =
         typeof body.error === "string"
           ? body.error
@@ -301,7 +309,12 @@ export function registerDataDomainRoutes(
             ? String(body.error.message)
             : "No se pudo completar la operación.";
       return Response.json(
-        { error: { code: "CRM_ERROR", message } },
+        {
+          error: { code: "CRM_ERROR", message },
+          ...(path.startsWith("/api/local-sync/") && response.status === 409
+            ? { data: body.data ?? null, master: body.master ?? null }
+            : {}),
+        },
         { status: response.status, headers: responseHeaders },
       );
     }

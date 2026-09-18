@@ -21,7 +21,7 @@ export function OfflineBanner() {
       <WifiOff className="size-4 shrink-0" aria-hidden />
       <span>
         {translate("savia.offline.banner", {
-          _: "Sin conexión — mostrando datos guardados. Los cambios requieren conexión.",
+          _: "Sin conexión — las colecciones locales siguen disponibles.",
         })}
       </span>
     </div>

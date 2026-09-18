@@ -54,8 +54,18 @@ export function useCrmSidebarNavigation(enabled: boolean): {
   useEffect(() => {
     if (!enabled || !domain) return;
     let active = true;
-    void services.apiClient
-      .get<{ data: unknown[] }>(`${domain.apiBasePath}/api/objects`)
+    const load = () =>
+      services.apiClient.get<{ data: unknown[] }>(
+        `${domain.apiBasePath}/api/objects`,
+      );
+    void (
+      services.localData
+        ? services.localData.cachedMetadata(
+            `navigation:${domain.apiBasePath}`,
+            load,
+          )
+        : load()
+    )
       .then((response) => {
         if (active)
           setSnapshot({

@@ -1,3 +1,4 @@
+import type { LocalWorkspace } from "@/local-data/workspaces";
 export type CrmTransport = (
   path: string,
   init?: RequestInit,
@@ -5,6 +6,7 @@ export type CrmTransport = (
 
 export type CrmRuntime = {
   embedded: boolean;
+  localWorkspace?: LocalWorkspace;
   apiBasePath?: string;
   domainId?: string;
   businessSetupEnabled?: boolean;
