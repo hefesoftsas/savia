@@ -21,10 +21,12 @@ const topicTag = (topic: string) => `topic:${topic}`;
  * Built for ~zero cost with the WebSocket Hibernation API:
  * - sockets carry their subscribed topics as tags, so broadcast needs no
  *   in-memory map and survives eviction;
- * - ping/pong is auto-answered without waking the object;
+ * - ping is answered with a millisecond wake-up instead of holding the
+ *   object in memory (no WebSocketRequestResponsePair dependency, so it
+ *   also runs on older workerd builds);
  * - single-use tickets live in SQLite storage (bytes, never billed
  *   meaningfully) instead of memory, so they survive eviction too.
- * The object only runs for ticket issuance, publishes and connects.
+ * The object only runs for ticket issuance, publishes, connects and pings.
  *
  * Room isolation is the tenant boundary: a socket only ever receives events
  * published to the room it authenticated for. The hub keeps no record data,
@@ -32,11 +34,6 @@ const topicTag = (topic: string) => `topic:${topic}`;
  */
 export class RealtimeHub extends DurableObject {
   async fetch(request: Request): Promise<Response> {
-    // Idempotent per request: ping/pong is answered without waking the
-    // object afterwards, so hibernated sockets cost nothing while idle.
-    this.ctx.setWebSocketAutoResponse(
-      new WebSocketRequestResponsePair("ping", "pong"),
-    );
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname.endsWith("/issue")) {
       return this.issueTicket(await request.json().catch(() => undefined));
@@ -137,11 +134,39 @@ export class RealtimeHub extends DurableObject {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    // Pings are auto-answered; every other client message is ignored so a
+    // Plain "ping" is the client keepalive (answered directly; the wake-up
+    // lasts milliseconds). Every other client message is ignored so a
     // misbehaving client can neither subscribe beyond its grant nor wake the
     // object into doing work. Unknown sockets are dropped.
-    void ws;
-    void message;
+    const meta = this.ctx.getTags(ws);
+    if (meta.length === 0) {
+      try {
+        ws.close(4401, "unknown socket");
+      } catch {
+        // ignore close races
+      }
+      return;
+    }
+    const text = typeof message === "string" ? message : "";
+    const isPing =
+      text === "ping" ||
+      (() => {
+        try {
+          return (JSON.parse(text) as { type?: unknown }).type === "ping";
+        } catch {
+          return false;
+        }
+      })();
+    if (!isPing) return;
+    try {
+      ws.send("pong");
+    } catch {
+      try {
+        ws.close(1011, "send failed");
+      } catch {
+        // ignore close races
+      }
+    }
   }
 
   async webSocketClose(ws: WebSocket) {
