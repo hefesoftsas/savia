@@ -272,6 +272,31 @@ describe("Nango CRM boundary", () => {
     info.mockRestore();
   });
 
+  it("parses OAuth standard singular scope string from raw credentials", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      Response.json({
+        data: {
+          connection_id: "hubspot-connection",
+          provider_config_key: "hubspot-savia",
+          credentials: {
+            raw: {
+              scope: "crm.objects.contacts.read crm.objects.contacts.write",
+            },
+          },
+        },
+      }),
+    );
+    const client = createNangoClient(configuredNango, fetcher as typeof fetch);
+
+    await expect(
+      client.getConnection("hubspot-connection", "hubspot-savia"),
+    ).resolves.toMatchObject({
+      connectionId: "hubspot-connection",
+      scopes: ["crm.objects.contacts.read", "crm.objects.contacts.write"],
+      scopeSource: "credentials.raw",
+    });
+  });
+
   it("reports Nango failures with a stable error that excludes upstream secrets", async () => {
     const fetcher = vi
       .fn()

@@ -73,7 +73,13 @@ function safeMetadata(value: unknown): Record<string, string | string[]> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const source = value as Record<string, unknown>;
   const result: Record<string, string | string[]> = {};
-  for (const key of ["scopes", "portal_id", "portal_name", "account_name"]) {
+  for (const key of [
+    "scopes",
+    "scope",
+    "portal_id",
+    "portal_name",
+    "account_name",
+  ]) {
     const item = source[key];
     if (typeof item === "string") result[key] = item;
     if (Array.isArray(item) && item.every((entry) => typeof entry === "string"))
@@ -106,13 +112,23 @@ function scopeSummary(
 ): Pick<NangoConnectionSummary, "scopes" | "scopeSource"> {
   const credentials = recordFrom(data.credentials);
   const rawCredentials = recordFrom(credentials?.raw);
-  const credentialScopes = safeScopes(rawCredentials?.scopes);
+  const credentialScopes = safeScopes(
+    rawCredentials?.scopes ??
+      rawCredentials?.scope ??
+      credentials?.scopes ??
+      credentials?.scope,
+  );
   if (credentialScopes !== undefined)
     return { scopes: credentialScopes, scopeSource: "credentials.raw" };
 
-  const metadataScopes = safeScopes(recordFrom(data.metadata)?.scopes);
+  const metadata = recordFrom(data.metadata);
+  const metadataScopes = safeScopes(metadata?.scopes ?? metadata?.scope);
   if (metadataScopes !== undefined)
     return { scopes: metadataScopes, scopeSource: "metadata" };
+
+  const directScopes = safeScopes(data.scopes ?? data.scope);
+  if (directScopes !== undefined)
+    return { scopes: directScopes, scopeSource: "metadata" };
 
   return { scopes: [], scopeSource: "none" };
 }
