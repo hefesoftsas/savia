@@ -133,5 +133,26 @@ describe("tenant-host", () => {
       cookieDomainForHost("evil.example.com", DEFAULT_CANONICAL_HOST),
     ).toBeUndefined();
   });
+
+  it("supports preview canonical host and subdomains automatically", () => {
+    expect(
+      parseTenantSlugFromHostname("merkaseguros.savia-preview.hefesoft.com"),
+    ).toBe("merkaseguros");
+    expect(
+      isAllowedTenantOrigin("https://merkaseguros.savia-preview.hefesoft.com"),
+    ).toBe(true);
+    expect(
+      isCanonicalOrigin("https://savia-preview.hefesoft.com"),
+    ).toBe(true);
+    expect(
+      isAllowedPublicOrigin("https://merkaseguros.savia-preview.hefesoft.com"),
+    ).toBe(true);
+    expect(
+      cookieDomainForHost("merkaseguros.savia-preview.hefesoft.com"),
+    ).toBe(".savia-preview.hefesoft.com");
+    expect(
+      cookieDomainForHost("savia-preview.hefesoft.com"),
+    ).toBe(".savia-preview.hefesoft.com");
+  });
 });
 

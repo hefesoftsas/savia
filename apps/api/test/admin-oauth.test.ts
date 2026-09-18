@@ -345,5 +345,77 @@ describe("admin OAuth bridge", () => {
     const setCookie = refresh.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("Domain=.savia.app.hefesoft.com");
   });
+
+  it("preserves and returns initiated tenant origin via savia.return_origin cookie", async () => {
+    const authFetch = vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      if (url.pathname === "/_internal/oauth/admin-client") {
+        return Response.json(adminClient);
+      }
+      if (url.pathname === "/api/auth/oauth2/authorize") {
+        return Response.json({
+          redirect: true,
+          url: `/api/auth/login?${url.searchParams.toString()}`,
+        });
+      }
+      if (url.pathname === "/api/auth/oauth2/token") {
+        return Response.json({
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          token_type: "Bearer",
+          expires_in: 300,
+          scope: "openid savia.api.read savia.api.write",
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { fetch: authFetch },
+    );
+
+    // 1. Authorize from tenant subdomain sets return_origin cookie with shared domain
+    const authorize = await app.request(
+      "https://merkaseguros.savia.app.hefesoft.com/api/auth/admin/authorize",
+      {
+        headers: {
+          host: "merkaseguros.savia.app.hefesoft.com",
+        },
+      },
+    );
+    expect(authorize.status).toBe(302);
+    const authSetCookie = authorize.headers.get("set-cookie") ?? "";
+    expect(authSetCookie).toContain("savia.return_origin=");
+    expect(authSetCookie).toContain(encodeURIComponent("https://merkaseguros.savia.app.hefesoft.com"));
+    expect(authSetCookie).toContain("Domain=.savia.app.hefesoft.com");
+
+    const location = new URL(authorize.headers.get("location")!);
+    const state = location.searchParams.get("state")!;
+
+    // 2. Callback returns returnOrigin and clears the cookie
+    const callback = await app.request(
+      "https://savia.app.hefesoft.com/api/auth/admin/callback",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://savia.app.hefesoft.com",
+          cookie: `savia.return_origin=${encodeURIComponent("https://merkaseguros.savia.app.hefesoft.com")}`,
+        },
+        body: JSON.stringify({ code: "authorization-code", state }),
+      },
+    );
+    expect(callback.status).toBe(200);
+    const payload = (await callback.json()) as { returnOrigin?: string };
+    expect(payload.returnOrigin).toBe("https://merkaseguros.savia.app.hefesoft.com");
+    const callbackSetCookie = callback.headers.get("set-cookie") ?? "";
+    expect(callbackSetCookie).toContain("savia.return_origin=");
+    expect(callbackSetCookie).toContain("Max-Age=0");
+  });
 });
 

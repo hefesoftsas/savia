@@ -1,6 +1,10 @@
 import type { UserIdentity } from "ra-core";
 import { isOfflineError } from "../offline/offline-error";
-import type { AuthPermissions, AuthSession } from "./auth-session";
+import type {
+  AuthPermissions,
+  AuthSession,
+  CallbackResult,
+} from "./auth-session";
 
 export type BrowserNavigation = {
   currentUrl(): string;
@@ -106,7 +110,7 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   private scopes = new Set<string>();
 
-  private callbackPromise: Promise<void> | null = null;
+  private callbackPromise: Promise<CallbackResult> | null = null;
 
   private refreshPromise: Promise<void> | null = null;
 
@@ -166,16 +170,16 @@ export class BetterAuthOAuthSession implements AuthSession {
     this.refreshAllowed = false;
   }
 
-  async handleCallback(): Promise<void> {
-    if (!this.callbackPromise) {
-      this.callbackPromise = this.exchangeCallback().catch(
+  async handleCallback(): Promise<CallbackResult> {
+    const callbackPromise =
+      this.callbackPromise ??
+      (this.callbackPromise = this.exchangeCallback().catch(
         (exception: unknown) => {
           this.callbackPromise = null;
           throw exception;
         },
-      );
-    }
-    await this.callbackPromise;
+      ));
+    return await callbackPromise;
   }
 
   async getAccessToken(): Promise<string | null> {
@@ -246,7 +250,7 @@ export class BetterAuthOAuthSession implements AuthSession {
     await this.requireAccessToken();
   }
 
-  private async exchangeCallback(): Promise<void> {
+  private async exchangeCallback(): Promise<CallbackResult> {
     const callback = new URL(this.navigation.currentUrl());
     const code = callback.searchParams.get("code");
     const state = callback.searchParams.get("state");
@@ -268,7 +272,13 @@ export class BetterAuthOAuthSession implements AuthSession {
       },
     );
     if (!response.ok) throw new Error(await responseMessage(response));
-    this.applyToken(readToken((await response.json()) as OAuthTokenResponse));
+    const payload = (await response.json()) as OAuthTokenResponse & {
+      returnOrigin?: unknown;
+    };
+    this.applyToken(readToken(payload));
+    const returnOrigin =
+      typeof payload.returnOrigin === "string" ? payload.returnOrigin : undefined;
+    return { returnOrigin };
   }
 
   private async refreshAccessToken(): Promise<void> {

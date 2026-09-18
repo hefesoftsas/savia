@@ -55,4 +55,16 @@ describe("useCurrentTenant", () => {
     expect(result.current.monogram).toBe("M");
     expect(result.current.kind).toBe("commercial");
   });
+
+  it("returns dedicated tenant info on preview subdomain", () => {
+    const { result } = renderHook(() =>
+      useCurrentTenant({ hostname: "merkaseguros.savia-preview.hefesoft.com" }),
+    );
+
+    expect(result.current.isDedicated).toBe(true);
+    expect(result.current.slug).toBe("merkaseguros");
+    expect(result.current.name).toBe("Merkaseguros");
+    expect(result.current.monogram).toBe("M");
+    expect(result.current.kind).toBe("commercial");
+  });
 });

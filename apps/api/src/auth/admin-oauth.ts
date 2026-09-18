@@ -3,6 +3,7 @@ import {
   cookieDomainForHost,
   DEFAULT_CANONICAL_HOST,
   isAllowedPublicOrigin,
+  isAllowedTenantOrigin,
 } from "@savia/tenant-host/tenant-host";
 import type { AuthService } from "./better-auth";
 
@@ -135,6 +136,95 @@ function clearBetterAuthCookies(
   const list = [clearBetterAuthCookie(name, requestUrl)];
   if (cookieDomain) list.push(clearBetterAuthCookie(name, requestUrl, cookieDomain));
   return list;
+}
+
+const returnOriginCookieName = "savia.return_origin";
+const returnOriginLifetimeSeconds = 10 * 60;
+
+function returnOriginCookie(
+  origin: string,
+  requestUrl: string,
+  cookieDomain?: string,
+): string {
+  const attributes = [
+    `${returnOriginCookieName}=${encodeURIComponent(origin)}`,
+    "HttpOnly",
+    `Max-Age=${returnOriginLifetimeSeconds}`,
+    "Path=/",
+    "SameSite=Lax",
+  ];
+  if (cookieDomain) attributes.push(`Domain=${cookieDomain}`);
+  if (new URL(requestUrl).protocol === "https:") attributes.push("Secure");
+  return attributes.join("; ");
+}
+
+function clearReturnOriginCookie(
+  requestUrl: string,
+  cookieDomain?: string,
+): string {
+  const attributes = [
+    `${returnOriginCookieName}=`,
+    "HttpOnly",
+    "Max-Age=0",
+    "Path=/",
+    "SameSite=Lax",
+  ];
+  if (cookieDomain) attributes.push(`Domain=${cookieDomain}`);
+  if (new URL(requestUrl).protocol === "https:") attributes.push("Secure");
+  return attributes.join("; ");
+}
+
+function clearReturnOriginCookies(
+  requestUrl: string,
+  cookieDomain?: string,
+): string[] {
+  const list = [clearReturnOriginCookie(requestUrl)];
+  if (cookieDomain) list.push(clearReturnOriginCookie(requestUrl, cookieDomain));
+  return list;
+}
+
+function returnOriginFromRequest(
+  request: Request,
+  canonicalHost: string = DEFAULT_CANONICAL_HOST,
+): string | undefined {
+  const cookies = request.headers.get("cookie")?.split(";") ?? [];
+  const entry = cookies
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${returnOriginCookieName}=`));
+  if (!entry) return undefined;
+  try {
+    const raw = decodeURIComponent(
+      entry.slice(returnOriginCookieName.length + 1),
+    );
+    if (!raw) return undefined;
+    const url = new URL(raw);
+    if (isAllowedTenantOrigin(url.origin, canonicalHost)) {
+      return url.origin;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveInitiatedOrigin(
+  request: Request,
+  canonicalHost: string = DEFAULT_CANONICAL_HOST,
+): string | undefined {
+  const url = new URL(request.url);
+  const returnTo = url.searchParams.get("return_to");
+  if (returnTo) {
+    try {
+      const returnUrl = new URL(returnTo);
+      if (isAllowedTenantOrigin(returnUrl.origin, canonicalHost)) {
+        return returnUrl.origin;
+      }
+    } catch {}
+  }
+  if (isAllowedTenantOrigin(url.origin, canonicalHost)) {
+    return url.origin;
+  }
+  return undefined;
 }
 
 function appendSetCookies(source: Headers, target: Headers): void {
@@ -416,9 +506,21 @@ export function registerAdminOAuthRoutes(
         "Authentication service is unavailable",
         503,
       );
+    const headers = cacheHeaders({ location: destination });
+    const targetOrigin = resolveInitiatedOrigin(context.req.raw, canonicalHost);
+    if (targetOrigin) {
+      headers.append(
+        "set-cookie",
+        returnOriginCookie(
+          targetOrigin,
+          context.req.url,
+          cookieDomain(context.req.url),
+        ),
+      );
+    }
     return new Response(null, {
       status: 302,
-      headers: cacheHeaders({ location: destination }),
+      headers,
     });
   });
 
@@ -526,6 +628,11 @@ export function registerAdminOAuthRoutes(
     const payload = await response.json().catch(() => undefined);
     const token = response.ok ? tokenResponse(payload) : undefined;
     const nextRefreshToken = token ? refreshToken(token) : undefined;
+    const domain = cookieDomain(context.req.url);
+    const returnOrigin = returnOriginFromRequest(context.req.raw, canonicalHost);
+    for (const cookie of clearReturnOriginCookies(context.req.url, domain)) {
+      headers.append("set-cookie", cookie);
+    }
     if (!token || !nextRefreshToken) {
       const providerError = oauthErrorCode(payload);
       console.error("Savia admin OAuth token exchange failed", {
@@ -549,10 +656,16 @@ export function registerAdminOAuthRoutes(
       refreshCookie(
         nextRefreshToken,
         context.req.url,
-        cookieDomain(context.req.url),
+        domain,
       ),
     );
-    return Response.json(publicTokenResponse(token), { headers });
+    return Response.json(
+      {
+        ...publicTokenResponse(token),
+        ...(returnOrigin ? { returnOrigin } : {}),
+      },
+      { headers },
+    );
   });
 
   app.post("/api/auth/admin/refresh", async (context) => {

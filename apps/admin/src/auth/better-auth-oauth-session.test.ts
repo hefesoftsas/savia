@@ -132,6 +132,38 @@ describe("BetterAuthOAuthSession", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it("exchanges a callback code and returns the returnOrigin if provided", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "better-auth-access-token",
+            token_type: "Bearer",
+            expires_in: 300,
+            scope: "openid savia.api.read savia.api.write",
+            returnOrigin: "https://merkaseguros.savia-preview.hefesoft.com",
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      );
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "http://127.0.0.1:8787",
+      navigation: {
+        currentUrl: () =>
+          "http://127.0.0.1:5173/auth/callback?code=code-1&state=state-1",
+        redirect: vi.fn(),
+      },
+      fetcher,
+    });
+
+    const result = await session.handleCallback();
+
+    expect(result).toEqual({
+      returnOrigin: "https://merkaseguros.savia-preview.hefesoft.com",
+    });
+  });
+
   it("reports the safe OAuth error returned by the callback bridge", async () => {
     const session = new BetterAuthOAuthSession({
       apiUrl: "http://127.0.0.1:8787",

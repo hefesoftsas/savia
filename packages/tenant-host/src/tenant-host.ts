@@ -10,6 +10,11 @@
  */
 
 export const DEFAULT_CANONICAL_HOST = "savia.app.hefesoft.com";
+export const PREVIEW_CANONICAL_HOST = "savia-preview.hefesoft.com";
+export const KNOWN_CANONICAL_HOSTS: ReadonlyArray<string> = [
+  DEFAULT_CANONICAL_HOST,
+  PREVIEW_CANONICAL_HOST,
+];
 
 /** DNS label: lowercase alphanumerics and hyphens, 1-63 chars, no leading/trailing hyphen. */
 export const TENANT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -77,6 +82,26 @@ function hostnameWithoutPort(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "");
 }
 
+function resolveEffectiveCanonicalHost(
+  host: string,
+  canonicalHost: unknown,
+): string {
+  if (
+    typeof canonicalHost === "string" &&
+    canonicalHost.trim() !== "" &&
+    normalizeCanonicalHost(canonicalHost) !== DEFAULT_CANONICAL_HOST
+  ) {
+    return normalizeCanonicalHost(canonicalHost);
+  }
+  if (
+    host === PREVIEW_CANONICAL_HOST ||
+    host.endsWith(`.${PREVIEW_CANONICAL_HOST}`)
+  ) {
+    return PREVIEW_CANONICAL_HOST;
+  }
+  return DEFAULT_CANONICAL_HOST;
+}
+
 /**
  * Returns the tenant slug when `hostname` is a direct child of `canonicalHost`
  * (`<slug>.<canonical>`), otherwise null. The canonical host itself, deeper
@@ -87,8 +112,8 @@ export function parseTenantSlugFromHostname(
   canonicalHost: unknown = DEFAULT_CANONICAL_HOST,
 ): string | null {
   if (typeof hostname !== "string") return null;
-  const canonical = normalizeCanonicalHost(canonicalHost);
   const host = hostnameWithoutPort(hostname);
+  const canonical = resolveEffectiveCanonicalHost(host, canonicalHost);
   if (!host || host === canonical) return null;
   const suffix = `.${canonical}`;
   if (!host.endsWith(suffix)) return null;
@@ -145,12 +170,10 @@ export function isCanonicalOrigin(
   } catch {
     return false;
   }
-  return (
-    url.protocol === "https:" &&
-    !url.username &&
-    !url.password &&
-    hostnameWithoutPort(url.hostname) === normalizeCanonicalHost(canonicalHost)
-  );
+  if (url.protocol !== "https:" || url.username || url.password) return false;
+  const host = hostnameWithoutPort(url.hostname);
+  const canonical = resolveEffectiveCanonicalHost(host, canonicalHost);
+  return host === canonical;
 }
 
 /** Either the canonical origin or an allowed tenant origin. */
@@ -175,7 +198,6 @@ export function cookieDomainForHost(
   canonicalHost: unknown = DEFAULT_CANONICAL_HOST,
 ): string | undefined {
   if (typeof hostname !== "string") return undefined;
-  const canonical = normalizeCanonicalHost(canonicalHost);
   const host = hostnameWithoutPort(hostname);
   if (
     !host ||
@@ -184,6 +206,7 @@ export function cookieDomainForHost(
   ) {
     return undefined;
   }
+  const canonical = resolveEffectiveCanonicalHost(host, canonicalHost);
   if (host === canonical || host.endsWith(`.${canonical}`)) {
     return `.${canonical}`;
   }

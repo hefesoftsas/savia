@@ -13,11 +13,15 @@ export type AuthPermissions = {
   memberships: AgencyMembershipPermission[];
 };
 
+export type CallbackResult = {
+  returnOrigin?: string;
+};
+
 export interface AuthSession {
   login(): Promise<void>;
   logout(): Promise<string>;
   getAuthorizeUrl(): string;
-  handleCallback(): Promise<void>;
+  handleCallback(): Promise<CallbackResult | void>;
   getAccessToken(): Promise<string | null>;
   getIdentity(): Promise<UserIdentity>;
   getPermissions(): Promise<AuthPermissions>;

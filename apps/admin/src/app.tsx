@@ -134,7 +134,18 @@ export function App({ services }: { services?: AppServices } = {}) {
   const [handlingCallback, setHandlingCallback] = useState(
     () => window.location.pathname === "/auth/callback",
   );
-  const finishCallback = useCallback(() => {
+  const finishCallback = useCallback((returnOrigin?: string) => {
+    if (returnOrigin) {
+      try {
+        const target = new URL(returnOrigin);
+        if (target.origin !== window.location.origin) {
+          window.location.replace(`${target.origin}/#/my-day`);
+          return;
+        }
+      } catch {
+        // Fall back to same-host routing
+      }
+    }
     window.history.replaceState({}, "", "/#/my-day");
     setHandlingCallback(false);
   }, []);
@@ -241,7 +252,7 @@ function BetterAuthCallback({
   onComplete,
 }: {
   services: AppServices;
-  onComplete(): void;
+  onComplete(returnOrigin?: string): void;
 }) {
   const [error, setError] = useState<string | null>(null);
 
@@ -263,9 +274,16 @@ function BetterAuthCallback({
     let active = true;
 
     void services.authSession.handleCallback().then(
-      () => {
+      (result) => {
         if (active) {
-          onComplete();
+          const returnOrigin =
+            result &&
+            typeof result === "object" &&
+            "returnOrigin" in result &&
+            typeof result.returnOrigin === "string"
+              ? result.returnOrigin
+              : undefined;
+          onComplete(returnOrigin);
         }
       },
       (exception: unknown) => {
