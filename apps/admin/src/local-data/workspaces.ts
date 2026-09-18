@@ -15,6 +15,8 @@ import { isOfflineError } from "@/offline/offline-error";
 export type LocalWorkspace = Awaited<
   ReturnType<ReturnType<typeof createWorkspaceManager>["open"]>
 >;
+const revalidatedWorkspaceMetadata = new Map<string, number>();
+
 export function createWorkspaceManager(
   session: AuthSession,
   client: ApiClient,
@@ -35,7 +37,9 @@ export function createWorkspaceManager(
       const key = `${scope}:${name}`;
       const saved = await readWorkspaceMetadata<T>(key);
       if (saved !== undefined) {
-        if (navigator.onLine !== false) {
+        const lastRevalidated = revalidatedWorkspaceMetadata.get(key) ?? 0;
+        if (navigator.onLine !== false && Date.now() - lastRevalidated > 60_000) {
+          revalidatedWorkspaceMetadata.set(key, Date.now());
           void load()
             .then((value) => writeWorkspaceMetadata(key, value))
             .catch(() => undefined);

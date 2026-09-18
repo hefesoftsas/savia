@@ -118,12 +118,25 @@ export async function syncOnce(
       }
     }
     const state = await store.db.syncState.get(collection.name);
+    let currentSequence = 0;
+    if (state?.cursor) {
+      try {
+        const decoded = JSON.parse(atob(state.cursor)) as { sequence?: number };
+        if (typeof decoded.sequence === "number")
+          currentSequence = decoded.sequence;
+      } catch {}
+    }
+    const upToDate =
+      typeof collection.latestSequence === "number" &&
+      currentSequence >= collection.latestSequence;
+    const recentlySynced =
+      typeof state?.lastSyncedAt === "number" &&
+      Date.now() - state.lastSyncedAt < 60_000;
     if (
       !requestedCollection &&
       !hadMutations &&
       state?.hydrated &&
-      typeof state.lastSyncedAt === "number" &&
-      Date.now() - state.lastSyncedAt < 30_000
+      (upToDate || recentlySynced)
     ) {
       continue;
     }
@@ -224,7 +237,7 @@ export function createSyncCoordinator(
       );
       attempt = 0;
       // One central watchdog catches remote changes and leader tab closure; no screen polling.
-      schedule(requested ? 0 : 60_000);
+      schedule(requested ? 5_000 : 60_000);
     } catch {
       attempt++;
       schedule(
@@ -243,7 +256,6 @@ export function createSyncCoordinator(
     if (started) return;
     started = true;
     globalThis.addEventListener?.("online", requestSync);
-    globalThis.addEventListener?.("focus", requestSync);
     subscription = liveQuery(async () =>
       (await store.db.outbox.toArray())
         .filter((m) => m.state === "pending")
@@ -257,7 +269,17 @@ export function createSyncCoordinator(
         }
       },
     });
-    requestSync();
+    void store.db.outbox
+      .filter((m) => m.state === "pending")
+      .count()
+      .then((pending) => {
+        if (!started) return;
+        if (pending > 0) requestSync();
+        else schedule(250);
+      })
+      .catch(() => {
+        if (started) schedule(250);
+      });
   };
   const stop = () => {
     started = false;
@@ -266,7 +288,6 @@ export function createSyncCoordinator(
     for (const controller of controllers) controller.abort();
     subscription?.unsubscribe();
     globalThis.removeEventListener?.("online", requestSync);
-    globalThis.removeEventListener?.("focus", requestSync);
   };
   const syncNow = (collection?: string): Promise<void> => {
     const key = collection ?? "$all";

@@ -10,6 +10,7 @@ export type CollectionManifest = {
   object: CrmObject;
   capability: "read-write" | "read-only" | "remote";
   schemaVersion: number;
+  latestSequence?: number;
 };
 export type Mutation = {
   mutationId: string;

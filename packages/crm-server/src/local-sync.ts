@@ -76,6 +76,18 @@ export function registerLocalSync(
       .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
       .bind(tenant)
       .all();
+    const { results: sequenceResults } = await db
+      .prepare(
+        "SELECT object_name, MAX(sequence) AS latest_sequence FROM crm_sync_changes WHERE tenant_id=? GROUP BY object_name",
+      )
+      .bind(tenant)
+      .all();
+    const sequences = new Map(
+      sequenceResults.map((r) => [
+        String(r.object_name),
+        Number(r.latest_sequence) || 0,
+      ]),
+    );
     const collections = await Promise.all(
       results
         .map(parseObject)
@@ -85,6 +97,7 @@ export function registerLocalSync(
           object,
           capability: await capability(db, tenant, object),
           schemaVersion: object.version ?? 1,
+          latestSequence: sequences.get(object.name) ?? 0,
         })),
     );
     return c.json({ collections, principalId: c.get("principalId") });

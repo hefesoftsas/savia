@@ -7,6 +7,7 @@ import { readWorkspaceMetadata, writeWorkspaceMetadata } from "./session";
 
 const response = (error: string, status = 503) =>
   Response.json({ error }, { status });
+const revalidatedMetadata = new Map<string, number>();
 /** CRM transport whose record read/write critical path is always IndexedDB. */
 export function createLocalTransport(
   store: LocalStore,
@@ -203,7 +204,9 @@ export function createLocalTransport(
       ? await readWorkspaceMetadata<unknown>(key)
       : undefined;
     if (cached !== undefined) {
-      if (navigator.onLine !== false) {
+      const lastRevalidated = revalidatedMetadata.get(key) ?? 0;
+      if (navigator.onLine !== false && Date.now() - lastRevalidated > 60_000) {
+        revalidatedMetadata.set(key, Date.now());
         void network(path, init)
           .then(async (result) => {
             if (result.ok) {
