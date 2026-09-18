@@ -53,6 +53,7 @@ import {
   formatConfiguredDate,
 } from "@/features/service-credentials/credential-registry";
 import { ModelCapabilityBadges } from "./model-capability-badges";
+import { SettingsPanelSkeleton } from "@/components/admin/page-skeletons";
 
 type ConfigurationServices = Pick<AppServices, "assistantConfiguration">;
 type ConfigurationTab = "global" | "agency";
@@ -294,22 +295,12 @@ export function AssistantConfigurationPanel({
   };
 
   if (loading) {
-    const loadingMessage = (
-      <>
-        <LoaderCircle className="size-4 animate-spin" /> Cargando configuración
-        de IA…
-      </>
-    );
     if (embedded) {
-      return (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          {loadingMessage}
-        </p>
-      );
+      return <SettingsPanelSkeleton className="py-2" />;
     }
     return (
-      <main className="mx-auto flex w-full max-w-6xl items-center gap-2 py-10 text-sm text-muted-foreground">
-        {loadingMessage}
+      <main className="mx-auto w-full max-w-6xl py-6">
+        <SettingsPanelSkeleton />
       </main>
     );
   }

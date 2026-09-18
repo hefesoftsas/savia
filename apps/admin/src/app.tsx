@@ -64,7 +64,7 @@ function SaviaRequestRoute({
 
 function CrmRoute({ services }: { services: AppServices }) {
   return (
-    <Suspense fallback={<RouteLoading />}>
+    <Suspense fallback={<RouteLoading variant="screens" />}>
       <CrmPage services={services} />
     </Suspense>
   );
@@ -72,7 +72,7 @@ function CrmRoute({ services }: { services: AppServices }) {
 
 function PersonalIntegrationsRoute({ services }: { services: AppServices }) {
   return (
-    <Suspense fallback={<RouteLoading label="Cargando integraciones…" />}>
+    <Suspense fallback={<RouteLoading variant="cards" label="Cargando integraciones…" />}>
       <PersonalIntegrationsPage services={services} />
     </Suspense>
   );
@@ -88,7 +88,7 @@ function MyDayRoute({ services }: { services: AppServices }) {
 
 function ServiceCredentialsRoute({ services }: { services: AppServices }) {
   return (
-    <Suspense fallback={<RouteLoading label="Cargando claves y servicios…" />}>
+    <Suspense fallback={<RouteLoading variant="cards" label="Cargando claves y servicios…" />}>
       <ServiceCredentialsPage services={services} />
     </Suspense>
   );

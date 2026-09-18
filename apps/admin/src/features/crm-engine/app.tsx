@@ -23,6 +23,7 @@ import {
 } from "ra-core";
 import { DataTable } from "@/components/admin/data-table";
 import { ListPagination } from "@/components/admin/list-pagination";
+import { ScreenListSkeleton } from "@/components/admin/page-skeletons";
 import { i18nProvider } from "@/lib/i18nProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,6 @@ import {
   Check,
   Code2,
   X,
-  LoaderCircle,
 } from "lucide-react";
 import { api, dataProvider } from "./api";
 import {
@@ -146,9 +146,13 @@ const initials = (value: unknown) =>
     .map((w) => w[0])
     .join("");
 const Loading = () => (
-  <div className="loading-line">
-    <LoaderCircle size={18} className="animate-spin" /> Cargando tu espacio de
-    trabajo…
+  <div
+    className="w-full space-y-4 py-4"
+    role="status"
+    aria-label="Cargando espacio de trabajo…"
+  >
+    <span className="sr-only">Cargando espacio de trabajo…</span>
+    <ScreenListSkeleton count={4} />
   </div>
 );
 function Modal({

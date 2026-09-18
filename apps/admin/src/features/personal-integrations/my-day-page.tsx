@@ -419,13 +419,7 @@ export function MyDayPage({
                 aria-label="Cargando agenda…"
                 className="space-y-3"
               >
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <LoaderCircle
-                    className="size-3.5 animate-spin"
-                    aria-hidden="true"
-                  />
-                  <span>Cargando agenda…</span>
-                </div>
+                <span className="sr-only">Cargando agenda…</span>
                 <div className="divide-y rounded-lg border">
                   {Array.from({ length: 3 }, (_, index) => (
                     <div

@@ -10,6 +10,7 @@ import {
 } from "../client-mapping";
 import { insuranceLookupFlowCatalog } from "../savia-request-bundle";
 import { InsuranceQuoteWizard } from "./quote-wizard";
+import { QuoteWizardSkeleton, InsuranceAdminSkeleton } from "./quote-skeletons";
 import "./quote-screens.css";
 
 type ScreenProps = { savia: PluginApi };
@@ -48,8 +49,14 @@ function QuoteScreen({ savia, wizard }: ScreenProps & { wizard: boolean }) {
   return (
     <>
       {error ? <p role="alert">{error}</p> : null}
-      {!settings ? <p role="status">Cargando configuración…</p> : null}
-      {settings ? <InsuranceQuoteWizard entry={wizard ? "wizard" : "direct"} savia={savia} settings={settings} /> : null}
+      {!settings ? <QuoteWizardSkeleton isWizard={wizard} /> : null}
+      {settings ? (
+        <InsuranceQuoteWizard
+          entry={wizard ? "wizard" : "direct"}
+          savia={savia}
+          settings={settings}
+        />
+      ) : null}
     </>
   );
 }
@@ -399,11 +406,7 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
           {error}
         </p>
       ) : null}
-      {!settings ? (
-        <p className="extension-policy-empty" role="status">
-          Cargando configuración…
-        </p>
-      ) : null}
+      {!settings ? <InsuranceAdminSkeleton /> : null}
       {draft ? (
         <div className="insurance-admin">
           <section

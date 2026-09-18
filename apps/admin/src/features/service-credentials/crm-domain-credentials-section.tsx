@@ -12,6 +12,7 @@ import type { AppServices } from "@/app-services";
 import { createEmbeddedTransport } from "@/api/embedded-transport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -226,9 +227,11 @@ export function CrmDomainCredentialsSection({
             globalCredentials={globalCredentials}
             freeServicesEntry={<FreeServicesEntry />}
             loadingMessage={
-              <p className="credentials-muted">
-                Cargando mapas e integraciones…
-              </p>
+              <div className="space-y-2 py-2" role="status" aria-label="Cargando mapas e integraciones…">
+                <span className="sr-only">Cargando mapas e integraciones…</span>
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-9 w-full max-w-sm rounded-md" />
+              </div>
             }
           />
         </TabsContent>
@@ -330,7 +333,11 @@ export function CrmDomainCredentialsSection({
         }
       >
         {integrations.isLoading ? (
-          <p className="credentials-muted">Cargando integraciones…</p>
+          <div className="space-y-2 py-2" role="status" aria-label="Cargando integraciones…">
+            <span className="sr-only">Cargando integraciones…</span>
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-9 w-full max-w-sm rounded-md" />
+          </div>
         ) : integrations.error ? (
           <p className="credentials-error" role="alert">
             {integrations.error.message}

@@ -246,7 +246,7 @@ export function CrmPage({ services }: { services: AppServices }) {
       </Popover>
     </>
   ) : null;
-  if (isPending) return <RouteLoading />;
+  if (isPending) return <RouteLoading variant="screens" />;
   if (!canAccess)
     return (
       <p role="alert">
@@ -305,7 +305,7 @@ export function CrmPage({ services }: { services: AppServices }) {
       {error && !selected ? (
         <p role="alert">{error}</p>
       ) : loading ? (
-        <RouteLoading />
+        <RouteLoading variant="screens" />
       ) : selected ? (
         <CrmWorkspace
           key={selected.id}
@@ -424,11 +424,11 @@ function CrmWorkspace({
     return () => setCrmRuntime({ embedded: false });
   }, [transport]);
   if (readyTransport !== transport) {
-    return <RouteLoading />;
+    return <RouteLoading variant="screens" />;
   }
   return (
     <div className="min-w-0 w-full" title="Estudio del dominio de datos">
-      <Suspense fallback={<RouteLoading />}>
+      <Suspense fallback={<RouteLoading variant="screens" />}>
         <CrmRoot embedded search={query} />
       </Suspense>
     </div>

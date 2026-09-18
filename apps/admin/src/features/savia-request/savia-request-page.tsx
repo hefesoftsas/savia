@@ -2,6 +2,7 @@ import { Workflow, LockKeyhole } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useCanAccess } from "ra-core";
 import type { AppServices } from "@/app-services";
+import { RouteLoading } from "@/components/admin/route-loading";
 
 const SaviaRequestDocs = lazy(async () => {
   const module = await import("./savia-request-docs");
@@ -23,7 +24,7 @@ export function SaviaRequestPage({
     resource: "savia-request",
     action: "list",
   });
-  if (isPending) return <p>Cargando Savia request…</p>;
+  if (isPending) return <RouteLoading label="Cargando Savia Request…" />;
   if (!canAccess)
     return (
       <section className="space-y-6">
@@ -54,7 +55,7 @@ export function SaviaRequestPage({
       </section>
     );
   return (
-    <Suspense fallback={<p role="status">Cargando Savia Request…</p>}>
+    <Suspense fallback={<RouteLoading label="Cargando Savia Request…" />}>
       {docs ? <SaviaRequestDocs /> : <SaviaRequestWorkspace />}
     </Suspense>
   );

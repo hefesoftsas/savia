@@ -1,14 +1,23 @@
-import { LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TableSkeleton } from "./table-skeleton";
+import { CardsGridSkeleton, ScreenListSkeleton } from "./page-skeletons";
+
+export type RouteLoadingVariant =
+  | "default"
+  | "table"
+  | "cards"
+  | "screens";
 
 export function RouteLoading({
   label,
   compact = false,
+  variant = "default",
   className,
 }: {
   label?: string;
   compact?: boolean;
+  variant?: RouteLoadingVariant;
   className?: string;
 }) {
   if (compact) {
@@ -21,11 +30,96 @@ export function RouteLoading({
           className,
         )}
       >
-        <LoaderCircle
-          className="size-4 shrink-0 animate-spin"
+        <span
+          className="size-2 shrink-0 rounded-full bg-primary/70 animate-pulse"
           aria-hidden="true"
         />
         {label ? <span>{label}</span> : null}
+      </div>
+    );
+  }
+
+  if (variant === "screens") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "mx-auto w-full max-w-6xl space-y-6 py-6",
+          className,
+        )}
+      >
+        {label ? (
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span
+              className="size-2 rounded-full bg-primary/70 animate-pulse"
+              aria-hidden="true"
+            />
+            <span>{label}</span>
+          </div>
+        ) : null}
+        <ScreenListSkeleton />
+      </div>
+    );
+  }
+
+  if (variant === "table") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "mx-auto w-full max-w-6xl space-y-6 py-6",
+          className,
+        )}
+      >
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-8 w-48" />
+          </div>
+          {label ? (
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <span
+                className="size-2 rounded-full bg-primary/70 animate-pulse"
+                aria-hidden="true"
+              />
+              <span>{label}</span>
+            </div>
+          ) : null}
+        </div>
+        <TableSkeleton rows={6} columns={5} />
+      </div>
+    );
+  }
+
+  if (variant === "cards") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "mx-auto w-full max-w-6xl space-y-6 py-6",
+          className,
+        )}
+      >
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          {label ? (
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <span
+                className="size-2 rounded-full bg-primary/70 animate-pulse"
+                aria-hidden="true"
+              />
+              <span>{label}</span>
+            </div>
+          ) : null}
+        </div>
+        <CardsGridSkeleton />
       </div>
     );
   }
@@ -47,8 +141,8 @@ export function RouteLoading({
         </div>
         {label ? (
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <LoaderCircle
-              className="size-3.5 animate-spin"
+            <span
+              className="size-2 rounded-full bg-primary/70 animate-pulse"
               aria-hidden="true"
             />
             <span>{label}</span>

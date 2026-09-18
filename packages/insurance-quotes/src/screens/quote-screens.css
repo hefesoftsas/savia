@@ -98,6 +98,24 @@
   margin: 20px 0;
   text-align: center;
 }
+.quote-skeleton {
+  animation: quote-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-color: var(--muted, rgba(140, 140, 140, 0.15));
+  border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quote-skeleton {
+    animation: none;
+  }
+}
+@keyframes quote-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
 .insurance-tabs button:focus-visible,
 .insurance-quote__actions button:focus-visible,
 .insurance-quote__info-trigger:focus-visible,

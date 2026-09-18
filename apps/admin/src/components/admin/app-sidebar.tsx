@@ -79,6 +79,7 @@ import {
 } from "@/features/crm-engine/lucide-lookup-icon";
 import { AppearancePanel } from "@/components/admin/appearance-panel";
 import { UserMenu } from "@/components/admin/user-menu";
+import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { useSaviaRequestWorkspace } from "@/features/savia-request/savia-request-provider";
@@ -1434,16 +1435,7 @@ function SaviaRequestCollapsibleMenu({
         </SidebarMenuButton>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <Suspense
-          fallback={
-            <p
-              className="px-2 py-1 text-xs text-muted-foreground"
-              role="status"
-            >
-              Cargando flows…
-            </p>
-          }
-        >
+        <Suspense fallback={<SidebarFlowsSkeleton count={3} />}>
           <SaviaRequestSidebar nested onNavigate={onNavigate} />
         </Suspense>
       </CollapsibleContent>

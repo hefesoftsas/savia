@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListBase, useListContext, useRecordContext } from "ra-core";
 import { BulkActionsToolbar } from "@/components/admin/bulk-actions-toolbar";
 import { DataTable } from "@/components/admin/data-table";
+import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { Confirm } from "@/components/admin/confirm";
 import { ListPagination } from "@/components/admin/list-pagination";
 import { SelectAllButton } from "@/components/admin/select-all-button";
@@ -1360,37 +1361,12 @@ function RecordTable({
   if (error) return <div role="alert">{error.message}</div>;
   if (isPending)
     return (
-      <div className="space-y-3" role="status" aria-live="polite">
-        <p className="loading-line">Cargando registros…</p>
-        <div className="rounded-md border bg-card overflow-hidden">
-          <div className="flex items-center gap-4 border-b bg-muted/40 px-4 py-3">
-            {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-4 w-24 my-0.5" />
-            ))}
-          </div>
-          <div className="divide-y">
-            {Array.from({ length: 6 }, (_, rowIndex) => (
-              <div
-                key={rowIndex}
-                className="flex items-center gap-4 px-4 py-3.5"
-              >
-                {Array.from({ length: 4 }, (_, colIndex) => (
-                  <Skeleton
-                    key={colIndex}
-                    className={
-                      colIndex === 0
-                        ? "h-4 w-28"
-                        : colIndex === 1
-                          ? "h-4 w-40"
-                          : "h-4 w-20"
-                    }
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <TableSkeleton
+        columns={Math.max(columns.filter((k) => k !== CRM_INTEGRATION_COLUMN_KEY).length, 4)}
+        rows={Math.min(perPage || 6, 8)}
+        hasCheckbox={true}
+        ariaLabel="Cargando registros…"
+      />
     );
   return (
     <>
@@ -1966,7 +1942,19 @@ function PipelineColumn({
       {query.error ? (
         <p role="alert">{query.error.message}</p>
       ) : query.isPending ? (
-        <p>Cargando…</p>
+        <div className="space-y-2 py-2" role="status" aria-label="Cargando tarjetas…">
+          <span className="sr-only">Cargando tarjetas…</span>
+          <div className="rounded-lg border bg-card p-3 space-y-2">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <div className="rounded-lg border bg-card p-3 space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-36" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+        </div>
       ) : (
         query.data.data.map((r: CrmRecord) => (
           <article

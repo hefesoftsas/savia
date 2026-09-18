@@ -1124,7 +1124,7 @@
     text-wrap: pretty;
   }
   .loading-line {
-    padding: 45px;
+    padding: 12px;
     display: flex;
     align-items: center;
     justify-content: center;

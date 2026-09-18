@@ -7,6 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import "./personal-integrations.css";
 
@@ -185,14 +186,19 @@ export function IntegrationGroupEmpty({ message }: { message: string }) {
 
 export function IntegrationGroupsSkeleton({ groups = 2 }: { groups?: number }) {
   return (
-    <div className="integrations-groups space-y-4">
+    <div
+      className="integrations-groups space-y-4"
+      role="status"
+      aria-label="Cargando integraciones…"
+    >
+      <span className="sr-only">Cargando integraciones…</span>
       {Array.from({ length: groups }, (_, index) => (
         <div
           key={index}
-          className="integrations-group overflow-hidden rounded-xl border bg-card"
+          className="integrations-group overflow-hidden rounded-xl border bg-card shadow-xs"
         >
           <div className="border-b px-5 py-3.5">
-            <div className="h-4 w-24 rounded bg-muted" />
+            <Skeleton className="h-4 w-24" />
           </div>
           <div className="space-y-0">
             {Array.from({ length: 3 }, (_, row) => (
@@ -200,12 +206,12 @@ export function IntegrationGroupsSkeleton({ groups = 2 }: { groups?: number }) {
                 key={row}
                 className="flex items-center gap-3 border-t px-5 py-4 first:border-t-0"
               >
-                <div className="size-8 rounded-md bg-muted" />
+                <Skeleton className="size-8 shrink-0 rounded-md" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 rounded bg-muted" />
-                  <div className="h-3 w-48 rounded bg-muted" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
                 </div>
-                <div className="h-8 w-24 rounded bg-muted" />
+                <Skeleton className="h-8 w-24 shrink-0 rounded-md" />
               </div>
             ))}
           </div>

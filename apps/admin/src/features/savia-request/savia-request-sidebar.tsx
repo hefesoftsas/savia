@@ -22,6 +22,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { useSaviaRequestWorkspace } from "./savia-request-provider";
 import { DeleteDialog, type DeleteAction } from "./editor/delete-dialog";
 import type { FlowSummary } from "./types";
@@ -302,9 +303,7 @@ export function SaviaRequestSidebar({
             </form>
           ) : null}
           {busy && flows.length === 0 ? (
-            <p className="px-2 py-3 text-xs leading-5 text-muted-foreground">
-              Cargando flows…
-            </p>
+            <SidebarFlowsSkeleton count={3} />
           ) : tree.flows.length === 0 && tree.children.length === 0 ? (
             <p className="px-2 py-3 text-xs leading-5 text-muted-foreground">
               {query.trim()
