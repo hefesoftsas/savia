@@ -48,8 +48,8 @@ describe("shouldPersistQueryKey", () => {
     expect(shouldPersistQueryKey(["record-detail", "r-1"])).toBe(false);
     expect(shouldPersistQueryKey(["record-links"])).toBe(false);
     expect(shouldPersistQueryKey(["managed-customer"])).toBe(false);
-    expect(shouldPersistQueryKey(["plate", "ABC123"])).toBe(false);
-    expect(shouldPersistQueryKey(["vehicle", "ABC123"])).toBe(false);
+    expect(shouldPersistQueryKey(["plate", "XXX-000"])).toBe(false);
+    expect(shouldPersistQueryKey(["vehicle", "XXX-000"])).toBe(false);
     expect(shouldPersistQueryKey(["operational-tasks"])).toBe(false);
     expect(shouldPersistQueryKey(["record-activity"])).toBe(false);
     expect(shouldPersistQueryKey(["savia-request"])).toBe(false);
