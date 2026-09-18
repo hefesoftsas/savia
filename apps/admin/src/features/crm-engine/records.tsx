@@ -57,6 +57,7 @@ import {
 } from "@savia/crm-shared/metadata";
 import { formatMapLocationSummary, parseMapLocation } from "@savia/crm-shared/map-location";
 import { recordsCsvFilename } from "@savia/crm-shared/records-csv-export";
+import { getScrollParent, syncScrollButtonPosition } from "./table-scroll";
 import "./records.css";
 import { RecordsCommandToolbar } from "./records-command-toolbar";
 type Condition = { field: string; op: string; value?: unknown };
@@ -159,11 +160,16 @@ function useHorizontalTableScroll(columns: string[], dataLength: number) {
   const signature = `${columns.join("|")}:${dataLength}`;
 
   useEffect(() => {
-    const viewport = shellRef.current?.querySelector(
+    const shell = shellRef.current;
+    const viewport = shell?.querySelector(
       '[data-slot="table-container"]',
     ) as HTMLDivElement | null;
     if (!viewport) return;
-    const sync = () => {
+
+    let rafId: number | null = null;
+    const scrollContainer = getScrollParent(shell);
+
+    const syncHorizontal = () => {
       const maxScrollLeft = Math.max(
         0,
         viewport.scrollWidth - viewport.clientWidth,
@@ -175,19 +181,42 @@ function useHorizontalTableScroll(columns: string[], dataLength: number) {
         canScrollRight: hasOverflow && viewport.scrollLeft < maxScrollLeft - 1,
       });
     };
+
+    const syncVertical = () => {
+      syncScrollButtonPosition(shell);
+    };
+
+    const onVerticalScroll = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(syncVertical);
+    };
+
+    const syncAll = () => {
+      syncHorizontal();
+      syncVertical();
+    };
+
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? undefined
-        : new ResizeObserver(sync);
+        : new ResizeObserver(syncAll);
 
-    sync();
-    viewport.addEventListener("scroll", sync, { passive: true });
-    window.addEventListener("resize", sync);
+    syncAll();
+    viewport.addEventListener("scroll", syncHorizontal, { passive: true });
+    window.addEventListener("resize", syncAll);
+    window.addEventListener("scroll", onVerticalScroll, { passive: true });
+    scrollContainer?.addEventListener("scroll", onVerticalScroll, {
+      passive: true,
+    });
     resizeObserver?.observe(viewport);
+    if (shell) resizeObserver?.observe(shell);
 
     return () => {
-      viewport.removeEventListener("scroll", sync);
-      window.removeEventListener("resize", sync);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      viewport.removeEventListener("scroll", syncHorizontal);
+      window.removeEventListener("resize", syncAll);
+      window.removeEventListener("scroll", onVerticalScroll);
+      scrollContainer?.removeEventListener("scroll", onVerticalScroll);
       resizeObserver?.disconnect();
     };
   }, [signature]);

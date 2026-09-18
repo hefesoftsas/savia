@@ -13,6 +13,7 @@ import { api } from "./api";
 import { getCrmRuntime } from "./runtime";
 import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
 import type { RecordRelationGroup } from "@savia/crm-shared/relations";
+import { getScrollParent, syncScrollButtonPosition } from "./table-scroll";
 
 const enc = encodeURIComponent;
 const relationKey = (group: RecordRelationGroup) =>
@@ -53,8 +54,12 @@ export function useHorizontalScroll(signature: string) {
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    const shell = viewport.parentElement as HTMLElement | null;
 
-    const sync = () => {
+    let rafId: number | null = null;
+    const scrollContainer = getScrollParent(shell);
+
+    const syncHorizontal = () => {
       const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
       const hasOverflow = maxScrollLeft > 1;
       setState({
@@ -63,17 +68,38 @@ export function useHorizontalScroll(signature: string) {
         canScrollRight: hasOverflow && viewport.scrollLeft < maxScrollLeft - 1,
       });
     };
-    const resizeObserver =
-      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(sync);
 
-    sync();
-    viewport.addEventListener("scroll", sync, { passive: true });
-    window.addEventListener("resize", sync);
+    const syncVertical = () => {
+      syncScrollButtonPosition(shell);
+    };
+
+    const onVerticalScroll = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(syncVertical);
+    };
+
+    const syncAll = () => {
+      syncHorizontal();
+      syncVertical();
+    };
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(syncAll);
+
+    syncAll();
+    viewport.addEventListener("scroll", syncHorizontal, { passive: true });
+    window.addEventListener("resize", syncAll);
+    window.addEventListener("scroll", onVerticalScroll, { passive: true });
+    scrollContainer?.addEventListener("scroll", onVerticalScroll, { passive: true });
     resizeObserver?.observe(viewport);
+    if (shell) resizeObserver?.observe(shell);
 
     return () => {
-      viewport.removeEventListener("scroll", sync);
-      window.removeEventListener("resize", sync);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      viewport.removeEventListener("scroll", syncHorizontal);
+      window.removeEventListener("resize", syncAll);
+      window.removeEventListener("scroll", onVerticalScroll);
+      scrollContainer?.removeEventListener("scroll", onVerticalScroll);
       resizeObserver?.disconnect();
     };
   }, [signature]);
