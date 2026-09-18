@@ -25,8 +25,12 @@ import type {
   ManagedIdentityUser,
   OAuthClientAdministrator,
 } from "../auth/better-auth";
+import type { Context } from "hono";
 import { AuthenticationError, type AgencyRole } from "../auth/types";
 import type { AppActor } from "../auth/types";
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { publishRealtime } from "../realtime/hub-client";
+import { PLATFORM_ROOM } from "../realtime/protocol";
 
 const membershipSchema = z.object({
   id: z.string(),
@@ -550,11 +554,30 @@ function membershipInvariantResponse(
   );
 }
 
+/**
+ * Best-effort realtime hint after identity mutations. The socket carries no
+ * record data; subscribers refetch the users list through the API.
+ */
+function notifyUsers(
+  realtime: RealtimeHubClient | undefined,
+  context: Context,
+  type: "created" | "updated" | "deleted",
+  id: string,
+): void {
+  publishRealtime(realtime, PLATFORM_ROOM, {
+    topic: "users",
+    type,
+    id,
+    actor: actorFromContext(context).principal.id,
+  });
+}
+
 export function registerIdentityRoutes(
   app: OpenAPIHono,
   d1: D1Database,
   userAdministrator?: IdentityUserAdministrator,
   oauthClientAdministrator?: OAuthClientAdministrator,
+  realtime?: RealtimeHubClient,
 ): void {
   app.openapi(currentIdentityRoute, (context) =>
     context.json({ data: actorDocument(actorFromContext(context)) }, 200),
@@ -613,6 +636,7 @@ export function registerIdentityRoutes(
           context.req.raw,
         );
       }
+      notifyUsers(realtime, context, "created", principal.id);
       return context.json(
         {
           data: managedActorDocument(
@@ -659,6 +683,7 @@ export function registerIdentityRoutes(
       }
       throw error;
     }
+    notifyUsers(realtime, context, "updated", principal.id);
     return context.json(
       {
         data: managedActorDocument(
@@ -786,6 +811,7 @@ export function registerIdentityRoutes(
         throw error;
       }
     }
+    notifyUsers(realtime, context, "updated", target.id);
     return context.json(
       {
         data: managedActorDocument(
@@ -816,6 +842,7 @@ export function registerIdentityRoutes(
       }
       throw error;
     }
+    notifyUsers(realtime, context, "updated", principalId);
     return context.body(null, 204);
   });
   app.openapi(suspendIdentityUserRoute, async (context) => {
@@ -850,6 +877,7 @@ export function registerIdentityRoutes(
       }
       throw error;
     }
+    notifyUsers(realtime, context, "updated", target.id);
     return context.body(null, 204);
   });
   app.openapi(reactivateIdentityUserRoute, async (context) => {
@@ -871,6 +899,7 @@ export function registerIdentityRoutes(
       context.req.raw,
     );
     await setPrincipalActive(d1, target.id, true);
+    notifyUsers(realtime, context, "updated", target.id);
     return context.body(null, 204);
   });
   app.openapi(revokeIdentityUserSessionsRoute, async (context) => {
@@ -935,6 +964,7 @@ export function registerIdentityRoutes(
     }
     await userAdministrator.deleteUser(principal.subject, context.req.raw);
     await deletePrincipal(d1, principal.id);
+    notifyUsers(realtime, context, "deleted", principal.id);
     return context.body(null, 204);
   });
   app.openapi(listOAuthClientsRoute, async (context) => {

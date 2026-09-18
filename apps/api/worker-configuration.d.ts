@@ -4,6 +4,7 @@
 interface __BaseEnv_Env {
   DOCUMENTS: R2Bucket;
   DB: D1Database;
+  REALTIME_HUB: DurableObjectNamespace;
   SAVIA_OAUTH_ISSUER: "http://127.0.0.1:8787/api/auth";
   SAVIA_API_RESOURCE: "http://127.0.0.1:8787";
   AUTH: Fetcher /* savia-auth */;

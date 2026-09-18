@@ -10,6 +10,9 @@ import { dynamicScalar } from "../crm/dynamic-scalar";
 import type { CrmRouteDependencies } from "./crm";
 import { genericSeed } from "./data-domains";
 import type { SolutionOptions } from "@savia/crm-server/solutions";
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { publishRealtime } from "../realtime/hub-client";
+import { tenantRoom } from "../realtime/protocol";
 
 export function registerDynamicCrmRoutes(
   app: OpenAPIHono,
@@ -23,6 +26,7 @@ export function registerDynamicCrmRoutes(
   actionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   beforeInstall?: SolutionOptions["beforeInstall"],
+  realtime?: RealtimeHubClient,
 ) {
   app.all("/v1/dynamic-crm/:agencyId/api/*", async (c) => {
     const actor = actorFromContext(c);
@@ -189,6 +193,27 @@ export function registerDynamicCrmRoutes(
     });
     await gateway.prepare();
     const response = await gateway.fetch(request);
+    if (response.ok && ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
+      const segments = path.split("/").filter(Boolean);
+      if (
+        segments[0] === "api" &&
+        (segments[1] === "records" || segments[1] === "views") &&
+        segments[2]
+      ) {
+        publishRealtime(realtime, tenantRoom(agencyId), {
+          topic: "records",
+          type:
+            c.req.method === "POST"
+              ? "created"
+              : c.req.method === "DELETE"
+                ? "deleted"
+                : "updated",
+          collection: segments[2],
+          ...(segments[3] ? { id: segments[3] } : {}),
+          actor: actor.principal.id,
+        });
+      }
+    }
     if (sharedNames && path === "/api/objects" && response.ok) {
       const body = (await response.json()) as { data: Array<{ name: string }> };
       return Response.json(

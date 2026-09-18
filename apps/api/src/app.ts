@@ -38,6 +38,8 @@ import { registerCrmRoutes, type CrmRouteDependencies } from "./routes/crm";
 import type { SqlBridgeClient } from "./crm/sql-bridge";
 import { registerCrmAutomaticSyncRoutes } from "./routes/crm-automatic-sync";
 import { registerIdentityRoutes } from "./routes/identity";
+import { registerRealtimeRoutes } from "./realtime/routes";
+import type { RealtimeHubClient } from "./realtime/hub-client";
 import {
   registerPersonalIntegrationRoutes,
   type PersonalIntegrationRouteDependencies,
@@ -72,6 +74,7 @@ export function createApp(
   sqlBridge?: SqlBridgeClient,
   extensionActionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
+  realtime?: RealtimeHubClient,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -99,7 +102,9 @@ export function createApp(
     userAdministrator ?? betterAuthUserAdministrator(resolvedAuthService),
     oauthClientAdministrator ??
       betterAuthOAuthClientAdministrator(resolvedAuthService),
+    realtime,
   );
+  registerRealtimeRoutes(app, realtime);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerLookupRoutes(app, saviaRequestService);
   registerRequestPageRoutes(app, db, saviaRequestService);
@@ -118,6 +123,7 @@ export function createApp(
     extensionActionExecutor,
     extensionConnectionsEncryptionKey,
     runtimeReleaseCatalog.beforeSolutionInstall(saviaRequestService),
+    realtime,
   );
   registerDataDomainRoutes(
     app,
@@ -138,6 +144,7 @@ export function createApp(
     app,
     db,
     userAdministrator ?? betterAuthUserAdministrator(resolvedAuthService),
+    realtime,
   );
   registerAccountAvatarRoutes(app, documents, resolvedAuthService);
   return app;

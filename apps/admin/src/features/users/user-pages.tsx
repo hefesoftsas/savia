@@ -25,6 +25,7 @@ import {
   useShowContext,
 } from "ra-core";
 import MicrosoftExcel from "@thesvg/react/microsoft-excel";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BooleanInput,
   Count,
@@ -44,6 +45,8 @@ import {
 } from "@/components/admin";
 import { Confirm } from "@/components/admin/confirm";
 import { isOfflineError } from "@/offline/offline-error";
+import { LiveIndicator } from "@/realtime/live-indicator";
+import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 import type {
   IdentityUserDataProvider,
@@ -272,8 +275,16 @@ function TenantUserScope() {
 }
 
 function UserListActions() {
+  const queryClient = useQueryClient();
+  const { status } = useRealtimeTopics({
+    topics: ["users"],
+    onEvent: () => {
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      <LiveIndicator status={status} />
       <ExportButton
         iconOnly
         label="Exportar a Excel"

@@ -15,6 +15,10 @@ import {
   upsertPrincipal,
 } from "../auth/identity-repository";
 import { isForeignKeyConstraint, isUniqueConstraint } from "../lib/database-errors";
+import type { Context } from "hono";
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { publishRealtime } from "../realtime/hub-client";
+import { PLATFORM_ROOM } from "../realtime/protocol";
 
 const tenantSchema = z.object({
   id: z.number(),
@@ -174,10 +178,30 @@ const conflict = {
   },
 };
 
+/**
+ * Best-effort realtime hint after tenant mutations. The socket carries no
+ * record data; subscribers refetch through the API.
+ */
+function notifyTenantRoom(
+  realtime: RealtimeHubClient | undefined,
+  context: Context,
+  topic: "users" | "tenants",
+  type: "created" | "updated" | "deleted",
+  id: string | number,
+): void {
+  publishRealtime(realtime, PLATFORM_ROOM, {
+    topic,
+    type,
+    id,
+    actor: actorFromContext(context).principal.id,
+  });
+}
+
 export function registerTenantRoutes(
   app: OpenAPIHono,
   db: D1Database,
   userAdministrator?: IdentityUserAdministrator,
+  realtime?: RealtimeHubClient,
 ) {
   app.openapi(listRoute, async (c) => {
     const actor = actorFromContext(c);
@@ -332,6 +356,8 @@ export function registerTenantRoutes(
       .prepare(`${select} WHERE t.id=?`)
       .bind(tenantId)
       .first<TenantRow>();
+    notifyTenantRoom(realtime, c, "tenants", "created", tenantId!);
+    if (principalId) notifyTenantRoom(realtime, c, "users", "created", principalId);
     return c.json({ data: document(row!) }, 201);
   });
   app.openapi(updateDefinition, async (c) => {
@@ -366,6 +392,7 @@ export function registerTenantRoutes(
       .prepare(`${select} WHERE t.id=? AND t.kind='commercial'`)
       .bind(id)
       .first<TenantRow>();
+    notifyTenantRoom(realtime, c, "tenants", "updated", id);
     return c.json({ data: document(row!) }, 200);
   });
   app.openapi(deleteDefinition, async (c) => {
@@ -416,6 +443,7 @@ export function registerTenantRoutes(
       if (isForeignKeyConstraint(error)) return c.json(conflict, 409);
       throw error;
     }
+    notifyTenantRoom(realtime, c, "tenants", "deleted", id);
     return c.body(null, 204);
   });
 }

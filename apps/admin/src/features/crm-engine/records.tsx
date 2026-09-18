@@ -48,6 +48,8 @@ import {
 } from "lucide-react";
 import { api, downloadCrm } from "./api";
 import { getListObjectsQueryKey } from "./generated/crm";
+import { getCrmRuntime } from "./runtime";
+import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {
   fieldEntries,
   getPipeline,
@@ -333,6 +335,54 @@ function hasSameTablePreferences(
     )
   );
 }
+function tenantIdFromDomainId(domainId: string | undefined): number | undefined {
+  const match = /^tenant:([1-9]\d*)$/.exec(domainId ?? "");
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Live sync for the records table. Subscribes to record hints for the
+ * current tenant, debounces bursts (imports fire one event per row) into a
+ * single refetch, and toasts what arrived. Renders nothing.
+ */
+function RecordsLiveSync({ objectName }: { objectName: string }) {
+  const client = useQueryClient();
+  const pending = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const tenantId = tenantIdFromDomainId(getCrmRuntime().domainId);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  useRealtimeTopics({
+    topics: ["records"],
+    tenantId,
+    enabled: tenantId !== undefined,
+    onEvent: (event) => {
+      if (event.collection && event.collection !== objectName) return;
+      pending.current += 1;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => {
+        const count = pending.current;
+        pending.current = 0;
+        void client.invalidateQueries({ queryKey: ["pipeline", objectName] });
+        void client.invalidateQueries({ queryKey: ["summary", objectName] });
+        void client.invalidateQueries({ queryKey: ["views", objectName] });
+        toast.success(
+          count === 1
+            ? "Cambio recibido — lista actualizada"
+            : `Se recibieron ${count} cambios — lista actualizada`,
+        );
+      }, 1500);
+    },
+  });
+  return null;
+}
+
 export default function Records({
   object,
   onOpen,
@@ -642,6 +692,7 @@ export default function Records({
   return (
     <>
       <div className="records-panel">
+        <RecordsLiveSync objectName={object.name} />
         <div className="records-panel-toolbar">
       <div className="view-tabs">
         <button

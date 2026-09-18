@@ -62,6 +62,10 @@ function apiConfig({ documentsBucket, domainD1Id, publicOrigin }) {
       { binding: "SAVIA_REQUEST", service: "savia-request" },
       { binding: "CONNECTOR_GATEWAY", service: "savia-connectors" },
     ],
+    durable_objects: {
+      bindings: [{ name: "REALTIME_HUB", class_name: "RealtimeHub" }],
+    },
+    migrations: [{ tag: "v1", new_sqlite_classes: ["RealtimeHub"] }],
     d1_databases: [
       {
         binding: "DB",

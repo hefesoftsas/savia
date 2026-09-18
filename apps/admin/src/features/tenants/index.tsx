@@ -1,5 +1,6 @@
 import type { ResourceProps } from "ra-core";
 import { required, useCreatePath } from "ra-core";
+import { useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
 import {
   BooleanInput,
@@ -13,6 +14,8 @@ import {
   TextInput,
 } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
+import { LiveIndicator } from "@/realtime/live-indicator";
+import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 
 function TenantFields() {
@@ -60,6 +63,21 @@ function InitialTenantUserFields() {
     </>
   );
 }
+function TenantListActions() {
+  const queryClient = useQueryClient();
+  const { status } = useRealtimeTopics({
+    topics: ["tenants"],
+    onEvent: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+    },
+  });
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <LiveIndicator status={status} />
+      <CreateButton label="Nuevo tenant" />
+    </div>
+  );
+}
 function TenantList() {
   const createPath = useCreatePath();
   const usersPath = createPath({ resource: "users", type: "list" });
@@ -68,7 +86,7 @@ function TenantList() {
     <List
       title="Tenants"
       sort={{ field: "name", order: "ASC" }}
-      actions={<CreateButton label="Nuevo tenant" />}
+      actions={<TenantListActions />}
     >
       <DataTable<TenantRecord>
         rowClick={(_id, _resource, record) =>

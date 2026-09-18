@@ -1,4 +1,6 @@
 import { createApp } from "./app";
+import { createRealtimeHubClient } from "./realtime/hub-client";
+export { RealtimeHub } from "./realtime/hub";
 import { processCrmSyncJobs } from "./crm/auto-sync";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
 import { PersonalActionPayloadCipher } from "./assistant/personal-action-payload";
@@ -206,6 +208,7 @@ export default {
       sqlBridgeFromEnvironment(environment),
       connectorExecutorFromEnvironment(environment),
       extensionConnectionsEncryptionKeyFromEnvironment(environment),
+      createRealtimeHubClient(environment.REALTIME_HUB),
     ).fetch(request, environment);
     return response;
   },

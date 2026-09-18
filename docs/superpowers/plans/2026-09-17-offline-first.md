@@ -88,6 +88,8 @@ Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño
 - [ ] **Step 4: verificar.**
   Criterio: crear preferencia offline → aparece "pendiente (1)" → online → se sincroniza sin duplicados; un 409 se reporta y no se reintenta solo.
 
+**Decision 2026-09-17 (implemented): push realtime via per-tenant Durable Object, not polling.** `RealtimeHub` DO with one instance per room (`platform`, `tenant:<id>`); single-use ticket auth (`POST /v1/realtime/ticket`); hint-only events (`topic` + `type` + id, no payload/PII); clients refetch. Publish points: identity/tenant mutations + dynamic-crm proxy (`records`/`views`). Deletes stay pessimistic; realtime only invalidates. No hibernation API (reconnect with backoff covers evictions).
+
 ## Fase 3 (opcional, solo si se pide modo avión): Service worker + app shell (~1 semana)
 
 - [ ] Workbox precache del shell admin (JS/CSS) con `NetworkFirst` para `/v1/*`; estrategia de versión y purga de cachés viejas; e2e: primera visita online, luego offline total y la app arranca. Nota: suma superficie de bugs (cachés rancias, auth) — no hacerlo "de paso" en otra fase.
