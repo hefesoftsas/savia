@@ -1,4 +1,5 @@
 import type { ErrorInfo } from "react";
+import { useTranslate } from "ra-core";
 import { Button } from "@/components/ui/button";
 import { ApiClientError } from "@/api/api-client";
 
@@ -10,6 +11,7 @@ export function TenantHostMismatchError({
   errorInfo?: ErrorInfo;
   resetErrorBoundary?: (args?: any) => void;
 }) {
+  const translate = useTranslate();
   const isMismatch =
     error instanceof ApiClientError && error.code === "TENANT_HOST_MISMATCH";
   const expectedHost = isMismatch
@@ -36,11 +38,15 @@ export function TenantHostMismatchError({
             </svg>
           </div>
           <h1 className="text-xl font-semibold tracking-tight">
-            Espacio de trabajo incorrecto
+            {translate("savia.errors.tenantMismatchTitle", {
+              _: "Espacio de trabajo incorrecto",
+            })}
           </h1>
           <p className="text-sm text-muted-foreground">
             {error.message ||
-              "Estás en el espacio de otro tenant. Abre tu URL dedicada para continuar."}
+              translate("savia.errors.tenantMismatchBody", {
+                _: "Estás en el espacio de otro tenant. Abre tu URL dedicada para continuar.",
+              })}
           </p>
           {expectedHost && (
             <div className="pt-2">
@@ -48,7 +54,10 @@ export function TenantHostMismatchError({
                 href={`https://${expectedHost}/#/my-day`}
                 className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                Ir a mi espacio ({expectedHost})
+                {translate("savia.errors.goToWorkspace", {
+                  host: expectedHost,
+                  _: `Ir a mi espacio (${expectedHost})`,
+                })}
               </a>
             </div>
           )}
@@ -61,11 +70,17 @@ export function TenantHostMismatchError({
     <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center">
       <div className="max-w-md space-y-4 rounded-xl border bg-card p-8 shadow-sm">
         <h1 className="text-xl font-semibold tracking-tight">
-          Ha ocurrido un error inesperado
+          {translate("savia.errors.unexpectedTitle", {
+            _: "Ha ocurrido un error inesperado",
+          })}
         </h1>
         <p className="text-sm text-muted-foreground">{error.message}</p>
         {resetErrorBoundary && (
-          <Button onClick={resetErrorBoundary}>Reintentar</Button>
+          <Button onClick={resetErrorBoundary}>
+            {translate("savia.errors.retry", {
+              _: "Reintentar",
+            })}
+          </Button>
         )}
       </div>
     </div>

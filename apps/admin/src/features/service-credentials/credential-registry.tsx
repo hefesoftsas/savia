@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslate } from "ra-core";
 import { CheckCircle2, CircleDashed, CircleHelp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -44,6 +45,11 @@ export function CredentialRequirementBadge({
   kind: CredentialRequirementKind;
   className?: string;
 }) {
+  const translate = useTranslate();
+  const key = kind === "per-item" ? "perItem" : kind;
+  const label = translate(`savia.serviceCredentials.badges.${key}`, {
+    _: requirementLabels[kind],
+  });
   return (
     <Badge
       variant={kind === "required" ? "default" : "outline"}
@@ -57,7 +63,7 @@ export function CredentialRequirementBadge({
         className,
       )}
     >
-      {requirementLabels[kind]}
+      {label}
     </Badge>
   );
 }
@@ -82,22 +88,24 @@ export function CredentialStatusBadge({
 }
 
 export function CredentialsHelpTooltip() {
+  const translate = useTranslate();
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Ayuda sobre credenciales"
+          aria-label={translate("savia.serviceCredentials.helpTooltipAria", {
+            _: "Ayuda sobre credenciales",
+          })}
         >
           <CircleHelp className="size-4" aria-hidden="true" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={8} className="max-w-xs">
-        Cada servicio indica si necesita clave, dónde se guarda y si ya está
-        configurado. Globales: una clave por espacio. Integraciones: credencial
-        por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y
-        Nominatim.
+        {translate("savia.serviceCredentials.helpTooltipContent", {
+          _: "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Globales: una clave por espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
+        })}
       </TooltipContent>
     </Tooltip>
   );

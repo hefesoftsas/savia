@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { Building2, LoaderCircle } from "lucide-react";
-import { CustomRoutes, memoryStore, Resource } from "ra-core";
+import { CustomRoutes, I18nContextProvider, memoryStore, Resource, useTranslate } from "ra-core";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
@@ -16,6 +16,7 @@ import { users } from "@/features/users";
 import { PasswordResetPage } from "@/features/users/password-reset-page";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { Admin } from "@/components/admin";
+import { i18nProvider } from "@/lib/i18nProvider";
 import { OfflineBanner } from "@/offline/offline-banner";
 import { OutboxStatus } from "@/offline/outbox-status";
 import { createOfflinePersister } from "@/offline/query-persister";
@@ -64,8 +65,17 @@ function SaviaRequestRoute({
   services: AppServices;
   docs?: boolean;
 }) {
+  const translate = useTranslate();
   return (
-    <Suspense fallback={<RouteLoading label="Cargando Savia Request…" />}>
+    <Suspense
+      fallback={
+        <RouteLoading
+          label={translate("savia.routes.loadingSaviaRequest", {
+            _: "Cargando Savia Request…",
+          })}
+        />
+      }
+    >
       <SaviaRequestPage docs={docs} services={services} />
     </Suspense>
   );
@@ -80,32 +90,70 @@ function CrmRoute({ services }: { services: AppServices }) {
 }
 
 function PersonalIntegrationsRoute({ services }: { services: AppServices }) {
+  const translate = useTranslate();
   return (
-    <Suspense fallback={<RouteLoading variant="cards" label="Cargando integraciones…" />}>
+    <Suspense
+      fallback={
+        <RouteLoading
+          variant="cards"
+          label={translate("savia.routes.loadingIntegrations", {
+            _: "Cargando integraciones…",
+          })}
+        />
+      }
+    >
       <PersonalIntegrationsPage services={services} />
     </Suspense>
   );
 }
 
 function MyDayRoute({ services }: { services: AppServices }) {
+  const translate = useTranslate();
   return (
-    <Suspense fallback={<RouteLoading label="Cargando Mi día…" />}>
+    <Suspense
+      fallback={
+        <RouteLoading
+          label={translate("savia.routes.loadingMyDay", {
+            _: "Cargando Mi día…",
+          })}
+        />
+      }
+    >
       <MyDayPage services={services} />
     </Suspense>
   );
 }
 
 function ServiceCredentialsRoute({ services }: { services: AppServices }) {
+  const translate = useTranslate();
   return (
-    <Suspense fallback={<RouteLoading variant="cards" label="Cargando claves y servicios…" />}>
+    <Suspense
+      fallback={
+        <RouteLoading
+          variant="cards"
+          label={translate("savia.routes.loadingCredentials", {
+            _: "Cargando claves y servicios…",
+          })}
+        />
+      }
+    >
       <ServiceCredentialsPage services={services} />
     </Suspense>
   );
 }
 
 function AccountRoute({ apiUrl }: { apiUrl: string }) {
+  const translate = useTranslate();
   return (
-    <Suspense fallback={<RouteLoading label="Cargando cuenta…" />}>
+    <Suspense
+      fallback={
+        <RouteLoading
+          label={translate("savia.routes.loadingAccount", {
+            _: "Cargando cuenta…",
+          })}
+        />
+      }
+    >
       <AccountPage apiUrl={apiUrl} />
     </Suspense>
   );
@@ -153,15 +201,19 @@ export function App({ services }: { services?: AppServices } = {}) {
 
   if (window.location.pathname === "/auth/reset-password") {
     return (
-      <PasswordResetPage
-        apiUrl={import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin}
-      />
+      <I18nContextProvider value={i18nProvider}>
+        <PasswordResetPage
+          apiUrl={import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin}
+        />
+      </I18nContextProvider>
     );
   }
 
   if (handlingCallback) {
     return (
-      <BetterAuthCallback services={appServices} onComplete={finishCallback} />
+      <I18nContextProvider value={i18nProvider}>
+        <BetterAuthCallback services={appServices} onComplete={finishCallback} />
+      </I18nContextProvider>
     );
   }
 
@@ -256,6 +308,7 @@ function BetterAuthCallback({
   services: AppServices;
   onComplete(returnOrigin?: string): void;
 }) {
+  const translate = useTranslate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -293,7 +346,9 @@ function BetterAuthCallback({
         setError(
           exception instanceof Error
             ? exception.message
-            : "No fue posible completar el inicio de sesión.",
+            : translate("savia.auth.signInFailedDetails", {
+                _: "No fue posible completar el inicio de sesión.",
+              }),
         );
       },
     );
@@ -301,7 +356,7 @@ function BetterAuthCallback({
     return () => {
       active = false;
     };
-  }, [onComplete, services]);
+  }, [onComplete, services, translate]);
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-secondary p-6 text-foreground">
@@ -314,17 +369,28 @@ function BetterAuthCallback({
           )}
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight">
-          {error ? "No pudimos iniciar sesión" : "Conectando con Savia"}
+          {error
+            ? translate("savia.auth.signInFailed", {
+                _: "No pudimos iniciar sesión",
+              })
+            : translate("savia.auth.connecting", {
+                _: "Conectando con Savia",
+              })}
         </h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {error ?? "Estamos validando tu sesión segura con Better Auth."}
+          {error ??
+            translate("savia.auth.validatingSession", {
+              _: "Estamos validando tu sesión segura con Better Auth.",
+            })}
         </p>
         {error ? (
           <Button
             className="mt-6 w-full"
             onClick={() => window.location.replace(window.location.origin)}
           >
-            Volver al inicio
+            {translate("savia.auth.returnHome", {
+              _: "Volver al inicio",
+            })}
           </Button>
         ) : null}
       </section>

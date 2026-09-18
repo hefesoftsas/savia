@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useAuthProvider, useNotify } from "ra-core";
+import { useAuthProvider, useNotify, useTranslate } from "ra-core";
 import { LoaderCircle } from "lucide-react";
 import { Notification } from "@/components/admin/notification";
 
@@ -15,12 +15,12 @@ import { Notification } from "@/components/admin/notification";
 export const LoginPage = (_props: { redirectTo?: string }) => {
   const authProvider = useAuthProvider();
   const notify = useNotify();
+  const translate = useTranslate();
   const loginStarted = useRef(false);
 
   useEffect(() => {
     if (!authProvider || loginStarted.current) return;
     loginStarted.current = true;
-
     void authProvider.login({}).catch((error) => {
       notify(
         typeof error === "string"
@@ -49,7 +49,9 @@ export const LoginPage = (_props: { redirectTo?: string }) => {
         <LoaderCircle className="size-5 animate-spin" />
       </div>
       <p className="text-sm font-medium text-muted-foreground">
-        Iniciando sesión con Savia…
+        {translate("savia.auth.signingIn", {
+          _: "Iniciando sesión con Savia…",
+        })}
       </p>
       <Notification />
     </main>

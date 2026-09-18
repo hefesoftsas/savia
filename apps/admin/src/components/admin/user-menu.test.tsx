@@ -14,6 +14,7 @@ vi.mock("ra-core", () => ({
     refetch,
   }),
   useLogout: () => vi.fn(),
+  useTranslate: () => (key: string, options?: any) => options?._ ?? key,
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslate } from "ra-core";
 import {
   Check,
   ChevronDown,
@@ -10,9 +11,17 @@ import { Button } from "@/components/ui/button";
 import { useOutbox } from "./use-outbox";
 import type { OutboxOp } from "./outbox";
 
-function opLabel(op: OutboxOp): string {
-  if (op.action === "save-appearance") return "Apariencia";
-  if (op.action === "save-sidebar") return "Menú lateral";
+function opLabel(op: OutboxOp, translate?: (key: string, options?: any) => string): string {
+  if (op.action === "save-appearance") {
+    return translate
+      ? translate("savia.offline.appearanceOp", { _: "Apariencia" })
+      : "Apariencia";
+  }
+  if (op.action === "save-sidebar") {
+    return translate
+      ? translate("savia.offline.sidebarOp", { _: "Menú lateral" })
+      : "Menú lateral";
+  }
   return `${op.resource}:${op.action}`;
 }
 
@@ -22,6 +31,7 @@ function opLabel(op: OutboxOp): string {
  */
 export function OutboxStatus() {
   const { ops, flushing, refresh, retry, discard } = useOutbox();
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
 
   // Ops can be enqueued from other components (sidebar, appearance), so
@@ -54,7 +64,10 @@ export function OutboxStatus() {
           ) : (
             <span aria-hidden className="size-2 rounded-full bg-amber-500" />
           )}
-          Cambios pendientes ({ops.length})
+          {translate("savia.offline.pendingChanges", {
+            count: ops.length,
+            _: `Cambios pendientes (${ops.length})`,
+          })}
         </span>
         <ChevronDown
           aria-hidden
@@ -63,53 +76,64 @@ export function OutboxStatus() {
       </button>
       {open && (
         <ul className="max-h-56 space-y-1 overflow-y-auto border-t px-2 py-2">
-          {ops.map((op) => (
-            <li
-              key={op.id}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm"
-            >
-              <span className="min-w-0">
-                <span className="block truncate font-medium">
-                  {opLabel(op)}
+          {ops.map((op) => {
+            const label = opLabel(op, translate);
+            return (
+              <li
+                key={op.id}
+                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">
+                    {label}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {op.status === "failed"
+                      ? (op.error ?? translate("savia.offline.syncFailed", { _: "Falló la sincronización." }))
+                      : translate("savia.offline.willSyncOnReconnect", { _: "Se sincronizará al reconectar." })}
+                  </span>
                 </span>
-                <span className="block text-xs text-muted-foreground">
-                  {op.status === "failed"
-                    ? (op.error ?? "Falló la sincronización.")
-                    : "Se sincronizará al reconectar."}
+                <span className="flex shrink-0 gap-1">
+                  {op.status === "failed" && op.id !== undefined && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={translate("savia.offline.retry", {
+                        label,
+                        _: `Reintentar ${label}`,
+                      })}
+                      onClick={() => void retry(op.id!)}
+                    >
+                      <RotateCcw className="size-4" aria-hidden />
+                    </Button>
+                  )}
+                  {op.id !== undefined && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={translate("savia.offline.discard", {
+                        label,
+                        _: `Descartar ${label}`,
+                      })}
+                      onClick={() => void discard(op.id!)}
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                    </Button>
+                  )}
                 </span>
-              </span>
-              <span className="flex shrink-0 gap-1">
-                {op.status === "failed" && op.id !== undefined && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Reintentar ${opLabel(op)}`}
-                    onClick={() => void retry(op.id!)}
-                  >
-                    <RotateCcw className="size-4" aria-hidden />
-                  </Button>
-                )}
-                {op.id !== undefined && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Descartar ${opLabel(op)}`}
-                    onClick={() => void discard(op.id!)}
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                  </Button>
-                )}
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
       {open && (
         <p className="flex items-center gap-1.5 border-t px-3 py-2 text-xs text-muted-foreground">
           <Check className="size-3.5" aria-hidden />
-          Nada destructivo se encola: solo preferencias personales.
+          {translate("savia.offline.safeNotice", {
+            _: "Nada destructivo se encola: solo preferencias personales.",
+          })}
         </p>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useTranslate } from "ra-core";
 import { Building2, CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ function requestUrl(baseUrl: string, path: string): string {
 }
 
 export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
+  const translate = useTranslate();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +21,27 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) {
-      setError("El enlace de restablecimiento no es válido.");
+      setError(
+        translate("savia.passwordReset.errors.invalidToken", {
+          _: "El enlace de restablecimiento no es válido.",
+        }),
+      );
       return;
     }
     if (password.length < 8) {
-      setError("La contraseña debe tener al menos 8 caracteres.");
+      setError(
+        translate("savia.passwordReset.errors.minLength", {
+          _: "La contraseña debe tener al menos 8 caracteres.",
+        }),
+      );
       return;
     }
     if (password !== confirmation) {
-      setError("Las contraseñas no coinciden.");
+      setError(
+        translate("savia.passwordReset.errors.mismatch", {
+          _: "Las contraseñas no coinciden.",
+        }),
+      );
       return;
     }
     setSubmitting(true);
@@ -47,7 +61,9 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
       );
       if (!response.ok) {
         throw new Error(
-          "El enlace expiró o no fue posible actualizar la contraseña.",
+          translate("savia.passwordReset.errors.failed", {
+            _: "El enlace expiró o no fue posible actualizar la contraseña.",
+          }),
         );
       }
       setComplete(true);
@@ -55,7 +71,9 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
       setError(
         exception instanceof Error
           ? exception.message
-          : "No fue posible actualizar la contraseña.",
+          : translate("savia.passwordReset.errors.generic", {
+              _: "No fue posible actualizar la contraseña.",
+            }),
       );
     } finally {
       setSubmitting(false);
@@ -73,12 +91,22 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
           )}
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight">
-          {complete ? "Contraseña actualizada" : "Crea una contraseña"}
+          {complete
+            ? translate("savia.passwordReset.successTitle", {
+                _: "Contraseña actualizada",
+              })
+            : translate("savia.passwordReset.createPasswordTitle", {
+                _: "Crea una contraseña",
+              })}
         </h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {complete
-            ? "Ya puedes ingresar a Savia con tu nueva contraseña."
-            : "Elige una contraseña segura para terminar de activar tu cuenta."}
+            ? translate("savia.passwordReset.successDescription", {
+                _: "Ya puedes ingresar a Savia con tu nueva contraseña.",
+              })
+            : translate("savia.passwordReset.createPasswordDescription", {
+                _: "Elige una contraseña segura para terminar de activar tu cuenta.",
+              })}
         </p>
         {complete ? (
           <Button
@@ -86,7 +114,7 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
             onClick={() => window.location.replace(window.location.origin)}
           >
             <Building2 className="size-4" />
-            Ir a Savia
+            {translate("savia.passwordReset.goToSavia", { _: "Ir a Savia" })}
           </Button>
         ) : (
           <form
@@ -94,7 +122,11 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
             onSubmit={(event) => void submit(event)}
           >
             <label className="grid gap-2">
-              <Label htmlFor="new-password">Nueva contraseña</Label>
+              <Label htmlFor="new-password">
+                {translate("savia.passwordReset.newPassword", {
+                  _: "Nueva contraseña",
+                })}
+              </Label>
               <Input
                 id="new-password"
                 type="password"
@@ -105,7 +137,11 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
               />
             </label>
             <label className="grid gap-2">
-              <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+              <Label htmlFor="confirm-password">
+                {translate("savia.passwordReset.confirmPassword", {
+                  _: "Confirmar contraseña",
+                })}
+              </Label>
               <Input
                 id="confirm-password"
                 type="password"
@@ -117,7 +153,13 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
             </label>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <Button type="submit" disabled={submitting || !token}>
-              {submitting ? "Actualizando…" : "Guardar contraseña"}
+              {submitting
+                ? translate("savia.passwordReset.submitting", {
+                    _: "Actualizando…",
+                  })
+                : translate("savia.passwordReset.submit", {
+                    _: "Guardar contraseña",
+                  })}
             </Button>
           </form>
         )}

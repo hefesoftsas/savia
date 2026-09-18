@@ -1,4 +1,5 @@
 import { WifiOff } from "lucide-react";
+import { useTranslate } from "ra-core";
 import { useOnlineStatus } from "./use-online-status";
 
 /**
@@ -8,6 +9,7 @@ import { useOnlineStatus } from "./use-online-status";
  */
 export function OfflineBanner() {
   const online = useOnlineStatus();
+  const translate = useTranslate();
   if (online) return null;
 
   return (
@@ -18,8 +20,9 @@ export function OfflineBanner() {
     >
       <WifiOff className="size-4 shrink-0" aria-hidden />
       <span>
-        Sin conexión — mostrando datos guardados. Los cambios requieren
-        conexión.
+        {translate("savia.offline.banner", {
+          _: "Sin conexión — mostrando datos guardados. Los cambios requieren conexión.",
+        })}
       </span>
     </div>
   );

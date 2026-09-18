@@ -4,6 +4,7 @@ import {
   useAuthProvider,
   useGetIdentity,
   useLogout,
+  useTranslate,
   UserMenuContext,
 } from "ra-core";
 import { ChevronsUpDown, ExternalLink, LogOut } from "lucide-react";
@@ -37,6 +38,7 @@ export function UserMenu({ children }: UserMenuProps) {
   const authProvider = useAuthProvider();
   const { data: identity, refetch } = useGetIdentity();
   const logout = useLogout();
+  const translate = useTranslate();
   const { isMobile } = useSidebar();
   const currentTenant = useCurrentTenant();
 
@@ -62,14 +64,21 @@ export function UserMenu({ children }: UserMenuProps) {
 
   if (!authProvider) return null;
 
+  const defaultAccountLabel = translate("savia.account.title", {
+    _: "Mi cuenta",
+  });
+  const openMenuLabel = translate("savia.userMenu.openMenu", {
+    _: "Abrir menú de cuenta",
+  });
+
   return (
     <UserMenuContext.Provider value={{ onClose: handleClose }}>
       <DropdownMenu open={open} onOpenChange={handleToggleOpen}>
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
-            aria-label="Abrir menú de cuenta"
+            aria-label={openMenuLabel}
             size="lg"
-            tooltip="Abrir menú de cuenta"
+            tooltip={openMenuLabel}
             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
             <Avatar className="size-8 rounded-lg">
@@ -83,10 +92,12 @@ export function UserMenu({ children }: UserMenuProps) {
                 className="line-clamp-2 font-medium break-words"
                 title={identity?.fullName}
               >
-                {identity?.fullName ?? "Mi cuenta"}
+                {identity?.fullName ?? defaultAccountLabel}
               </span>
               <span className="truncate text-xs text-muted-foreground">
-                {currentTenant.isDedicated ? currentTenant.name : "Mi cuenta"}
+                {currentTenant.isDedicated
+                  ? currentTenant.name
+                  : defaultAccountLabel}
               </span>
             </span>
             <ChevronsUpDown
@@ -112,13 +123,18 @@ export function UserMenu({ children }: UserMenuProps) {
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col">
                 <p className="truncate text-sm font-semibold leading-tight text-foreground">
-                  {identity?.fullName ?? "Usuario"}
+                  {identity?.fullName ??
+                    translate("savia.userMenu.fallbackUser", {
+                      _: "Usuario",
+                    })}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {"email" in (identity ?? {}) &&
                   typeof identity?.email === "string"
                     ? identity.email
-                    : "Plataforma Savia"}
+                    : translate("savia.userMenu.fallbackPlatform", {
+                        _: "Plataforma Savia",
+                      })}
                 </p>
               </div>
             </div>
@@ -146,7 +162,11 @@ export function UserMenu({ children }: UserMenuProps) {
             >
               <a href="https://savia.app.hefesoft.com">
                 <ExternalLink className="size-4 text-muted-foreground" />
-                <span>Consola Plataforma</span>
+                <span>
+                  {translate("savia.userMenu.platformConsole", {
+                    _: "Consola Plataforma",
+                  })}
+                </span>
               </a>
             </DropdownMenuItem>
           ) : null}
