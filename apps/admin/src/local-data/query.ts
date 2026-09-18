@@ -4,10 +4,25 @@ import {
   type CrmRecord,
 } from "@savia/crm-shared/metadata";
 import type { Table } from "dexie";
+import { queryCache } from "./query-cache";
+import {
+  conditionIds,
+  searchIds,
+  intersect,
+  union,
+  eachFieldValue,
+} from "./query-index";
 import { z } from "zod";
 
 type Row = { collection: string; id: string; document: CrmRecord };
-type Database = { records: Table<Row, [string, string]> };
+type Database = {
+  records: Table<Row, [string, string]>;
+  syncState?: Table<
+    { collection: string; dataRevision?: string; cursor?: string },
+    string
+  >;
+  outbox?: Table<{ collection: string; mutationId: string }, string>;
+};
 export type RecordSortKey = [string, string, number, string | number, string];
 const scalar = (value: unknown): string | number | null =>
   value == null
@@ -240,13 +255,93 @@ function predicate(object: CrmObject, params: URLSearchParams) {
     );
   };
 }
+async function filteredIds(
+  db: Database,
+  collection: string,
+  object: CrmObject,
+  params: URLSearchParams,
+) {
+  const parsed = params.has("filters")
+    ? schema.parse(JSON.parse(params.get("filters")!))
+    : undefined;
+  const trash = params.get("trash") === "true";
+  const resolve = (
+    condition: NonNullable<typeof parsed>["conditions"][number],
+  ) => {
+    const conditionParams = new URLSearchParams({
+      trash: String(trash),
+      filters: JSON.stringify({ conditions: [condition] }),
+    });
+    const matches = predicate(object, conditionParams);
+    return conditionIds(db.records, collection, trash, condition, (value) =>
+      matches({
+        id: "",
+        created_at: "",
+        updated_at: "",
+        [condition.field]: value,
+        deleted_at: trash ? "deleted" : null,
+      } as CrmRecord),
+    );
+  };
+  let candidates: Set<string> | undefined;
+  if (parsed?.conditions.length) {
+    const sets = await Promise.all(parsed.conditions.map(resolve));
+    candidates = parsed.logic === "or" ? union(sets) : sets.reduce(intersect);
+  }
+  const constrain = (set: Set<string>) => {
+    candidates = candidates ? intersect(candidates, set) : set;
+  };
+  const pipeline = object.config.studio?.pipeline?.field ?? "stage";
+  if (object.config.fields[pipeline]) {
+    if (params.get("stage"))
+      constrain(
+        await resolve({
+          field: pipeline,
+          op: "eq",
+          value: params.get("stage"),
+        }),
+      );
+    if (params.get("emptyStage") === "true")
+      constrain(
+        union(
+          await Promise.all(
+            [null, ""].map((value) =>
+              resolve({ field: pipeline, op: "eq", value }),
+            ),
+          ),
+        ),
+      );
+  }
+  if (params.get("q") && candidates?.size !== 0) {
+    const fields =
+      params
+        .get("searchFields")
+        ?.split(",")
+        .map((v) => v.trim())
+        .filter((v) => object.config.fields[v])
+        .slice(0, 20) ??
+      (object.config.fields[params.get("searchField") ?? ""]
+        ? [params.get("searchField")!]
+        : []);
+    constrain(
+      await searchIds(
+        db.records,
+        collection,
+        trash,
+        fields.length ? fields : undefined,
+        params.get("q")!,
+      ),
+    );
+  }
+  return candidates;
+}
 export async function queryRecords(
   db: Database,
   collection: string,
   object: CrmObject,
   params: URLSearchParams,
 ) {
-  const match = predicate(object, params);
+  predicate(object, params); // Validate before any cache lookup.
   const page = Math.max(1, Math.floor(Number(params.get("page")) || 1));
   const perPage = Math.min(
     200,
@@ -289,27 +384,77 @@ export async function queryRecords(
     const exact = indexed.slice(0, 4);
     rows = db.records.where("sortKeys").between(exact, [...exact, []]);
   }
-  let total = 0;
-  const data: CrmRecord[] = [];
   const offset = (page - 1) * perPage;
-  if (
-    !params.get("q") &&
-    !params.get("stage") &&
-    params.get("emptyStage") !== "true" &&
-    (!parsed?.conditions.length || equality)
-  ) {
-    const total = await rows.clone().count();
-    const selected = await rows.clone().offset(offset).limit(perPage).toArray();
-    return { data: selected.map((row) => row.document), total, page, perPage };
-  }
-  // Cursor order comes from IndexedDB, so only the requested page occupies memory.
-  await rows.each((row) => {
-    if (match(row.document)) {
-      if (total >= offset && data.length < perPage) data.push(row.document);
-      total++;
-    }
-  });
-  return { data, total, page, perPage };
+  // Counts and page reads share one readonly snapshot, including concurrent replication.
+  return db.records.db.transaction(
+    "r",
+    [
+      db.records,
+      ...(db.syncState ? [db.syncState] : []),
+      ...(db.outbox ? [db.outbox] : []),
+    ],
+    async () => {
+      if (
+        !params.get("q") &&
+        !params.get("stage") &&
+        params.get("emptyStage") !== "true" &&
+        (!parsed?.conditions.length || equality)
+      ) {
+        const total = await rows.clone().count();
+        const selected = await rows
+          .clone()
+          .offset(offset)
+          .limit(perPage)
+          .toArray();
+        return {
+          data: selected.map((row) => row.document),
+          total,
+          page,
+          perPage,
+        };
+      }
+      const cache = queryCache(db.records.db);
+      const constraints = new URLSearchParams(params);
+      constraints.delete("page");
+      constraints.delete("perPage");
+      constraints.sort();
+      const revision = await db.syncState?.get(collection);
+      const pendingIds = await db.outbox
+        ?.where("collection")
+        .equals(collection)
+        .primaryKeys();
+      const key = JSON.stringify([
+        collection,
+        object.config,
+        constraints.toString(),
+        revision?.dataRevision,
+        revision?.cursor,
+        pendingIds?.sort(),
+      ]);
+      // The persisted revision and page share one snapshot. Broadcast delivery is
+      // only an eviction hint; correctness never depends on another tab notifying us.
+      let ids = revision?.dataRevision ? cache.get(key) : undefined;
+      if (!ids) {
+        const candidates = await filteredIds(db, collection, object, params);
+        ids = [];
+        // Only keys are traversed to preserve the requested sort and stable ID ties.
+        if (candidates?.size !== 0)
+          ids = (await rows.primaryKeys()).flatMap((key) =>
+            !candidates || candidates.has(key[1]) ? [key[1]] : [],
+          );
+        if (revision?.dataRevision) cache.put(key, collection, ids);
+      }
+      const selected = await db.records.bulkGet(
+        ids.slice(offset, offset + perPage).map((id) => [collection, id]),
+      );
+      return {
+        data: selected.flatMap((row) => (row ? [row.document] : [])),
+        total: ids.length,
+        page,
+        perPage,
+      };
+    },
+  );
 }
 export async function querySummary(
   db: Database,
@@ -317,7 +462,7 @@ export async function querySummary(
   object: CrmObject,
   params: URLSearchParams,
 ) {
-  const match = predicate(object, params);
+  predicate(object, params);
   const pipeline = getPipeline(object);
   const group = params.get("group") ?? pipeline?.field;
   if (!group || !object.config.fields[group])
@@ -331,21 +476,31 @@ export async function querySummary(
     string,
     { value: string | number | null; count: number; amount: number }
   >();
-  await db.records
-    .where("collection")
-    .equals(collection)
-    .each(({ document }) => {
-      if (!match(document)) return;
-      const value = scalar(document[group]);
+  await db.records.db.transaction("r", db.records, async () => {
+    const ids = await filteredIds(db, collection, object, params);
+    const trash = params.get("trash") === "true";
+    const amounts = new Map<string, number>();
+    if (amount && numeric(amount))
+      await eachFieldValue(
+        db.records,
+        collection,
+        trash,
+        amount,
+        (id, value) => {
+          if (ids && !ids.has(id)) return;
+          const parsed = parseFloat(String(value ?? ""));
+          amounts.set(id, Number.isFinite(parsed) ? parsed : 0);
+        },
+      );
+    await eachFieldValue(db.records, collection, trash, group, (id, value) => {
+      if (ids && !ids.has(id)) return;
       const key = JSON.stringify(value);
       const bucket = groups.get(key) ?? { value, count: 0, amount: 0 };
       bucket.count++;
-      if (amount && numeric(amount)) {
-        const parsed = parseFloat(String(scalar(document[amount]) ?? ""));
-        bucket.amount += Number.isFinite(parsed) ? parsed : 0;
-      }
+      bucket.amount += amounts.get(id) ?? 0;
       groups.set(key, bucket);
     });
+  });
   return {
     data: [...groups.values()].sort(
       (a, b) => b.count - a.count || compare(a.value, b.value),

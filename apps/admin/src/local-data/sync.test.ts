@@ -259,3 +259,76 @@ it.each(["accept", "retry"] as const)(
     }
   },
 );
+
+it("hydrates a requested collection without waiting for unrelated collections and coalesces readers", async () => {
+  store = await openLocalStore(crypto.randomUUID());
+  const original = Object.getOwnPropertyDescriptor(navigator, "locks");
+  let chain = Promise.resolve();
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: (
+        _name: string,
+        _options: unknown,
+        callback: (lock: object) => Promise<void>,
+      ) => {
+        const next = chain.then(() => callback({}));
+        chain = next.catch(() => undefined);
+        return next;
+      },
+    },
+  });
+  const collections = ["unrelated", "people"].map((name) => ({
+    name,
+    object: { config: { fields: {} } },
+    capability: "read-only",
+    schemaVersion: 1,
+  }));
+  const calls: string[] = [];
+  let unrelatedStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    unrelatedStarted = resolve;
+  });
+  let resumed!: () => void;
+  const backgroundResumed = new Promise<void>((resolve) => {
+    resumed = resolve;
+  });
+  let unrelatedRequests = 0;
+  const { createSyncCoordinator } = await import("./sync");
+  const coordinator = createSyncCoordinator(store, async (path, init) => {
+    calls.push(path);
+    if (path.endsWith("manifest")) return Response.json({ collections });
+    if (path.includes("/unrelated")) {
+      unrelatedStarted();
+      if (++unrelatedRequests > 1) resumed();
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    }
+    return Response.json({ documents: [], cursor: "complete", hasMore: false });
+  });
+  try {
+    coordinator.start();
+    await started;
+    await Promise.all([
+      coordinator.syncNow("people"),
+      coordinator.syncNow("people"),
+    ]);
+    expect((await store.db.syncState.get("people"))?.hydrated).toBe(true);
+    expect(calls.filter((path) => path.includes("/pull/people"))).toHaveLength(
+      1,
+    );
+    const before = calls.length;
+    await coordinator.syncNow("people");
+    expect(calls).toHaveLength(before);
+    await backgroundResumed;
+  } finally {
+    coordinator.stop();
+    if (original) Object.defineProperty(navigator, "locks", original);
+    else Reflect.deleteProperty(navigator, "locks");
+  }
+});

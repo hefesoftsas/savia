@@ -11,7 +11,10 @@ const response = (error: string, status = 503) =>
 export function createLocalTransport(
   store: LocalStore,
   network: SyncTransport,
-  syncNow: () => Promise<void>,
+  syncNow: (collection?: string) => Promise<void>,
+  requestSync: () => void = () => {
+    void syncNow().catch(() => undefined);
+  },
 ): SyncTransport {
   return async (path, init = {}) => {
     let decoded = path;
@@ -61,13 +64,13 @@ export function createLocalTransport(
       const collection = segments[2];
       let definition = await store.db.collections.get(collection);
       if (!definition) {
-        await syncNow();
+        await syncNow(collection);
         definition = await store.db.collections.get(collection);
       }
       if (definition && definition.capability !== "remote") {
         const state = await store.db.syncState.get(collection);
         if (!state?.hydrated) {
-          await syncNow();
+          await syncNow(collection);
           if (!(await store.db.syncState.get(collection))?.hydrated)
             return response(
               "Esta colección todavía no está lista sin conexión. Conecta para completar la descarga.",
@@ -231,7 +234,7 @@ export function createLocalTransport(
       (await store.db.collections.count()) > 0
     )
       return Response.json({ ok: true });
-    if (method !== "GET" && result.ok) void syncNow().catch(() => undefined);
+    if (method !== "GET" && result.ok) requestSync();
     return result;
   };
 }

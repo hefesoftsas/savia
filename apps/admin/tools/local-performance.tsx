@@ -54,6 +54,21 @@ const BenchmarkTable = memo(function BenchmarkTable({
     </Profiler>
   );
 });
+async function scanBaseline() {
+  let total = 0;
+  const data: CrmRecord[] = [];
+  const prefix = ["benchmark", "amount:DESC:active"];
+  await store.db.records
+    .where("sortKeys")
+    .between(prefix, [...prefix, []])
+    .each(({ document }) => {
+      if (Number(document.amount) >= 50000 && document.owner === "Agent 1") {
+        if (data.length < 200) data.push(document);
+        total++;
+      }
+    });
+  return { data, total };
+}
 function App() {
   const [rows, setRows] = useState<CrmRecord[]>([]),
     [virtual, setVirtual] = useState(false),
@@ -118,22 +133,41 @@ function App() {
     if (result.current)
       result.current.textContent = "10,000 synthetic records ready";
   }
-  async function query(mode: boolean) {
+  async function query(
+    mode: boolean,
+    filtered = false,
+    pageNumber = 1,
+    baseline = false,
+    search = false,
+  ) {
     setLoading(true);
     renderMs.current = 0;
     started.current = performance.now();
     const t = performance.now();
-    const page = await queryRecords(
-      store.db,
-      "benchmark",
-      object,
-      new URLSearchParams({
-        q: "",
-        perPage: "200",
-        sort: "amount",
-        order: "DESC",
-      }),
-    );
+    const page = baseline
+      ? await scanBaseline()
+      : await queryRecords(
+          store.db,
+          "benchmark",
+          object,
+          new URLSearchParams({
+            q: search ? "Customer 98" : "",
+            page: String(pageNumber),
+            ...(filtered
+              ? {
+                  filters: JSON.stringify({
+                    conditions: [
+                      { field: "amount", op: "gte", value: 50000 },
+                      { field: "owner", op: "eq", value: "Agent 1" },
+                    ],
+                  }),
+                }
+              : {}),
+            perPage: "200",
+            sort: "amount",
+            order: "DESC",
+          }),
+        );
     queryMs.current = performance.now() - t;
     measuring.current = true;
     setVirtual(mode);
@@ -150,6 +184,10 @@ function App() {
             ["Prepare data", prepare],
             ["Measure full table", () => query(false)],
             ["Measure virtual table", () => query(true)],
+            ["Measure compound filter", () => query(true, true)],
+            ["Next filtered page", () => query(true, true, 2)],
+            ["Measure scan baseline", () => query(true, true, 1, true)],
+            ["Measure text search", () => query(true, false, 1, false, true)],
           ].map(([label, fn]) => (
             <button
               className="rounded border px-3 py-2"

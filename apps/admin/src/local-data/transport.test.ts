@@ -194,3 +194,73 @@ it("does not fabricate business setup for an unprovisioned workspace", async () 
   )("/api/business/setup", { method: "POST" });
   expect(result.status).toBe(503);
 });
+
+it("serves hydrated page changes locally with no HTTP or synchronization", async () => {
+  const { openLocalStore } = await import("./store");
+  const local = await openLocalStore(crypto.randomUUID());
+  try {
+    await local.refreshManifest([
+      {
+        name: "contacts",
+        capability: "read-write",
+        schemaVersion: 1,
+        object: {
+          name: "contacts",
+          config: { fields: { name: { type: "Textbox" } } },
+        },
+      } as never,
+    ]);
+    await local.applyPull("contacts", {
+      documents: [
+        { ...document, created_at: "2026-01-01", updated_at: "2026-01-01" },
+      ],
+      cursor: "1",
+      hasMore: false,
+    });
+    const network = vi.fn();
+    const synchronize = vi.fn();
+    const transport = createLocalTransport(local, network, synchronize);
+    const first = await transport("/api/records/contacts?page=1&perPage=1");
+    const second = await transport("/api/records/contacts?page=2&perPage=1");
+    expect((await first.json()).data).toHaveLength(1);
+    expect((await second.json()).data).toHaveLength(0);
+    expect(network).not.toHaveBeenCalled();
+    expect(synchronize).not.toHaveBeenCalled();
+  } finally {
+    await local.destroy();
+  }
+});
+
+it("requests only the collection that needs provisioning", async () => {
+  const local = store();
+  let hydrated = false;
+  local.db.syncState.get = async () => ({ hydrated });
+  const synchronize = vi.fn(async (_collection?: string) => {
+    hydrated = true;
+  });
+  const network = vi.fn();
+  const result = await createLocalTransport(
+    local as never,
+    network,
+    synchronize,
+  )("/api/records/contacts/one");
+  expect(result.ok).toBe(true);
+  expect(synchronize).toHaveBeenCalledExactlyOnceWith("contacts");
+  expect(network).not.toHaveBeenCalled();
+});
+
+it("schedules post-bootstrap synchronization in the background instead of a full foreground pass", async () => {
+  const local = store();
+  const foreground = vi.fn();
+  const background = vi.fn();
+  const network = vi.fn().mockResolvedValue(Response.json({ ok: true }));
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    foreground,
+    background,
+  );
+  expect((await transport("/api/bootstrap", { method: "POST" })).ok).toBe(true);
+  expect(background).toHaveBeenCalledOnce();
+  expect(foreground).not.toHaveBeenCalled();
+});

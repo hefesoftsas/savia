@@ -51,6 +51,16 @@ export class LocalStore {
       ),
     };
   }
+  /** Must be called within the same read-write transaction as the record change. */
+  private async touch(collection: string) {
+    const prior = await this.db.syncState.get(collection);
+    await this.db.syncState.put({
+      collection,
+      hydrated: false,
+      ...prior,
+      dataRevision: crypto.randomUUID(),
+    });
+  }
   async get(collection: string, id: string) {
     return (await this.db.records.get([collection, id]))?.document;
   }
@@ -64,6 +74,7 @@ export class LocalStore {
     return this.db.transaction(
       "rw",
       this.db.records,
+      this.db.syncState,
       this.db.outbox,
       this.db.collections,
       async () => {
@@ -86,6 +97,7 @@ export class LocalStore {
         const document = overlay(current, mutation);
         await this.db.records.put(await this.row(collection, document));
         await this.db.outbox.add(mutation);
+        await this.touch(collection);
         return document;
       },
     );
@@ -99,6 +111,7 @@ export class LocalStore {
       this.db.outbox,
       this.db.conflicts,
       async () => {
+        const changed = new Set<string>();
         const priorCollections = new Map(
           (await this.db.collections.toArray()).map((c) => [c.name, c]),
         );
@@ -140,7 +153,7 @@ export class LocalStore {
                 Object.keys(prior.object?.config?.fields ?? {}).sort(),
               ) !== JSON.stringify([...fields].sort()))
           ) {
-            await this.db.records
+            const reindexed = await this.db.records
               .where("collection")
               .equals(collection.name)
               .modify((row) => {
@@ -150,6 +163,7 @@ export class LocalStore {
                   fields,
                 );
               });
+            if (reindexed) changed.add(collection.name);
           }
         }
         for (const mutation of await this.db.outbox.toArray()) {
@@ -157,11 +171,13 @@ export class LocalStore {
             await this.db.records.put(
               await this.row(mutation.collection, mutation.localSnapshot),
             );
+            changed.add(mutation.collection);
             await this.db.outbox.update(mutation.mutationId, {
               localSnapshot: undefined,
             });
           }
         }
+        for (const collection of changed) await this.touch(collection);
       },
     );
   }
@@ -178,18 +194,27 @@ export class LocalStore {
           .equals(collection)
           .toArray();
         const protectedIds = new Set(pending.map((m) => m.id));
+        let changed = false;
         if (batch.reset)
-          await this.db.records
-            .where("collection")
-            .equals(collection)
-            .filter((r) => !protectedIds.has(r.id))
-            .delete();
+          changed =
+            (await this.db.records
+              .where("collection")
+              .equals(collection)
+              .filter((r) => !protectedIds.has(r.id))
+              .delete()) > 0;
         for (const document of batch.documents)
-          if (!protectedIds.has(document.id))
+          if (!protectedIds.has(document.id)) {
             await this.db.records.put(await this.row(collection, document));
+            changed = true;
+          }
+        // Adopt legacy replicas once, even when the first pull is an empty
+        // heartbeat; later empty pulls keep the stable revision.
+        if (changed || !(await this.db.syncState.get(collection))?.dataRevision)
+          await this.touch(collection);
         const prior = await this.db.syncState.get(collection);
         await this.db.syncState.put({
           collection,
+          dataRevision: prior?.dataRevision,
           cursor: batch.cursor,
           hydrated: (!batch.reset && prior?.hydrated) || !batch.hasMore,
           lastSyncedAt: Date.now(),
@@ -201,6 +226,7 @@ export class LocalStore {
     await this.db.transaction(
       "rw",
       this.db.records,
+      this.db.syncState,
       this.db.outbox,
       this.db.collections,
       async () => {
@@ -224,6 +250,7 @@ export class LocalStore {
         await this.db.records.put(
           await this.row(mutation.collection, document),
         );
+        await this.touch(mutation.collection);
       },
     );
   }
@@ -254,6 +281,7 @@ export class LocalStore {
     await this.db.transaction(
       "rw",
       this.db.records,
+      this.db.syncState,
       this.db.outbox,
       this.db.conflicts,
       this.db.collections,
@@ -278,7 +306,13 @@ export class LocalStore {
               "Server record no longer exists",
               null,
             );
-          else await this.db.records.delete([mutation.collection, mutation.id]);
+          else if (
+            await this.db.records
+              .where(":id")
+              .equals([mutation.collection, mutation.id])
+              .delete()
+          )
+            await this.touch(mutation.collection);
         } else await this.acknowledge(mutation, conflict.master);
         await this.db.conflicts.delete(mutationId);
       },
@@ -288,6 +322,7 @@ export class LocalStore {
     await this.db.transaction(
       "rw",
       this.db.records,
+      this.db.syncState,
       this.db.outbox,
       this.db.conflicts,
       this.db.collections,
@@ -382,6 +417,7 @@ export class LocalStore {
     await this.db.transaction(
       "rw",
       this.db.records,
+      this.db.syncState,
       this.db.collections,
       this.db.outbox,
       this.db.conflicts,
@@ -410,11 +446,19 @@ export class LocalStore {
           });
         }
         const metadata = await this.db.collections.get(mutation.collection);
-        if (document && metadata && metadata.capability !== "remote")
+        if (document && metadata && metadata.capability !== "remote") {
           await this.db.records.put(
             await this.row(mutation.collection, document),
           );
-        else await this.db.records.delete([mutation.collection, mutation.id]);
+          await this.touch(mutation.collection);
+        } else if (
+          await this.db.records
+            .where(":id")
+            .equals([mutation.collection, mutation.id])
+            .delete()
+        ) {
+          await this.touch(mutation.collection);
+        }
       },
     );
   }
@@ -422,6 +466,7 @@ export class LocalStore {
     await this.db.transaction(
       "rw",
       this.db.records,
+      this.db.syncState,
       this.db.collections,
       this.db.outbox,
       this.db.conflicts,
@@ -458,6 +503,7 @@ export class LocalStore {
         await this.db.records.put(
           await this.row(mutation.collection, document),
         );
+        await this.touch(mutation.collection);
       },
     );
   }

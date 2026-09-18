@@ -326,3 +326,166 @@ describe("collection query changes", () => {
     }
   });
 });
+
+it("persists a new data revision for same-count writes but not empty or protected pulls", async () => {
+  const s = await open();
+  const revision = async () =>
+    (await s.db.syncState.get("people"))?.dataRevision;
+  await s.applyPull("people", {
+    documents: [doc("a", "Before")],
+    cursor: "1",
+    hasMore: false,
+  });
+  const first = await revision();
+  expect(first).toEqual(expect.any(String));
+  await s.applyPull("people", { documents: [], cursor: "2", hasMore: false });
+  expect(await revision()).toBe(first);
+  await s.applyPull("people", {
+    documents: [doc("a", "After", 2)],
+    cursor: "3",
+    hasMore: false,
+  });
+  const second = await revision();
+  expect(second).not.toBe(first);
+  await s.mutate("people", "update", "a", { name: "Local" }, 2);
+  const local = await revision();
+  expect(local).not.toBe(second);
+  await s.applyPull("people", {
+    documents: [doc("a", "Protected", 3)],
+    cursor: "4",
+    hasMore: false,
+  });
+  expect(await revision()).toBe(local);
+  expect((await s.db.syncState.get("people"))?.cursor).toBe("4");
+});
+
+it("rolls back record, outbox and data revision together when revision persistence fails", async () => {
+  const s = await open();
+  await s.applyPull("people", {
+    documents: [doc("a", "Before")],
+    cursor: "1",
+    hasMore: false,
+  });
+  const before = (await s.db.syncState.get("people"))?.dataRevision;
+  const reject = () => {
+    throw new Error("Revision write failed");
+  };
+  s.db.syncState.hook("updating", reject);
+  await expect(
+    s.mutate("people", "update", "a", { name: "Unsaved" }, 1),
+  ).rejects.toThrow("Revision write failed");
+  s.db.syncState.hook("updating").unsubscribe(reject);
+  expect((await s.get("people", "a"))?.name).toBe("Before");
+  expect(await s.db.outbox.count()).toBe(0);
+  expect((await s.db.syncState.get("people"))?.dataRevision).toBe(before);
+});
+
+it.each([
+  "acknowledge",
+  "accept-master",
+  "accept-deleted",
+  "discard",
+  "retry",
+  "reset",
+  "schema",
+])(
+  "advances the data revision when %s changes visible records or indexes",
+  async (action) => {
+    const s = await open();
+    await s.applyPull("people", {
+      documents: [doc("a", "Server")],
+      cursor: "1",
+      hasMore: false,
+    });
+    if (!["reset", "schema"].includes(action))
+      await s.mutate("people", "update", "a", { name: "Local" }, 1);
+    const mutation = (await s.db.outbox.toArray())[0];
+    if (action.startsWith("accept"))
+      await s.rejectMutation(
+        mutation,
+        "conflict",
+        "Conflict",
+        action === "accept-deleted" ? null : doc("a", "Master", 2),
+      );
+    if (["discard", "retry"].includes(action))
+      await s.rejectMutation(mutation, "error", "Invalid");
+    const before = (await s.db.syncState.get("people"))!.dataRevision;
+    if (action === "acknowledge")
+      await s.acknowledge(mutation, doc("a", "Acknowledged", 2));
+    if (action.startsWith("accept")) await s.acceptMaster(mutation.mutationId);
+    if (action === "discard") await s.discardMutation(mutation.mutationId);
+    if (action === "retry")
+      await s.retryMutation(mutation.mutationId, { name: "Corrected" });
+    if (action === "reset")
+      await s.applyPull("people", {
+        documents: [],
+        cursor: "2",
+        hasMore: false,
+        reset: true,
+      });
+    if (action === "schema")
+      await s.refreshManifest([
+        {
+          name: "people",
+          object: {
+            config: { fields: { added: { type: "Textbox" } } },
+          } as never,
+          capability: "read-write",
+          schemaVersion: 2,
+        },
+      ]);
+    const after = (await s.db.syncState.get("people"))!.dataRevision;
+    expect(after).toEqual(expect.any(String));
+    expect(after).not.toBe(before);
+  },
+);
+
+it("removes revoked revisions and gives restored local snapshots a fresh revision", async () => {
+  const s = await open();
+  await s.mutate("people", "create", "a", { name: "Local" });
+  const first = (await s.db.syncState.get("people"))!.dataRevision;
+  await s.refreshManifest([]);
+  expect(await s.db.syncState.get("people")).toBeUndefined();
+  await s.refreshManifest([
+    {
+      name: "people",
+      object: { config: { fields: {} } } as never,
+      capability: "read-write",
+      schemaVersion: 1,
+    },
+  ]);
+  expect((await s.get("people", "a"))?.name).toBe("Local");
+  const restored = (await s.db.syncState.get("people"))!.dataRevision;
+  expect(restored).toEqual(expect.any(String));
+  expect(restored).not.toBe(first);
+  await s.blockAuthorization("Forbidden");
+  expect(await s.db.syncState.get("people")).toBeUndefined();
+});
+
+it("adopts a legacy hydrated replica with no revision on its first empty pull", async () => {
+  const s = await open();
+  await s.applyPull("people", {
+    documents: [doc("a", "Unchanged")],
+    cursor: "legacy",
+    hasMore: false,
+  });
+  await s.db.syncState.update("people", { dataRevision: undefined });
+  const record = await s.get("people", "a");
+  await s.applyPull("people", {
+    documents: [],
+    cursor: "legacy",
+    hasMore: false,
+  });
+  const adopted = (await s.db.syncState.get("people"))!;
+  expect(adopted.dataRevision).toEqual(expect.any(String));
+  expect(adopted.hydrated).toBe(true);
+  expect(await s.get("people", "a")).toEqual(record);
+  await s.applyPull("people", {
+    documents: [],
+    cursor: "legacy",
+    hasMore: false,
+  });
+  expect((await s.db.syncState.get("people"))?.dataRevision).toBe(
+    adopted.dataRevision,
+  );
+});

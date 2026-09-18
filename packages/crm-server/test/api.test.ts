@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
 import app from "../src/index";
@@ -423,4 +423,73 @@ it("deletes local screens with records when deleteRecords is true", async () => 
       (item: any) => item.name === created.name,
     ),
   ).toBe(false);
+});
+
+it("reads native counts and pages in one D1 batch with matching filters and pagination", async () => {
+  await json("/objects", "POST", {
+    name: "page_batch",
+    label: "Page batch",
+    config: makeConfig({
+      name: { type: "Textbox", label: "Name" },
+      amount: { type: "Number", label: "Amount" },
+    }),
+  });
+  const records = [];
+  for (const amount of [5, 10, 20, 99])
+    records.push(
+      (
+        await json("/records/page_batch", "POST", {
+          name: `Item ${amount}`,
+          amount,
+        })
+      ).data,
+    );
+  await json(`/records/page_batch/${records[3].id}?version=1`, "DELETE");
+  const db = platform.env.DB;
+  const batch = vi.fn((statements: D1PreparedStatement[]) =>
+    db.batch(statements),
+  );
+  const wrapped = new Proxy(db, {
+    get(target, property) {
+      if (property === "batch") return batch;
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const list = async (query: string) => {
+    const response = await app.request(
+      `http://localhost/api/records/page_batch?${query}`,
+      {},
+      { ...platform.env, DB: wrapped },
+    );
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{
+      data: { id: string; amount: number }[];
+      total: number;
+      page: number;
+      perPage: number;
+    }>;
+  };
+  const second = await list("sort=amount&order=ASC&page=2&perPage=2");
+  expect(second).toMatchObject({
+    total: 3,
+    page: 2,
+    perPage: 2,
+    data: [{ id: records[2].id, amount: 20 }],
+  });
+  expect(await list("sort=amount&order=ASC&page=8&perPage=2")).toMatchObject({
+    total: 3,
+    data: [],
+  });
+  expect(await list("trash=true&perPage=1")).toMatchObject({
+    total: 1,
+    data: [{ id: records[3].id }],
+  });
+  expect(await list("q=Item%2010&perPage=1")).toMatchObject({
+    total: 1,
+    data: [{ id: records[1].id }],
+  });
+  expect(batch).toHaveBeenCalledTimes(4);
+  for (const [statements] of batch.mock.calls)
+    expect(statements).toHaveLength(2);
 });

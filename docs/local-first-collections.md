@@ -46,7 +46,8 @@ of running concurrent writers. Realtime notifications wake synchronization; the
 durable pull cursor, not a socket event, establishes completeness. A central
 60-second watchdog repairs missed events. Retries use exponential backoff and
 jitter. Local queries use IndexedDB indexes for pagination and ordering; complex
-filters stream records and can cost more on large collections.
+filters use scalar index ranges and set intersections/unions. Derived match IDs
+and exact totals are reused across pages.
 
 ## Offline access and recovery
 
@@ -95,8 +96,11 @@ must be measured separately; unit test timings are not device benchmarks.
 
 Record lists keep bounded pages (25 by default, at most 200). Empty search and
 empty filter constraints use indexed count/page reads instead of scanning each
-record. Text/complex predicates still stream the collection to compute exact
-counts; these are not constant-time queries. Search keystrokes are coalesced for
+record. Compound equality, range, membership and empty predicates resolve from
+existing field indexes. Field substring predicates inspect scalar index keys.
+Unrestricted substring searches inspect documents in batches of 256 on the first
+query; subsequent pages reuse the ordered matching IDs and exact total. Neither
+substring matching nor a first broad filter is constant time. Search keystrokes are coalesced for
 180 ms while the input remains immediately editable.
 
 Pages above 20 records virtualize rows with TanStack Virtual, a bounded viewport,
@@ -131,3 +135,42 @@ virtual rows. Aggregate React render time was 79.7 ms versus 15.1 ms; these
 measurements are illustrative and vary by machine. Deferred panels reduce the
 initial JavaScript path, while precaching operational screens increases the
 offline cache footprint; lazy loading does not imply a smaller total download.
+
+## Filter cache and pagination
+
+Each open database retains at most eight filtered ID lists and 100,000 IDs in
+aggregate. Records themselves are fetched only for the requested page (except
+initial unrestricted text-search batches). Larger result sets are not cached.
+Every record-changing store transaction also updates `syncState.dataRevision`.
+Queries read that revision, the pull cursor, pending mutation IDs and the page
+in one readonly transaction. Cursor/outbox identity also detects older clients
+that write without advancing the new revision. Delayed cross-tab notifications
+do not determine cache correctness. Mutation
+notifications additionally evict affected collections; empty sync heartbeats do
+not change the revision. Legacy replicas acquire their first revision on the next
+pull. Summaries aggregate scalar group/amount index keys without loading records.
+
+Hydrated native collections paginate locally with zero list HTTP calls. First
+provisioning coalesces requests for the same collection, preempts an unrelated
+background pass in the same coordinator, and downloads the requested collection
+before resuming background work. It still needs that collection's complete first
+snapshot; another tab's Web Lock and explicit full manual synchronization may
+still delay it. Aborted pushes retain their idempotency keys.
+
+Remote collections continue to paginate through their backend. Native D1 listing
+uses one batch for count and page, preserving a consistent transaction and
+avoiding a serial roundtrip. It still uses `LIMIT/OFFSET`; deep remote pages and
+custom JSON-field sorts can remain expensive. An optional domain-provider query
+hook can load all rows before filtering, but the built-in provider does not enable
+that hook. Pushing its arbitrary filters/sorts down requires an adapter contract
+with equivalent semantics, rather than silently changing results.
+
+The developer benchmark also provides compound-filter, next-page, unrestricted
+text and former full-scan comparisons. Reload between source changes, prepare
+the fixture after a protocol upgrade, and measure without a concurrent build.
+
+A development-browser sample over 10,000 synthetic records (200-row pages)
+measured the former compound-filter scan at 283.9 ms, the indexed first query at
+163.5 ms, and the cached next page at 22.6 ms. These are illustrative local timings,
+not production latency guarantees. Unrestricted first-time text search still does
+work proportional to the collection; its result is reused for later pages.

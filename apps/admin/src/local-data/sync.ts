@@ -29,6 +29,7 @@ export async function syncOnce(
   store: LocalStore,
   transport: SyncTransport,
   expectedPrincipalId?: string,
+  requestedCollection?: string,
 ) {
   const blocked = await store.authorizationError();
   if (blocked) throw new SyncAuthorizationError(blocked);
@@ -60,6 +61,8 @@ export async function syncOnce(
   }
   await store.refreshManifest(manifest.collections);
   for (const collection of manifest.collections) {
+    if (requestedCollection && collection.name !== requestedCollection)
+      continue;
     if (collection.capability === "remote") continue;
     if (collection.capability === "read-write") {
       const mutations = await store.db.outbox
@@ -142,9 +145,12 @@ export function createSyncCoordinator(
   let subscription: Subscription | undefined;
   const controllers = new Set<AbortController>();
   let generation = 0;
-  const synchronize = async () => {
+  let backgroundController: AbortController | undefined;
+  const foreground = new Map<string, Promise<void>>();
+  const synchronize = async (collection?: string, background = false) => {
     const controller = new AbortController();
     controllers.add(controller);
+    if (background) backgroundController = controller;
     try {
       await syncOnce(
         store,
@@ -158,6 +164,7 @@ export function createSyncCoordinator(
           return response;
         },
         expectedPrincipalId,
+        collection,
       );
       store.setSyncError();
     } catch (error) {
@@ -171,6 +178,7 @@ export function createSyncCoordinator(
       throw error;
     } finally {
       controllers.delete(controller);
+      if (backgroundController === controller) backgroundController = undefined;
     }
   };
   let lastPending = "";
@@ -182,7 +190,7 @@ export function createSyncCoordinator(
     }, delay);
   };
   const run = async () => {
-    if (!started || running) return;
+    if (!started || running || foreground.size) return;
     running = true;
     requested = false;
     try {
@@ -198,8 +206,8 @@ export function createSyncCoordinator(
         `savia-sync:${store.scope}`,
         { mode: "exclusive", ifAvailable: true },
         async (lock) => {
-          if (!lock || !started) return;
-          await synchronize();
+          if (!lock || !started || foreground.size) return;
+          await synchronize(undefined, true);
         },
       );
       attempt = 0;
@@ -248,21 +256,52 @@ export function createSyncCoordinator(
     globalThis.removeEventListener?.("online", requestSync);
     globalThis.removeEventListener?.("focus", requestSync);
   };
-  const syncNow = async () => {
-    if (!globalThis.navigator?.locks)
-      throw new Error("Background synchronization requires Web Locks");
+  const syncNow = (collection?: string): Promise<void> => {
+    const key = collection ?? "$all";
+    const existing = foreground.get(key);
+    if (existing) return existing;
     const expectedGeneration = generation;
-    const resumeAfterRecovery = Boolean((await store.status()).syncError);
-    await navigator.locks.request(
-      `savia-sync:${store.scope}`,
-      { mode: "exclusive" },
-      async () => {
-        if (generation !== expectedGeneration)
-          throw new DOMException("Synchronization stopped", "AbortError");
-        await synchronize();
-      },
-    );
-    if (resumeAfterRecovery && !started) start();
+    const pending = (async () => {
+      if (!globalThis.navigator?.locks)
+        throw new Error("Background synchronization requires Web Locks");
+      const ready = async () => {
+        if (!collection) return false;
+        const definition = await store.db.collections.get(collection);
+        return (
+          definition?.capability === "remote" ||
+          Boolean(
+            definition && (await store.db.syncState.get(collection))?.hydrated,
+          )
+        );
+      };
+      if (await ready()) return;
+      // Foreground provisioning takes priority over a background pass. Aborted
+      // pushes keep their durable mutation IDs and are safe to retry.
+      if (collection) backgroundController?.abort();
+      const resumeAfterRecovery = Boolean((await store.status()).syncError);
+      await navigator.locks.request(
+        `savia-sync:${store.scope}`,
+        { mode: "exclusive" },
+        async () => {
+          if (generation !== expectedGeneration)
+            throw new DOMException("Synchronization stopped", "AbortError");
+          // Another reader/tab may have provisioned it while the lock was held.
+          if (await ready()) return;
+          await synchronize(collection);
+        },
+      );
+      if (resumeAfterRecovery && !started) start();
+    })();
+    foreground.set(key, pending);
+    const cleanup = () => {
+      if (foreground.get(key) === pending) foreground.delete(key);
+      if (started) {
+        if (collection) requestSync();
+        else schedule(60_000);
+      }
+    };
+    void pending.then(cleanup, cleanup);
+    return pending;
   };
   return { start, requestSync, syncNow, stop };
 }

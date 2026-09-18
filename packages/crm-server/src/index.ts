@@ -319,19 +319,20 @@ export function createCrmApp(
       ? sort
       : `json_extract(data,'$.${sort}')`;
     const { where, args } = buildWhere(object, c.get("tenant"), params);
-    const total = await c.env.DB.prepare(
-      `SELECT count(*) AS total FROM crm_records WHERE ${where}`,
-    )
-      .bind(...args)
-      .first<{ total: number }>();
-    const { results } = await c.env.DB.prepare(
-      `SELECT * FROM crm_records WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`,
-    )
-      .bind(...args, perPage, (page - 1) * perPage)
-      .all();
+    // One D1 batch keeps the count and page in the same transaction and avoids
+    // a separate network roundtrip before fetching the visible records.
+    const [countResult, pageResult] = await c.env.DB.batch([
+      c.env.DB.prepare(
+        `SELECT count(*) AS total FROM crm_records WHERE ${where}`,
+      ).bind(...args),
+      c.env.DB.prepare(
+        `SELECT * FROM crm_records WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`,
+      ).bind(...args, perPage, (page - 1) * perPage),
+    ]);
     return c.json({
-      data: results.map(parseRecord),
-      total: total?.total ?? 0,
+      data: pageResult.results.map(parseRecord),
+      total:
+        (countResult.results[0] as { total: number } | undefined)?.total ?? 0,
       page,
       perPage,
     });

@@ -26,6 +26,8 @@ export type Mutation = {
 };
 export type SyncState = {
   collection: string;
+  /** Atomic record/index revision for snapshot-safe in-memory query caches. */
+  dataRevision?: string;
   cursor?: string;
   hydrated: boolean;
   lastSyncedAt?: number;
