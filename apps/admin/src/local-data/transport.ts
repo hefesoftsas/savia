@@ -200,9 +200,36 @@ export function createLocalTransport(
       method === "GET" &&
       ["objects", "views", "collection-relations"].includes(segments[1]);
     const key = `${store.scope}:metadata:${path}`;
-    const cached = cacheable
+    let cached = cacheable
       ? await readWorkspaceMetadata<unknown>(key)
       : undefined;
+    if (
+      cacheable &&
+      cached === undefined &&
+      segments[1] === "objects" &&
+      segments.length === 2
+    ) {
+      try {
+        const [principal, apiBasePath] = JSON.parse(store.scope) as [
+          string,
+          string,
+        ];
+        const navigationKey = `${principal}:navigation:${apiBasePath}`;
+        const navCached = await readWorkspaceMetadata<unknown>(navigationKey);
+        if (navCached !== undefined) cached = navCached;
+      } catch {}
+      if (cached === undefined) {
+        cached = await readWorkspaceMetadata<unknown>(`${store.scope}:objects`);
+      }
+    }
+    if (
+      cacheable &&
+      cached === undefined &&
+      segments[1] === "views" &&
+      segments.length === 3
+    ) {
+      cached = { data: [], default: null };
+    }
     if (cached !== undefined) {
       const lastRevalidated = revalidatedMetadata.get(key) ?? 0;
       if (navigator.onLine !== false && Date.now() - lastRevalidated > 60_000) {

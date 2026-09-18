@@ -88,18 +88,39 @@ export function registerLocalSync(
         Number(r.latest_sequence) || 0,
       ]),
     );
-    const collections = await Promise.all(
-      results
-        .map(parseObject)
-        .filter((o) => !disabled.has(o.name))
-        .map(async (object) => ({
+    const exists = await db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='crm_collection_bindings'",
+      )
+      .first();
+    const boundObjects = new Set<string>();
+    if (exists) {
+      const { results: bindingResults } = await db
+        .prepare(
+          "SELECT object_name FROM crm_collection_bindings WHERE tenant_id=?",
+        )
+        .bind(tenant)
+        .all();
+      for (const b of bindingResults) boundObjects.add(String(b.object_name));
+    }
+    const collections = results
+      .map(parseObject)
+      .filter((o) => !disabled.has(o.name))
+      .map((object) => {
+        const studio = object.config.studio;
+        const isRemote = Boolean(
+          studio?.business ||
+            studio?.collection ||
+            boundObjects.has(object.name),
+        );
+        return {
           name: object.name,
           object,
-          capability: await capability(db, tenant, object),
+          capability: isRemote ? ("remote" as const) : ("read-write" as const),
           schemaVersion: object.version ?? 1,
           latestSequence: sequences.get(object.name) ?? 0,
-        })),
-    );
+        };
+      });
     return c.json({ collections, principalId: c.get("principalId") });
   });
   app.get("/api/local-sync/pull/:collection", async (c) => {
