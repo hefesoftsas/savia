@@ -54,6 +54,7 @@ import {
   isCoveredByVersion,
   setCollectionVersion,
 } from "@/offline/collection-versions";
+import { useOfflinePolicy } from "@/offline/use-offline-policy";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {
   fieldEntries,
@@ -357,6 +358,11 @@ function RecordsLiveSync({ objectName }: { objectName: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const domainId = getCrmRuntime().domainId;
   const tenantId = tenantIdFromDomainId(domainId);
+
+  // Loads the tenant's offline policy (enabled collections + refresh
+  // intervals). Degrades silently outside providers; the static fallback
+  // keeps working.
+  useOfflinePolicy(tenantId);
 
   useEffect(
     () => () => {

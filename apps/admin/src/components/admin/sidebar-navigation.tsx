@@ -10,6 +10,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   CalendarDays,
+  CloudOff,
   Workflow,
   House,
   Link2,
@@ -129,6 +130,13 @@ const navigationDefinitions: Record<
     route: "/users",
     section: "management",
     icon: UsersRound,
+  },
+  "offline-policies": {
+    id: "offline-policies",
+    labelKey: "savia.sidebar.items.offline-policies",
+    route: "/offline-policies",
+    section: "management",
+    icon: CloudOff,
   },
   "page-administrator": {
     id: "page-administrator",

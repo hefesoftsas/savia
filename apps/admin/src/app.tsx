@@ -51,6 +51,10 @@ const AccountPage = lazy(async () => {
   const module = await import("@/features/account/account-page");
   return { default: module.AccountPage };
 });
+const OfflinePoliciesPage = lazy(async () => {
+  const module = await import("@/features/offline-policies");
+  return { default: module.OfflinePoliciesPage };
+});
 
 const adminStore = memoryStore();
 const SaviaRequestPage = lazy(async () => {
@@ -142,8 +146,24 @@ function ServiceCredentialsRoute({ services }: { services: AppServices }) {
   );
 }
 
-function AccountRoute({ apiUrl }: { apiUrl: string }) {
+function OfflinePoliciesRoute({ services }: { services: AppServices }) {
   const translate = useTranslate();
+  return (
+    <Suspense
+      fallback={
+        <RouteLoading
+          label={translate("savia.routes.loadingOffline", {
+            _: "Cargando modo sin conexión…",
+          })}
+        />
+      }
+    >
+      <OfflinePoliciesPage services={services} />
+    </Suspense>
+  );
+}
+
+function AccountRoute({ apiUrl }: { apiUrl: string }) {  const translate = useTranslate();
   return (
     <Suspense
       fallback={
@@ -292,6 +312,10 @@ export function App({ services }: { services?: AppServices } = {}) {
           <Route
             path="/service-credentials"
             element={<ServiceCredentialsRoute services={appServices} />}
+          />
+          <Route
+            path="/offline-policies"
+            element={<OfflinePoliciesRoute services={appServices} />}
           />
           <Route
             path="/assistant-configuration"

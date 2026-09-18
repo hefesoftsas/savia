@@ -135,8 +135,7 @@ describe("React Admin authentication provider", () => {
     ).resolves.toBe(true);
   });
 
-  it("exposes private provider credentials to authenticated users", async () => {
-    const session = {
+  it("exposes private provider credentials to authenticated users", async () => {    const session = {
       checkSession: vi.fn(),
       clearSession: vi.fn(),
       getAccessToken: vi.fn(),
@@ -173,5 +172,51 @@ describe("React Admin authentication provider", () => {
         action: "list",
       }),
     ).resolves.toBe(true);
+  });
+
+  it("gates offline policies to admins and tenant admins", async () => {
+    const baseSession = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn(),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      getAuthorizeUrl: vi.fn(),
+    };
+    const withPermissions = (permissions: unknown) =>
+      createReactAdminAuthProvider({
+        ...baseSession,
+        getPermissions: vi.fn().mockResolvedValue(permissions),
+      });
+    const platformAdmin = withPermissions({
+      canReadDocuments: true,
+      canExecuteCommands: true,
+      canManageIdentity: true,
+      memberships: [],
+    });
+    const tenantAdmin = withPermissions({
+      canReadDocuments: true,
+      canExecuteCommands: true,
+      canManageIdentity: false,
+      memberships: [{ agencyId: 101, role: "tenant_admin" }],
+    });
+    const viewer = withPermissions({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: false,
+      memberships: [{ agencyId: 101, role: "viewer" }],
+    });
+
+    await expect(
+      platformAdmin.canAccess?.({ resource: "offline-policies", action: "edit" }),
+    ).resolves.toBe(true);
+    await expect(
+      tenantAdmin.canAccess?.({ resource: "offline-policies", action: "edit" }),
+    ).resolves.toBe(true);
+    await expect(
+      viewer.canAccess?.({ resource: "offline-policies", action: "edit" }),
+    ).resolves.toBe(false);
   });
 });

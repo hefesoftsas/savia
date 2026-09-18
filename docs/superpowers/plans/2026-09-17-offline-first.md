@@ -94,6 +94,8 @@ Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño
 
 **Decision 2026-09-17 (implemented): delta via monotonic collection versions, not row mirrors.** `crm_collection_versions` (migration 0051) is bumped by the dynamic-crm proxy on every records/views mutation and the version travels in the realtime event; clients keep a Dexie version map and skip covered events. Full row mirrors were rejected: record backends are heterogeneous (local D1, HubSpot-shared, Postgres) and tombstoning all of them is disproportionate while push already scopes every invalidation.
 
+**Decision 2026-09-18 (implemented): per-collection offline policy administrable.** Tabla `offline_collection_policies` (migración 0052) + endpoints `/v1/offline/collections` (lectura: miembro del tenant; escritura: platform admin o tenant_admin) + pantalla admin `/offline-policies` (toggle por colección + intervalo de refresco 30–86400 s). El cliente publica la política en un snapshot que obedece el persister y aplica `staleTime`/`refetchInterval` por colección vía query defaults. Sin snapshot (primer arranque offline), rige el piloto estático.
+
 **Decision 2026-09-18 (implemented): customer lists are opt-in per collection, never global.** `OFFLINE_PII_COLLECTIONS` (`cotizaciones`, `cotizaciones_detalle` pilot); only `pipeline`/`summary` list queries persist, never `record-detail`/files/links. PII additionally expires at restore after 12 h and the whole persisted cache is wiped on logout (`onLogout` → `queryClient.clear()` + `persister.removeClient()`). Rationale: IndexedDB is unencrypted and outlives the session; stale offers are worse than a clear error; credential endpoints never persist.
 
 ## Fase 3 (implemented 2026-09-17): Service worker + app shell

@@ -54,7 +54,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
       operation: ["dashboard", "dynamic-crm"],
       productivity: ["my-day", "integrations"],
       administration: ["provider-credentials", "service-credentials"],
-      management: ["tenants", "users", "page-administrator"],
+      management: ["tenants", "users", "offline-policies", "page-administrator"],
     },
   });
 }

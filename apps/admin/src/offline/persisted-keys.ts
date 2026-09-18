@@ -1,3 +1,4 @@
+import { isCollectionOfflineEnabled } from "./offline-policy";
 /**
  * Allowlist of TanStack Query keys that may be persisted to IndexedDB.
  *
@@ -64,6 +65,6 @@ export function isPiiQueryKey(queryKey: unknown): boolean {
     typeof first === "string" &&
     PII_LIST_PREFIXES.has(first) &&
     typeof second === "string" &&
-    OFFLINE_PII_COLLECTIONS.has(second)
+    isCollectionOfflineEnabled(second)
   );
 }

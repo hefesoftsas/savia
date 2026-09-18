@@ -55,6 +55,8 @@ export function createReactAdminAuthProvider(
       const isPlatformAdmin = permissions.canManageIdentity;
       if (resource === "dynamic-crm")
         return isPlatformAdmin || hasAnyRole(permissions, ["agency_admin"]);
+      if (resource === "offline-policies")
+        return isPlatformAdmin || hasAnyRole(permissions, ["agency_admin"]);
       if (resource === "savia-request") return isPlatformAdmin;
       if (resource === "users" || resource === "tenants") return isPlatformAdmin;
       if (resource === "crm-connections") {
