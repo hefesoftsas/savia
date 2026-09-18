@@ -447,4 +447,105 @@ describe("BetterAuthOAuthSession", () => {
     const redirectUrl = await session.logout();
     expect(redirectUrl).toBe("http://127.0.0.1:8787/api/auth/admin/authorize");
   });
+
+  it("keeps the stale token when a refresh hits a network failure", async () => {
+    const refresh = (token: string, expiresIn: number) =>
+      new Response(
+        JSON.stringify({
+          access_token: token,
+          token_type: "Bearer",
+          expires_in: expiresIn,
+          scope: "openid savia.api.read savia.api.write",
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(refresh("stale-token", 1))
+      .mockRejectedValue(new TypeError("Failed to fetch"));
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "http://127.0.0.1:8787",
+      fetcher,
+    });
+
+    // First call refreshes (no token yet); the token expires almost
+    // immediately so every later call attempts a refresh that fails.
+    await session.checkSession();
+    await session.checkSession();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+
+    expect(await session.getAccessToken()).toBe("stale-token");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("serves last known permissions when identity lookup goes offline", async () => {
+    const identity = new Response(
+      JSON.stringify({
+        data: {
+          id: "principal-1",
+          attributes: {
+            displayName: "Savia Administrator",
+            globalRoles: ["platform_admin"],
+          },
+        },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+    const refresh = (token: string, expiresIn: number) =>
+      new Response(
+        JSON.stringify({
+          access_token: token,
+          token_type: "Bearer",
+          expires_in: expiresIn,
+          scope: "openid savia.api.read savia.api.write",
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(refresh("token-1", 1))
+      .mockResolvedValueOnce(identity)
+      .mockResolvedValueOnce(refresh("token-2", 300))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "http://127.0.0.1:8787",
+      fetcher,
+    });
+
+    const online = await session.getPermissions();
+    expect(online.canManageIdentity).toBe(true);
+
+    // The second lookup rotates the token (expiring first one) and then the
+    // identity request fails: cached permissions keep resources visible.
+    const offline = await session.getPermissions();
+    expect(offline).toEqual(online);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it("degrades without cached permissions on a first offline lookup", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "better-auth-access-token",
+            token_type: "Bearer",
+            expires_in: 300,
+            scope: "openid savia.api.read savia.api.write",
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "http://127.0.0.1:8787",
+      fetcher,
+    });
+
+    await expect(session.getPermissions()).resolves.toMatchObject({
+      canReadDocuments: true,
+      canManageIdentity: false,
+      memberships: [],
+    });
+  });
 });

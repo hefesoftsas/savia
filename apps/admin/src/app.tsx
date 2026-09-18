@@ -8,6 +8,7 @@ import {
 } from "react";
 import { Building2, LoaderCircle } from "lucide-react";
 import { CustomRoutes, memoryStore, Resource } from "ra-core";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
 import { tenants } from "@/features/tenants";
@@ -15,6 +16,13 @@ import { users } from "@/features/users";
 import { PasswordResetPage } from "@/features/users/password-reset-page";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { Admin } from "@/components/admin";
+import { OfflineBanner } from "@/offline/offline-banner";
+import { createOfflinePersister } from "@/offline/query-persister";
+import { shouldPersistQueryKey } from "@/offline/persisted-keys";
+import {
+  OFFLINE_CACHE_MAX_AGE_MS,
+  createOfflineQueryClient,
+} from "@/offline/query-client";
 import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
@@ -118,6 +126,11 @@ export function App({ services }: { services?: AppServices } = {}) {
     () => services ?? getDefaultAppServices(),
     [services],
   );
+  // Offline-first QueryClient (persisted reads) shared by React Admin and
+  // every useQuery in the app. Mutations keep failing fast online-style;
+  // only reads are served from the persisted cache.
+  const [queryClient] = useState(() => createOfflineQueryClient());
+  const [persister] = useState(() => createOfflinePersister());
   const [handlingCallback, setHandlingCallback] = useState(
     () => window.location.pathname === "/auth/callback",
   );
@@ -141,14 +154,27 @@ export function App({ services }: { services?: AppServices } = {}) {
   }
 
   return (
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: OFFLINE_CACHE_MAX_AGE_MS,
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) =>
+            shouldPersistQueryKey(query.queryKey),
+        },
+      }}
+    >
     <AppServicesProvider services={appServices}>
       <TenantTitleSync title={pageTitle} />
+      <OfflineBanner />
       <Admin
         authProvider={appServices.authProvider}
         dataProvider={appServices.dataProvider}
         disableTelemetry
         error={TenantHostMismatchError}
         requireAuth
+        queryClient={queryClient}
         store={adminStore}
         title={pageTitle}
       >
@@ -206,6 +232,7 @@ export function App({ services }: { services?: AppServices } = {}) {
         </CustomRoutes>
       </Admin>
     </AppServicesProvider>
+    </PersistQueryClientProvider>
   );
 }
 

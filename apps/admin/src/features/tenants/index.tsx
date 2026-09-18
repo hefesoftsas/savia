@@ -120,7 +120,7 @@ function TenantCreate() {
 }
 function TenantEdit() {
   return (
-    <Edit title="Editar tenant" mutationMode="pessimistic">
+    <Edit title="Editar tenant" mutationMode="optimistic">
       <SimpleForm className="max-w-2xl">
         <TenantFields />
       </SimpleForm>

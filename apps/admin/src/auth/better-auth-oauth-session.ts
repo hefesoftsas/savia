@@ -1,4 +1,5 @@
 import type { UserIdentity } from "ra-core";
+import { isOfflineError } from "../offline/offline-error";
 import type { AuthPermissions, AuthSession } from "./auth-session";
 
 export type BrowserNavigation = {
@@ -113,6 +114,13 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   private identityPromise: Promise<SaviaIdentity> | null = null;
 
+  /**
+   * Last fully-resolved permissions, memory-only (never persisted: tokens
+   * and credentials stay out of browser storage). Returned when the network
+   * drops so cached reads and navigation keep working offline.
+   */
+  private lastKnownPermissions: AuthPermissions | undefined;
+
   private readonly fetcher: typeof fetch;
 
   private readonly navigation: BrowserNavigation;
@@ -154,6 +162,7 @@ export class BetterAuthOAuthSession implements AuthSession {
     this.scopes.clear();
     this.callbackPromise = null;
     this.identityPromise = null;
+    this.lastKnownPermissions = undefined;
     this.refreshAllowed = false;
   }
 
@@ -194,13 +203,26 @@ export class BetterAuthOAuthSession implements AuthSession {
   }
 
   async getPermissions(): Promise<AuthPermissions> {
-    const signedIn = Boolean(await this.getAccessToken());
+    let signedIn = false;
+    try {
+      signedIn = Boolean(await this.getAccessToken());
+    } catch (exception) {
+      // A dropped network must not hide every resource: fall back to the
+      // last known permissions so cached reads stay visible offline.
+      if (isOfflineError(exception) && this.lastKnownPermissions) {
+        return this.lastKnownPermissions;
+      }
+      throw exception;
+    }
     const canWrite = signedIn && this.scopes.has("savia.api.write");
     let identity: SaviaIdentity | undefined;
     if (signedIn && this.accessToken) {
       try {
         identity = await this.saviaIdentity(this.accessToken);
-      } catch {
+      } catch (exception) {
+        if (isOfflineError(exception) && this.lastKnownPermissions) {
+          return this.lastKnownPermissions;
+        }
         identity = undefined;
       }
     }
@@ -210,12 +232,14 @@ export class BetterAuthOAuthSession implements AuthSession {
         ? identity.attributes.globalRoles.includes("platform_admin")
         : false;
     }
-    return {
+    const permissions = {
       canReadDocuments: signedIn && this.scopes.has("savia.api.read"),
       canExecuteCommands: canWrite,
       canManageIdentity,
       memberships: identity ? activeMemberships(identity) : [],
     };
+    if (identity) this.lastKnownPermissions = permissions;
+    return permissions;
   }
 
   async checkSession(): Promise<void> {
@@ -250,14 +274,24 @@ export class BetterAuthOAuthSession implements AuthSession {
   private async refreshAccessToken(): Promise<void> {
     if (!this.refreshPromise) {
       this.refreshPromise = (async () => {
-        const response = await this.fetcher(
-          requestUrl(this.settings.apiUrl, "/api/auth/admin/refresh"),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: { Accept: "application/json" },
-          },
-        );
+        let response: Response;
+        try {
+          response = await this.fetcher(
+            requestUrl(this.settings.apiUrl, "/api/auth/admin/refresh"),
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { Accept: "application/json" },
+            },
+          );
+        } catch (exception) {
+          // The network dropped mid-refresh: keep the stale token instead
+          // of wiping the session. Reads keep serving the persisted cache
+          // and checkSession still resolves, so the app never "logs out"
+          // just because the network did.
+          if (isOfflineError(exception)) return;
+          throw exception;
+        }
         if (!response.ok) {
           this.accessToken = null;
           this.accessTokenExpiresAt = 0;
