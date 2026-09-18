@@ -121,8 +121,10 @@ export function useRealtimeTopics({
       socket.onopen = () => {
         backoffMs = 1000;
         pingTimer = setInterval(() => {
+          // Plain "ping" is auto-answered by the hub without waking it, so
+          // idle connections cost nothing.
           if (socket?.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: "ping" }));
+            socket.send("ping");
           }
         }, PING_INTERVAL_MS);
       };

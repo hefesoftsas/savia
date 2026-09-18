@@ -12,32 +12,31 @@ type TicketGrant = {
   expiresAt: number;
 };
 
-type SocketMeta = {
-  principalId: string;
-  topics: Set<string>;
-};
-
-type ClientMessage =
-  | { type: "ping" }
-  | { type: "subscribe"; topics: string[] }
-  | { type: "unsubscribe"; topics: string[] };
+const ticketKey = (ticket: string) => `ticket:${ticket}`;
+const topicTag = (topic: string) => `topic:${topic}`;
 
 /**
  * Push hub, one instance per room (`platform` or `tenant:<id>`).
  *
+ * Built for ~zero cost with the WebSocket Hibernation API:
+ * - sockets carry their subscribed topics as tags, so broadcast needs no
+ *   in-memory map and survives eviction;
+ * - ping/pong is auto-answered without waking the object;
+ * - single-use tickets live in SQLite storage (bytes, never billed
+ *   meaningfully) instead of memory, so they survive eviction too.
+ * The object only runs for ticket issuance, publishes and connects.
+ *
  * Room isolation is the tenant boundary: a socket only ever receives events
  * published to the room it authenticated for. The hub keeps no record data,
- * only sockets and short-lived single-use tickets.
- *
- * NOTE: sockets live in memory (no hibernation API). Evictions drop
- * connections and clients reconnect with backoff — safe because every event
- * is a hint and clients refetch authoritative state.
+ * only tickets.
  */
 export class RealtimeHub extends DurableObject {
-  private readonly sockets = new Map<WebSocket, SocketMeta>();
-  private readonly tickets = new Map<string, TicketGrant>();
-
   async fetch(request: Request): Promise<Response> {
+    // Idempotent per request: ping/pong is answered without waking the
+    // object afterwards, so hibernated sockets cost nothing while idle.
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair("ping", "pong"),
+    );
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname.endsWith("/issue")) {
       return this.issueTicket(await request.json().catch(() => undefined));
@@ -74,10 +73,10 @@ export class RealtimeHub extends DurableObject {
         { status: 400 },
       );
     }
-    this.pruneTickets();
+    await this.pruneTickets();
     const ticket = crypto.randomUUID();
     const expiresAt = Date.now() + TICKET_TTL_MS;
-    this.tickets.set(ticket, {
+    await this.ctx.storage.put<TicketGrant>(ticketKey(ticket), {
       principalId: grant.principalId,
       topics: [...new Set(grant.topics)],
       expiresAt,
@@ -108,76 +107,49 @@ export class RealtimeHub extends DurableObject {
   }
 
   private async openSession(ticket: string | null): Promise<Response> {
-    if (ticket) this.pruneTickets();
-    const grant = ticket ? this.tickets.get(ticket) : undefined;
-    if (!grant || grant.expiresAt <= Date.now()) {
-      if (ticket) this.tickets.delete(ticket);
+    if (ticket) await this.pruneTickets();
+    const grant = ticket
+      ? await this.ctx.storage.get<TicketGrant>(ticketKey(ticket))
+      : undefined;
+    if (!ticket || !grant || grant.expiresAt <= Date.now()) {
+      if (ticket) await this.ctx.storage.delete(ticketKey(ticket));
       return new Response("Invalid or expired ticket", { status: 401 });
     }
-    this.tickets.delete(ticket!);
+    await this.ctx.storage.delete(ticketKey(ticket));
     return this.upgrade(grant);
   }
 
   private async upgrade(grant: TicketGrant): Promise<Response> {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    this.ctx.acceptWebSocket(server);
-    this.sockets.set(server, {
-      principalId: grant.principalId,
-      topics: new Set(grant.topics),
-    });
-    server.send(
-      JSON.stringify({
-        v: 1,
-        topic: grant.topics[0],
-        type: "connected",
-        at: new Date().toISOString(),
-      }),
+    this.ctx.acceptWebSocket(
+      server,
+      grant.topics.map(topicTag),
     );
+    const greeting = JSON.stringify({
+      v: 1,
+      topic: grant.topics[0],
+      type: "connected",
+      at: new Date().toISOString(),
+    });
+    server.send(greeting);
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    const meta = this.sockets.get(ws);
-    if (!meta) {
-      ws.close(4401, "unknown socket");
-      return;
-    }
-    let parsed: ClientMessage | undefined;
-    try {
-      parsed =
-        typeof message === "string"
-          ? (JSON.parse(message) as ClientMessage)
-          : undefined;
-    } catch {
-      return;
-    }
-    if (!parsed || typeof parsed !== "object") return;
-    if (parsed.type === "ping") {
-      ws.send(JSON.stringify({ v: 1, type: "pong" }));
-      return;
-    }
-    if (
-      (parsed.type === "subscribe" || parsed.type === "unsubscribe") &&
-      Array.isArray(parsed.topics)
-    ) {
-      for (const topic of parsed.topics) {
-        if (!isRealtimeTopic(topic)) continue;
-        if (parsed.type === "subscribe") meta.topics.add(topic);
-        else meta.topics.delete(topic);
-      }
-      ws.send(
-        JSON.stringify({
-          v: 1,
-          type: "subscriptions",
-          topics: [...meta.topics],
-        }),
-      );
-    }
+    // Pings are auto-answered; every other client message is ignored so a
+    // misbehaving client can neither subscribe beyond its grant nor wake the
+    // object into doing work. Unknown sockets are dropped.
+    void ws;
+    void message;
   }
 
   async webSocketClose(ws: WebSocket) {
-    this.sockets.delete(ws);
+    try {
+      ws.close();
+    } catch {
+      // ignore close races
+    }
   }
 
   async webSocketError(ws: WebSocket) {
@@ -186,13 +158,11 @@ export class RealtimeHub extends DurableObject {
     } catch {
       // ignore close races
     }
-    this.sockets.delete(ws);
   }
 
   private broadcast(event: { topic: string } & Record<string, unknown>): void {
     const payload = JSON.stringify(event);
-    for (const [ws, meta] of this.sockets) {
-      if (!meta.topics.has(event.topic)) continue;
+    for (const ws of this.ctx.getWebSockets(topicTag(event.topic))) {
       try {
         ws.send(payload);
       } catch {
@@ -201,15 +171,17 @@ export class RealtimeHub extends DurableObject {
         } catch {
           // ignore close races
         }
-        this.sockets.delete(ws);
       }
     }
   }
 
-  private pruneTickets(): void {
-    const now = Date.now();
-    for (const [ticket, grant] of this.tickets) {
-      if (grant.expiresAt <= now) this.tickets.delete(ticket);
+  private async pruneTickets(): Promise<void> {
+    const expired: string[] = [];
+    for (const [key, grant] of await this.ctx.storage.list<TicketGrant>({
+      prefix: "ticket:",
+    })) {
+      if (grant.expiresAt <= Date.now()) expired.push(key);
     }
+    if (expired.length) await this.ctx.storage.delete(expired);
   }
 }

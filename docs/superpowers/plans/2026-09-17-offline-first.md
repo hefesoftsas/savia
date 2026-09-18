@@ -88,7 +88,9 @@ Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño
 - [ ] **Step 4: verificar.**
   Criterio: crear preferencia offline → aparece "pendiente (1)" → online → se sincroniza sin duplicados; un 409 se reporta y no se reintenta solo.
 
-**Decision 2026-09-17 (implemented): push realtime via per-tenant Durable Object, not polling.** `RealtimeHub` DO with one instance per room (`platform`, `tenant:<id>`); single-use ticket auth (`POST /v1/realtime/ticket`); hint-only events (`topic` + `type` + id, no payload/PII); clients refetch. Publish points: identity/tenant mutations + dynamic-crm proxy (`records`/`views`). Deletes stay pessimistic; realtime only invalidates. No hibernation API (reconnect with backoff covers evictions).
+**Decision 2026-09-17 (implemented): push realtime via per-tenant Durable Object, not polling.** `RealtimeHub` DO with one instance per room (`platform`, `tenant:<id>`); single-use ticket auth (`POST /v1/realtime/ticket`); hint-only events (`topic` + `type` + id, no payload/PII); clients refetch. Publish points: identity/tenant mutations + dynamic-crm proxy (`records`/`views`). Deletes stay pessimistic; realtime only invalidates. Hibernation API on (topics as socket tags, tickets in SQLite storage, ping auto-answered) so idle connections bill ~nothing. No `subscribe`/`unsubscribe` dynamism: the grant at connect time is the subscription, which is all our screens use.
+
+**Decision 2026-09-17 (implemented): surgical realtime updates by id, no blind refetch-all.** `applyRealtimeListEvent` removes `deleted` rows from cached `{data,total}` lists without network (numeric/string ids match); creates/updates invalidate exactly one query prefix. Record tables keep debounced invalidates (complex grouped shapes) with an aggregated toast.
 
 ## Fase 3 (opcional, solo si se pide modo avión): Service worker + app shell (~1 semana)
 

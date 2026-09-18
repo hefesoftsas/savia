@@ -46,6 +46,7 @@ import {
 import { Confirm } from "@/components/admin/confirm";
 import { isOfflineError } from "@/offline/offline-error";
 import { LiveIndicator } from "@/realtime/live-indicator";
+import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 import type {
@@ -278,8 +279,8 @@ function UserListActions() {
   const queryClient = useQueryClient();
   const { status } = useRealtimeTopics({
     topics: ["users"],
-    onEvent: () => {
-      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    onEvent: (event) => {
+      applyRealtimeListEvent(queryClient, "users", event);
     },
   });
   return (

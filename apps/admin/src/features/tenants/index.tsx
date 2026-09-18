@@ -15,6 +15,7 @@ import {
 } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { LiveIndicator } from "@/realtime/live-indicator";
+import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 
@@ -67,8 +68,8 @@ function TenantListActions() {
   const queryClient = useQueryClient();
   const { status } = useRealtimeTopics({
     topics: ["tenants"],
-    onEvent: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+    onEvent: (event) => {
+      applyRealtimeListEvent(queryClient, "tenants", event);
     },
   });
   return (
