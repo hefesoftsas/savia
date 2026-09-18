@@ -1,6 +1,7 @@
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -58,6 +59,49 @@ export default defineConfig({
     tailwindcss(),
     reactSandboxPlugin(),
     precompressionPlugin(),
+    // App shell precache for airplane-mode boot. Data stays in the Dexie
+    // query cache on purpose: no runtime caching of /v1/* here, so no API
+    // payload (or credential-adjacent response) ever lands in Cache Storage.
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "auto",
+      manifest: false,
+      workbox: {
+        navigateFallback: "index.html",
+        navigateFallbackDenylist: [/^\/api/, /^\/v1/],
+        cleanupOutdatedCaches: true,
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // Precache only the boot shell: dist ships ~9k chunks (43 MB),
+        // precaching all of it would tax first visits. Remaining
+        // same-origin assets cache on first use below.
+        globPatterns: [
+          "index.html",
+          "assets/index-*.js",
+          "assets/*.css",
+          "*.{ico,png,svg,webp,webmanifest}",
+        ],
+        runtimeCaching: [
+          {
+            // Same-origin app assets only. /v1/* and /api/* are excluded
+            // on purpose: API payloads live in the Dexie query cache under
+            // the persisted-keys allowlist, never in Cache Storage.
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin &&
+              !url.pathname.startsWith("/v1") &&
+              !url.pathname.startsWith("/api") &&
+              (url.pathname.startsWith("/assets/") ||
+                /\.(js|css|woff2?|ttf|eot)$/.test(url.pathname)),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "savia-shell",
+              expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      devOptions: { enabled: false },
+    }),
   ],
   resolve: {
     dedupe: [

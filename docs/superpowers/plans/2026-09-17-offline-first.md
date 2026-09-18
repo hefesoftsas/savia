@@ -94,7 +94,9 @@ Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño
 
 **Decision 2026-09-17 (implemented): delta via monotonic collection versions, not row mirrors.** `crm_collection_versions` (migration 0051) is bumped by the dynamic-crm proxy on every records/views mutation and the version travels in the realtime event; clients keep a Dexie version map and skip covered events. Full row mirrors were rejected: record backends are heterogeneous (local D1, HubSpot-shared, Postgres) and tombstoning all of them is disproportionate while push already scopes every invalidation.
 
-## Fase 3 (opcional, solo si se pide modo avión): Service worker + app shell (~1 semana)
+## Fase 3 (implemented 2026-09-17): Service worker + app shell
+
+`vite-plugin-pwa` (generateSW, autoUpdate) precaches only the boot shell (index.html, entry JS/CSS, icons ≈ 2.8 MB): dist ships ~9k chunks (43 MB) and precaching all of it would tax first visits, so remaining same-origin assets cache on first use (CacheFirst `savia-shell`). `/v1/*` and `/api/*` are excluded from Cache Storage on purpose — API payloads live only in the Dexie query cache under the persisted-keys allowlist. Served by the existing gateway worker (static assets + SPA fallback), no config change needed.
 
 - [ ] Workbox precache del shell admin (JS/CSS) con `NetworkFirst` para `/v1/*`; estrategia de versión y purga de cachés viejas; e2e: primera visita online, luego offline total y la app arranca. Nota: suma superficie de bugs (cachés rancias, auth) — no hacerlo "de paso" en otra fase.
 
