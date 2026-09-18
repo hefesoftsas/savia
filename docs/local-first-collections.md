@@ -90,3 +90,44 @@ reopening, dirty-row protection, conflicts, revoked access, derived queries and
 confirmed that a pending local edit survived page reload; a sorted page query took
 84.5 ms on that development machine. Production latency, quota and external adapter behavior
 must be measured separately; unit test timings are not device benchmarks.
+
+## Table responsiveness and lazy loading
+
+Record lists keep bounded pages (25 by default, at most 200). Empty search and
+empty filter constraints use indexed count/page reads instead of scanning each
+record. Text/complex predicates still stream the collection to compute exact
+counts; these are not constant-time queries. Search keystrokes are coalesced for
+180 ms while the input remains immediately editable.
+
+Pages above 20 records virtualize rows with TanStack Virtual, a bounded viewport,
+measured row heights, and six overscan rows. Small pages keep native rows. Column
+widths stay fixed during vertical scrolling. Focus is pinned by record identity,
+and row actions, selection, sorting and page controls retain their existing
+semantics. This is row virtualization; columns are not virtualized.
+
+Lists preserve their latest successful page during query transitions and transient
+errors, label stale results and disable their actions until the requested results
+arrive. An explicit permission rejection or query reset/removal clears retained
+rows. Background replication does not replace a populated table with a skeleton.
+Committed IndexedDB key ranges drive refreshes for changed collections, including
+same-count edits and other database connections. Unchanged sync heartbeats and
+outbox-only status changes do not refresh record queries.
+
+Studio administration, screen/menu editors and form configuration panels load on
+first use. The production service worker precaches list/detail/create-edit static
+dependency closures; optional studio panels and icon catalogs remain on demand.
+An optional editor needs one online visit before it is available offline.
+
+To reproduce browser measurements, run the admin development server and open
+`/tools/local-performance.html`. The fixture uses an isolated IndexedDB database
+with 10,000 synthetic records, queries pages of 200, and compares the shared full
+and virtual tables. It reports query time, aggregate React render time and time
+through two animation frames separately. Reload after changing source files;
+HMR and concurrent builds invalidate timing comparisons. Development results are
+diagnostics, not production INP or a low-end-device benchmark.
+
+A development-browser sample with 200 rows mounted 200 native rows versus 14
+virtual rows. Aggregate React render time was 79.7 ms versus 15.1 ms; these
+measurements are illustrative and vary by machine. Deferred panels reduce the
+initial JavaScript path, while precaching operational screens increases the
+offline cache footprint; lazy loading does not imply a smaller total download.

@@ -1,7 +1,5 @@
 import { reconcileLocalQueries } from "./local-query-sync";
 import { RecordOriginLinks } from "./record-origin-links";
-import ScreenAdministration from "./screen-administration";
-import ScreenMenuReorder from "./screen-menu-reorder";
 import {
   collectionCapabilities,
   supportsLocalRecordTools,
@@ -102,7 +100,12 @@ import {
 import { exampleOpenApi } from "@savia/crm-shared/seed";
 import { inspectDocument } from "@savia/crm-shared/openapi";
 import "./style.css";
-import ScreenManager, { sortScreens, withScreen } from "./screen-manager";
+import { sortScreens, withScreen } from "./screen-metadata";
+import {
+  ScreenManager,
+  ScreenAdministration,
+  ScreenMenuReorder,
+} from "./lazy-studio-panels";
 import {
   extensionApiFor,
   extensionScreenFor,
@@ -662,20 +665,22 @@ function App({
             </Suspense>
           </>
         ) : (
-          <ScreenAdministration
-            objects={[]}
-            selected={selected}
-            detail={false}
-            domainTools={Boolean(
-              getCrmRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
-            )}
-            onNavigate={navigate}
-            onVisibilityChange={updateScreenVisibility}
-            menuLayout={resolvedMenuLayout}
-            onMenuLayoutChange={saveMenuLayout}
-            onDeletePermanent={deleteScreenPermanently}
-            onSolutionsChanged={refresh}
-          />
+          <Suspense fallback={<Loading />}>
+            <ScreenAdministration
+              objects={[]}
+              selected={selected}
+              detail={false}
+              domainTools={Boolean(
+                getCrmRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
+              )}
+              onNavigate={navigate}
+              onVisibilityChange={updateScreenVisibility}
+              menuLayout={resolvedMenuLayout}
+              onMenuLayoutChange={saveMenuLayout}
+              onDeletePermanent={deleteScreenPermanently}
+              onSolutionsChanged={refresh}
+            />
+          </Suspense>
         )}
         {newObject && (
           <NewObject
@@ -920,21 +925,23 @@ function App({
         ) : null}
         <div className="page-content">
           {view.startsWith("admin") || view === "new-object" ? (
-            <ScreenAdministration
-              key={`${view}:${selected}`}
-              objects={objects}
-              selected={selected}
-              detail={view === "admin-screen"}
-              domainTools={Boolean(
-                getCrmRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
-              )}
-              onNavigate={navigate}
-              onVisibilityChange={updateScreenVisibility}
-              menuLayout={resolvedMenuLayout}
-              onMenuLayoutChange={saveMenuLayout}
-              onDeletePermanent={deleteScreenPermanently}
-              onSolutionsChanged={refresh}
-            />
+            <Suspense fallback={<Loading />}>
+              <ScreenAdministration
+                key={`${view}:${selected}`}
+                objects={objects}
+                selected={selected}
+                detail={view === "admin-screen"}
+                domainTools={Boolean(
+                  getCrmRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
+                )}
+                onNavigate={navigate}
+                onVisibilityChange={updateScreenVisibility}
+                menuLayout={resolvedMenuLayout}
+                onMenuLayoutChange={saveMenuLayout}
+                onDeletePermanent={deleteScreenPermanently}
+                onSolutionsChanged={refresh}
+              />
+            </Suspense>
           ) : ExtensionScreen ? (
             <ExtensionScreen savia={extensionApi!} />
           ) : view === "create" || view === "edit" ? (
@@ -1011,12 +1018,14 @@ function App({
                     value="menu"
                     className="m-0 focus-visible:outline-none"
                   >
-                    <ScreenMenuReorder
-                      className="screen-manager-menu-reorder"
-                      objects={objects}
-                      menuLayout={resolvedMenuLayout}
-                      onMenuLayoutChange={saveMenuLayout}
-                    />
+                    <Suspense fallback={<Loading />}>
+                      <ScreenMenuReorder
+                        className="screen-manager-menu-reorder"
+                        objects={objects}
+                        menuLayout={resolvedMenuLayout}
+                        onMenuLayoutChange={saveMenuLayout}
+                      />
+                    </Suspense>
                   </TabsContent>
 
                   <TabsContent
@@ -1024,108 +1033,114 @@ function App({
                     className="m-0 focus-visible:outline-none"
                   >
                     <div className="savia-surface-card screen-manager-shell">
-                      <ScreenManager
-                        variant="table"
-                        objects={objects}
-                        onCancel={() => navigate(object.name, "screens")}
-                        onSaved={async (updated) => {
-                          activeQueryClient.setQueryData(
-                            getListObjectsQueryKey(),
-                            (previous: any) =>
-                              previous
-                                ? {
-                                    ...previous,
-                                    data: previous.data.map((o: CrmObject) =>
-                                      o.name === updated.name
-                                        ? { ...o, ...updated }
-                                        : o,
-                                    ),
-                                  }
-                                : previous,
-                          );
-                          await refresh();
-                          if (
-                            updated.config.studio?.screen?.hidden &&
-                            selected === updated.name
-                          ) {
-                            const next = objects.find(
-                              (o) =>
-                                o.name !== updated.name &&
-                                !o.config.studio?.screen?.hidden,
+                      <Suspense fallback={<Loading />}>
+                        <ScreenManager
+                          variant="table"
+                          objects={objects}
+                          onCancel={() => navigate(object.name, "screens")}
+                          onSaved={async (updated) => {
+                            activeQueryClient.setQueryData(
+                              getListObjectsQueryKey(),
+                              (previous: any) =>
+                                previous
+                                  ? {
+                                      ...previous,
+                                      data: previous.data.map((o: CrmObject) =>
+                                        o.name === updated.name
+                                          ? { ...o, ...updated }
+                                          : o,
+                                      ),
+                                    }
+                                  : previous,
                             );
-                            navigate(
-                              next?.name ?? updated.name,
-                              next ? "records" : "designer",
-                            );
-                          }
-                        }}
-                      />
+                            await refresh();
+                            if (
+                              updated.config.studio?.screen?.hidden &&
+                              selected === updated.name
+                            ) {
+                              const next = objects.find(
+                                (o) =>
+                                  o.name !== updated.name &&
+                                  !o.config.studio?.screen?.hidden,
+                              );
+                              navigate(
+                                next?.name ?? updated.name,
+                                next ? "records" : "designer",
+                              );
+                            }
+                          }}
+                        />
+                      </Suspense>
                     </div>
                   </TabsContent>
                 </Tabs>
               ) : (
                 <div className="savia-surface-card screen-manager-shell">
-                  <ScreenManager
-                    variant={view === "screen-settings" ? "detail" : "table"}
-                    objects={
-                      removeScreen
-                        ? [
-                            objects.find(
-                              (item) => item.name === removeScreen.name,
-                            ) ?? removeScreen,
-                          ]
-                        : view === "screen-settings"
-                          ? [object]
-                          : objects
-                    }
-                    initialRemoval={removeScreen?.name}
-                    onCancel={() =>
-                      navigate(
-                        object.name,
-                        view === "screen-settings" ? "admin-screen" : "screens",
-                        view === "screen-settings"
-                          ? undefined
-                          : { tab: "screens" },
-                      )
-                    }
-                    onSaved={async (updated) => {
-                      activeQueryClient.setQueryData(
-                        getListObjectsQueryKey(),
-                        (previous: any) =>
-                          previous
-                            ? {
-                                ...previous,
-                                data: previous.data.map((o: CrmObject) =>
-                                  o.name === updated.name
-                                    ? { ...o, ...updated }
-                                    : o,
-                                ),
-                              }
-                            : previous,
-                      );
-                      await refresh();
-                      if (
-                        updated.config.studio?.screen?.hidden &&
-                        selected === updated.name
-                      ) {
-                        const next = objects.find(
-                          (o) =>
-                            o.name !== updated.name &&
-                            !o.config.studio?.screen?.hidden,
-                        );
-                        navigate(
-                          next?.name ?? updated.name,
-                          view === "screen-settings"
-                            ? "admin"
-                            : next
-                              ? "records"
-                              : "designer",
-                        );
-                      } else if (view === "remove-screen") {
-                        navigate(object.name, "screens", { tab: "screens" });
+                  <Suspense fallback={<Loading />}>
+                    <ScreenManager
+                      variant={view === "screen-settings" ? "detail" : "table"}
+                      objects={
+                        removeScreen
+                          ? [
+                              objects.find(
+                                (item) => item.name === removeScreen.name,
+                              ) ?? removeScreen,
+                            ]
+                          : view === "screen-settings"
+                            ? [object]
+                            : objects
                       }
-                    }}
-                  />
+                      initialRemoval={removeScreen?.name}
+                      onCancel={() =>
+                        navigate(
+                          object.name,
+                          view === "screen-settings"
+                            ? "admin-screen"
+                            : "screens",
+                          view === "screen-settings"
+                            ? undefined
+                            : { tab: "screens" },
+                        )
+                      }
+                      onSaved={async (updated) => {
+                        activeQueryClient.setQueryData(
+                          getListObjectsQueryKey(),
+                          (previous: any) =>
+                            previous
+                              ? {
+                                  ...previous,
+                                  data: previous.data.map((o: CrmObject) =>
+                                    o.name === updated.name
+                                      ? { ...o, ...updated }
+                                      : o,
+                                  ),
+                                }
+                              : previous,
+                        );
+                        await refresh();
+                        if (
+                          updated.config.studio?.screen?.hidden &&
+                          selected === updated.name
+                        ) {
+                          const next = objects.find(
+                            (o) =>
+                              o.name !== updated.name &&
+                              !o.config.studio?.screen?.hidden,
+                          );
+                          navigate(
+                            next?.name ?? updated.name,
+                            view === "screen-settings"
+                              ? "admin"
+                              : next
+                                ? "records"
+                                : "designer",
+                          );
+                        } else if (view === "remove-screen") {
+                          navigate(object.name, "screens", { tab: "screens" });
+                        }
+                      }}
+                    />
+                  </Suspense>
                 </div>
               )}
             </div>
@@ -1601,31 +1616,25 @@ export default function Root({
     if (!workspace) return;
     let previous = new Set<string>();
     let active = true;
-    let generation = 0;
-    const unsubscribe = workspace.store.subscribe(() => {
-      const currentGeneration = ++generation;
-      void Promise.all([
-        workspace.store.db.collections.toArray(),
-        workspace.store.authorizationError(),
-      ])
-        .then(async ([collections, blocked]) => {
-          if (!active || currentGeneration !== generation) return;
-          setAuthorizationError(blocked);
-          const names = new Set(
-            collections
-              .filter((c) => c.capability !== "remote")
-              .map((c) => c.name),
-          );
-          const before = previous;
-          previous = names;
-          if (blocked) {
-            await queryClient.cancelQueries();
-            queryClient.clear();
-            return;
-          }
-          await reconcileLocalQueries(queryClient, before, names);
-        })
-        .catch(() => undefined);
+    const unsubscribe = workspace.store.subscribeQueryChanges((change) => {
+      if (!active) return;
+      setAuthorizationError(change.authorizationError);
+      const before = previous;
+      previous = change.current;
+      if (change.authorizationError) {
+        void queryClient.cancelQueries();
+        queryClient.clear();
+        return;
+      }
+      void reconcileLocalQueries(
+        queryClient,
+        before,
+        change.current,
+        change.changed,
+      ).catch(() => undefined);
+      if (change.metadataChanged) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/objects"] });
+      }
     });
     return () => {
       active = false;

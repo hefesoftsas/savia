@@ -57,3 +57,23 @@ it("refreshes locally resolved relation pickers after replication", async () => 
   );
   expect(client.getQueryState(key)?.isInvalidated).toBe(true);
 });
+
+it("refreshes only changed collections and their relation labels", async () => {
+  const client = new QueryClient();
+  const changedKeys = [
+    ["people", "getList"],
+    ["relation-labels", "people", ["a"]],
+    ["relation-options", "/api", "domain", "people"],
+  ];
+  const untouched = ["policies", "getList"];
+  for (const key of [...changedKeys, untouched]) client.setQueryData(key, {});
+  await reconcileLocalQueries(
+    client,
+    new Set(["people", "policies"]),
+    new Set(["people", "policies"]),
+    new Set(["people"]),
+  );
+  for (const key of changedKeys)
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(untouched)?.isInvalidated).toBe(false);
+});

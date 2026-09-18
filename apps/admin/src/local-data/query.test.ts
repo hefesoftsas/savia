@@ -277,3 +277,41 @@ test("record detail finds scalar and array incoming links, outgoing links and ex
   expect(incomplete.relationsComplete).toBe(false);
   expect(incomplete.data.relations).toEqual([]);
 });
+
+test.each<Record<string, string>>([
+  { q: "" },
+  { filters: JSON.stringify({ conditions: [] }) },
+  {
+    q: "",
+    filters: JSON.stringify({ logic: "or", conditions: [] }),
+    stage: "",
+    emptyStage: "false",
+  },
+])(
+  "reads only the requested page for inactive query constraints: %j",
+  async (constraints) => {
+    const db = await setup(
+      Array.from({ length: 100 }, (_, amount) => ({ amount })),
+    );
+    let documentsRead = 0;
+    db.records.hook("reading", (row) => {
+      documentsRead++;
+      return row;
+    });
+    const result = await queryRecords(
+      db,
+      "deals",
+      object,
+      new URLSearchParams({
+        ...constraints,
+        sort: "amount",
+        order: "ASC",
+        page: "2",
+        perPage: "3",
+      }),
+    );
+    expect(result.total).toBe(100);
+    expect(result.data.map((record) => record.amount)).toEqual([3, 4, 5]);
+    expect(documentsRead).toBe(3);
+  },
+);

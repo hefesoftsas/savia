@@ -20,6 +20,7 @@ export async function reconcileLocalQueries(
   client: QueryClient,
   previous: Set<string>,
   current: Set<string>,
+  changed: Set<string> = current,
 ) {
   const removed = new Set([...previous].filter((name) => !current.has(name)));
   if (removed.size) {
@@ -29,6 +30,6 @@ export async function reconcileLocalQueries(
     await client.resetQueries({ predicate });
   }
   await client.invalidateQueries({
-    predicate: (query) => collectionQuery(query, current),
+    predicate: (query) => collectionQuery(query, changed),
   });
 }

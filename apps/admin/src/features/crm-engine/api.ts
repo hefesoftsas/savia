@@ -9,8 +9,18 @@ export async function apiFetch<T>(
     headers: { "Content-Type": "application/json", ...options?.headers },
   });
   if (response.status === 204 || response.status === 205) return undefined as T;
+  if (!response.ok) {
+    const failure = await response.json().catch(() => undefined);
+    throw Object.assign(
+      new Error(
+        typeof failure?.error === "string"
+          ? failure.error
+          : (failure?.error?.message ?? `Error ${response.status}`),
+      ),
+      { status: response.status },
+    );
+  }
   const data: any = await response.json();
-  if (!response.ok) throw new Error(data.error ?? `Error ${response.status}`);
   return data as T;
 }
 export const api = <T = any>(

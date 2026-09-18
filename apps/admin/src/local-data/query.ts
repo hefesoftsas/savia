@@ -293,8 +293,10 @@ export async function queryRecords(
   const data: CrmRecord[] = [];
   const offset = (page - 1) * perPage;
   if (
-    !["q", "stage", "emptyStage"].some((key) => params.has(key)) &&
-    (!params.has("filters") || equality)
+    !params.get("q") &&
+    !params.get("stage") &&
+    params.get("emptyStage") !== "true" &&
+    (!parsed?.conditions.length || equality)
   ) {
     const total = await rows.clone().count();
     const selected = await rows.clone().offset(offset).limit(perPage).toArray();

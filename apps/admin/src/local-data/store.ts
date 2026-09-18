@@ -1,4 +1,9 @@
-import { liveQuery } from "dexie";
+import Dexie, {
+  liveQuery,
+  rangesOverlap,
+  RangeSet,
+  type ObservabilitySet,
+} from "dexie";
 import type { CrmRecord } from "@savia/crm-shared/metadata";
 import { createRecordSortKeys } from "./query";
 import { LocalDatabase } from "./database";
@@ -465,6 +470,109 @@ export class LocalStore {
       pending: all.filter((m) => m.state === "pending").length,
       conflicts: all.filter((m) => m.state === "conflict").length,
       errors: all.filter((m) => m.state === "error").length,
+    };
+  }
+  /** Observe committed record ranges, including writes from other tabs, without loading documents. */
+  subscribeQueryChanges(
+    listener: (change: {
+      current: Set<string>;
+      changed: Set<string>;
+      authorizationError?: string;
+      metadataChanged: boolean;
+    }) => void,
+  ) {
+    let active = true;
+    let initialized = false;
+    let previous = new Map<string, string>();
+    let previousAuthorization: string | undefined;
+    let previousManifest = "";
+    let queue = Promise.resolve();
+    const prefix = `idb://${this.db.name}/`;
+    const onMutation = (parts?: ObservabilitySet) => {
+      if (
+        parts &&
+        !Object.keys(parts).some(
+          (part) =>
+            part.startsWith(`${prefix}records/`) ||
+            part.startsWith(`${prefix}collections/`) ||
+            part.startsWith(`${prefix}syncState/`),
+        )
+      )
+        return;
+      queue = queue
+        .then(async () => {
+          if (!active) return;
+          const [collections, states] = await this.db.transaction(
+            "r",
+            this.db.collections,
+            this.db.syncState,
+            () =>
+              Promise.all([
+                this.db.collections.toArray(),
+                this.db.syncState.toArray(),
+              ]),
+          );
+          if (!active) return;
+          const authorizationError = states.find(
+            (state) => state.collection === "$authorization",
+          )?.authorizationError;
+          const hydrated = new Map(
+            states.map((state) => [state.collection, state.hydrated]),
+          );
+          const current = new Map(
+            collections
+              .filter((item) => item.capability !== "remote")
+              .map((item) => [
+                item.name,
+                JSON.stringify([item, hydrated.get(item.name) ?? false]),
+              ]),
+          );
+          const changed = new Set<string>();
+          const recordRanges = [
+            parts?.[`${prefix}records/`],
+            parts?.[`${prefix}records/:dels`],
+          ];
+          for (const [name, signature] of current) {
+            const range = new RangeSet(
+              [name, Dexie.minKey],
+              [name, Dexie.maxKey],
+            );
+            if (
+              previous.get(name) !== signature ||
+              recordRanges.some((keys) => keys && rangesOverlap(keys, range))
+            )
+              changed.add(name);
+          }
+          const manifest = JSON.stringify(collections);
+          const metadataChanged = previousManifest !== manifest;
+          const removed = [...previous.keys()].some(
+            (name) => !current.has(name),
+          );
+          const notify =
+            !initialized ||
+            changed.size > 0 ||
+            removed ||
+            metadataChanged ||
+            previousAuthorization !== authorizationError;
+          initialized = true;
+          previous = current;
+          previousManifest = manifest;
+          previousAuthorization = authorizationError;
+          if (notify)
+            listener({
+              current: new Set(current.keys()),
+              changed,
+              authorizationError,
+              metadataChanged,
+            });
+        })
+        .catch(() => undefined);
+    };
+    Dexie.on("storagemutated", onMutation);
+    onMutation();
+    return () => {
+      active = false;
+      Dexie.on.storagemutated.unsubscribe(onMutation);
     };
   }
   subscribe(listener: () => void) {

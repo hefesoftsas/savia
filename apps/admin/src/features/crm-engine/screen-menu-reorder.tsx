@@ -26,7 +26,7 @@ import {
   reorderScreensListInLayout,
   type ScreenMenuLayout,
 } from "@savia/crm-shared/screen-menu-layout";
-import { sortScreens } from "./screen-manager";
+import { sortScreens } from "./screen-metadata";
 
 const screenDragType = "application/x-savia-screen-order";
 const sectionDragType = "application/x-savia-menu-section";

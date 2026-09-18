@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { openLocalStore, type LocalStore } from "./store";
 const stores: LocalStore[] = [];
 async function open(scope: string = crypto.randomUUID()) {
@@ -253,4 +253,76 @@ it("reindexes missing field values when collection schema changes", async () => 
   ]);
   const after = (await s.db.records.get(["people", "a"]))!;
   expect(after.sortKeys!.length).toBeGreaterThan(before.sortKeys!.length);
+});
+
+describe("collection query changes", () => {
+  it("reports same-count edits from another connection without refreshing other collections or heartbeat pulls", async () => {
+    const s = await open();
+    await s.refreshManifest([
+      {
+        name: "people",
+        object: { config: { fields: {} } } as never,
+        capability: "read-write",
+        schemaVersion: 1,
+      },
+      {
+        name: "policies",
+        object: { config: { fields: {} } } as never,
+        capability: "read-write",
+        schemaVersion: 1,
+      },
+    ]);
+    await s.applyPull("people", {
+      documents: [doc("a", "Before")],
+      cursor: "1",
+      hasMore: false,
+    });
+    const changes: Array<{
+      changed: Set<string>;
+      current: Set<string>;
+      authorizationError?: string;
+    }> = [];
+    const unsubscribe = s.subscribeQueryChanges((change) =>
+      changes.push(change),
+    );
+    try {
+      await vi.waitFor(() => expect(changes).toHaveLength(1));
+      changes.length = 0;
+      const other = await openLocalStore(s.scope);
+      try {
+        await other.applyPull("people", {
+          documents: [doc("a", "After", 2)],
+          cursor: "2",
+          hasMore: false,
+        });
+        await vi.waitFor(() => expect(changes).toHaveLength(1));
+        expect([...changes[0]!.changed]).toEqual(["people"]);
+        changes.length = 0;
+        await other.applyPull("people", {
+          documents: [],
+          cursor: "2",
+          hasMore: false,
+        });
+        await other.db.outbox.add({
+          mutationId: "error",
+          collection: "people",
+          id: "a",
+          action: "update",
+          sequence: 1,
+          state: "error",
+        });
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        expect(changes).toHaveLength(0);
+        await other.blockAuthorization("Session expired");
+        await vi.waitFor(() =>
+          expect(changes.at(-1)?.authorizationError).toBe("Session expired"),
+        );
+        expect(changes.at(-1)?.current.size).toBe(0);
+      } finally {
+        other.close();
+      }
+    } finally {
+      unsubscribe();
+    }
+  });
 });

@@ -1,12 +1,12 @@
+import { useDebouncedSearch } from "./use-debounced-search";
+import { RetainedListResults } from "./retained-list-results";
 import { recordOptionLabel } from "./record-option-label";
-import { FormLabelsEditor } from "./form-labels-editor";
-import { CollectionOptionsEditor } from "./collection-options-editor";
 import { RecordOriginLinks } from "./record-origin-links";
 import {
   collectionCapabilities,
   supportsLocalRecordTools,
 } from "./collection-capabilities";
-import React, { useState, useEffect, useRef } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListBase, useListContext, useRecordContext } from "ra-core";
 import { BulkActionsToolbar } from "@/components/admin/bulk-actions-toolbar";
@@ -147,7 +147,21 @@ const money = (v: unknown, currency = "COP", decimals = 2) => {
   }
 };
 
-import { FormColumnPicker } from "./form-layout-picker";
+const FormColumnPicker = lazy(() =>
+  import("./form-layout-picker").then((module) => ({
+    default: module.FormColumnPicker,
+  })),
+);
+const FormLabelsEditor = lazy(() =>
+  import("./form-labels-editor").then((module) => ({
+    default: module.FormLabelsEditor,
+  })),
+);
+const CollectionOptionsEditor = lazy(() =>
+  import("./collection-options-editor").then((module) => ({
+    default: module.CollectionOptionsEditor,
+  })),
+);
 
 type HorizontalScrollState = {
   hasOverflow: boolean;
@@ -518,11 +532,13 @@ export default function Records({
       toast.error((error as Error).message);
     }
   };
+  const querySearch = useDebouncedSearch(s.q);
+  const querySettings = { ...s, q: querySearch };
   const summary = useQuery({
     queryKey: [
       "summary",
       object.name,
-      s.q,
+      querySearch,
       s.searchField,
       s.stage,
       s.filters,
@@ -533,7 +549,7 @@ export default function Records({
       api(
         `/records/${object.name}/summary?` +
           new URLSearchParams({
-            ...params(s, trash),
+            ...params(querySettings, trash),
             group: s.group || pipeline?.field || "",
           }),
       ),
@@ -825,7 +841,7 @@ export default function Records({
                   <PipelineColumn
                     key={String(o.value)}
                     object={object}
-                    settings={s}
+                    settings={querySettings}
                     stage={String(o.value)}
                     label={o.label}
                     onOpen={onOpen}
@@ -834,7 +850,7 @@ export default function Records({
               {!s.stage && (
                 <PipelineColumn
                   object={object}
-                  settings={s}
+                  settings={querySettings}
                   stage=""
                   label="Sin etapa"
                   onOpen={onOpen}
@@ -843,11 +859,12 @@ export default function Records({
             </div>
           ) : (
             <ListBase
+              key={`${object.name}:${trash}`}
               resource={object.name}
               perPage={s.perPage}
               sort={s.sort}
               filter={{
-                ...params(s, trash),
+                ...params(querySettings, trash),
                 __collectionSearch: capabilities.search,
                 __collectionFilter: capabilities.filter,
                 __collectionSort: capabilities.sort,
@@ -855,21 +872,27 @@ export default function Records({
               disableSyncWithLocation
               storeKey={false}
             >
-              <RecordTable
-                object={object}
-                columnAliases={s.columnAliases}
-                columns={visibleColumnKeys}
-                trash={trash}
-                onOpen={onOpen}
-                desiredSort={s.sort}
-                desiredPerPage={s.perPage}
-                onPerPage={(perPage) => setS((prev) => ({ ...prev, perPage }))}
-                onSort={(sort) => setS((prev) => ({ ...prev, sort }))}
-                onConfigureColumns={() => {
-                  setConfigTab("table");
-                  setConfig(true);
-                }}
-              />
+              <RetainedListResults
+                scope={`${getCrmRuntime().localWorkspace?.scope ?? getCrmRuntime().apiBasePath}:${object.name}:${trash}`}
+              >
+                <RecordTable
+                  object={object}
+                  columnAliases={s.columnAliases}
+                  columns={visibleColumnKeys}
+                  trash={trash}
+                  onOpen={onOpen}
+                  desiredSort={s.sort}
+                  desiredPerPage={s.perPage}
+                  onPerPage={(perPage) =>
+                    setS((prev) => ({ ...prev, perPage }))
+                  }
+                  onSort={(sort) => setS((prev) => ({ ...prev, sort }))}
+                  onConfigureColumns={() => {
+                    setConfigTab("table");
+                    setConfig(true);
+                  }}
+                />
+              </RetainedListResults>
             </ListBase>
           )}
         </div>
@@ -944,24 +967,28 @@ export default function Records({
             </DrawerHeader>
             <div className="view-config">
               {canConfigureSourceForm && configTab === "form" && (
-                <section className="view-config-form" aria-label="Formulario">
-                  <h3>Distribución del formulario</h3>
-                  <FormColumnPicker
-                    className="form-column-picker--compact"
-                    name="view-form-columns"
-                    value={formColumns}
-                    onChange={setFormColumns}
-                  />
-                  <FormLabelsEditor
-                    fields={formFields}
-                    onChange={setFormFields}
-                  />
-                  <CollectionOptionsEditor
-                    object={object}
-                    fields={formFields}
-                    onChange={setFormFields}
-                  />
-                </section>
+                <Suspense
+                  fallback={<p role="status">Cargando configuración…</p>}
+                >
+                  <section className="view-config-form" aria-label="Formulario">
+                    <h3>Distribución del formulario</h3>
+                    <FormColumnPicker
+                      className="form-column-picker--compact"
+                      name="view-form-columns"
+                      value={formColumns}
+                      onChange={setFormColumns}
+                    />
+                    <FormLabelsEditor
+                      fields={formFields}
+                      onChange={setFormFields}
+                    />
+                    <CollectionOptionsEditor
+                      object={object}
+                      fields={formFields}
+                      onChange={setFormFields}
+                    />
+                  </section>
+                </Suspense>
               )}
               <section
                 className="view-config-columns"
@@ -1418,6 +1445,7 @@ function RecordTable({
     error,
     sort,
     setSort,
+    page,
     perPage,
     setPerPage,
   } = useListContext<CrmRecord>();
@@ -1490,6 +1518,9 @@ function RecordTable({
             data-scroll-right={canScrollRight || undefined}
           >
             <DataTable
+              virtualize
+              total={total}
+              rowOffset={((page ?? 1) - 1) * perPage}
               className="records-table"
               resource={object.name}
               bulkActionButtons={false}

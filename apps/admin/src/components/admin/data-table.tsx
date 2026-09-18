@@ -1,5 +1,12 @@
-import type { ReactNode, Ref } from "react";
-import { Children, createElement, isValidElement, useCallback } from "react";
+import { useVirtualizer, defaultRangeExtractor } from "@tanstack/react-virtual";
+import type { ReactNode, Ref, ComponentProps } from "react";
+import {
+  Children,
+  createElement,
+  isValidElement,
+  useCallback,
+  useState,
+} from "react";
 import type {
   DataTableBaseProps,
   ExtractRecordPaths,
@@ -97,8 +104,19 @@ export function DataTable<RecordType extends RaRecord = RaRecord>(
     bulkActionButtons = defaultBulkActionButtons,
     bulkActionsToolbar,
     scrollViewportRef,
+    virtualize = false,
+    rowOffset = 0,
     ...rest
   } = props;
+  const [viewport, setViewportElement] = useState<HTMLDivElement | null>(null);
+  const setViewport = useCallback(
+    (node: HTMLDivElement | null) => {
+      setViewportElement(node);
+      if (typeof scrollViewportRef === "function") scrollViewportRef(node);
+      else if (scrollViewportRef) scrollViewportRef.current = node;
+    },
+    [scrollViewportRef],
+  );
   const hasBulkActions = !!bulkActionsToolbar || bulkActionButtons !== false;
   const resourceFromContext = useResourceContext(props);
   const storeKey = props.storeKey || `${resourceFromContext}.datatable`;
@@ -107,6 +125,11 @@ export function DataTable<RecordType extends RaRecord = RaRecord>(
     ? reorderChildren(children, columnRanks)
     : children;
 
+  const columnWidths = Children.toArray(columns).map((column) =>
+    isValidElement<{ width?: number }>(column)
+      ? (column.props.width ?? 200)
+      : 200,
+  );
   return (
     <DataTableBase<RecordType>
       hasBulkActions={hasBulkActions}
@@ -119,14 +142,59 @@ export function DataTable<RecordType extends RaRecord = RaRecord>(
       empty={<DataTableEmpty />}
       {...rest}
     >
-      <div className={cn("rounded-md border", className)}>
-        <Table ref={scrollViewportRef}>
+      <div
+        className={cn(
+          "rounded-md border",
+          virtualize &&
+            "[&_[data-slot=table-container]]:max-h-[min(60vh,560px)] [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-background [&_td]:overflow-hidden [&_td]:text-ellipsis",
+          className,
+        )}
+      >
+        <Table
+          ref={setViewport}
+          style={
+            virtualize
+              ? {
+                  tableLayout: "fixed",
+                  width: columnWidths.reduce(
+                    (a, b) => a + b,
+                    hasBulkActions ? 40 : 0,
+                  ),
+                  minWidth: "100%",
+                }
+              : undefined
+          }
+          aria-rowcount={
+            virtualize && rest.total !== undefined ? rest.total + 1 : undefined
+          }
+        >
+          {virtualize && (
+            <colgroup>
+              {hasBulkActions && <col style={{ width: 40 }} />}
+              {columnWidths.map((width, index) => (
+                <col key={index} style={{ width }} />
+              ))}
+            </colgroup>
+          )}
           <DataTableRenderContext.Provider value="header">
             <DataTableHead>{columns}</DataTableHead>
           </DataTableRenderContext.Provider>
-          <DataTableBody<RecordType> rowClassName={rowClassName}>
-            {columns}
-          </DataTableBody>
+          {virtualize ? (
+            <VirtualDataTableBody<RecordType>
+              viewport={viewport}
+              rowOffset={rowOffset}
+              rowClassName={rowClassName}
+            >
+              {columns}
+            </VirtualDataTableBody>
+          ) : (
+            <DataTableBody<RecordType>
+              rowClassName={rowClassName}
+              rowOffset={rowOffset}
+            >
+              {columns}
+            </DataTableBody>
+          )}
         </Table>
       </div>
       {bulkActionsToolbar ??
@@ -194,7 +262,9 @@ const DataTableHead = ({ children }: { children: ReactNode }) => {
 const DataTableBody = <RecordType extends RaRecord = RaRecord>({
   children,
   rowClassName,
+  rowOffset = 0,
 }: {
+  rowOffset?: number;
   children: ReactNode;
   rowClassName?: (record: RecordType) => string | undefined;
 }) => {
@@ -206,7 +276,10 @@ const DataTableBody = <RecordType extends RaRecord = RaRecord>({
           value={record}
           key={record.id ?? `row${rowIndex}`}
         >
-          <DataTableRow className={rowClassName?.(record)}>
+          <DataTableRow
+            className={rowClassName?.(record)}
+            aria-rowindex={rowOffset + rowIndex + 2}
+          >
             {children}
           </DataTableRow>
         </RecordContextProvider>
@@ -215,13 +288,109 @@ const DataTableBody = <RecordType extends RaRecord = RaRecord>({
   );
 };
 
+const VirtualDataTableBody = <RecordType extends RaRecord = RaRecord>({
+  children,
+  rowClassName,
+  viewport,
+  rowOffset,
+}: {
+  children: ReactNode;
+  rowClassName?: (record: RecordType) => string | undefined;
+  viewport: HTMLDivElement | null;
+  rowOffset: number;
+}) => {
+  const data = useDataTableDataContext() ?? [];
+  const { hasBulkActions } = useDataTableConfigContext();
+  const [focusedId, setFocusedId] = useState<Identifier | null>(null);
+  const focused =
+    focusedId === null
+      ? -1
+      : data.findIndex((record) => record.id === focusedId);
+  const virtualizer = useVirtualizer({
+    count: data.length,
+    enabled: data.length > 20,
+    getScrollElement: () => viewport,
+    estimateSize: () => 40,
+    getItemKey: (index) => data[index].id,
+    overscan: 6,
+    initialRect: { width: 800, height: 480 },
+    rangeExtractor: (range) =>
+      [
+        ...new Set([
+          ...defaultRangeExtractor(range),
+          ...(focused >= 0 && focused < data.length ? [focused] : []),
+        ]),
+      ].sort((a, b) => a - b),
+  });
+  // Small pages already have a bounded DOM and need no scroll observer.
+  if (data.length <= 20)
+    return (
+      <DataTableBody<RecordType>
+        rowClassName={rowClassName}
+        rowOffset={rowOffset}
+      >
+        {children}
+      </DataTableBody>
+    );
+  const items = virtualizer.getVirtualItems();
+  const cells = Children.count(children) + (hasBulkActions ? 1 : 0);
+  // Native table rows retain column alignment and accessibility. Spacer rows
+  // represent unmounted rows; measured heights support wrapped cell content.
+  let end = 0;
+  return (
+    <TableBody>
+      {items.map((item) => {
+        const record = data[item.index];
+        const gap = Math.max(0, item.start - end);
+        end = item.end;
+        return (
+          <RecordContextProvider value={record} key={record.id}>
+            {gap > 0 && (
+              <tr aria-hidden="true">
+                <td
+                  colSpan={cells}
+                  style={{ height: gap, padding: 0, border: 0 }}
+                />
+              </tr>
+            )}
+            <DataTableRow
+              tabIndex={0}
+              ref={virtualizer.measureElement}
+              data-index={item.index}
+              aria-rowindex={rowOffset + item.index + 2}
+              className={rowClassName?.(record)}
+              onFocusCapture={() => setFocusedId(record.id)}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node))
+                  setFocusedId(null);
+              }}
+            >
+              {children}
+            </DataTableRow>
+          </RecordContextProvider>
+        );
+      })}
+      {virtualizer.getTotalSize() > end && (
+        <tr aria-hidden="true">
+          <td
+            colSpan={cells}
+            style={{
+              height: virtualizer.getTotalSize() - end,
+              padding: 0,
+              border: 0,
+            }}
+          />
+        </tr>
+      )}
+    </TableBody>
+  );
+};
+
 const DataTableRow = ({
   children,
   className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) => {
+  ...rowProps
+}: ComponentProps<"tr">) => {
   const { rowClick, handleToggleItem } = useDataTableCallbacksContext();
   const selectedIds = useDataTableSelectedIdsContext();
   const { hasBulkActions = false } = useDataTableConfigContext();
@@ -271,8 +440,19 @@ const DataTableRow = ({
 
   return (
     <TableRow
+      {...rowProps}
       key={record.id}
       onClick={handleClick}
+      onKeyDown={(event) => {
+        rowProps.onKeyDown?.(event);
+        if (
+          event.target === event.currentTarget &&
+          (event.key === "Enter" || event.key === " ")
+        ) {
+          event.preventDefault();
+          void handleClick();
+        }
+      }}
       className={cn(rowClick !== false && "cursor-pointer", className)}
     >
       {hasBulkActions ? (
@@ -374,6 +554,9 @@ export interface DataTableProps<
   bulkActionButtons?: ReactNode;
   bulkActionsToolbar?: ReactNode;
   scrollViewportRef?: Ref<HTMLDivElement>;
+  /** Mount only visible rows in a bounded scroll viewport. */
+  virtualize?: boolean;
+  rowOffset?: number;
 }
 
 export function DataTableColumn<
@@ -553,6 +736,7 @@ function DataTableCell<
 export interface DataTableColumnProps<
   RecordType extends RaRecord<Identifier> = RaRecord<Identifier>,
 > {
+  width?: number;
   className?: string;
   cellClassName?: string;
   headerClassName?: string;

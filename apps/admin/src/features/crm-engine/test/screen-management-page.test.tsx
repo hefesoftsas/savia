@@ -47,7 +47,9 @@ it("separates menu ordering from screen settings and keeps section creation comp
     screen.queryByRole("columnheader", { name: "Pantalla" }),
   ).not.toBeInTheDocument();
 
-  const addSection = screen.getByRole("button", { name: "Agregar sección" });
+  const addSection = await screen.findByRole("button", {
+    name: "Agregar sección",
+  });
   expect(addSection).toHaveTextContent("");
   await user.hover(addSection);
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
@@ -75,24 +77,18 @@ it("keeps the selected management tab in the URL", async () => {
     "/?object=clientes&view=screens&tab=screens",
   );
 
-  render(
-    <Root
-      embedded
-      search="object=clientes&view=screens&tab=screens"
-    />,
-  );
+  render(<Root embedded search="object=clientes&view=screens&tab=screens" />);
 
   const menuOrderTab = await screen.findByRole("tab", {
     name: "Orden del menú",
   });
-  expect(
-    screen.getByRole("tab", { name: "Pantallas" }),
-  ).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: "Pantallas" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   await user.click(menuOrderTab);
-  expect(window.location.search).toBe(
-    "?object=clientes&view=screens&tab=menu",
-  );
+  expect(window.location.search).toBe("?object=clientes&view=screens&tab=menu");
 });
 
 it("returns direct screen removal to the screen settings tab", async () => {
@@ -107,7 +103,8 @@ it("returns direct screen removal to the screen settings tab", async () => {
   render(<Root embedded search="object=clientes&view=remove-screen" />);
 
   await user.click(await screen.findByRole("button", { name: "Cancelar" }));
-  expect(
-    await screen.findByRole("tab", { name: "Pantallas" }),
-  ).toHaveAttribute("aria-selected", "true");
+  expect(await screen.findByRole("tab", { name: "Pantallas" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 });

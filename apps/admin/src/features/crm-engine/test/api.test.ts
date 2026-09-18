@@ -16,3 +16,13 @@ describe("apiFetch", () => {
     );
   });
 });
+
+it.each([
+  new Response("Forbidden", { status: 403 }),
+  new Response(null, { status: 401 }),
+])("preserves authorization status for non-JSON failures", async (response) => {
+  setCrmRuntime({ embedded: true, transport: async () => response });
+  await expect(apiFetch("/api/records/private")).rejects.toMatchObject({
+    status: response.status,
+  });
+});

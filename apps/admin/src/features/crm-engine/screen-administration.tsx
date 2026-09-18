@@ -62,7 +62,7 @@ import {
 } from "@savia/crm-shared/screen-menu-layout";
 import { collectionCapabilities } from "./collection-capabilities";
 import CollectionOperationsPanel from "./collection-operations-panel";
-import { sortScreens } from "./screen-manager";
+import { sortScreens } from "./screen-metadata";
 import ExtensionManager from "./extension-manager";
 import SolutionManager from "./solution-manager";
 import "./screen-administration.css";

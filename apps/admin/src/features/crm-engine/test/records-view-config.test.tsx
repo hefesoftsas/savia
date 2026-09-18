@@ -280,7 +280,10 @@ it("opens a stale record URL through the collection currently visible", async ()
         total: 1,
       });
     if (path === "/api/records/clientes/12")
-      return Response.json({ error: "El registro no existe." }, { status: 404 });
+      return Response.json(
+        { error: "El registro no existe." },
+        { status: 404 },
+      );
     return Response.json({ data: {} });
   });
   setCrmRuntime({
@@ -384,7 +387,9 @@ it("offers a CSV export for local record tables", async () => {
       return Response.json({ data: [], default: null });
     if (path.startsWith("/api/records/test"))
       return Response.json({
-        data: [{ id: "1", nombre: "Ejemplo", html_personalizado: "<p>Hola</p>" }],
+        data: [
+          { id: "1", nombre: "Ejemplo", html_personalizado: "<p>Hola</p>" },
+        ],
         total: 1,
       });
     return Response.json({ data: {} });
@@ -596,9 +601,12 @@ it("exposes server-backed table filters for agency profiles", async () => {
   expect(
     screen.getByRole("combobox", { name: "Operador del filtro 1" }),
   ).toHaveTextContent("Contiene");
-  fireEvent.change(screen.getByRole("textbox", { name: "Valor del filtro 1" }), {
-    target: { value: "Agen" },
-  });
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Valor del filtro 1" }),
+    {
+      target: { value: "Agen" },
+    },
+  );
   const recordRequests = () =>
     transport.mock.calls
       .map(([path]) => String(path))
@@ -609,7 +617,9 @@ it("exposes server-backed table filters for agency profiles", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
   await waitFor(() =>
     expect(
-      recordRequests().some((path) => decodeURIComponent(path).includes("Agen")),
+      recordRequests().some((path) =>
+        decodeURIComponent(path).includes("Agen"),
+      ),
     ).toBe(true),
   );
 });
@@ -1198,9 +1208,7 @@ it("does not offer bulk delete for collections without delete capability", async
   const recordsRegion = await screen.findByRole("region", {
     name: "Registros de Perfiles de agencia",
   });
-  expect(
-    within(recordsRegion).queryByRole("checkbox"),
-  ).not.toBeInTheDocument();
+  expect(within(recordsRegion).queryByRole("checkbox")).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "Eliminar seleccionados" }),
   ).not.toBeInTheDocument();
@@ -1209,6 +1217,7 @@ it("does not offer bulk delete for collections without delete capability", async
 it("saves source-form column layout from the records configuration drawer", async () => {
   let savedObject: Record<string, unknown> | null = null;
   const transport = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === "/api/collection-catalog") return Response.json({ data: [] });
     if (path === "/api/objects")
       return Response.json({ data: [sourceAgencyProfiles] });
     if (path === "/api/objects/agency_profiles" && init?.method === "PUT") {
@@ -1250,19 +1259,15 @@ it("saves source-form column layout from the records configuration drawer", asyn
       name: "Columnas del formulario",
     }),
   ).not.toBeInTheDocument();
-  const oneColumn = within(panel).getByRole("radio", {
+  const oneColumn = await within(panel).findByRole("radio", {
     name: "Una columna",
   });
   const twoColumns = within(panel).getByRole("radio", {
     name: "Dos columnas",
   });
   expect(oneColumn).toBeChecked();
-  expect(
-    within(panel).getByTestId("form-layout-preview-1"),
-  ).toBeVisible();
-  expect(
-    within(panel).getByTestId("form-layout-preview-2"),
-  ).toBeVisible();
+  expect(within(panel).getByTestId("form-layout-preview-1")).toBeVisible();
+  expect(within(panel).getByTestId("form-layout-preview-2")).toBeVisible();
   fireEvent.click(twoColumns);
   expect(twoColumns).toBeChecked();
   fireEvent.click(

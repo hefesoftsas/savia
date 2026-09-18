@@ -1,3 +1,4 @@
+import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -62,21 +63,8 @@ function offlineShellPlugin(): Plugin {
     apply: "build",
     generateBundle(_options, bundle) {
       offlineShellAssets.clear();
-      const visit = (name: string) => {
-        if (offlineShellAssets.has(name)) return;
-        const item = bundle[name];
-        if (!item || item.type !== "chunk") return;
-        offlineShellAssets.set(name, Buffer.byteLength(item.code));
-        item.imports.forEach(visit);
-      };
-      for (const item of Object.values(bundle)) {
-        if (
-          item.type === "chunk" &&
-          (item.isEntry ||
-            item.facadeModuleId?.endsWith("/dynamic-crm/crm-page.tsx") ||
-            item.facadeModuleId?.endsWith("/crm-engine/app.tsx"))
-        )
-          visit(item.fileName);
+      for (const [name, size] of collectOfflineShellAssets(bundle)) {
+        offlineShellAssets.set(name, size);
       }
     },
   };
