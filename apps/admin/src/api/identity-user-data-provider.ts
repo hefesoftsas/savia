@@ -207,7 +207,13 @@ export function createIdentityUserDataProvider(
 
     async delete(_resource: string, params: DeleteParams) {
       await client.remove(String(params.id));
-      return { data: params.previousData };
+      // React Admin may call delete without previousData (e.g. from
+      // Show/Edit actions where the record comes from a different context).
+      // Always return a record with an id so the mutation cache stays
+      // consistent instead of resolving with `data: undefined`.
+      return {
+        data: (params.previousData ?? { id: params.id }) as UserRecord,
+      };
     },
 
     async grantMembership(

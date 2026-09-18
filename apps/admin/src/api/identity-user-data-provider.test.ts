@@ -151,4 +151,34 @@ describe("identity user data provider", () => {
       membership: { tenantId: 101, role: "agency_admin" },
     });
   });
+
+  it("returns an id fallback when deleting without previousData", async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const provider = createIdentityUserDataProvider(
+      { remove } as unknown as IdentityClient,
+    );
+
+    const result = await provider.delete("users", {
+      id: "principal-9",
+      previousData: undefined,
+    });
+
+    expect(remove).toHaveBeenCalledWith("principal-9");
+    expect(result.data).toMatchObject({ id: "principal-9" });
+  });
+
+  it("returns previousData when deleting with a record in context", async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const provider = createIdentityUserDataProvider(
+      { remove } as unknown as IdentityClient,
+    );
+    const previousData = { id: "principal-7", displayName: "Persona Siete" };
+
+    const result = await provider.delete("users", {
+      id: "principal-7",
+      previousData,
+    });
+
+    expect(result.data).toEqual(previousData);
+  });
 });

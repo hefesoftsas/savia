@@ -11,12 +11,17 @@ import {
 } from "lucide-react";
 import {
   required,
+  useCanAccess,
   useDataProvider,
+  useDelete,
   useEditContext,
   useGetList,
   useListContext,
   useNotify,
+  useRecordContext,
+  useRedirect,
   useRefresh,
+  useResourceContext,
   useShowContext,
 } from "ra-core";
 import MicrosoftExcel from "@thesvg/react/microsoft-excel";
@@ -26,7 +31,6 @@ import {
   Create,
   CreateButton,
   DataTable,
-  DeleteButton,
   Edit,
   EditButton,
   ExportButton,
@@ -38,6 +42,8 @@ import {
   SimpleForm,
   TextInput,
 } from "@/components/admin";
+import { Confirm } from "@/components/admin/confirm";
+import { isOfflineError } from "@/offline/offline-error";
 import type { TenantRecord } from "@/api/tenant-data-provider";
 import type {
   IdentityUserDataProvider,
@@ -86,6 +92,141 @@ function getUserStatusView(isActive: unknown): UserStatusView {
   if (isActive === true) return "active";
   if (isActive === false) return "inactive";
   return "all";
+}
+
+type ApiErrorLike = {
+  code?: string;
+  status?: number;
+};
+
+function asApiErrorLike(error: unknown): ApiErrorLike {
+  if (typeof error !== "object" || error === null) return {};
+  const candidate = error as Record<string, unknown>;
+  const nested =
+    typeof candidate.body === "object" && candidate.body !== null
+      ? (candidate.body as Record<string, unknown>).error
+      : undefined;
+  const nestedRecord =
+    typeof nested === "object" && nested !== null
+      ? (nested as Record<string, unknown>)
+      : undefined;
+  const code =
+    (typeof candidate.code === "string" && candidate.code) ||
+    (nestedRecord && typeof nestedRecord.code === "string"
+      ? (nestedRecord.code as string)
+      : undefined);
+  const status =
+    typeof candidate.status === "number" ? candidate.status : undefined;
+  return { code, status };
+}
+
+export function deleteUserErrorMessage(error: unknown): string {
+  if (isOfflineError(error)) {
+    return "Sin conexión o servicio no disponible. Inténtalo de nuevo.";
+  }
+  const { code, status } = asApiErrorLike(error);
+  if (code === "LAST_ACTIVE_MEMBER") {
+    return "No se puede eliminar: el tenant debe conservar al menos un usuario activo.";
+  }
+  if (code === "AUTHORIZATION_FORBIDDEN") {
+    return "No tienes permiso para eliminar este usuario (no puedes eliminarte a ti mismo).";
+  }
+  if (code === "VALIDATION_ERROR") {
+    return "No se puede eliminar al último administrador de plataforma activo.";
+  }
+  if (code === "NOT_FOUND" || status === 404) {
+    return "El usuario ya no existe. Actualiza la lista.";
+  }
+  if (status === 403) {
+    return "No tienes permiso para eliminar usuarios.";
+  }
+  return "No fue posible eliminar el usuario.";
+}
+
+/**
+ * Pessimistic delete with confirmation for identity users.
+ *
+ * The generic undoable DeleteButton hides backend guards behind an
+ * optimistic toast, so a rejected delete looks like it worked and then the
+ * row "reappears". This button waits for the server and surfaces the reason
+ * in Spanish, matching the pessimistic pattern used elsewhere (tenants).
+ */
+function UserDeleteButton({
+  iconOnly = false,
+  label = "Eliminar usuario",
+  redirectTo = "list",
+}: {
+  iconOnly?: boolean;
+  label?: string;
+  redirectTo?: "list" | false;
+}) {
+  const record = useRecordContext<UserRecord>();
+  const resource = useResourceContext() ?? "users";
+  const { canAccess } = useCanAccess({
+    resource,
+    action: "delete",
+    record,
+  });
+  const notify = useNotify();
+  const refresh = useRefresh();
+  const redirect = useRedirect();
+  const [deleteOne, { isPending }] = useDelete();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  if (!canAccess || record?.id == null) return null;
+
+  const handleConfirm = () => {
+    deleteOne(
+      resource,
+      { id: record.id, previousData: record },
+      {
+        onSuccess: () => {
+          setConfirmOpen(false);
+          notify("Usuario eliminado.", { type: "success" });
+          refresh();
+          if (redirectTo) redirect(redirectTo, resource);
+        },
+        onError: (error: unknown) => {
+          setConfirmOpen(false);
+          notify(deleteUserErrorMessage(error), { type: "error" });
+        },
+      },
+    );
+  };
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size={iconOnly ? "icon" : "default"}
+        aria-label={label}
+        title={iconOnly ? label : undefined}
+        disabled={isPending}
+        onClick={(event) => {
+          event.stopPropagation();
+          setConfirmOpen(true);
+        }}
+        className="cursor-pointer hover:bg-destructive/10! text-destructive! border-destructive! focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
+      >
+        <Trash2 className="size-4" />
+        {iconOnly ? null : label}
+      </Button>
+      <Confirm
+        isOpen={confirmOpen}
+        title="Eliminar usuario"
+        content={`¿Eliminar a ${record.displayName ?? record.email}? Esta acción no se puede deshacer.`}
+        confirm="ra.action.delete"
+        confirmColor="warning"
+        ConfirmIcon={Trash2}
+        loading={isPending}
+        onClose={() => {
+          if (!isPending) setConfirmOpen(false);
+        }}
+        onConfirm={handleConfirm}
+      />
+    </>
+  );
 }
 
 export function UserList() {
@@ -152,7 +293,7 @@ function UserTabbedTable() {
     useListContext<UserRecord>();
   const statusView = getUserStatusView(filterValues.isActive);
   const { isActive: _isActive, ...filtersWithoutStatus } = filterValues;
-  const setStatus = (nextStatus: UserStatusView) => () => {
+  const setStatus = (nextStatus: UserStatusView) => {
     setFilters(
       nextStatus === "all"
         ? filtersWithoutStatus
@@ -162,21 +303,25 @@ function UserTabbedTable() {
   };
 
   return (
-    <Tabs value={statusView} className="mb-4 gap-2">
+    <Tabs
+      value={statusView}
+      onValueChange={(value) => setStatus(value as UserStatusView)}
+      className="mb-4 gap-2"
+    >
       <TabsList className="w-full justify-start overflow-x-auto">
-        <TabsTrigger value="active" onClick={setStatus("active")}>
+        <TabsTrigger value="active">
           Activos
           <Badge variant="outline" className="hidden md:inline-flex">
             <Count filter={{ ...filtersWithoutStatus, isActive: true }} />
           </Badge>
         </TabsTrigger>
-        <TabsTrigger value="inactive" onClick={setStatus("inactive")}>
+        <TabsTrigger value="inactive">
           Suspendidos
           <Badge variant="outline" className="hidden md:inline-flex">
             <Count filter={{ ...filtersWithoutStatus, isActive: false }} />
           </Badge>
         </TabsTrigger>
-        <TabsTrigger value="all" onClick={setStatus("all")}>
+        <TabsTrigger value="all">
           Todos
           <Badge variant="outline" className="hidden md:inline-flex">
             <Count filter={filtersWithoutStatus} />
@@ -247,7 +392,7 @@ function UserTable({ storeKey }: { storeKey: string }) {
         >
           <ShowButton iconOnly />
           <EditButton iconOnly />
-          <DeleteButton iconOnly />
+          <UserDeleteButton iconOnly redirectTo={false} />
         </div>
       </DataTable.Col>
     </DataTable>
@@ -270,7 +415,11 @@ export function UserCreate() {
 
 export function UserEdit() {
   return (
-    <Edit title={<UserEditTitle />} actions={<UserEditActions />}>
+    <Edit
+      title={<UserEditTitle />}
+      actions={<UserEditActions />}
+      mutationMode="optimistic"
+    >
       <SimpleForm className="max-w-5xl gap-6">
         <Tabs defaultValue="identity" className="w-full gap-6">
           <div className="max-w-full overflow-x-auto">
@@ -311,7 +460,7 @@ function UserEditActions() {
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <ShowButton iconOnly label="Ver ficha" />
-      <DeleteButton iconOnly label="Eliminar usuario" />
+      <UserDeleteButton iconOnly label="Eliminar usuario" />
     </div>
   );
 }
@@ -340,7 +489,7 @@ function UserShowActions() {
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <EditButton iconOnly label="Editar usuario" />
-      <DeleteButton iconOnly label="Eliminar usuario" />
+      <UserDeleteButton iconOnly label="Eliminar usuario" />
     </div>
   );
 }
