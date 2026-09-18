@@ -37,6 +37,7 @@ export async function listOutboxOps(
   overrides?: OutboxTable,
 ): Promise<OutboxOp[]> {
   // Dexie has no "all" shortcut on the typed surface; read both statuses.
+  // Storage errors propagate: callers without a table (tests, SSR) catch.
   const [pending, failed] = await Promise.all([
     table(overrides).where("status").equals("pending").toArray(),
     table(overrides).where("status").equals("failed").toArray(),
@@ -112,9 +113,15 @@ export async function flushOutbox(
   overrides?: OutboxTable,
 ): Promise<FlushSummary> {
   const store = table(overrides);
-  const pending = (
-    await store.where("status").equals("pending").toArray()
-  ).sort((a, b) => a.queuedAt - b.queuedAt);
+  let pending: OutboxOp[];
+  try {
+    pending = (
+      await store.where("status").equals("pending").toArray()
+    ).sort((a, b) => a.queuedAt - b.queuedAt);
+  } catch {
+    // Storage unavailable (tests, SSR, locked private mode): nothing to do.
+    return { succeeded: 0, failed: [] };
+  }
   const summary: FlushSummary = { succeeded: 0, failed: [] };
   for (const op of pending) {
     if (op.id === undefined) continue;
