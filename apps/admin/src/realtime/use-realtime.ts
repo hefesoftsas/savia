@@ -10,6 +10,7 @@ export type RealtimeChangeEvent = {
   type: "created" | "updated" | "deleted";
   collection?: string;
   id?: string | number;
+  version?: number;
   at?: string;
   actor?: string;
 };

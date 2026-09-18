@@ -200,6 +200,23 @@ export function registerDynamicCrmRoutes(
         (segments[1] === "records" || segments[1] === "views") &&
         segments[2]
       ) {
+        // Monotonic version for delta sync. Best-effort: a missing table
+        // must never break the mutation it versions.
+        let collectionVersion: number | undefined;
+        try {
+          const bumped = await db
+            .prepare(
+              `INSERT INTO crm_collection_versions(tenant_id, collection, version, updated_at)
+               VALUES(?, ?, 1, ?)
+               ON CONFLICT(tenant_id, collection) DO UPDATE SET version = version + 1, updated_at = excluded.updated_at
+               RETURNING version`,
+            )
+            .bind(tenantKey, segments[2], new Date().toISOString())
+            .first<{ version: number }>();
+          collectionVersion = bumped?.version;
+        } catch {
+          collectionVersion = undefined;
+        }
         publishRealtime(realtime, tenantRoom(agencyId), {
           topic: "records",
           type:
@@ -210,6 +227,7 @@ export function registerDynamicCrmRoutes(
                 : "updated",
           collection: segments[2],
           ...(segments[3] ? { id: segments[3] } : {}),
+          ...(collectionVersion !== undefined ? { version: collectionVersion } : {}),
           actor: actor.principal.id,
         });
       }

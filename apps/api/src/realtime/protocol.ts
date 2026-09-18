@@ -37,6 +37,7 @@ export const realtimeEventSchema = z.object({
   type: z.enum(["created", "updated", "deleted"]),
   collection: z.string().min(1).max(64).optional(),
   id: z.union([z.string(), z.number()]).optional(),
+  version: z.number().int().nonnegative().optional(),
   at: z.string().datetime(),
   actor: z.string().optional(),
 });

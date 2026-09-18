@@ -92,6 +92,8 @@ Solo si hay demanda real de "trabajar sin red". **Identidad excluida por diseño
 
 **Decision 2026-09-17 (implemented): surgical realtime updates by id, no blind refetch-all.** `applyRealtimeListEvent` removes `deleted` rows from cached `{data,total}` lists without network (numeric/string ids match); creates/updates invalidate exactly one query prefix. Record tables keep debounced invalidates (complex grouped shapes) with an aggregated toast.
 
+**Decision 2026-09-17 (implemented): delta via monotonic collection versions, not row mirrors.** `crm_collection_versions` (migration 0051) is bumped by the dynamic-crm proxy on every records/views mutation and the version travels in the realtime event; clients keep a Dexie version map and skip covered events. Full row mirrors were rejected: record backends are heterogeneous (local D1, HubSpot-shared, Postgres) and tombstoning all of them is disproportionate while push already scopes every invalidation.
+
 ## Fase 3 (opcional, solo si se pide modo avión): Service worker + app shell (~1 semana)
 
 - [ ] Workbox precache del shell admin (JS/CSS) con `NetworkFirst` para `/v1/*`; estrategia de versión y purga de cachés viejas; e2e: primera visita online, luego offline total y la app arranca. Nota: suma superficie de bugs (cachés rancias, auth) — no hacerlo "de paso" en otra fase.

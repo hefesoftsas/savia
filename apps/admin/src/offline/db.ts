@@ -20,18 +20,27 @@ export interface OutboxOp {
   error?: string;
 }
 
+export interface CollectionVersionRow {
+  /** `${tenantKey}:${collection}`, e.g. `tenant:101:quotes`. */
+  key: string;
+  version: number;
+  updatedAt: number;
+}
+
 /**
- * Single IndexedDB database for offline support. Version 2 adds the
- * mutation outbox next to the query cache.
+ * Single IndexedDB database for offline support. Version 3 adds the
+ * per-collection version map used by delta sync.
  */
 export class SaviaOfflineDb extends Dexie {
   queryCache!: Table<QueryCacheRow, string>;
   outbox!: Table<OutboxOp, number>;
+  collectionVersions!: Table<CollectionVersionRow, string>;
 
   constructor() {
     super("savia-offline");
     this.version(1).stores({ queryCache: "key, updatedAt" });
     this.version(2).stores({ outbox: "++id, status, queuedAt" });
+    this.version(3).stores({ collectionVersions: "key" });
   }
 }
 

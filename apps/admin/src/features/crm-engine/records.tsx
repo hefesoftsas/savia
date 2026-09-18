@@ -49,6 +49,11 @@ import {
 import { api, downloadCrm } from "./api";
 import { getListObjectsQueryKey } from "./generated/crm";
 import { getCrmRuntime } from "./runtime";
+import {
+  getCollectionVersion,
+  isCoveredByVersion,
+  setCollectionVersion,
+} from "@/offline/collection-versions";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {
   fieldEntries,
@@ -348,8 +353,10 @@ function tenantIdFromDomainId(domainId: string | undefined): number | undefined 
 function RecordsLiveSync({ objectName }: { objectName: string }) {
   const client = useQueryClient();
   const pending = useRef(0);
+  const pendingVersion = useRef<number | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const tenantId = tenantIdFromDomainId(getCrmRuntime().domainId);
+  const domainId = getCrmRuntime().domainId;
+  const tenantId = tenantIdFromDomainId(domainId);
 
   useEffect(
     () => () => {
@@ -364,20 +371,42 @@ function RecordsLiveSync({ objectName }: { objectName: string }) {
     enabled: tenantId !== undefined,
     onEvent: (event) => {
       if (event.collection && event.collection !== objectName) return;
-      pending.current += 1;
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
-        const count = pending.current;
-        pending.current = 0;
-        void client.invalidateQueries({ queryKey: ["pipeline", objectName] });
-        void client.invalidateQueries({ queryKey: ["summary", objectName] });
-        void client.invalidateQueries({ queryKey: ["views", objectName] });
-        toast.success(
-          count === 1
-            ? "Cambio recibido — lista actualizada"
-            : `Se recibieron ${count} cambios — lista actualizada`,
-        );
-      }, 1500);
+      // Delta gate: skip events this client already covered. Unversioned
+      // events (old servers) always refetch.
+      void (async () => {
+        if (event.collection && event.version !== undefined && domainId) {
+          const known = await getCollectionVersion(
+            `${domainId}:${event.collection}`,
+          );
+          if (isCoveredByVersion(known, event.version)) return;
+          pendingVersion.current =
+            pendingVersion.current === undefined
+              ? event.version
+              : Math.max(pendingVersion.current, event.version);
+        }
+        pending.current += 1;
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+          const count = pending.current;
+          const version = pendingVersion.current;
+          pending.current = 0;
+          pendingVersion.current = undefined;
+          void client.invalidateQueries({ queryKey: ["pipeline", objectName] });
+          void client.invalidateQueries({ queryKey: ["summary", objectName] });
+          void client.invalidateQueries({ queryKey: ["views", objectName] });
+          if (event.collection && version !== undefined && domainId) {
+            void setCollectionVersion(
+              `${domainId}:${event.collection}`,
+              version,
+            );
+          }
+          toast.success(
+            count === 1
+              ? "Cambio recibido — lista actualizada"
+              : `Se recibieron ${count} cambios — lista actualizada`,
+          );
+        }, 1500);
+      })();
     },
   });
   return null;
