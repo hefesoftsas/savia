@@ -64,6 +64,11 @@ function apiConfig({ documentsBucket, domainD1Id, publicOrigin }) {
     ],
     ratelimits: [
       {
+        name: "PUBLIC_FORMS_RATE_LIMITER",
+        namespace_id: "879102",
+        simple: { limit: 30, period: 60 },
+      },
+      {
         name: "REALTIME_RATE_LIMITER",
         namespace_id: "879101",
         simple: { limit: 30, period: 60 },
@@ -177,6 +182,8 @@ function gatewayConfig({ publicOrigin }) {
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
+        "/public/forms",
+        "/public/forms/*",
         "/api/*",
         "/v1/*",
         "/.well-known/*",

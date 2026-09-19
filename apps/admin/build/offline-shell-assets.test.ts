@@ -18,6 +18,13 @@ it("precaches record routes and their static closure without traversing optional
   });
   const bundle = {
     "entry.js": chunk("entry.js", "/src/main.tsx", ["shared.js"], ["crm.js"]),
+    "private-app.js": chunk("private-app.js", "/src/app.tsx", ["shared.js"]),
+    "appearance.js": chunk("appearance.js", "/admin/appearance-cache.ts"),
+    "registration.js": chunk(
+      "registration.js",
+      "/pwa/register-service-worker.ts",
+    ),
+    "public.js": chunk("public.js", "/public-forms/public-form-page.tsx"),
     "crm.js": chunk(
       "crm.js",
       "/dynamic-crm/crm-page.tsx",
@@ -41,6 +48,9 @@ it("precaches record routes and their static closure without traversing optional
   expect([...collectOfflineShellAssets(bundle).keys()].sort()).toEqual(
     [
       "entry.js",
+      "private-app.js",
+      "appearance.js",
+      "registration.js",
       "crm.js",
       "records.js",
       "detail.js",

@@ -60,6 +60,11 @@ type AssistantSecrets = {
 };
 
 type RuntimeEnvironment = {
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  PUBLIC_FORMS_RATE_LIMITER?: {
+    limit(input: { key: string }): Promise<{ success: boolean }>;
+  };
   SAVIA_REQUEST?: import("./routes/savia-request").SaviaRequestService;
 } & Env &
   AttachmentSecrets &
@@ -209,6 +214,12 @@ export default {
       connectorExecutorFromEnvironment(environment),
       extensionConnectionsEncryptionKeyFromEnvironment(environment),
       createRealtimeHubClient(environment.REALTIME_HUB),
+      {
+        siteKey: environment.TURNSTILE_SITE_KEY,
+        secretKey: environment.TURNSTILE_SECRET_KEY,
+        publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
+        rateLimiter: environment.PUBLIC_FORMS_RATE_LIMITER,
+      },
     ).fetch(request, environment);
     return response;
   },

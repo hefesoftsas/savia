@@ -82,11 +82,13 @@ export default defineConfig({
     // payload (or credential-adjacent response) ever lands in Cache Storage.
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "auto",
+      // Only the private bootstrap registers a worker; public visitors must not
+      // download the administrative offline shell.
+      injectRegister: false,
       manifest: false,
       workbox: {
         navigateFallback: "index.html",
-        navigateFallbackDenylist: [/^\/api/, /^\/v1/],
+        navigateFallbackDenylist: [/^\/api/, /^\/v1/, /^\/public\/forms/],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // Precache only the boot shell: dist ships ~9k chunks (43 MB),

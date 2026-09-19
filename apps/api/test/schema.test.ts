@@ -44,13 +44,15 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(288);
+    expect(names).toHaveLength(290);
     expect(names).toEqual(
       expect.arrayContaining([
         "assistant_virtual_employees",
         "assistant_virtual_employee_files",
         "assistant_virtual_employee_chunks",
         "request_page_runs",
+        "public_forms",
+        "public_form_submissions",
         "crm_objects",
         "crm_collection_versions",
         "crm_sync_changes",

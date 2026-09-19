@@ -85,3 +85,22 @@ describe("edge gateway", () => {
     expect(api.fetch).toHaveBeenCalledWith(request);
   });
 });
+
+it("serves public pages without leaking their link via referrers or caching", async () => {
+  const api = { fetch: vi.fn(async () => Response.json({})) };
+  const assets = { fetch: vi.fn(async () => new Response("public shell")) };
+  const response = await gatewayFetch(
+    new Request("https://savia.example/public/forms/fixture"),
+    { API: api, ASSETS: assets },
+  );
+  expect(await response.text()).toBe("public shell");
+  expect(api.fetch).not.toHaveBeenCalled();
+  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+  await gatewayFetch(
+    new Request("https://savia.example/api/public/forms/fixture"),
+    { API: api, ASSETS: assets },
+  );
+  expect(api.fetch).toHaveBeenCalledOnce();
+});

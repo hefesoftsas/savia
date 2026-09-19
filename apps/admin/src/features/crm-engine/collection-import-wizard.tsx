@@ -810,7 +810,7 @@ export function CollectionImportWizard({
             </div>
           )}
 
-          {/* STEP 3: FIELDS MATRIX */}
+          {/* STEP 3: FIELDS TABLE */}
           {step === "fields" && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
@@ -826,7 +826,7 @@ export function CollectionImportWizard({
 
               <div className="wizard-table-container">
                 <div className="wizard-table-scroll">
-                  <table className="wizard-matrix-table">
+                  <table className="wizard-fields-table">
                     <thead>
                       <tr>
                         <th style={{ width: 44 }}></th>

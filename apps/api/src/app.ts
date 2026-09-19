@@ -3,6 +3,11 @@ import {
   registerRequestResultRoutes,
 } from "./request-results/routes";
 
+import {
+  registerPublicFormRoutes,
+  type PublicFormsOptions,
+} from "./public-forms/routes";
+import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { registerRequestPageRoutes } from "./request-pages/routes";
 import { registerDataDomainRoutes } from "./routes/data-domains";
 import { registerDynamicCrmRoutes } from "./routes/dynamic-crm";
@@ -75,6 +80,7 @@ export function createApp(
   extensionActionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   realtime?: RealtimeHubClient,
+  publicForms?: PublicFormsOptions,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -107,6 +113,15 @@ export function createApp(
   registerRealtimeRoutes(app, realtime);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerLookupRoutes(app, saviaRequestService);
+  registerPublicFormRoutes(app, db, {
+    ...publicForms,
+    quote:
+      publicForms?.quote ??
+      createPublicQuoteAdapter({
+        executor: extensionActionExecutor,
+        encryptionKey: extensionConnectionsEncryptionKey,
+      }),
+  });
   registerRequestPageRoutes(app, db, saviaRequestService);
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);

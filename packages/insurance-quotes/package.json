@@ -10,7 +10,8 @@
     "./normalize": "./src/normalize.ts",
     "./solution": "./src/solution.ts",
     "./admin": "./src/admin.tsx",
-    "./assistant-contract": "./src/assistant-contract.ts"
+    "./assistant-contract": "./src/assistant-contract.ts",
+    "./public-form": "./src/public-form.ts"
   },
   "scripts": {
     "test": "vitest run",

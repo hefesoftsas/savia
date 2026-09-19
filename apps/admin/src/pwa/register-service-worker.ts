@@ -6,14 +6,17 @@ export function registerPwaServiceWorker(): void {
     return;
   }
 
-  window.addEventListener("load", () => {
+  const register = () => {
     const swUrl = import.meta.env.DEV ? "/dev-sw.js?dev-sw" : "/sw.js";
 
     navigator.serviceWorker
       .register(swUrl, { scope: "/" })
       .then((registration) => {
         if (import.meta.env.DEV) {
-          console.debug("[PWA] Service worker registered successfully:", registration.scope);
+          console.debug(
+            "[PWA] Service worker registered successfully:",
+            registration.scope,
+          );
         }
       })
       .catch((error: unknown) => {
@@ -21,5 +24,7 @@ export function registerPwaServiceWorker(): void {
           console.debug("[PWA] Service worker registration notice:", error);
         }
       });
-  });
+  };
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }

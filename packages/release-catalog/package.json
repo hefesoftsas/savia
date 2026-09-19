@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./runtime": "./src/runtime.ts",
-    "./assistant-contracts": "./src/assistant-contracts.ts"
+    "./assistant-contracts": "./src/assistant-contracts.ts",
+    "./public-forms": "./src/public-forms.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -17,6 +17,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
+
 - [local-first-collections.md](local-first-collections.md) — local replicas, synchronization, recovery and deployment.
 
 - [realtime-cost-controls.md](realtime-cost-controls.md) — realtime limits, hibernation and cost controls.

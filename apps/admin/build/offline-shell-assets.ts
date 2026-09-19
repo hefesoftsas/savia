@@ -1,6 +1,9 @@
 // Include operational routes even though React loads them on demand. Only walk
 // static imports: optional studio panels and icon catalogs must remain on demand.
 const operationalRoutes = [
+  "/src/app.tsx",
+  "/admin/appearance-cache.ts",
+  "/pwa/register-service-worker.ts",
   "/dynamic-crm/crm-page.tsx",
   "/crm-engine/app.tsx",
   "/crm-engine/records.tsx",

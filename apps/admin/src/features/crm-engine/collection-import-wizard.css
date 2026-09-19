@@ -244,7 +244,7 @@
   gap: 16px;
 }
 
-/* Step 3: Fields Matrix Table */
+/* Step 3: Fields Table */
 .wizard-table-container {
   background: #ffffff;
   border: 1px solid var(--crm-border, #e1e6df);
@@ -259,14 +259,14 @@
   overflow-y: auto;
 }
 
-.wizard-matrix-table {
+.wizard-fields-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
   text-align: left;
 }
 
-.wizard-matrix-table th {
+.wizard-fields-table th {
   background: #f4f6f2;
   color: #49544c;
   font-weight: 650;
@@ -277,17 +277,17 @@
   z-index: 2;
 }
 
-.wizard-matrix-table td {
+.wizard-fields-table td {
   padding: 8px 14px;
   border-bottom: 1px solid #edf1eb;
   vertical-align: middle;
 }
 
-.wizard-matrix-table tr:hover {
+.wizard-fields-table tr:hover {
   background: #fafbf9;
 }
 
-.wizard-matrix-table tr.row-excluded {
+.wizard-fields-table tr.row-excluded {
   opacity: 0.45;
   background: #f8f9f7;
 }
