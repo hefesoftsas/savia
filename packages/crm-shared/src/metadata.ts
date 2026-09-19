@@ -156,6 +156,7 @@ export const DISPLAY_TEXT_TYPE = "DisplayText" as const;
 export const supportedTypes = [
   "Textbox",
   "Textarea",
+  "RichText",
   "Email",
   "Phone",
   "Url",
@@ -166,6 +167,7 @@ export const supportedTypes = [
   "Number",
   "Currency",
   "Dropdown",
+  "MultiSelect",
   "Autocomplete",
   "Toggle",
   "DateControl",
@@ -576,7 +578,31 @@ export const configSchema = z
           next = config.fields[next]?.config?.optionsWhen?.field;
         }
       }
-      if (c?.multiple && !c.relation && !c.collectionRelation)
+      if (
+        f.type === "MultiSelect" &&
+        (c?.unique ||
+          c?.relation ||
+          c?.collectionRelation ||
+          c?.collectionOptions ||
+          c?.optionsWhen ||
+          c?.dateTime ||
+          c?.formula)
+      )
+        issue(
+          `${f.label}: multiple choice requires a static option list without scalar or relation settings.`,
+        );
+      if (
+        f.type === "MultiSelect" &&
+        (!f.options?.length ||
+          new Set(f.options.map((o) => o.value)).size !== f.options.length)
+      )
+        issue(`${f.label}: provide distinct options for multiple choice.`);
+      if (
+        c?.multiple &&
+        !c.relation &&
+        !c.collectionRelation &&
+        f.type !== "MultiSelect"
+      )
         issue(`${f.label}: selección múltiple requiere una relación.`);
       if (c?.unique && (c.multiple || c.formula))
         issue(
@@ -774,14 +800,18 @@ export function validateRecord(
       value === undefined ||
       value === null ||
       value === "" ||
+      (field.type === "RichText" &&
+        typeof value === "string" &&
+        !value.trim()) ||
       (Array.isArray(value) && !value.length);
     if (empty) {
       if (required) errors[name] = `${field.label}: obligatorio`;
-      clean[name] = c.multiple
-        ? []
-        : value === undefined && field.type === "Toggle"
-          ? false
-          : null;
+      clean[name] =
+        c.multiple || field.type === "MultiSelect"
+          ? []
+          : value === undefined && field.type === "Toggle"
+            ? false
+            : null;
       continue;
     }
     if (field.type === "DateTime" || c.dateTime === true) {
@@ -798,6 +828,19 @@ export function validateRecord(
       if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
         errors[name] = `${field.label}: enter a valid time (HH:mm)`;
       else clean[name] = value;
+      continue;
+    }
+    if (field.type === "MultiSelect") {
+      const allowed = new Set(
+        field.options?.map((option) => option.value) ?? [],
+      );
+      if (
+        !Array.isArray(value) ||
+        value.length > 500 ||
+        value.some((item) => typeof item !== "string" || !allowed.has(item))
+      )
+        errors[name] = `${field.label}: select valid options`;
+      else clean[name] = [...new Set(value)];
       continue;
     }
     if (c.multiple) {
@@ -879,7 +922,12 @@ export function validateRecord(
     )
       errors[name] = `${field.label}: fuera del rango permitido`;
     if (typeof value === "string") {
-      const max = typeof c.maxLength === "number" ? c.maxLength : 10000,
+      const max =
+          typeof c.maxLength === "number"
+            ? c.maxLength
+            : field.type === "RichText"
+              ? 100000
+              : 10000,
         min = typeof c.minLength === "number" ? c.minLength : 0;
       if (value.length < min || value.length > max)
         errors[name] = `${field.label}: longitud permitida ${min}–${max}`;

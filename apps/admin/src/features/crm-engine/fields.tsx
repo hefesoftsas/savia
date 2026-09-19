@@ -1,3 +1,5 @@
+import { MultiSelectField } from "./multi-select-field";
+import { RichTextField } from "./rich-text-field";
 import { DateTimeField } from "./date-time-field";
 import { TimeField } from "./time-field";
 import { CollectionRelationPicker } from "./collection-relation-picker";
@@ -712,6 +714,8 @@ export const registry = {
   DateTime: <DateTimeField />,
   Time: <TimeField />,
   Textarea: <LongText />,
+  RichText: <RichTextField />,
+  MultiSelect: <MultiSelectField />,
   Dropdown: <SelectField />,
   Autocomplete: <AutocompleteField />,
   CrmRelation: <RelationField />,

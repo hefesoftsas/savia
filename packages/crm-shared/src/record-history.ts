@@ -35,6 +35,7 @@ export const defaultRecordHistorySettings: RecordHistorySettings = {
 const types = new Set([
   "Textbox",
   "Textarea",
+  "RichText",
   "Email",
   "Phone",
   "Url",

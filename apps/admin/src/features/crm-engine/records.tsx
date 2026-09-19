@@ -1,4 +1,4 @@
-import { formatFieldValue } from "./field-value";
+import { FieldValueDisplay } from "./field-value-display";
 import RecordHistorySettingsButton from "./record-history-settings";
 import { useDebouncedSearch } from "./use-debounced-search";
 import { RetainedListResults } from "./retained-list-results";
@@ -1565,7 +1565,7 @@ function RecordTable({
                     }
                     render={(r) => {
                       const cell = (
-                        <span className={key === "name" ? "record-name" : ""}>
+                        <div className={key === "name" ? "record-name" : ""}>
                           {object.config.fields[key].config?.relation ? (
                             <RelatedValue
                               objectName={String(
@@ -1577,14 +1577,15 @@ function RecordTable({
                               "managed-customer" && key === "email" ? (
                             displayCustomerEmail(r[key])
                           ) : (
-                            formatFieldValue(r[key], object.config.fields[key])
+                            <FieldValueDisplay value={r[key]} field={object.config.fields[key]}/>
                           )}
-                        </span>
+                        </div>
                       );
                       return key === primaryColumnKey &&
                         !trash &&
                         collectionCapabilities(object).read ? (
                         <div className="grid justify-items-start gap-1">
+                          {object.config.fields[key].type === "RichText" && cell}
                           <button
                             type="button"
                             className="text-left text-primary underline-offset-4 hover:underline focus-visible:underline"
@@ -1594,7 +1595,7 @@ function RecordTable({
                               onOpen(r as CrmRecord);
                             }}
                           >
-                            {cell}
+                            {object.config.fields[key].type === "RichText" ? "Open record" : cell}
                           </button>
                         </div>
                       ) : (

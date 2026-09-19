@@ -1,4 +1,4 @@
-import { formatFieldValue } from "./field-value";
+import { FieldValueDisplay } from "./field-value-display";
 import {
   cloneElement,
   createContext,
@@ -197,7 +197,7 @@ function SummaryValue({
   if (blank(value))
     return <span className="conversation-empty-value">Sin completar</span>;
   if (ids.length) return <>{names.data?.join(", ") ?? "Cargando…"}</>;
-  return <>{formatFieldValue(value, field)}</>;
+  return <FieldValueDisplay value={value} field={field}/>;
 }
 export default function ConversationWizard({
   object,

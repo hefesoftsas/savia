@@ -1,4 +1,4 @@
-import { formatFieldValue } from "./field-value";
+import { FieldValueDisplay } from "./field-value-display";
 const RecordHistory = lazy(() => import("./record-history"));
 import { supportsRecordHistory } from "./record-history-client";
 import { canDuplicateRecord } from "./record-duplication";
@@ -538,7 +538,7 @@ export default function RecordDetail({
                                     ),
                                   );
                             })()
-                          : formatFieldValue(current[name], field)}
+                          : <FieldValueDisplay value={current[name]} field={field}/>}
                     </dd>
                   </div>
                 ))}

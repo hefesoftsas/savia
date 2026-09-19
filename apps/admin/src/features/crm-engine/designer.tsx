@@ -287,7 +287,7 @@ function Properties({
     field.type === "Address" ||
     ["Email", "Phone", "Url", "Textbox", "Textarea"].includes(field.type) ||
     field.type === "Dropdown" ||
-    field.type === "Autocomplete";
+    field.type === "Autocomplete" || field.type === "MultiSelect" || field.type === "RichText";
   return (
     <aside className="studio-properties" key={id}>
       <div className="studio-properties-header">
@@ -517,6 +517,14 @@ function Properties({
                     updateField(id, { type, config: rest });
                     return;
                   }
+                  if (type === "MultiSelect" || type === "RichText") {
+                    updateField(id, {
+                      type, defaultValue: undefined,
+                      options: type === "MultiSelect" ? field.options?.length ? field.options : [{value: "option_1", label: "Option 1"}] : undefined,
+                      config: {section: config.section, minLength: type === "RichText" ? config.minLength : undefined, maxLength: type === "RichText" ? config.maxLength : undefined},
+                    });
+                    return;
+                  }
                   if (type === "Currency") {
                     const { addressAutocomplete, mapPicker, formHtml, displayText, ...rest } =
                       config;
@@ -641,6 +649,11 @@ function Properties({
                     <option value="false">No</option>
                     <option value="true">Sí</option>
                   </Choice>
+                ) : field.type === "MultiSelect" ? (
+                  <select multiple aria-label="Default choices" className="w-full rounded-md border p-2" value={Array.isArray(field.defaultValue) ? field.defaultValue.map(String) : []}
+                    onChange={event => updateField(id, {defaultValue: Array.from(event.currentTarget.selectedOptions, option => option.value)})}>
+                    {(field.options ?? []).map(option => <option key={String(option.value)} value={String(option.value)}>{String(option.label)}</option>)}
+                  </select>
                 ) : (
                   <Input
                     type={
@@ -1201,6 +1214,8 @@ function Properties({
                   />
                 </Control>
               </>
+            ) : field.type === "RichText" ? (
+              <div className="studio-two">{numeric("minLength", "Minimum length")}{numeric("maxLength", "Maximum length")}</div>
             ) : ["Textbox", "Textarea"].includes(field.type) ? (
               <>
                 <Control label="Formato">
@@ -1305,7 +1320,7 @@ function Properties({
                 )}
               </>
             )}
-            {field.type === "Autocomplete" && (
+            {(field.type === "Autocomplete" || field.type === "MultiSelect") && (
               <>
                 <Control label="Opciones (valor | etiqueta, una por línea)">
                   <Textarea
@@ -1327,12 +1342,12 @@ function Properties({
                     }
                   />
                 </Control>
-                <DependentOptionsEditor
+                {field.type !== "MultiSelect" && <DependentOptionsEditor
                   name={id}
                   fields={state.fields}
                   value={config.optionsWhen as any}
                   onChange={(v) => patch("optionsWhen", v)}
-                />
+                />}
               </>
             )}
           </PropertySection>
@@ -1583,7 +1598,7 @@ function Editor({
         ? { readOnly: true, required: false }
         : {}),
       ...(Object.keys(config).length ? { config } : {}),
-      ...(type === "Dropdown" || type === "Autocomplete"
+      ...(type === "Dropdown" || type === "Autocomplete" || type === "MultiSelect"
         ? { options: [{ value: "opcion_1", label: "Opción 1" }] }
         : {}),
     };

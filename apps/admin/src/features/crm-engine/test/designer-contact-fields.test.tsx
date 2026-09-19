@@ -99,7 +99,7 @@ it("adds dedicated date-time and time fields from the palette", () => {
       <Designer object={object} onSaved={vi.fn()} />
     </QueryClientProvider>,
   );
-  for (const label of ["Date and time", "Time"]) {
+  for (const label of ["Date and time", "Time", "Multiple choice", "Rich text"]) {
     fireEvent.click(screen.getByRole("button", { name: label, exact: true }));
     expect(screen.getAllByText(label).length).toBeGreaterThan(1);
   }
