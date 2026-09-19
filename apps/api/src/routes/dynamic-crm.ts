@@ -31,6 +31,17 @@ export function registerDynamicCrmRoutes(
 ) {
   app.all("/v1/dynamic-crm/:agencyId/api/*", async (c) => {
     const actor = actorFromContext(c);
+    const expectedPrincipal = c.req.header("X-Savia-Sync-Principal");
+    if (
+      expectedPrincipal !== undefined &&
+      expectedPrincipal !== actor.principal.id
+    )
+      return c.json(
+        {
+          error: "The authenticated principal changed. Reopen this workspace.",
+        },
+        403,
+      );
     const agencyId = Number(c.req.param("agencyId"));
     if (!Number.isSafeInteger(agencyId) || agencyId <= 0)
       return c.json(

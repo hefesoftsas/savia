@@ -487,7 +487,7 @@ export async function dynamicOpenApi(
           { ...idempotency, required: true },
         ],
         description:
-          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
+          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. New rows may supply a UUID clientId without id or version to preserve an offline identity. X-Savia-Sync-Principal, when supplied, must match the authenticated principal. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
         body: {
           type: "object",
           required: ["record", "relations"],
@@ -499,6 +499,12 @@ export async function dynamicOpenApi(
               additionalProperties: false,
               properties: {
                 id: { type: "string" },
+                clientId: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Optional stable create ID; requires data and forbids id and version.",
+                },
                 version: { type: "integer", minimum: 1 },
                 data: { type: "object" },
               },
@@ -526,6 +532,12 @@ export async function dynamicOpenApi(
                       additionalProperties: false,
                       properties: {
                         id: { type: "string" },
+                        clientId: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "Optional stable create ID; requires data and forbids id and version.",
+                        },
                         version: { type: "integer", minimum: 1 },
                         data: { type: "object" },
                       },
@@ -643,7 +655,10 @@ export async function dynamicOpenApi(
           ...bundlePath.post,
           operationId: `${name}_bundle_save`,
           tags: [object.label],
-          parameters: [{ ...idempotency, required: true }],
+          parameters: [
+            { ...idempotency, required: true },
+            parameter("X-Savia-Sync-Principal", "header", { type: "string" }),
+          ],
         },
       };
     const record = envelope(ref(`${name}_Record`));

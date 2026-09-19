@@ -139,7 +139,9 @@ afterEach(async () => {
 it("restores the original parent, child and selection versions without rebasing and retains retry identity on failure", async () => {
   state.scope = scope();
   await seed();
-  const save = vi.fn().mockRejectedValue(new Error("offline"));
+  const save = vi
+    .fn()
+    .mockRejectedValue(new Error("Resolve the overlapping pending form first"));
   mount(save);
   await screen.findByDisplayValue("Draft");
   expect(state.props.values.children).toEqual(stored.values.children);
@@ -161,13 +163,24 @@ it("restores the original parent, child and selection versions without rebasing 
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
   expect(save.mock.calls[1][3]).toEqual(save.mock.calls[0][3]);
 });
-it("clears durable state after confirmed successful save", async () => {
+it("clears durable state only after the local queue commits", async () => {
   state.scope = scope();
   await seed();
-  const save = vi.fn().mockResolvedValue({ id: "parent", _version: 4 });
+  let commit!: (record: unknown) => void;
+  const save = vi.fn().mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        commit = resolve;
+      }),
+  );
   mount(save);
   await screen.findByDisplayValue("Draft");
   fireEvent.click(screen.getByText("Save"));
+  await waitFor(() => expect(save).toHaveBeenCalled());
+  const pendingReader = createRelatedRecordDraft(key());
+  expect(await pendingReader.read()).toBeDefined();
+  await pendingReader.close();
+  commit({ id: "parent", _version: 4, _localPending: true });
   await waitFor(() =>
     expect(screen.queryByText(/Borrador recuperado/)).not.toBeInTheDocument(),
   );

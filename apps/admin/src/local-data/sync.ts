@@ -1,3 +1,4 @@
+import { pushQueuedBundles, resolveBundleFromServer } from "./bundle-sync";
 import { liveQuery, type Subscription } from "dexie";
 import type { CrmRecord } from "@savia/crm-shared/metadata";
 import type { CollectionManifest, PullBatch, SyncTransport } from "./contracts";
@@ -24,17 +25,9 @@ function isStorageCapacityError(error: unknown): boolean {
     )
   );
 }
-/** One synchronization pass. Call under the coordinator's origin-wide scope lock. */
-export async function syncOnce(
-  store: LocalStore,
-  transport: SyncTransport,
-  expectedPrincipalId?: string,
-  requestedCollection?: string,
-) {
-  const blocked = await store.authorizationError();
-  if (blocked) throw new SyncAuthorizationError(blocked);
+function authorizedTransport(store: LocalStore, transport: SyncTransport, expectedPrincipalId?: string): SyncTransport {
   const network = transport;
-  transport = async (path, init) => {
+  return async (path, init) => {
     const headers = new Headers(init?.headers);
     if (expectedPrincipalId !== undefined)
       headers.set("X-Savia-Sync-Principal", expectedPrincipalId);
@@ -46,6 +39,17 @@ export async function syncOnce(
     }
     return response;
   };
+}
+/** One synchronization pass. Call under the coordinator's origin-wide scope lock. */
+export async function syncOnce(
+  store: LocalStore,
+  transport: SyncTransport,
+  expectedPrincipalId?: string,
+  requestedCollection?: string,
+) {
+  const blocked = await store.authorizationError();
+  if (blocked) throw new SyncAuthorizationError(blocked);
+  transport = authorizedTransport(store, transport, expectedPrincipalId);
   const manifest = await json<{
     collections: CollectionManifest[];
     principalId?: string;
@@ -60,19 +64,21 @@ export async function syncOnce(
     throw new SyncAuthorizationError(message);
   }
   await store.refreshManifest(manifest.collections);
+  const bundleCollections = await pushQueuedBundles(store, transport, requestedCollection);
   for (const collection of manifest.collections) {
     if (requestedCollection && collection.name !== requestedCollection)
       continue;
     if (collection.capability === "remote") continue;
-    let hadMutations = false;
+    let hadMutations = bundleCollections.has(collection.name);
     if (collection.capability === "read-write") {
       const mutations = await store.db.outbox
         .where("collection")
         .equals(collection.name)
         .sortBy("sequence");
-      hadMutations = mutations.length > 0;
+      hadMutations = hadMutations || mutations.length > 0;
       const blocked = new Set<string>();
       for (const queued of mutations) {
+        if (queued.action === "bundle") continue;
         if (blocked.has(queued.id)) continue;
         const mutation = await store.db.outbox.get(queued.mutationId);
         if (!mutation) continue;
@@ -156,6 +162,19 @@ export async function syncOnce(
       more = batch.hasMore;
     }
   }
+}
+/** Caller serializes this operation with normal synchronization through Web Locks. */
+export async function resolveQueuedBundle(store: LocalStore, network: SyncTransport, expectedPrincipalId: string | undefined, mutationId: string, mode: "server" | "local") {
+  const blocked = await store.authorizationError();
+  if (blocked) throw new SyncAuthorizationError(blocked);
+  const transport = authorizedTransport(store, network, expectedPrincipalId);
+  const manifest = await json<{collections: CollectionManifest[]; principalId?: string}>(await transport("/api/local-sync/manifest"));
+  if (expectedPrincipalId !== undefined && manifest.principalId !== expectedPrincipalId) {
+    await store.blockAuthorization("Local sync principal changed; authenticate the expected account");
+    throw new SyncAuthorizationError("Local sync principal changed");
+  }
+  await store.refreshManifest(manifest.collections);
+  await resolveBundleFromServer(store, transport, mutationId, mode);
 }
 export function createSyncCoordinator(
   store: LocalStore,
@@ -336,5 +355,27 @@ export function createSyncCoordinator(
     void pending.then(cleanup, cleanup);
     return pending;
   };
-  return { start, requestSync, syncNow, stop };
+  const resolveBundle = async (mutationId: string, mode: "server" | "local") => {
+    if (!navigator.locks) throw new Error("Synchronization requires Web Locks support");
+    const expectedGeneration = generation;
+    const controller = new AbortController();
+    controllers.add(controller);
+    try {
+      await navigator.locks.request(`savia-sync:${store.scope}`, {mode:"exclusive"}, async () => {
+        if (generation !== expectedGeneration) throw new DOMException("Synchronization stopped", "AbortError");
+        await resolveQueuedBundle(store, async (path, init) => {
+          controller.signal.throwIfAborted();
+          const response = await transport(path, {...init, signal: controller.signal});
+          controller.signal.throwIfAborted();
+          return response;
+        }, expectedPrincipalId, mutationId, mode);
+      });
+      requestSync();
+    } catch(error) {
+      if (error instanceof SyncAuthorizationError) stop();
+      throw error;
+    } finally { controllers.delete(controller); }
+  };
+  return { start, requestSync, syncNow, resolveBundle, stop };
+
 }

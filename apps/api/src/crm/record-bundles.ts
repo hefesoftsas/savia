@@ -23,6 +23,7 @@ import {
 } from "@savia/crm-server/operations";
 const rowSchema = z
   .object({
+    clientId: z.string().uuid().optional(),
     id: z.string().min(1).max(512).optional(),
     version: z.number().int().positive().optional(),
     data: z.record(z.string(), z.unknown()).optional(),
@@ -98,6 +99,20 @@ export function createRecordBundlesApp({
       input.relations.length
     )
       fail("Duplicate relation group.");
+    for (const row of [
+      input.record,
+      ...input.relations.flatMap((group) => group.rows),
+    ]) {
+      if (
+        row.clientId !== undefined &&
+        (row.id !== undefined ||
+          row.version !== undefined ||
+          row.data === undefined)
+      )
+        fail(
+          "clientId is allowed only on new rows with data and no id or version.",
+        );
+    }
     const hash = Array.from(
       new Uint8Array(
         await crypto.subtle.digest(
@@ -266,7 +281,7 @@ export function createRecordBundlesApp({
       }
       if (before && (!row.version || row.version !== before._version))
         fail("Record version is missing or changed.", row.version ? 409 : 428);
-      const identity = `${objectName}:${row.id ?? crypto.randomUUID()}`;
+      const identity = `${objectName}:${row.id ?? row.clientId ?? crypto.randomUUID()}`;
       if (touched.has(identity))
         fail("A record can be edited only once per bundle.");
       touched.add(identity);
@@ -347,7 +362,15 @@ export function createRecordBundlesApp({
             )
             .bind(tenant, id),
         );
-      else
+      else {
+        if (
+          row.clientId &&
+          (await db
+            .prepare("SELECT 1 FROM crm_records WHERE tenant_id=? AND id=?")
+            .bind(tenant, id)
+            .first())
+        )
+          fail("The client-generated record ID already exists.", 409);
         writes.push(
           db
             .prepare(
@@ -355,6 +378,7 @@ export function createRecordBundlesApp({
             )
             .bind(id, tenant, objectName, JSON.stringify(data), now, now),
         );
+      }
       writes.push(
         ...uniqueStatements(db, tenant, object, id, data),
         audit(
@@ -635,6 +659,8 @@ export function createRecordBundlesApp({
     } catch (error) {
       const saved = await replay();
       if (saved) return c.json(saved);
+      if (String(error).includes("UNIQUE constraint failed: crm_records"))
+        fail("The client-generated record ID already exists.", 409);
       if (String(error).includes("relation_cardinality_conflict"))
         fail("Relation cardinality does not allow this selection.", 409);
       throw error;

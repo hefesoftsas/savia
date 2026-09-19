@@ -103,6 +103,10 @@ export function createWorkspaceManager(
           syncNow,
           coordinator.requestSync,
         ),
+        resolveBundle: async (mutationId: string, mode: "server" | "local") => {
+          if (closed || expected !== generation) throw new Error("La sesión cambió.");
+          await coordinator.resolveBundle(mutationId, mode);
+        },
         requestSync: coordinator.requestSync,
         syncNow,
         close: () => {

@@ -1,3 +1,4 @@
+import { localRecordLinks } from "./link-snapshots";
 import { isOfflineError } from "@/offline/offline-error";
 import { validateRecord } from "@savia/crm-shared/metadata";
 import type { LocalStore } from "./store";
@@ -52,6 +53,8 @@ export function createLocalTransport(
       (await store.db.collections.count()) > 0
     )
       return Response.json({ ok: true });
+    if (segments[1] === "record-links" && segments.length === 4 && method === "GET")
+      return localRecordLinks(store, network, path, init, segments[2], segments[3]);
     const recordRoute =
       segments[1] === "records" &&
       ((segments.length === 3 && ["GET", "POST"].includes(method)) ||

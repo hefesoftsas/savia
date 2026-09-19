@@ -1,3 +1,14 @@
+import {
+  enqueueBundle,
+  acknowledgeBundle,
+  resolveBundle,
+  pendingBundle,
+} from "./bundle-store";
+import type { RelatedRecordBundle } from "@savia/crm-shared/related-records";
+import type {
+  RelationDefinition,
+  RecordRelationGroup,
+} from "@savia/crm-shared/relations";
 import Dexie, {
   liveQuery,
   rangesOverlap,
@@ -52,7 +63,7 @@ export class LocalStore {
     };
   }
   /** Must be called within the same read-write transaction as the record change. */
-  private async touch(collection: string) {
+  async touch(collection: string) {
     const prior = await this.db.syncState.get(collection);
     await this.db.syncState.put({
       collection,
@@ -64,9 +75,41 @@ export class LocalStore {
   async get(collection: string, id: string) {
     return (await this.db.records.get([collection, id]))?.document;
   }
+  enqueueBundle(
+    collection: string,
+    input: RelatedRecordBundle,
+    definitions: RelationDefinition[],
+    mutationId: string,
+  ) {
+    return enqueueBundle(this, collection, input, definitions, mutationId);
+  }
+  acknowledgeBundle(
+    mutation: Mutation,
+    result: {
+      data: CrmRecord;
+      related: Array<{ relationId: string; records: CrmRecord[] }>;
+    },
+  ) {
+    return acknowledgeBundle(this, mutation, result);
+  }
+  getPendingBundle(collection: string, id: string) {
+    return pendingBundle(this, collection, id);
+  }
+  resolveBundle(
+    mutationId: string,
+    mode: "server" | "local",
+    masters: Array<{
+      collection: string;
+      id: string;
+      document: CrmRecord | null;
+    }>,
+    groups: RecordRelationGroup[],
+  ) {
+    return resolveBundle(this, mutationId, mode, masters, groups);
+  }
   async mutate(
     collection: string,
-    action: Mutation["action"],
+    action: Exclude<Mutation["action"], "bundle">,
     id: string,
     data?: Record<string, unknown>,
     baseVersion?: number,
@@ -81,6 +124,10 @@ export class LocalStore {
         const metadata = await this.db.collections.get(collection);
         if (metadata?.capability !== "read-write")
           throw new Error("Collection is not writable locally");
+        if (await this.getPendingBundle(collection, id))
+          throw new Error(
+            "This record belongs to a pending bundle; synchronize or resolve it first",
+          );
         const current = await this.get(collection, id);
         const last = await this.db.outbox.orderBy("sequence").last();
         const mutation: Mutation = {
@@ -105,11 +152,14 @@ export class LocalStore {
   async refreshManifest(collections: CollectionManifest[]) {
     await this.db.transaction(
       "rw",
-      this.db.collections,
-      this.db.records,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.conflicts,
+      [
+        this.db.collections,
+        this.db.records,
+        this.db.syncState,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.linkSnapshots,
+      ],
       async () => {
         const changed = new Set<string>();
         const priorCollections = new Map(
@@ -133,6 +183,10 @@ export class LocalStore {
                 });
             }
             await this.db.records.where("collection").equals(old.name).delete();
+            await this.db.linkSnapshots
+              .where("collection")
+              .equals(old.name)
+              .delete();
             await this.db.outbox.where("collection").equals(old.name).modify({
               state: "error",
               error:
@@ -167,6 +221,33 @@ export class LocalStore {
           }
         }
         for (const mutation of await this.db.outbox.toArray()) {
+          if (mutation.bundle) {
+            for (const member of mutation.bundle.members) {
+              if (names.has(member.collection)) {
+                await this.db.records.put(
+                  await this.row(member.collection, member.document),
+                );
+                changed.add(member.collection);
+              }
+            }
+            if (names.has(mutation.collection))
+              await this.db.linkSnapshots.put({
+                collection: mutation.collection,
+                id: mutation.id,
+                groups: mutation.bundle.groups,
+              });
+            if (
+              mutation.bundle.members.some(
+                (member) =>
+                  collections.find((c) => c.name === member.collection)
+                    ?.capability !== "read-write",
+              )
+            )
+              await this.db.outbox.update(mutation.mutationId, {
+                state: "error",
+                error: "Bundle collection access revoked; local edits retained",
+              });
+          }
           if (mutation.localSnapshot && names.has(mutation.collection)) {
             await this.db.records.put(
               await this.row(mutation.collection, mutation.localSnapshot),
@@ -194,6 +275,9 @@ export class LocalStore {
           .equals(collection)
           .toArray();
         const protectedIds = new Set(pending.map((m) => m.id));
+        for (const mutation of await this.db.outbox.toArray())
+          for (const member of mutation.bundle?.members ?? [])
+            if (member.collection === collection) protectedIds.add(member.id);
         let changed = false;
         if (batch.reset)
           changed =
@@ -223,6 +307,8 @@ export class LocalStore {
     );
   }
   async acknowledge(mutation: Mutation, master: CrmRecord) {
+    if (mutation.bundle)
+      throw new Error("Acknowledge the complete bundle instead");
     await this.db.transaction(
       "rw",
       this.db.records,
@@ -287,6 +373,8 @@ export class LocalStore {
       this.db.collections,
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
+        if (mutation?.bundle)
+          throw new Error("Resolve the complete bundle instead");
         const conflict = await this.db.conflicts.get(mutationId);
         if (!mutation || !conflict || conflict.master === undefined)
           throw new Error("Conflict has no master record");
@@ -329,9 +417,13 @@ export class LocalStore {
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
         if (!mutation) return;
+        if (mutation.bundle)
+          throw new Error("Resolve the complete bundle instead");
         const metadata = await this.db.collections.get(mutation.collection);
         if (metadata?.capability !== "read-write")
           throw new Error("Collection is not writable locally");
+        if (mutation?.bundle)
+          throw new Error("Resolve the complete bundle instead");
         const conflict = await this.db.conflicts.get(mutationId);
         if (conflict?.master?.deleted_at)
           throw new Error(
@@ -386,6 +478,7 @@ export class LocalStore {
       this.db.collections,
       this.db.syncState,
       this.db.outbox,
+      this.db.linkSnapshots,
       async () => {
         for (const mutation of await this.db.outbox.toArray()) {
           const localSnapshot = await this.get(
@@ -399,6 +492,7 @@ export class LocalStore {
           });
         }
         await this.db.records.clear();
+        await this.db.linkSnapshots.clear();
         await this.db.collections.clear();
         await this.db.syncState.clear();
         await this.db.syncState.put({
@@ -424,6 +518,8 @@ export class LocalStore {
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
         if (!mutation) return;
+        if (mutation.bundle)
+          throw new Error("Resolve the complete bundle instead");
         if (mutation.state === "pending")
           throw new Error("Only rejected mutations can be discarded");
         await this.db.outbox.delete(mutationId);
@@ -473,6 +569,8 @@ export class LocalStore {
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
         if (!mutation) return;
+        if (mutation.bundle)
+          throw new Error("Resolve the complete bundle instead");
         if (mutation.state !== "error")
           throw new Error("Only rejected errors can be retried");
         const metadata = await this.db.collections.get(mutation.collection);

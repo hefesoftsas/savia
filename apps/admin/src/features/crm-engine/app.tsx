@@ -781,9 +781,13 @@ function App({
           onUploadTemporaryAttachment={(field, file) =>
             uploadTemporaryR2Attachment(object.name, field, file)
           }
-          onSaved={() => {
+          onSaved={(saved) => {
             toast.success(
-              editing === "new" ? "Registro creado" : "Cambios guardados",
+              saved && saved._localPending
+                ? "Guardado en este dispositivo · sincronización pendiente"
+                : editing === "new"
+                  ? "Registro creado"
+                  : "Cambios guardados",
             );
             closeEditor();
             refresh();

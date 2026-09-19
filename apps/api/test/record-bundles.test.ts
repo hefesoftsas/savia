@@ -714,18 +714,23 @@ it("publishes bounded hints from tenant and platform bundle routes only after su
         },
       } as any,
     });
-    const request = (name: string) =>
+    const request = (name: string, principal?: string) =>
       app.request(prefix + "/record-bundles/parents", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Idempotency-Key": crypto.randomUUID(),
+          ...(principal !== undefined
+            ? { "X-Savia-Sync-Principal": principal }
+            : {}),
         },
         body: JSON.stringify({
           record: { data: { name } },
           relations: [{ relationId, rows: [{ data: { name: "Child" } }] }],
         }),
       });
+    expect((await request("Wrong principal", "other-user")).status).toBe(403);
+    expect(events).toHaveLength(0);
     const invalid = await request("");
     expect(invalid.status).toBe(422);
     expect(events).toHaveLength(0);
@@ -744,6 +749,122 @@ it("publishes bounded hints from tenant and platform bundle routes only after su
         }),
       ]),
     );
-    expect(await response.json()).toHaveProperty("related");
+    const saved: any = await response.json();
+    expect(saved).toHaveProperty("related");
+    for (const path of [
+      `/records/parents/${saved.data.id}`,
+      `/record-links/parents/${saved.data.id}`,
+    ]) {
+      const denied = await app.request(prefix + path, {
+        headers: { "X-Savia-Sync-Principal": "other-user" },
+      });
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).not.toHaveProperty("data");
+      const allowed = await app.request(prefix + path, {
+        headers: { "X-Savia-Sync-Principal": "test-platform-admin" },
+      });
+      expect(allowed.status).toBe(200);
+    }
+  }
+});
+
+it("preserves offline create IDs and replays the original receipt after later edits", async () => {
+  const { relationId, call } = await fixture();
+  const parentId = crypto.randomUUID(),
+    childId = crypto.randomUUID(),
+    key = crypto.randomUUID();
+  const body = {
+    record: { clientId: parentId, data: { name: "Parent" } },
+    relations: [
+      { relationId, rows: [{ clientId: childId, data: { name: "Child" } }] },
+    ],
+  };
+  const response = await call(body, key);
+  expect(response.status).toBe(200);
+  const saved: any = await response.json();
+  expect(saved.data.id).toBe(parentId);
+  expect(saved.related[0].records[0].id).toBe(childId);
+  expect(
+    (
+      await call({
+        record: { id: parentId, version: 1, data: { name: "Later" } },
+        relations: [],
+      })
+    ).status,
+  ).toBe(200);
+  expect(await (await call(body, key)).json()).toEqual(saved);
+  expect((await call(body)).status).toBe(409);
+});
+it("rejects malformed or edit/link client IDs without writing any records", async () => {
+  const { tenant, relationId, call } = await fixture();
+  for (const row of [
+    { clientId: "bad", data: { name: "Child" } },
+    {
+      clientId: crypto.randomUUID(),
+      id: crypto.randomUUID(),
+      data: { name: "Child" },
+    },
+    { clientId: crypto.randomUUID(), version: 1, data: { name: "Child" } },
+    { clientId: crypto.randomUUID() },
+  ]) {
+    expect(
+      (
+        await call({
+          record: { data: { name: "Parent" } },
+          relations: [{ relationId, rows: [row] }],
+        })
+      ).status,
+    ).toBe(422);
+  }
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+    )
+      .bind(tenant)
+      .first(),
+  ).toEqual({ count: 0 });
+});
+
+it("rolls back a parent when a child create ID collides, including deleted records", async () => {
+  const { tenant, relationId, call } = await fixture();
+  const childId = crypto.randomUUID();
+  const original = await call({
+    record: { data: { name: "Original" } },
+    relations: [
+      { relationId, rows: [{ clientId: childId, data: { name: "Child" } }] },
+    ],
+  });
+  expect(original.status).toBe(200);
+  for (const deleted of [false, true]) {
+    if (deleted)
+      await env.DB.prepare(
+        "UPDATE crm_records SET deleted_at='2026-09-19' WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, childId)
+        .run();
+    const response = await call({
+      record: { clientId: crypto.randomUUID(), data: { name: "Uncommitted" } },
+      relations: [
+        {
+          relationId,
+          rows: [{ clientId: childId, data: { name: "Overwrite" } }],
+        },
+      ],
+    });
+    expect(response.status).toBe(409);
+    expect(
+      await env.DB.prepare(
+        "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      )
+        .bind(tenant)
+        .first(),
+    ).toEqual({ count: 2 });
+    expect(
+      await env.DB.prepare(
+        "SELECT json_extract(data,'$.name') name FROM crm_records WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, childId)
+        .first(),
+    ).toEqual({ name: "Child" });
   }
 });
