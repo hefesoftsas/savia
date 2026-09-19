@@ -1,3 +1,5 @@
+import { z } from "@hono/zod-openapi";
+import { databaseSourceInputSchema } from "@savia/crm-shared/database-sources";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { disabledSolutionObjects } from "@savia/crm-server/solution-state";
 import { parseObject } from "@savia/crm-server/services";
@@ -337,22 +339,90 @@ export async function dynamicOpenApi(
               {
                 status: 201,
                 body: {
+                  anyOf: [
+                    z.toJSONSchema(databaseSourceInputSchema, { io: "input" }),
+                    {
+                      type: "object",
+                      required: ["id", "label", "kind", "baseUrl"],
+                      properties: {
+                        id: { type: "string" },
+                        label: { type: "string" },
+                        kind: { const: "jsonapi" },
+                        baseUrl: { type: "string", format: "uri" },
+                        token: { type: "string", writeOnly: true },
+                        options: { type: "object" },
+                      },
+                    },
+                  ],
+                },
+              },
+            ),
+          },
+          "/sources/{id}/test": {
+            post: operation(
+              "database_source_test",
+              "Fuentes y colecciones",
+              "Probar conexión de base de datos",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+              },
+            ),
+          },
+          "/sources/{id}/inspect": {
+            post: operation(
+              "database_source_inspect",
+              "Fuentes y colecciones",
+              "Inspeccionar tablas o colecciones",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+                body: {
                   type: "object",
-                  required: ["id", "label", "kind"],
+                  properties: { resource: { type: "string" } },
+                },
+              },
+            ),
+          },
+          "/sources/{id}": {
+            put: operation(
+              "database_source_update",
+              "Fuentes y colecciones",
+              "Actualizar acceso y permisos de escritura",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+                body: {
+                  type: "object",
                   properties: {
-                    id: { type: "string" },
                     label: { type: "string" },
-                    kind: { enum: ["jsonapi", "postgres"] },
-                    baseUrl: { type: "string", format: "uri" },
-                    token: { type: "string", writeOnly: true },
-                    host: { type: "string" },
-                    port: { type: "integer" },
-                    database: { type: "string" },
-                    username: { type: "string" },
-                    password: { type: "string", writeOnly: true },
-                    schema: { type: "string" },
-                    ssl: { type: "boolean" },
-                    options: { type: "object" },
+                    password: {
+                      type: "string",
+                      writeOnly: true,
+                      nullable: true,
+                    },
+                    writeEnabled: { type: "boolean" },
+                  },
+                },
+              },
+            ),
+          },
+          "/collection-bindings/{name}/sync": {
+            post: operation(
+              "database_source_sync",
+              "Fuentes y colecciones",
+              "Sincronizar campos desde la base",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("name", "path", { type: "string" }, true),
+                ],
+                body: {
+                  type: "object",
+                  required: ["version"],
+                  properties: {
+                    version: { type: "integer" },
+                    fields: { type: "array", items: { type: "string" } },
                   },
                 },
               },
@@ -453,7 +523,7 @@ export async function dynamicOpenApi(
                   },
                 },
                 description:
-                  "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API o Postgres. No copia los registros externos.",
+                  "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server o MongoDB. No copia los registros externos.",
               },
             ),
           },

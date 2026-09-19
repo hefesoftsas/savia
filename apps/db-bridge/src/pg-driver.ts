@@ -1,3 +1,4 @@
+import { createPostgresDatabaseDriver } from "./postgres-driver";
 import { Pool, type PoolConfig } from "pg";
 import {
   SQL_MAX_TABLES,
@@ -66,6 +67,7 @@ const quote = (identifier: string): string =>
 
 export function createPgDriver(): BridgeDriver {
   const pools = new Map<string, Pool>();
+  const metadataDriver = createPostgresDatabaseDriver();
 
   function poolFor(connection: BridgeConnectionWithPassword): Pool {
     const key = fingerprint(connection);
@@ -128,66 +130,30 @@ export function createPgDriver(): BridgeDriver {
       connection: BridgeConnectionWithPassword,
       table: string,
     ): Promise<BridgeIntrospectColumnsResult> {
-      const pool = poolFor(connection);
-      const [columns, keys] = await Promise.all([
-        pool.query(
-          `SELECT column_name AS name,
-                  udt_name AS "pgType",
-                  (is_nullable = 'YES') AS nullable,
-                  column_default AS "defaultValue"
-             FROM information_schema.columns
-            WHERE table_schema = $1 AND table_name = $2
-            ORDER BY ordinal_position`,
-          [connection.schema, table],
-        ),
-        pool.query(
-          `SELECT kcu.column_name AS name,
-                  tc.constraint_type AS kind
-             FROM information_schema.table_constraints tc
-             JOIN information_schema.key_column_usage kcu
-               ON kcu.constraint_schema = tc.constraint_schema
-              AND kcu.constraint_name = tc.constraint_name
-            WHERE tc.table_schema = $1
-              AND tc.table_name = $2
-              AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')`,
-          [connection.schema, table],
-        ),
-      ]);
-      if (!columns.rows.length) {
-        const error = new Error("Tabla no encontrada o sin columnas.");
-        (error as { status?: number }).status = 404;
-        throw error;
-      }
-      const pk = new Set(
-        keys.rows
-          .filter((row) => row.kind === "PRIMARY KEY")
-          .map((row) => String(row.name)),
+      const described = await metadataDriver.inspect(
+        { ...connection, kind: "postgres" },
+        table,
       );
-      const unique = new Set(
-        keys.rows
-          .filter((row) => row.kind === "UNIQUE")
-          .map((row) => String(row.name)),
-      );
-      const orderedPk = columns.rows
-        .map((row) => String(row.name))
-        .filter((name) => pk.has(name));
       return {
         schema: connection.schema,
         table,
-        kind: "table",
-        columns: columns.rows.map((row) => ({
-          name: String(row.name),
-          pgType: String(row.pgType ?? "text"),
-          nullable: Boolean(row.nullable),
-          isPrimaryKey: pk.has(String(row.name)),
-          isUnique: pk.has(String(row.name)) || unique.has(String(row.name)),
-          defaultValue:
-            row.defaultValue === null || row.defaultValue === undefined
-              ? null
-              : String(row.defaultValue).slice(0, 500),
+        kind: described.kind === "view" ? "view" : "table",
+        primaryKey: described.primaryKey,
+        columns: described.fields.map((f) => ({
+          name: f.name,
+          pgType: f.nativeType,
+          nullable: f.nullable,
+          isPrimaryKey: described.primaryKey.includes(f.name),
+          isUnique: [described.primaryKey, ...described.uniqueKeys].some(
+            (k) => k.length === 1 && k[0] === f.name,
+          ),
+          defaultValue: f.defaultValue ?? null,
         })),
-        primaryKey: orderedPk.slice(0, 10),
       };
+    },
+    async close() {
+      await Promise.all([...pools.values()].map((p) => p.end()));
+      await metadataDriver.close();
     },
 
     async query(input: BridgeQuery): Promise<BridgeQueryResult> {
