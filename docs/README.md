@@ -1,5 +1,7 @@
 # Documentation
 
+- [External database sources](external-database-sources.md): PostgreSQL, MySQL, SQL Server, MongoDB, CRUD policies, and metadata synchronization.
+
 Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Onboarding (new developers)

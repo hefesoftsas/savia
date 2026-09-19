@@ -1,5 +1,26 @@
 # External database plugins implementation plan
 
+## Implementation status — 2026-09-19
+
+Tasks 1–8 are implemented. Task 9 delivered the guide, disposable live fixtures,
+regression suites, and independent review. All five review findings were fixed
+with regression coverage. Runtime adapters share a transactional relational core;
+MongoDB uses a directly configured endpoint to preserve host allowlists.
+
+Verified: shared contracts (103 tests), bridge (41 tests), admin database forms
+and source manager (22 tests), API source/migration/policy suites, generated API
+contracts, and the bundled bridge build. Browser inspection covered source choices,
+SQL Server TLS/defaults, and MongoDB connection fields. Native CRUD passed for all
+four engines during implementation; the final combined run passed PostgreSQL,
+MySQL and MongoDB but SQL Server timed out under concurrent host load. The runner
+now starts and removes each engine sequentially. Full repository validation is
+not claimed: the broad admin run encountered failures and timeouts outside the
+targeted suites and was stopped to reduce memory pressure. Detailed local command
+results are recorded in the execution ledger.
+
+The original checklist below remains as the planned specification; the status
+above records the actual delivered and verified scope.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver PostgreSQL, MySQL, SQL Server, and MongoDB source adapters with discovery, metadata synchronization, and permission-controlled CRUD in Savia.
@@ -50,7 +71,8 @@ Each task follows red/green verification and commits only its own changes using 
 
 ```ts
 it.each(["Acme", "", true, false, 0, 1.5, null])(
-  "preserves the scalar %j", (value) => {
+  "preserves the scalar %j",
+  (value) => {
     expect(serializeValue(value)).toBe(value);
   },
 );
@@ -79,42 +101,104 @@ if (typeof value === "number") return Number.isFinite(value) ? value : null;
 
 ```ts
 export type DatabaseKind = "postgres" | "mysql" | "mssql" | "mongodb";
-export type JsonValue = null | boolean | number | string | JsonValue[] |
-  { [key: string]: JsonValue };
+export type JsonValue =
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type DatabaseConnection =
-  | { kind: "postgres"; host: string; port: number; database: string;
-      username: string; password: string; schema: string; ssl: boolean }
-  | { kind: "mysql"; host: string; port: number; database: string;
-      username: string; password: string; ssl: boolean }
-  | { kind: "mssql"; host: string; port: number; database: string;
-      username: string; password: string; schema: string;
-      encrypt: boolean; trustServerCertificate: boolean }
-  | { kind: "mongodb"; host: string; port: number; database: string;
-      username?: string; password?: string; authSource: string;
-      replicaSet?: string; ssl: boolean };
+  | {
+      kind: "postgres";
+      host: string;
+      port: number;
+      database: string;
+      username: string;
+      password: string;
+      schema: string;
+      ssl: boolean;
+    }
+  | {
+      kind: "mysql";
+      host: string;
+      port: number;
+      database: string;
+      username: string;
+      password: string;
+      ssl: boolean;
+    }
+  | {
+      kind: "mssql";
+      host: string;
+      port: number;
+      database: string;
+      username: string;
+      password: string;
+      schema: string;
+      encrypt: boolean;
+      trustServerCertificate: boolean;
+    }
+  | {
+      kind: "mongodb";
+      host: string;
+      port: number;
+      database: string;
+      username?: string;
+      password?: string;
+      authSource: string;
+      replicaSet?: string;
+      ssl: boolean;
+    };
 export type DatabaseField = {
-  name: string; nativeType: string;
-  valueType: "string" | "boolean" | "number" | "decimal" | "bigint" |
-    "date" | "json" | "binary" | "unsupported";
-  nullable: boolean; generated: boolean; writable: boolean;
-  hasDefault: boolean; defaultValue?: string | null;
+  name: string;
+  nativeType: string;
+  valueType:
+    | "string"
+    | "boolean"
+    | "number"
+    | "decimal"
+    | "bigint"
+    | "date"
+    | "json"
+    | "binary"
+    | "unsupported";
+  nullable: boolean;
+  generated: boolean;
+  writable: boolean;
+  hasDefault: boolean;
+  defaultValue?: string | null;
 };
 export type ResourceMetadata = {
-  resource: string; kind: "table" | "view" | "collection";
-  fields: DatabaseField[]; primaryKey: string[]; uniqueKeys: string[][];
-  idType?: "string" | "objectId"; sampled: boolean;
+  resource: string;
+  kind: "table" | "view" | "collection";
+  fields: DatabaseField[];
+  primaryKey: string[];
+  uniqueKeys: string[][];
+  idType?: "string" | "objectId";
+  sampled: boolean;
 };
 export type DatabaseRead = {
-  connection: DatabaseConnection; resource: string;
-  operation: "list" | "read"; id?: string; idColumn?: string;
-  idType?: "string" | "objectId"; columns: string[];
-  page: number; perPage: number; sort?: string; order: "ASC" | "DESC";
-  filters: { field: string; op: "eq"; value: null | boolean | number | string }[];
-  search?: string; searchColumns: string[];
+  connection: DatabaseConnection;
+  resource: string;
+  operation: "list" | "read";
+  id?: string;
+  idColumn?: string;
+  idType?: "string" | "objectId";
+  columns: string[];
+  page: number;
+  perPage: number;
+  sort?: string;
+  order: "ASC" | "DESC";
+  filters: {
+    field: string;
+    op: "eq";
+    value: null | boolean | number | string;
+  }[];
+  search?: string;
+  searchColumns: string[];
 };
 export type DatabaseMutation = {
-  connection: DatabaseConnection; resource: string; idColumn: string;
-  idType?: "string" | "objectId"; columns: string[];
+  connection: DatabaseConnection;
+  resource: string;
+  idColumn: string;
+  idType?: "string" | "objectId";
+  columns: string[];
 } & (
   | { operation: "create"; values: Record<string, JsonValue> }
   | { operation: "update"; id: string; values: Record<string, JsonValue> }
@@ -122,7 +206,10 @@ export type DatabaseMutation = {
 );
 export type DatabaseResult = {
   data: Record<string, JsonValue> | Record<string, JsonValue>[] | null;
-  page?: number; perPage?: number; total?: number; hasNext?: boolean;
+  page?: number;
+  perPage?: number;
+  total?: number;
+  hasNext?: boolean;
 };
 ```
 
@@ -131,19 +218,32 @@ export type DatabaseResult = {
 
 ```ts
 const connection = {
-  kind: "postgres", host: "pg.internal", port: 5432, database: "erp",
-  username: "writer", password: "secret", schema: "public", ssl: true,
+  kind: "postgres",
+  host: "pg.internal",
+  port: 5432,
+  database: "erp",
+  username: "writer",
+  password: "secret",
+  schema: "public",
+  ssl: true,
 };
 it("requires an identifier for update", () => {
-  expect(databaseMutationSchema.safeParse({
-    connection, resource: "orders", idColumn: "id", columns: ["id", "name"],
-    operation: "update", values: { name: "Acme" },
-  }).success).toBe(false);
+  expect(
+    databaseMutationSchema.safeParse({
+      connection,
+      resource: "orders",
+      idColumn: "id",
+      columns: ["id", "name"],
+      operation: "update",
+      values: { name: "Acme" },
+    }).success,
+  ).toBe(false);
 });
 it("defaults persisted sources to read-only", () => {
   const { password, kind, ...settings } = connection;
-  expect(databaseSourceConfigSchema.parse({ kind, ...settings }).writeEnabled)
-    .toBe(false);
+  expect(
+    databaseSourceConfigSchema.parse({ kind, ...settings }).writeEnabled,
+  ).toBe(false);
 });
 ```
 
@@ -164,10 +264,16 @@ The persisted-config schema consumes a kind discriminator to validate then omits
 ```ts
 export interface DatabaseDriver {
   testConnection(connection: DatabaseConnection): Promise<void>;
-  listResources(connection: DatabaseConnection): Promise<{
-    resource: string; kind: "table" | "view" | "collection";
-  }[]>;
-  inspect(connection: DatabaseConnection, resource: string): Promise<ResourceMetadata>;
+  listResources(connection: DatabaseConnection): Promise<
+    {
+      resource: string;
+      kind: "table" | "view" | "collection";
+    }[]
+  >;
+  inspect(
+    connection: DatabaseConnection,
+    resource: string,
+  ): Promise<ResourceMetadata>;
   read(input: DatabaseRead): Promise<DatabaseResult>;
   mutate(input: DatabaseMutation): Promise<DatabaseResult>;
   close(): Promise<void>;
@@ -184,9 +290,12 @@ Import shared types from Task 2. Export `DatabaseBridgeError` with a safe code, 
 it("rejects an update without its identifier", async () => {
   const app = createDbBridgeApp({ drivers: {}, sharedSecret: "test-secret" });
   const response = await app.request("http://bridge/database/mutate", {
-    method: "POST", headers: {
-      authorization: "Bearer test-secret", "content-type": "application/json",
-    }, body: JSON.stringify({ operation: "update" }),
+    method: "POST",
+    headers: {
+      authorization: "Bearer test-secret",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ operation: "update" }),
   });
   expect(response.status).toBe(422);
 });
@@ -287,9 +396,15 @@ Here `collection` is selected from the configured database and validated resourc
 
 ```ts
 const source = {
-  id: "mysql_erp", label: "MySQL ERP", kind: "mysql",
-  host: "mysql.internal", database: "erp", username: "writer",
-  password: "fixture-secret", ssl: true, writeEnabled: true,
+  id: "mysql_erp",
+  label: "MySQL ERP",
+  kind: "mysql",
+  host: "mysql.internal",
+  database: "erp",
+  username: "writer",
+  password: "fixture-secret",
+  ssl: true,
+  writeEnabled: true,
 };
 ```
 

@@ -27,7 +27,14 @@ export function collectionCapabilities(
     capabilities?: CollectionCapabilities;
     collection?: {
       capabilities: CollectionCapabilities;
-      kind?: "domain" | "jsonapi" | "postgres" | "crm";
+      kind?:
+        | "domain"
+        | "jsonapi"
+        | "postgres"
+        | "mysql"
+        | "mssql"
+        | "mongodb"
+        | "crm";
       domain?: string;
       collection?: string;
     };
