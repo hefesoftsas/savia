@@ -11,11 +11,14 @@ Verified: shared contracts (103 tests), bridge (41 tests), admin database forms
 and source manager (22 tests), API source/migration/policy suites, generated API
 contracts, and the bundled bridge build. Browser inspection covered source choices,
 SQL Server TLS/defaults, and MongoDB connection fields. Native CRUD passed for all
-four engines during implementation; the final combined run passed PostgreSQL,
-MySQL and MongoDB but SQL Server timed out under concurrent host load. The runner
-now starts and removes each engine sequentially. Full repository validation is
+four engines. The final PostgreSQL, MySQL and MongoDB run passed; SQL Server
+passed separately after replacing log-based startup detection with authenticated
+query readiness. The runner starts and removes each engine sequentially.
+Full repository validation is
 not claimed: the broad admin run encountered failures and timeouts outside the
-targeted suites and was stopped to reduce memory pressure. Detailed local command
+targeted suites and was stopped to reduce memory pressure. Global TypeScript
+validation was stopped at admin after more than ten minutes under concurrent host
+load; the API and bridge typechecks completed successfully. Detailed local command
 results are recorded in the execution ledger.
 
 The original checklist below remains as the planned specification; the status

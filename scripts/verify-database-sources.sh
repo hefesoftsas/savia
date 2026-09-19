@@ -22,7 +22,7 @@ for engine in "${engines[@]}"; do
       postgres) docker exec "${run_id}-${engine}" pg_isready -U postgres >/dev/null 2>&1 && ready=true ;;
       mysql) docker exec "${run_id}-${engine}" mysqladmin ping -h localhost -psavia_test_only >/dev/null 2>&1 && ready=true ;;
       mongodb) docker exec "${run_id}-${engine}" mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' >/dev/null 2>&1 && ready=true ;;
-      mssql) docker logs "${run_id}-${engine}" 2>&1 | grep -q 'SQL Server is now ready for client connections' && ready=true ;;
+      mssql) docker exec "${run_id}-${engine}" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Savia_test_Only_2026 -C -l 3 -t 3 -b -Q "SELECT 1" >/dev/null 2>&1 && ready=true ;;
     esac
     if "$ready"; then break; fi
     sleep 2
