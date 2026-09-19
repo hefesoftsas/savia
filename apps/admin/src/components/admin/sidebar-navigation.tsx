@@ -67,6 +67,13 @@ const navigationDefinitions: Record<
     labelKey: string;
   }
 > = {
+  "access-control": {
+    id: "access-control",
+    labelKey: "savia.sidebar.items.access-control",
+    route: "/roles",
+    section: "administration",
+    icon: KeyRound,
+  },
   "dynamic-crm": {
     id: "dynamic-crm",
     labelKey: "savia.sidebar.items.dynamic-crm",

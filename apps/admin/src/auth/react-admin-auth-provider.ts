@@ -15,7 +15,10 @@ function hasAnyRole(
 
 export function createReactAdminAuthProvider(
   session: AuthSession,
-  options?: { onLogout?: () => void | Promise<void> },
+  options?: {
+    onLogout?: () => void | Promise<void>;
+    canAccessCrm?: () => Promise<boolean>;
+  },
 ): AuthProvider {
   return {
     login: () => session.login(),
@@ -55,8 +58,14 @@ export function createReactAdminAuthProvider(
     canAccess: async ({ resource, action }) => {
       const permissions = await session.getPermissions();
       const isPlatformAdmin = permissions.canManageIdentity;
-      if (resource === "dynamic-crm")
+      if (resource === "access-control")
         return isPlatformAdmin || hasAnyRole(permissions, ["agency_admin"]);
+      if (resource === "dynamic-crm")
+        return (
+          isPlatformAdmin ||
+          hasAnyRole(permissions, ["agency_admin"]) ||
+          Boolean(await options?.canAccessCrm?.())
+        );
       if (resource === "savia-request") return isPlatformAdmin;
       if (resource === "users" || resource === "tenants")
         return isPlatformAdmin;
