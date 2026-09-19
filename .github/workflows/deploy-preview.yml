@@ -92,6 +92,8 @@ jobs:
           CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
           NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
 
       - name: Deploy savia-auth
         uses: cloudflare/wrangler-action@v4

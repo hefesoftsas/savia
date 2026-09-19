@@ -6,6 +6,23 @@ import { fileURLToPath } from "node:url";
 export function buildSecretUploads(environment, values) {
   if (!["production", "preview"].includes(environment))
     throw new Error("Unsupported deployment environment");
+  if (values.SQL_BRIDGE_URL || values.SQL_BRIDGE_SECRET) {
+    if (!values.SQL_BRIDGE_URL || !values.SQL_BRIDGE_SECRET)
+      throw new Error(
+        "SQL_BRIDGE_URL and SQL_BRIDGE_SECRET must be configured together",
+      );
+    const url = new URL(values.SQL_BRIDGE_URL);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      throw new Error(
+        "SQL_BRIDGE_URL must be an HTTPS URL without credentials, query, or fragment",
+      );
+  }
   const definitions = [
     ["auth", "savia-auth", { BETTER_AUTH_SECRET: "BETTER_AUTH_SECRET" }],
     [
@@ -48,6 +65,10 @@ export function buildSecretUploads(environment, values) {
     );
     if (app === "api" && values.OPENROUTER_API_KEY)
       secrets.OPENROUTER_API_KEY = values.OPENROUTER_API_KEY;
+    if (app === "api" && values.SQL_BRIDGE_URL) {
+      secrets.SQL_BRIDGE_URL = values.SQL_BRIDGE_URL;
+      secrets.SQL_BRIDGE_SECRET = values.SQL_BRIDGE_SECRET;
+    }
     return {
       app,
       worker: name + (environment === "preview" ? "-preview" : ""),
