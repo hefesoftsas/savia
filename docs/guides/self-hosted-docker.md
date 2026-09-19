@@ -75,3 +75,7 @@ Run `pnpm --filter @savia/self-hosted test` and `pnpm --filter @savia/self-hoste
 An optional HTTP smoke test targets a disposable installation: set `SAVIA_DOCKER_TEST_ORIGIN`, `TEST_EMAIL`, `TEST_PASSWORD` and a private `SAVIA_DOCKER_TEST_STATE_FILE`, then run `pnpm --filter @savia/self-hosted exec vitest run test/docker.integration.test.ts`. It enrolls MFA for the fixture administrator and creates a tenant, collection, records, an attachment and public form; use a test installation. The state file retains the MFA secret and fixture identifiers for restart verification and must stay private.
 
 For an optional PostgreSQL application database, see [PostgreSQL for Docker](self-hosted-postgres.md).
+
+### Authentication page verification
+
+After starting Docker, verify that `/api/auth/login`, `/api/auth/mfa-enroll` and `/api/auth/consent` return HTML successfully. The server-rendered login surface imports React explicitly so it also works when the native loader starts from the repository root without the authentication package’s JSX configuration. The Docker integration suite covers these pages separately from JSON authentication endpoints.

@@ -545,3 +545,19 @@ test.skipIf(!origin || !email || !password)(
   },
   120_000,
 );
+
+test.skipIf(!origin)(
+  "renders authentication pages in the native Docker runtime",
+  async () => {
+    for (const path of [
+      "/api/auth/login",
+      "/api/auth/mfa-enroll",
+      "/api/auth/consent",
+    ]) {
+      const response = await fetch(new URL(path, origin));
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/html");
+      expect(await response.text()).toContain("<form");
+    }
+  },
+);

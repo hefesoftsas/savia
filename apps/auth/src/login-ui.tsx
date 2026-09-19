@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { TenantBranding } from "@savia/tenant-host/branding";
 import { renderToStaticMarkup } from "react-dom/server";
 import { saviaLargeLogoDataUri, saviaLogoDataUri } from "./savia-logo";
