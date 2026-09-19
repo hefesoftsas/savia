@@ -180,7 +180,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
         gate.start,
         db
           .prepare(
-            "INSERT OR IGNORE INTO crm_file_revisions(tenant_id,file_id,version,storage_key,size,created_at,created_by) VALUES (?,?,?,?,?,?,NULL)",
+            "INSERT INTO crm_file_revisions(tenant_id,file_id,version,storage_key,size,created_at,created_by) VALUES (?,?,?,?,?,?,NULL) ON CONFLICT DO NOTHING",
           )
           .bind(
             tenant,

@@ -442,7 +442,7 @@ export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
       await accessAuthority(db, actorFromContext(c), s, true);
       const rows = await db
         .prepare(
-          "SELECT p.id,p.display_name AS displayName,p.email FROM identity_principal p WHERE p.is_active=1 AND (? IS NULL OR EXISTS(SELECT 1 FROM identity_tenant_membership m WHERE m.principal_id=p.id AND m.tenant_id=? AND m.is_active=1)) AND (p.display_name LIKE ? OR p.email LIKE ?) ORDER BY p.display_name,p.id LIMIT 200",
+          'SELECT p.id,p.display_name AS "displayName",p.email FROM identity_principal p WHERE p.is_active=1 AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM identity_tenant_membership m WHERE m.principal_id=p.id AND m.tenant_id=? AND m.is_active=1)) AND (p.display_name LIKE ? OR p.email LIKE ?) ORDER BY p.display_name,p.id LIMIT 200',
         )
         .bind(
           s.startsWith("tenant:") ? Number(s.slice(7)) : null,

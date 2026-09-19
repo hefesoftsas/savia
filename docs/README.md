@@ -19,6 +19,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [PostgreSQL for Docker](guides/self-hosted-postgres.md) — optional database, offline SQLite import, backup and recovery.
 - [Self-hosted Docker](guides/self-hosted-docker.md) — optional native deployment alongside Cloudflare, setup, persistence and operational limits.
 
 - [Remote MCP](remote-mcp.md): connect Claude and ChatGPT to authorized collections and AI employees using OAuth.

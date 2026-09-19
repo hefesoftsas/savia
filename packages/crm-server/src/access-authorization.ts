@@ -1,3 +1,9 @@
+import {
+  dialectFor,
+  registerDialect,
+  sqliteDialect,
+  type SqlDialect,
+} from "@savia/db/dialect";
 import type {
   AccessAction,
   AccessPolicy,
@@ -17,6 +23,7 @@ export function inheritAccessPolicy(
   source: D1Database,
   target: D1Database,
 ): D1Database {
+  registerDialect(target, dialectFor(source));
   const policy = policyFor(source);
   if (policy) contexts.set(target, policy);
   return target;
@@ -35,7 +42,7 @@ export function accessDatabase(db: D1Database, policy: AccessPolicy) {
           const result = await target.batch([
             target
               .prepare(
-                "INSERT INTO crm_write_guards(id,valid) SELECT ?,COALESCE((SELECT revision=? FROM access_revisions WHERE scope=?),0)",
+                `INSERT INTO crm_write_guards(id,valid) SELECT ?,COALESCE((SELECT ${dialectFor(db).booleanInteger("revision=?")} FROM access_revisions WHERE scope=?),0)`,
               )
               .bind(id, policy.revision, policy.scope),
             ...statements,
@@ -47,6 +54,7 @@ export function accessDatabase(db: D1Database, policy: AccessPolicy) {
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
+  registerDialect(wrapped, dialectFor(db));
   contexts.set(wrapped, policy);
   return wrapped;
 }
@@ -124,12 +132,23 @@ export function projectCrmRecord(
     deleted_at: record.deleted_at,
   };
 }
-export function accessColumns(object: CrmObject) {
+export function accessColumns(
+  object: CrmObject,
+  dialect: SqlDialect = sqliteDialect,
+) {
   return Object.fromEntries([
     ["$createdBy", "created_by"],
     ...Object.keys(object.config.fields)
       .filter((f) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(f))
-      .map((f) => [f, `json_extract(data,'$.${f}')`]),
+      .map((f) => [
+        f,
+        {
+          expression: dialect.jsonValue("data", "$." + f),
+          type: dialect.jsonType("data", "$." + f),
+          document: "data",
+          path: "$." + f,
+        },
+      ]),
   ]);
 }
 export function queryAccessFields(policy: AccessPolicy, name: string) {

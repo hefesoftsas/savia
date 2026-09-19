@@ -1,3 +1,5 @@
+import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
+import { dialectFor } from "@savia/db/dialect";
 import { registerRecordHistory } from "./record-history";
 import { historyDatabase } from "./record-history-storage";
 import { registerOfficeFiles } from "./office-files";
@@ -92,6 +94,26 @@ export function createCrmApp(
     await next();
   });
   app.onError((error, c) => {
+    if (databaseConflict(error))
+      return c.json(
+        {
+          error: {
+            code: "WRITE_CONFLICT",
+            message: "The data changed. Reload and retry.",
+          },
+        },
+        409,
+      );
+    if (databaseInputFailure(error))
+      return c.json(
+        {
+          error: {
+            code: "INVALID_UNICODE",
+            message: "The database cannot store this Unicode value.",
+          },
+        },
+        422,
+      );
     if (error instanceof z.ZodError)
       return c.json(
         { error: error.issues.map((i) => i.message).join(" ") },
@@ -172,7 +194,7 @@ export function createCrmApp(
         ...initialObjects.map((o) =>
           db
             .prepare(
-              "INSERT OR IGNORE INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
+              "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(
               tenant,
@@ -185,14 +207,14 @@ export function createCrmApp(
         ...(agencyTenant ? [] : seedRecords).map((r) =>
           db
             .prepare(
-              "INSERT OR IGNORE INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+              "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(r.id, tenant, r.object, JSON.stringify(r.data)),
         ),
       ]);
     await db
       .prepare(
-        "INSERT OR IGNORE INTO crm_schema_versions(tenant_id,object_name,version,definition) SELECT tenant_id,name,version,json_object('name',name,'label',label,'description',description,'config',json(config),'version',version) FROM crm_objects WHERE tenant_id=?",
+        `INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) SELECT tenant_id,name,version,${dialectFor(db).name === "postgres" ? "json_build_object('name',name,'label',label,'description',description,'config',config::json,'version',version)::text" : "json_object('name',name,'label',label,'description',description,'config',json(config),'version',version)"} FROM crm_objects WHERE tenant_id=? ON CONFLICT DO NOTHING`,
       )
       .bind(tenant)
       .run();
@@ -349,12 +371,13 @@ export function createCrmApp(
       return fail("Campo de orden inválido.");
     const sortSql = ["created_at", "updated_at", "id"].includes(sort)
       ? sort
-      : `json_extract(data,'$.${sort}')`;
+      : dialectFor(c.env.DB).jsonSort("data", `$.${sort}`);
     const { where, args } = buildWhere(
       object,
       c.get("tenant"),
       params,
       policyFor(c.env.DB),
+      dialectFor(c.env.DB),
     );
     // One D1 batch keeps the count and page in the same transaction and avoids
     // a separate network roundtrip before fetching the visible records.
@@ -401,16 +424,25 @@ export function createCrmApp(
       });
     const amount =
       targetAmountField && isNumericAmount(targetAmountField)
-        ? `CAST(json_extract(data,'$.${targetAmountField}') AS REAL)`
+        ? `CAST(${dialectFor(c.env.DB).jsonValue("data", `$.${targetAmountField}`)} AS DOUBLE PRECISION)`
         : "0";
     const { where, args } = buildWhere(
       object,
       c.get("tenant"),
       params,
       policyFor(c.env.DB),
+      dialectFor(c.env.DB),
     );
+    const dialect = dialectFor(c.env.DB);
+    const groupValue = dialect.jsonValue("data", `$.${group}`);
+    // jsonb transports typed scalar groups without collapsing numeric and text keys.
+    // SQLite JSON booleans share their numeric group with 0/1.
+    const groupSql =
+      dialect.name === "postgres"
+        ? `CASE WHEN ${dialect.jsonType("data", `$.${group}`)} IN ('integer','real','true','false') THEN to_jsonb((${groupValue})::numeric) ELSE to_jsonb(${groupValue}) END`
+        : groupValue;
     const { results } = await c.env.DB.prepare(
-      `SELECT json_extract(data,'$.${group}') AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM crm_records WHERE ${where} GROUP BY value ORDER BY count DESC`,
+      `SELECT ${groupSql} AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM crm_records WHERE ${where} GROUP BY value ORDER BY count DESC`,
     )
       .bind(...args)
       .all();
@@ -704,7 +736,7 @@ export function createCrmApp(
   });
   app.get("/api/audit", async (c) => {
     const { results } = await c.env.DB.prepare(
-      "SELECT id,action,object_name,record_id,created_at,detail FROM crm_audit WHERE tenant_id=? AND (? IS NULL OR object_name=?) ORDER BY created_at DESC LIMIT 100",
+      "SELECT id,action,object_name,record_id,created_at,detail FROM crm_audit WHERE tenant_id=? AND (CAST(? AS TEXT) IS NULL OR object_name=?) ORDER BY created_at DESC LIMIT 100",
     )
       .bind(
         c.get("tenant"),

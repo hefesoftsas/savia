@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { CollectionGatewayContext } from "./collection-gateway";
@@ -576,7 +577,9 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
       await remote(conn, `/crm/v3/objects/${resource}/${id}`);
       const rows = await db
         .prepare(
-          "SELECT object_name,config FROM crm_collection_bindings WHERE tenant_id=? AND json_extract(config,'$.kind')='crm'",
+          "SELECT object_name,config FROM crm_collection_bindings WHERE tenant_id=? AND " +
+            dialectFor(db).jsonValue("config", "$.kind") +
+            "='crm'",
         )
         .bind(tenant)
         .all<{ object_name: string; config: string }>();

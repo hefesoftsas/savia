@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import {
   defaultTenantBranding,
   type TenantBrandingConfig,
@@ -124,7 +125,7 @@ export async function saveTenantBranding(
   const { version, ...config } = input;
   const row = await db
     .prepare(
-      `INSERT INTO tenant_branding(tenant_id,config,version,updated_by,updated_at) SELECT ?,?,1,?,? WHERE (?=0 OR EXISTS(SELECT 1 FROM tenant_branding WHERE tenant_id=?)) AND (? IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='logo' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) AND (? IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='cover' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) ON CONFLICT(tenant_id) DO UPDATE SET config=excluded.config,version=tenant_branding.version+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at WHERE tenant_branding.version=? RETURNING version`,
+      "INSERT INTO tenant_branding(tenant_id,config,version,updated_by,updated_at) SELECT ?,?,1,?,? WHERE (?=0 OR EXISTS(SELECT 1 FROM tenant_branding WHERE tenant_id=?)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='logo' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='cover' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) ON CONFLICT(tenant_id) DO UPDATE SET config=excluded.config,version=tenant_branding.version+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at WHERE tenant_branding.version=? RETURNING version",
     )
     .bind(
       id,
@@ -209,7 +210,11 @@ export async function uploadBrandingAsset(
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   await db
     .prepare(
-      `UPDATE tenant_branding_assets SET state='deleting' WHERE tenant_id=? AND state IN ('live','uploading') AND created_at<? AND NOT EXISTS(SELECT 1 FROM tenant_branding b WHERE b.tenant_id=tenant_branding_assets.tenant_id AND (json_extract(b.config,'$.logoUrl')='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id OR json_extract(b.config,'$.coverUrl')='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id))`,
+      "UPDATE tenant_branding_assets SET state='deleting' WHERE tenant_id=? AND state IN ('live','uploading') AND created_at<? AND NOT EXISTS(SELECT 1 FROM tenant_branding b WHERE b.tenant_id=tenant_branding_assets.tenant_id AND (" +
+        dialectFor(db).jsonValue("b.config", "$.logoUrl") +
+        "='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id OR " +
+        dialectFor(db).jsonValue("b.config", "$.coverUrl") +
+        "='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id))",
     )
     .bind(id, cutoff)
     .run();

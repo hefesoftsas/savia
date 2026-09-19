@@ -73,3 +73,5 @@ Existing Cloudflare data is not automatically copied into this installation. Mov
 Run `pnpm --filter @savia/self-hosted test` and `pnpm --filter @savia/self-hosted typecheck`, plus the repository test lanes. The optional live S3 contract test uses `SAVIA_TEST_S3_ENDPOINT`, `SAVIA_TEST_S3_ACCESS_KEY`, and `SAVIA_TEST_S3_SECRET_KEY`, creates a temporary bucket, and removes its test data. Real composition tests exercise bootstrap login, MFA, CRUD, local synchronization and reopening persisted SQLite databases.
 
 An optional HTTP smoke test targets a disposable installation: set `SAVIA_DOCKER_TEST_ORIGIN`, `TEST_EMAIL`, `TEST_PASSWORD` and a private `SAVIA_DOCKER_TEST_STATE_FILE`, then run `pnpm --filter @savia/self-hosted exec vitest run test/docker.integration.test.ts`. It enrolls MFA for the fixture administrator and creates a tenant, collection, records, an attachment and public form; use a test installation. The state file retains the MFA secret and fixture identifiers for restart verification and must stay private.
+
+For an optional PostgreSQL application database, see [PostgreSQL for Docker](self-hosted-postgres.md).

@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { z } from "zod";
 import {
   canonicalJson,
@@ -126,7 +127,7 @@ async function assertDependencies(
 async function assertCanDisable(db: D1Database, tenant: string, id: string) {
   const dependentExtension = await db
     .prepare(
-      "SELECT e.id FROM crm_extension_installations e,json_each(e.manifest,'$.requires') d WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=? LIMIT 1",
+      `SELECT e.id FROM crm_extension_installations e,${dialectFor(db).jsonEach("e.manifest", "$.requires", "d")} WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=? LIMIT 1`,
     )
     .bind(tenant, id, id)
     .first<{ id: string }>();
@@ -137,7 +138,7 @@ async function assertCanDisable(db: D1Database, tenant: string, id: string) {
     );
   const dependentSolution = await db
     .prepare(
-      "SELECT s.id FROM crm_solution_installations s,json_each(s.manifest,'$.requires') d WHERE s.tenant_id=? AND s.enabled=1 AND d.value=? LIMIT 1",
+      `SELECT s.id FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND d.value=? LIMIT 1`,
     )
     .bind(tenant, id)
     .first<{ id: string }>();
@@ -169,12 +170,12 @@ function noActiveDependentsGuards(db: D1Database, tenant: string, id: string) {
   return [
     guard(
       db,
-      "SELECT count(*)=0 FROM crm_extension_installations e,json_each(e.manifest,'$.requires') d WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=?",
+      `SELECT count(*)=0 FROM crm_extension_installations e,${dialectFor(db).jsonEach("e.manifest", "$.requires", "d")} WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=?`,
       [tenant, id, id],
     ),
     guard(
       db,
-      "SELECT count(*)=0 FROM crm_solution_installations s,json_each(s.manifest,'$.requires') d WHERE s.tenant_id=? AND s.enabled=1 AND d.value=?",
+      `SELECT count(*)=0 FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND d.value=?`,
       [tenant, id],
     ),
   ];
@@ -292,7 +293,7 @@ export function registerExtensions(
       ...provisioning.starts,
       ...provisioning.writes,
       c.env.DB.prepare(
-        "INSERT INTO crm_extension_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,enabled=1,manifest=excluded.manifest,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+        `INSERT INTO crm_extension_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,enabled=1,manifest=excluded.manifest,updated_at=${dialectFor(c.env.DB).utcNow()}`,
       ).bind(tenant, id, extension.manifest.version, manifest),
       audit(
         c.env.DB,
@@ -362,7 +363,7 @@ export function registerExtensions(
       currentGuard.start,
       ...stateGuards.map((state) => state.start),
       c.env.DB.prepare(
-        "UPDATE crm_extension_installations SET enabled=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE tenant_id=? AND id=?",
+        `UPDATE crm_extension_installations SET enabled=?,updated_at=${dialectFor(c.env.DB).utcNow()} WHERE tenant_id=? AND id=?`,
       ).bind(input.enabled ? 1 : 0, tenant, id),
       audit(
         c.env.DB,

@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { z } from "@hono/zod-openapi";
 import {
   accessGrantSchema,
@@ -204,7 +205,7 @@ async function commitPolicy(
   const tenant = scope.startsWith("tenant:") ? Number(scope.slice(7)) : -1;
   const authorization = db
     .prepare(
-      "INSERT INTO crm_write_guards(id,valid) SELECT ?,EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1 AND (EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin') OR EXISTS(SELECT 1 FROM identity_tenant_membership m JOIN tenants t ON t.id=m.tenant_id WHERE m.principal_id=p.id AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND m.role IN ('tenant_admin','agency_admin'))))",
+      "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1 AND (EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin') OR EXISTS(SELECT 1 FROM identity_tenant_membership m JOIN tenants t ON t.id=m.tenant_id WHERE m.principal_id=p.id AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND m.role IN ('tenant_admin','agency_admin')))) THEN 1 ELSE 0 END",
     )
     .bind(guard, actor.principal.id, tenant);
   const revisionGuard = crypto.randomUUID();
@@ -213,19 +214,21 @@ async function commitPolicy(
       authorization,
       db
         .prepare(
-          "INSERT OR IGNORE INTO access_revisions(scope,revision) VALUES (?,0)",
+          dialectFor(db).name === "postgres"
+            ? "INSERT INTO access_revisions(scope,revision) VALUES (?,0) ON CONFLICT (scope) DO NOTHING"
+            : "INSERT OR IGNORE INTO access_revisions(scope,revision) VALUES (?,0)",
         )
         .bind(scope),
+      db
+        .prepare(
+          "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM access_revisions WHERE scope=? AND revision=?) THEN 1 ELSE 0 END",
+        )
+        .bind(revisionGuard, scope, expectedRevision),
       db
         .prepare(
           "UPDATE access_revisions SET revision=revision+1 WHERE scope=? AND revision=?",
         )
         .bind(scope, expectedRevision),
-      db
-        .prepare(
-          "INSERT INTO crm_write_guards(id,valid) VALUES (?,changes()=1)",
-        )
-        .bind(revisionGuard),
       ...statements,
       db
         .prepare(
@@ -381,7 +384,7 @@ export async function replaceAccessAssignments(
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
-        "INSERT INTO crm_write_guards(id,valid) SELECT ?,EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1)",
+        "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1) THEN 1 ELSE 0 END",
       )
       .bind(guard, input.principalId),
     db
@@ -403,7 +406,7 @@ export async function replaceAccessAssignments(
     statements.unshift(
       db
         .prepare(
-          "INSERT INTO crm_write_guards(id,valid) SELECT ?,EXISTS(SELECT 1 FROM identity_tenant_membership WHERE principal_id=? AND tenant_id=? AND is_active=1)",
+          "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_tenant_membership WHERE principal_id=? AND tenant_id=? AND is_active=1) THEN 1 ELSE 0 END",
         )
         .bind(membershipGuard, input.principalId, Number(input.scope.slice(7))),
     );

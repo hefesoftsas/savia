@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import {
   policyFor,
   requireRecordAccess,
@@ -581,7 +582,7 @@ export function createRecordBundlesApp({
         guards.push(
           guard(
             db,
-            `SELECT COALESCE(json_group_array(id),'[]')=? FROM (SELECT ${other} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other})`,
+            `SELECT ${dialectFor(db).name === "postgres" ? "COALESCE(jsonb_agg(id),'[]'::jsonb)=?::jsonb" : "COALESCE(json_group_array(id),'[]')=?"} FROM (SELECT ${other} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other})`,
             [JSON.stringify(ids), tenant, group.relationId, parent.id],
           ),
         );
@@ -746,7 +747,7 @@ export function createRecordBundlesApp({
           guards.push(
             guard(
               db,
-              `SELECT COALESCE(json_group_array(id),'[]')=? FROM (SELECT ${otherName} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${fieldName}=? ORDER BY ${otherName})`,
+              `SELECT ${dialectFor(db).name === "postgres" ? "COALESCE(jsonb_agg(id),'[]'::jsonb)=?::jsonb" : "COALESCE(json_group_array(id),'[]')=?"} FROM (SELECT ${otherName} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${fieldName}=? ORDER BY ${otherName})`,
               [JSON.stringify(selected), tenant, relationId, parent.id],
             ),
           );
@@ -772,7 +773,9 @@ export function createRecordBundlesApp({
       guards.push(
         guard(
           db,
-          "SELECT COALESCE(json_group_array(json_object('id',id,'version',version)), '[]')=? FROM (SELECT id,version FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)",
+          dialectFor(db).name === "postgres"
+            ? "SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'version',version)), '[]'::jsonb)=?::jsonb FROM (SELECT id,version FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)"
+            : "SELECT COALESCE(json_group_array(json_object('id',id,'version',version)), '[]')=? FROM (SELECT id,version FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)",
           [
             JSON.stringify(
               rules[objectName].map(({ id, version }) => ({ id, version })),

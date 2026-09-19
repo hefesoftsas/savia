@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { z } from "zod";
 import type { Hono } from "hono";
 import type { AccessPredicate } from "@savia/crm-shared/access-control";
@@ -112,8 +113,8 @@ const summary = (row: Row, allowed: Set<string>): RecordHistoryEntry => ({
     .filter((f) => allowed.has(f))
     .sort(),
 });
-const columns =
-  "h.version,h.action,h.created_at,h.actor_kind,h.actor_id,h.cause_id,(SELECT json_group_array(key) FROM json_each(h.changes)) AS fields_json";
+const columns = (db: D1Database) =>
+  `h.version,h.action,h.created_at,h.actor_kind,h.actor_id,h.cause_id,${dialectFor(db).name === "postgres" ? "(SELECT COALESCE(json_agg(key),'[]'::json)::text FROM jsonb_object_keys(h.changes::jsonb) AS keys(key))" : "(SELECT json_group_array(key) FROM json_each(h.changes))"} AS fields_json`;
 const pageQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().max(16384).optional(),
@@ -128,7 +129,8 @@ const encode = (value: unknown) =>
   btoa(encodeURIComponent(JSON.stringify(value)));
 const keySchema = z.string().min(1).max(128);
 const idSchema = z.string().min(1).max(256);
-const retentionWhere = "h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+const retentionWhere = (db: D1Database) =>
+  `h.expires_at>${dialectFor(db).utcNow()}`;
 
 export function registerRecordHistory(
   app: Hono<Env>,
@@ -162,11 +164,11 @@ export function registerRecordHistory(
     // Bound work as well as response size. Totals become lower bounds above 1,000 events.
     const data = await db
       .prepare(
-        `SELECT count(*) AS events, COALESCE(sum(bytes),0) AS logicalBytes,
-      COALESCE(sum(expired),0) AS expiredEvents, min(IIF(expired,expires_at,NULL)) AS oldestExpiredAt
-      FROM (SELECT length(CAST(changes AS BLOB)) AS bytes, expires_at,
-        expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') AS expired
-        FROM crm_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1000)`,
+        `SELECT count(*) AS events, COALESCE(sum(bytes),0) AS "logicalBytes",
+      COALESCE(sum(expired),0) AS "expiredEvents", min(CASE WHEN expired=1 THEN expires_at ELSE NULL END) AS "oldestExpiredAt"
+      FROM (SELECT ${dialectFor(db).name === "postgres" ? "octet_length(changes)" : "length(CAST(changes AS BLOB))"} AS bytes, expires_at,
+        ${dialectFor(db).booleanInteger(`expires_at<=${dialectFor(db).utcNow()}`)} AS expired
+        FROM crm_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1000) AS history_usage`,
       )
       .bind(tenant, name)
       .first<{
@@ -211,7 +213,7 @@ export function registerRecordHistory(
     requireRecordAccess(db, name, "update", record);
     const row = await db
       .prepare(
-        `SELECT changes FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND ${retentionWhere}`,
+        `SELECT changes FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND ${retentionWhere(db)}`,
       )
       .bind(tenant, name, id, version)
       .first<{ changes: string }>();
@@ -277,7 +279,7 @@ export function registerRecordHistory(
     );
     const sourceGuard = guard(
       db,
-      `SELECT EXISTS(SELECT 1 FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND changes=? AND ${retentionWhere}) AND EXISTS(SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=? AND version=?)`,
+      `SELECT EXISTS(SELECT 1 FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND changes=? AND ${retentionWhere(db)}) AND EXISTS(SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=? AND version=?)`,
       [
         tenant,
         name,
@@ -409,7 +411,7 @@ export function registerRecordHistory(
     }
     const rows = await db
       .prepare(
-        `SELECT ${columns} FROM crm_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version<? AND ${retentionWhere} ORDER BY h.version DESC LIMIT ?`,
+        `SELECT ${columns(db)} FROM crm_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version<? AND ${retentionWhere(db)} ORDER BY h.version DESC LIMIT ?`,
       )
       .bind(tenant, name, id, version, q.limit + 1)
       .all<Row>();
@@ -440,7 +442,7 @@ export function registerRecordHistory(
     const { fields, settings } = await historyAccess(db, tenant, name, id);
     const row = await db
       .prepare(
-        `SELECT ${columns},h.changes FROM crm_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version=? AND ${retentionWhere}`,
+        `SELECT ${columns(db)},h.changes FROM crm_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version=? AND ${retentionWhere(db)}`,
       )
       .bind(tenant, name, id, version)
       .first<Row>();

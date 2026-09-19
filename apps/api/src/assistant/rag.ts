@@ -149,7 +149,10 @@ export function extractTextFromFile(
       return textBlocks.join("\n");
     }
     // Fallback: strip binary noise
-    const sanitized = rawString.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/g, " ");
+    const sanitized = rawString.replace(
+      /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/g,
+      " ",
+    );
     return sanitized.replace(/\s{2,}/g, " ").trim();
   }
 
@@ -221,7 +224,10 @@ export async function indexDocument(
 
       await env.VECTORIZE.insert(vectors);
     } catch (error) {
-      console.warn("[Cloudflare RAG] Vector indexing failed, falling back to D1 storage:", error);
+      console.warn(
+        "[Cloudflare RAG] Vector indexing failed, falling back to D1 storage:",
+        error,
+      );
     }
   }
 
@@ -267,15 +273,16 @@ export async function retrieveRelevantChunks(
         }));
       }
     } catch (error) {
-      console.warn("[Cloudflare RAG] Vector search failed, using D1 fallback:", error);
+      console.warn(
+        "[Cloudflare RAG] Vector search failed, using D1 fallback:",
+        error,
+      );
     }
   }
 
   // 2. Local Fallback: Keyword and phrase matching from D1 chunks
   const rows = await env.DB.prepare(
-    `SELECT id, employee_id AS employeeId, file_id AS fileId, chunk_index AS chunkIndex, text
-     FROM assistant_virtual_employee_chunks
-     WHERE employee_id = ?`,
+    'SELECT id, employee_id AS "employeeId", file_id AS "fileId", chunk_index AS "chunkIndex", text\n     FROM assistant_virtual_employee_chunks\n     WHERE employee_id = ?',
   )
     .bind(employeeId)
     .all<DocumentChunk>();
@@ -339,7 +346,10 @@ export async function deleteFileVectors(
     try {
       await env.VECTORIZE.deleteByIds(chunkIds);
     } catch (error) {
-      console.warn("[Cloudflare RAG] Failed to delete vectors from Vectorize:", error);
+      console.warn(
+        "[Cloudflare RAG] Failed to delete vectors from Vectorize:",
+        error,
+      );
     }
   }
 

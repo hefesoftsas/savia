@@ -5,7 +5,9 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "test": "vitest run --maxWorkers=1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "import:sqlite": "tsx src/postgres/import-cli.ts",
+    "test:postgres": "SAVIA_POSTGRES_TEST_REQUIRED=1 vitest run --maxWorkers=1"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -18,13 +20,16 @@
     "quickjs-emscripten": "^0.31.0",
     "tsx": "^4.21.0",
     "undici": "^7.29.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "pg": "^8.18.0",
+    "@savia/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^7.0.0",
     "@types/ws": "^8.18.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@types/pg": "^8.15.6"
   }
 }

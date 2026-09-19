@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   actorFromContext,
@@ -155,7 +156,9 @@ export function registerRequestPageRoutes(
   app: OpenAPIHono,
   db: D1Database,
   service?: SaviaRequestService,
-  normalizersForDomain: (domainId: string) => Promise<readonly ResultNormalizer[]> = async () => [],
+  normalizersForDomain: (
+    domainId: string,
+  ) => Promise<readonly ResultNormalizer[]> = async () => [],
 ) {
   app.use("/v1/request-pages/*", async (c, next) => {
     requirePlatformAdministrator(actorFromContext(c));
@@ -276,18 +279,32 @@ export function registerRequestPageRoutes(
       let errors = validateJsonSchema(document, schema, value);
       if (schema.contentSchema) {
         try {
-          errors = errors.concat(validateJsonSchema(document, schema.contentSchema, JSON.parse(value)));
+          errors = errors.concat(
+            validateJsonSchema(
+              document,
+              schema.contentSchema,
+              JSON.parse(value),
+            ),
+          );
         } catch {
           errors.push("JSON inválido");
         }
       }
       if (errors.length)
-        return error("Los datos no cumplen el contrato vigente de " + key + ": " + errors.join(" ") + ". Revisa el request o vuelve a generar la página.");
+        return error(
+          "Los datos no cumplen el contrato vigente de " +
+            key +
+            ": " +
+            errors.join(" ") +
+            ". Revisa el request o vuelve a generar la página.",
+        );
     }
     const now = new Date().toISOString();
     const inserted = await db
       .prepare(
-        "INSERT OR IGNORE INTO request_page_runs(id,principal_id,domain_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?)",
+        dialectFor(db).name === "postgres"
+          ? "INSERT INTO request_page_runs(id,principal_id,domain_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?) ON CONFLICT (id) DO NOTHING"
+          : "INSERT OR IGNORE INTO request_page_runs(id,principal_id,domain_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?)",
       )
       .bind(
         body.id,
@@ -311,7 +328,14 @@ export function registerRequestPageRoutes(
         .first<Row>();
       if (!concurrent)
         return error("Identificador de ejecución no disponible.", 409);
-      if(concurrent.domain_id!==body.domainId||concurrent.page_name!==body.pageName||concurrent.action_id!==body.actionId||concurrent.mode!==body.mode||concurrent.form_values!==JSON.stringify(body.values)) return error('Ese identificador corresponde a otra ejecución.',409);
+      if (
+        concurrent.domain_id !== body.domainId ||
+        concurrent.page_name !== body.pageName ||
+        concurrent.action_id !== body.actionId ||
+        concurrent.mode !== body.mode ||
+        concurrent.form_values !== JSON.stringify(body.values)
+      )
+        return error("Ese identificador corresponde a otra ejecución.", 409);
       return c.json(publicRun(concurrent), 200);
     }
     try {
@@ -326,7 +350,11 @@ export function registerRequestPageRoutes(
       )) as RunResult;
       if (run.flowId !== action.id)
         throw new Error("El proveedor devolvió una ejecución inesperada.");
-      const result = normalizeResult(flow, run, await normalizersForDomain(body.domainId));
+      const result = normalizeResult(
+        flow,
+        run,
+        await normalizersForDomain(body.domainId),
+      );
       const configurationError = (run as RunResult & { error?: string }).error;
       if (
         typeof configurationError === "string" &&

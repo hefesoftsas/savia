@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import type { Env } from "./context";
 import type {
@@ -102,7 +103,8 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
           policy,
           `collection:${object.name}`,
           "read",
-          accessColumns(object),
+          accessColumns(object, dialectFor(db)),
+          dialectFor(db),
         );
         const count = await db
           .prepare(
@@ -327,12 +329,13 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
         columns.some((f) => typeof f !== "string" || !allowed.includes(f))
       )
         accessDenied();
-      const read = buildWhere(object, tenant, params, policy),
+      const read = buildWhere(object, tenant, params, policy, dialectFor(db)),
         exp = compileAccessWhere(
           policy,
           `collection:${name}`,
           "export",
-          accessColumns(object),
+          accessColumns(object, dialectFor(db)),
+          dialectFor(db),
         );
       const rows = await db
         .prepare(

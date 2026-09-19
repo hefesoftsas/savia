@@ -1,3 +1,4 @@
+import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { returnOriginFromRequest } from "./auth/admin-oauth";
 import { readTenantBrandingForRequest } from "./tenant-branding/service";
 import { RealtimeHubError } from "./realtime/hub-client";
@@ -361,8 +362,31 @@ export function createApiShell(
   });
 
   app.onError((exception, context) => {
+    if (databaseConflict(exception))
+      return context.json(
+        {
+          error: {
+            code: "WRITE_CONFLICT",
+            message: "The data changed. Reload and retry.",
+          },
+        },
+        409,
+      );
+    if (databaseInputFailure(exception))
+      return context.json(
+        {
+          error: {
+            code: "INVALID_UNICODE",
+            message: "The database cannot store this Unicode value.",
+          },
+        },
+        422,
+      );
     if (exception instanceof AccessControlError)
-      return context.json({error:{code:exception.code,message:exception.message}}, exception.status);
+      return context.json(
+        { error: { code: exception.code, message: exception.message } },
+        exception.status,
+      );
     if (exception instanceof RealtimeHubError) return exception.getResponse();
     if (exception instanceof HTTPException)
       return context.json(

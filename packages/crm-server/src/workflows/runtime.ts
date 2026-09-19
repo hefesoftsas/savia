@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { executeWebhookNode } from "./webhook-delivery";
 import type { WebhookDependencies } from "./webhook-destinations";
 import { workflowResumeAt } from "@savia/crm-shared/workflows";
@@ -211,7 +212,7 @@ async function executeNode(
     );
   const g = guard(
     db,
-    "SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND status='running' AND lease_token=? AND lease_until>?",
+    "SELECT EXISTS(SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND status='running' AND lease_token=? AND lease_until>?)",
     [run.workspace_id, run.id, token, Date.now()],
   );
   let next = node.next ?? null;
@@ -356,15 +357,28 @@ async function executeNode(
         !["string", "number", "boolean"].includes(typeof expected)
       )
         throw new Error("Query value must be scalar");
+      const comparison =
+        node.field === "id"
+          ? {
+              sql: `id ${dialectFor(db).nullSafeEqual} ?`,
+              parameters: [
+                typeof expected === "boolean" ? Number(expected) : expected,
+              ],
+            }
+          : dialectFor(db).jsonCompare(
+              "data",
+              `$.${node.field}`,
+              "eq",
+              expected,
+            );
       const rows = await db
         .prepare(
-          `SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${node.field === "id" ? "id" : "json_extract(data,?)"} IS ? LIMIT ?`,
+          `SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${comparison.sql} LIMIT ?`,
         )
         .bind(
           run.workspace_id,
           node.collection,
-          ...(node.field === "id" ? [] : [`$.${node.field}`]),
-          typeof expected === "boolean" ? Number(expected) : expected,
+          ...comparison.parameters,
           node.limit,
         )
         .all();

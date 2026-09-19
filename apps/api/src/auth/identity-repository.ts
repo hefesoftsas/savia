@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import {
   tenants,
   identityTenantMemberships,
@@ -64,6 +65,26 @@ export async function upsertPrincipal(
 ): Promise<IdentityPrincipal> {
   const db = database(d1);
   const now = timestamp();
+  if (dialectFor(d1).name === "postgres") {
+    const saved = await d1
+      .prepare(
+        `INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at)
+      VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(issuer,subject) DO UPDATE SET email=excluded.email,display_name=excluded.display_name,updated_at=excluded.updated_at
+      RETURNING id,issuer,subject,email,display_name AS "displayName",is_active AS "isActive",created_at AS "createdAt",updated_at AS "updatedAt"`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        external.issuer,
+        external.subject,
+        external.email,
+        external.displayName,
+        now,
+        now,
+      )
+      .first<IdentityPrincipal>();
+    if (!saved) throw new Error("Unable to create identity principal");
+    return { ...saved, isActive: Boolean(saved.isActive) };
+  }
   const [saved] = await db
     .insert(identityPrincipals)
     .values({
@@ -287,7 +308,8 @@ export async function grantMembership(
   tenantId: number,
   role: AgencyRole,
 ): Promise<AgencyMembership> {
-  if (!isRegisteredAgencyRole(role)) throw new Error("Invalid tenant membership role");
+  if (!isRegisteredAgencyRole(role))
+    throw new Error("Invalid tenant membership role");
   const platformAdministrator = await database(d1)
     .select({ role: identityGlobalRoles.role })
     .from(identityGlobalRoles)

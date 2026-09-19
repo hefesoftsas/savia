@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type {
   AccessScope,
   AccessGrant,
@@ -57,7 +58,8 @@ export async function accessCatalog(
     .all<{ object_name: string }>();
   const bound = new Set(bindings.results.map((r) => r.object_name));
   const columns = await db
-    .prepare("PRAGMA table_info(crm_records)")
+    .prepare(dialectFor(db).tableColumns("crm_records").sql)
+    .bind(...dialectFor(db).tableColumns("crm_records").parameters)
     .all<{ name: string }>();
   const collections: AccessCatalogEntry[] = rows.results.map((row) => {
     const config = JSON.parse(row.config),

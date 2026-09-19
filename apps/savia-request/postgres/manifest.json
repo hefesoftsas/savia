@@ -1,0 +1,312 @@
+{
+  "format": 1,
+  "baseline": "0001_baseline.sql",
+  "sourceMigrations": [
+    {
+      "filename": "0001.sql",
+      "sha256": "f2a6fdd65306fe3a0e43d6d97a321301f66aad050dc3baa90af471b05705220c"
+    },
+    {
+      "filename": "0002.sql",
+      "sha256": "dc529a2fb171f5f1c8a7d5ce12f070a0cb84a2e23f86160b2a8dbaa37d58cec3"
+    },
+    {
+      "filename": "0003_insurance_bundles.sql",
+      "sha256": "565b204f4d6d6728b47b7187357266db0449f9186b0effb2b2123b744804264f"
+    }
+  ],
+  "objects": [
+    {
+      "type": "table",
+      "name": "flows",
+      "table": "flows"
+    },
+    {
+      "type": "table",
+      "name": "flow_versions",
+      "table": "flow_versions"
+    },
+    {
+      "type": "table",
+      "name": "flow_variables",
+      "table": "flow_variables"
+    },
+    {
+      "type": "table",
+      "name": "flow_runs",
+      "table": "flow_runs"
+    },
+    {
+      "type": "table",
+      "name": "folders",
+      "table": "folders"
+    },
+    {
+      "type": "table",
+      "name": "installed_bundles",
+      "table": "installed_bundles"
+    }
+  ],
+  "tables": [
+    {
+      "name": "flows",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "definition",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "flow_versions",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "definition",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "flow_variables",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "value",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "secret",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["flow_id", "key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "flow_runs",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "version_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "mode",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "summary",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "folders",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "path",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["path"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "installed_bundles",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "installed_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    }
+  ],
+  "mappingNotes": [
+    "All SQLite INTEGER/BIGINT values map to PostgreSQL BIGINT; flags remain integer values, JSON and timestamps remain text.",
+    "A single-column INTEGER primary key maps to GENERATED BY DEFAULT AS IDENTITY, preserving explicit source IDs on import.",
+    "Foreign keys, delete/update actions, deferral, unique keys and checks are native constraints; explicit indexes preserve their source names.",
+    "SQLite integer predicates in partial indexes and the sales review check use explicit comparisons to zero.",
+    "savia_json_valid uses the PostgreSQL json parser while retaining text storage. JSON execution uses jsonb and therefore escaped U+0000 is a known incompatible value requiring resolution before release.",
+    "seed=false suppresses baseline seed data permanently for that installation; changing seed on an applied baseline never replays seeds."
+  ]
+}

@@ -28,6 +28,9 @@ type State = {
     tenantId: number;
     collection: string;
     recordId: string;
+    syncCursor?: string;
+    deletedRecordId?: string;
+    history?: unknown[];
     fileId?: string;
     attachment?: string;
     publicFormId?: string;
@@ -289,6 +292,36 @@ test.skipIf(!origin || !email || !password)(
             }),
           ]),
         );
+        if (previous.syncCursor) {
+          const delta = await json(
+            `${previousBase}/local-sync/pull/${previous.collection}?cursor=${encodeURIComponent(previous.syncCursor)}`,
+          );
+          expect(delta.documents).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: previous.recordId,
+                name: "Docker updated",
+              }),
+            ]),
+          );
+          if (previous.deletedRecordId)
+            expect(delta.documents).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  id: previous.deletedRecordId,
+                  deleted_at: expect.any(String),
+                }),
+              ]),
+            );
+        }
+        if (previous.history)
+          expect(
+            (
+              await json(
+                `${previousBase}/record-history/${previous.collection}/${previous.recordId}`,
+              )
+            ).data,
+          ).toEqual(previous.history);
         if (previous.fileId) {
           const restoredFile = await request(
             `${previousBase}/file/${previous.fileId}/download`,
@@ -333,6 +366,12 @@ test.skipIf(!origin || !email || !password)(
           name: { type: "Textbox", label: "Name", required: true },
         }),
       });
+      await json(`${base}/record-history-settings/${collection}`, 200, "PUT", {
+        enabled: true,
+        fields: ["name"],
+        retentionDays: 90,
+        expectedVersion: 1,
+      });
       const record = (
         await json(`${base}/records/${collection}`, 201, "POST", {
           name: "Docker persisted",
@@ -344,6 +383,8 @@ test.skipIf(!origin || !email || !password)(
         (await json(`${base}/records/${collection}/${record.id}`)).data.name,
       ).toBe("Docker persisted");
       const pulled = await json(`${base}/local-sync/pull/${collection}`);
+      state.fixture.syncCursor = pulled.cursor;
+      saveState(path, state);
       expect(pulled.documents).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: record.id, name: "Docker persisted" }),
@@ -481,6 +522,21 @@ test.skipIf(!origin || !email || !password)(
       state.fixture.publicFormToken = published.token;
       state.fixture.publicSubmissionId = submissionId;
       state.fixture.publicReceipt = receipt.reference;
+      const removed = (
+        await json(`${base}/records/${collection}`, 201, "POST", {
+          name: "Docker tombstone",
+        })
+      ).data;
+      await json(
+        `${base}/records/${collection}/${removed.id}?version=${removed._version}`,
+        200,
+        "DELETE",
+      );
+      state.fixture.deletedRecordId = removed.id;
+      state.fixture.history = (
+        await json(`${base}/record-history/${collection}/${record.id}`)
+      ).data;
+      expect(state.fixture.history!.length).toBeGreaterThan(0);
       saveState(path, state);
       // Leave the fixture IDs in the private state file for an external container restart check.
     } finally {

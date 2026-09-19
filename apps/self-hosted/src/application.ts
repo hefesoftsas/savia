@@ -12,7 +12,7 @@ import {
 import { createAuthHandler } from "../../auth/src/index";
 import requestApp from "../../savia-request/src/server/index";
 import { createRuntimeConnectorApp } from "../../connector-gateway/src/index";
-import { SqliteDatabase } from "./sqlite";
+import { openDatabases } from "./databases";
 import { createObjectStore } from "./object-store";
 import { createNodeHookExecutor } from "./hooks";
 import { createNodeRealtimeHub } from "./realtime";
@@ -28,23 +28,16 @@ export async function createApplication(
   env: Record<string, string | undefined> = process.env,
 ) {
   mkdirSync(config.dataDirectory, { recursive: true, mode: 0o700 });
-  const database = new SqliteDatabase(
-    resolve(config.dataDirectory, "core.sqlite"),
-  );
-  const authDatabase = new SqliteDatabase(
-    resolve(config.dataDirectory, "auth.sqlite"),
-  );
-  const requestDatabase = new SqliteDatabase(
-    resolve(config.dataDirectory, "request.sqlite"),
-  );
+  const stores = openDatabases(config, repositoryRoot);
+  const {
+    core: database,
+    auth: authDatabase,
+    request: requestDatabase,
+  } = stores;
   const objects = createObjectStore(config.s3);
   const realtime = createNodeRealtimeHub();
   const outbound = createNativeCollectionFetch();
   try {
-    await database.migrate(resolve(repositoryRoot, "packages/db/migrations"));
-    await requestDatabase.migrate(
-      resolve(repositoryRoot, "apps/savia-request/migrations"),
-    );
     const smtp = env.SAVIA_SMTP_HOST
       ? nodemailer.createTransport({
           host: env.SAVIA_SMTP_HOST,
@@ -68,13 +61,18 @@ export async function createApplication(
         SAVIA_ADMIN_REDIRECT_URI: `${config.publicOrigin}/auth/callback`,
         SAVIA_SCALAR_REDIRECT_URI: `${config.publicOrigin}/docs`,
       },
-      smtp
-        ? {
-            sendTransactionalEmail: async (email) => {
-              await smtp.sendMail({ ...email, from: env.SAVIA_SMTP_FROM });
-            },
-          }
-        : {},
+      {
+        database: stores.authDatabase,
+        ...(smtp
+          ? {
+              sendTransactionalEmail: async (
+                email: import("../../auth/src/smtp").SMTPEmail,
+              ) => {
+                await smtp.sendMail({ ...email, from: env.SAVIA_SMTP_FROM });
+              },
+            }
+          : {}),
+      },
     );
     const encryptionKey = createHash("sha256")
       .update(config.encryptionKey)
@@ -146,13 +144,15 @@ export async function createApplication(
       },
     });
     // Initialize authentication before accepting traffic, including bootstrap and OAuth clients.
-    const startup = await auth.fetch(
-      new Request(`${config.publicOrigin}/api/auth/get-session`),
-    );
-    if (startup.status >= 500)
-      throw new Error(
-        `Authentication initialization failed (${startup.status})`,
+    await stores.initialize(async () => {
+      const startup = await auth.fetch(
+        new Request(`${config.publicOrigin}/api/auth/get-session`),
       );
+      if (startup.status >= 500)
+        throw new Error(
+          `Authentication initialization failed (${startup.status})`,
+        );
+    });
     let scheduled: Promise<void> | undefined;
     return {
       fetch: api.fetch,
@@ -170,18 +170,14 @@ export async function createApplication(
         await outbound.close();
         objects.close();
         smtp?.close();
-        database.close();
-        authDatabase.close();
-        requestDatabase.close();
+        await stores.close();
       },
     };
   } catch (error) {
     realtime.close();
     await outbound.close();
     objects.close();
-    database.close();
-    authDatabase.close();
-    requestDatabase.close();
+    await stores.close();
     throw error;
   }
 }

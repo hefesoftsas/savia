@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { authorizedAgencyIds, canManageIdentity } from "../auth/access-policy";
 import { actorFromContext } from "../auth/middleware";
@@ -761,11 +762,7 @@ export function registerCrmRoutes(
           );
     const agencyId =
       existing?.agencyId ??
-      (await resolveWritableAgencyId(
-        repository,
-        actor,
-        requestedAgencyId,
-      ));
+      (await resolveWritableAgencyId(repository, actor, requestedAgencyId));
     if (agencyId === undefined)
       return context.json(membershipRequiredResponse(), 403);
     if (!existing)
@@ -820,11 +817,7 @@ export function registerCrmRoutes(
       : undefined;
     const agencyId =
       existingForPrincipal?.agencyId ??
-      (await resolveWritableAgencyId(
-        repository,
-        actor,
-        requestedAgencyId,
-      ));
+      (await resolveWritableAgencyId(repository, actor, requestedAgencyId));
     if (agencyId === undefined)
       return context.json(membershipRequiredResponse(), 403);
     if (!isCrmProviderId(requestedProvider))
@@ -925,11 +918,17 @@ export function registerCrmRoutes(
         try {
           await db
             .prepare(
-              `UPDATE crm_collection_bindings
-               SET config = json_set(config, '$.connectionId', ?)
-               WHERE json_extract(config, '$.principalId') = ?
-                 AND json_extract(config, '$.accountId') = ?
-                 AND json_extract(config, '$.provider') = ?`,
+              "UPDATE crm_collection_bindings\n               SET config = " +
+                (dialectFor(db).name === "postgres"
+                  ? "jsonb_set(config::jsonb, '{connectionId}', to_jsonb(?::text))::text"
+                  : "json_set(config, '$.connectionId', ?)") +
+                "\n               WHERE " +
+                dialectFor(db).jsonValue("config", "$.principalId") +
+                " = ?\n                 AND " +
+                dialectFor(db).jsonValue("config", "$.accountId") +
+                " = ?\n                 AND " +
+                dialectFor(db).jsonValue("config", "$.provider") +
+                " = ?",
             )
             .bind(
               connection.id,

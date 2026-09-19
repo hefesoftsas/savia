@@ -51,7 +51,8 @@ export type AuthenticatedUser = {
 
 export type TransactionalEmailSender = (email: SMTPEmail) => Promise<void>;
 
-type AuthDependencies = {
+export type AuthDependencies = {
+  database?: import("better-auth").BetterAuthOptions["database"];
   sendTransactionalEmail?: TransactionalEmailSender;
 };
 
@@ -163,7 +164,7 @@ export function createBetterAuth(
       }
       return [defaultOrigin, wildcard];
     },
-    database: environment.AUTH_DB,
+    database: dependencies.database ?? environment.AUTH_DB,
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
@@ -219,6 +220,17 @@ async function ensureSchema(
   );
   schemaInitializations.set(database, initialization);
   return initialization;
+}
+
+/** Initialize native auth schema without creating users, sessions or OAuth clients. */
+export async function initializeAuthSchema(
+  environment: AuthWorkerEnvironment,
+  dependencies: AuthDependencies = {},
+): Promise<void> {
+  await ensureSchema(
+    createBetterAuth(environment, dependencies),
+    environment.AUTH_DB,
+  );
 }
 
 const LOCAL_SEED_USERS = [
@@ -536,9 +548,11 @@ export function createAuthHandler(
   environment: AuthWorkerEnvironment,
   dependencies: AuthDependencies = {},
 ) {
-  const auth = createBetterAuth(environment, dependencies);
+  let instance: ReturnType<typeof createBetterAuth> | undefined;
   return {
     async fetch(request: Request) {
+      // Native startup verifies the database under its deployment lock first.
+      const auth = (instance ??= createBetterAuth(environment, dependencies));
       await ensureSchema(auth, environment.AUTH_DB);
       await ensureBootstrapAdministrator(auth, environment);
       await ensureScalarOAuthClient(auth, environment.AUTH_DB, environment);

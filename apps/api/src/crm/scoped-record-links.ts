@@ -149,7 +149,7 @@ export async function scopedRelationDefinitions(
 ): Promise<Response> {
   const rows = await db
     .prepare(
-      "SELECT id,source_object AS sourceObject,target_object AS targetObject,source_label AS sourceLabel,target_label AS targetLabel,cardinality,source_field AS sourceField,target_field AS targetField,source_display_field AS sourceDisplayField,target_display_field AS targetDisplayField,storage,version FROM crm_collection_relations WHERE tenant_id=? AND storage='local' ORDER BY id LIMIT 501",
+      'SELECT id,source_object AS "sourceObject",target_object AS "targetObject",source_label AS "sourceLabel",target_label AS "targetLabel",cardinality,source_field AS "sourceField",target_field AS "targetField",source_display_field AS "sourceDisplayField",target_display_field AS "targetDisplayField",storage,version FROM crm_collection_relations WHERE tenant_id=? AND storage=\'local\' ORDER BY id LIMIT 501',
     )
     .bind(tenant)
     .all<any>();

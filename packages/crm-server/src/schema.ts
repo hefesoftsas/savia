@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import {
@@ -279,7 +280,7 @@ export async function publishSchema(
     ...relationGuards,
     db
       .prepare(
-        "INSERT OR IGNORE INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
+        "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
       )
       .bind(tenant, name, previous.version, JSON.stringify(previous)),
     db
@@ -298,7 +299,7 @@ export async function publishSchema(
       rg.start,
       db
         .prepare(
-          "INSERT OR REPLACE INTO crm_schema_data(tenant_id,object_name,version,record_id,data) VALUES (?,?,?,?,?)",
+          "INSERT INTO crm_schema_data(tenant_id,object_name,version,record_id,data) VALUES (?,?,?,?,?) ON CONFLICT(tenant_id,object_name,version,record_id) DO UPDATE SET data=excluded.data",
         )
         .bind(
           tenant,
@@ -536,10 +537,8 @@ async function assertObjectCanBeDeleted(
 async function tableExists(db: D1Database, name: string) {
   return Boolean(
     await db
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
-      )
-      .bind(name)
+      .prepare(dialectFor(db).tableExists(name).sql)
+      .bind(...dialectFor(db).tableExists(name).parameters)
       .first(),
   );
 }

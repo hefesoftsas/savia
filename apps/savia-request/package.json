@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
-    "hono": "^4.9.0"
+    "hono": "^4.9.0",
+    "@savia/db": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260901.1",

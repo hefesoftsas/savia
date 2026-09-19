@@ -5,7 +5,10 @@
   "exports": {
     "./schema": "./src/schema.ts",
     "./internal-schema": "./src/internal-schema.generated.ts",
-    "./core-schema": "./src/core-schema.ts"
+    "./core-schema": "./src/core-schema.ts",
+    "./dialect": "./src/dialect.ts",
+    "./postgres-dialect": "./src/postgres-dialect.ts",
+    "./errors": "./src/errors.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate --config drizzle.config.ts"

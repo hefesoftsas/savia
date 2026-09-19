@@ -197,7 +197,7 @@ export async function acceptWorkflowWebhook(
     minute = Math.floor(Date.now() / 60000);
   const g = guard(
     db,
-    "SELECT 1 FROM workflows w JOIN workflow_webhook_endpoints e ON e.workspace_id=w.workspace_id AND e.workflow_id=w.id WHERE e.id=? AND e.secret_hash=? AND w.enabled=1 AND w.published_version=?",
+    "SELECT EXISTS(SELECT 1 FROM workflows w JOIN workflow_webhook_endpoints e ON e.workspace_id=w.workspace_id AND e.workflow_id=w.id WHERE e.id=? AND e.secret_hash=? AND w.enabled=1 AND w.published_version=?)",
     [endpoint.id, digest, row.published_version],
   );
   try {

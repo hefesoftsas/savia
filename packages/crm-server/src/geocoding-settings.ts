@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { decryptSecret, encryptSecret } from "./integrations";
@@ -74,7 +75,7 @@ export function registerGeocodingSettings(app: Hono<Env>) {
     );
     await c.env.DB.prepare(
       `INSERT INTO crm_geocoding_settings (tenant_id, encrypted_geoapify_key, updated_at)
-       VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+       VALUES (?, ?, ${dialectFor(c.env.DB).utcNow()})
        ON CONFLICT(tenant_id) DO UPDATE SET
          encrypted_geoapify_key=excluded.encrypted_geoapify_key,
          updated_at=excluded.updated_at`,

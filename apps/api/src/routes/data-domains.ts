@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { streamingRequest } from "../lib/streaming-request";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { PLATFORM_ROOM } from "../realtime/protocol";
@@ -168,7 +169,9 @@ export function registerDataDomainRoutes(
     const input = c.req.valid("json");
     const result = await db
       .prepare(
-        "INSERT OR IGNORE INTO crm_data_domains(id,label,created_by) VALUES (?,?,?)",
+        dialectFor(db).name === "postgres"
+          ? "INSERT INTO crm_data_domains(id,label,created_by) VALUES (?,?,?) ON CONFLICT (id) DO NOTHING"
+          : "INSERT OR IGNORE INTO crm_data_domains(id,label,created_by) VALUES (?,?,?)",
       )
       .bind(input.name, input.label, actor.principal.id)
       .run();

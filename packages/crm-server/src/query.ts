@@ -1,3 +1,8 @@
+import {
+  sqliteDialect,
+  type SqlDialect,
+  type JsonOperator,
+} from "@savia/db/dialect";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { z } from "zod";
 import { fail } from "./context";
@@ -48,6 +53,7 @@ export function buildWhere(
   tenant: string,
   params: Record<string, string | undefined>,
   policy?: AccessPolicy,
+  dialect: SqlDialect = sqliteDialect,
 ) {
   if (policy)
     requireQueryAccess(
@@ -63,7 +69,8 @@ export function buildWhere(
       policy,
       `collection:${object.name}`,
       "read",
-      accessColumns(object),
+      accessColumns(object, dialect),
+      dialect,
     );
     where += ` AND ${access.sql}`;
     args.push(...access.bindings);
@@ -74,25 +81,29 @@ export function buildWhere(
     const searchFields = resolveSearchFields(object, params);
     if (searchFields.length) {
       where += ` AND (${searchFields
-        .map(
-          (field) =>
-            `CAST(json_extract(data,'$.${field}') AS TEXT) LIKE ? ESCAPE '\\'`,
+        .map((field) =>
+          dialect.textLike(dialect.jsonText("data", "$." + field)),
         )
         .join(" OR ")})`;
       args.push(...searchFields.map(() => pattern));
     } else {
-      where +=
-        " AND EXISTS(SELECT 1 FROM json_each(data) search WHERE CAST(search.value AS TEXT) LIKE ? ESCAPE '\\')";
+      where += ` AND EXISTS(SELECT 1 FROM ${dialect.jsonEach("data", "$", "search")} WHERE ${dialect.textLike("CAST(search.value AS TEXT)")})`;
       args.push(pattern);
     }
   }
   const pipeline = object.config.studio?.pipeline?.field ?? "stage";
   if (params.stage && object.config.fields[pipeline]) {
-    where += ` AND json_extract(data,'$.${pipeline}')=?`;
-    args.push(params.stage);
+    const comparison = dialect.jsonCompare(
+      "data",
+      "$." + pipeline,
+      "eq",
+      params.stage,
+    );
+    where += ` AND ${comparison.sql}`;
+    args.push(...comparison.parameters);
   }
   if (params.emptyStage === "true" && object.config.fields[pipeline])
-    where += ` AND (json_extract(data,'$.${pipeline}') IS NULL OR json_extract(data,'$.${pipeline}')='')`;
+    where += ` AND (${dialect.jsonText("data", "$." + pipeline)} IS NULL OR ${dialect.jsonText("data", "$." + pipeline)}='')`;
   if (params.filters) {
     let raw;
     try {
@@ -105,7 +116,7 @@ export function buildWhere(
     for (const condition of filters.conditions) {
       if (!object.config.fields[condition.field])
         return fail("Campo de filtro desconocido.", 422);
-      const expr = `json_extract(data,'$.${condition.field}')`;
+      const expr = dialect.jsonText("data", "$." + condition.field);
       const value = condition.value;
       if (condition.op === "empty") {
         parts.push(`(${expr} IS NULL OR ${expr}='' OR ${expr}='[]')`);
@@ -119,10 +130,11 @@ export function buildWhere(
           value.some((v) => !["string", "number", "boolean"].includes(typeof v))
         )
           return fail("Filtro de lista inválido.", 422);
-        parts.push(`${expr} IN (${value.map(() => "?").join(",")})`);
-        args.push(
-          ...value.map((v) => (typeof v === "boolean" ? Number(v) : v)),
+        const comparisons = value.map((v) =>
+          dialect.jsonCompare("data", "$." + condition.field, "eq", v),
         );
+        parts.push("(" + comparisons.map((c) => c.sql).join(" OR ") + ")");
+        args.push(...comparisons.flatMap((c) => c.parameters));
         continue;
       }
       if (
@@ -131,7 +143,7 @@ export function buildWhere(
       )
         return fail("Valor de filtro inválido.", 422);
       if (["contains", "startsWith", "endsWith"].includes(condition.op)) {
-        parts.push(`CAST(${expr} AS TEXT) LIKE ? ESCAPE '\\'`);
+        parts.push(dialect.textLike(`CAST(${expr} AS TEXT)`));
         const text = String(value ?? "").replace(/[\\%_]/g, "\\$&");
         args.push(
           condition.op === "contains"
@@ -142,16 +154,14 @@ export function buildWhere(
         );
         continue;
       }
-      const ops: Record<string, string> = {
-        eq: "IS",
-        ne: "IS NOT",
-        gt: ">",
-        gte: ">=",
-        lt: "<",
-        lte: "<=",
-      };
-      parts.push(`${expr} ${ops[condition.op]} ?`);
-      args.push(typeof value === "boolean" ? Number(value) : (value ?? null));
+      const comparison = dialect.jsonCompare(
+        "data",
+        "$." + condition.field,
+        condition.op as JsonOperator,
+        value ?? null,
+      );
+      parts.push(comparison.sql);
+      args.push(...comparison.parameters);
     }
     if (parts.length)
       where +=

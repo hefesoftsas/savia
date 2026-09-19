@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "@hono/zod-openapi";
@@ -137,7 +138,7 @@ export function createCollectionRelationsApp({
   async function definitions(): Promise<RelationDefinition[]> {
     const rows = await db
       .prepare(
-        "SELECT id,source_object AS sourceObject,target_object AS targetObject,source_label AS sourceLabel,target_label AS targetLabel,cardinality,source_field AS sourceField,target_field AS targetField,source_display_field AS sourceDisplayField,target_display_field AS targetDisplayField,storage,version FROM crm_collection_relations WHERE tenant_id=? ORDER BY id LIMIT 501",
+        'SELECT id,source_object AS "sourceObject",target_object AS "targetObject",source_label AS "sourceLabel",target_label AS "targetLabel",cardinality,source_field AS "sourceField",target_field AS "targetField",source_display_field AS "sourceDisplayField",target_display_field AS "targetDisplayField",storage,version FROM crm_collection_relations WHERE tenant_id=? ORDER BY id LIMIT 501',
       )
       .bind(tenant)
       .all<RelationDefinition>();
@@ -434,18 +435,17 @@ export function createCollectionRelationsApp({
           const value =
             currentField === "id" ? id : currentRecord[currentField];
           if (value !== null && value !== undefined && value !== "") {
-            const expression =
-              matchField === "id" ? "id" : "json_extract(data,?)";
-            const args = matchField === "id" ? [] : [`$.${matchField}`];
-            const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${expression}=?`;
-            const params = [
-              tenant,
-              targetObject,
-              ...args,
-              typeof value === "boolean"
-                ? Number(value)
-                : (value as string | number),
-            ];
+            const comparison =
+              matchField === "id"
+                ? { sql: "id=?", parameters: [value] }
+                : dialectFor(db).jsonCompare(
+                    "data",
+                    `$.${matchField}`,
+                    "eq",
+                    value,
+                  );
+            const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${comparison.sql}`;
+            const params = [tenant, targetObject, ...comparison.parameters];
             total =
               (
                 await db

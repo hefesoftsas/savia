@@ -1,3 +1,4 @@
+import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
 import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,12 +40,15 @@ function totp(uri: string) {
     .padStart(6, "0");
 }
 
-it("enforces real administrator authentication and persists CRUD plus local-sync data across restart", async () => {
+async function applicationScenario(postgresUrl?: string) {
   const directory = mkdtempSync(join(tmpdir(), "savia-application-"));
   const origin = "http://localhost:8080";
   const email = "bootstrap@example.test",
     password = "Application-Smoke-Password-123!";
   const config = loadConfiguration({
+    ...(postgresUrl
+      ? { SAVIA_DATABASE_DRIVER: "postgres", SAVIA_POSTGRES_URL: postgresUrl }
+      : {}),
     SAVIA_PUBLIC_ORIGIN: origin,
     SAVIA_DATA_DIR: directory,
     SAVIA_AUTH_SECRET: "integration-auth-secret-".repeat(3),
@@ -125,6 +129,10 @@ it("enforces real administrator authentication and persists CRUD plus local-sync
         name: { type: "Textbox", label: "Name", required: true },
       }),
     });
+    if (postgresUrl)
+      await json(`${base}/records/${object}`, 422, "POST", {
+        name: "invalid\u0000value",
+      });
     const created = await json(`${base}/records/${object}`, 201, "POST", {
       name: "Before restart",
     });
@@ -190,4 +198,14 @@ it("enforces real administrator authentication and persists CRUD plus local-sync
     await app?.close();
     rmSync(directory, { recursive: true, force: true });
   }
-}, 30_000);
+}
+it(
+  "enforces real administrator authentication and persists CRUD plus local-sync data across restart",
+  () => applicationScenario(),
+  30000,
+);
+it.skipIf(!postgresTestUrl)(
+  "PostgreSQL: enforces real administrator authentication and persists CRUD plus local-sync data across restart",
+  () => withPostgresFixture(async (_db, url) => applicationScenario(url)),
+  60000,
+);

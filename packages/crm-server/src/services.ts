@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
 import { validateRecord, fieldEntries } from "@savia/crm-shared/metadata";
 import { fail } from "./context";
@@ -76,7 +77,7 @@ export function guard(db: D1Database, query: string, args: any[]) {
   return {
     start: db
       .prepare(
-        `INSERT INTO crm_write_guards(id,valid) VALUES (?,COALESCE((${query}),0))`,
+        `INSERT INTO crm_write_guards(id,valid) VALUES (?,COALESCE(${dialectFor(db).booleanInteger(`(${query})`)},0))`,
       )
       .bind(id, ...args),
     end: db.prepare("DELETE FROM crm_write_guards WHERE id=?").bind(id),
@@ -180,7 +181,7 @@ export async function checkRelations(
           );
         const g = guard(
           db,
-          "SELECT 1 FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+          "SELECT EXISTS(SELECT 1 FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL)",
           [tenant, field.config.relation, id],
         );
         checks.push(g.start, g.end);
@@ -194,9 +195,8 @@ export async function assertLocalCollection(
   name: string,
 ) {
   const installed = await db
-    .prepare(
-      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='crm_collection_bindings'",
-    )
+    .prepare(dialectFor(db).tableExists("crm_collection_bindings").sql)
+    .bind(...dialectFor(db).tableExists("crm_collection_bindings").parameters)
     .first();
   if (!installed) return;
   if (
@@ -447,8 +447,8 @@ export async function deleteRecord(
     for (const [field, config] of fieldEntries(object))
       if (config.config?.relation === name) {
         const condition = config.config.multiple
-          ? `EXISTS (SELECT 1 FROM json_each(data,'$.${field}') WHERE value=?)`
-          : `json_extract(data,'$.${field}')=?`;
+          ? `EXISTS (SELECT 1 FROM ${dialectFor(db).jsonEach("data", `$.${field}`, "related")} WHERE value=?)`
+          : dialectFor(db).jsonCompare("data", `$.${field}`, "eq", id).sql;
         const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND id<>? AND ${condition}`;
         const args = [tenant, object.name, id, id];
         const { results: references } = await db
@@ -526,9 +526,8 @@ export async function deleteRecord(
   }
   // Older CRM installations may not have collection relation metadata yet.
   const hasCollectionRelations = await db
-    .prepare(
-      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='crm_record_links'",
-    )
+    .prepare(dialectFor(db).tableExists("crm_record_links").sql)
+    .bind(...dialectFor(db).tableExists("crm_record_links").parameters)
     .first();
   if (hasCollectionRelations)
     statements.push(

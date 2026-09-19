@@ -6,6 +6,9 @@ const option = (name, fallback) => {
   const i = args.indexOf(name);
   return i < 0 ? fallback : args[i + 1];
 };
+const database = option("--database", "sqlite");
+if (!["sqlite", "postgres"].includes(database))
+  throw new Error("--database must be sqlite or postgres");
 const email = option("--email");
 if (!email || !/^[^\s@=]+@[^\s@=]+\.[^\s@=]+$/.test(email))
   throw new Error("Use --email admin@example.com");
@@ -31,7 +34,16 @@ if (
   throw new Error("--storage-origin must be an HTTP(S) origin");
 const path = resolve(option("--output", "infra/secrets/self-hosted.env"));
 const secret = () => randomBytes(32).toString("hex");
+const postgresPassword = database === "postgres" ? secret() : undefined;
 const values = {
+  SAVIA_DATABASE_DRIVER: database,
+  ...(postgresPassword
+    ? {
+        POSTGRES_PASSWORD: postgresPassword,
+        SAVIA_POSTGRES_URL: `postgresql://savia:${postgresPassword}@postgres:5432/savia`,
+        SAVIA_POSTGRES_POOL_SIZE: "5",
+      }
+    : {}),
   SAVIA_PUBLIC_ORIGIN: origin.origin,
   SAVIA_AUTH_SECRET: secret(),
   SAVIA_ENCRYPTION_KEY: secret(),

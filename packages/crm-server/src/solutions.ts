@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { bodyLimit } from "hono/body-limit";
@@ -235,7 +236,7 @@ export async function installSolution(
   statements.push(
     db
       .prepare(
-        "INSERT INTO crm_solution_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,manifest=excluded.manifest,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+        `INSERT INTO crm_solution_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,manifest=excluded.manifest,updated_at=${dialectFor(db).utcNow()}`,
       )
       .bind(tenant, manifest.id, manifest.version, JSON.stringify(manifest)),
   );
@@ -428,7 +429,7 @@ export function registerSolutions(
     if (!enabled) {
       const dependent = await db
         .prepare(
-          "SELECT s.id FROM crm_solution_installations s,json_each(s.manifest,'$.requires') d WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=? LIMIT 1",
+          `SELECT s.id FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=? LIMIT 1`,
         )
         .bind(tenant, id, id)
         .first<{ id: string }>();
@@ -476,7 +477,7 @@ export function registerSolutions(
       checks.push(
         guard(
           db,
-          "SELECT count(*)=0 FROM crm_solution_installations s,json_each(s.manifest,'$.requires') d WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=?",
+          `SELECT count(*)=0 FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=?`,
           [tenant, id, id],
         ),
       );
@@ -484,7 +485,7 @@ export function registerSolutions(
       ...checks.map((g) => g.start),
       db
         .prepare(
-          "UPDATE crm_solution_installations SET enabled=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE tenant_id=? AND id=?",
+          `UPDATE crm_solution_installations SET enabled=?,updated_at=${dialectFor(db).utcNow()} WHERE tenant_id=? AND id=?`,
         )
         .bind(enabled ? 1 : 0, tenant, id),
       audit(

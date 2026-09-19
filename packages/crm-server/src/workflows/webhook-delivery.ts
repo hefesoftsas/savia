@@ -31,7 +31,7 @@ export async function executeWebhookNode(
   const fencing = () =>
     guard(
       db,
-      "SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND lease_token=? AND status='running' AND lease_until>?",
+      "SELECT EXISTS(SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND lease_token=? AND status='running' AND lease_until>?)",
       [run.workspace_id, run.id, token, Date.now()],
     );
   let delivery = await db

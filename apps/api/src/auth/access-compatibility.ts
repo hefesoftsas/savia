@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type {
   AccessGrant,
   AccessScope,
@@ -12,7 +13,13 @@ export async function compatibilityGrants(
   const catalog = await accessCatalog(db, scope);
   const rows = await db
     .prepare(
-      "SELECT object_name FROM crm_collection_bindings WHERE tenant_id=? AND json_extract(config,'$.kind')='crm' AND json_extract(config,'$.provider')='hubspot' AND json_extract(config,'$.accessScope')='tenant'",
+      "SELECT object_name FROM crm_collection_bindings WHERE tenant_id=? AND " +
+        dialectFor(db).jsonValue("config", "$.kind") +
+        "='crm' AND " +
+        dialectFor(db).jsonValue("config", "$.provider") +
+        "='hubspot' AND " +
+        dialectFor(db).jsonValue("config", "$.accessScope") +
+        "='tenant'",
     )
     .bind(crmTenantForScope(scope))
     .all<{ object_name: string }>();

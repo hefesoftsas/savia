@@ -1,10 +1,8 @@
+import { dialectFor } from "@savia/db/dialect";
 import { HTTPException } from "hono/http-exception";
 import type { AppActor } from "../auth/types";
 import { hasAgencyCapability } from "../auth/access-policy";
-import {
-  findPrincipal,
-  loadActor,
-} from "../auth/identity-repository";
+import { findPrincipal, loadActor } from "../auth/identity-repository";
 import type { CrmRouteDependencies } from "../routes/crm";
 import { CrmUpstreamError } from "./contracts";
 import type {
@@ -54,7 +52,9 @@ const ruleView = (r: RuleRow) => ({
 
 async function mayManage(db: D1Database, actor: AppActor, tenantId: number) {
   const tenant = await db
-    .prepare("SELECT id FROM tenants WHERE id=? AND kind='commercial' AND is_active=1")
+    .prepare(
+      "SELECT id FROM tenants WHERE id=? AND kind='commercial' AND is_active=1",
+    )
     .bind(tenantId)
     .first<{ id: number }>();
   return (
@@ -88,7 +88,9 @@ async function ruleFor(db: D1Database, actor: AppActor, id: string) {
 }
 export async function listSyncRules(db: D1Database, actor: AppActor) {
   const tenants = await db
-    .prepare("SELECT id,name FROM tenants WHERE kind='commercial' AND is_active=1 ORDER BY name")
+    .prepare(
+      "SELECT id,name FROM tenants WHERE kind='commercial' AND is_active=1 ORDER BY name",
+    )
     .all<{ id: number; name: string }>();
   const allowed = (
     await Promise.all(
@@ -320,7 +322,9 @@ function ruleMappings(
     upsertSuccess: async (input) => {
       await db
         .prepare(
-          "INSERT INTO crm_sync_mappings(rule_id,customer_id,object_kind,external_object_id) VALUES (?,?,?,?) ON CONFLICT(rule_id,customer_id,object_kind) DO UPDATE SET external_object_id=excluded.external_object_id,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "INSERT INTO crm_sync_mappings(rule_id,customer_id,object_kind,external_object_id) VALUES (?,?,?,?) ON CONFLICT(rule_id,customer_id,object_kind) DO UPDATE SET external_object_id=excluded.external_object_id,updated_at=" +
+            dialectFor(db).utcNow() +
+            "",
         )
         .bind(
           rule.id,

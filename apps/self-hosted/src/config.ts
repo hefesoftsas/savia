@@ -1,3 +1,4 @@
+import { databaseConfiguration } from "./database-config";
 import { resolve } from "node:path";
 import { isIP } from "node:net";
 export function loadConfiguration(
@@ -62,6 +63,7 @@ export function loadConfiguration(
   if (env.SAVIA_BOOTSTRAP_PASSWORD && env.SAVIA_BOOTSTRAP_PASSWORD.length < 12)
     throw new Error("Bootstrap password must contain at least 12 characters");
   return {
+    database: databaseConfiguration(env),
     trustedProxyAddresses,
     publicOrigin: origin.origin,
     canonicalHost: origin.hostname,

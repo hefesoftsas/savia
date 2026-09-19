@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { historyDatabase } from "@savia/crm-server/record-history-storage";
 import {
   scopedRecordLinks,
@@ -173,7 +174,13 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
           ) {
             const shared = await db
               .prepare(
-                "SELECT 1 FROM crm_collection_bindings WHERE tenant_id=? AND object_name=? AND json_extract(config,'$.kind')='crm' AND json_extract(config,'$.provider')='hubspot' AND json_extract(config,'$.accessScope')='tenant'",
+                "SELECT 1 FROM crm_collection_bindings WHERE tenant_id=? AND object_name=? AND " +
+                  dialectFor(db).jsonValue("config", "$.kind") +
+                  "='crm' AND " +
+                  dialectFor(db).jsonValue("config", "$.provider") +
+                  "='hubspot' AND " +
+                  dialectFor(db).jsonValue("config", "$.accessScope") +
+                  "='tenant'",
               )
               .bind(tenant, decodeURIComponent(match[1]))
               .first();

@@ -1,3 +1,4 @@
+import { dialectFor, inheritDialect } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -35,9 +36,8 @@ async function capability(
   const studio = object.config.studio;
   if (studio?.business || studio?.collection) return "remote" as const;
   const exists = await db
-    .prepare(
-      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='crm_collection_bindings'",
-    )
+    .prepare(dialectFor(db).tableExists("crm_collection_bindings").sql)
+    .bind(...dialectFor(db).tableExists("crm_collection_bindings").parameters)
     .first();
   if (
     exists &&
@@ -100,9 +100,8 @@ export function registerLocalSync(
       ]),
     );
     const exists = await db
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='crm_collection_bindings'",
-      )
+      .prepare(dialectFor(db).tableExists("crm_collection_bindings").sql)
+      .bind(...dialectFor(db).tableExists("crm_collection_bindings").parameters)
       .first();
     const boundObjects = new Set<string>();
     if (exists) {
@@ -244,7 +243,7 @@ export function registerLocalSync(
         await db.batch([
           db
             .prepare(
-              "INSERT OR IGNORE INTO crm_access_deliveries(principal_id,scope,revision,object_name,record_id) VALUES(?,?,?,?,?)",
+              "INSERT INTO crm_access_deliveries(principal_id,scope,revision,object_name,record_id) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(
               policy.principalId,
@@ -376,7 +375,7 @@ export function registerLocalSync(
           db
             .prepare(
               `INSERT INTO crm_sync_receipts(tenant_id,principal_id,mutation_id,fingerprint,before_state,response)
-   SELECT ?,?,?,?,?,json_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by) FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?`,
+   SELECT ?,?,?,?,?,${dialectFor(db).name === "postgres" ? "json_build_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by)::text" : "json_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by)"} FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?`,
             )
             .bind(
               tenant,
@@ -390,6 +389,7 @@ export function registerLocalSync(
             ),
         ]),
     } as D1Database;
+    inheritDialect(db, receiptDb);
     const transactionalDb = policy
       ? accessDatabase(receiptDb, policy)
       : receiptDb;

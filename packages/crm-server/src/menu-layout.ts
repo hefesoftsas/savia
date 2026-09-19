@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { type Env } from "./context";
@@ -41,7 +42,7 @@ export async function saveMenuLayout(
   await db
     .prepare(
       `INSERT INTO crm_studio_settings (tenant_id, menu_layout, updated_at)
-       VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+       VALUES (?, ?, ${dialectFor(db).utcNow()})
        ON CONFLICT(tenant_id) DO UPDATE SET
          menu_layout=excluded.menu_layout,
          updated_at=excluded.updated_at`,
@@ -121,7 +122,11 @@ export function registerMenuLayout(app: Hono<Env>) {
   app.put("/api/objects/reorder", async (c) => {
     const body = reorderBodySchema.parse(await c.req.json());
     if ("layout" in body) {
-      const layout = await applyMenuLayout(c.env.DB, c.get("tenant"), body.layout);
+      const layout = await applyMenuLayout(
+        c.env.DB,
+        c.get("tenant"),
+        body.layout,
+      );
       return c.json({ data: layout });
     }
     const updated = await reorderScreens(c.env.DB, c.get("tenant"), body.names);

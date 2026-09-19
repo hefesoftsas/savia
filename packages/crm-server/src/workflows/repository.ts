@@ -318,7 +318,7 @@ export class WorkflowRepository {
   async retry(id: string) {
     const g = guard(
       this.db,
-      "SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND status IN ('failed','blocked')",
+      "SELECT EXISTS(SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND status IN ('failed','blocked'))",
       [this.workspace, id],
     );
     await transaction(this.db, [

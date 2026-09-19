@@ -1,3 +1,4 @@
+import { dialectFor, inheritDialect } from "@savia/db/dialect";
 import { inheritAccessPolicy } from "./access-authorization";
 
 export type RecordHistoryActor = {
@@ -91,6 +92,7 @@ export function historyDatabase(
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
+  inheritDialect(source, wrapped);
   const result = inheritAccessPolicy(source, wrapped);
   historySources.set(result, db);
   return result;
@@ -104,7 +106,7 @@ export async function purgeExpiredRecordHistory(db: D1Database, limit = 500) {
   );
   return db
     .prepare(
-      "DELETE FROM crm_record_history WHERE rowid IN (SELECT rowid FROM crm_record_history WHERE expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY expires_at LIMIT ?)",
+      `DELETE FROM crm_record_history WHERE (tenant_id,object_name,record_id,version) IN (SELECT tenant_id,object_name,record_id,version FROM crm_record_history WHERE expires_at<=${dialectFor(db).utcNow()} ORDER BY expires_at LIMIT ?)`,
     )
     .bind(bounded)
     .run();
@@ -115,7 +117,7 @@ export async function maintainRecordHistory(db: D1Database, limit = 500) {
   const result = await purgeExpiredRecordHistory(db, limit);
   const row = await db
     .prepare(
-      "SELECT expires_at FROM crm_record_history WHERE expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY expires_at LIMIT 1",
+      `SELECT expires_at FROM crm_record_history WHERE expires_at<=${dialectFor(db).utcNow()} ORDER BY expires_at LIMIT 1`,
     )
     .first<{ expires_at: string }>();
   return {

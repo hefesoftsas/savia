@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
@@ -203,7 +204,11 @@ export function registerTenantBrandingRoutes(
       await activeTenant(db, tenantId);
       const row = await db
         .prepare(
-          "SELECT a.object_key,a.content_type FROM tenant_branding_assets a JOIN tenant_branding b ON b.tenant_id=a.tenant_id WHERE a.state='live' AND a.tenant_id=? AND a.id=? AND (json_extract(b.config,'$.logoUrl')=? OR json_extract(b.config,'$.coverUrl')=?)",
+          "SELECT a.object_key,a.content_type FROM tenant_branding_assets a JOIN tenant_branding b ON b.tenant_id=a.tenant_id WHERE a.state='live' AND a.tenant_id=? AND a.id=? AND (" +
+            dialectFor(db).jsonValue("b.config", "$.logoUrl") +
+            "=? OR " +
+            dialectFor(db).jsonValue("b.config", "$.coverUrl") +
+            "=?)",
         )
         .bind(
           tenantId,

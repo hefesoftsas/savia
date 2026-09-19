@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -153,7 +154,7 @@ export async function runAutomations(
       await db.batch([
         db
           .prepare(
-            "INSERT OR IGNORE INTO crm_tasks (id,tenant_id,object_name,record_id,title,owner,due_at) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO crm_tasks (id,tenant_id,object_name,record_id,title,owner,due_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
           )
           .bind(
             taskId,
@@ -235,8 +236,9 @@ export function registerOperations(app: Hono<Env>) {
       for (const [fieldName, field] of Object.entries(object.config.fields)) {
         if (field.config?.relation === objectName) {
           const path = `$.${identifier.parse(fieldName)}`;
-          const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND (json_extract(data,?)=? OR EXISTS(SELECT 1 FROM json_each(CASE WHEN json_type(data,?)='array' THEN json_extract(data,?) ELSE '[]' END) WHERE value=?))`;
-          const args = [tenant, object.name, path, id, path, path, id];
+          const comparison = dialectFor(db).jsonCompare("data", path, "eq", id);
+          const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND (${comparison.sql} OR EXISTS(SELECT 1 FROM ${dialectFor(db).jsonEach("data", path, "related")} WHERE value=?))`;
+          const args = [tenant, object.name, ...comparison.parameters, id];
           const count = await db
             .prepare(`SELECT COUNT(*) AS total FROM crm_records WHERE ${where}`)
             .bind(...args)
@@ -270,7 +272,7 @@ export function registerOperations(app: Hono<Env>) {
           );
           const { results } = await db
             .prepare(
-              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY id LIMIT ? OFFSET ?",
+              `SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id IN (SELECT value FROM (SELECT ? AS ids) input, ${dialectFor(db).jsonEach("input.ids", "$", "related")}) ORDER BY id LIMIT ? OFFSET ?`,
             )
             .bind(
               tenant,
@@ -858,12 +860,11 @@ export function registerOperations(app: Hono<Env>) {
         const key = `${field}:${JSON.stringify(normalized)}`;
         const row = await db
           .prepare(
-            "SELECT id FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND LOWER(TRIM(CAST(json_extract(data,?) AS TEXT)))=? LIMIT 1",
+            `SELECT id FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND LOWER(TRIM(${dialectFor(db).jsonText("data", `$.${field}`)}))=? LIMIT 1`,
           )
           .bind(
             tenant,
             objectName,
-            `$.${field}`,
             String(
               typeof value === "boolean"
                 ? Number(value)
@@ -980,7 +981,13 @@ export function registerOperations(app: Hono<Env>) {
       custom = parseCsvExportColumns(params, object);
     if (custom) {
       const { columns, headers: headerLabels } = custom;
-      const { where, args } = buildWhere(object, tenant, params);
+      const { where, args } = buildWhere(
+        object,
+        tenant,
+        params,
+        undefined,
+        dialectFor(db),
+      );
       const total = await db
         .prepare(`SELECT count(*) AS total FROM crm_records WHERE ${where}`)
         .bind(...args)
@@ -998,7 +1005,7 @@ export function registerOperations(app: Hono<Env>) {
         fail("Campo de orden inválido.");
       const sortSql = ["created_at", "updated_at", "id"].includes(sort)
         ? sort
-        : `json_extract(data,'$.${sort}')`;
+        : dialectFor(db).jsonSort("data", `$.${sort}`);
       const { results } = await db
         .prepare(
           `SELECT * FROM crm_records WHERE ${where} ORDER BY ${sortSql} ${order}, id ASC LIMIT 10000`,
@@ -1393,9 +1400,9 @@ export function registerOperations(app: Hono<Env>) {
           : "$.nonexistent_field";
       const { results: groups } = await db
         .prepare(
-          "SELECT COALESCE(CAST(json_extract(data,?) AS TEXT),'Sin etapa') AS stage,COALESCE(CAST(json_extract(data,?) AS TEXT),'Sin responsable') AS owner,count(*) AS count,COALESCE(SUM(CAST(json_extract(data,?) AS REAL)),0) AS amount FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL GROUP BY 1,2 ORDER BY 1,2",
+          `SELECT COALESCE(${dialectFor(db).jsonText("data", stage)},'Sin etapa') AS stage,COALESCE(${dialectFor(db).jsonText("data", owner)},'Sin responsable') AS owner,count(*) AS count,COALESCE(SUM(CAST(${dialectFor(db).jsonValue("data", amount)} AS DOUBLE PRECISION)),0) AS amount FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL GROUP BY 1,2 ORDER BY 1,2`,
         )
-        .bind(stage, owner, amount, tenant, object.name)
+        .bind(tenant, object.name)
         .all<{ stage: string; owner: string; count: number; amount: number }>();
       const won = groups
           .filter((g) =>

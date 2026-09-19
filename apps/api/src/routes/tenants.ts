@@ -1,3 +1,5 @@
+import { dialectFor } from "@savia/db/dialect";
+import { tableNames, foreignKeys } from "../lib/database-schema";
 import { deleteTenantBrandingAssets } from "../tenant-branding/service";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
@@ -34,17 +36,20 @@ async function hasRestrictingTenantReference(db: D1Database, tenantId: number) {
     on_delete: string;
   };
   const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-  const tables = await db
-    .prepare(
-      "SELECT name,sql FROM sqlite_master WHERE type='table' AND sql LIKE '%tenants%'",
-    )
-    .all<{ name: string; sql: string }>();
-  const names = tables.results
-    .map((table) => table.name)
-    .filter((name) => identifier.test(name));
+  const tables =
+    dialectFor(db).name === "postgres"
+      ? await tableNames(db)
+      : (
+          await db
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%tenants%'",
+            )
+            .all<{ name: string }>()
+        ).results.map((row) => row.name);
+  const names = tables.filter((name) => identifier.test(name));
   if (!names.length) return false;
-  const keys = await db.batch<ForeignKey>(
-    names.map((name) => db.prepare(`PRAGMA foreign_key_list("${name}")`)),
+  const keys = await Promise.all(
+    names.map(async (name) => ({ results: await foreignKeys(db, name) })),
   );
   const probes: string[] = [];
   keys.forEach((result, index) => {
@@ -226,7 +231,8 @@ const deleteDefinition = createRoute({
 type TenantRow = Omit<z.infer<typeof tenantSchema>, "isActive"> & {
   isActive: number;
 };
-const select = `SELECT t.id,t.id_slug AS idSlug,t.name,t.kind,t.is_active AS isActive,t.created_at AS createdAt,t.updated_at AS updatedAt,NULL AS agencyId FROM tenants t`;
+const select =
+  'SELECT t.id,t.id_slug AS "idSlug",t.name,t.kind,t.is_active AS "isActive",t.created_at AS "createdAt",t.updated_at AS "updatedAt",NULL AS "agencyId" FROM tenants t';
 const document = (row: TenantRow) => ({
   ...row,
   isActive: Boolean(row.isActive),
@@ -306,7 +312,7 @@ export function registerTenantRoutes(
     }
     const row = await db
       .prepare(
-        "SELECT id, id_slug AS idSlug, name, kind, is_active AS isActive FROM tenants WHERE id_slug=? AND is_active=1",
+        'SELECT id, id_slug AS "idSlug", name, kind, is_active AS "isActive" FROM tenants WHERE id_slug=? AND is_active=1',
       )
       .bind(slug)
       .first<{
@@ -383,7 +389,7 @@ export function registerTenantRoutes(
       );
       const allocation = await db
         .prepare(
-          `INSERT INTO server_id_sequences(resource,next_id) SELECT 'tenants',COALESCE(MAX(id),0)+2 FROM tenants WHERE true ON CONFLICT(resource) DO UPDATE SET next_id=MAX(next_id+1,(SELECT COALESCE(MAX(id),0)+2 FROM tenants)) RETURNING next_id-1 AS id`,
+          `INSERT INTO server_id_sequences(resource,next_id) SELECT 'tenants',COALESCE(MAX(id),0)+2 FROM tenants WHERE true ON CONFLICT(resource) DO UPDATE SET next_id=${dialectFor(db).name === "postgres" ? "GREATEST" : "MAX"}(${dialectFor(db).name === "postgres" ? "server_id_sequences.next_id" : "next_id"}+1,(SELECT COALESCE(MAX(id),0)+2 FROM tenants)) RETURNING next_id-1 AS id`,
         )
         .first<{ id: number }>();
       if (!allocation) throw new Error("Unable to allocate tenant ID");
@@ -484,14 +490,17 @@ export function registerTenantRoutes(
       .bind(id, `agency:${id}`)
       .first();
     if (linked) return c.json(conflict, 409);
-    const tables = await db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' AND sql LIKE '%tenant_id%'",
-      )
-      .all<{ name: string }>();
-    const names = tables.results
-      .map((table) => table.name)
-      .filter((name) => /^[a-z_]+$/.test(name));
+    const tables =
+      dialectFor(db).name === "postgres"
+        ? await tableNames(db, "tenant_id")
+        : (
+            await db
+              .prepare(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' AND sql LIKE '%tenant_id%'",
+              )
+              .all<{ name: string }>()
+          ).results.map((row) => row.name);
+    const names = tables.filter((name) => /^crm_[a-z_]+$/.test(name));
     if (names.length) {
       const remaining = await db.batch(
         names.map((name) =>

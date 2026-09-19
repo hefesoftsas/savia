@@ -1,3 +1,4 @@
+import { dialectFor } from "@savia/db/dialect";
 import type { AgencyMembership, AgencyRole } from "./types";
 
 export const PLATFORM_TENANT_ID = 0;
@@ -64,7 +65,9 @@ async function ensurePlatformTenant(d1: D1Database): Promise<TenantRow> {
   const now = new Date().toISOString();
   await d1
     .prepare(
-      `INSERT OR IGNORE INTO tenants(
+      dialectFor(d1).name === "postgres"
+        ? "INSERT INTO tenants(\n        id,id_slug,name,is_active,created_at,updated_at,kind\n      ) VALUES(0,'savia-platform','Plataforma Savia',1,?,?, 'platform') ON CONFLICT (id) DO NOTHING"
+        : `INSERT OR IGNORE INTO tenants(
         id,id_slug,name,is_active,created_at,updated_at,kind
       ) VALUES(0,'savia-platform','Plataforma Savia',1,?,?, 'platform')`,
     )
@@ -144,7 +147,8 @@ export async function assertPrincipalCanLoseActiveMembership(
       principal_active: number;
       kind: "commercial" | "platform";
     }>();
-  if (!current || !current.membership_active || !current.principal_active) return;
+  if (!current || !current.membership_active || !current.principal_active)
+    return;
   if (current.kind !== "commercial") return;
   const activeMembers = await d1
     .prepare(

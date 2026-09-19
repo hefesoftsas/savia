@@ -699,7 +699,7 @@ async function ensureFixedClientResource(
   if (existing) return;
   await database
     .prepare(
-      'INSERT OR IGNORE INTO "oauthClientResource" (id, "clientId", "resourceId", "createdAt") VALUES (?, ?, ?, ?)',
+      'INSERT INTO "oauthClientResource" (id, "clientId", "resourceId", "createdAt") VALUES (?, ?, ?, ?) ON CONFLICT ("clientId", "resourceId") DO NOTHING',
     )
     .bind(
       crypto.randomUUID(),
