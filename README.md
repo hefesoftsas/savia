@@ -1,5 +1,16 @@
 # Savia
 
+## License
+
+Savia — Developed by Hefesoft SAS, Colombia.
+
+Savia is source-available under the [Savia Source-Available License 1.0](LICENSE),
+not an OSI-approved open-source license. Companies with total monthly revenue
+above USD 20,000 must obtain a commercial Savia license from Hefesoft SAS.
+Redistributions must publish corresponding source, including modifications,
+and all deployments must preserve visible Savia/Hefesoft attribution.
+See the [licensing guide](docs/licensing.md) and [NOTICE](NOTICE).
+
 > New developers: start at [docs/](docs/) (onboarding track + guides index).
 
 Savia es una plataforma low code independiente de la industria. Permite crear

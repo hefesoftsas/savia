@@ -1,0 +1,154 @@
+Savia Source-Available License 1.0
+
+Copyright (c) 2026 Hefesoft SAS, Colombia.
+
+1. Scope and definitions
+
+"Licensor" means Hefesoft SAS, Colombia, to the extent it owns or is authorized
+to license the relevant rights. "Software" means the Savia source code,
+executables, and documentation distributed with this License, excluding
+separately licensed third-party materials. "You" means the individual or legal
+entity exercising rights under this License. When acting for an employer or
+customer, that employer or customer must independently qualify under section 3.
+"Modified Software" means changes to or derivative works of the Software.
+
+"Monthly Revenue" means the total gross revenue of the relevant company from
+all business activities worldwide during a calendar month, not merely revenue
+generated using Savia. Revenue is measured before expenses and income taxes,
+excluding sales taxes collected for authorities and deducting actual refunds
+and credit notes. Revenue in another currency must be converted to United
+States dollars using a consistently applied, publicly documented monthly
+average exchange rate published by a central bank for that month. The company
+must retain its calculation and the exchange-rate source. Internal departments
+and branches of the same legal entity are not separate companies for this test.
+
+2. Conditional grant
+
+Subject to every condition of this License, Licensor grants You a worldwide,
+non-exclusive, royalty-free copyright license to use, reproduce, study,
+modify, and redistribute the Software and Modified Software, in source or
+executable form, and to operate it as a hosted service. No ownership transfers.
+Rights not expressly granted are reserved.
+
+3. Mandatory commercial license above USD 20,000 per month
+
+A company whose Monthly Revenue exceeds USD 20,000 must request AND obtain
+a separate written commercial Savia license from Licensor before exercising
+any of the rights granted in section 2. Submitting a request does not grant
+permission. This requirement applies to internal use, development, testing,
+production, hosted services, and redistribution, including through contractors.
+An individual may not rely on personal eligibility to operate the Software
+for a company that exceeds the threshold.
+
+For ongoing eligibility, assess both the immediately preceding calendar month
+and revenue accumulated in the current calendar month. If either exceeds
+USD 20,000, a commercial license is required. A new company with no preceding
+month assesses the current month. Exactly USD 20,000 does not exceed the
+threshold. If You cross the threshold while using the Software, stop exercising
+the licensed rights until a commercial license is effective. Earlier compliant
+use is not retroactively made a breach by later revenue growth.
+
+Commercial pricing and additional terms are agreed separately with Licensor.
+A commercial license does not waive source-publication or attribution duties
+unless its written terms expressly do so. Request commercial terms from
+Hefesoft SAS through the official Savia repository's maintainer contact channel:
+https://github.com/hefesoftsas/savia
+Do not publish confidential revenue information in a public issue.
+
+4. Redistribution and publication of modifications
+
+Whenever You distribute the Software or Modified Software to another person
+or entity, whether for payment or free of charge, You must:
+
+(a) Include this License and the NOTICE file, preserve copyright, licensing,
+    attribution, and third-party notices, and identify Your modifications and
+    their dates without representing them as authored or endorsed by Licensor.
+(b) License the covered Software, including Your modifications, to recipients
+    under this same License. Each recipient remains subject to section 3.
+    You may not add restrictions that prevent exercise of these rights.
+(c) Make the complete corresponding source of the distributed version publicly
+    available at no charge, without registration, under this License, no later
+    than the first distribution. This includes all modifications and the build,
+    installation, and configuration scripts needed to reproduce that version.
+    A patch alone is insufficient unless the exact base source is also available.
+(d) Supply a clearly identified source URL with each distribution and in the
+    application's legal or about page. Keep that exact version available for
+    at least three years after Your last distribution of that version, and
+    publish the source of every subsequent modified release You distribute.
+
+Private modifications need not be published until distributed. Network access
+to a hosted instance alone is not distribution for this section; the revenue
+and visible-attribution requirements still apply to hosted instances. Business
+records, user data, passwords, private keys, and production secrets are not
+corresponding source and must not be included. Independently authored works
+that merely communicate with Savia through an API are not automatically
+Modified Software. Third-party dependencies retain their own licenses.
+
+5. Mandatory visible attribution
+
+Every original or modified deployment and distribution must clearly identify
+the product as Savia and display the following notice:
+
+    Savia — Desarrollado por Hefesoft SAS, Colombia.
+
+An English equivalent may be displayed in addition:
+
+    Savia — Developed by Hefesoft SAS, Colombia.
+
+For graphical and web interfaces, the required notice must remain legible and
+visible during normal use, including on login and public-facing pages, in a
+persistent footer, header, or equivalent area. An about page, source comment,
+or hidden legal link alone is insufficient. Responsive layouts must preserve
+readable attribution. For command-line programs, show it at startup and in
+help/version output. For headless APIs or MCP services with no user interface,
+include it in service-identification metadata and public documentation. Include
+it in distributed documentation and product descriptions as well.
+
+You may add Your own branding and authorship notices for Your contributions,
+but may not remove, hide, obscure, or replace the Savia attribution. This
+License permits use of the Savia and Hefesoft names to fulfill these duties;
+it does not otherwise grant trademark rights or permission to imply endorsement.
+
+6. Third-party rights and earlier releases
+
+This License does not replace licenses for third-party code, libraries, assets,
+or other materials identified as separately licensed. Preserve those licenses
+and satisfy their obligations. Licensor grants only rights it is entitled to
+grant. This License does not revoke rights already granted for earlier copies
+under another license, nor does it relicense third-party contributions without
+the required authorization.
+
+7. Termination
+
+Your rights under this License terminate automatically upon a breach. Except
+for commercial eligibility under section 3, rights are reinstated if You cure
+the breach within 30 days after first becoming aware of it, provided Licensor
+has not previously terminated Your rights for a breach. Reinstatement does not
+excuse liability for a breach. Revenue-based ineligibility is resolved only by
+obtaining a commercial license or again satisfying section 3; there is no
+30-day permission to operate above the threshold. Compliant recipients retain
+their own rights. Sections concerning notices on retained copies, third-party
+rights, disclaimers, liability, and interpretation survive termination.
+
+8. Disclaimer and limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED
+"AS IS", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+LICENSOR AND CONTRIBUTORS ARE NOT LIABLE FOR INDIRECT, SPECIAL, INCIDENTAL,
+OR CONSEQUENTIAL DAMAGES, LOSS OF PROFITS, DATA, OR BUSINESS ARISING FROM
+THE SOFTWARE. THEIR TOTAL LIABILITY UNDER THIS LICENSE SHALL NOT EXCEED
+AMOUNTS YOU PAID TO THEM FOR RIGHTS UNDER THIS LICENSE. THESE EXCLUSIONS DO
+NOT APPLY WHERE MANDATORY LAW PROHIBITS THEM. A SEPARATE COMMERCIAL AGREEMENT
+MAY PROVIDE DIFFERENT WARRANTIES OR LIABILITY TERMS.
+
+9. Interpretation
+
+This License is governed by the laws of Colombia, subject to applicable
+mandatory law. If a provision is unenforceable, the remaining provisions
+remain effective to the extent permitted by law. Failure to enforce a term
+is not a waiver. Amendments and exceptions require Licensor's express written
+agreement. This English text controls over informal translations.
+
+This is a source-available license with commercial-use restrictions. It is
+not an OSI-approved open-source license and must not be represented as such.

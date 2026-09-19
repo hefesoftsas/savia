@@ -1,6 +1,7 @@
 {
   "name": "savia-agencies-api",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "packageManager": "pnpm@11.24.0",
   "scripts": {
     "dev": "sh scripts/dev-local.sh",
