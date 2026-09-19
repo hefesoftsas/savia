@@ -166,7 +166,7 @@ export async function previewSchema(
       const field = next.config.fields[key];
       if (!field) return fail("Campo de conversión desconocido.", 422);
       if (mapped[key] != null && mapped[key] !== "") {
-        if (field.type === "Number" || field.type === "Currency")
+        if (["Number", "Currency", "Percentage", "Rating"].includes(field.type))
           mapped[key] = Number(mapped[key]);
         else if (field.type === "Toggle") {
           if (

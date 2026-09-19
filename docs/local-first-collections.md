@@ -190,3 +190,13 @@ work proportional to the collection; its result is reused for later pages.
 ## Scoped permissions
 
 See [Roles and permissions](permissions.md) for policy revision binding, creator attribution, row removals, field redaction and quarantine behavior. Policy changes require clearing old projections before replay. An acknowledged mutation is reauthorized against the current record before its response is returned. The existing offline lease still bounds disconnected access.
+
+## Application updates and retired assets
+
+The private bootstrap registers the service worker before loading the application modules. Returning to a visible tab or reconnecting checks for a new worker, at most once per minute and without polling. A replacement controller shows an update notice; it never reloads an open form automatically.
+
+If a deployment removes an old lazy-loaded JavaScript or stylesheet asset, both the boot boundary and the administrative error boundary offer **Actualizar y recargar** instead of retrying the same rejected module import. This recovery code is part of the statically imported boot shell. On explicit confirmation it checks the worker script without the HTTP cache, waits for the replacement worker to activate, then reloads the complete document so module failures are no longer cached in memory. Offline, failed, redundant or stalled installations remain retryable; the overall update deadline is 15 seconds, with no automatic reload loop.
+
+Recovery never clears IndexedDB, pending mutation queues, caches or credentials. A full reload still discards form edits that have not been saved locally, so the interface explains that before confirmation. Public form visitors neither register nor update the administrative worker; their recovery only reloads their document. Browsers without service workers also use a normal document reload.
+
+Clients already running a version from before this recovery mechanism may require one complete reload to receive it. Subsequent deployments expose the update and recovery controls in the running application.

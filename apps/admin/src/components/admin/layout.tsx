@@ -1,3 +1,4 @@
+import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import type { ErrorInfo } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -175,6 +176,7 @@ export const Layout = (props: CoreLayoutProps) => {
             className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 sm:right-4"
           />
         </header>
+        <DeploymentUpdateNotice />
         <ErrorBoundary
           onError={handleError}
           fallbackRender={({ error, resetErrorBoundary }) => (

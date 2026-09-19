@@ -1,3 +1,5 @@
+import { DeploymentRecovery } from "@/pwa/deployment-recovery-ui";
+import { isModuleLoadError } from "@/pwa/deployment-recovery";
 import type { ErrorInfo } from "react";
 import { useTranslate } from "ra-core";
 import { Button } from "@/components/ui/button";
@@ -15,8 +17,10 @@ export function TenantHostMismatchError({
   const isMismatch =
     error instanceof ApiClientError && error.code === "TENANT_HOST_MISMATCH";
   const expectedHost = isMismatch
-    ? ((error.details as { expectedHost?: string } | undefined)?.expectedHost)
+    ? (error.details as { expectedHost?: string } | undefined)?.expectedHost
     : undefined;
+
+  if (isModuleLoadError(error)) return <DeploymentRecovery />;
 
   if (isMismatch) {
     return (

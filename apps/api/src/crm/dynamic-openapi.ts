@@ -93,29 +93,57 @@ function operation(
 
 function fieldSchema(field: CrmObject["config"]["fields"][string]): Schema {
   const c = field.config ?? {};
-  let value: Schema = c.multiple
-    ? {
-        type: "array",
-        items: { type: "string" },
-        maxItems: 500,
-        uniqueItems: true,
-      }
-    : {
-        type:
-          field.type === "Number"
-            ? c.integer
+  let value: Schema =
+    c.multiple || field.type === "MultiSelect"
+      ? {
+          type: "array",
+          items: {
+            type: "string",
+            ...(field.type === "MultiSelect"
+              ? { enum: (field.options ?? []).map((option) => option.value) }
+              : {}),
+          },
+          ...(field.type === "MultiSelect" &&
+          field.required &&
+          !field.hidden &&
+          !c.visibleWhen
+            ? { minItems: 1 }
+            : {}),
+          maxItems: 500,
+          uniqueItems: true,
+        }
+      : {
+          type: ["Number", "Currency", "Percentage", "Rating"].includes(
+            field.type,
+          )
+            ? (c.integer && field.type !== "Percentage") ||
+              field.type === "Rating"
               ? "integer"
               : "number"
             : field.type === "Toggle"
               ? "boolean"
               : "string",
-      };
-  if (field.type === "Number") {
+        };
+  if (["Number", "Currency", "Percentage", "Rating"].includes(field.type)) {
     if (typeof c.minimum === "number") value.minimum = c.minimum;
     if (typeof c.maximum === "number") value.maximum = c.maximum;
   }
+  if (field.type === "Percentage") {
+    value.minimum = c.minimum ?? 0;
+    value.maximum = c.maximum ?? 100;
+    value.multipleOf = 10 ** -Number(c.decimals ?? 2);
+  }
+  if (field.type === "Rating") {
+    value.minimum = 1;
+    value.maximum = c.maximum ?? 5;
+  }
   if (value.type === "string") {
-    value.maxLength = typeof c.maxLength === "number" ? c.maxLength : 10000;
+    value.maxLength =
+      typeof c.maxLength === "number"
+        ? c.maxLength
+        : field.type === "RichText"
+          ? 100000
+          : 10000;
     if (typeof c.minLength === "number") value.minLength = c.minLength;
     if (field.required && !field.hidden && !c.visibleWhen)
       value.minLength = Math.max(
@@ -126,6 +154,9 @@ function fieldSchema(field: CrmObject["config"]["fields"][string]): Schema {
     if (c.format === "email") value.format = "email";
     if (c.format === "url") value.format = "uri";
     if (field.type === "DateControl") value.format = "date";
+    if (field.type === "DateTime" || c.dateTime === true)
+      value.format = "date-time";
+    if (field.type === "Time") value.pattern = "^([01]\\d|2[0-3]):[0-5]\\d$";
     if (field.type === "Dropdown" && !c.relation)
       value.enum = (field.options ?? []).map((o) => o.value);
   }
