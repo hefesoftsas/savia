@@ -25,6 +25,7 @@ import {
   handlesCollectionSourceRequest,
 } from "./collection-sources";
 import type { SqlBridgeClient } from "./sql-bridge";
+import { canManageSharedCrm } from "./hubspot-access";
 
 export type CollectionGatewayContext = {
   db: D1Database;
@@ -85,6 +86,8 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
   const local = () =>
     createCrmApp(tenant, {
       principalId: actor.principal.id,
+      authorizeWorkflow: async ({ workspace }) =>
+        canManageSharedCrm(actor, workspace),
       seedObjects,
       ...solutionOptions,
       beforeInstall: context.beforeInstall,

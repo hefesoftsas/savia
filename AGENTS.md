@@ -1,8 +1,9 @@
 # AGENTS.md
 
-Repo: Savia — low-code platform for insurance agencies (Cloudflare Workers +
+Repo: Savia — general-purpose low-code platform (Cloudflare Workers +
 D1/R2, pnpm monorepo). Human docs in `docs/` (index: `docs/README.md`);
 onboarding in `docs/onboarding/`.
+Industry capabilities are optional solution packages, not assumptions of the platform core.
 
 ## Commands
 

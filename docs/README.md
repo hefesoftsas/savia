@@ -17,6 +17,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
+
 - [local-first-collections.md](local-first-collections.md) — local replicas, synchronization, recovery and deployment.
 
 - [realtime-cost-controls.md](realtime-cost-controls.md) — realtime limits, hibernation and cost controls.

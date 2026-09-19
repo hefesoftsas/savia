@@ -10,6 +10,7 @@ import {
   platformAdministratorAuthenticator,
 } from "./auth-fixtures";
 import { AuthenticationError } from "../src/auth/types";
+import { runScheduledWorkflows } from "../src/workflows";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -38,6 +39,85 @@ const admin = () =>
     undefined,
     agencyAdministratorAuthenticator(),
   );
+it("runs general-domain workflows with current persisted owner permissions", async () => {
+  const app = createApp(
+    env.DB,
+    env.DOCUMENTS,
+    undefined,
+    platformAdministratorAuthenticator(),
+  );
+  const base = "/v1/data-domains/platform/api";
+  const headers = { "content-type": "application/json" };
+  const draftResponse = await app.request(base + "/workflows", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name: "General process",
+      definition: {
+        trigger: { type: "manual" },
+        nodes: [{ id: "done", type: "transform", values: { result: "ok" } }],
+      },
+    }),
+  });
+  expect(draftResponse.status).toBe(201);
+  const reference = await app.request(base + "/openapi.json");
+  expect(reference.status).toBe(200);
+  expect(
+    ((await reference.json()) as any).paths["/workflows/{id}/publish"].post
+      .requestBody.content["application/json"].schema.properties.revision.type,
+  ).toBe("integer");
+  const { data: draft } = (await draftResponse.json()) as any;
+  expect(
+    (
+      await app.request(`${base}/workflows/${draft.id}/publish`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ revision: draft.revision }),
+      })
+    ).status,
+  ).toBe(200);
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES ('test-platform-admin','savia:test','workflow-owner','workflow@example.test','Workflow owner',1,'2026-01-01','2026-01-01') ON CONFLICT(id) DO NOTHING",
+  ).run();
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO identity_global_role(principal_id,role,created_at) VALUES ('test-platform-admin','platform_admin','2026-01-01')",
+  ).run();
+  const start = async (key: string) =>
+    (await (
+      await app.request(`${base}/workflows/${draft.id}/start`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ key, data: {} }),
+      })
+    ).json()) as any;
+  const first = await start("authorized");
+  await runScheduledWorkflows(env.DB);
+  expect(
+    (
+      (await (
+        await app.request(`${base}/workflow-executions/${first.data.id}`)
+      ).json()) as any
+    ).data.status,
+  ).toBe("completed");
+  const second = await start("revoked");
+  await env.DB.prepare(
+    "UPDATE identity_principal SET is_active=0 WHERE id='test-platform-admin'",
+  ).run();
+  await runScheduledWorkflows(env.DB);
+  expect(
+    (
+      (await (
+        await app.request(`${base}/workflow-executions/${second.data.id}`)
+      ).json()) as any
+    ).data.status,
+  ).toBe("blocked");
+  await env.DB.prepare(
+    "UPDATE identity_principal SET is_active=1 WHERE id='test-platform-admin'",
+  ).run();
+  expect(
+    (await admin().request(prefix + `/workflows/${draft.id}`)).status,
+  ).toBe(404);
+});
 describe("CRM inside Savia", () => {
   it("rejects anonymous, viewer and foreign agency requests", async () => {
     const anonymous = createApp(env.DB, env.DOCUMENTS, undefined, {

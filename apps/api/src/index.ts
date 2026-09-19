@@ -2,6 +2,7 @@ import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
 export { RealtimeHub } from "./realtime/hub";
 import { processCrmSyncJobs } from "./crm/auto-sync";
+import { runScheduledWorkflows } from "./workflows";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
 import { PersonalActionPayloadCipher } from "./assistant/personal-action-payload";
 import { SaviaAssistantService } from "./assistant/service";
@@ -216,6 +217,15 @@ export default {
     _event: ScheduledController,
     environment: RuntimeEnvironment,
   ): Promise<void> {
-    await runScheduledCrmSync(environment);
+    const results = await Promise.allSettled([
+      runScheduledCrmSync(environment),
+      runScheduledWorkflows(environment.DB),
+    ]);
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length)
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        "Scheduled jobs failed",
+      );
   },
 };

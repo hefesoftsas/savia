@@ -40,13 +40,15 @@ import {
 import { registerExtensions, type ExtensionOptions } from "./extensions";
 import { registerExtensionActions } from "./extension-actions";
 import { registerExtensionSummaries } from "./extension-summaries";
+import { registerWorkflows, type WorkflowOptions } from "./workflows/routes";
 export function createCrmApp(
   agencyTenant?: string,
   options?: {
     seedObjects?: CrmObject[];
     principalId?: string;
   } & SolutionOptions &
-    ExtensionOptions,
+    ExtensionOptions &
+    WorkflowOptions,
 ) {
   const app = new Hono<Env>();
   app.use(
@@ -700,6 +702,7 @@ export function createCrmApp(
   registerGeocodingSettings(app);
   registerLocalSync(app, trigger);
   registerOperations(app);
+  registerWorkflows(app, options);
   return app;
 }
 export default createCrmApp();
