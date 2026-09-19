@@ -134,7 +134,8 @@ function clearBetterAuthCookies(
   cookieDomain?: string,
 ): string[] {
   const list = [clearBetterAuthCookie(name, requestUrl)];
-  if (cookieDomain) list.push(clearBetterAuthCookie(name, requestUrl, cookieDomain));
+  if (cookieDomain)
+    list.push(clearBetterAuthCookie(name, requestUrl, cookieDomain));
   return list;
 }
 
@@ -179,11 +180,12 @@ function clearReturnOriginCookies(
   cookieDomain?: string,
 ): string[] {
   const list = [clearReturnOriginCookie(requestUrl)];
-  if (cookieDomain) list.push(clearReturnOriginCookie(requestUrl, cookieDomain));
+  if (cookieDomain)
+    list.push(clearReturnOriginCookie(requestUrl, cookieDomain));
   return list;
 }
 
-function returnOriginFromRequest(
+export function returnOriginFromRequest(
   request: Request,
   canonicalHost: string = DEFAULT_CANONICAL_HOST,
 ): string | undefined {
@@ -228,9 +230,8 @@ function resolveInitiatedOrigin(
 }
 
 function appendSetCookies(source: Headers, target: Headers): void {
-  const getSetCookie = (
-    source as Headers & { getSetCookie?: () => string[] }
-  ).getSetCookie;
+  const getSetCookie = (source as Headers & { getSetCookie?: () => string[] })
+    .getSetCookie;
   const cookies = getSetCookie?.call(source);
   if (cookies?.length) {
     for (const cookie of cookies) target.append("set-cookie", cookie);
@@ -629,7 +630,10 @@ export function registerAdminOAuthRoutes(
     const token = response.ok ? tokenResponse(payload) : undefined;
     const nextRefreshToken = token ? refreshToken(token) : undefined;
     const domain = cookieDomain(context.req.url);
-    const returnOrigin = returnOriginFromRequest(context.req.raw, canonicalHost);
+    const returnOrigin = returnOriginFromRequest(
+      context.req.raw,
+      canonicalHost,
+    );
     for (const cookie of clearReturnOriginCookies(context.req.url, domain)) {
       headers.append("set-cookie", cookie);
     }
@@ -653,11 +657,7 @@ export function registerAdminOAuthRoutes(
     }
     headers.append(
       "set-cookie",
-      refreshCookie(
-        nextRefreshToken,
-        context.req.url,
-        domain,
-      ),
+      refreshCookie(nextRefreshToken, context.req.url, domain),
     );
     return Response.json(
       {

@@ -1,3 +1,5 @@
+import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
+import { canonicalHostForApi } from "./auth/tenant-host-guard";
 import {
   installRequestResultEnvelope,
   registerRequestResultRoutes,
@@ -160,7 +162,14 @@ export function createApp(
     db,
     userAdministrator ?? betterAuthUserAdministrator(resolvedAuthService),
     realtime,
+    documents,
   );
   registerAccountAvatarRoutes(app, documents, resolvedAuthService);
+  registerTenantBrandingRoutes(
+    app,
+    db,
+    documents,
+    canonicalHostForApi(oauthUrls.authorizationUrl),
+  );
   return app;
 }

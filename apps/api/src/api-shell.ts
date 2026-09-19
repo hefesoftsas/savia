@@ -1,3 +1,5 @@
+import { returnOriginFromRequest } from "./auth/admin-oauth";
+import { readTenantBrandingForRequest } from "./tenant-branding/service";
 import { RealtimeHubError } from "./realtime/hub-client";
 import { installRequestResultEnvelope } from "./request-results/routes";
 
@@ -442,9 +444,45 @@ export function createApiShell(
     tenantHost?.canonicalHost ??
     canonicalHostForApi(oauthUrls?.authorizationUrl);
   registerAdminOAuthRoutes(app, db, resolvedAuthService, canonicalHost);
-  app.all("/api/auth/*", (context) => {
+  app.all("/api/auth/*", async (context) => {
     if (!resolvedAuthService) return authenticationUnavailableResponse();
-    return resolvedAuthService.fetch(context.req.raw);
+    // Never forward a caller-supplied identity payload to the authentication UI.
+    const headers = new Headers(context.req.raw.headers);
+    headers.delete("x-savia-tenant-branding");
+    if (
+      context.req.method === "GET" &&
+      [
+        "/api/auth/login",
+        "/api/auth/mfa-enroll",
+        "/api/auth/consent",
+        "/api/auth/oauth-ui.css",
+      ].includes(context.req.path)
+    ) {
+      try {
+        const returnOrigin =
+          new URL(context.req.url).hostname === canonicalHost
+            ? returnOriginFromRequest(context.req.raw, canonicalHost)
+            : undefined;
+        const brandingRequest = returnOrigin
+          ? new Request(new URL(context.req.path, returnOrigin), {
+              headers: { accept: "application/json" },
+            })
+          : context.req.raw;
+        const branding = await readTenantBrandingForRequest(
+          db,
+          brandingRequest,
+          canonicalHost,
+        );
+        if (branding)
+          headers.set(
+            "x-savia-tenant-branding",
+            encodeURIComponent(JSON.stringify(branding)),
+          );
+      } catch {
+        // Branding is cosmetic: a failed lookup must not prevent authentication.
+      }
+    }
+    return resolvedAuthService.fetch(new Request(context.req.raw, { headers }));
   });
   if (oauthResource) {
     app.get("/.well-known/oauth-protected-resource", async (context) =>

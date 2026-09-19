@@ -5117,6 +5117,236 @@ export interface paths {
     };
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/branding": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant branding */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                displayName: string;
+                loginTitle: string;
+                loginDescription: string;
+                primaryColor: string;
+                accentColor: string;
+                logoUrl: string | null;
+                coverUrl: string | null;
+                version: number;
+              };
+              canManage?: boolean;
+            };
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            displayName: string;
+            loginTitle: string;
+            loginDescription: string;
+            primaryColor: string;
+            accentColor: string;
+            logoUrl: string | null;
+            coverUrl: string | null;
+            version: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Tenant branding */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                displayName: string;
+                loginTitle: string;
+                loginDescription: string;
+                primaryColor: string;
+                accentColor: string;
+                logoUrl: string | null;
+                coverUrl: string | null;
+                version: number;
+              };
+              canManage?: boolean;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/branding/assets/{kind}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          kind: "logo" | "cover";
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "multipart/form-data": {
+            /** Format: binary */
+            file?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Uploaded image awaiting branding save */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                url: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/tenant-branding": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Branding for the requested tenant hostname */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                displayName: string;
+                loginTitle: string;
+                loginDescription: string;
+                primaryColor: string;
+                accentColor: string;
+                logoUrl: string | null;
+                coverUrl: string | null;
+                version: number;
+              } | null;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/tenant-branding/assets/{tenantId}/{assetId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          assetId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Published tenant logo or cover */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "image/png": string;
+            "image/jpeg": string;
+            "image/webp": string;
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {

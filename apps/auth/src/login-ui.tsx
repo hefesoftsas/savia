@@ -1,3 +1,4 @@
+import type { TenantBranding } from "@savia/tenant-host/branding";
 import { renderToStaticMarkup } from "react-dom/server";
 import { saviaLargeLogoDataUri, saviaLogoDataUri } from "./savia-logo";
 import { Button } from "./components/ui/button";
@@ -6,12 +7,12 @@ import { Label } from "./components/ui/label";
 
 type Screen = "login" | "enroll" | "consent";
 
-function SaviaMark() {
+function SaviaMark({ branding }: { branding?: TenantBranding }) {
   return (
     <img
       className="savia-mark"
-      src={saviaLogoDataUri}
-      alt="Savia"
+      src={branding?.logoUrl ?? saviaLogoDataUri}
+      alt={branding?.displayName ?? "Savia"}
       width={40}
       height={40}
     />
@@ -21,8 +22,10 @@ function SaviaMark() {
 function Shell({
   screen,
   children,
+  branding,
 }: {
   screen: Screen;
+  branding?: TenantBranding;
   children: React.ReactNode;
 }) {
   const context =
@@ -32,21 +35,34 @@ function Shell({
         ? "Protección de cuenta"
         : "Acceso seguro";
   return (
-    <div className="oauth-screen">
+    <div
+      className="oauth-screen"
+      data-tenant-branding={branding ? "true" : undefined}
+    >
       <section className="oauth-workspace" aria-label={context}>
-        <a className="savia-brand" href="/docs" aria-label="Savia API">
+        <a
+          className="savia-brand"
+          href="/docs"
+          aria-label={branding?.displayName ?? "Savia API"}
+        >
           <img
             className="savia-brand-logo"
-            src={saviaLargeLogoDataUri}
-            alt="Savia"
+            src={branding?.logoUrl ?? saviaLargeLogoDataUri}
+            alt={branding?.displayName ?? "Savia"}
             height={36}
           />
         </a>
         <div className="oauth-form-column">{children}</div>
       </section>
-      <aside className="oauth-aside" aria-hidden="true">
+      <aside
+        className={`oauth-aside${branding?.coverUrl ? " has-cover" : ""}`}
+        aria-hidden="true"
+      >
+        {branding?.coverUrl && (
+          <img className="oauth-aside-cover" src={branding.coverUrl} alt="" />
+        )}
         <div className="oauth-aside-mark">
-          <SaviaMark />
+          <SaviaMark branding={branding} />
         </div>
         <div className="oauth-aside-illustration">
           <svg
@@ -121,13 +137,15 @@ function Shell({
           </svg>
         </div>
         <div>
-          <p className="oauth-aside-eyebrow">Savia · IA para seguros</p>
+          <p className="oauth-aside-eyebrow">
+            {branding?.displayName ?? "Savia · IA para seguros"}
+          </p>
           <p className="oauth-aside-title">
-            Seguros que anticipan. IA que acelera.
+            {branding?.loginTitle ?? "Seguros que anticipan. IA que acelera."}
           </p>
           <p className="oauth-aside-copy">
-            Conecta información, cobertura y decisiones para una operación más
-            clara y ágil.
+            {branding?.loginDescription ??
+              "Conecta información, cobertura y decisiones para una operación más clara y ágil."}
           </p>
         </div>
       </aside>
@@ -139,7 +157,10 @@ function Status() {
   return <p id="oauth-status" role="status" aria-live="polite" />;
 }
 
-function LoginContent({ tenantSlug }: { tenantSlug?: string | null } = {}) {
+function LoginContent({
+  tenantSlug,
+  branding,
+}: { tenantSlug?: string | null; branding?: TenantBranding } = {}) {
   const workspaceKicker = tenantSlug
     ? `Espacio de trabajo · ${tenantSlug}`
     : "Acceso a Savia";
@@ -148,11 +169,13 @@ function LoginContent({ tenantSlug }: { tenantSlug?: string | null } = {}) {
     : "Autentícate para continuar con la autorización solicitada.";
 
   return (
-    <Shell screen="login">
+    <Shell screen="login" branding={branding}>
       <div className="oauth-heading">
-        <p className="oauth-kicker">{workspaceKicker}</p>
-        <h1>Inicia sesión</h1>
-        <p>{workspaceSubtitle}</p>
+        <p className="oauth-kicker">
+          {branding?.displayName ?? workspaceKicker}
+        </p>
+        <h1>{branding?.loginTitle ?? "Inicia sesión"}</h1>
+        <p>{branding?.loginDescription ?? workspaceSubtitle}</p>
       </div>
       <form
         className="oauth-form"
@@ -272,9 +295,9 @@ function LoginContent({ tenantSlug }: { tenantSlug?: string | null } = {}) {
   );
 }
 
-function EnrollmentContent() {
+function EnrollmentContent({ branding }: { branding?: TenantBranding }) {
   return (
-    <Shell screen="enroll">
+    <Shell screen="enroll" branding={branding}>
       <div className="oauth-heading">
         <p className="oauth-kicker">Protección de cuenta</p>
         <h1>Configura tu segundo factor</h1>
@@ -344,12 +367,12 @@ function EnrollmentContent() {
   );
 }
 
-function ConsentContent() {
+function ConsentContent({ branding }: { branding?: TenantBranding }) {
   return (
-    <Shell screen="consent">
+    <Shell screen="consent" branding={branding}>
       <div className="oauth-heading">
         <p className="oauth-kicker">Solicitud de acceso</p>
-        <h1>Autoriza Savia</h1>
+        <h1>Autoriza {branding?.displayName ?? "Savia"}</h1>
         <p data-oauth-client>La aplicación solicita acceso a tu cuenta.</p>
       </div>
       <div className="oauth-permissions">
@@ -373,15 +396,18 @@ function ConsentContent() {
 
 export function renderOAuthSurface(
   screen: Screen,
-  options?: { tenantSlug?: string | null },
+  options?: { tenantSlug?: string | null; branding?: TenantBranding },
 ): string {
   const content =
     screen === "login" ? (
-      <LoginContent tenantSlug={options?.tenantSlug} />
+      <LoginContent
+        tenantSlug={options?.tenantSlug}
+        branding={options?.branding}
+      />
     ) : screen === "enroll" ? (
-      <EnrollmentContent />
+      <EnrollmentContent branding={options?.branding} />
     ) : (
-      <ConsentContent />
+      <ConsentContent branding={options?.branding} />
     );
   return renderToStaticMarkup(content);
 }

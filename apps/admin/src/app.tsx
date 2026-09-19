@@ -1,4 +1,8 @@
 import {
+  TenantBrandingProvider,
+  useTenantBranding,
+} from "@/features/tenant-branding/tenant-branding-provider";
+import {
   lazy,
   Suspense,
   useCallback,
@@ -159,13 +163,28 @@ function AccountRoute({ apiUrl }: { apiUrl: string }) {
 }
 
 function TenantTitleSync({ title }: { title: string }) {
+  const { branding } = useTenantBranding();
   useEffect(() => {
-    document.title = title;
-  }, [title]);
+    document.title = branding ? `${branding.displayName} | Savia` : title;
+  }, [title, branding]);
   return null;
 }
 
-export function App({ services }: { services?: AppServices } = {}) {
+const TenantBrandingPage = lazy(() =>
+  import("@/features/tenant-branding/tenant-branding-page").then((module) => ({
+    default: module.TenantBrandingPage,
+  })),
+);
+
+export function App(props: { services?: AppServices } = {}) {
+  return (
+    <TenantBrandingProvider>
+      <AppContent {...props} />
+    </TenantBrandingProvider>
+  );
+}
+
+function AppContent({ services }: { services?: AppServices } = {}) {
   const currentTenant = useCurrentTenant();
   const pageTitle = currentTenant.isDedicated
     ? `${currentTenant.name} | Savia`
@@ -244,6 +263,18 @@ export function App({ services }: { services?: AppServices } = {}) {
           <Resource {...users} />
           <Resource {...tenants} />
           <CustomRoutes>
+            <Route
+              path="/tenant-branding"
+              element={
+                <Suspense
+                  fallback={
+                    <RouteLoading label="Cargando identidad del tenant…" />
+                  }
+                >
+                  <TenantBrandingPage services={appServices} />
+                </Suspense>
+              }
+            />
             <Route path="/" element={<Navigate to="/my-day" replace />} />
             <Route path="/crm" element={<CrmRoute services={appServices} />} />
             <Route

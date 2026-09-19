@@ -17,6 +17,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
+
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
 
 - [local-first-collections.md](local-first-collections.md) — local replicas, synchronization, recovery and deployment.

@@ -1,3 +1,4 @@
+import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
 import {
   lazy,
   Suspense,
@@ -318,6 +319,7 @@ function normalizeNavigationText(value: string) {
 export function AppSidebar() {
   const translate = useTranslate();
   const currentTenant = useCurrentTenant();
+  const { branding } = useTenantBranding();
   const services = useAppServices();
   const { openMobile, setOpenMobile, state } = useSidebar();
   const { active: saviaRequestActive } = useSaviaRequestWorkspace();
@@ -707,24 +709,34 @@ export function AppSidebar() {
                 onClick={closeMobileSidebar}
                 className="flex items-center gap-2.5 min-w-0"
               >
-                {currentTenant.isDedicated ? (
+                {currentTenant.isDedicated || branding ? (
                   <>
                     <div
                       className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground font-semibold text-xs tracking-wider shadow-sm"
-                      title={currentTenant.name}
+                      title={branding?.displayName ?? currentTenant.name}
                       aria-hidden="true"
                     >
-                      {currentTenant.monogram}
+                      {branding?.logoUrl ? (
+                        <img
+                          src={branding.logoUrl}
+                          alt=""
+                          className="size-7 object-contain"
+                        />
+                      ) : (
+                        (branding?.displayName ?? currentTenant.name).charAt(0)
+                      )}
                     </div>
                     <div className="flex flex-col min-w-0 group-data-[collapsible=icon]:hidden leading-tight">
                       <span className="truncate font-semibold text-sm text-foreground">
-                        {currentTenant.name}
+                        {branding?.displayName ?? currentTenant.name}
                       </span>
                       <span className="text-[10px] text-muted-foreground tracking-tight">
                         Espacio de trabajo · Savia
                       </span>
                     </div>
-                    <span className="sr-only">{currentTenant.name}</span>
+                    <span className="sr-only">
+                      {branding?.displayName ?? currentTenant.name}
+                    </span>
                   </>
                 ) : (
                   <>

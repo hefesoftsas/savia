@@ -65,19 +65,26 @@ it("submits all expanded fields within a dialog without dismissing it", async ()
   );
   await screen.findByRole("textbox", { name: "Campo 0" });
   fireEvent.click(screen.getByRole("button", { name: "Expand" }));
-  for (let index = 0; index <= 25; index++)
-    fireEvent.input(
-      await screen.findByRole("textbox", { name: `Campo ${index}` }),
-      { target: { value: `Valor ${index}` } },
-    );
+  await screen.findByRole("textbox", { name: "Campo 25" });
+  // Query the expanded controls once. Recomputing every accessible role across
+  // this large dialog for each keystroke made the test CPU-bound in the suite.
+  const inputs = screen.getAllByRole("textbox");
+  expect(inputs).toHaveLength(26);
+  for (const [index, input] of inputs.entries()) {
+    expect(input).toHaveAccessibleName(`Campo ${index}`);
+    fireEvent.input(input, { target: { value: `Valor ${index}` } });
+  }
   fireEvent.click(screen.getByRole("button", { name: "Guardar registro" }));
   await waitFor(() => expect(save).toHaveBeenCalledOnce());
   expect(close).not.toHaveBeenCalled();
-  expect(save.mock.calls[0][0]).toMatchObject({
-    field_0: "Valor 0",
-    field_25: "Valor 25",
-    field_26: false,
-  });
+  expect(save.mock.calls[0][0]).toMatchObject(
+    Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [
+        `field_${index}`,
+        index <= 25 ? `Valor ${index}` : false,
+      ]),
+    ),
+  );
 });
 
 it.each(["managed-customer", "managed-agency"] as const)(

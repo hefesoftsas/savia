@@ -1,3 +1,4 @@
+import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
@@ -16,6 +17,7 @@ import { ThemeModeToggle } from "@/components/admin/theme-mode-toggle";
  */
 export function AppearancePanel() {
   const { state } = useSidebar();
+  const { branding } = useTenantBranding();
   const translate = useTranslate();
   const iconCollapsed = state === "collapsed";
   const [open, setOpen] = useState(true);
@@ -23,7 +25,7 @@ export function AppearancePanel() {
   if (iconCollapsed) {
     return (
       <SidebarMenu>
-        <ColorThemeToggle />
+        {!branding && <ColorThemeToggle />}
         <ThemeModeToggle />
       </SidebarMenu>
     );
@@ -53,7 +55,7 @@ export function AppearancePanel() {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <SidebarMenu>
-          <ColorThemeToggle />
+          {!branding && <ColorThemeToggle />}
           <ThemeModeToggle />
         </SidebarMenu>
       </CollapsibleContent>
