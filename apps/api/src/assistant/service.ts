@@ -314,19 +314,8 @@ export class SaviaAssistantService implements AssistantService {
     }
     if (!effective.apiKey) return unavailableResponse();
 
-    // 1. Resolve active agency if any
-    let agencyId: number | undefined;
-    if (typeof this.configuration.database?.prepare === "function") {
-      try {
-        const activeAgencyRow = await this.configuration.database
-          .prepare(
-            `SELECT agency_id FROM assistant_active_agencies WHERE principal_id = ?`,
-          )
-          .bind(request.principalId)
-          .first<{ agency_id: number }>();
-        agencyId = activeAgencyRow?.agency_id;
-      } catch {}
-    }
+    // The configuration resolver checks current tenant membership, including revocations.
+    const agencyId = effective.agencyId;
 
     // 2. Extract last user text
     let lastUserText = "";
@@ -373,7 +362,12 @@ export class SaviaAssistantService implements AssistantService {
         }
 
         // If not mentioned in latest user message, inherit from earlier turns in the same thread
-        if (!employee && Array.isArray(request.messages)) {
+        if (
+          !employee &&
+          !request.employeeId &&
+          !request.employeeHandle &&
+          Array.isArray(request.messages)
+        ) {
           for (let i = request.messages.length - 1; i >= 0; i--) {
             const m = request.messages[i] as any;
             if (m?.role === "user") {
@@ -398,6 +392,24 @@ export class SaviaAssistantService implements AssistantService {
           }
         }
       } catch {}
+    }
+
+    if (
+      employee &&
+      (employee.status !== "active" ||
+        (employee.agencyId !== null && employee.agencyId !== agencyId))
+    )
+      employee = null;
+    if ((request.employeeId || request.employeeHandle) && !employee) {
+      return Response.json(
+        {
+          error: {
+            code: "EMPLOYEE_UNAVAILABLE",
+            message: "Employee unavailable",
+          },
+        },
+        { status: 404 },
+      );
     }
 
     // 4. Retrieve RAG chunks if employee is active

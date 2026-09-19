@@ -103,6 +103,35 @@ export class SaviaApiClient {
     this.fetcher = fetcher;
   }
 
+  async listEmployees(): Promise<unknown> {
+    return this.request("/api/assistant/mcp/employees");
+  }
+
+  async invokeEmployee(
+    employeeId: string,
+    message: string,
+    history: Array<{ role: "user" | "assistant"; text: string }> = [],
+  ): Promise<unknown> {
+    return this.request(
+      `/api/assistant/mcp/employees/${encode(employeeId)}/invoke`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message, history }),
+      },
+    );
+  }
+
+  async employeeAction(
+    actionId: string,
+    operation: "confirm" | "cancel" | "status",
+  ): Promise<unknown> {
+    return this.request(
+      `/api/assistant/actions/${encode(actionId)}${operation === "status" ? "" : `/${operation}`}`,
+      { method: operation === "status" ? "GET" : "POST" },
+    );
+  }
+
   async listDomains(): Promise<SaviaDomain[]> {
     const response = await this.request<{ data: SaviaDomain[] }>("/v1/domains");
     return response.data;

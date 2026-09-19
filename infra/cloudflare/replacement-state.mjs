@@ -197,6 +197,7 @@ function gatewayConfig(_, stage) {
         "/api/*",
         "/v1/*",
         "/.well-known/*",
+        "/mcp",
         "/docs",
         "/openapi.json",
       ],

@@ -190,6 +190,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
         "/api/*",
         "/v1/*",
         "/.well-known/*",
+        "/mcp",
         "/health",
         "/docs",
         "/openapi.json",
@@ -257,7 +258,8 @@ export async function renderProductionConfigs({
       config.workers_dev = false;
       config.preview_urls = false;
     }
-    configs.api.triggers = { crons: [] };
+    configs.api.triggers = { crons: ["* * * * *"] };
+    configs.api.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE = "true";
     configs.api.vars.SAVIA_MCP_URL = "https://savia-mcp-preview.internal/mcp";
     configs.admin.vars = {
       CANONICAL_HOST: new URL(rendered.publicOrigin).hostname,

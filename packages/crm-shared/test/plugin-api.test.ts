@@ -253,3 +253,26 @@ describe("plugin collection API", () => {
     await expect(savia.services.get("summary")).resolves.toEqual({ total: 3 });
   });
 });
+
+it("routes files through authorized host APIs and preserves multipart bodies", async () => {
+  const calls: unknown[][] = [];
+  const request = async (...args: unknown[]) => {
+    calls.push(args);
+    return { data: [] } as any;
+  };
+  const api = createPluginApi({ extensionId: "example.files", request });
+  const file = new File(["proof"], "proof.txt", { type: "text/plain" });
+  await api.files!.list("cases", "case/1");
+  await api.files!.upload("cases", "case/1", file);
+  await api.files!.download("file/1");
+  await api.files!.remove("file/1", 3);
+  expect(calls[0][0]).toBe("/files/cases/case%2F1");
+  expect(calls[1][2]).toBeInstanceOf(FormData);
+  expect(calls[2]).toEqual([
+    "/file/file%2F1/download",
+    "GET",
+    undefined,
+    { responseType: "blob" },
+  ]);
+  expect(calls[3]).toEqual(["/file/file%2F1", "DELETE", { version: 3 }]);
+});

@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.payments",
+  "version": "1.0.0",
+  "label": "Conciliación bancaria",
+  "description": "Importa extractos y asigna recaudos a obligaciones.",
+  "requires": [],
+  "apiVersion": 1
+}

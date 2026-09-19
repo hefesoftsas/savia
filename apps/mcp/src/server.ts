@@ -1,3 +1,4 @@
+import { registerEmployeeTools } from "./employee-tools";
 import { createHash } from "node:crypto";
 import { FastMCP } from "@prefecthq/fastmcp-ts/server";
 import { z } from "zod";
@@ -81,9 +82,16 @@ export function createSaviaMcpServer(
       ? getDelegatedClient(server, apiUrl, options?.apiFetch)
       : configuredClient;
 
+  registerEmployeeTools(server, clientForRequest);
+
   server.tool(
     {
       name: "savia_execute_command",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+      },
       description:
         "Execute a documented domain command. Use this for writes rather than direct table-style CRUD.",
       input: z.object({
@@ -275,7 +283,7 @@ export function createSaviaMcpServer(
     {
       name: "savia_list_crm_collections",
       description:
-        "Discover available CRM collections (customers, policies, quotes, and custom collections), their labels, descriptions, record counts, and field schemas with types and dropdown options.",
+        "Discover authorized Savia collections (local collections, custom collections, and connected CRM providers), their labels, descriptions, record counts, and field schemas with types and dropdown options.",
       annotations: { readOnlyHint: true },
       input: z.object({
         all: z
@@ -423,6 +431,11 @@ export function createSaviaMcpServer(
   server.tool(
     {
       name: "savia_create_crm_record",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+      },
       description:
         "Create a record in an installed CRM provider collection using its discovered fields. This writes to the connected CRM. Requires caller authorization and provider create capability.",
       input: z.object({
@@ -445,6 +458,11 @@ export function createSaviaMcpServer(
   server.tool(
     {
       name: "savia_update_crm_record",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+      },
       description:
         "Update specified fields of an installed CRM provider record. This writes to the connected CRM. Read the record first and include its _version when present; provider update capability is enforced.",
       input: z.object({
@@ -469,6 +487,11 @@ export function createSaviaMcpServer(
   server.tool(
     {
       name: "savia_delete_crm_record",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+      },
       description:
         "Delete a record by ID from a CRM collection. This permanently removes or archives the record.",
       input: z.object({

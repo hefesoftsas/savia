@@ -46,6 +46,7 @@ export function isServicePath(pathname: string): boolean {
     pathname.startsWith("/api/") ||
     pathname.startsWith("/v1/") ||
     pathname.startsWith("/.well-known/") ||
+    pathname === "/mcp" ||
     pathname === "/health" ||
     pathname === "/docs" ||
     pathname === "/openapi.json"

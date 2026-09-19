@@ -1,6 +1,9 @@
 import { WebhookEndpointRepository } from "./webhook-endpoints";
 import { WebhookDestinationRepository } from "./webhook-destinations";
 import { webhookDestinationSchema } from "@savia/crm-shared/workflow-webhooks";
+import { isExtensionAvailable, type ExtensionOptions } from "../extensions";
+import type { WorkflowBundle } from "@savia/crm-shared/workflow-bundles";
+import { prepareWorkflowBundle } from "./bundles";
 import type { Hono, Context } from "hono";
 import { z } from "zod";
 import type { Env } from "../context";
@@ -10,6 +13,7 @@ import { workflowDraftSchema } from "@savia/crm-shared/workflows";
 export type WorkflowAction =
   "view" | "design" | "publish" | "execute" | "history" | "resolve";
 export type WorkflowOptions = {
+  workflowBundles?: readonly WorkflowBundle[];
   authorizeWorkflow?: (request: {
     workspace: string;
     principalId: string;
@@ -25,6 +29,7 @@ export const workflowRequests = {
     })
     .strict(),
   secret: z.object({ secret: z.string().min(1).max(8192) }).strict(),
+
   save: z
     .object({
       revision: z.number().int().positive(),
@@ -42,7 +47,7 @@ export const workflowRequests = {
 };
 export function registerWorkflows(
   app: Hono<Env>,
-  options: WorkflowOptions = {},
+  options: WorkflowOptions & ExtensionOptions = {},
 ) {
   const repository = async (c: Context<Env>, action: WorkflowAction) => {
     const principalId = c.get("principalId"),
@@ -105,6 +110,62 @@ export function registerWorkflows(
       body = workflowRequests.enabled.parse(await c.req.json());
     return c.json({
       data: await repo.setEnabled(c.req.param("id"), body.enabled),
+    });
+  });
+  app.get("/api/workflow-bundles", async (c) => {
+    await repository(c, "view");
+    const objects = await c.env.DB.prepare(
+      "SELECT name FROM crm_objects WHERE tenant_id=?",
+    )
+      .bind(c.get("tenant"))
+      .all<{ name: string }>();
+    const names = new Set(objects.results.map((o) => o.name));
+    const available = [];
+    for (const bundle of options.workflowBundles ?? [])
+      if (
+        !bundle.extensionId ||
+        (await isExtensionAvailable(
+          c.env.DB,
+          c.get("tenant"),
+          bundle.extensionId,
+          options.extensionRegistry,
+        ))
+      )
+        available.push(bundle);
+    return c.json({
+      data: available.map((bundle) => ({
+        id: bundle.id,
+        label: bundle.label,
+        description: bundle.description,
+        missing: bundle.collections.filter((name) => !names.has(name)),
+        workflows: bundle.workflows.map((w) => w.name),
+      })),
+    });
+  });
+  app.post("/api/workflow-bundles/:id/prepare", async (c) => {
+    await repository(c, "design");
+    await repository(c, "publish");
+    const bundle = options.workflowBundles?.find(
+      (b) => b.id === c.req.param("id"),
+    );
+    if (
+      !bundle ||
+      (bundle.extensionId &&
+        !(await isExtensionAvailable(
+          c.env.DB,
+          c.get("tenant"),
+          bundle.extensionId,
+          options.extensionRegistry,
+        )))
+    )
+      fail("Workflow bundle not found", 404);
+    return c.json({
+      data: await prepareWorkflowBundle(
+        c.env.DB,
+        c.get("tenant"),
+        c.get("principalId"),
+        bundle,
+      ),
     });
   });
   app.get("/api/workflows", async (c) =>

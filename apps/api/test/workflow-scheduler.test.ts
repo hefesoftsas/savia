@@ -19,3 +19,15 @@ it("continues workflows when the independent CRM synchronization fails", async (
     true,
   );
 });
+import { processCrmSyncJobs } from "../src/crm/auto-sync";
+it("ticks workflows in preview without activating external CRM synchronization", async () => {
+  vi.clearAllMocks();
+  await expect(
+    worker.scheduled({} as ScheduledController, {
+      ...env,
+      SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+    }),
+  ).resolves.toBeUndefined();
+  expect(runScheduledWorkflows).toHaveBeenCalledTimes(1);
+  expect(processCrmSyncJobs).not.toHaveBeenCalled();
+});

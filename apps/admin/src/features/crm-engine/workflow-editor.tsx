@@ -81,7 +81,11 @@ export function ValueInput({
       value === null
         ? "null"
         : typeof value === "object"
-          ? "ref"
+          ? "concat" in value
+            ? "concat"
+            : "dateOffset" in value
+              ? "dateOffset"
+              : "ref"
           : typeof value;
   return (
     <div className="wf-value">
@@ -92,15 +96,19 @@ export function ValueInput({
           value={kind}
           onChange={(e) =>
             onChange(
-              e.target.value === "ref"
-                ? { ref: variables[0] ?? "system.owner" }
-                : e.target.value === "number"
-                  ? 0
-                  : e.target.value === "boolean"
-                    ? false
-                    : e.target.value === "null"
-                      ? null
-                      : "",
+              e.target.value === "concat"
+                ? { concat: [""] }
+                : e.target.value === "dateOffset"
+                  ? { dateOffset: { value: "", days: 0 } }
+                  : e.target.value === "ref"
+                    ? { ref: variables[0] ?? "system.owner" }
+                    : e.target.value === "number"
+                      ? 0
+                      : e.target.value === "boolean"
+                        ? false
+                        : e.target.value === "null"
+                          ? null
+                          : "",
             )
           }
         >
@@ -109,8 +117,77 @@ export function ValueInput({
           <option value="boolean">Sí / No</option>
           <option value="null">Vacío</option>
           <option value="ref">Variable</option>
+          <option value="concat">Combinar textos</option>
+          <option value="dateOffset">Desplazar fecha</option>
         </select>
-        {kind === "boolean" ? (
+        {typeof value === "object" && value && "concat" in value ? (
+          <fieldset>
+            <legend>Partes del texto</legend>
+            {value.concat.map((part, index) => (
+              <div key={index}>
+                <ValueInput
+                  label={`Parte ${index + 1}`}
+                  value={part}
+                  variables={variables}
+                  onChange={(next) =>
+                    onChange({
+                      concat: value.concat.map((item, i) =>
+                        i === index ? next : item,
+                      ),
+                    })
+                  }
+                />
+                <Button
+                  variant="ghost"
+                  disabled={value.concat.length === 1}
+                  onClick={() =>
+                    onChange({
+                      concat: value.concat.filter((_, i) => i !== index),
+                    })
+                  }
+                >
+                  Quitar parte
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              disabled={value.concat.length >= 12}
+              onClick={() => onChange({ concat: [...value.concat, ""] })}
+            >
+              Añadir parte
+            </Button>
+          </fieldset>
+        ) : typeof value === "object" && value && "dateOffset" in value ? (
+          <fieldset>
+            <legend>Fecha relativa</legend>
+            <ValueInput
+              label="Fecha base"
+              value={value.dateOffset.value}
+              variables={variables}
+              onChange={(next) =>
+                onChange({ dateOffset: { ...value.dateOffset, value: next } })
+              }
+            />
+            <label>
+              Días antes (negativo) o después
+              <Input
+                type="number"
+                min={-3660}
+                max={3660}
+                value={value.dateOffset.days}
+                onChange={(e) =>
+                  onChange({
+                    dateOffset: {
+                      ...value.dateOffset,
+                      days: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+          </fieldset>
+        ) : kind === "boolean" ? (
           <select
             id={id}
             value={String(value)}
@@ -125,7 +202,11 @@ export function ValueInput({
             type={kind === "number" ? "number" : "text"}
             list={kind === "ref" ? `${id}-options` : undefined}
             value={
-              typeof value === "object" ? (value?.ref ?? "") : String(value)
+              typeof value === "object"
+                ? value && "ref" in value
+                  ? value.ref
+                  : ""
+                : String(value)
             }
             onChange={(e) =>
               onChange(
@@ -468,24 +549,33 @@ export function StepEditor({
                 patch({ operator: e.target.value as typeof node.operator })
               }
             >
-              {["eq", "neq", "gt", "gte", "lt", "lte", "contains", "empty"].map(
-                (op, i) => (
-                  <option key={op} value={op}>
-                    {
-                      [
-                        "Igual",
-                        "Distinto",
-                        "Mayor",
-                        "Mayor o igual",
-                        "Menor",
-                        "Menor o igual",
-                        "Contiene",
-                        "Está vacío",
-                      ][i]
-                    }
-                  </option>
-                ),
-              )}
+              {[
+                "eq",
+                "neq",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "contains",
+                "empty",
+                "date_after",
+              ].map((op, i) => (
+                <option key={op} value={op}>
+                  {
+                    [
+                      "Igual",
+                      "Distinto",
+                      "Mayor",
+                      "Mayor o igual",
+                      "Menor",
+                      "Menor o igual",
+                      "Contiene",
+                      "Está vacío",
+                      "Fecha posterior",
+                    ][i]
+                  }
+                </option>
+              ))}
             </select>
           </label>
           <ValueInput
@@ -507,6 +597,33 @@ export function StepEditor({
           variables={variables}
         />
       ) : null}
+      {node.type === "create" ? (
+        <label>
+          Evitar duplicados por campo único
+          <select
+            value={node.matchField ?? ""}
+            onChange={(e) => patch({ matchField: e.target.value || undefined })}
+          >
+            <option value="">Crear siempre</option>
+            {fields
+              .filter((field) => {
+                const definition = objects.find(
+                  (o) => o.name === node.collection,
+                )?.config.fields[field];
+                return (
+                  definition?.config?.unique &&
+                  !definition.config.multiple &&
+                  ["Textbox", "Dropdown"].includes(definition.type)
+                );
+              })
+              .map((field) => (
+                <option key={field} value={field}>
+                  {field}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
       {node.type === "update" ? (
         <ValueInput
           label="ID del registro"
@@ -524,6 +641,7 @@ export function StepEditor({
               onChange={(e) => patch({ field: e.target.value })}
             >
               <option value="">Selecciona un campo</option>
+              <option value="id">ID del registro</option>
               {fields.map((f) => (
                 <option key={f}>{f}</option>
               ))}
@@ -575,15 +693,41 @@ export function StepEditor({
         </label>
       ) : null}
       {node.type === "delay" ? (
-        <label>
-          Segundos de espera
-          <Input
-            type="number"
-            min={1}
-            value={node.seconds}
-            onChange={(e) => patch({ seconds: Number(e.target.value) })}
-          />
-        </label>
+        <fieldset>
+          <legend>Momento de continuación</legend>
+          <select
+            aria-label="Tipo de espera"
+            value={node.until === undefined ? "seconds" : "until"}
+            onChange={(e) =>
+              patch(
+                e.target.value === "seconds"
+                  ? { seconds: 60, until: undefined }
+                  : { seconds: undefined, until: "" },
+              )
+            }
+          >
+            <option value="seconds">Duración en segundos</option>
+            <option value="until">Hasta una fecha UTC</option>
+          </select>
+          {node.until === undefined ? (
+            <label>
+              Segundos de espera
+              <Input
+                type="number"
+                min={1}
+                value={node.seconds ?? 60}
+                onChange={(e) => patch({ seconds: Number(e.target.value) })}
+              />
+            </label>
+          ) : (
+            <ValueInput
+              label="Continuar en fecha"
+              value={node.until}
+              onChange={(value) => patch({ until: value })}
+              variables={variables}
+            />
+          )}
+        </fieldset>
       ) : null}
       {destination(
         node.type === "condition" ? "Si se cumple" : "Siguiente paso",

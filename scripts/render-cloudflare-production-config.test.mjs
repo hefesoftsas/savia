@@ -142,6 +142,7 @@ test("writes only the supported production workers and retains their runtime set
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
     ]);
     assert.ok(admin.assets.run_worker_first.includes("/health"));
+    assert.ok(admin.assets.run_worker_first.includes("/mcp"));
     assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {
@@ -191,7 +192,8 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       for (const binding of conf.d1_databases ?? [])
         assert.ok(binding.database_id.startsWith("preview-"));
       if (app === "api") {
-        assert.deepEqual(conf.triggers, { crons: [] });
+        assert.deepEqual(conf.triggers, { crons: ["* * * * *"] });
+        assert.equal(conf.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE, "true");
         assert.equal(conf.r2_buckets[0].bucket_name, "savia-documents-preview");
         assert.equal(
           conf.vars.SAVIA_MCP_URL,

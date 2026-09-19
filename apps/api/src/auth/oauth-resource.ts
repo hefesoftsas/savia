@@ -181,7 +181,11 @@ function verificationErrorCategory(exception: unknown): string {
 }
 
 export function requiredOAuthScope(request: Request): string {
-  if (new URL(request.url).pathname === "/api/assistant/chat") {
+  const path = new URL(request.url).pathname;
+  if (
+    path === "/api/assistant/chat" ||
+    /^\/api\/assistant\/mcp\/employees\/[^/]+\/invoke$/.test(path)
+  ) {
     return SAVIA_READ_SCOPE;
   }
   return request.method === "GET" || request.method === "HEAD"

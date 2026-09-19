@@ -1,0 +1,23 @@
+{
+  "name": "@savia/insurance-automation",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./manifest": "./src/manifest.ts",
+    "./bundles": "./src/bundles.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/crm-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

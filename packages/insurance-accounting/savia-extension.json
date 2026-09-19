@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.accounting",
+  "version": "1.0.0",
+  "label": "Contabilidad",
+  "description": "Prepara lotes de facturas y comprobantes balanceados.",
+  "requires": [],
+  "apiVersion": 1
+}

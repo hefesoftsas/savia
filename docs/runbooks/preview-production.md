@@ -45,7 +45,9 @@ The encryption keys match the copied encrypted records. Preview credentials are
 stored in its GitHub environment. Business integrations copied from production
 can still refer to live external accounts: interactive operations use those
 accounts. Scheduled synchronization is disabled in preview to avoid duplicate
-background work. Preview OAuth origins and service bindings point to preview.
+background work. A workflow-only scheduler runs once per minute so explicitly active
+workflows and incoming webhooks can execute; it does not invoke CRM synchronization
+or scheduled record-history maintenance. Preview OAuth origins and service bindings point to preview.
 
 The public gateway uses an exact custom domain. Wildcard custom domains are not
 supported by Cloudflare; tenant-specific hostnames need separately provisioned

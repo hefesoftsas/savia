@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.compliance",
+  "version": "1.0.0",
+  "label": "Expedientes de cumplimiento",
+  "description": "Organiza requisitos, evidencias, revisiones y vigencias configurables.",
+  "requires": [],
+  "apiVersion": 1
+}

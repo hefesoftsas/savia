@@ -120,6 +120,51 @@ describe("general workflow definitions", () => {
   });
 });
 
+it("builds bounded term keys and calendar offsets without evaluating code", () => {
+  const context = {
+    trigger: { id: "p1", end: "2028-03-01" },
+    before: {},
+    steps: {},
+    system: {},
+  };
+  expect(
+    resolveWorkflowValue(
+      { concat: [{ ref: "trigger.id" }, ":", { ref: "trigger.end" }] } as any,
+      context,
+    ),
+  ).toBe("p1:2028-03-01");
+  expect(
+    resolveWorkflowValue(
+      { dateOffset: { value: { ref: "trigger.end" }, days: -1 } } as any,
+      context,
+    ),
+  ).toBe("2028-02-29");
+  expect(() =>
+    resolveWorkflowValue(
+      { dateOffset: { value: "2026-02-30", days: 1 } } as any,
+      context,
+    ),
+  ).toThrow();
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [
+        {
+          id: "wait",
+          type: "delay",
+          until: { dateOffset: { value: "2028-03-01", days: -30 } },
+        },
+      ],
+    }).success,
+  ).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      trigger: { type: "manual" },
+      nodes: [{ id: "wait", type: "delay", seconds: 1, until: "2028-03-01" }],
+    }).success,
+  ).toBe(false);
+});
+
 it("accepts incoming and outgoing webhooks with pinned destinations", () => {
   const flow = {
     trigger: { type: "webhook" },

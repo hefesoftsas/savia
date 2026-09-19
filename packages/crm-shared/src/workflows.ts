@@ -6,7 +6,7 @@ const key = z
   .string()
   .regex(/^[a-z][a-z0-9_]{0,47}$/)
   .refine(safePart);
-export const workflowValueSchema = z.union([
+const scalarWorkflowValueSchema = z.union([
   z.string().max(4000),
   z.number().finite(),
   z.boolean(),
@@ -21,7 +21,35 @@ export const workflowValueSchema = z.union([
     })
     .strict(),
 ]);
-export type WorkflowValue = z.infer<typeof workflowValueSchema>;
+export type WorkflowValue =
+  | z.infer<typeof scalarWorkflowValueSchema>
+  | { concat: WorkflowValue[] }
+  | { dateOffset: { value: WorkflowValue; days: number } };
+function expressionSchema(depth: number): z.ZodType<WorkflowValue> {
+  if (depth === 0) return scalarWorkflowValueSchema;
+  return z.union([
+    scalarWorkflowValueSchema,
+    z
+      .object({
+        concat: z
+          .array(expressionSchema(depth - 1))
+          .min(1)
+          .max(12),
+      })
+      .strict(),
+    z
+      .object({
+        dateOffset: z
+          .object({
+            value: expressionSchema(depth - 1),
+            days: z.number().int().min(-3660).max(3660),
+          })
+          .strict(),
+      })
+      .strict(),
+  ]);
+}
+export const workflowValueSchema = expressionSchema(3);
 const values = z
   .unknown()
   .refine(
@@ -58,6 +86,7 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
         "lt",
         "lte",
         "contains",
+        "date_after",
         "empty",
       ]),
       right: workflowValueSchema,
@@ -76,7 +105,13 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z
-    .object({ ...base, type: z.literal("create"), collection: key, values })
+    .object({
+      ...base,
+      type: z.literal("create"),
+      collection: key,
+      values,
+      matchField: key.optional(),
+    })
     .strict(),
   z
     .object({
@@ -108,9 +143,14 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
     .object({
       ...base,
       type: z.literal("delay"),
-      seconds: z.number().int().min(1).max(31_536_000),
+      seconds: z.number().int().min(1).max(31_536_000).optional(),
+      until: workflowValueSchema.optional(),
     })
-    .strict(),
+    .strict()
+    .refine(
+      (node) => (node.seconds === undefined) !== (node.until === undefined),
+      "Choose seconds or an absolute date",
+    ),
 ]);
 export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 const trigger = z.discriminatedUnion("type", [
@@ -220,6 +260,32 @@ export function resolveWorkflowValue(
   context: WorkflowContext,
 ): unknown {
   if (!value || typeof value !== "object") return value;
+  if ("concat" in value) {
+    const parts = value.concat.map((part) =>
+      resolveWorkflowValue(part, context),
+    );
+    if (
+      parts.some((part) => typeof part !== "string" && typeof part !== "number")
+    )
+      throw new Error("Concatenation requires text or numbers");
+    const result = parts.join("");
+    if (result.length > 4000)
+      throw new Error("Expression exceeds 4000 characters");
+    return result;
+  }
+  if ("dateOffset" in value) {
+    const raw = resolveWorkflowValue(value.dateOffset.value, context);
+    if (
+      typeof raw !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(raw) ||
+      !Number.isFinite(Date.parse(raw)) ||
+      new Date(raw).toISOString().slice(0, 10) !== raw
+    )
+      throw new Error("Date offset requires a valid calendar date");
+    return new Date(Date.parse(raw) + value.dateOffset.days * 86400000)
+      .toISOString()
+      .slice(0, 10);
+  }
   let result: unknown = context;
   for (const part of value.ref.split(".")) {
     if (
@@ -248,6 +314,18 @@ export function evaluateWorkflowCondition(
       return (
         left === null || left === "" || (Array.isArray(left) && !left.length)
       );
+    case "date_after": {
+      const date = (v: unknown) =>
+        typeof v === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+        !Number.isNaN(Date.parse(v)) &&
+        new Date(v).toISOString().slice(0, 10) === v
+          ? Date.parse(v)
+          : null;
+      const a = date(left),
+        b = date(right);
+      return a !== null && b !== null && a > b;
+    }
     case "contains":
       return (
         typeof left === "string" &&
@@ -265,4 +343,21 @@ export function evaluateWorkflowCondition(
             ? left < right
             : left <= right;
   }
+}
+
+export function workflowResumeAt(
+  node: Extract<WorkflowNode, { type: "delay" }>,
+  context: WorkflowContext,
+  now: number,
+): number {
+  if (node.seconds !== undefined) return now + node.seconds * 1000;
+  const raw = resolveWorkflowValue(node.until!, context);
+  if (
+    typeof raw !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)?$/.test(raw) ||
+    !Number.isFinite(Date.parse(raw)) ||
+    new Date(raw).toISOString().slice(0, 10) !== raw.slice(0, 10)
+  )
+    throw new Error("Delay requires an ISO UTC date");
+  return Math.max(now, Date.parse(raw));
 }

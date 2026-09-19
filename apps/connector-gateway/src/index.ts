@@ -9,6 +9,7 @@ type ConnectorEnvironment = {
   DB: D1Database;
   EXTENSION_CONNECTIONS_ENCRYPTION_KEY?: string;
   SAVIA_REQUEST?: SaviaRequestService;
+  EXTENSION_GATEWAY_ALLOWED_ORIGINS?: string;
 };
 
 export function createRuntimeConnectorApp(environment: ConnectorEnvironment) {
@@ -17,6 +18,12 @@ export function createRuntimeConnectorApp(environment: ConnectorEnvironment) {
     encryptionKey: environment.EXTENSION_CONNECTIONS_ENCRYPTION_KEY,
     actions: runtimeReleaseCatalog.createConnectorActions(
       environment.SAVIA_REQUEST,
+      {
+        allowedOrigins: (environment.EXTENSION_GATEWAY_ALLOWED_ORIGINS ?? "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      },
     ),
   });
 }

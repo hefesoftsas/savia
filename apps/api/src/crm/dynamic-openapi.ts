@@ -1090,6 +1090,20 @@ export async function dynamicOpenApi(
       "Enable webhook destination",
       workflowRequests.enabled,
     ],
+
+    [
+      "/access-context",
+      "get",
+      "Read current authenticated access policy",
+      null,
+    ],
+    ["/workflow-bundles", "get", "List available workflow bundles", null],
+    [
+      "/workflow-bundles/{id}/prepare",
+      "post",
+      "Prepare additive relations and inactive workflow drafts",
+      null,
+    ],
     ["/workflows", "get", "List workflows", null],
     ["/workflows", "post", "Create workflow draft", workflowDraftSchema],
     ["/workflows/{id}", "get", "Read workflow draft", null],

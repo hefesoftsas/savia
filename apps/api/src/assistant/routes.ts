@@ -1,3 +1,4 @@
+import { registerEmployeeMcpRoutes } from "./employee-mcp";
 import { PendingActionRepository } from "./pending-actions";
 import { z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
@@ -70,6 +71,7 @@ export function registerAssistantRoutes(
   service?: AssistantService,
   dependencies?: AssistantRouteDependencies,
 ): void {
+  registerEmployeeMcpRoutes(app, service, dependencies);
   app.post("/api/assistant/chat", async (context) => {
     if (!service) return unavailableResponse();
     const parsed = chatRequestSchema.safeParse(

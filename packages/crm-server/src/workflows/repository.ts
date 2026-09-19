@@ -119,6 +119,17 @@ export class WorkflowRepository {
       if (kind && kind !== "crm")
         fail("Workflow steps currently support native collections only", 422);
       const fields = new Set(fieldEntries(object).map(([name]) => name));
+      if ("type" in item && item.type === "query") fields.add("id");
+      if ("type" in item && item.type === "create" && item.matchField) {
+        const field = object.config.fields[item.matchField];
+        if (
+          !field?.config?.unique ||
+          field.config?.multiple ||
+          !["Textbox", "Dropdown"].includes(field.type) ||
+          !(item.matchField in item.values)
+        )
+          fail("Matched creation requires a mapped unique field", 422);
+      }
       const used =
         "values" in item
           ? Object.keys(item.values)

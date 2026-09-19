@@ -99,6 +99,19 @@ function WorkspaceWorkflows({
     [runId, setRunId] = useState<string | null>(null),
     [manualData, setManualData] = useState<Record<string, WorkflowValue>>({}),
     [notice, setNotice] = useState("");
+  const bundles = useQuery({
+    queryKey: ["workflow-bundles", scope],
+    queryFn: () =>
+      api<{
+        data: {
+          id: string;
+          label: string;
+          description: string;
+          missing: string[];
+          workflows: string[];
+        }[];
+      }>("/workflow-bundles"),
+  });
   const list = useQuery({
     queryKey: ["workflows", scope],
     queryFn: () => api<{ data: Draft[] }>("/workflows"),
@@ -201,6 +214,53 @@ function WorkspaceWorkflows({
       ) : null}
       {notice ? <p role="status">{notice}</p> : null}
       {list.isPending ? <p role="status">Cargando flujos…</p> : null}
+      {bundles.data?.data.length ? (
+        <details className="wf-bundles">
+          <summary>Conectar colecciones con plantillas</summary>
+          <p>
+            Preparar añade relaciones y borradores. Revisa y publica cada flujo
+            para activarlo. Los flujos existentes se conservan.
+          </p>
+          {bundles.data.data.map((bundle) => (
+            <article key={bundle.id}>
+              <h3>{bundle.label}</h3>
+              <p>{bundle.description}</p>
+              {bundle.missing.length ? (
+                <p>Faltan colecciones: {bundle.missing.join(", ")}</p>
+              ) : null}
+              <Button
+                variant="outline"
+                disabled={busy || dirty || !!bundle.missing.length}
+                onClick={() =>
+                  request(async () => {
+                    const result = await api<{ data: { workflows: Draft[] } }>(
+                      `/workflow-bundles/${bundle.id}/prepare`,
+                      "POST",
+                    );
+                    await Promise.all([
+                      client.invalidateQueries({ queryKey: ["/api/objects"] }),
+                      client.invalidateQueries({ queryKey: ["objects"] }),
+                    ]);
+                    setNotice(
+                      result.data.workflows.length
+                        ? "Relaciones preparadas. Revisa los borradores y publica los que quieras activar."
+                        : "Relaciones preparadas. Este paquete no añade flujos.",
+                    );
+                  })
+                }
+              >
+                Preparar {bundle.label}
+              </Button>
+            </article>
+          ))}
+        </details>
+      ) : null}
+      {bundles.error ? (
+        <p role="alert">
+          No se pudieron cargar las plantillas.{" "}
+          <button onClick={() => bundles.refetch()}>Reintentar</button>
+        </p>
+      ) : null}
       <div className="wf-workspace">
         <aside className="wf-list" aria-label="Flujos guardados">
           {list.data?.data.length === 0 ? (

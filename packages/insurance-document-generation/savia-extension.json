@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.document-generation",
+  "version": "1.0.0",
+  "label": "Documentos y firma",
+  "description": "Genera documentos desde plantillas y gestiona solicitudes de firma.",
+  "requires": [],
+  "apiVersion": 1
+}

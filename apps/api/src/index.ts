@@ -1,3 +1,4 @@
+import { remoteMcpResponse } from "./mcp-gateway";
 import { maintainRecordHistory } from "@savia/crm-server/record-history-storage";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
@@ -62,6 +63,7 @@ type AssistantSecrets = {
 };
 
 type RuntimeEnvironment = {
+  SAVIA_WORKFLOW_ONLY_SCHEDULE?: string;
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
   PUBLIC_FORMS_RATE_LIMITER?: {
@@ -192,6 +194,8 @@ export default {
     environment: RuntimeEnvironment,
     context?: ExecutionContext,
   ): Promise<Response> {
+    const mcp = await remoteMcpResponse(request, environment);
+    if (mcp) return mcp;
     const assistant = assistantRuntimeFromEnvironment(environment);
     const response = await createApp(
       environment.DB,
@@ -229,6 +233,13 @@ export default {
     _event: ScheduledController,
     environment: RuntimeEnvironment,
   ): Promise<void> {
+    if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
+      await runScheduledWorkflows(
+        environment.DB,
+        environment.CRM_INTEGRATION_KEY,
+      );
+      return;
+    }
     const results = await Promise.allSettled([
       runScheduledCrmSync(environment),
       runScheduledWorkflows(environment.DB, environment.CRM_INTEGRATION_KEY),

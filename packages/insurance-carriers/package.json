@@ -1,0 +1,30 @@
+{
+  "name": "@savia/insurance-carriers",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./manifest": "./src/manifest.ts",
+    "./object": "./src/object.ts",
+    "./admin": "./src/admin.tsx",
+    "./connectors": "./src/connectors.ts",
+    "./domain": "./src/domain.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/crm-shared": "workspace:*",
+    "@savia/insurance-workbench": "workspace:*",
+    "react": "^19.2.8",
+    "zod": "^4.5.4",
+    "@savia/insurance-communications": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

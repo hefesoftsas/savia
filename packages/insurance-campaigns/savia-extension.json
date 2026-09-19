@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.campaigns",
+  "version": "1.0.0",
+  "label": "Campañas",
+  "description": "Segmentación y ejecución con consentimiento verificable.",
+  "requires": [],
+  "apiVersion": 1
+}
