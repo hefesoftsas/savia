@@ -117,7 +117,15 @@ export async function remoteMcpResponse(
       "x-savia-mcp-secret": env.SAVIA_MCP_SHARED_SECRET,
       "x-savia-user-authorization": `Bearer ${credentials.access_token}`,
     });
-    for (const name of ["content-type", "accept", "mcp-protocol-version"]) {
+    // Modern MCP validates routing headers against the JSON-RPC body.
+    // Keep the allowlist explicit so external credentials remain excluded.
+    for (const name of [
+      "content-type",
+      "accept",
+      "mcp-protocol-version",
+      "mcp-method",
+      "mcp-name",
+    ]) {
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }

@@ -2,6 +2,48 @@ import { describe, expect, it, vi } from "vitest";
 import worker from "../src/worker";
 
 describe("Savia MCP Cloudflare Worker", () => {
+  it("exposes tools over stateless HTTP after legacy initialization", async () => {
+    const env = {
+      SAVIA_API_URL: "https://api.test",
+      SAVIA_MCP_SHARED_SECRET: "discovery-test-secret",
+    };
+    const send = (body: unknown) =>
+      worker.fetch(
+        new Request("https://savia-mcp.internal/mcp", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            "mcp-protocol-version": "2025-03-26",
+            "x-savia-mcp-secret": env.SAVIA_MCP_SHARED_SECRET,
+            "x-savia-user-authorization": "Bearer discovery-user",
+          },
+          body: JSON.stringify(body),
+        }),
+        env,
+      );
+    const initialized = await send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "discovery-test", version: "1" },
+      },
+    });
+    expect(initialized.status).toBe(200);
+    expect(await initialized.text()).toContain("capabilities");
+    const listed = await send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    });
+    expect(listed.status).toBe(200);
+    expect(await listed.text()).toContain("savia_list_crm_collections");
+  });
+
   it("rejects requests when credentials are missing or invalid", async () => {
     const env = {
       SAVIA_API_URL: "https://api.test",
@@ -38,7 +80,8 @@ describe("Savia MCP Cloudflare Worker", () => {
   it("authenticates delegated requests and executes CRM tools with the user token", async () => {
     let capturedAuth: string | undefined;
     const mockApiFetch = vi.fn().mockImplementation((url, init) => {
-      capturedAuth = init?.headers?.get?.("authorization") ?? init?.headers?.authorization;
+      capturedAuth =
+        init?.headers?.get?.("authorization") ?? init?.headers?.authorization;
       return new Response(
         JSON.stringify({
           data: [
@@ -69,7 +112,7 @@ describe("Savia MCP Cloudflare Worker", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "accept": "application/json, text/event-stream",
+          accept: "application/json, text/event-stream",
           "x-savia-mcp-secret": "test-secret-123",
           "x-savia-user-authorization": "Bearer my-secret-jwt-token",
         },
