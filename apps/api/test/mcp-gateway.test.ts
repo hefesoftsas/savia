@@ -50,10 +50,13 @@ describe("public MCP boundary", () => {
           "x-savia-mcp-secret": "forged",
           "x-savia-user-authorization": "Bearer forged",
           "mcp-session-id": "someone-else",
+          "mcp-protocol-version": "2026-07-28",
+          "mcp-method": "tools/call",
+          "mcp-name": "savia_list_domains",
           "content-type": "application/json",
           accept: "application/json, text/event-stream",
         },
-        body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+        body: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"savia_list_domains","arguments":{}}}',
       }),
       env,
     );
@@ -65,6 +68,9 @@ describe("public MCP boundary", () => {
     expect(mcpRequest.headers.get("authorization")).toBeNull();
     expect(mcpRequest.headers.get("cookie")).toBeNull();
     expect(mcpRequest.headers.get("mcp-session-id")).toBeNull();
+    expect(mcpRequest.headers.get("mcp-protocol-version")).toBe("2026-07-28");
+    expect(mcpRequest.headers.get("mcp-method")).toBe("tools/call");
+    expect(mcpRequest.headers.get("mcp-name")).toBe("savia_list_domains");
     expect(mcpRequest.headers.get("x-savia-user-authorization")).toBe(
       "Bearer internal-api-token",
     );
