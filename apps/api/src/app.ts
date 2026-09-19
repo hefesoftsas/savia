@@ -1,3 +1,4 @@
+import { registerAccessControlRoutes } from "./routes/access-control";
 import {
   installRequestResultEnvelope,
   registerRequestResultRoutes,
@@ -85,6 +86,7 @@ export function createApp(
     oauthUrls,
   );
   installRequestResultEnvelope(app);
+  registerAccessControlRoutes(app, db);
   registerAssistantRoutes(app, assistantService, {
     db,
     documents,
