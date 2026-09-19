@@ -18,6 +18,7 @@ import {
   type OAuthResourceAuthenticator,
 } from "./auth/oauth-resource";
 import { AuthenticationError, type Authenticator } from "./auth/types";
+import { AccessControlError } from "./auth/access-registry";
 import { publicAuthUrls, type PublicAuthUrls } from "./public-origin";
 
 import { registerHealthRoute } from "./routes/health";
@@ -360,6 +361,8 @@ export function createApiShell(
   });
 
   app.onError((exception, context) => {
+    if (exception instanceof AccessControlError)
+      return context.json({error:{code:exception.code,message:exception.message}}, exception.status);
     if (exception instanceof RealtimeHubError) return exception.getResponse();
     if (exception instanceof HTTPException)
       return context.json(

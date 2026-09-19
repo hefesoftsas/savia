@@ -1,5 +1,6 @@
 import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
 import { canonicalHostForApi } from "./auth/tenant-host-guard";
+import { registerAccessControlRoutes } from "./routes/access-control";
 import {
   installRequestResultEnvelope,
   registerRequestResultRoutes,
@@ -93,6 +94,7 @@ export function createApp(
     oauthUrls,
   );
   installRequestResultEnvelope(app);
+  registerAccessControlRoutes(app, db);
   registerAssistantRoutes(app, assistantService, {
     db,
     documents,

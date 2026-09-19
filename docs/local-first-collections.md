@@ -174,3 +174,8 @@ measured the former compound-filter scan at 283.9 ms, the indexed first query at
 163.5 ms, and the cached next page at 22.6 ms. These are illustrative local timings,
 not production latency guarantees. Unrestricted first-time text search still does
 work proportional to the collection; its result is reused for later pages.
+
+
+## Scoped permissions
+
+See [Roles and permissions](permissions.md) for policy revision binding, creator attribution, row removals, field redaction and quarantine behavior. Policy changes require clearing old projections before replay. An acknowledged mutation is reauthorized against the current record before its response is returned. The existing offline lease still bounds disconnected access.

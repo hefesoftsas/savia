@@ -1,5 +1,6 @@
 import {
   customType,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -12,6 +13,78 @@ const bigint = customType<{ data: number; driverData: number }>({
   dataType() {
     return "BIGINT";
   },
+});
+
+export const accessRevisions = sqliteTable("access_revisions", {
+  scope: text("scope").primaryKey().notNull(),
+  revision: integer("revision").notNull().default(0),
+});
+export const accessRoles = sqliteTable(
+  "access_roles",
+  {
+    id: text("id").notNull(),
+    scope: text("scope")
+      .notNull()
+      .references(() => accessRevisions.scope),
+    name: text("name").notNull(),
+    label: text("label").notNull(),
+    description: text("description").notNull().default(""),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    protected: integer("protected", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    legacyRole: text("legacy_role"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.id] }),
+    uniqueIndex("access_roles_scope_name").on(table.scope, table.name),
+  ],
+);
+export const accessGrants = sqliteTable(
+  "access_grants",
+  {
+    id: text("id").primaryKey().notNull(),
+    scope: text("scope").notNull(),
+    roleId: text("role_id").notNull(),
+    resource: text("resource").notNull(),
+    action: text("action").notNull(),
+    predicate: text("predicate").notNull(),
+    fields: text("fields").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.scope, table.roleId],
+      foreignColumns: [accessRoles.scope, accessRoles.id],
+    }).onDelete("cascade"),
+  ],
+);
+export const accessAssignments = sqliteTable(
+  "access_assignments",
+  {
+    scope: text("scope").notNull(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    roleId: text("role_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.principalId, table.roleId] }),
+    foreignKey({
+      columns: [table.scope, table.roleId],
+      foreignColumns: [accessRoles.scope, accessRoles.id],
+    }).onDelete("cascade"),
+  ],
+);
+export const accessAudit = sqliteTable("access_audit", {
+  id: text("id").primaryKey().notNull(),
+  scope: text("scope").notNull(),
+  actorId: text("actor_id").notNull(),
+  action: text("action").notNull(),
+  targetId: text("target_id").notNull(),
+  beforeState: text("before_state"),
+  afterState: text("after_state"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const serverIdSequences = sqliteTable("server_id_sequences", {

@@ -1,4 +1,6 @@
 import { HTTPException } from "hono/http-exception";
+import type { AccessPolicy } from "@savia/crm-shared/access-control";
+import { accessDatabase } from "@savia/crm-server/access-authorization";
 import { createCrmApp } from "@savia/crm-server/index";
 import { ExtensionConnectionRepository } from "@savia/crm-server/extension-connections";
 import { ExtensionSettingsRepository } from "@savia/crm-server/extension-settings";
@@ -32,6 +34,7 @@ export type CollectionGatewayContext = {
   files: R2Bucket;
   tenant: string;
   actor: AppActor;
+  accessPolicy?: AccessPolicy;
   integrationKey?: string;
   extensionConnectionsEncryptionKey?: string;
   crm?: CrmRouteDependencies;
@@ -86,6 +89,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
   const local = () =>
     createCrmApp(tenant, {
       principalId: actor.principal.id,
+      accessPolicy: context.accessPolicy,
       seedObjects,
       ...solutionOptions,
       beforeInstall: context.beforeInstall,
@@ -99,6 +103,65 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
     async prepare() {},
     async fetch(request: Request): Promise<Response> {
       const path = new URL(request.url).pathname;
+      if (context.accessPolicy) {
+        const match =
+          /^\/api\/(?:objects|records|views|record-detail|record-links|record-notes|record-activity|collection-options|files|import|export)\/([^/]+)/.exec(
+            path,
+          );
+        if (match) {
+          const row = await db
+            .prepare(
+              "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+            )
+            .bind(tenant, decodeURIComponent(match[1]))
+            .first<{ config: string }>();
+          const studio = row ? JSON.parse(row.config).studio : undefined;
+          const binding = await db
+            .prepare(
+              "SELECT 1 FROM crm_collection_bindings WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, decodeURIComponent(match[1]))
+            .first();
+          if (
+            binding &&
+            request.method === "GET" &&
+            /^\/api\/(?:objects|records|views|record-detail|record-links|record-notes|record-activity)\//.test(
+              path,
+            )
+          ) {
+            const shared = await db
+              .prepare(
+                "SELECT 1 FROM crm_collection_bindings WHERE tenant_id=? AND object_name=? AND json_extract(config,'$.kind')='crm' AND json_extract(config,'$.provider')='hubspot' AND json_extract(config,'$.accessScope')='tenant'",
+              )
+              .bind(tenant, decodeURIComponent(match[1]))
+              .first();
+            if (
+              shared &&
+              context.accessPolicy.grants.some(
+                (g) =>
+                  g.resource === `collection:${decodeURIComponent(match[1])}` &&
+                  g.action === "read" &&
+                  g.roleId.startsWith("builtin:"),
+              )
+            )
+              return createCollectionGateway({
+                ...context,
+                accessPolicy: undefined,
+              }).fetch(request);
+          }
+          if (binding || studio?.business || studio?.collection)
+            return Response.json(
+              { error: "This adapter does not support this access policy." },
+              { status: 403 },
+            );
+        }
+        return local().fetch(request, {
+          DB: accessDatabase(db, context.accessPolicy),
+          FILES: files,
+          POC_LOCAL: "false",
+          INTEGRATION_KEY: integrationKey,
+        });
+      }
       if (/^\/api\/record-bundles\/[^/]+\/?$/.test(path))
         return createRecordBundlesApp({ db, tenant }).fetch(request);
       if (path === "/api/collection-catalog" && context.externalCollections) {

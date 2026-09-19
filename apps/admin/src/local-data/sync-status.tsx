@@ -30,7 +30,9 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
         .then(([next, ops, states, collections, conflicts]) => {
           if (!active) return;
           setStatus(next);
-          setProblems(ops.filter((op) => op.state !== "pending"));
+          setProblems(
+            ops.filter((op) => !op.quarantined && op.state !== "pending"),
+          );
           setHasLocal(collections.some((c) => c.capability !== "remote"));
           setDeletedConflicts(
             new Set(

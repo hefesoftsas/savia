@@ -34,12 +34,18 @@ export async function syncOnce(
   const blocked = await store.authorizationError();
   if (blocked) throw new SyncAuthorizationError(blocked);
   const network = transport;
+  let policyRevision: number | undefined;
   transport = async (path, init) => {
     const headers = new Headers(init?.headers);
     if (expectedPrincipalId !== undefined)
       headers.set("X-Savia-Sync-Principal", expectedPrincipalId);
+    if(policyRevision !== undefined) headers.set("X-Savia-Policy-Revision", String(policyRevision));
     const response = await network(path, { ...init, headers });
-    if (response.status === 401 || response.status === 403) {
+    if (
+      response.status === 401 ||
+      response.status === 403 ||
+      (response.status === 409 && path.includes("/pull/"))
+    ) {
       const message = `Local sync HTTP ${response.status}: authorization required`;
       await store.blockAuthorization(message);
       throw new SyncAuthorizationError(message);
@@ -49,7 +55,10 @@ export async function syncOnce(
   const manifest = await json<{
     collections: CollectionManifest[];
     principalId?: string;
+    policyRevision?: number;
+    policyScope?: string;
   }>(await transport("/api/local-sync/manifest"));
+  policyRevision=manifest.policyRevision;
   if (
     expectedPrincipalId !== undefined &&
     manifest.principalId !== expectedPrincipalId
@@ -59,6 +68,17 @@ export async function syncOnce(
     await store.blockAuthorization(message);
     throw new SyncAuthorizationError(message);
   }
+  if (
+    manifest.policyRevision !== undefined ||
+    (await store.db.syncState.get("$policy"))
+  )
+    await store.acceptPolicy(
+      JSON.stringify([
+        manifest.principalId ?? expectedPrincipalId,
+        manifest.policyScope ?? "legacy",
+        manifest.policyRevision ?? 0,
+      ]),
+    );
   await store.refreshManifest(manifest.collections);
   for (const collection of manifest.collections) {
     if (requestedCollection && collection.name !== requestedCollection)
@@ -75,7 +95,7 @@ export async function syncOnce(
       for (const queued of mutations) {
         if (blocked.has(queued.id)) continue;
         const mutation = await store.db.outbox.get(queued.mutationId);
-        if (!mutation) continue;
+        if (!mutation || mutation.quarantined) continue;
         if (mutation.state !== "pending") {
           blocked.add(mutation.id);
           continue;

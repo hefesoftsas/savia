@@ -18,10 +18,8 @@ const apiUrl = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
 
 export function createAppServices() {
   const remoteSession = new BetterAuthOAuthSession({ apiUrl });
-  const authSession = createLocalSession(
-    remoteSession,
-    apiUrl,
-    () => remoteSession.verifySession(),
+  const authSession = createLocalSession(remoteSession, apiUrl, () =>
+    remoteSession.verifySession(),
   );
   const apiClient = new ApiClient({
     baseUrl: apiUrl,
@@ -43,6 +41,24 @@ export function createAppServices() {
     authSession,
     authProvider: createReactAdminAuthProvider(authSession, {
       onLogout: clearOfflineData,
+      canAccessCrm: async () => {
+        const { data } = await apiClient.get<{
+          data: Array<{ id: string; kind: string }>;
+        }>("/v1/data-domains");
+        for (const domain of data) {
+          const scope =
+            domain.kind === "custom" ? "domain:" + domain.id : domain.id;
+          try {
+            const policy = await apiClient.get<{
+              grants: Array<{ action: string; resource: string }>;
+            }>(
+              "/v1/access-control/effective?scope=" + encodeURIComponent(scope),
+            );
+            if (policy.grants.some((g) => g.action === "read")) return true;
+          } catch {}
+        }
+        return false;
+      },
     }),
     apiClient,
     queryClient,

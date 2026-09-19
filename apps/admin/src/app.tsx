@@ -33,6 +33,9 @@ import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 
+const RolePages = lazy(async () => ({
+  default: (await import("@/features/access-control/role-pages")).RolePages,
+}));
 const CrmPage = lazy(async () => {
   const module = await import("@/features/dynamic-crm/crm-page");
   return { default: module.CrmPage };
@@ -272,6 +275,14 @@ function AppContent({ services }: { services?: AppServices } = {}) {
                   }
                 >
                   <TenantBrandingPage services={appServices} />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/roles"
+              element={
+                <Suspense fallback={<RouteLoading />}>
+                  <RolePages services={appServices} />
                 </Suspense>
               }
             />
