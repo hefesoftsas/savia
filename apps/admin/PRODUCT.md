@@ -4,7 +4,7 @@
 
 ## Platform
 
-web
+web, pwa (instalable en escritorio y móvil)
 
 ## Users
 
@@ -50,6 +50,7 @@ autenticadas.
   quedan como propuestas de vigencia limitada y exigen confirmación explícita.
 - El access token y las credenciales de OpenRouter permanecen fuera del
   almacenamiento persistente del navegador.
+- La aplicación web es instalable como PWA (Progressive Web App) en navegadores de escritorio y móviles (Chrome, Edge, Android, iOS Safari), con precarga de shell y acceso rápido a pantallas clave.
 
 ## Brand Commitments
 

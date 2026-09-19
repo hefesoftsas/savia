@@ -129,7 +129,10 @@ export default defineConfig({
           },
         ],
       },
-      devOptions: { enabled: false },
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
     }),
   ],
   resolve: {

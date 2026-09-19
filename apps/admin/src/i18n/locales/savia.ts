@@ -377,6 +377,17 @@ const saviaEnglish = {
       appearanceOp: "Appearance",
       sidebarOp: "Sidebar menu",
     },
+    pwa: {
+      installApp: "Install application",
+      iosTitle: "Install Savia on your device",
+      iosSubtitle:
+        "Install Savia as an application for quick access from your home screen and full-screen experience.",
+      iosStep1Title: "Tap the Share button",
+      iosStep1Desc: "In the bottom or top bar of Safari, tap",
+      iosStep2Title: "Add to Home Screen",
+      iosStep2Desc: "Scroll down the list and tap 'Add to Home Screen'.",
+      gotIt: "Got it",
+    },
     auth: {
       signingIn: "Signing in to Savia…",
       connecting: "Connecting to Savia",
@@ -811,6 +822,18 @@ const saviaSpanish = {
       safeNotice: "Nada destructivo se encola: solo preferencias personales.",
       appearanceOp: "Apariencia",
       sidebarOp: "Menú lateral",
+    },
+    pwa: {
+      installApp: "Instalar aplicación",
+      iosTitle: "Instalar Savia en tu dispositivo",
+      iosSubtitle:
+        "Instala Savia como aplicación para acceder rápidamente desde tu pantalla de inicio y utilizarla a pantalla completa.",
+      iosStep1Title: "Pulsa el botón de Compartir",
+      iosStep1Desc: "En la barra inferior o superior de Safari, toca",
+      iosStep2Title: "Añadir a pantalla de inicio",
+      iosStep2Desc:
+        "Baja por la lista de opciones y pulsa 'Añadir a pantalla de inicio'.",
+      gotIt: "Entendido",
     },
     auth: {
       signingIn: "Iniciando sesión con Savia…",
@@ -1248,6 +1271,18 @@ const saviaPortuguese = {
         "Nada destrutivo é enfileirado: apenas preferências pessoais.",
       appearanceOp: "Aparência",
       sidebarOp: "Menu lateral",
+    },
+    pwa: {
+      installApp: "Instalar aplicativo",
+      iosTitle: "Instalar o Savia no seu dispositivo",
+      iosSubtitle:
+        "Instale o Savia como aplicativo para acessar rapidamente da sua tela inicial e usar em tela cheia.",
+      iosStep1Title: "Toque no botão Compartilhar",
+      iosStep1Desc: "Na barra inferior ou superior do Safari, toque em",
+      iosStep2Title: "Adicionar à Tela de Início",
+      iosStep2Desc:
+        "Desça na lista e toque em 'Adicionar à Tela de Início'.",
+      gotIt: "Entendido",
     },
     auth: {
       signingIn: "Iniciando sessão com Savia…",
