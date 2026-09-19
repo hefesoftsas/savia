@@ -1,3 +1,4 @@
+import { remoteMcpResponse } from "./mcp-gateway";
 import { purgeExpiredRecordHistory } from "@savia/crm-server/record-history-storage";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
@@ -192,6 +193,8 @@ export default {
     environment: RuntimeEnvironment,
     context?: ExecutionContext,
   ): Promise<Response> {
+    const mcp = await remoteMcpResponse(request, environment);
+    if (mcp) return mcp;
     const assistant = assistantRuntimeFromEnvironment(environment);
     const response = await createApp(
       environment.DB,

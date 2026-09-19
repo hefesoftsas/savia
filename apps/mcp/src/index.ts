@@ -54,6 +54,7 @@ export async function runSaviaMcp(): Promise<void> {
     const configuration = readHttpMcpConfiguration();
     await server.run({
       transport: "http",
+      stateless: true,
       host: configuration.host,
       port: configuration.port,
     });
@@ -65,7 +66,9 @@ export async function runSaviaMcp(): Promise<void> {
 
 const entryPoint = process.argv[1];
 const isMain =
-  Boolean(entryPoint && resolve(entryPoint) === fileURLToPath(import.meta.url)) ||
+  Boolean(
+    entryPoint && resolve(entryPoint) === fileURLToPath(import.meta.url),
+  ) ||
   process.argv.some(
     (arg) => arg.endsWith("src/index.ts") || arg.endsWith("src/index.js"),
   );

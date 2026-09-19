@@ -22,6 +22,7 @@ describe("edge gateway", () => {
     expect(assets.fetch).not.toHaveBeenCalled();
     expect(isServicePath("/.well-known/oauth-protected-resource")).toBe(true);
     expect(isServicePath("/health")).toBe(true);
+    expect(isServicePath("/mcp")).toBe(true);
     expect(isServicePath("/docs")).toBe(true);
     expect(isServicePath("/openapi.json")).toBe(true);
   });

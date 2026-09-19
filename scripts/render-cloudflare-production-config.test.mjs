@@ -142,6 +142,7 @@ test("writes only the supported production workers and retains their runtime set
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
     ]);
     assert.ok(admin.assets.run_worker_first.includes("/health"));
+    assert.ok(admin.assets.run_worker_first.includes("/mcp"));
     assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {

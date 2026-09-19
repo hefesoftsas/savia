@@ -190,6 +190,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
         "/api/*",
         "/v1/*",
         "/.well-known/*",
+        "/mcp",
         "/health",
         "/docs",
         "/openapi.json",

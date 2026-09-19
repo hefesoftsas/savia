@@ -397,6 +397,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      jose:
+        specifier: ^6.2.10
+        version: 6.2.10
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4

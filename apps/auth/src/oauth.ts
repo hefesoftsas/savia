@@ -530,6 +530,12 @@ export function oauthProviderOptions(
     scopes: providerScopes,
     resources: [
       {
+        identifier: `${runtime.apiResource}/mcp`,
+        name: "Savia MCP",
+        allowedScopes: [...apiScopes],
+        accessTokenTtl: 300,
+      },
+      {
         identifier: runtime.apiResource,
         name: "Savia Domain API",
         allowedScopes: [...apiScopes],
@@ -537,7 +543,14 @@ export function oauthProviderOptions(
       },
     ],
     resourceSeedMode: "merge",
-    clientRegistrationDefaultResources: [runtime.apiResource],
+    allowDynamicClientRegistration: true,
+    allowUnauthenticatedClientRegistration: true,
+    clientRegistrationRequirePKCE: true,
+    clientRegistrationDefaultScopes: [...providerScopes],
+    clientRegistrationDefaultResources: [
+      runtime.apiResource,
+      `${runtime.apiResource}/mcp`,
+    ],
     accessTokenExpiresIn: 300,
     clientPrivileges: ({ user }) =>
       roleEntries(user as Record<string, unknown>).includes("admin"),

@@ -1,3 +1,5 @@
+import { exchangeMcpToken } from "./mcp-exchange";
+import { oauthRuntime } from "./oauth";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { admin, bearer, jwt, twoFactor } from "better-auth/plugins";
@@ -538,6 +540,12 @@ export default {
     await ensureScalarOAuthClient(auth, environment.AUTH_DB, environment);
     await ensureAdminOAuthClient(auth, environment.AUTH_DB, environment);
     const pathname = new URL(request.url).pathname;
+    if (
+      request.method === "POST" &&
+      pathname === "/_internal/oauth/mcp-exchange"
+    ) {
+      return exchangeMcpToken(request, oauthRuntime(environment), auth);
+    }
     const oauthPage = oauthPageResponse(request, {
       restartUrl: adminLoginUrl(environment),
       branding: tenantBrandingFromHeader(

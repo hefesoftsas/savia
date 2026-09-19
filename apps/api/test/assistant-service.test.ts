@@ -37,6 +37,27 @@ async function applyMigrations() {
 describe("SaviaAssistantService action approvals", () => {
   beforeAll(applyMigrations);
 
+  it("does not fall back to a general assistant for an unknown explicit employee", async () => {
+    const factory = vi.fn();
+    const service = new SaviaAssistantService(
+      {
+        database: env.DB,
+        mcpUrl: "http://mcp:8789/mcp",
+        mcpSharedSecret: "secret",
+        openRouterApiKey: "key",
+      },
+      { mcpClientFactory: factory },
+    );
+    const response = await service.chat({
+      principalId: "test-platform-admin",
+      authorization: "Bearer user",
+      employeeId: "not-visible",
+      messages: [{ role: "user", content: "@ventas help" }],
+    });
+    expect(response.status).toBe(404);
+    expect(factory).not.toHaveBeenCalled();
+  });
+
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM assistant_pending_actions");
   });
@@ -330,6 +351,8 @@ describe("SaviaAssistantService MCP transport", () => {
       savia_extension_insurance_summary: {
         annotations: { readOnlyHint: true },
       },
+      savia_invoke_employee: { annotations: { readOnlyHint: true } },
+      savia_confirm_employee_action: { annotations: { readOnlyHint: true } },
       savia_extension_mutate_policy: {
         annotations: { readOnlyHint: false },
       },
