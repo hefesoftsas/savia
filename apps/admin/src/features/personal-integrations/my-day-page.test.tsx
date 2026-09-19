@@ -241,6 +241,39 @@ describe("MyDayPage", () => {
     );
   });
 
+  it("keeps available events when one connected calendar fails to sync", async () => {
+    const services = createServices(["google_calendar", "outlook"]);
+    const listEvents = (
+      services.personalIntegrations as unknown as { listEvents: Mock }
+    ).listEvents;
+    listEvents.mockImplementation(
+      ({ provider }: { provider: "google_calendar" | "outlook" }) =>
+        provider === "google_calendar"
+          ? Promise.resolve([
+              {
+                id: "google-event-1",
+                title: "Revisar renovación en Google",
+                startsAt: "2026-01-03T14:00:00.000Z",
+                endsAt: "2026-01-03T14:30:00.000Z",
+                webLink:
+                  "https://calendar.google.com/calendar/event?eid=google-event-1",
+              },
+            ])
+          : Promise.reject(
+              new Error(
+                "The personal integration request could not be completed",
+              ),
+            ),
+    );
+
+    render(<MyDayPage services={services} />);
+
+    expect(
+      await screen.findByText("Revisar renovación en Google"),
+    ).toBeVisible();
+    expect(screen.getByText("No se pudo sincronizar Outlook.")).toBeVisible();
+  });
+
   it("requires an in-app confirmation before sending a task to calendars", async () => {
     const user = userEvent.setup();
     const services = createServices(["google_calendar", "outlook"]);
