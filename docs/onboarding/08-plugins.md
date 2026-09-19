@@ -11,7 +11,10 @@ execution exist — an explicit security decision, not a missing feature.
 
 1. **React screen** (`src/screens/`): replaces a normal CRM view (e.g.
    Pólizas). Registered explicitly in
-   `apps/admin/src/features/crm-engine/extension-screens.tsx`. Receives
+   `apps/admin/src/features/crm-engine/extension-screens.tsx`. Contributions
+   can specify `hidden: true` on `ExtensionScreenContribution` if the screen
+   should not appear in the left sidebar (e.g. secondary screens only opened
+   from other pages or workflows). Receives
    `{ savia }` already scoped to tenant + user + extension: no D1, no tokens,
    no credentials. In dev, Vite imports it from the workspace with hot-reload.
 2. **Host collections API** (`packages/crm-shared/src/plugin-api.ts`):

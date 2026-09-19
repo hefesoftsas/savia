@@ -27,6 +27,7 @@ import { i18nProvider } from "@/lib/i18nProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -108,6 +109,7 @@ import {
 } from "./lazy-studio-panels";
 import {
   extensionApiFor,
+  extensionScreenDefaultHidden,
   extensionScreenFor,
   isExtensionScreenEnabled,
 } from "./extension-screens";
@@ -336,8 +338,14 @@ function App({
     if (nextView === "screens" || nextView === "remove-screen")
       setEditing(null);
   }, [search]);
+  const isObjectHidden = (o: CrmObject) => {
+    if (o.config.studio?.screen?.hidden !== undefined) {
+      return Boolean(o.config.studio?.screen?.hidden);
+    }
+    return extensionScreenDefaultHidden(o.name);
+  };
   const visibleObjects = sortScreens(
-    objects.filter((o) => !o.config.studio?.screen?.hidden),
+    objects.filter((o) => !isObjectHidden(o)),
   );
   const resolvedMenuLayout = useMemo(
     () =>
@@ -367,7 +375,10 @@ function App({
       : undefined;
   const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
   const recordId = location.get("record");
-  const object = objects.find((o) => o.name === selected) ?? objects[0];
+  const object =
+    objects.find((o) => o.name === selected) ??
+    visibleObjects[0] ??
+    objects[0];
   const resolvedObjectName = object?.name ?? selected;
   const contribution = extensionScreenFor(resolvedObjectName, view);
   const extensionsQuery = useQuery({
@@ -509,21 +520,24 @@ function App({
       {
         type: "savia-crm-navigation",
         domainId: getCrmRuntime().domainId,
-        objects: objects.map((item) => ({
-          name: item.name,
-          label: item.label,
-          count: item.config.studio?.requestPage ? undefined : item.count,
-          hidden: !!item.config.studio?.screen?.hidden,
-          config: {
-            studio: {
-              screen: {
-                hidden: !!item.config.studio?.screen?.hidden,
-                section: item.config.studio?.screen?.section,
-                icon: item.config.studio?.screen?.icon,
+        objects: objects.map((item) => {
+          const hidden = isObjectHidden(item);
+          return {
+            name: item.name,
+            label: item.label,
+            count: item.config.studio?.requestPage ? undefined : item.count,
+            hidden,
+            config: {
+              studio: {
+                screen: {
+                  hidden,
+                  section: item.config.studio?.screen?.section,
+                  icon: item.config.studio?.screen?.icon,
+                },
               },
             },
-          },
-        })),
+          };
+        }),
       },
       window.location.origin,
     );
@@ -1440,6 +1454,7 @@ function NewObject({
   const [name, setName] = useState(""),
     [label, setLabel] = useState(""),
     [description, setDescription] = useState(""),
+    [showInSidebar, setShowInSidebar] = useState(true),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
@@ -1456,13 +1471,23 @@ function NewObject({
           setBusy(true);
           setError("");
           try {
+            const baseConfig = makeConfig({
+              name: { type: "Textbox", label: "Nombre", required: true },
+            });
             await api("/objects", "POST", {
               name,
               label,
               description,
-              config: makeConfig({
-                name: { type: "Textbox", label: "Nombre", required: true },
-              }),
+              config: showInSidebar
+                ? baseConfig
+                : {
+                    ...baseConfig,
+                    studio: {
+                      screen: {
+                        hidden: true,
+                      },
+                    },
+                  },
             });
             toast.success("Objeto creado");
             await onCreated(name);
@@ -1511,6 +1536,28 @@ function NewObject({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+        </div>
+        <div className="new-object-field new-object-sidebar-toggle">
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="object-sidebar-toggle"
+                className="text-sm font-medium cursor-pointer"
+              >
+                Mostrar en la barra lateral
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.
+              </p>
+            </div>
+            <Switch
+              id="object-sidebar-toggle"
+              checked={showInSidebar}
+              onCheckedChange={setShowInSidebar}
+              disabled={busy}
+              aria-label="Mostrar en la barra lateral"
+            />
+          </div>
         </div>
         {error && (
           <p role="alert" className="error-message">

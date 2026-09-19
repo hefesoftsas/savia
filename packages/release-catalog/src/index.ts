@@ -25,6 +25,7 @@ export type ExtensionScreenContribution = {
   extensionId: string;
   object: string;
   view: string;
+  hidden?: boolean;
   Screen: ComponentType<{ savia: PluginApi }>;
 };
 

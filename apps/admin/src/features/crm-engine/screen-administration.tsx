@@ -63,6 +63,7 @@ import {
 import { collectionCapabilities } from "./collection-capabilities";
 import CollectionOperationsPanel from "./collection-operations-panel";
 import { sortScreens } from "./screen-metadata";
+import { isPluginScreen } from "./extension-screens";
 import ExtensionManager from "./extension-manager";
 import SolutionManager from "./solution-manager";
 import "./screen-administration.css";
@@ -213,12 +214,14 @@ export default function ScreenAdministration({
     {
       id: "active",
       label: "Pantallas activas",
+      subtitle: "Visibles en la barra lateral",
       screens: filteredActive,
       hidden: false,
     },
     {
       id: "inactive",
       label: "Pantallas inactivas",
+      subtitle: "Ocultas de la barra lateral · Accesibles desde otras páginas",
       screens: filteredInactive,
       hidden: true,
     },
@@ -327,24 +330,36 @@ export default function ScreenAdministration({
   const openScreenConfig = (item: CrmObject) => {
     onNavigate(item.name, "admin-screen");
   };
-  const renderScreenRowOpen = (item: CrmObject, hasSource: boolean) => (
-    <button
-      type="button"
-      className="screen-admin-row-open"
-      aria-label={`Configurar ${item.label}`}
-      onClick={() => openScreenConfig(item)}
-    >
-      <span className="screen-admin-row-icon" aria-hidden="true">
-        {hasSource ? <Database /> : <LayoutDashboard />}
-      </span>
-      <span className="screen-admin-row-copy">
-        <span className="screen-admin-row-title">{item.label}</span>
-        <span className="screen-admin-row-meta">
-          {hasSource ? "Conectada a una fuente de datos" : "Colección local"}
+  const renderScreenRowOpen = (item: CrmObject, hasSource: boolean) => {
+    const fromPlugin = isPluginScreen(item.name);
+    return (
+      <button
+        type="button"
+        className="screen-admin-row-open"
+        aria-label={`Configurar ${item.label}`}
+        onClick={() => openScreenConfig(item)}
+      >
+        <span className="screen-admin-row-icon" aria-hidden="true">
+          {hasSource ? <Database /> : fromPlugin ? <Plug /> : <LayoutDashboard />}
         </span>
-      </span>
-    </button>
-  );
+        <span className="screen-admin-row-copy">
+          <span className="screen-admin-row-title-wrap">
+            <span className="screen-admin-row-title">{item.label}</span>
+            {fromPlugin ? (
+              <span className="screen-admin-plugin-badge">Plugin</span>
+            ) : null}
+          </span>
+          <span className="screen-admin-row-meta">
+            {hasSource
+              ? "Conectada a una fuente de datos"
+              : fromPlugin
+                ? "Pantalla provista por plugin / extensión"
+                : "Colección local"}
+          </span>
+        </span>
+      </button>
+    );
+  };
   const renderActiveScreenRow = (item: CrmObject, sectionId: string | null) => {
     const hasSource = Boolean(item.config.studio?.collection);
     const isPending =
@@ -399,6 +414,7 @@ export default function ScreenAdministration({
             <span className="screen-admin-row-visibility">
               <Switch
                 aria-label={`Desactivar ${item.label}`}
+                title="Mostrar u ocultar en la barra lateral"
                 checked
                 disabled={isPending}
                 onCheckedChange={(visible) => {
@@ -504,6 +520,7 @@ export default function ScreenAdministration({
             <span className="screen-admin-row-visibility">
               <Switch
                 aria-label={`Activar ${item.label}`}
+                title="Mostrar u ocultar en la barra lateral"
                 checked={false}
                 disabled={isPending}
                 onCheckedChange={(visible) => {
@@ -871,7 +888,14 @@ export default function ScreenAdministration({
                   aria-label={group.label}
                 >
                   <header className="screen-admin-list-heading">
-                    <h2>{group.label}</h2>
+                    <div>
+                      <h2>{group.label}</h2>
+                      {group.subtitle ? (
+                        <p className="screen-admin-list-subheading">
+                          {group.subtitle}
+                        </p>
+                      ) : null}
+                    </div>
                     <span>{group.screens.length}</span>
                   </header>
                   {group.id === "active" ? (

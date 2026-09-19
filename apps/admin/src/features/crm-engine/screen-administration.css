@@ -353,6 +353,28 @@
   min-width: 0;
   gap: 3px;
 }
+.screen-admin-row-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.screen-admin-plugin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  line-height: 1.2;
+}
+.screen-admin-list-subheading {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
 .screen-admin-row-title {
   font-size: 15px;
   font-weight: 600;

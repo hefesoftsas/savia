@@ -46,3 +46,22 @@ export function isExtensionScreenEnabled(
       (entry.builtIn || entry.installed?.enabled === true),
   );
 }
+
+export function isPluginScreen(object: string): boolean {
+  return extensionScreens.some((screen) => screen.object === object);
+}
+
+export function extensionScreenContribution(
+  object: string,
+  view: string = "records",
+): ExtensionScreenContribution | undefined {
+  return extensionScreens.find(
+    (screen) => screen.object === object && screen.view === view,
+  );
+}
+
+export function extensionScreenDefaultHidden(object: string): boolean {
+  const match = extensionScreens.find((screen) => screen.object === object);
+  return match?.hidden === true;
+}
+

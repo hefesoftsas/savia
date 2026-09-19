@@ -3,6 +3,8 @@ export { withScreen, sortScreens } from "./screen-metadata";
 import { Fragment, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { isPluginScreen } from "./extension-screens";
 import {
   Tooltip,
   TooltipContent,
@@ -252,7 +254,12 @@ export default function ScreenManager({
           aria-labelledby="screen-presentation-identity"
         >
           <div className="screen-presentation-section-header">
-            <h2 id="screen-presentation-identity">Identidad en el menú</h2>
+            <div className="flex items-center gap-2">
+              <h2 id="screen-presentation-identity">Identidad en el menú</h2>
+              {isPluginScreen(object.name) ? (
+                <span className="screen-admin-plugin-badge">Plugin</span>
+              ) : null}
+            </div>
             <span
               className={`screen-setting-status${hidden ? " is-hidden" : ""}`}
             >
@@ -357,15 +364,31 @@ export default function ScreenManager({
           </div>
         </section>
         <section
-          className="screen-presentation-section screen-presentation-danger"
+          className="screen-presentation-section"
           aria-labelledby="screen-presentation-menu"
         >
-          <h2 id="screen-presentation-menu">Visibilidad en el menú</h2>
+          <h2 id="screen-presentation-menu">Visibilidad en la barra lateral</h2>
           <p className="screen-presentation-lede">
             {hidden
-              ? "Esta pantalla no aparece en Tu negocio, pero sus registros se conservan."
-              : "Puedes ocultar la pantalla del menú sin borrar sus registros."}
+              ? "Esta pantalla está oculta de la barra lateral, pero sigue disponible para ser llamada desde otras páginas o flujos."
+              : "Esta pantalla aparece visible en la barra lateral izquierda."}
           </p>
+          <div className="screen-sidebar-visibility-toggle mb-4">
+            <div className="flex items-center justify-between gap-4 py-2 border-b border-border/50">
+              <div className="space-y-0.5">
+                <span className="text-sm font-medium">Mostrar en la barra lateral</span>
+                <p className="text-xs text-muted-foreground">
+                  Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.
+                </p>
+              </div>
+              <Switch
+                aria-label={`Mostrar u ocultar ${object.label} en la barra lateral`}
+                checked={!hidden}
+                disabled={!!busy}
+                onCheckedChange={(checked) => save(object, { hidden: !checked })}
+              />
+            </div>
+          </div>
           {removing === object.name && !hidden ? (
             <div className="screen-removal">
               <p>
@@ -391,7 +414,7 @@ export default function ScreenManager({
             </div>
           ) : (
             <Button
-              variant={hidden ? "outline" : "destructive"}
+              variant={hidden ? "outline" : "outline"}
               disabled={!!busy}
               onClick={() =>
                 hidden
@@ -480,13 +503,18 @@ export default function ScreenManager({
                           <label htmlFor={`screen-name-${object.name}`}>
                             Nombre de la pantalla
                           </label>
-                          <span
-                            className={`screen-setting-status${hidden ? " is-hidden" : ""}`}
-                          >
-                            {hidden
-                              ? "Fuera del menú"
-                              : "Visible en Tu negocio"}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {isPluginScreen(object.name) ? (
+                              <span className="screen-admin-plugin-badge">Plugin</span>
+                            ) : null}
+                            <span
+                              className={`screen-setting-status${hidden ? " is-hidden" : ""}`}
+                            >
+                              {hidden
+                                ? "Fuera del menú"
+                                : "Visible en Tu negocio"}
+                            </span>
+                          </div>
                         </div>
                         <div className="screen-name-controls">
                           <Input
