@@ -1,9 +1,11 @@
+import type { AccessPolicy } from "./access-control";
 import type { CrmObject } from "./metadata";
 
 export type PluginHostRequest = <T>(
   path: string,
   method?: string,
   data?: unknown,
+  options?: { responseType?: "blob" },
 ) => Promise<T>;
 
 export type PluginCollectionDefinition = Pick<
@@ -71,7 +73,23 @@ export type PluginCollection<TRecord, TInput = Partial<TRecord>> = {
   describe(): Promise<PluginCollectionDefinition | undefined>;
 };
 
+export type PluginFile = {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  version: number;
+  created_at?: string;
+};
+export type PluginFiles = {
+  list(object: string, recordId: string): Promise<PluginFile[]>;
+  upload(object: string, recordId: string, file: File): Promise<PluginFile>;
+  download(id: string): Promise<Blob>;
+  remove(id: string, version: number): Promise<void>;
+};
 export type PluginApi = {
+  files?: PluginFiles;
+  access?: { effective(): Promise<AccessPolicy | null> };
   settings: {
     get<T extends Record<string, unknown>>(): Promise<PluginSettings<T>>;
     replace<T extends Record<string, unknown>>(
@@ -190,6 +208,44 @@ export function createPluginApi({
   };
 
   return {
+    access: {
+      async effective() {
+        return (
+          await request<HostData<AccessPolicy | null>>("/access-context", "GET")
+        ).data;
+      },
+    },
+    files: {
+      async list(object, recordId) {
+        return (
+          await request<HostData<PluginFile[]>>(
+            `/files/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}`,
+            "GET",
+          )
+        ).data;
+      },
+      async upload(object, recordId, file) {
+        const form = new FormData();
+        form.set("file", file);
+        return (
+          await request<HostData<PluginFile>>(
+            `/files/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}`,
+            "POST",
+            form,
+          )
+        ).data;
+      },
+      download: (id) =>
+        request<Blob>(
+          `/file/${encodeURIComponent(id)}/download`,
+          "GET",
+          undefined,
+          { responseType: "blob" },
+        ),
+      async remove(id, version) {
+        await request(`/file/${encodeURIComponent(id)}`, "DELETE", { version });
+      },
+    },
     settings: {
       async get<T extends Record<string, unknown>>() {
         return (

@@ -1,3 +1,4 @@
+import { workflowResumeAt } from "@savia/crm-shared/workflows";
 import { historyDatabase } from "../record-history-storage";
 import {
   evaluateWorkflowCondition,
@@ -8,6 +9,7 @@ import {
 } from "@savia/crm-shared/workflows";
 import {
   createRecord,
+  getObject,
   updateRecord,
   getRecord,
   guard,
@@ -227,7 +229,7 @@ async function executeNode(
           next,
           json(updated),
           node.type === "delay" ? "waiting" : next ? "queued" : "completed",
-          node.type === "delay" ? now + node.seconds * 1000 : 0,
+          node.type === "delay" ? workflowResumeAt(node, context, now) : 0,
           run.workspace_id,
           run.id,
         ),
@@ -253,14 +255,55 @@ async function executeNode(
     ],
   });
   if (node.type === "create") {
+    const input = mapped(node.values);
+    const findMatch = async () => {
+      if (!node.matchField) return null;
+      const object = await getObject(db, run.workspace_id, node.collection);
+      if (
+        !object.config.fields[node.matchField]?.config?.unique ||
+        object.config.fields[node.matchField]?.config?.multiple ||
+        !["Textbox", "Dropdown"].includes(
+          object.config.fields[node.matchField]?.type,
+        )
+      )
+        throw new Error("Matched creation requires a unique field");
+      const match = input[node.matchField];
+      if (typeof match !== "string" || !match.trim())
+        throw new Error("Matched creation requires a nonempty text key");
+      const row = await db
+        .prepare(
+          "SELECT record_id FROM crm_unique_values WHERE tenant_id=? AND object_name=? AND field_name=? AND value=?",
+        )
+        .bind(
+          run.workspace_id,
+          node.collection,
+          node.matchField,
+          match.trim().toLocaleLowerCase(),
+        )
+        .first<{ record_id: string }>();
+      return row
+        ? getRecord(db, run.workspace_id, node.collection, row.record_id)
+        : null;
+    };
+    const existing = await findMatch();
+    if (existing) {
+      await transaction(db, [g.start, ...finish(existing)]);
+      return;
+    }
     const id = crypto.randomUUID();
-    await createRecord(
-      db,
-      run.workspace_id,
-      node.collection,
-      mapped(node.values),
-      { id, createdBy: run.owner_id, checkpoint: nativeCheckpoint(id) },
-    );
+    try {
+      await createRecord(db, run.workspace_id, node.collection, input, {
+        id,
+        createdBy: run.owner_id,
+        checkpoint: nativeCheckpoint(id),
+      });
+    } catch (error) {
+      // Unique index arbitrates concurrent source events. A replay returns the
+      // existing record and checkpoints this execution without overwriting it.
+      const winner = await findMatch();
+      if (!winner) throw error;
+      await transaction(db, [g.start, ...finish(winner)]);
+    }
     return;
   }
   if (node.type === "update") {
@@ -299,12 +342,12 @@ async function executeNode(
         throw new Error("Query value must be scalar");
       const rows = await db
         .prepare(
-          "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND json_extract(data,?) IS ? LIMIT ?",
+          `SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${node.field === "id" ? "id" : "json_extract(data,?)"} IS ? LIMIT ?`,
         )
         .bind(
           run.workspace_id,
           node.collection,
-          `$.${node.field}`,
+          ...(node.field === "id" ? [] : [`$.${node.field}`]),
           typeof expected === "boolean" ? Number(expected) : expected,
           node.limit,
         )
@@ -349,7 +392,9 @@ async function executeNode(
       break;
     }
     case "delay":
-      output = { resumeAt: new Date(now + node.seconds * 1000).toISOString() };
+      output = {
+        resumeAt: new Date(workflowResumeAt(node, context, now)).toISOString(),
+      };
       break;
   }
   await transaction(db, [g.start, ...effects, ...finish(output)]);

@@ -157,3 +157,46 @@ it("reuses the manual delivery key after an uncertain network failure", async ()
     .mock.calls.filter(([url]) => url.endsWith("/start"));
   expect((starts[0][2] as any).key).toBe((starts[1][2] as any).key);
 });
+
+it("prepares a contributed bundle without publishing or replacing a draft", async () => {
+  vi.mocked(api).mockImplementation(async (url, method) => ({
+    data:
+      url === "/workflow-bundles"
+        ? [
+            {
+              id: "example.links",
+              label: "Related requests",
+              description: "Add real links",
+              missing: [],
+              workflows: ["Create case"],
+            },
+          ]
+        : method === "POST"
+          ? { workflows: [] }
+          : [],
+  }));
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <Workflows objects={[]} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Preparar Related requests" }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      "/workflow-bundles/example.links/prepare",
+      "POST",
+    ),
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Relaciones preparadas",
+  );
+  expect(
+    vi.mocked(api).mock.calls.some(([url]) => url.endsWith("/publish")),
+  ).toBe(false);
+});

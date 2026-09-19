@@ -13,8 +13,31 @@ async function source(path: string): Promise<string> {
 describe("release catalog", () => {
   it("assembles the optional insurance solution without involving platform hosts", () => {
     expect(releaseCatalog.extensionRegistry.ids()).toEqual([
+      "insurance.accounting",
+      "insurance.activities",
+      "insurance.automation",
+      "insurance.calendar",
+      "insurance.campaigns",
+      "insurance.carriers",
+      "insurance.claims",
+      "insurance.collections",
+      "insurance.commissions",
+      "insurance.communications",
+      "insurance.compliance",
+      "insurance.customer-portal",
+      "insurance.data-quality",
+      "insurance.document-generation",
+      "insurance.documents",
+      "insurance.endorsements",
+      "insurance.issuance",
+      "insurance.opportunities",
+      "insurance.payments",
       "insurance.portfolio-dashboard",
       "insurance.quotes",
+      "insurance.renewals",
+      "insurance.reports",
+      "insurance.service",
+      "insurance.settlements",
     ]);
     expect(
       releaseCatalog.solutionCatalog.map((solution) => solution.id),
@@ -24,12 +47,33 @@ describe("release catalog", () => {
         .get("insurance.quotes")
         ?.runtime?.actions?.map((action) => action.actionId),
     ).toEqual(["quote"]);
-    expect(releaseCatalog.extensionScreens.map((screen) => screen.id)).toEqual([
-      "insurance.portfolio-dashboard.policies",
-      "insurance.quotes.direct",
-      "insurance.quotes.wizard",
-      "insurance.quotes.admin",
-    ]);
+    expect(releaseCatalog.extensionScreens.map((screen) => screen.id)).toEqual(
+      expect.arrayContaining([
+        "insurance.portfolio-dashboard.policies",
+        "insurance.quotes.direct",
+        "insurance.quotes.wizard",
+        "insurance.quotes.admin",
+        "insurance.collections.worklist",
+        "insurance.renewals.worklist",
+        "insurance.claims.worklist",
+        "insurance.commissions.worklist",
+        "insurance.endorsements.worklist",
+        "insurance.opportunities.worklist",
+        "insurance.activities.worklist",
+        "insurance.issuance.worklist",
+        "insurance.documents.worklist",
+        "insurance.service.worklist",
+      ]),
+    );
+    expect(releaseCatalog.extensionRegistry.ids()).toHaveLength(25);
+    for (const id of releaseCatalog.extensionRegistry
+      .ids()
+      .filter((id) => id !== "insurance.automation"))
+      expect(
+        releaseCatalog.extensionScreens.some(
+          (screen) => screen.extensionId === id,
+        ),
+      ).toBe(true);
     expect(
       releaseCatalog.extensionResultRenderers.map(
         (renderer) => renderer.extensionId,

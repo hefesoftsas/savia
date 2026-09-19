@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.service",
+  "version": "1.0.0",
+  "label": "Solicitudes de servicio",
+  "description": "Organiza consultas, reclamos y solicitudes de tus clientes hasta su respuesta.",
+  "requires": [],
+  "apiVersion": 1
+}
