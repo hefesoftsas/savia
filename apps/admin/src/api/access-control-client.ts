@@ -12,10 +12,31 @@ export type AccessCatalog = ResponseOf<
 >["resources"];
 export type RoleInput =
   paths["/v1/access-control/roles"]["post"]["requestBody"]["content"]["application/json"];
+export type AccessAuditPage = ResponseOf<
+  paths["/v1/access-control/audit"]["get"]
+>;
+export type AccessAuditEntry = AccessAuditPage["data"][number];
+export type AccessAuditDetail = ResponseOf<
+  paths["/v1/access-control/audit/{id}"]["get"]
+>;
+export type AuditFilters = Omit<
+  NonNullable<paths["/v1/access-control/audit"]["get"]["parameters"]["query"]>,
+  "scope"
+>;
 export function createAccessControlClient(client: ApiClient) {
   const base = "/v1/access-control";
   const query = (scope: string) => "?scope=" + encodeURIComponent(scope);
   return {
+    listAudit: (scope: string, filters: AuditFilters = {}) => {
+      const params = new URLSearchParams({ scope });
+      for (const [key, value] of Object.entries(filters))
+        if (value !== undefined) params.set(key, String(value));
+      return client.get<AccessAuditPage>(base + "/audit?" + params.toString());
+    },
+    getAudit: (scope: string, id: string) =>
+      client.get<AccessAuditDetail>(
+        base + "/audit/" + encodeURIComponent(id) + query(scope),
+      ),
     listRoles: (scope: string) =>
       client.get<AccessRoles>(base + "/roles" + query(scope)),
     getCatalog: async (scope: string) =>

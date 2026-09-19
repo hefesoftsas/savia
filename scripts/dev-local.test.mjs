@@ -12,6 +12,7 @@ async function localDevelopmentCommands({
   mcpEnabled = true,
   adminPort = null,
   port5173Occupied = false,
+  devHost = "127.0.0.1",
 } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "savia-dev-local-"));
   const output = join(directory, "commands.txt");
@@ -68,6 +69,7 @@ exit 1
       ...process.env,
       PATH: `${directory}:${process.env.PATH}`,
       SAVIA_SECRETS_DIR: secrets,
+      SAVIA_DEV_HOST: devHost,
       TMPDIR: directory,
       ...(adminPort === null ? {} : { SAVIA_ADMIN_PORT: adminPort }),
     },
@@ -134,4 +136,20 @@ test("runs without MCP when its shared secret is absent", async () => {
   assert.doesNotMatch(commands, /--filter @savia\/mcp dev/);
   assert.doesNotMatch(commands, /--var SAVIA_MCP_URL/);
   assert.doesNotMatch(commands, /--var SAVIA_MCP_SHARED_SECRET/);
+});
+
+test("exposes Admin inside a container while preserving browser OAuth URLs", async () => {
+  const commands = await localDevelopmentCommands({
+    devHost: "0.0.0.0",
+    adminPort: "5173",
+  });
+  assert.match(commands, /vite --host 0\.0\.0\.0 --port 5173 --strictPort/);
+  assert.match(
+    commands,
+    /SAVIA_ADMIN_REDIRECT_URI:http:\/\/127\.0\.0\.1:5173\/auth\/callback/,
+  );
+  assert.match(
+    commands,
+    /@savia\/auth exec wrangler dev --local --ip 127\.0\.0\.1/,
+  );
 });

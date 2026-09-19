@@ -193,6 +193,8 @@ function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
 }
 
 export type DynamicFormProps = {
+  /** Keep a transient copy separate from the ordinary persisted create draft. */
+  ephemeralDraft?: boolean;
   object: CrmObject;
   values?: Record<string, unknown>;
   onSave: (
@@ -524,7 +526,7 @@ function StepForm({
         name,
         values[name] ??
           field.defaultValue ??
-          (field.config?.multiple || field.type === R2_ATTACHMENT_TYPE
+          (field.config?.multiple || field.type === "MultiSelect" || field.type === R2_ATTACHMENT_TYPE
             ? []
             : field.type === "Toggle"
               ? false

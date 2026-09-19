@@ -185,6 +185,17 @@ export function registerDataDomainRoutes(
     return c.json({ data: customDomain(input.name, input.label) }, 201);
   });
   app.all("/v1/data-domains/:domainId/api/*", async (c) => {
+    const expectedPrincipal = c.req.header("X-Savia-Sync-Principal");
+    if (
+      expectedPrincipal !== undefined &&
+      expectedPrincipal !== actorFromContext(c).principal.id
+    )
+      return c.json(
+        {
+          error: "The authenticated principal changed. Reopen this workspace.",
+        },
+        403,
+      );
     const id = c.req.param("domainId");
     const actor = actorFromContext(c);
     const accessPolicy = actor.globalRoles.includes("platform_admin")

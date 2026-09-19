@@ -2,11 +2,16 @@ import {
   Type,
   Hash,
   CircleDollarSign,
+  Percent,
+  Star,
   Rows3,
+  ListChecks,
+  Bold,
   List,
   Search,
   ToggleLeft,
   Calendar,
+  Clock,
   Paperclip,
   HelpCircle,
   Mail,
@@ -18,7 +23,10 @@ import {
   Heading,
   type LucideIcon,
 } from "lucide-react";
-import { DISPLAY_TEXT_TYPE, R2_ATTACHMENT_TYPE } from "@savia/crm-shared/metadata";
+import {
+  DISPLAY_TEXT_TYPE,
+  R2_ATTACHMENT_TYPE,
+} from "@savia/crm-shared/metadata";
 
 export const fieldTypePalette: {
   type: string;
@@ -36,16 +44,52 @@ export const fieldTypePalette: {
   { type: DISPLAY_TEXT_TYPE, label: "Texto fijo", icon: Heading },
   { type: "Number", label: "Número", icon: Hash },
   {
+    type: "Percentage",
+    label: "Percentage",
+    icon: Percent,
+    searchTerms: "porcentaje tasa descuento percent",
+  },
+  {
+    type: "Rating",
+    label: "Rating",
+    icon: Star,
+    searchTerms: "calificación estrellas puntuación escala score",
+  },
+  {
     type: "Currency",
     label: "Moneda",
     icon: CircleDollarSign,
     searchTerms: "moneda divisa dinero precio cop usd eur plata currency valor",
   },
   { type: "Textarea", label: "Texto largo", icon: Rows3 },
+  {
+    type: "RichText",
+    label: "Rich text",
+    icon: Bold,
+    searchTerms: "texto enriquecido formato markdown",
+  },
+  {
+    type: "MultiSelect",
+    label: "Multiple choice",
+    icon: ListChecks,
+    searchTerms: "selección múltiple etiquetas opciones",
+  },
   { type: "Dropdown", label: "Selección", icon: List },
   { type: "Autocomplete", label: "Autocompletar", icon: Search },
   { type: "Toggle", label: "Sí / No", icon: ToggleLeft },
   { type: "DateControl", label: "Fecha", icon: Calendar },
+  {
+    type: "DateTime",
+    label: "Date and time",
+    icon: Calendar,
+    searchTerms: "fecha hora datetime timestamp",
+  },
+  {
+    type: "Time",
+    label: "Time",
+    icon: Clock,
+    searchTerms: "hora horario time",
+  },
   { type: R2_ATTACHMENT_TYPE, label: "Archivo adjunto", icon: Paperclip },
 ];
 
@@ -62,11 +106,7 @@ export function fieldTypeLabel(type: string) {
 }
 
 export function normalizePaletteTypeSearch(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "");
+  return value.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 }
 
 export function filterPaletteFieldTypes<

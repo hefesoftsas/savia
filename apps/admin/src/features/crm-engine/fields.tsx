@@ -1,3 +1,8 @@
+import { PercentageField, RatingField } from "./percentage-rating-fields";
+import { MultiSelectField } from "./multi-select-field";
+import { RichTextField } from "./rich-text-field";
+import { DateTimeField } from "./date-time-field";
+import { TimeField } from "./time-field";
 import { CollectionRelationPicker } from "./collection-relation-picker";
 import { useDependentOptions } from "./dependent-options";
 import { useEffect, useRef, useState } from "react";
@@ -706,8 +711,14 @@ export const registry = {
   DisplayText: <DisplayTextField />,
   Number: <NumberField />,
   Currency: <CurrencyField />,
+  Percentage: <PercentageField />,
+  Rating: <RatingField />,
   DateControl: <DateField />,
+  DateTime: <DateTimeField />,
+  Time: <TimeField />,
   Textarea: <LongText />,
+  RichText: <RichTextField />,
+  MultiSelect: <MultiSelectField />,
   Dropdown: <SelectField />,
   Autocomplete: <AutocompleteField />,
   CrmRelation: <RelationField />,

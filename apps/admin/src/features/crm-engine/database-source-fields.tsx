@@ -1,0 +1,146 @@
+import type { RefObject } from "react";
+import {
+  databaseKinds,
+  type DatabaseKind,
+} from "@savia/crm-shared/database-sources";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+export type DatabaseSourceDraft = {
+  host: string;
+  port: string;
+  database: string;
+  username: string;
+  schema: string;
+  ssl: boolean;
+  authSource: string;
+  trustServerCertificate: boolean;
+  writeEnabled: boolean;
+};
+export function DatabaseSourceFields({
+  kind,
+  draft,
+  onChange,
+  editing,
+  passwordRef,
+  removePassword,
+  onRemovePassword,
+}: {
+  kind: DatabaseKind;
+  draft: DatabaseSourceDraft;
+  onChange: (patch: Partial<DatabaseSourceDraft>) => void;
+  editing: boolean;
+  passwordRef: RefObject<HTMLInputElement | null>;
+  removePassword: boolean;
+  onRemovePassword: (value: boolean) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      {!editing && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                ["host", `Host ${databaseKinds[kind].label}`],
+                ["port", "Puerto"],
+                ["database", "Base de datos"],
+                ["username", "Usuario"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="grid gap-1.5 text-sm">
+                <Label htmlFor={`pg-${key}-input`}>{label}</Label>
+                <Input
+                  id={`pg-${key}-input`}
+                  required={key !== "username" || kind !== "mongodb"}
+                  value={draft[key]}
+                  onChange={(e) => onChange({ [key]: e.target.value })}
+                  {...(key === "port"
+                    ? { inputMode: "numeric", pattern: "[0-9]*" }
+                    : {})}
+                />
+              </div>
+            ))}
+          </div>
+          {(kind === "postgres" || kind === "mssql") && (
+            <div className="grid gap-1.5 text-sm">
+              <Label htmlFor="pg-schema-input">Esquema (opcional)</Label>
+              <Input
+                id="pg-schema-input"
+                value={draft.schema}
+                onChange={(e) => onChange({ schema: e.target.value })}
+              />
+            </div>
+          )}
+          {kind === "mongodb" && (
+            <div className="grid gap-1.5 text-sm">
+              <Label htmlFor="database-auth-source">
+                Base de autenticación
+              </Label>
+              <Input
+                id="database-auth-source"
+                value={draft.authSource}
+                onChange={(e) => onChange({ authSource: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Conexión directa al servidor indicado.
+              </p>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.ssl}
+              onChange={(e) => onChange({ ssl: e.target.checked })}
+            />
+            {kind === "mssql" ? "Cifrar conexión" : "Exigir SSL"}
+          </label>
+          {kind === "mssql" && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={draft.trustServerCertificate}
+                onChange={(e) =>
+                  onChange({ trustServerCertificate: e.target.checked })
+                }
+              />
+              Confiar en certificado del servidor
+            </label>
+          )}
+        </>
+      )}
+      <div className="grid gap-1.5 text-sm">
+        <Label htmlFor="source-password-input">Contraseña (opcional)</Label>
+        <Input
+          id="source-password-input"
+          ref={passwordRef}
+          type="password"
+          autoComplete="new-password"
+        />
+        <p className="text-xs text-muted-foreground">
+          Se guarda cifrada en el servidor y nunca se devuelve.
+        </p>
+      </div>
+      {editing && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={removePassword}
+            onChange={(e) => onRemovePassword(e.target.checked)}
+          />
+          Quitar contraseña
+        </label>
+      )}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={draft.writeEnabled}
+          onChange={(e) => onChange({ writeEnabled: e.target.checked })}
+        />
+        Permitir crear, editar y eliminar registros
+      </label>
+      <p className="text-xs text-muted-foreground">
+        Las operaciones disponibles también dependen de los permisos de la
+        cuenta y de un identificador único. Las vistas son de solo lectura.
+      </p>
+    </div>
+  );
+}

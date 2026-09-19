@@ -1,3 +1,8 @@
+import { historyDatabase } from "@savia/crm-server/record-history-storage";
+import {
+  scopedRecordLinks,
+  scopedRelationDefinitions,
+} from "./scoped-record-links";
 import { HTTPException } from "hono/http-exception";
 import type { AccessPolicy } from "@savia/crm-shared/access-control";
 import { accessDatabase } from "@savia/crm-server/access-authorization";
@@ -106,6 +111,38 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
     async prepare() {},
     async fetch(request: Request): Promise<Response> {
       const path = new URL(request.url).pathname;
+      if (/^\/api\/record-bundles\/[^/]+\/?$/.test(path))
+        return createRecordBundlesApp({
+          db: historyDatabase(
+            context.accessPolicy
+              ? accessDatabase(db, context.accessPolicy)
+              : db,
+            tenant,
+            { kind: "user", id: actor.principal.id },
+          ),
+          tenant,
+        }).fetch(request);
+      if (
+        context.accessPolicy &&
+        /^\/api\/record-links\/[^/]+\/[^/]+$/.test(path) &&
+        request.method === "GET"
+      )
+        return scopedRecordLinks(
+          request,
+          accessDatabase(db, context.accessPolicy),
+          tenant,
+          context.accessPolicy,
+        );
+      if (
+        context.accessPolicy &&
+        path === "/api/collection-relations" &&
+        request.method === "GET"
+      )
+        return scopedRelationDefinitions(
+          accessDatabase(db, context.accessPolicy),
+          tenant,
+          context.accessPolicy,
+        );
       if (context.accessPolicy) {
         const match =
           /^\/api\/(?:objects|records|views|record-detail|record-links|record-notes|record-activity|collection-options|files|import|export)\/([^/]+)/.exec(
@@ -166,7 +203,13 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
         });
       }
       if (/^\/api\/record-bundles\/[^/]+\/?$/.test(path))
-        return createRecordBundlesApp({ db, tenant }).fetch(request);
+        return createRecordBundlesApp({
+          db: historyDatabase(db, tenant, {
+            kind: "user",
+            id: actor.principal.id,
+          }),
+          tenant,
+        }).fetch(request);
       if (path === "/api/collection-catalog" && context.externalCollections) {
         try {
           const response = await context.externalCollections.fetch(

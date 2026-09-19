@@ -1,6 +1,7 @@
+import { FieldValueDisplay } from "./field-value-display";
+import RecordHistorySettingsButton from "./record-history-settings";
 import { useDebouncedSearch } from "./use-debounced-search";
 import { RetainedListResults } from "./retained-list-results";
-import { recordOptionLabel } from "./record-option-label";
 import { RecordOriginLinks } from "./record-origin-links";
 import {
   collectionCapabilities,
@@ -757,6 +758,7 @@ export default function Records({
               </TooltipContent>
             </Tooltip>
           </div>
+          <RecordHistorySettingsButton object={object} />
           <RecordsCommandToolbar
             object={object}
             capabilities={capabilities}
@@ -1563,7 +1565,7 @@ function RecordTable({
                     }
                     render={(r) => {
                       const cell = (
-                        <span className={key === "name" ? "record-name" : ""}>
+                        <div className={key === "name" ? "record-name" : ""}>
                           {object.config.fields[key].config?.relation ? (
                             <RelatedValue
                               objectName={String(
@@ -1571,41 +1573,19 @@ function RecordTable({
                               )}
                               value={r[key]}
                             />
-                          ) : object.config.fields[key].type === "Currency" ||
-                            object.config.fields[key].config?.format ===
-                              "currency" ? (
-                            money(
-                              r[key],
-                              String(
-                                object.config.fields[key].config?.currency ||
-                                  "COP",
-                              ),
-                              typeof object.config.fields[key].config
-                                ?.decimals === "number"
-                                ? Number(
-                                    object.config.fields[key].config?.decimals,
-                                  )
-                                : object.config.fields[key].config?.integer
-                                  ? 0
-                                  : 2,
-                            )
                           ) : object.config.studio?.business ===
                               "managed-customer" && key === "email" ? (
                             displayCustomerEmail(r[key])
                           ) : (
-                            display(
-                              recordOptionLabel(
-                                r[key],
-                                object.config.fields[key].options,
-                              ),
-                            )
+                            <FieldValueDisplay value={r[key]} field={object.config.fields[key]}/>
                           )}
-                        </span>
+                        </div>
                       );
                       return key === primaryColumnKey &&
                         !trash &&
                         collectionCapabilities(object).read ? (
                         <div className="grid justify-items-start gap-1">
+                          {object.config.fields[key].type === "RichText" && cell}
                           <button
                             type="button"
                             className="text-left text-primary underline-offset-4 hover:underline focus-visible:underline"
@@ -1615,7 +1595,7 @@ function RecordTable({
                               onOpen(r as CrmRecord);
                             }}
                           >
-                            {cell}
+                            {object.config.fields[key].type === "RichText" ? "Open record" : cell}
                           </button>
                         </div>
                       ) : (

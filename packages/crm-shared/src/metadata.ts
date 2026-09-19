@@ -1,3 +1,9 @@
+import {
+  recordHistorySettingsSchema,
+  isHistoryField,
+  type RecordHistorySettings,
+} from "./record-history";
+import { resourceMetadataSchema, isDatabaseKind } from "./database-sources";
 import { collectionOptionsSchema } from "./collection-options";
 import { requestPageSchema, type RequestPageConfig } from "./request-page";
 import type { IFormConfig, IFieldConfig } from "@form-eng/core";
@@ -66,11 +72,26 @@ export type CollectionCapabilities = z.infer<
 export const collectionBindingMetadataSchema = z.object({
   sourceId: z.string().min(1).max(120),
   resource: z.string().min(1).max(300),
-  kind: z.enum(["domain", "jsonapi", "postgres", "crm"]),
+  kind: z.enum([
+    "domain",
+    "jsonapi",
+    "postgres",
+    "mysql",
+    "mssql",
+    "mongodb",
+    "crm",
+  ]),
   domain: z.string().optional(),
   collection: z.string().optional(),
   capabilities: collectionCapabilitiesSchema,
   /** Postgres v1: columna identificadora y PK real de la tabla. */
+  databaseMetadata: resourceMetadataSchema.optional(),
+  sourceOwnerPrincipalId: z.string().optional(),
+  writePermissions: z
+    .object({ create: z.boolean(), update: z.boolean(), delete: z.boolean() })
+    .optional(),
+  idType: z.enum(["string", "objectId"]).optional(),
+  schemaIssues: z.array(z.string()).optional(),
   idColumn: z.string().min(1).max(63).optional(),
   primaryKey: z.array(z.string().min(1).max(63)).max(10).optional(),
 });
@@ -78,6 +99,7 @@ export type CollectionBindingMetadata = z.infer<
   typeof collectionBindingMetadataSchema
 >;
 export type StudioConfig = {
+  history?: RecordHistorySettings;
   collection?: CollectionBindingMetadata;
   capabilities?: CollectionCapabilities;
   business?: "customer" | "quotation" | "managed-customer" | "managed-agency";
@@ -134,6 +156,7 @@ export const DISPLAY_TEXT_TYPE = "DisplayText" as const;
 export const supportedTypes = [
   "Textbox",
   "Textarea",
+  "RichText",
   "Email",
   "Phone",
   "Url",
@@ -143,10 +166,15 @@ export const supportedTypes = [
   DISPLAY_TEXT_TYPE,
   "Number",
   "Currency",
+  "Percentage",
+  "Rating",
   "Dropdown",
+  "MultiSelect",
   "Autocomplete",
   "Toggle",
   "DateControl",
+  "DateTime",
+  "Time",
   R2_ATTACHMENT_TYPE,
 ] as const;
 
@@ -232,6 +260,7 @@ export const fieldSchema = z
         integer: z.boolean().optional(),
         currency: z.string().trim().min(2).max(10).optional(),
         decimals: z.number().int().min(0).max(6).optional(),
+        ratingStyle: z.enum(["stars", "number"]).optional(),
         dateTime: z.boolean().optional(),
         collectionOptions: collectionOptionsSchema.optional(),
         relation: identifier.optional(),
@@ -273,6 +302,7 @@ export const fieldSchema = z
   })
   .passthrough();
 const studio = z.object({
+  history: recordHistorySettingsSchema.optional(),
   collection: collectionBindingMetadataSchema.optional(),
   capabilities: collectionCapabilitiesSchema.optional(),
   business: z
@@ -329,8 +359,8 @@ const studio = z.object({
 export const configSchema = z
   .object({
     version: z.literal(2),
-    fields: z.record(identifier, fieldSchema),
-    fieldOrder: z.array(identifier),
+    fields: z.record(z.union([identifier, z.literal("_id")]), fieldSchema),
+    fieldOrder: z.array(z.union([identifier, z.literal("_id")])),
     studio: studio.optional(),
   })
   .passthrough()
@@ -338,6 +368,20 @@ export const configSchema = z
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
     const names = Object.keys(config.fields);
+    if (names.includes("_id") && config.studio?.collection?.kind !== "mongodb")
+      issue("The _id field is reserved for MongoDB collections.");
+    if (config.studio?.history) {
+      if (
+        config.studio.collection ||
+        ["managed-customer", "managed-agency"].includes(
+          config.studio.business ?? "",
+        )
+      )
+        issue("History is supported only for local collections.");
+      for (const name of config.studio.history.fields)
+        if (!isHistoryField(name, config.fields[name]))
+          issue(`Unsupported history field: ${name}`);
+    }
     if (!names.length || names.length > 100)
       issue("El objeto necesita entre 1 y 100 campos.");
     if (
@@ -355,7 +399,7 @@ export const configSchema = z
           ].includes(n) &&
           // Postgres externo: la PK suele llamarse `id` y coincide con el
           // identificador del sobre (solo lectura, sin escrituras locales).
-          !(config.studio?.collection?.kind === "postgres" && n === "id"),
+          !(isDatabaseKind(config.studio?.collection?.kind) && n === "id"),
       )
     )
       issue("Nombre de campo reservado.");
@@ -539,7 +583,57 @@ export const configSchema = z
           next = config.fields[next]?.config?.optionsWhen?.field;
         }
       }
-      if (c?.multiple && !c.relation && !c.collectionRelation)
+      if (["Percentage", "Rating"].includes(f.type)) {
+        if (
+          c?.multiple ||
+          c?.relation ||
+          c?.collectionRelation ||
+          c?.collectionOptions ||
+          c?.dateTime ||
+          c?.formula ||
+          c?.format
+        )
+          issue(
+            `${f.label}: this numeric field cannot use relation or alternate value settings.`,
+          );
+        if (
+          f.type === "Rating" &&
+          (!Number.isInteger(c?.maximum ?? 5) ||
+            (c?.maximum ?? 5) < 1 ||
+            (c?.maximum ?? 5) > 10 ||
+            (c?.minimum !== undefined && c.minimum !== 1))
+        )
+          issue(
+            `${f.label}: ratings require a maximum integer from 1 to 10 and a minimum of 1.`,
+          );
+        if (f.type === "Percentage" && (c?.minimum ?? 0) > (c?.maximum ?? 100))
+          issue(`${f.label}: minimum must not exceed maximum.`);
+      }
+      if (
+        f.type === "MultiSelect" &&
+        (c?.unique ||
+          c?.relation ||
+          c?.collectionRelation ||
+          c?.collectionOptions ||
+          c?.optionsWhen ||
+          c?.dateTime ||
+          c?.formula)
+      )
+        issue(
+          `${f.label}: multiple choice requires a static option list without scalar or relation settings.`,
+        );
+      if (
+        f.type === "MultiSelect" &&
+        (!f.options?.length ||
+          new Set(f.options.map((o) => o.value)).size !== f.options.length)
+      )
+        issue(`${f.label}: provide distinct options for multiple choice.`);
+      if (
+        c?.multiple &&
+        !c.relation &&
+        !c.collectionRelation &&
+        f.type !== "MultiSelect"
+      )
         issue(`${f.label}: selección múltiple requiere una relación.`);
       if (c?.unique && (c.multiple || c.formula))
         issue(
@@ -737,14 +831,73 @@ export function validateRecord(
       value === undefined ||
       value === null ||
       value === "" ||
+      (field.type === "RichText" &&
+        typeof value === "string" &&
+        !value.trim()) ||
       (Array.isArray(value) && !value.length);
     if (empty) {
       if (required) errors[name] = `${field.label}: obligatorio`;
-      clean[name] = c.multiple
-        ? []
-        : value === undefined && field.type === "Toggle"
-          ? false
-          : null;
+      clean[name] =
+        c.multiple || field.type === "MultiSelect"
+          ? []
+          : value === undefined && field.type === "Toggle"
+            ? false
+            : null;
+      continue;
+    }
+    if (field.type === "DateTime" || c.dateTime === true) {
+      if (
+        typeof value !== "string" ||
+        !z.iso.datetime({ offset: true }).safeParse(value).success
+      )
+        errors[name] =
+          `${field.label}: enter a valid date and time with a time zone`;
+      else clean[name] = new Date(value).toISOString();
+      continue;
+    }
+    if (field.type === "Time") {
+      if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
+        errors[name] = `${field.label}: enter a valid time (HH:mm)`;
+      else clean[name] = value;
+      continue;
+    }
+    if (field.type === "Percentage" || field.type === "Rating") {
+      const rating = field.type === "Rating";
+      const min = rating ? 1 : Number(c.minimum ?? 0);
+      const max = Number(c.maximum ?? (rating ? 5 : 100));
+      if (
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        value < min ||
+        value > max ||
+        (rating && !Number.isInteger(value))
+      )
+        errors[name] =
+          `${field.label}: enter ${rating ? "an integer" : "a number"} between ${min} and ${max}`;
+      else if (!rating) {
+        const scaled = value * 10 ** Number(c.decimals ?? 2);
+        if (
+          !Number.isFinite(scaled) ||
+          Math.abs(scaled - Math.round(scaled)) >
+            Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8
+        )
+          errors[name] =
+            `${field.label}: use at most ${c.decimals ?? 2} decimal places`;
+      }
+      clean[name] = value;
+      continue;
+    }
+    if (field.type === "MultiSelect") {
+      const allowed = new Set(
+        field.options?.map((option) => option.value) ?? [],
+      );
+      if (
+        !Array.isArray(value) ||
+        value.length > 500 ||
+        value.some((item) => typeof item !== "string" || !allowed.has(item))
+      )
+        errors[name] = `${field.label}: select valid options`;
+      else clean[name] = [...new Set(value)];
       continue;
     }
     if (c.multiple) {
@@ -826,7 +979,12 @@ export function validateRecord(
     )
       errors[name] = `${field.label}: fuera del rango permitido`;
     if (typeof value === "string") {
-      const max = typeof c.maxLength === "number" ? c.maxLength : 10000,
+      const max =
+          typeof c.maxLength === "number"
+            ? c.maxLength
+            : field.type === "RichText"
+              ? 100000
+              : 10000,
         min = typeof c.minLength === "number" ? c.minLength : 0;
       if (value.length < min || value.length > max)
         errors[name] = `${field.label}: longitud permitida ${min}–${max}`;

@@ -139,7 +139,9 @@ afterEach(async () => {
 it("restores the original parent, child and selection versions without rebasing and retains retry identity on failure", async () => {
   state.scope = scope();
   await seed();
-  const save = vi.fn().mockRejectedValue(new Error("offline"));
+  const save = vi
+    .fn()
+    .mockRejectedValue(new Error("Resolve the overlapping pending form first"));
   mount(save);
   await screen.findByDisplayValue("Draft");
   expect(state.props.values.children).toEqual(stored.values.children);
@@ -161,13 +163,24 @@ it("restores the original parent, child and selection versions without rebasing 
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
   expect(save.mock.calls[1][3]).toEqual(save.mock.calls[0][3]);
 });
-it("clears durable state after confirmed successful save", async () => {
+it("clears durable state only after the local queue commits", async () => {
   state.scope = scope();
   await seed();
-  const save = vi.fn().mockResolvedValue({ id: "parent", _version: 4 });
+  let commit!: (record: unknown) => void;
+  const save = vi.fn().mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        commit = resolve;
+      }),
+  );
   mount(save);
   await screen.findByDisplayValue("Draft");
   fireEvent.click(screen.getByText("Save"));
+  await waitFor(() => expect(save).toHaveBeenCalled());
+  const pendingReader = createRelatedRecordDraft(key());
+  expect(await pendingReader.read()).toBeDefined();
+  await pendingReader.close();
+  commit({ id: "parent", _version: 4, _localPending: true });
   await waitFor(() =>
     expect(screen.queryByText(/Borrador recuperado/)).not.toBeInTheDocument(),
   );
@@ -279,4 +292,44 @@ it("restores an existing draft while live record links are offline", async () =>
   await waitFor(() => expect(save).toHaveBeenCalled());
   expect(save.mock.calls[0][2][0].previousIds).toEqual(["child"]);
   vi.mocked(api).mockImplementation(implementation);
+});
+it("keeps duplicate creation separate from an existing create draft and creates without a previous record", async () => {
+  state.scope = scope();
+  const handle = createRelatedRecordDraft({
+    workspaceScope: state.scope,
+    object: "parents",
+  });
+  handle.schedule({
+    ...stored,
+    values: { name: "Ordinary draft" },
+    previous: undefined,
+  });
+  await handle.flush();
+  const save = vi.fn().mockResolvedValue({ id: "fresh", name: "Copy" });
+  const mounted = render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <CollectionRecordForm
+        object={object}
+        values={{ name: "Copy" }}
+        ephemeralDraft
+        onSave={save}
+      />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("name")).toHaveValue("Copy"),
+  );
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Save"));
+  await waitFor(() => expect(save).toHaveBeenCalled());
+  expect(save.mock.calls[0][1]).toBeUndefined();
+  mounted.unmount();
+  expect((await handle.read())?.value).toMatchObject({
+    values: { name: "Ordinary draft" },
+  });
+  await handle.close();
 });

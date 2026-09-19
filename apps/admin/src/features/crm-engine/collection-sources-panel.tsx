@@ -1,3 +1,9 @@
+import {
+  databaseKinds,
+  isDatabaseKind,
+  type DatabaseKind,
+} from "@savia/crm-shared/database-sources";
+import { DatabaseSourceFields } from "./database-source-fields";
 import CrmWorkspacePanel from "./crm-workspace-panel";
 import CollectionOperationsPanel from "./collection-operations-panel";
 import { useRef, useState } from "react";
@@ -52,7 +58,11 @@ type Source =
   | {
       id: string;
       label: string;
-      kind: "postgres";
+      kind: DatabaseKind;
+      writeEnabled?: boolean;
+      authSource?: string;
+      encrypt?: boolean;
+      trustServerCertificate?: boolean;
       host: string;
       port: number;
       database: string;
@@ -188,7 +198,7 @@ export default function CollectionSourcesPanel({
   const [confirmRemoval, setConfirmRemoval] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [sourceLabel, setSourceLabel] = useState("");
-  const [sourceKind, setSourceKind] = useState<"jsonapi" | "postgres">(
+  const [sourceKind, setSourceKind] = useState<"jsonapi" | DatabaseKind>(
     "jsonapi",
   );
   const [baseUrl, setBaseUrl] = useState("");
@@ -200,11 +210,20 @@ export default function CollectionSourcesPanel({
   const [pgUsername, setPgUsername] = useState("");
   const [pgSchema, setPgSchema] = useState("public");
   const [pgSsl, setPgSsl] = useState(true);
+  const [writeEnabled, setWriteEnabled] = useState(false);
+  const [authSource, setAuthSource] = useState("admin");
+  const [trustCertificate, setTrustCertificate] = useState(false);
+  const [databaseIdColumn, setDatabaseIdColumn] = useState("");
+  const [mongoIdType, setMongoIdType] = useState<"string" | "objectId">(
+    "objectId",
+  );
   const [removePassword, setRemovePassword] = useState(false);
   const [allowFilters, setAllowFilters] = useState(false);
   const [allowSort, setAllowSort] = useState(false);
   const [totalPointer, setTotalPointer] = useState("");
-  const [mode, setMode] = useState<"domain" | "jsonapi" | "postgres">("domain");
+  const [mode, setMode] = useState<"domain" | "jsonapi" | DatabaseKind>(
+    "domain",
+  );
   const [selected, setSelected] = useState("");
   const [remoteSource, setRemoteSource] = useState("");
   const [resource, setResource] = useState("");
@@ -246,6 +265,9 @@ export default function CollectionSourcesPanel({
     setPgUsername("");
     setPgSchema("public");
     setPgSsl(true);
+    setWriteEnabled(false);
+    setAuthSource("admin");
+    setTrustCertificate(false);
     setRemoveToken(false);
     setRemovePassword(false);
   }
@@ -268,7 +290,8 @@ export default function CollectionSourcesPanel({
           "PUT",
           {
             label: sourceLabel,
-            ...(editing?.kind === "postgres"
+            ...(editing?.kind !== "jsonapi" ? { writeEnabled } : {}),
+            ...(editing?.kind !== "jsonapi"
               ? removePassword
                 ? { password: null }
                 : password
@@ -281,20 +304,27 @@ export default function CollectionSourcesPanel({
                   : {}),
           },
         );
-      } else if (sourceKind === "postgres") {
+      } else if (isDatabaseKind(sourceKind)) {
         const port = Number.parseInt(pgPort, 10);
         if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
           throw new Error("El puerto debe estar entre 1 y 65535.");
         await request<Source>("/sources", "POST", {
           id: sourceId,
           label: sourceLabel,
-          kind: "postgres",
+          kind: sourceKind,
           host: pgHost.trim(),
           port,
           database: pgDatabase.trim(),
-          username: pgUsername.trim(),
-          ...(pgSchema.trim() ? { schema: pgSchema.trim() } : {}),
-          ssl: pgSsl,
+          ...(pgUsername.trim() ? { username: pgUsername.trim() } : {}),
+          ...((sourceKind === "postgres" || sourceKind === "mssql") &&
+          pgSchema.trim()
+            ? { schema: pgSchema.trim() }
+            : {}),
+          ...(sourceKind === "mssql"
+            ? { encrypt: pgSsl, trustServerCertificate: trustCertificate }
+            : { ssl: pgSsl }),
+          ...(sourceKind === "mongodb" ? { authSource } : {}),
+          writeEnabled,
           ...(password ? { password } : {}),
         });
       } else
@@ -351,7 +381,7 @@ export default function CollectionSourcesPanel({
       (item) => item.id === remoteSource,
     );
     const table = resource.trim();
-    if (!table && selectedSource?.kind !== "postgres") return;
+    if (!table && !isDatabaseKind(selectedSource?.kind)) return;
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -389,8 +419,8 @@ export default function CollectionSourcesPanel({
       if (inspection.primaryKey)
         setNotice(
           inspection.primaryKey.length
-            ? `Columnas inferidas. Identificador: ${inspection.primaryKey.join(", ")}. La colección es de solo lectura.`
-            : "Columnas inferidas, pero la tabla no tiene primary key: no se puede vincular.",
+            ? `Columnas inferidas. Identificador: ${inspection.primaryKey.join(", ")}. Las operaciones respetan los permisos de la fuente.`
+            : "Columnas inferidas. Selecciona una clave única para operar por registro; sin ella solo podrás listar.",
         );
       else
         setNotice(
@@ -427,7 +457,7 @@ export default function CollectionSourcesPanel({
           domain: entry.domain,
           collection: entry.collection,
         };
-      } else if (mode === "postgres") {
+      } else if (isDatabaseKind(mode)) {
         const parsed: unknown = JSON.parse(fields);
         if (
           !parsed ||
@@ -444,6 +474,8 @@ export default function CollectionSourcesPanel({
           sourceId: remoteSource,
           resource: resource.trim(),
           fields: parsed,
+          ...(databaseIdColumn ? { idColumn: databaseIdColumn } : {}),
+          ...(mode === "mongodb" ? { idType: mongoIdType } : {}),
         };
       } else {
         const parsed: unknown = JSON.parse(fields);
@@ -497,7 +529,7 @@ export default function CollectionSourcesPanel({
   const editingKind = editingSource
     ? (sources.data?.find((item) => item.id === sourceId)?.kind ?? "jsonapi")
     : sourceKind;
-  const showPostgresFields = editingKind === "postgres";
+  const showPostgresFields = isDatabaseKind(editingKind);
 
   return (
     <section className="mx-auto grid w-full max-w-5xl gap-6 pb-12">
@@ -587,8 +619,8 @@ export default function CollectionSourcesPanel({
                   Fuentes configuradas
                 </h2>
                 <CardDescription className="text-xs leading-relaxed">
-                  Conexiones a servicios web JSON:API y a bases PostgreSQL
-                  externas de solo lectura.
+                  Conexiones a servicios web JSON:API y a bases de datos
+                  externas con permisos de lectura y escritura.
                 </CardDescription>
               </div>
               <Tooltip>
@@ -613,6 +645,9 @@ export default function CollectionSourcesPanel({
                       setPgUsername("");
                       setPgSchema("public");
                       setPgSsl(true);
+                      setWriteEnabled(false);
+                      setAuthSource("admin");
+                      setTrustCertificate(false);
                       setSourceOpen(!sourceOpen);
                     }}
                   >
@@ -632,8 +667,8 @@ export default function CollectionSourcesPanel({
                     <h3 className="text-sm font-semibold text-foreground">
                       {editingSource
                         ? "Actualizar acceso a fuente"
-                        : sourceKind === "postgres"
-                          ? "Conexión PostgreSQL (solo lectura)"
+                        : isDatabaseKind(sourceKind)
+                          ? "Conexión de base de datos"
                           : "Conexión JSON:API"}
                     </h3>
                     <Badge variant="outline" className="text-xs">
@@ -649,16 +684,22 @@ export default function CollectionSourcesPanel({
                         aria-label="Tipo de fuente"
                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
                         value={sourceKind}
-                        onChange={(e) =>
-                          setSourceKind(
-                            e.target.value as "jsonapi" | "postgres",
-                          )
-                        }
+                        onChange={(e) => {
+                          const kind = e.target.value as
+                            "jsonapi" | DatabaseKind;
+                          setSourceKind(kind);
+                          if (isDatabaseKind(kind)) {
+                            setPgPort(String(databaseKinds[kind].port));
+                            setPgSchema(databaseKinds[kind].schema);
+                          }
+                        }}
                       >
                         <option value="jsonapi">Recurso JSON:API</option>
-                        <option value="postgres">
-                          Base PostgreSQL (solo lectura)
-                        </option>
+                        {Object.entries(databaseKinds).map(([kind, info]) => (
+                          <option key={kind} value={kind}>
+                            Base {info.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   )}
@@ -777,125 +818,42 @@ export default function CollectionSourcesPanel({
                     </>
                   )}
 
-                  {showPostgresFields && (
-                    <>
-                      {!editingSource && (
-                        <>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="grid gap-1.5 text-sm">
-                              <Label htmlFor="pg-host-input">
-                                Host PostgreSQL
-                              </Label>
-                              <Input
-                                id="pg-host-input"
-                                required
-                                disabled={editingSource}
-                                value={pgHost}
-                                onChange={(e) => setPgHost(e.target.value)}
-                                placeholder="pg.interno"
-                              />
-                            </div>
-                            <div className="grid gap-1.5 text-sm">
-                              <Label htmlFor="pg-port-input">Puerto</Label>
-                              <Input
-                                id="pg-port-input"
-                                required
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                disabled={editingSource}
-                                value={pgPort}
-                                onChange={(e) => setPgPort(e.target.value)}
-                                placeholder="5432"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="grid gap-1.5 text-sm">
-                              <Label htmlFor="pg-database-input">
-                                Base de datos
-                              </Label>
-                              <Input
-                                id="pg-database-input"
-                                required
-                                disabled={editingSource}
-                                value={pgDatabase}
-                                onChange={(e) => setPgDatabase(e.target.value)}
-                                placeholder="erp"
-                              />
-                            </div>
-                            <div className="grid gap-1.5 text-sm">
-                              <Label htmlFor="pg-username-input">Usuario</Label>
-                              <Input
-                                id="pg-username-input"
-                                required
-                                disabled={editingSource}
-                                value={pgUsername}
-                                onChange={(e) => setPgUsername(e.target.value)}
-                                placeholder="lector"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="grid gap-1.5 text-sm">
-                              <Label htmlFor="pg-schema-input">
-                                Esquema (opcional)
-                              </Label>
-                              <Input
-                                id="pg-schema-input"
-                                disabled={editingSource}
-                                value={pgSchema}
-                                onChange={(e) => setPgSchema(e.target.value)}
-                                placeholder="public"
-                              />
-                            </div>
-                            <label className="flex items-end gap-2 text-xs font-medium cursor-pointer pb-2">
-                              <input
-                                type="checkbox"
-                                className="size-4 rounded border-input accent-primary"
-                                disabled={editingSource}
-                                checked={pgSsl}
-                                onChange={(e) => setPgSsl(e.target.checked)}
-                              />
-                              <span>Exigir SSL</span>
-                            </label>
-                          </div>
-                        </>
-                      )}
-
-                      <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="source-password-input">
-                          Contraseña (opcional)
-                        </Label>
-                        <Input
-                          id="source-password-input"
-                          ref={passwordInput}
-                          type="password"
-                          autoComplete="off"
-                          placeholder="••••••••••••"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Se guarda cifrada en el servidor y nunca se devuelve.
-                          Usa un rol con solo SELECT. La colección resultante es
-                          de solo lectura.
-                        </p>
-                      </div>
-
-                      {editingSource && (
-                        <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="size-4 rounded border-input accent-primary"
-                            checked={removePassword}
-                            onChange={(event) =>
-                              setRemovePassword(event.target.checked)
-                            }
-                          />
-                          <span>Quitar contraseña</span>
-                        </label>
-                      )}
-                    </>
+                  {showPostgresFields && isDatabaseKind(editingKind) && (
+                    <DatabaseSourceFields
+                      kind={editingKind}
+                      editing={editingSource}
+                      passwordRef={passwordInput}
+                      removePassword={removePassword}
+                      onRemovePassword={setRemovePassword}
+                      draft={{
+                        host: pgHost,
+                        port: pgPort,
+                        database: pgDatabase,
+                        username: pgUsername,
+                        schema: pgSchema,
+                        ssl: pgSsl,
+                        writeEnabled,
+                        authSource,
+                        trustServerCertificate: trustCertificate,
+                      }}
+                      onChange={(patch) => {
+                        if (patch.host !== undefined) setPgHost(patch.host);
+                        if (patch.port !== undefined) setPgPort(patch.port);
+                        if (patch.database !== undefined)
+                          setPgDatabase(patch.database);
+                        if (patch.username !== undefined)
+                          setPgUsername(patch.username);
+                        if (patch.schema !== undefined)
+                          setPgSchema(patch.schema);
+                        if (patch.ssl !== undefined) setPgSsl(patch.ssl);
+                        if (patch.writeEnabled !== undefined)
+                          setWriteEnabled(patch.writeEnabled);
+                        if (patch.authSource !== undefined)
+                          setAuthSource(patch.authSource);
+                        if (patch.trustServerCertificate !== undefined)
+                          setTrustCertificate(patch.trustServerCertificate);
+                      }}
+                    />
                   )}
 
                   <div className="flex justify-end gap-2 pt-2">
@@ -955,13 +913,13 @@ export default function CollectionSourcesPanel({
                             variant="outline"
                             className="text-xs font-normal"
                           >
-                            {source.kind === "postgres"
-                              ? "PostgreSQL"
+                            {source.kind !== "jsonapi"
+                              ? databaseKinds[source.kind].label
                               : "JSON:API"}
                           </Badge>
                           <Badge
                             variant={
-                              source.kind === "postgres"
+                              source.kind !== "jsonapi"
                                 ? source.hasPassword
                                   ? "secondary"
                                   : "outline"
@@ -971,7 +929,7 @@ export default function CollectionSourcesPanel({
                             }
                             className="text-xs font-normal"
                           >
-                            {source.kind === "postgres"
+                            {source.kind !== "jsonapi"
                               ? source.hasPassword
                                 ? "Con contraseña"
                                 : "Sin contraseña"
@@ -981,12 +939,38 @@ export default function CollectionSourcesPanel({
                           </Badge>
                         </div>
                         <p className="break-all text-xs text-muted-foreground font-mono">
-                          {source.kind === "postgres"
-                            ? `${source.host}:${source.port}/${source.database} · ${source.schema}`
+                          {source.kind !== "jsonapi"
+                            ? `${source.host}:${source.port}/${source.database}${source.schema ? ` · ${source.schema}` : ""}`
                             : source.baseUrl}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {source.kind !== "jsonapi" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={async () => {
+                              setBusy(true);
+                              setError("");
+                              try {
+                                await request(
+                                  `/sources/${encodeURIComponent(source.id)}/test`,
+                                  "POST",
+                                  {},
+                                );
+                                setNotice("Conexión verificada.");
+                              } catch (e) {
+                                setError(errorText(e));
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
+                          >
+                            Probar conexión
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           size="sm"
@@ -1002,13 +986,22 @@ export default function CollectionSourcesPanel({
                             setSourceId(source.id);
                             setSourceLabel(source.label);
                             setSourceKind(source.kind);
-                            if (source.kind === "postgres") {
+                            if (source.kind !== "jsonapi") {
                               setPgHost(source.host);
                               setPgPort(String(source.port));
                               setPgDatabase(source.database);
                               setPgUsername(source.username);
-                              setPgSchema(source.schema);
-                              setPgSsl(source.ssl);
+                              setPgSchema(source.schema ?? "");
+                              setWriteEnabled(Boolean(source.writeEnabled));
+                              setAuthSource(source.authSource ?? "admin");
+                              setTrustCertificate(
+                                Boolean(source.trustServerCertificate),
+                              );
+                              setPgSsl(
+                                source.kind === "mssql"
+                                  ? source.encrypt !== false
+                                  : source.ssl !== false,
+                              );
                             } else {
                               setBaseUrl(source.baseUrl);
                             }
@@ -1071,7 +1064,7 @@ export default function CollectionSourcesPanel({
               </CardTitle>
               <CardDescription className="text-xs leading-relaxed">
                 Asocia una colección del catálogo de dominio, un recurso
-                JSON:API o una tabla PostgreSQL de solo lectura para generar
+                JSON:API o una tabla o colección de base de datos para generar
                 vistas de CRM.
               </CardDescription>
             </CardHeader>
@@ -1087,7 +1080,7 @@ export default function CollectionSourcesPanel({
                     value={mode}
                     onChange={(e) =>
                       setMode(
-                        e.target.value as "domain" | "jsonapi" | "postgres",
+                        e.target.value as "domain" | "jsonapi" | DatabaseKind,
                       )
                     }
                   >
@@ -1095,9 +1088,11 @@ export default function CollectionSourcesPanel({
                       Colección existente del dominio
                     </option>
                     <option value="jsonapi">Recurso JSON:API externo</option>
-                    <option value="postgres">
-                      Tabla PostgreSQL (solo lectura)
-                    </option>
+                    {Object.entries(databaseKinds).map(([kind, info]) => (
+                      <option key={kind} value={kind}>
+                        Base {info.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1153,8 +1148,8 @@ export default function CollectionSourcesPanel({
                         <option value="">Selecciona una fuente</option>
                         {sources.data
                           ?.filter((source) =>
-                            mode === "postgres"
-                              ? source.kind === "postgres"
+                            isDatabaseKind(mode)
+                              ? source.kind === mode
                               : source.kind === "jsonapi",
                           )
                           .map((source) => (
@@ -1168,25 +1163,25 @@ export default function CollectionSourcesPanel({
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                       <div className="grid gap-1.5 text-sm">
                         <Label htmlFor="remote-resource-input">
-                          {mode === "postgres"
+                          {isDatabaseKind(mode)
                             ? "Tabla (vacío para listar)"
                             : "Recurso remoto"}
                         </Label>
                         <Input
                           id="remote-resource-input"
                           aria-label={
-                            mode === "postgres"
+                            isDatabaseKind(mode)
                               ? "Tabla (vacío para listar)"
                               : "Recurso remoto"
                           }
-                          required={mode !== "postgres"}
+                          required={!isDatabaseKind(mode)}
                           value={resource}
                           onChange={(e) => {
                             setResource(e.target.value);
                             suggestName(e.target.value);
                           }}
                           placeholder={
-                            mode === "postgres" ? "orders" : "contacts"
+                            isDatabaseKind(mode) ? "orders" : "contacts"
                           }
                         />
                       </div>
@@ -1196,14 +1191,14 @@ export default function CollectionSourcesPanel({
                         disabled={
                           busy ||
                           !remoteSource ||
-                          (mode !== "postgres" && !resource.trim())
+                          (!isDatabaseKind(mode) && !resource.trim())
                         }
                         onClick={() => void inspectSource()}
                       >
                         <Search className="size-3.5 mr-1.5" />
                         {busy
                           ? "Analizando…"
-                          : mode === "postgres"
+                          : isDatabaseKind(mode)
                             ? "Analizar tabla"
                             : "Analizar recurso"}
                       </Button>
@@ -1241,11 +1236,50 @@ export default function CollectionSourcesPanel({
                       />
                     </div>
 
-                    {mode === "postgres" ? (
+                    {isDatabaseKind(mode) && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="database-id-column">
+                            Identificador único (opcional)
+                          </Label>
+                          <Input
+                            id="database-id-column"
+                            value={databaseIdColumn}
+                            onChange={(e) =>
+                              setDatabaseIdColumn(e.target.value)
+                            }
+                            placeholder={
+                              mode === "mongodb" ? "_id" : "Clave primaria"
+                            }
+                          />
+                        </div>
+                        {mode === "mongodb" && (
+                          <div className="grid gap-1.5">
+                            <Label htmlFor="mongodb-id-type">
+                              Tipo de identificador
+                            </Label>
+                            <select
+                              id="mongodb-id-type"
+                              className="h-9 rounded-md border bg-background px-3"
+                              value={mongoIdType}
+                              onChange={(e) =>
+                                setMongoIdType(
+                                  e.target.value as "string" | "objectId",
+                                )
+                              }
+                            >
+                              <option value="objectId">ObjectId</option>
+                              <option value="string">Texto</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isDatabaseKind(mode) ? (
                       <p className="text-xs text-muted-foreground">
-                        La tabla debe tener primary key de una columna. La
-                        colección resultante es de solo lectura: sin escrituras
-                        ni relaciones remotas (usa relaciones locales).
+                        Las operaciones dependen del identificador único y de
+                        los permisos de escritura de la fuente. Las vistas son
+                        de solo lectura.
                       </p>
                     ) : (
                       <div className="grid gap-1.5 text-sm">
@@ -1421,8 +1455,8 @@ export default function CollectionSourcesPanel({
                               ? "Dominio"
                               : binding.kind === "crm"
                                 ? "HubSpot"
-                                : binding.kind === "postgres"
-                                  ? "PostgreSQL"
+                                : isDatabaseKind(binding.kind)
+                                  ? databaseKinds[binding.kind].label
                                   : binding.sourceId}
                           </Badge>
                         </div>
@@ -1431,25 +1465,63 @@ export default function CollectionSourcesPanel({
                             ? "Colección del dominio"
                             : binding.kind === "crm"
                               ? "HubSpot"
-                              : binding.kind === "postgres"
-                                ? `PostgreSQL · ${binding.sourceId}`
+                              : isDatabaseKind(binding.kind)
+                                ? `${databaseKinds[binding.kind].label} · ${binding.sourceId}`
                                 : binding.sourceId}{" "}
                           · {binding.resource}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        {!["crm", "postgres"].includes(binding.kind) && (
+                        {isDatabaseKind(binding.kind) && (
                           <Button
                             type="button"
-                            size="sm"
                             variant="outline"
-                            onClick={() => setOperationBinding(binding)}
+                            size="sm"
+                            disabled={busy}
+                            onClick={async () => {
+                              setBusy(true);
+                              setError("");
+                              try {
+                                const object = await request<CrmObject>(
+                                  `/objects/${encodeURIComponent(binding.name)}`,
+                                );
+                                const next = await request<CrmObject>(
+                                  `/collection-bindings/${encodeURIComponent(binding.name)}/sync`,
+                                  "POST",
+                                  { version: object.version },
+                                );
+                                await client.invalidateQueries();
+                                setNotice(
+                                  next.config.studio?.collection?.schemaIssues
+                                    ?.length
+                                    ? next.config.studio.collection.schemaIssues.join(
+                                        "; ",
+                                      )
+                                    : "Campos sincronizados.",
+                                );
+                              } catch (e) {
+                                setError(errorText(e));
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
                           >
-                            <SlidersHorizontal className="size-3.5 mr-1.5" />
-                            Operaciones
+                            Sincronizar campos
                           </Button>
                         )}
+                        {binding.kind !== "crm" &&
+                          !isDatabaseKind(binding.kind) && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setOperationBinding(binding)}
+                            >
+                              <SlidersHorizontal className="size-3.5 mr-1.5" />
+                              Operaciones
+                            </Button>
+                          )}
                         <Button
                           type="button"
                           size="sm"

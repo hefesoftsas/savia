@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(306);
+    expect(names).toHaveLength(308);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -73,6 +73,8 @@ describe("full D1 schema projection", () => {
         "crm_collection_versions",
         "crm_sync_changes",
         "crm_sync_receipts",
+        "crm_record_history",
+        "crm_record_history_context",
         "offline_collection_policies",
         "crm_solution_installations",
         "crm_extension_installations",
@@ -104,6 +106,20 @@ describe("full D1 schema projection", () => {
         "crm_integration_runs",
         "crm_notes",
         "crm_files",
+        "crm_file_revisions",
+        "crm_access_deliveries",
+        "workflows",
+        "workflow_versions",
+        "workflow_events",
+        "workflow_executions",
+        "workflow_jobs",
+        "workflow_tasks",
+        "workflow_write_context",
+        "access_revisions",
+        "access_roles",
+        "access_grants",
+        "access_assignments",
+        "access_audit",
         "crm_file_drafts",
         "crm_automations",
         "crm_automation_runs",

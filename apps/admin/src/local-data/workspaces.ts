@@ -38,7 +38,10 @@ export function createWorkspaceManager(
       const saved = await readWorkspaceMetadata<T>(key);
       if (saved !== undefined) {
         const lastRevalidated = revalidatedWorkspaceMetadata.get(key) ?? 0;
-        if (navigator.onLine !== false && Date.now() - lastRevalidated > 60_000) {
+        if (
+          navigator.onLine !== false &&
+          Date.now() - lastRevalidated > 60_000
+        ) {
           revalidatedWorkspaceMetadata.set(key, Date.now());
           void load()
             .then((value) => writeWorkspaceMetadata(key, value))
@@ -73,7 +76,7 @@ export function createWorkspaceManager(
         String(JSON.parse(principal)[1]),
       );
       let closed = false;
-      const syncNow = async (collection?: string) => {
+      const syncNow = async (collection?: string, force = false) => {
         if (closed || expected !== generation) return;
         if (await store.authorizationError()) {
           // This is a real authenticated request for this tenant. Cached session
@@ -92,7 +95,7 @@ export function createWorkspaceManager(
           await store.resumeAuthorization();
           coordinator.start();
         }
-        await coordinator.syncNow(collection);
+        await coordinator.syncNow(collection, force);
       };
       const workspace = {
         store,
@@ -103,6 +106,11 @@ export function createWorkspaceManager(
           syncNow,
           coordinator.requestSync,
         ),
+        resolveBundle: async (mutationId: string, mode: "server" | "local") => {
+          if (closed || expected !== generation)
+            throw new Error("La sesión cambió.");
+          await coordinator.resolveBundle(mutationId, mode);
+        },
         requestSync: coordinator.requestSync,
         syncNow,
         close: () => {

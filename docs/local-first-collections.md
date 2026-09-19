@@ -11,8 +11,8 @@ visible record and its outbox mutation in one local transaction. The UI can fini
 without waiting for HTTP. Server validation, authorization and business rules
 remain authoritative; rejected edits remain visible in the synchronization panel.
 
-Each database has five fixed stores: `records`, `collections`, `outbox`,
-`syncState`, and `conflicts`. Collection names are data, not IndexedDB schema.
+Each database has six fixed stores: `records`, `collections`, `outbox`,
+`syncState`, `conflicts`, and `linkSnapshots`. Collection names are data, not IndexedDB schema.
 Creating a collection does not upgrade the database version. Scope includes the
 API environment, principal, domain API prefix and permissions snapshot. No access
 tokens are persisted by this subsystem.
@@ -48,6 +48,18 @@ durable pull cursor, not a socket event, establishes completeness. A central
 jitter. Local queries use IndexedDB indexes for pagination and ordering; complex
 filters use scalar index ranges and set intersections/unions. Derived match IDs
 and exact totals are reused across pages.
+
+## Related form bundles
+
+Prepared parent/detail forms save all local records, complete link snapshots and one
+outbox entry atomically. The fixed `linkSnapshots` store is introduced by database
+version 2; adding collections does not create additional schema versions. Bundles
+use stable client IDs and replay the same receipt key after uncertain network
+failures. Ordinary writes cannot overlap records in a pending bundle. Conflicts
+are resolved for the complete form using fresh server records and links, including
+newly linked records. Inverse links whose complete snapshot is unknown remain
+unavailable offline until synchronized. See [related record editing](related-record-editing.md)
+for preparation requirements and limits.
 
 ## Offline access and recovery
 
@@ -175,7 +187,24 @@ measured the former compound-filter scan at 283.9 ms, the indexed first query at
 not production latency guarantees. Unrestricted first-time text search still does
 work proportional to the collection; its result is reused for later pages.
 
-
 ## Scoped permissions
 
 See [Roles and permissions](permissions.md) for policy revision binding, creator attribution, row removals, field redaction and quarantine behavior. Policy changes require clearing old projections before replay. An acknowledged mutation is reauthorized against the current record before its response is returned. The existing offline lease still bounds disconnected access.
+
+## Application updates and retired assets
+
+The private bootstrap registers the service worker before loading the application modules. Returning to a visible tab or reconnecting checks for a new worker, at most once per minute and without polling. A replacement controller shows an update notice; it never reloads an open form automatically.
+
+If a deployment removes an old lazy-loaded JavaScript or stylesheet asset, both the boot boundary and the administrative error boundary offer **Actualizar y recargar** instead of retrying the same rejected module import. This recovery code is part of the statically imported boot shell. On explicit confirmation it checks the worker script without the HTTP cache, waits for the replacement worker to activate, then reloads the complete document so module failures are no longer cached in memory. Offline, failed, redundant or stalled installations remain retryable; the overall update deadline is 15 seconds, with no automatic reload loop.
+
+Recovery never clears IndexedDB, pending mutation queues, caches or credentials. A full reload still discards form edits that have not been saved locally, so the interface explains that before confirmation. Public form visitors neither register nor update the administrative worker; their recovery only reloads their document. Browsers without service workers also use a normal document reload.
+
+Clients already running a version from before this recovery mechanism may require one complete reload to receive it. Subsequent deployments expose the update and recovery controls in the running application.
+
+## Synchronization visibility and recovery
+
+The collection workspace keeps the pending-change count visible while disconnected and shows activity while its coordinator holds the synchronization lock. A persisted **Última comprobación** timestamp records the last successful full workspace pass, survives reopening the app and is shared across tabs. It does not mean every edit was accepted: rejected edits and conflicts remain separately visible. Collection-only provisioning and failed or cancelled passes do not advance this timestamp.
+
+Transient synchronization failures now appear in the status bar while the existing bounded automatic backoff continues. **Reintentar sincronización** requests one full pass using the same durable mutation IDs; it never clears the outbox or schedules an extra pass after success. The manual button is disabled while offline or while this workspace is synchronizing. Storage-capacity and authorization failures keep their existing stop/recovery rules. Quarantined edits remain preserved but are excluded from visible pending/problem counts and recovery exports.
+
+The status view reports local storage read failures instead of silently presenting stale success, and ignores stale asynchronous snapshots after newer updates. Activity reflects this tab's coordinator; committed queue changes and the last full-check timestamp are observed across tabs. Synchronization runs while the collection workspace is open, not as an operating-system background service.

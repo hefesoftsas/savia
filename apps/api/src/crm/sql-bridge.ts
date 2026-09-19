@@ -1,4 +1,8 @@
 import {
+  createDatabaseBridgeClient,
+  type DatabaseBridgeClient,
+} from "./database-bridge";
+import {
   bridgeIntrospectColumnsResultSchema,
   bridgeIntrospectTablesResultSchema,
   bridgeQueryResultSchema,
@@ -33,6 +37,7 @@ function fail(
 }
 
 export type SqlBridgeClient = {
+  database?: DatabaseBridgeClient;
   listTables(connection: BridgeConnectionWithPassword): Promise<BridgeTable[]>;
   getColumns(
     connection: BridgeConnectionWithPassword,
@@ -146,6 +151,7 @@ export function createSqlBridgeClient(
   }
 
   return {
+    database: createDatabaseBridgeClient(config),
     listTables: (connection) =>
       post("/introspect", { connection }, (value) => {
         const parsed = bridgeIntrospectTablesResultSchema.parse(value);

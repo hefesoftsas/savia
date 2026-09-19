@@ -68,3 +68,18 @@ and rerun after correction; production timeouts were not increased to mask them.
 
 Local run logs, screenshots and artifact checksums are retained under
 `.cache/insurance-qa/` and are not committed as source.
+
+## Integration with current main
+
+The plugin suite was integrated with `cd4fbc5` from main on 2026-09-19.
+Conflicts retained both the new workflow timing and record-history integration,
+the portal access context, and the current 308-table schema projection.
+Dependencies were reconciled with pnpm. The combined tree passed:
+
+- Admin: 913 tests in 171 files.
+- API: 455 tests in 67 files.
+- Workspace: 645 tests passed; four database-bridge tests remained skipped.
+- Repository and boundary contracts: 58 tests passed.
+- Full typecheck, production admin build, conflict-file formatting and diff checks.
+
+The integration run logs use the `merge-` prefix under `.cache/insurance-qa/`.

@@ -714,18 +714,23 @@ it("publishes bounded hints from tenant and platform bundle routes only after su
         },
       } as any,
     });
-    const request = (name: string) =>
+    const request = (name: string, principal?: string) =>
       app.request(prefix + "/record-bundles/parents", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Idempotency-Key": crypto.randomUUID(),
+          ...(principal !== undefined
+            ? { "X-Savia-Sync-Principal": principal }
+            : {}),
         },
         body: JSON.stringify({
           record: { data: { name } },
           relations: [{ relationId, rows: [{ data: { name: "Child" } }] }],
         }),
       });
+    expect((await request("Wrong principal", "other-user")).status).toBe(403);
+    expect(events).toHaveLength(0);
     const invalid = await request("");
     expect(invalid.status).toBe(422);
     expect(events).toHaveLength(0);
@@ -744,6 +749,392 @@ it("publishes bounded hints from tenant and platform bundle routes only after su
         }),
       ]),
     );
-    expect(await response.json()).toHaveProperty("related");
+    const saved: any = await response.json();
+    expect(saved).toHaveProperty("related");
+    for (const path of [
+      `/records/parents/${saved.data.id}`,
+      `/record-links/parents/${saved.data.id}`,
+    ]) {
+      const denied = await app.request(prefix + path, {
+        headers: { "X-Savia-Sync-Principal": "other-user" },
+      });
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).not.toHaveProperty("data");
+      const allowed = await app.request(prefix + path, {
+        headers: { "X-Savia-Sync-Principal": "test-platform-admin" },
+      });
+      expect(allowed.status).toBe(200);
+    }
   }
+});
+
+it("preserves offline create IDs and replays the original receipt after later edits", async () => {
+  const { relationId, call } = await fixture();
+  const parentId = crypto.randomUUID(),
+    childId = crypto.randomUUID(),
+    key = crypto.randomUUID();
+  const body = {
+    record: { clientId: parentId, data: { name: "Parent" } },
+    relations: [
+      { relationId, rows: [{ clientId: childId, data: { name: "Child" } }] },
+    ],
+  };
+  const response = await call(body, key);
+  expect(response.status).toBe(200);
+  const saved: any = await response.json();
+  expect(saved.data.id).toBe(parentId);
+  expect(saved.related[0].records[0].id).toBe(childId);
+  expect(
+    (
+      await call({
+        record: { id: parentId, version: 1, data: { name: "Later" } },
+        relations: [],
+      })
+    ).status,
+  ).toBe(200);
+  expect(await (await call(body, key)).json()).toEqual(saved);
+  expect((await call(body)).status).toBe(409);
+});
+it("rejects malformed or edit/link client IDs without writing any records", async () => {
+  const { tenant, relationId, call } = await fixture();
+  for (const row of [
+    { clientId: "bad", data: { name: "Child" } },
+    {
+      clientId: crypto.randomUUID(),
+      id: crypto.randomUUID(),
+      data: { name: "Child" },
+    },
+    { clientId: crypto.randomUUID(), version: 1, data: { name: "Child" } },
+    { clientId: crypto.randomUUID() },
+  ]) {
+    expect(
+      (
+        await call({
+          record: { data: { name: "Parent" } },
+          relations: [{ relationId, rows: [row] }],
+        })
+      ).status,
+    ).toBe(422);
+  }
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+    )
+      .bind(tenant)
+      .first(),
+  ).toEqual({ count: 0 });
+});
+
+it("rolls back a parent when a child create ID collides, including deleted records", async () => {
+  const { tenant, relationId, call } = await fixture();
+  const childId = crypto.randomUUID();
+  const original = await call({
+    record: { data: { name: "Original" } },
+    relations: [
+      { relationId, rows: [{ clientId: childId, data: { name: "Child" } }] },
+    ],
+  });
+  expect(original.status).toBe(200);
+  for (const deleted of [false, true]) {
+    if (deleted)
+      await env.DB.prepare(
+        "UPDATE crm_records SET deleted_at='2026-09-19' WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, childId)
+        .run();
+    const response = await call({
+      record: { clientId: crypto.randomUUID(), data: { name: "Uncommitted" } },
+      relations: [
+        {
+          relationId,
+          rows: [{ clientId: childId, data: { name: "Overwrite" } }],
+        },
+      ],
+    });
+    expect(response.status).toBe(409);
+    expect(
+      await env.DB.prepare(
+        "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      )
+        .bind(tenant)
+        .first(),
+    ).toEqual({ count: 2 });
+    expect(
+      await env.DB.prepare(
+        "SELECT json_extract(data,'$.name') name FROM crm_records WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, childId)
+        .first(),
+    ).toEqual({ name: "Child" });
+  }
+});
+
+it("enforces scoped bundle row and field grants and projects immutable replays", async () => {
+  const { accessDatabase } =
+    await import("@savia/crm-server/access-authorization");
+  const { tenant, relationId } = await fixture();
+  const scope = `domain:${tenant}` as const;
+  await env.DB.prepare(
+    "INSERT INTO access_revisions(scope,revision) VALUES (?,1)",
+  )
+    .bind(scope)
+    .run();
+  const policy = {
+    principalId: "bundle-owner",
+    scope,
+    revision: 1,
+    grants: ["parents", "children"].flatMap((name) =>
+      (["read", "create", "update"] as const).map((action) => ({
+        id: `${name}-${action}`,
+        roleId: "form-owner",
+        resource: `collection:${name}` as const,
+        action,
+        predicate: { all: true as const },
+        fields: ["name"],
+      })),
+    ),
+  };
+  const call = (
+    input: unknown,
+    grants = policy.grants,
+    key = crypto.randomUUID(),
+    revision = 1,
+  ) =>
+    createRecordBundlesApp({
+      db: accessDatabase(env.DB, { ...policy, grants, revision }),
+      tenant,
+    }).request("http://test/api/record-bundles/parents", {
+      method: "POST",
+      headers: { "content-type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify(input),
+    });
+  const body = {
+    record: { clientId: crypto.randomUUID(), data: { name: "Parent" } },
+    relations: [
+      {
+        relationId,
+        rows: [{ clientId: crypto.randomUUID(), data: { name: "Child" } }],
+      },
+    ],
+  };
+  expect(
+    (
+      await call(
+        body,
+        policy.grants.filter((g) => g.resource !== "collection:children"),
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await call(
+        body,
+        policy.grants.map((g) => ({
+          ...g,
+          fields: g.action === "create" ? [] : g.fields,
+        })),
+      )
+    ).status,
+  ).toBe(403);
+  const key = crypto.randomUUID();
+  const response = await call(body, policy.grants, key);
+  expect(response.status, await response.clone().text()).toBe(200);
+  const saved: any = await response.json();
+  const { createCollectionGateway } =
+    await import("../src/crm/collection-gateway");
+  const actor = await platformAdministratorAuthenticator().authenticate(
+    new Request("http://test"),
+    env.DB,
+  );
+  const gateway = (grants = policy.grants) =>
+    createCollectionGateway({
+      db: env.DB,
+      files: env.DOCUMENTS,
+      tenant,
+      actor,
+      accessPolicy: { ...policy, grants },
+      seedObjects: [],
+    });
+  const replay = await gateway().fetch(
+    new Request("http://test/api/record-bundles/parents", {
+      method: "POST",
+      headers: { "content-type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify(body),
+    }),
+  );
+  const staleHeaders = new Request("http://test/api/record-bundles/parents", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": key,
+      "X-Savia-Policy-Revision": "0",
+    },
+    body: JSON.stringify(body),
+  });
+  expect((await gateway().fetch(staleHeaders)).status).toBe(403);
+  const metadata = await gateway().fetch(
+    new Request("http://test/api/collection-relations"),
+  );
+  expect(metadata.status).toBe(200);
+  expect(((await metadata.json()) as any).data.map((d: any) => d.id)).toContain(
+    relationId,
+  );
+  const deniedMetadata = await gateway(
+    policy.grants.filter((g) => g.resource !== "collection:children"),
+  ).fetch(new Request("http://test/api/collection-relations"));
+  expect(((await deniedMetadata.json()) as any).data).toEqual([]);
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(saved);
+  const linkRequest = () =>
+    new Request(
+      `http://test/api/record-links/parents/${saved.data.id}?includeRecords=true`,
+    );
+  const links = await gateway().fetch(linkRequest());
+  expect(links.status, await links.clone().text()).toBe(200);
+  expect(((await links.json()) as any).data[0].records[0].data.name).toBe(
+    "Child",
+  );
+  const hidden = await gateway(
+    policy.grants.map((g) => ({
+      ...g,
+      fields: g.action === "read" ? [] : g.fields,
+    })),
+  ).fetch(linkRequest());
+  expect(hidden.status).toBe(200);
+  expect(
+    ((await hidden.json()) as any).data[0].records[0].data,
+  ).not.toHaveProperty("name");
+  expect(
+    (
+      await gateway(
+        policy.grants.filter((g) => g.resource !== "collection:children"),
+      ).fetch(linkRequest())
+    ).status,
+  ).toBe(403);
+  expect(saved.data.name).toBe("Parent");
+  expect(
+    await env.DB.prepare(
+      "SELECT created_by FROM crm_records WHERE tenant_id=? AND id=?",
+    )
+      .bind(tenant, saved.data.id)
+      .first(),
+  ).toEqual({ created_by: "bundle-owner" });
+  const projected: any = await (
+    await call(
+      body,
+      policy.grants.map((g) => ({
+        ...g,
+        fields: g.action === "read" ? [] : g.fields,
+      })),
+      key,
+    )
+  ).json();
+  expect(projected.data).not.toHaveProperty("name");
+  expect(projected.related[0].records[0]).not.toHaveProperty("name");
+  const deniedRows = policy.grants.map((g) => ({
+    ...g,
+    predicate: {
+      field: "name",
+      op: "eq" as const,
+      value: { literal: "Unrelated" },
+    },
+  }));
+  expect(
+    (await call(body, deniedRows as typeof policy.grants, key)).status,
+  ).toBe(403);
+  expect(
+    (
+      await call(
+        {
+          ...body,
+          record: { id: saved.data.id, version: 1, data: { name: "Changed" } },
+        },
+        deniedRows as typeof policy.grants,
+      )
+    ).status,
+  ).toBe(403);
+  const unrelatedRelation = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality,storage) VALUES(?,?,?,?,?,?,?,?)",
+  )
+    .bind(
+      tenant,
+      unrelatedRelation,
+      "parents",
+      "children",
+      "Other",
+      "Other",
+      "many-to-many",
+      "fields",
+    )
+    .run();
+  expect(
+    (
+      await gateway().fetch(
+        new Request(
+          `http://test/api/record-links/parents/${saved.data.id}?relationId=${relationId}&direction=outgoing`,
+        ),
+      )
+    ).status,
+  ).toBe(200);
+  expect((await gateway().fetch(linkRequest())).status).toBe(403);
+  await env.DB.prepare("UPDATE access_revisions SET revision=2 WHERE scope=?")
+    .bind(scope)
+    .run();
+  const stale = {
+    record: { clientId: crypto.randomUUID(), data: { name: "Stale" } },
+    relations: [],
+  };
+  expect((await call(stale)).status).toBe(409);
+  expect(
+    await env.DB.prepare("SELECT count(*) n FROM crm_records WHERE tenant_id=?")
+      .bind(tenant)
+      .first(),
+  ).toEqual({ n: 2 });
+});
+
+it("journals each committed bundle member once without duplicating workflow events on replay", async () => {
+  const { tenant, relationId, call } = await fixture();
+  for (const collection of ["parents", "children"]) {
+    const definition = JSON.stringify({
+      trigger: { type: "created", collection },
+      nodes: [{ id: "start", type: "finish" }],
+    });
+    await env.DB.prepare(
+      "INSERT INTO workflows(workspace_id,id,name,definition,created_by) VALUES(?,?,?,?,?)",
+    )
+      .bind(tenant, collection, collection, definition, "owner")
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO workflow_versions(workspace_id,id,workflow_id,definition,owner_id,revision) VALUES(?,?,?,?,?,1)",
+    )
+      .bind(tenant, collection + "-v1", collection, definition, "owner")
+      .run();
+    await env.DB.prepare(
+      "UPDATE workflows SET enabled=1,published_version=? WHERE workspace_id=? AND id=?",
+    )
+      .bind(collection + "-v1", tenant, collection)
+      .run();
+  }
+  const input = {
+      record: { clientId: crypto.randomUUID(), data: { name: "Parent" } },
+      relations: [
+        {
+          relationId,
+          rows: [{ clientId: crypto.randomUUID(), data: { name: "Child" } }],
+        },
+      ],
+    },
+    key = crypto.randomUUID();
+  expect((await call(input, key)).status).toBe(200);
+  expect((await call(input, key)).status).toBe(200);
+  expect((await call(input)).status).toBe(409);
+  for (const table of ["crm_records", "workflow_events", "workflow_executions"])
+    expect(
+      await env.DB.prepare(
+        `SELECT count(*) n FROM ${table} WHERE ${table === "crm_records" ? "tenant_id" : "workspace_id"}=?`,
+      )
+        .bind(tenant)
+        .first(),
+    ).toEqual({ n: 2 });
 });

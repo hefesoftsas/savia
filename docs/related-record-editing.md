@@ -11,7 +11,7 @@ Local collection forms can create, link, edit and unlink related records while e
 3. Choose **Selector de registros**, **Subformulario**, or **Tabla editable**. Tables are available on the multiple side of a relation.
 4. Choose visible child fields and the allowed create, edit, link and unlink actions. Required child fields remain visible. Define validation rules in the related collection.
 
-Action settings restrict what this form may submit; they do not grant access beyond the authenticated user's collection permissions. External collection adapters retain their existing selector behavior.
+Action settings restrict what this form may submit; they do not grant access beyond the authenticated user's collection permissions. Scoped roles must have the corresponding parent and child record grants and permission to write each bound relation field. The server enforces row filters, projects readable fields and guards the permission revision inside the atomic transaction. Scoped local link reads are supported; standalone scoped link writes remain disabled. External collection adapters retain their existing selector behavior.
 
 Subforms expose child fields inside the parent editor. Tables show a bounded page of rows and open a child editor on demand. Changes stay in the parent form until its save succeeds. **Desvincular** removes the link and preserves the original related record.
 
@@ -19,9 +19,11 @@ Subforms expose child fields inside the parent editor. Tables show a bounded pag
 
 Authenticated local workspaces keep related-form drafts in IndexedDB, scoped by environment, user, API scope and permissions. Closing a form or a failed save preserves its draft. Reopening restores the original record versions and relation selections, so a concurrent server change produces a conflict rather than silently overwriting newer data. A successful submission clears the draft.
 
-Submitting a related form requires a connection. Pending ordinary collection writes are synchronized first. Offline edits remain drafts; a related bundle is not split into independent offline writes. In contexts without a local workspace, edits remain in the open form and are not persisted across closing it. Storage failures are shown to the user.
+Saving a prepared related form in a local workspace commits the parent, details, links and one outbox operation in a single IndexedDB transaction. The form closes immediately with a device-save confirmation; records remain marked pending until the server acknowledges the complete bundle. A failed local transaction preserves the draft. Collections, relation definitions and existing links must be downloaded before offline editing; unknown links are never treated as an empty selection. In contexts without a local workspace, submission still requires connectivity.
 
-The server requires an idempotency key, preventing a retry after a lost response from creating duplicate details. The draft preserves that key for retries. Automation delivery uses the rule definitions captured with the original commit; replaying a saved submission does not apply newly added or changed rules to that historical event. Reloading data after a conflict requires reviewing or discarding the stale draft; simply retrying does not bypass version checks.
+On reconnection, Web Locks serialize bundle synchronization with ordinary writes. Stable client record IDs and the original idempotency key prevent a lost response from creating duplicate details. A record already owned by another pending operation cannot enter a second bundle. The server validates the complete request and applies its records, links and receipt atomically. Automation replay uses the rule definitions captured by the original commit.
+
+The synchronization panel resolves a rejected or conflicting form as one unit: accept current server records, or explicitly reapply local values using freshly downloaded versions and complete links. Reapplying creates a new operation key; automatic network retries retain the original key. Missing or deleted records cannot be silently resurrected. Resolution requires connectivity. Permission changes quarantine pending payloads and remove their recovery/export controls. Expired authentication hides local data while preserving uncertain operations for the same account and unchanged policy.
 
 ## Current bounds
 

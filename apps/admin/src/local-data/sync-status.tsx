@@ -16,10 +16,17 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
   const [deletedConflicts, setDeletedConflicts] = useState(new Set<string>());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [readError, setReadError] = useState("");
+  const [loaded, setLoaded] = useState(false);
   const online = useOnlineStatus();
   useEffect(() => {
     let active = true;
+    let revision = 0;
+    setLoaded(false);
+    setError("");
+    setReadError("");
     const refresh = () => {
+      const current = ++revision;
       void Promise.all([
         workspace.store.status(),
         workspace.store.db.outbox.toArray(),
@@ -28,7 +35,9 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
         workspace.store.db.conflicts.toArray(),
       ])
         .then(([next, ops, states, collections, conflicts]) => {
-          if (!active) return;
+          if (!active || current !== revision) return;
+          setLoaded(true);
+          setReadError("");
           setStatus(next);
           setProblems(
             ops.filter((op) => !op.quarantined && op.state !== "pending"),
@@ -50,7 +59,12 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
                 ),
           );
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (active && current === revision)
+            setReadError(
+              "No se pudo leer el estado local. Tus cambios no se han descartado. Reintenta la sincronización.",
+            );
+        });
     };
     refresh();
     const unsubscribe = workspace.store.subscribe(refresh);
@@ -59,12 +73,12 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
       unsubscribe();
     };
   }, [workspace]);
-  const act = async (action: () => Promise<unknown>) => {
+  const act = async (action: () => Promise<unknown>, request = true) => {
     setBusy(true);
     setError("");
     try {
       await action();
-      workspace.requestSync();
+      if (request) workspace.requestSync();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo sincronizar.");
     } finally {
@@ -77,25 +91,52 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
       className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-sm"
     >
       <span role="status" aria-live="polite" className="text-muted-foreground">
-        {status.authorizationError
-          ? "Acceso revocado · vuelve a iniciar sesión"
-          : !hasLocal
-            ? "Colecciones remotas · requieren conexión"
-            : !ready
-              ? "Preparando datos locales"
-              : !online
-                ? "Sin conexión · datos locales"
-                : status.pending
-                  ? `${status.pending} cambios pendientes`
-                  : "Datos locales disponibles"}
+        {readError
+          ? "Estado local no disponible"
+          : !loaded
+            ? "Comprobando estado local…"
+            : status.authorizationError
+              ? "Acceso revocado · vuelve a iniciar sesión"
+              : status.syncing
+                ? "Sincronizando…"
+                : !online
+                  ? "Sin conexión · los cambios locales se enviarán al reconectar"
+                  : status.syncError
+                    ? "Sincronización interrumpida"
+                    : status.conflicts + status.errors > 0
+                      ? "Hay cambios que requieren atención"
+                      : !hasLocal
+                        ? "Colecciones remotas · requieren conexión"
+                        : !ready
+                          ? "Preparando datos locales"
+                          : "Datos locales disponibles"}
       </span>
+      {loaded && status.pending > 0 && (
+        <span>
+          {status.pending === 1
+            ? "1 cambio pendiente"
+            : `${status.pending} cambios pendientes`}
+        </span>
+      )}
+      {loaded && status.lastSyncedAt && (
+        <span className="text-muted-foreground">
+          Última comprobación:{" "}
+          <time dateTime={new Date(status.lastSyncedAt).toISOString()}>
+            {new Date(status.lastSyncedAt).toLocaleString()}
+          </time>
+        </span>
+      )}
       <Button
         size="sm"
         variant="ghost"
-        disabled={busy || !online}
-        onClick={() => void act(workspace.syncNow)}
+        disabled={busy || Boolean(status.syncing) || !online}
+        onClick={() => void act(workspace.syncNow, false)}
       >
-        Sincronizar
+        {busy || status.syncing
+          ? "Sincronizando…"
+          : status.syncError || readError
+            ? "Reintentar sincronización"
+            : "Sincronizar"}
       </Button>
       {status.conflicts + status.errors > 0 && (
         <details className="w-full">
@@ -109,17 +150,23 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
                 className="flex flex-wrap items-center gap-2"
               >
                 <span className="min-w-0 break-words">
-                  {op.collection}: {op.id} — {op.error}
+                  {op.collection}: {op.id}
+                  {op.action === "bundle" &&
+                    ` · Formulario completo (${op.bundle?.members.length ?? 1} registros)`}
+                  {" — "}
+                  {op.error}
                 </span>
-                {op.state === "conflict" && (
+                {op.action === "bundle" ? (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={busy}
+                      disabled={
+                        busy || !online || Boolean(status.authorizationError)
+                      }
                       onClick={() =>
                         void act(() =>
-                          workspace.store.acceptMaster(op.mutationId),
+                          workspace.resolveBundle(op.mutationId, "server"),
                         )
                       }
                     >
@@ -128,18 +175,49 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={busy || deletedConflicts.has(op.mutationId)}
+                      disabled={
+                        busy || !online || Boolean(status.authorizationError)
+                      }
                       onClick={() =>
                         void act(() =>
-                          workspace.store.retryWithLocal(op.mutationId),
+                          workspace.resolveBundle(op.mutationId, "local"),
                         )
                       }
                     >
                       Conservar mis cambios
                     </Button>
                   </>
+                ) : (
+                  op.state === "conflict" && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void act(() =>
+                            workspace.store.acceptMaster(op.mutationId),
+                          )
+                        }
+                      >
+                        Usar versión del servidor
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || deletedConflicts.has(op.mutationId)}
+                        onClick={() =>
+                          void act(() =>
+                            workspace.store.retryWithLocal(op.mutationId),
+                          )
+                        }
+                      >
+                        Conservar mis cambios
+                      </Button>
+                    </>
+                  )
                 )}
-                {op.state === "error" && (
+                {op.action !== "bundle" && op.state === "error" && (
                   <>
                     <Button
                       variant="outline"
@@ -194,6 +272,11 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
             Descargar cambios pendientes
           </Button>
         </details>
+      )}
+      {readError && (
+        <p role="alert" className="w-full text-destructive">
+          {readError}
+        </p>
       )}
       {status.syncError && (
         <p role="alert" className="w-full text-destructive">

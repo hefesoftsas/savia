@@ -1,3 +1,7 @@
+import {
+  canDuplicateRecord,
+  duplicateRecordValues,
+} from "./record-duplication";
 import { saveRelatedRecords } from "./save-related-records";
 import { reconcileLocalQueries } from "./local-query-sync";
 import { RecordOriginLinks } from "./record-origin-links";
@@ -375,6 +379,10 @@ function App({
     view === "remove-screen"
       ? objects.find((item) => item.name === selected)
       : undefined;
+  const [duplicate, setDuplicate] = useState<{
+    object: string;
+    values: Record<string, unknown>;
+  } | null>(null);
   const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
   const recordId = location.get("record");
   const object =
@@ -455,6 +463,7 @@ function App({
     setLocation(params);
     setMobile(false);
     setEditing(null);
+    setDuplicate(null);
   };
   const selectScreensTab = (tab: "menu" | "screens") => {
     const params = new URLSearchParams(location);
@@ -470,6 +479,7 @@ function App({
         : collectionCapabilities(object).update)
     )
       return;
+    setDuplicate(null);
     setWriteKey(crypto.randomUUID());
     const surface = recordSurface(object, record === "new" ? "create" : "edit");
     if (surface === "page") {
@@ -489,11 +499,18 @@ function App({
     }
     setEditing(record);
   };
+  const duplicateRecord = (record: CrmRecord) => {
+    if (!object || !canDuplicateRecord(object)) return;
+    const values = duplicateRecordValues(object, record);
+    editRecord("new");
+    setDuplicate({ object: object.name, values });
+  };
   useEffect(() => {
     if (embedded) return;
     const pop = () => {
       setLocation(new URLSearchParams(window.location.search));
       setEditing(null);
+      setDuplicate(null);
       setWriteKey(crypto.randomUUID());
     };
     window.addEventListener("popstate", pop);
@@ -720,12 +737,14 @@ function App({
   const capabilities = collectionCapabilities(object);
   const closeEditor = () => {
     setEditing(null);
+    setDuplicate(null);
     if (view === "create" || view === "edit") navigate(object.name);
   };
   const editorSurface = recordSurface(
     object,
     editing === "new" || view === "create" ? "create" : "edit",
   );
+  const copying = editing === "new" && duplicate?.object === object.name;
   const recordEditor =
     editing &&
     (editing === "new" ? capabilities.create : capabilities.update) ? (
@@ -739,20 +758,26 @@ function App({
         }
         title={
           editing === "new"
-            ? `Nuevo registro · ${object.label}`
+            ? `${copying ? "Duplicar registro" : "Nuevo registro"} · ${object.label}`
             : String(editing.name ?? "Editar registro")
         }
         description={
           editing === "new"
-            ? "Completa los datos. Los campos con * son obligatorios."
+            ? copying
+              ? "Se copiaron los campos simples editables. Se excluyen identificadores, propietarios, fechas de auditoría, campos únicos, ocultos o calculados, archivos y relaciones. Revisa los datos antes de guardar. Al cerrar se descarta esta copia."
+              : "Completa los datos. Los campos con * son obligatorios."
             : "Edita los datos y guarda tus cambios."
         }
         onClose={closeEditor}
       >
         {editing !== "new" && <RecordOriginLinks record={editing} />}
         <DynamicForm
+          key={writeKey}
+          ephemeralDraft={copying}
           object={object}
-          values={editing === "new" ? {} : editing}
+          values={
+            editing === "new" ? (copying ? duplicate.values : {}) : editing
+          }
           onCancel={editorSurface === "page" ? undefined : closeEditor}
           onSave={async (data, previous, relations, saveOptions) => {
             if (object.config.studio?.collection)
@@ -765,7 +790,13 @@ function App({
               previous ?? (editing === "new" ? undefined : editing);
             const creating = !target;
             if (relations)
-              return saveRelatedRecords(object.name, data, target, relations, saveOptions?.idempotencyKey ?? writeKey);
+              return saveRelatedRecords(
+                object.name,
+                data,
+                target,
+                relations,
+                saveOptions?.idempotencyKey ?? writeKey,
+              );
             const result = await api<{ data: CrmRecord }>(
               `/records/${object.name}${creating ? "" : "/" + target.id}`,
               creating ? "POST" : "PATCH",
@@ -781,9 +812,13 @@ function App({
           onUploadTemporaryAttachment={(field, file) =>
             uploadTemporaryR2Attachment(object.name, field, file)
           }
-          onSaved={() => {
+          onSaved={(saved) => {
             toast.success(
-              editing === "new" ? "Registro creado" : "Cambios guardados",
+              saved && saved._localPending
+                ? "Guardado en este dispositivo · sincronización pendiente"
+                : editing === "new"
+                  ? "Registro creado"
+                  : "Cambios guardados",
             );
             closeEditor();
             refresh();
@@ -1344,9 +1379,11 @@ function App({
       {recordId && capabilities.read && !editing && detailQuery.data && (
         <Suspense fallback={<Loading />}>
           <RecordDetail
+            key={`${object.name}:${recordId}`}
             object={object}
             record={detailQuery.data.data}
             onEdit={editRecord}
+            onDuplicate={duplicateRecord}
             onNavigate={(name, id) => navigate(name, "records", { record: id })}
             onQuotation={(record) =>
               navigate("cotizaciones", "records", { record: record.id })

@@ -258,6 +258,11 @@ describe("Identity and access", () => {
     await env.DB.exec("DELETE FROM identity_global_role");
     await env.DB.exec("DELETE FROM identity_principal");
     await env.DB.exec("DELETE FROM agencies");
+    // These fixtures recreate tenant IDs; clear their scoped ACL state as well.
+    await env.DB.exec("DELETE FROM access_roles WHERE scope LIKE 'tenant:%'");
+    await env.DB.exec(
+      "DELETE FROM access_revisions WHERE scope LIKE 'tenant:%'",
+    );
     await env.DB.exec("DELETE FROM tenants");
   });
 

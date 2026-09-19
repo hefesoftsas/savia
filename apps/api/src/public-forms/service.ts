@@ -1,3 +1,4 @@
+import { historyDatabase } from "@savia/crm-server/record-history-storage";
 import { HTTPException } from "hono/http-exception";
 import { getObject, createRecord } from "@savia/crm-server/services";
 import { validateRecord, type CrmObject } from "@savia/crm-shared/metadata";
@@ -537,9 +538,19 @@ export async function submitPublicForm(
       );
       if (Object.keys(values).some((field) => !stillPublic.has(field)))
         reject("The form changed. Request a new link.", 409);
-      await createRecord(db, link.tenant_id, link.object_name, values, {
-        idempotencyKey: "public-form:" + link.id + ":" + input.submissionId,
-      });
+      await createRecord(
+        historyDatabase(db, link.tenant_id, {
+          kind: "public-form",
+          id: link.id,
+          causeId: input.submissionId,
+        }),
+        link.tenant_id,
+        link.object_name,
+        values,
+        {
+          idempotencyKey: "public-form:" + link.id + ":" + input.submissionId,
+        },
+      );
     } else
       result = await options.quote!.execute({
         db,

@@ -1,14 +1,13 @@
 import { lazy, Suspense } from "react";
+import { registerPwaServiceWorker } from "./pwa/register-service-worker";
 
 const PrivateApp = lazy(async () => {
-  const [{ App }, { applyCachedAppearance }, { registerPwaServiceWorker }] =
-    await Promise.all([
-      import("./app"),
-      import("./components/admin/appearance-cache"),
-      import("./pwa/register-service-worker"),
-    ]);
-  applyCachedAppearance();
   registerPwaServiceWorker();
+  const [{ App }, { applyCachedAppearance }] = await Promise.all([
+    import("./app"),
+    import("./components/admin/appearance-cache"),
+  ]);
+  applyCachedAppearance();
   return { default: App };
 });
 const PublicForm = lazy(async () => {

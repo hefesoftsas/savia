@@ -1,5 +1,7 @@
 /** Staged relation changes submitted together with their parent record. */
 export type RelatedRecordRow = {
+  /** UUID reserved locally for a new row; never combined with id or version. */
+  clientId?: string;
   id?: string;
   version?: number;
   data?: Record<string, unknown>;
@@ -10,6 +12,11 @@ export type RelatedRecordChanges = {
   rows: RelatedRecordRow[];
 };
 export type RelatedRecordBundle = {
-  record: { id?: string; version?: number; data: Record<string, unknown> };
+  record: {
+    clientId?: string;
+    id?: string;
+    version?: number;
+    data: Record<string, unknown>;
+  };
   relations: RelatedRecordChanges[];
 };

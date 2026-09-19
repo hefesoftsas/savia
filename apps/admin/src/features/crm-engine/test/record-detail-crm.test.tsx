@@ -2,7 +2,13 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RecordDetail from "../record-detail";
 import { api } from "../api";
@@ -224,4 +230,45 @@ it("shows a right arrow when the record detail tabs overflow", async () => {
   expect(scrollBy).toHaveBeenCalledWith(
     expect.objectContaining({ left: expect.any(Number) }),
   );
+});
+it("reloads the source before duplication and refuses stale data after an access failure", async () => {
+  const record = { id: "source", name: "Old" };
+  const onDuplicate = vi.fn();
+  vi.mocked(api).mockResolvedValue({ data: { record, relations: [] } });
+  const object = {
+    name: "local",
+    label: "Local",
+    description: "",
+    config: makeConfig({ name: { type: "Textbox", label: "Name" } }),
+  };
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <RecordDetail
+        object={object}
+        record={record}
+        onEdit={vi.fn()}
+        onDuplicate={onDuplicate}
+        onClose={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  const button = await screen.findByRole("button", { name: "Duplicar" });
+  vi.mocked(api).mockRejectedValueOnce(new Error("Acceso denegado"));
+  fireEvent.click(button);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Acceso denegado");
+  expect(onDuplicate).not.toHaveBeenCalled();
+  vi.mocked(api).mockResolvedValue({
+    data: { record: { ...record, name: "Current" }, relations: [] },
+  });
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(onDuplicate).toHaveBeenCalledWith({ ...record, name: "Current" }),
+  );
+  expect(record.name).toBe("Old");
+  expect(vi.mocked(api).mock.calls.every((call) => !call[1])).toBe(true);
 });

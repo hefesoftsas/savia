@@ -276,18 +276,16 @@ it("caches extension settings metadata offline and invalidates on mutation", asy
   );
 
   // 1. First fetch reaches the network and caches to workspace metadata
-  const first = await transport(
-    "/api/extensions/insurance.quotes/settings",
-    { method: "GET" },
-  );
+  const first = await transport("/api/extensions/insurance.quotes/settings", {
+    method: "GET",
+  });
   expect(await first.json()).toEqual(settingsData);
   expect(network).toHaveBeenCalledTimes(1);
 
   // 2. Second fetch returns immediately from local cached metadata without network
-  const second = await transport(
-    "/api/extensions/insurance.quotes/settings",
-    { method: "GET" },
-  );
+  const second = await transport("/api/extensions/insurance.quotes/settings", {
+    method: "GET",
+  });
   expect(await second.json()).toEqual(settingsData);
   expect(network).toHaveBeenCalledTimes(1);
 
@@ -302,11 +300,117 @@ it("caches extension settings metadata offline and invalidates on mutation", asy
   // 4. Subsequent fetch after mutation goes back to the server
   const updatedData = { data: { value: { prefix: "COT-2-" }, version: 2 } };
   network.mockResolvedValueOnce(Response.json(updatedData));
-  const third = await transport(
-    "/api/extensions/insurance.quotes/settings",
-    { method: "GET" },
-  );
+  const third = await transport("/api/extensions/insurance.quotes/settings", {
+    method: "GET",
+  });
   expect(await third.json()).toEqual(updatedData);
   expect(network).toHaveBeenCalledTimes(3);
 });
 
+it("refreshes collection versions after saving history settings without caching history", async () => {
+  const local = { ...store(), scope: "history-settings-test" };
+  const network = vi
+    .fn()
+    .mockImplementation(async (path) =>
+      Response.json(
+        path === "/api/objects"
+          ? { data: [{ name: "contacts", version: 1 }] }
+          : { data: [], version: 1 },
+      ),
+    );
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  await transport("/api/objects");
+  await transport("/api/record-history-settings/contacts", { method: "PUT" });
+  network.mockResolvedValueOnce(
+    Response.json({ data: [{ name: "contacts", version: 2 }] }),
+  );
+  const refreshed = await transport("/api/objects");
+  expect(await refreshed.json()).toEqual({
+    data: [{ name: "contacts", version: 2 }],
+  });
+  await transport("/api/record-history/contacts/one");
+  await transport("/api/record-history/contacts/one");
+  expect(
+    network.mock.calls.filter(
+      ([path]) => path === "/api/record-history/contacts/one",
+    ),
+  ).toHaveLength(2);
+});
+
+it("blocks history recovery while the target has local pending edits", async () => {
+  const local = store();
+  Object.assign(local.db, {
+    outbox: { where: () => ({ equals: () => ({ count: async () => 1 }) }) },
+  });
+  Object.assign(local, { getPendingBundle: async () => null });
+  const network = vi.fn();
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  const result = await transport("/api/record-history/contacts/one/2/restore", {
+    method: "PUT",
+    body: JSON.stringify({
+      fields: ["name"],
+      side: "before",
+      expectedVersion: 2,
+    }),
+  });
+  expect(result.status).toBe(409);
+  expect(network).not.toHaveBeenCalled();
+});
+
+it("refreshes local data after successful history recovery without reporting refresh failure as a write failure", async () => {
+  const local = store();
+  Object.assign(local.db, {
+    outbox: { where: () => ({ equals: () => ({ count: async () => 0 }) }) },
+  });
+  Object.assign(local, { getPendingBundle: async () => null });
+  const network = vi.fn(async () => Response.json({ data: { version: 3 } }));
+  const sync = vi.fn(async () => {
+    throw new Error("Offline after commit");
+  });
+  const requestSync = vi.fn();
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    sync,
+    requestSync,
+  );
+  const result = await transport("/api/record-history/contacts/one/2/restore", {
+    method: "PUT",
+  });
+  expect(result.status).toBe(200);
+  expect(sync).toHaveBeenCalledWith("contacts", true);
+  expect(requestSync).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ["/api/collection-bindings", "POST"],
+  ["/api/collection-bindings/external/sync", "POST"],
+  ["/api/collection-bindings/external", "DELETE"],
+  ["/api/sources/external", "PATCH"],
+])("refreshes backend collection metadata after %s", async (path, method) => {
+  const local = { ...store(), scope: `external-metadata-${path}` };
+  const network = vi.fn(async () =>
+    Response.json({ data: [{ name: "contacts", version: 1 }] }),
+  );
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  await transport("/api/objects");
+  await transport(path, { method });
+  network.mockResolvedValueOnce(
+    Response.json({ data: [{ name: "external", version: 2 }] }),
+  );
+  expect(await (await transport("/api/objects")).json()).toEqual({
+    data: [{ name: "external", version: 2 }],
+  });
+});

@@ -1,7 +1,8 @@
+import { z } from "@hono/zod-openapi";
+import { databaseSourceInputSchema } from "@savia/crm-shared/database-sources";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { disabledSolutionObjects } from "@savia/crm-server/solution-state";
 import { parseObject } from "@savia/crm-server/services";
-import { z } from "@hono/zod-openapi";
 import { workflowDraftSchema } from "@savia/crm-shared/workflows";
 import { workflowRequests } from "@savia/crm-server/workflows/routes";
 
@@ -92,29 +93,57 @@ function operation(
 
 function fieldSchema(field: CrmObject["config"]["fields"][string]): Schema {
   const c = field.config ?? {};
-  let value: Schema = c.multiple
-    ? {
-        type: "array",
-        items: { type: "string" },
-        maxItems: 500,
-        uniqueItems: true,
-      }
-    : {
-        type:
-          field.type === "Number"
-            ? c.integer
+  let value: Schema =
+    c.multiple || field.type === "MultiSelect"
+      ? {
+          type: "array",
+          items: {
+            type: "string",
+            ...(field.type === "MultiSelect"
+              ? { enum: (field.options ?? []).map((option) => option.value) }
+              : {}),
+          },
+          ...(field.type === "MultiSelect" &&
+          field.required &&
+          !field.hidden &&
+          !c.visibleWhen
+            ? { minItems: 1 }
+            : {}),
+          maxItems: 500,
+          uniqueItems: true,
+        }
+      : {
+          type: ["Number", "Currency", "Percentage", "Rating"].includes(
+            field.type,
+          )
+            ? (c.integer && field.type !== "Percentage") ||
+              field.type === "Rating"
               ? "integer"
               : "number"
             : field.type === "Toggle"
               ? "boolean"
               : "string",
-      };
-  if (field.type === "Number") {
+        };
+  if (["Number", "Currency", "Percentage", "Rating"].includes(field.type)) {
     if (typeof c.minimum === "number") value.minimum = c.minimum;
     if (typeof c.maximum === "number") value.maximum = c.maximum;
   }
+  if (field.type === "Percentage") {
+    value.minimum = c.minimum ?? 0;
+    value.maximum = c.maximum ?? 100;
+    value.multipleOf = 10 ** -Number(c.decimals ?? 2);
+  }
+  if (field.type === "Rating") {
+    value.minimum = 1;
+    value.maximum = c.maximum ?? 5;
+  }
   if (value.type === "string") {
-    value.maxLength = typeof c.maxLength === "number" ? c.maxLength : 10000;
+    value.maxLength =
+      typeof c.maxLength === "number"
+        ? c.maxLength
+        : field.type === "RichText"
+          ? 100000
+          : 10000;
     if (typeof c.minLength === "number") value.minLength = c.minLength;
     if (field.required && !field.hidden && !c.visibleWhen)
       value.minLength = Math.max(
@@ -125,6 +154,9 @@ function fieldSchema(field: CrmObject["config"]["fields"][string]): Schema {
     if (c.format === "email") value.format = "email";
     if (c.format === "url") value.format = "uri";
     if (field.type === "DateControl") value.format = "date";
+    if (field.type === "DateTime" || c.dateTime === true)
+      value.format = "date-time";
+    if (field.type === "Time") value.pattern = "^([01]\\d|2[0-3]):[0-5]\\d$";
     if (field.type === "Dropdown" && !c.relation)
       value.enum = (field.options ?? []).map((o) => o.value);
   }
@@ -340,22 +372,90 @@ export async function dynamicOpenApi(
               {
                 status: 201,
                 body: {
+                  anyOf: [
+                    z.toJSONSchema(databaseSourceInputSchema, { io: "input" }),
+                    {
+                      type: "object",
+                      required: ["id", "label", "kind", "baseUrl"],
+                      properties: {
+                        id: { type: "string" },
+                        label: { type: "string" },
+                        kind: { const: "jsonapi" },
+                        baseUrl: { type: "string", format: "uri" },
+                        token: { type: "string", writeOnly: true },
+                        options: { type: "object" },
+                      },
+                    },
+                  ],
+                },
+              },
+            ),
+          },
+          "/sources/{id}/test": {
+            post: operation(
+              "database_source_test",
+              "Fuentes y colecciones",
+              "Probar conexión de base de datos",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+              },
+            ),
+          },
+          "/sources/{id}/inspect": {
+            post: operation(
+              "database_source_inspect",
+              "Fuentes y colecciones",
+              "Inspeccionar tablas o colecciones",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+                body: {
                   type: "object",
-                  required: ["id", "label", "kind"],
+                  properties: { resource: { type: "string" } },
+                },
+              },
+            ),
+          },
+          "/sources/{id}": {
+            put: operation(
+              "database_source_update",
+              "Fuentes y colecciones",
+              "Actualizar acceso y permisos de escritura",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+                body: {
+                  type: "object",
                   properties: {
-                    id: { type: "string" },
                     label: { type: "string" },
-                    kind: { enum: ["jsonapi", "postgres"] },
-                    baseUrl: { type: "string", format: "uri" },
-                    token: { type: "string", writeOnly: true },
-                    host: { type: "string" },
-                    port: { type: "integer" },
-                    database: { type: "string" },
-                    username: { type: "string" },
-                    password: { type: "string", writeOnly: true },
-                    schema: { type: "string" },
-                    ssl: { type: "boolean" },
-                    options: { type: "object" },
+                    password: {
+                      type: "string",
+                      writeOnly: true,
+                      nullable: true,
+                    },
+                    writeEnabled: { type: "boolean" },
+                  },
+                },
+              },
+            ),
+          },
+          "/collection-bindings/{name}/sync": {
+            post: operation(
+              "database_source_sync",
+              "Fuentes y colecciones",
+              "Sincronizar campos desde la base",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("name", "path", { type: "string" }, true),
+                ],
+                body: {
+                  type: "object",
+                  required: ["version"],
+                  properties: {
+                    version: { type: "integer" },
+                    fields: { type: "array", items: { type: "string" } },
                   },
                 },
               },
@@ -456,7 +556,7 @@ export async function dynamicOpenApi(
                   },
                 },
                 description:
-                  "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API o Postgres. No copia los registros externos.",
+                  "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server o MongoDB. No copia los registros externos.",
               },
             ),
           },
@@ -490,7 +590,7 @@ export async function dynamicOpenApi(
           { ...idempotency, required: true },
         ],
         description:
-          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
+          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. New rows may supply a UUID clientId without id or version to preserve an offline identity. X-Savia-Sync-Principal, when supplied, must match the authenticated principal. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
         body: {
           type: "object",
           required: ["record", "relations"],
@@ -502,6 +602,12 @@ export async function dynamicOpenApi(
               additionalProperties: false,
               properties: {
                 id: { type: "string" },
+                clientId: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Optional stable create ID; requires data and forbids id and version.",
+                },
                 version: { type: "integer", minimum: 1 },
                 data: { type: "object" },
               },
@@ -529,6 +635,12 @@ export async function dynamicOpenApi(
                       additionalProperties: false,
                       properties: {
                         id: { type: "string" },
+                        clientId: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "Optional stable create ID; requires data and forbids id and version.",
+                        },
                         version: { type: "integer", minimum: 1 },
                         data: { type: "object" },
                       },
@@ -646,7 +758,10 @@ export async function dynamicOpenApi(
           ...bundlePath.post,
           operationId: `${name}_bundle_save`,
           tags: [object.label],
-          parameters: [{ ...idempotency, required: true }],
+          parameters: [
+            { ...idempotency, required: true },
+            parameter("X-Savia-Sync-Principal", "header", { type: "string" }),
+          ],
         },
       };
     const record = envelope(ref(`${name}_Record`));

@@ -141,7 +141,6 @@ it("does not grant configuration, bulk or unrelated source operations", async ()
   for (const path of [
     "/objects",
     "/records/acl_contacts/bulk",
-    "/record-bundles/acl_contacts",
     "/collection-bindings",
   ])
     expect(
@@ -153,6 +152,25 @@ it("does not grant configuration, bulk or unrelated source operations", async ()
         })
       ).status,
     ).toBe(403);
+});
+it("does not grant bundle creates through a read/update-only role", async () => {
+  const result = await f.request(
+    "viewer",
+    101,
+    base + "/record-bundles/acl_contacts",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        record: { data: { name: "Unauthorized create" } },
+        relations: [],
+      }),
+    },
+  );
+  expect(result.status).toBe(403);
 });
 it("does not bypass restrictions through published aliases", async () => {
   const response = await f.request(

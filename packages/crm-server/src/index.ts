@@ -1,9 +1,15 @@
+import { registerRecordHistory } from "./record-history";
+import { historyDatabase } from "./record-history-storage";
 import { registerOfficeFiles } from "./office-files";
 import { Hono } from "hono";
 import { registerLocalSync } from "./local-sync";
 import type { AccessPolicy } from "@savia/crm-shared/access-control";
 import { registerAccessMiddleware } from "./access-middleware";
-import { policyFor, requireQueryAccess } from "./access-authorization";
+import {
+  accessDatabase,
+  policyFor,
+  requireQueryAccess,
+} from "./access-authorization";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
@@ -120,9 +126,24 @@ export function createCrmApp(
       );
     await next();
   });
+  app.use("/api/*", async (c, next) => {
+    const db =
+      options?.accessPolicy && policyFor(c.env.DB) !== options.accessPolicy
+        ? accessDatabase(c.env.DB, options.accessPolicy)
+        : c.env.DB;
+    c.env = {
+      ...c.env,
+      DB: historyDatabase(db, c.get("tenant"), {
+        kind: c.get("principalId") ? "user" : "system",
+        id: c.get("principalId") || null,
+      }),
+    };
+    await next();
+  });
   if (options?.accessPolicy)
     registerAccessMiddleware(app, options.accessPolicy);
   app.get("/api/access-context", (c) => c.json({ data: null }));
+  registerRecordHistory(app, trigger);
   registerExtensions(app, options);
   registerExtensionActions(app, options);
   registerExtensionSummaries(app, options);

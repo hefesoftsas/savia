@@ -31,6 +31,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  // These fixtures recreate tenant IDs; clear their scoped ACL state as well.
+  await env.DB.exec("DELETE FROM access_roles WHERE scope LIKE 'tenant:%'");
+  await env.DB.exec("DELETE FROM access_revisions WHERE scope LIKE 'tenant:%'");
   await env.DB.exec("DELETE FROM tenants");
   await env.DB.exec(
     "INSERT INTO tenants (id, id_slug, name, is_active, kind, created_at, updated_at) VALUES (101, 'merkaseguros', 'Merka Seguros', 1, 'commercial', '2026-09-09', '2026-09-09'), (202, 'other-agency', 'Other Agency', 1, 'commercial', '2026-09-09', '2026-09-09')",
@@ -158,4 +161,3 @@ describe("GET /v1/tenants/current", () => {
     expect(response.status).toBe(404);
   });
 });
-

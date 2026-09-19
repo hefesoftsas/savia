@@ -610,7 +610,11 @@ it("updates a Postgres password explicitly", async () => {
       "/api/sources/erp",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ label: "ERP Postgres", password: "nueva" }),
+        body: JSON.stringify({
+          label: "ERP Postgres",
+          writeEnabled: false,
+          password: "nueva",
+        }),
       }),
     ),
   );
@@ -708,4 +712,22 @@ it("labels Postgres bindings and hides their operation configuration", async () 
   expect(
     screen.queryByRole("button", { name: "Operaciones", exact: true }),
   ).not.toBeInTheDocument();
+});
+
+it("offers four database engines with their connection defaults", async () => {
+  const transport = mockTransport();
+  setCrmRuntime({ embedded: true, domainId: "platform", transport });
+  mount(<CollectionSourcesPanel />);
+  openSourcesTab();
+  fireEvent.click(screen.getByRole("button", { name: /Nueva fuente/ }));
+  const kind = screen.getByLabelText("Tipo de fuente");
+  for (const [value, port] of [
+    ["mysql", "3306"],
+    ["mssql", "1433"],
+    ["mongodb", "27017"],
+    ["postgres", "5432"],
+  ]) {
+    fireEvent.change(kind, { target: { value } });
+    expect(screen.getByLabelText("Puerto")).toHaveValue(port);
+  }
 });

@@ -1,3 +1,14 @@
+import {
+  enqueueBundle,
+  acknowledgeBundle,
+  resolveBundle,
+  pendingBundle,
+} from "./bundle-store";
+import type { RelatedRecordBundle } from "@savia/crm-shared/related-records";
+import type {
+  RelationDefinition,
+  RecordRelationGroup,
+} from "@savia/crm-shared/relations";
 import Dexie, {
   liveQuery,
   rangesOverlap,
@@ -29,6 +40,12 @@ function overlay(
 export class LocalStore {
   readonly db: LocalDatabase;
   private syncError?: string;
+  private syncing = false;
+  setSyncing(value: boolean) {
+    if (this.syncing === value) return;
+    this.syncing = value;
+    for (const listener of this.listeners) listener();
+  }
   private listeners = new Set<() => void>();
   setSyncError(message?: string) {
     if (this.syncError === message) return;
@@ -52,7 +69,7 @@ export class LocalStore {
     };
   }
   /** Must be called within the same read-write transaction as the record change. */
-  private async touch(collection: string) {
+  async touch(collection: string) {
     const prior = await this.db.syncState.get(collection);
     await this.db.syncState.put({
       collection,
@@ -64,23 +81,56 @@ export class LocalStore {
   async get(collection: string, id: string) {
     return (await this.db.records.get([collection, id]))?.document;
   }
+  enqueueBundle(
+    collection: string,
+    input: RelatedRecordBundle,
+    definitions: RelationDefinition[],
+    mutationId: string,
+  ) {
+    return enqueueBundle(this, collection, input, definitions, mutationId);
+  }
+  acknowledgeBundle(
+    mutation: Mutation,
+    result: {
+      data: CrmRecord;
+      related: Array<{ relationId: string; records: CrmRecord[] }>;
+    },
+  ) {
+    return acknowledgeBundle(this, mutation, result);
+  }
+  getPendingBundle(collection: string, id: string) {
+    return pendingBundle(this, collection, id);
+  }
+  resolveBundle(
+    mutationId: string,
+    mode: "server" | "local",
+    masters: Array<{
+      collection: string;
+      id: string;
+      document: CrmRecord | null;
+    }>,
+    groups: RecordRelationGroup[],
+  ) {
+    return resolveBundle(this, mutationId, mode, masters, groups);
+  }
   async mutate(
     collection: string,
-    action: Mutation["action"],
+    action: Exclude<Mutation["action"], "bundle">,
     id: string,
     data?: Record<string, unknown>,
     baseVersion?: number,
   ) {
     return this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.collections,
+      [this.db.records, this.db.syncState, this.db.outbox, this.db.collections],
       async () => {
         const metadata = await this.db.collections.get(collection);
         if (metadata?.capability !== "read-write")
           throw new Error("Collection is not writable locally");
+        if (await this.getPendingBundle(collection, id))
+          throw new Error(
+            "This record belongs to a pending bundle; synchronize or resolve it first",
+          );
         const current = await this.get(collection, id);
         const last = await this.db.outbox.orderBy("sequence").last();
         const mutation: Mutation = {
@@ -105,11 +155,14 @@ export class LocalStore {
   async refreshManifest(collections: CollectionManifest[]) {
     await this.db.transaction(
       "rw",
-      this.db.collections,
-      this.db.records,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.conflicts,
+      [
+        this.db.collections,
+        this.db.records,
+        this.db.syncState,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.linkSnapshots,
+      ],
       async () => {
         const changed = new Set<string>();
         const priorCollections = new Map(
@@ -133,6 +186,10 @@ export class LocalStore {
                 });
             }
             await this.db.records.where("collection").equals(old.name).delete();
+            await this.db.linkSnapshots
+              .where("collection")
+              .equals(old.name)
+              .delete();
             await this.db.outbox.where("collection").equals(old.name).modify({
               state: "error",
               error:
@@ -167,6 +224,33 @@ export class LocalStore {
           }
         }
         for (const mutation of await this.db.outbox.toArray()) {
+          if (mutation.bundle && !mutation.quarantined) {
+            for (const member of mutation.bundle.members) {
+              if (names.has(member.collection)) {
+                await this.db.records.put(
+                  await this.row(member.collection, member.document),
+                );
+                changed.add(member.collection);
+              }
+            }
+            if (names.has(mutation.collection))
+              await this.db.linkSnapshots.put({
+                collection: mutation.collection,
+                id: mutation.id,
+                groups: mutation.bundle.groups,
+              });
+            if (
+              mutation.bundle.members.some(
+                (member) =>
+                  collections.find((c) => c.name === member.collection)
+                    ?.capability !== "read-write",
+              )
+            )
+              await this.db.outbox.update(mutation.mutationId, {
+                state: "error",
+                error: "Bundle collection access revoked; local edits retained",
+              });
+          }
           if (
             !mutation.quarantined &&
             mutation.localSnapshot &&
@@ -188,11 +272,14 @@ export class LocalStore {
   async applyPull(collection: string, batch: PullBatch) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.outbox,
-      this.db.syncState,
-      this.db.collections,
-      this.db.conflicts,
+      [
+        this.db.records,
+        this.db.outbox,
+        this.db.syncState,
+        this.db.collections,
+        this.db.conflicts,
+        this.db.linkSnapshots,
+      ],
       async () => {
         const pending = await this.db.outbox
           .where("collection")
@@ -201,8 +288,43 @@ export class LocalStore {
         const protectedIds = new Set(
           pending.filter((m) => !m.quarantined).map((m) => m.id),
         );
+        for (const mutation of await this.db.outbox.toArray())
+          if (!mutation.quarantined)
+            for (const member of mutation.bundle?.members ?? [])
+              if (member.collection === collection) protectedIds.add(member.id);
+        const allPending = await this.db.outbox.toArray();
+        const quarantineMember = async (id: string, error: string) => {
+          for (const mutation of allPending) {
+            if (mutation.collection !== collection || mutation.id !== id) {
+              if (
+                !mutation.bundle?.members.some(
+                  (m) => m.collection === collection && m.id === id,
+                )
+              )
+                continue;
+            }
+            await this.db.outbox.update(mutation.mutationId, {
+              quarantined: true,
+              state: "error",
+              error,
+            });
+            await this.db.conflicts.delete(mutation.mutationId);
+            for (const member of mutation.bundle?.members ?? []) {
+              if (member.collection === collection)
+                protectedIds.delete(member.id);
+              if (member.before)
+                await this.db.records.put(
+                  await this.row(member.collection, member.before),
+                );
+              else await this.db.records.delete([member.collection, member.id]);
+              await this.touch(member.collection);
+            }
+          }
+          await this.db.linkSnapshots.clear();
+        };
         let changed = false;
         for (const id of batch.removedIds ?? []) {
+          await quarantineMember(id, "Record access revoked");
           await this.db.records.delete([collection, id]);
           await this.db.outbox
             .where("[collection+id]")
@@ -233,6 +355,7 @@ export class LocalStore {
                 !Object.hasOwn(document, field),
             );
           if (removed && protectedIds.has(document.id)) {
+            await quarantineMember(document.id, "Record fields revoked");
             await this.db.outbox
               .where("[collection+id]")
               .equals([collection, document.id])
@@ -269,12 +392,11 @@ export class LocalStore {
     );
   }
   async acknowledge(mutation: Mutation, master: CrmRecord) {
+    if (mutation.bundle)
+      throw new Error("Acknowledge the complete bundle instead");
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.collections,
+      [this.db.records, this.db.syncState, this.db.outbox, this.db.collections],
       async () => {
         const current = await this.db.outbox.get(mutation.mutationId);
         if (!current || current.quarantined) return;
@@ -311,8 +433,7 @@ export class LocalStore {
   ) {
     await this.db.transaction(
       "rw",
-      this.db.outbox,
-      this.db.conflicts,
+      [this.db.outbox, this.db.conflicts],
       async () => {
         const current = await this.db.outbox.get(mutation.mutationId);
         if (!current || current.quarantined) return;
@@ -331,13 +452,17 @@ export class LocalStore {
   async acceptMaster(mutationId: string) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.conflicts,
-      this.db.collections,
+      [
+        this.db.records,
+        this.db.syncState,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.collections,
+      ],
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
+        if (mutation?.bundle)
+          throw new Error("Resolve the complete bundle instead");
         const conflict = await this.db.conflicts.get(mutationId);
         if (mutation?.quarantined)
           throw new Error("Pending work is quarantined after an access change");
@@ -375,19 +500,25 @@ export class LocalStore {
   async retryWithLocal(mutationId: string) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.conflicts,
-      this.db.collections,
+      [
+        this.db.records,
+        this.db.syncState,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.collections,
+      ],
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
         if (!mutation) return;
+        if (mutation.bundle)
+          throw new Error("Resolve the complete bundle instead");
         if (mutation.quarantined)
           throw new Error("Pending work is quarantined after an access change");
         const metadata = await this.db.collections.get(mutation.collection);
         if (metadata?.capability !== "read-write")
           throw new Error("Collection is not writable locally");
+        if (mutation?.bundle)
+          throw new Error("Resolve the complete bundle instead");
         const conflict = await this.db.conflicts.get(mutationId);
         if (conflict?.master?.deleted_at)
           throw new Error(
@@ -435,11 +566,14 @@ export class LocalStore {
   async acceptPolicy(identity: string) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.collections,
-      this.db.syncState,
-      this.db.outbox,
-      this.db.conflicts,
+      [
+        this.db.records,
+        this.db.collections,
+        this.db.syncState,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.linkSnapshots,
+      ],
       async () => {
         const previous = await this.db.syncState.get("$policy");
         if (previous?.policyIdentity === identity) return;
@@ -449,6 +583,7 @@ export class LocalStore {
           error: "Permissions changed; pending work is quarantined",
         });
         await this.db.records.clear();
+        await this.db.linkSnapshots.clear();
         await this.db.collections.clear();
         await this.db.conflicts.clear();
         await this.db.syncState.clear();
@@ -463,30 +598,41 @@ export class LocalStore {
   async authorizationError() {
     return (await this.db.syncState.get("$authorization"))?.authorizationError;
   }
-  async blockAuthorization(message: string) {
+  async blockAuthorization(message: string, quarantine = true) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.collections,
-      this.db.syncState,
-      this.db.outbox,
+      [
+        this.db.records,
+        this.db.collections,
+        this.db.syncState,
+        this.db.outbox,
+        this.db.linkSnapshots,
+      ],
       async () => {
-        const scopedPolicy = Boolean(await this.db.syncState.get("$policy"));
+        const policy = await this.db.syncState.get("$policy");
+        const scopedPolicy = Boolean(policy);
         for (const mutation of await this.db.outbox.toArray()) {
           const localSnapshot = await this.get(
             mutation.collection,
             mutation.id,
           );
           await this.db.outbox.update(mutation.mutationId, {
-            state: mutation.state === "conflict" ? "conflict" : "error",
+            state:
+              mutation.bundle && (!quarantine || !scopedPolicy)
+                ? mutation.state
+                : mutation.state === "conflict"
+                  ? "conflict"
+                  : "error",
             error: message,
-            ...(scopedPolicy ? { quarantined: true } : {}),
+            ...(scopedPolicy && quarantine ? { quarantined: true } : {}),
             localSnapshot: localSnapshot ?? mutation.localSnapshot,
           });
         }
         await this.db.records.clear();
+        await this.db.linkSnapshots.clear();
         await this.db.collections.clear();
         await this.db.syncState.clear();
+        if (policy) await this.db.syncState.put(policy);
         await this.db.syncState.put({
           collection: "$authorization",
           hydrated: false,
@@ -502,14 +648,18 @@ export class LocalStore {
   async discardMutation(mutationId: string) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.syncState,
-      this.db.collections,
-      this.db.outbox,
-      this.db.conflicts,
+      [
+        this.db.records,
+        this.db.syncState,
+        this.db.collections,
+        this.db.outbox,
+        this.db.conflicts,
+      ],
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
         if (!mutation) return;
+        if (mutation.bundle)
+          throw new Error("Resolve the complete bundle instead");
         if (mutation.state === "pending")
           throw new Error("Only rejected mutations can be discarded");
         await this.db.outbox.delete(mutationId);
@@ -553,14 +703,18 @@ export class LocalStore {
   async retryMutation(mutationId: string, data?: Record<string, unknown>) {
     await this.db.transaction(
       "rw",
-      this.db.records,
-      this.db.syncState,
-      this.db.collections,
-      this.db.outbox,
-      this.db.conflicts,
+      [
+        this.db.records,
+        this.db.syncState,
+        this.db.collections,
+        this.db.outbox,
+        this.db.conflicts,
+      ],
       async () => {
         const mutation = await this.db.outbox.get(mutationId);
         if (!mutation) return;
+        if (mutation.bundle)
+          throw new Error("Resolve the complete bundle instead");
         if (mutation.quarantined)
           throw new Error("Pending work is quarantined after an access change");
         if (mutation.state !== "error")
@@ -599,9 +753,12 @@ export class LocalStore {
     );
   }
   async status(): Promise<LocalStatus> {
-    const all = await this.db.outbox.toArray();
+    const all = (await this.db.outbox.toArray()).filter((m) => !m.quarantined);
+    const lastSyncedAt = (await this.db.syncState.get("$sync"))?.lastSyncedAt;
     const authorizationError = await this.authorizationError();
     return {
+      syncing: this.syncing,
+      ...(lastSyncedAt ? { lastSyncedAt } : {}),
       ...(authorizationError ? { authorizationError } : {}),
       ...(this.syncError ? { syncError: this.syncError } : {}),
       pending: all.filter((m) => m.state === "pending").length,

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const compose = await readFile("docker-compose.yml", "utf8");
 
-test("keeps local Workers outside Docker Compose", () => {
+test("keeps Workers together instead of introducing separate network services", () => {
   assert.doesNotMatch(compose, /^  (?:api|mcp):/m);
   assert.doesNotMatch(compose, /SAVIA_PROVIDER_(?:SURA_BASE_URL|GATEWAY_URL)/);
 });

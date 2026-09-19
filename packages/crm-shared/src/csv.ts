@@ -97,16 +97,18 @@ export function mapCsvRow(
       if (field.defaultValue === undefined) input[key] = null;
       return;
     }
-    if (field.config?.multiple) {
+    if (field.config?.multiple || field.type === "MultiSelect") {
       try {
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) throw new Error();
         input[key] = parsed;
       } catch {
         conversionErrors[key] =
-          `${field.label}: usa un arreglo JSON para relaciones múltiples.`;
+          `${field.label}: use a JSON array for multiple values.`;
       }
-    } else if (field.type === "Number" || field.type === "Currency") {
+    } else if (
+      ["Number", "Currency", "Percentage", "Rating"].includes(field.type)
+    ) {
       input[key] = Number(raw);
       if (!Number.isFinite(input[key]))
         conversionErrors[key] = `${field.label}: número inválido.`;

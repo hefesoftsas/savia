@@ -169,3 +169,26 @@ describe("db-bridge", () => {
     expect(response.status).toBe(404);
   });
 });
+
+it("validates database mutation bodies before dispatch", async () => {
+  const app = createDbBridgeApp({ drivers: {}, sharedSecret: "secret" } as any);
+  const response = await app.request("http://bridge/database/mutate", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer secret",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ operation: "update" }),
+  });
+  expect(response.status).toBe(422);
+});
+it("authenticates all database endpoints", async () => {
+  const app = createDbBridgeApp({ drivers: {}, sharedSecret: "secret" } as any);
+  for (const endpoint of ["test", "resources", "inspect", "read", "mutate"]) {
+    const response = await app.request(`http://bridge/database/${endpoint}`, {
+      method: "POST",
+      body: "{}",
+    });
+    expect(response.status).toBe(401);
+  }
+});

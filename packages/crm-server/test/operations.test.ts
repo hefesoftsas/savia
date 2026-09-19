@@ -110,12 +110,15 @@ beforeAll(async () => {
     "0007_temporary_r2_attachments.sql",
     "0011_solutions.sql",
     "0016_office_revisions.sql",
+    "0017_record_history.sql",
   ])
     for (const sql of readFileSync(`migrations/${name}`, "utf8")
       .split(/;(?!(?:\s*END\b))/i)
       .filter((sql) => sql.trim()))
       await platform.env.DB.prepare(sql).run();
-  await platform.env.DB.prepare("ALTER TABLE crm_records ADD COLUMN created_by TEXT").run();
+  await platform.env.DB.prepare(
+    "ALTER TABLE crm_records ADD COLUMN created_by TEXT",
+  ).run();
   await platform.env.DB.prepare(
     "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
   )

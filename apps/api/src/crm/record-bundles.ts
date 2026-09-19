@@ -1,3 +1,10 @@
+import {
+  policyFor,
+  requireRecordAccess,
+  requireWriteAccess,
+  projectCrmRecord,
+  accessDenied,
+} from "@savia/crm-server/access-authorization";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
@@ -23,6 +30,7 @@ import {
 } from "@savia/crm-server/operations";
 const rowSchema = z
   .object({
+    clientId: z.string().uuid().optional(),
     id: z.string().min(1).max(512).optional(),
     version: z.number().int().positive().optional(),
     data: z.record(z.string(), z.unknown()).optional(),
@@ -70,6 +78,7 @@ export function createRecordBundlesApp({
   db: D1Database;
   tenant: string;
 }) {
+  const policy = policyFor(db);
   const app = new Hono();
   app.onError((error, c) =>
     error instanceof HTTPException
@@ -84,6 +93,16 @@ export function createRecordBundlesApp({
     }),
   );
   app.post("/api/record-bundles/:object", async (c) => {
+    const expectedRevision = c.req.header("X-Savia-Policy-Revision");
+    if (
+      policy &&
+      expectedRevision !== undefined &&
+      expectedRevision !== String(policy.revision)
+    )
+      fail(
+        "Permissions changed. Refresh the workspace before submitting pending work.",
+        403,
+      );
     const parsed = schema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) fail("Invalid record bundle.");
     const input = parsed.data,
@@ -98,6 +117,20 @@ export function createRecordBundlesApp({
       input.relations.length
     )
       fail("Duplicate relation group.");
+    for (const row of [
+      input.record,
+      ...input.relations.flatMap((group) => group.rows),
+    ]) {
+      if (
+        row.clientId !== undefined &&
+        (row.id !== undefined ||
+          row.version !== undefined ||
+          row.data === undefined)
+      )
+        fail(
+          "clientId is allowed only on new rows with data and no id or version.",
+        );
+    }
     const hash = Array.from(
       new Uint8Array(
         await crypto.subtle.digest(
@@ -161,6 +194,69 @@ export function createRecordBundlesApp({
           .run();
       }
     }
+    async function authorizeResult(result: {
+      data: CrmRecord;
+      related: { relationId: string; records: CrmRecord[] }[];
+    }) {
+      if (!policy) return;
+      const authorize = async (objectName: string, record: CrmRecord) => {
+        const current = await db
+          .prepare(
+            "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+          )
+          .bind(tenant, objectName, record.id)
+          .first();
+        if (!current) accessDenied();
+        requireRecordAccess(db, objectName, "read", parseRecord(current));
+        requireRecordAccess(db, objectName, "read", record);
+      };
+      await authorize(name, result.data);
+      for (const group of result.related) {
+        const definition = await db
+          .prepare(
+            "SELECT source_object,target_object FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+          )
+          .bind(tenant, group.relationId)
+          .first<{ source_object: string; target_object: string }>();
+        if (
+          !definition ||
+          ![definition.source_object, definition.target_object].includes(name)
+        )
+          accessDenied();
+        const target =
+          definition.source_object === name
+            ? definition.target_object
+            : definition.source_object;
+        for (const record of group.records) await authorize(target, record);
+      }
+    }
+    async function projectResult(result: {
+      data: CrmRecord;
+      related: { relationId: string; records: CrmRecord[] }[];
+    }) {
+      if (!policy) return result;
+      const related = [];
+      for (const group of result.related) {
+        const definition = await db
+          .prepare(
+            "SELECT source_object,target_object FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+          )
+          .bind(tenant, group.relationId)
+          .first<{ source_object: string; target_object: string }>();
+        if (!definition) accessDenied();
+        const target =
+          definition.source_object === name
+            ? definition.target_object
+            : definition.source_object;
+        related.push({
+          ...group,
+          records: group.records.map((record) =>
+            projectCrmRecord(policy, target, record),
+          ),
+        });
+      }
+      return { data: projectCrmRecord(policy, name, result.data), related };
+    }
     const replay = async () => {
       const old = await db
         .prepare(
@@ -172,8 +268,10 @@ export function createRecordBundlesApp({
       if (old.fingerprint !== hash)
         fail("This idempotency key was used with other data.", 409);
       const saved = JSON.parse(old.response);
+      const result = saved.result ?? saved;
+      await authorizeResult(result);
       await deliverSaved(saved);
-      return saved.result ?? saved;
+      return projectResult(result);
     };
     // Replays return the original committed result even when a later edit changed versions.
     const guards: ReturnType<typeof guard>[] = [],
@@ -198,6 +296,14 @@ export function createRecordBundlesApp({
           fail(`Collection ${objectName} does not allow ${action}.`, 403);
         return cached;
       }
+      if (
+        policy &&
+        !policy.grants.some(
+          (g) =>
+            g.resource === `collection:${objectName}` && g.action === action,
+        )
+      )
+        accessDenied();
       await assertLocalCollection(db, tenant, objectName);
       const object = await getObject(db, tenant, objectName),
         studio = object.config.studio;
@@ -251,6 +357,7 @@ export function createRecordBundlesApp({
         : null;
       if (row.id && !existing) fail("The related record does not exist.", 404);
       const before = existing ? parseRecord(existing) : null;
+      if (before) requireRecordAccess(db, objectName, "read", before);
       if (before)
         guards.push(
           guard(
@@ -266,7 +373,7 @@ export function createRecordBundlesApp({
       }
       if (before && (!row.version || row.version !== before._version))
         fail("Record version is missing or changed.", row.version ? 409 : 428);
-      const identity = `${objectName}:${row.id ?? crypto.randomUUID()}`;
+      const identity = `${objectName}:${row.id ?? row.clientId ?? crypto.randomUUID()}`;
       if (touched.has(identity))
         fail("A record can be edited only once per bundle.");
       touched.add(identity);
@@ -347,14 +454,31 @@ export function createRecordBundlesApp({
             )
             .bind(tenant, id),
         );
-      else
+      else {
+        if (
+          row.clientId &&
+          (await db
+            .prepare("SELECT 1 FROM crm_records WHERE tenant_id=? AND id=?")
+            .bind(tenant, id)
+            .first())
+        )
+          fail("The client-generated record ID already exists.", 409);
         writes.push(
           db
             .prepare(
-              "INSERT INTO crm_records(id,tenant_id,object_name,data,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+              "INSERT INTO crm_records(id,tenant_id,object_name,data,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?)",
             )
-            .bind(id, tenant, objectName, JSON.stringify(data), now, now),
+            .bind(
+              id,
+              tenant,
+              objectName,
+              JSON.stringify(data),
+              now,
+              now,
+              policy?.principalId ?? null,
+            ),
         );
+      }
       writes.push(
         ...uniqueStatements(db, tenant, object, id, data),
         audit(
@@ -373,7 +497,17 @@ export function createRecordBundlesApp({
         updated_at: now,
         _version: (before?._version ?? 0) + 1,
         deleted_at: null,
+        created_by: before?.created_by ?? policy?.principalId ?? null,
       } as CrmRecord;
+      requireWriteAccess(
+        db,
+        objectName,
+        before ? "update" : "create",
+        before,
+        after,
+        Object.keys(row.data),
+      );
+      requireRecordAccess(db, objectName, "read", after);
       events.push({ name: objectName, before, after });
       return after;
     }
@@ -489,6 +623,35 @@ export function createRecordBundlesApp({
             ids.some((id) => !group.rows.some((r) => r.id === id))
           )
             fail("Unlinking rows is disabled.", 403);
+        }
+        // Relation selections require the parent action and every bound field grant.
+        requireWriteAccess(
+          db,
+          name,
+          input.record.id ? "update" : "create",
+          events[0].before,
+          parent,
+          bindings.map(([field]) => field),
+        );
+        for (const id of ids) {
+          const previous = await db
+            .prepare(
+              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+            )
+            .bind(tenant, target, id)
+            .first();
+          if (!previous && policy) accessDenied();
+          if (previous) {
+            requireRecordAccess(db, target, "read", parseRecord(previous));
+            if (policy)
+              guards.push(
+                guard(
+                  db,
+                  "SELECT version=? AND deleted_at IS NULL FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+                  [parseRecord(previous)._version, tenant, target, id],
+                ),
+              );
+          }
         }
         const records: CrmRecord[] = [];
         for (const [index, row] of group.rows.entries())
@@ -635,12 +798,14 @@ export function createRecordBundlesApp({
     } catch (error) {
       const saved = await replay();
       if (saved) return c.json(saved);
+      if (String(error).includes("UNIQUE constraint failed: crm_records"))
+        fail("The client-generated record ID already exists.", 409);
       if (String(error).includes("relation_cardinality_conflict"))
         fail("Relation cardinality does not allow this selection.", 409);
       throw error;
     }
     await deliverSaved(saved);
-    return c.json(result);
+    return c.json(await projectResult(result));
   });
   return app;
 }

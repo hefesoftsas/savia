@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type {
+  LinkSnapshot,
   StoredRecord,
   CollectionManifest,
   Mutation,
@@ -7,6 +8,7 @@ import type {
   Conflict,
 } from "./contracts";
 export class LocalDatabase extends Dexie {
+  linkSnapshots!: Table<LinkSnapshot, [string, string]>;
   records!: Table<StoredRecord, [string, string]>;
   collections!: Table<CollectionManifest, string>;
   outbox!: Table<Mutation, string>;
@@ -21,5 +23,6 @@ export class LocalDatabase extends Dexie {
       syncState: "collection",
       conflicts: "mutationId,collection",
     });
+    this.version(2).stores({ linkSnapshots: "[collection+id],collection" });
   }
 }

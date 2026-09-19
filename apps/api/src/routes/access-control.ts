@@ -1,3 +1,10 @@
+import {
+  auditQuerySchema,
+  auditEntrySchema,
+  auditDetailSchema,
+  listAccessAudit,
+  getAccessAudit,
+} from "../auth/access-audit";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { actorFromContext } from "../auth/middleware";
 import { accessAuthority } from "../auth/access-context";
@@ -89,6 +96,64 @@ export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
     c.header("cache-control", "no-store");
     await next();
   });
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: base + "/audit",
+      tags,
+      request: { query: auditQuerySchema },
+      responses: {
+        200: response(
+          z.object({
+            data: z.array(auditEntrySchema),
+            nextCursor: z.string().nullable(),
+          }),
+        ),
+        ...failures,
+      },
+    }),
+    async (c) => {
+      const q = c.req.valid("query");
+      return c.json(
+        await listAccessAudit(db, actorFromContext(c), scope(q.scope), q),
+        200,
+      );
+    },
+    (result, c) => {
+      if (!result.success)
+        return c.json(
+          {
+            error: {
+              code: "INVALID_AUDIT_FILTERS",
+              message: "Invalid audit filters.",
+            },
+          },
+          422,
+        );
+    },
+  );
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: base + "/audit/{id}",
+      tags,
+      request: {
+        query: scopeQuery,
+        params: z.object({ id: z.string().min(1).max(256) }),
+      },
+      responses: { 200: response(auditDetailSchema), ...failures },
+    }),
+    async (c) =>
+      c.json(
+        await getAccessAudit(
+          db,
+          actorFromContext(c),
+          scope(c.req.valid("query").scope),
+          c.req.valid("param").id,
+        ),
+        200,
+      ),
+  );
   app.openapi(
     createRoute({
       method: "get",

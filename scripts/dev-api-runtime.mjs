@@ -111,7 +111,7 @@ if (
       "dev",
       "--local",
       "--ip",
-      "127.0.0.1",
+      process.env.SAVIA_DEV_HOST || "127.0.0.1",
       "--port",
       "8787",
       "--inspector-port",

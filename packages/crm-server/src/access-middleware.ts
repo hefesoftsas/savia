@@ -118,6 +118,17 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
       return c.json({ data, menuLayout: null });
     }
     if (path.startsWith("/api/local-sync/")) return next();
+    // The history reader rechecks record access and stable historical field grants.
+    if (
+      method === "GET" &&
+      /^\/api\/record-history\/[^/]+\/[^/]+(?:\/[^/]+)?$/.test(path)
+    )
+      return next();
+    if (
+      (method === "GET" || method === "PUT") &&
+      /^\/api\/record-history\/[^/]+\/[^/]+\/[^/]+\/restore$/.test(path)
+    )
+      return next();
     const recordMatch =
       /^\/api\/records\/([^/]+)(?:\/([^/]+))?(?:\/(restore|bulk))?$/.exec(path);
     const viewMatch = /^\/api\/views\/([^/]+)$/.exec(path);

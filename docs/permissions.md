@@ -43,8 +43,18 @@ Apply D1 migrations before serving the new application code:
 - API database: `0055_access_control.sql` creates scoped roles, grants, assignments, revisions and audit; `0056_access_sync.sql` adds creator and synchronization delivery storage.
 - Standalone CRM: `0016_access_sync.sql` adds the corresponding CRM storage. Scoped authorization also requires the API policy repository; standalone legacy usage does not enable custom roles by itself.
 
+The migration runner can resume the known partial `0055_access_control.sql` deployment. It verifies the completed 22-statement prefix before skipping it, preserving role labels, grants, assignments and revision counters without replaying bootstrap permissions. Unexpected schema differences abort recovery. The final triggers use nested `IIF` expressions to avoid the remote D1 trigger parser confusing a `CASE` terminator with the trigger terminator.
+
 Existing memberships receive protected role assignments. Membership changes and suspension invalidate revisions. Role/grant/assignment changes, audit writes and revision increments use a guarded D1 transaction. Stale writes fail instead of partially changing a policy.
 
 Use the standard database backup procedure before deployment. Roll back application code only with a compatible schema; do not delete policy history or fabricate creator attribution. This implementation work does not deploy or modify production data.
 
-Administration APIs are generated from OpenAPI route schemas; consult Scalar for request/response definitions. Audit history is retained in `access_audit`; a dedicated audit browser is not part of this editor.
+Administration APIs are generated from OpenAPI route schemas; consult Scalar for request/response definitions. Audit history is retained in `access_audit` and available in the **Audit** tab.
+
+## Permission change history
+
+Select a workspace in **Roles and permissions**, then open **Audit**. Administrators can browse successful role saves, deletions and membership role assignments within their authorized scope. This is permission history, not a history of business-record changes or rejected requests.
+
+Filter by action, actor ID, target ID and an inclusive date range. Dates entered in the browser use the local timezone. History loads 25 summaries per page, newest first, using a cursor rather than counting the entire history. **Refresh history** returns to the newest page. Open **View changes** to load the captured before/after values for one event; missing historical values are labeled **Not recorded**.
+
+History requires connectivity. The API rechecks administrator access for both lists and details, binds cursors to their scope and filters, and disables HTTP caching. Changing scope or receiving an authorization rejection hides the prior history. Audit data is not persisted in the offline replica.
