@@ -283,7 +283,7 @@ expect(screen.getByRole('textbox', { name: 'Role name' })).toHaveValue('Claims r
 ```
 
 - [ ] Run `pnpm --filter @savia/admin test src/features/access-control src/api/access-control-client.test.ts`; expected FAIL.
-- [ ] Build the editor with General, Pages, Data, Administration and Members sections using existing shadcn/ra-core components. Include matrix action controls, row-filter and field selectors, effective access explanation and clear additive-role behavior. Disable forbidden capabilities based on the server catalog; still handle server rejection. Never show global user-management controls to a tenant-only role manager.
+- [ ] Build the editor with General, Pages, Data, Administration and Members sections using existing shadcn/ra-core components. Include action tables, row-filter and field selectors, effective access explanation and clear additive-role behavior. Disable forbidden capabilities based on the server catalog; still handle server rejection. Never show global user-management controls to a tenant-only role manager.
 - [ ] Replace permissive frontend fallbacks for registered protected resources with server-derived decisions. Preserve public/auth routes through explicit registration. Hide denied collections/fields and gate record actions without treating client checks as enforcement. Invalidate policy queries and workspaces only after a confirmed server save.
 - [ ] Run focused UI tests, existing auth-provider tests, admin typecheck and browser verification of keyboard use, narrow layout, role assignment and permission revocation. Use the browser skill for inspection. Commit as `feat: add scoped role and permission editor`.
 

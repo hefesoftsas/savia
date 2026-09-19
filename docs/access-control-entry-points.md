@@ -1,6 +1,6 @@
 # Access-control enforcement inventory
 
-Status: characterization; enforcement work in progress. Do not enable configurable role editing until every protected path is covered.
+Status: scoped native enforcement implemented. Unsupported adapter, generated request-page, configuration and extension paths retain protected legacy authorization and are not delegable by custom CRM roles. See [permissions.md](permissions.md) for supported actions and rollout constraints.
 
 | Entry point | Current owner / guard | Required policy boundary |
 | --- | --- | --- |

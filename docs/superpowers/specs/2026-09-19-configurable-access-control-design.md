@@ -72,7 +72,7 @@ Protected platform administrators retain existing legitimate access; internal sa
 
 ## Administration interface
 
-Provide Roles and permissions within the active administration scope. The role editor contains General, Pages, Data, Administration and Members sections. Data shows a collection/action matrix with row-scope and field editors. The user view supports multiple business-role assignments in the existing membership.
+Provide Roles and permissions within the active administration scope. The role editor contains General, Pages, Data, Administration and Members sections. Data shows a collection/action table with row-scope and field editors. The user view supports multiple business-role assignments in the existing membership.
 
 A server-calculated effective-permissions preview explains which role grants an operation; it does not impersonate the selected user or execute business actions. Saves use optimistic concurrency and explain conflicts. Protected roles and forbidden administrative capabilities are visibly read-only. Role/assignment editing requires connectivity.
 
