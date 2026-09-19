@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -6,6 +6,7 @@ import { createAccessControlClient } from "@/api/access-control-client";
 import type { AppServices } from "@/app-services";
 import { RoleEditor } from "./role-editor";
 import { AssignmentEditor } from "./assignment-editor";
+const AuditBrowser = lazy(() => import("./audit-browser"));
 export function RolePages({ services }: { services: AppServices }) {
   const client = useMemo(
     () => createAccessControlClient(services.apiClient),
@@ -106,6 +107,7 @@ export function RolePages({ services }: { services: AppServices }) {
           <TabsList>
             <TabsTrigger value="roles">Roles</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
+            <TabsTrigger value="audit">Audit</TabsTrigger>
           </TabsList>
           <TabsContent
             value="roles"
@@ -188,6 +190,11 @@ export function RolePages({ services }: { services: AppServices }) {
                 void refresh();
               }}
             />
+          </TabsContent>
+          <TabsContent value="audit" className="mt-6">
+            <Suspense fallback={<p role="status">Loading history…</p>}>
+              <AuditBrowser client={client} scope={scope} />
+            </Suspense>
           </TabsContent>
         </Tabs>
       )}

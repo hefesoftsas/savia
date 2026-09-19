@@ -193,6 +193,8 @@ function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
 }
 
 export type DynamicFormProps = {
+  /** Keep a transient copy separate from the ordinary persisted create draft. */
+  ephemeralDraft?: boolean;
   object: CrmObject;
   values?: Record<string, unknown>;
   onSave: (

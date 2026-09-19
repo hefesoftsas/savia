@@ -293,3 +293,43 @@ it("restores an existing draft while live record links are offline", async () =>
   expect(save.mock.calls[0][2][0].previousIds).toEqual(["child"]);
   vi.mocked(api).mockImplementation(implementation);
 });
+it("keeps duplicate creation separate from an existing create draft and creates without a previous record", async () => {
+  state.scope = scope();
+  const handle = createRelatedRecordDraft({
+    workspaceScope: state.scope,
+    object: "parents",
+  });
+  handle.schedule({
+    ...stored,
+    values: { name: "Ordinary draft" },
+    previous: undefined,
+  });
+  await handle.flush();
+  const save = vi.fn().mockResolvedValue({ id: "fresh", name: "Copy" });
+  const mounted = render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <CollectionRecordForm
+        object={object}
+        values={{ name: "Copy" }}
+        ephemeralDraft
+        onSave={save}
+      />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("name")).toHaveValue("Copy"),
+  );
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Save"));
+  await waitFor(() => expect(save).toHaveBeenCalled());
+  expect(save.mock.calls[0][1]).toBeUndefined();
+  mounted.unmount();
+  expect((await handle.read())?.value).toMatchObject({
+    values: { name: "Ordinary draft" },
+  });
+  await handle.close();
+});

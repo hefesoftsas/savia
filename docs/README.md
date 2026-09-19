@@ -22,6 +22,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
 - [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
 
+- [record-duplication.md](record-duplication.md) — duplicate safe scalar values into a new local record without copying identity, ownership or relations.
 - [related-record-editing.md](related-record-editing.md) — related subforms, editable tables, atomic saves and recoverable drafts.
 
 - [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.

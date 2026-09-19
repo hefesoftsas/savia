@@ -307,7 +307,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
     fresh.current = baseline;
     let handle:
       ReturnType<typeof createRelatedRecordDraft<DraftSnapshot>> | undefined;
-    if (bundled && runtime.localWorkspace?.scope) {
+    if (bundled && runtime.localWorkspace?.scope && !props.ephemeralDraft) {
       try {
         handle = createRelatedRecordDraft<DraftSnapshot>(
           {

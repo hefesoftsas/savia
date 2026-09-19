@@ -1,3 +1,4 @@
+import { canDuplicateRecord } from "./record-duplication";
 import { OfficeEditButton } from "./office-edit-button";
 import { recordOptionLabel } from "./record-option-label";
 import { RecordOriginLinks } from "./record-origin-links";
@@ -12,7 +13,7 @@ import {
 import { CustomerActions } from "./business-panel";
 import { getCrmRuntime } from "./runtime";
 import { crmFetch, downloadCrm } from "./api";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Download, Paperclip, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import {
+  Copy,
+  Download,
+  Paperclip,
+  Pencil,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { api } from "./api";
 import {
@@ -147,6 +155,7 @@ export default function RecordDetail({
   object,
   record,
   onEdit,
+  onDuplicate,
   onClose,
   onRefresh,
   onQuotation,
@@ -155,12 +164,22 @@ export default function RecordDetail({
   object: CrmObject;
   record: CrmRecord;
   onEdit: (record: CrmRecord) => void;
+  onDuplicate?: (record: CrmRecord) => void;
   onClose: () => void;
   onRefresh: () => void;
   onQuotation?: (record: CrmRecord) => void;
   onNavigate?: (object: string, id: string) => void;
 }) {
   const labelLocale = useFieldLabelLocale();
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateError, setDuplicateError] = useState("");
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [tab, setTab] = useState("summary"),
     [relationPage, setRelationPage] = useState(1),
     [activityPage, setActivityPage] = useState(1),
@@ -405,16 +424,54 @@ export default function RecordDetail({
                 {crmTitle ? display(crmTitle) : label(current)}
               </DialogTitle>
             </div>
-            {capabilities.update && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onEdit(current)}
-              >
-                <Pencil size={15} /> Editar
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {onDuplicate && canDuplicateRecord(object) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={duplicating}
+                  onClick={async () => {
+                    setDuplicating(true);
+                    setDuplicateError("");
+                    try {
+                      const result = await detail.refetch();
+                      if (result.error) throw result.error;
+                      const source = result.data?.data.record;
+                      if (!source?.id)
+                        throw new Error(
+                          "No se pudo cargar el registro. Reintenta.",
+                        );
+                      if (mounted.current) onDuplicate(source);
+                    } catch (error) {
+                      if (mounted.current)
+                        setDuplicateError(
+                          error instanceof Error
+                            ? error.message
+                            : "No se pudo cargar el registro. Reintenta.",
+                        );
+                    } finally {
+                      if (mounted.current) setDuplicating(false);
+                    }
+                  }}
+                >
+                  <Copy size={15} />{" "}
+                  {duplicating ? "Cargando copia…" : "Duplicar"}
+                </Button>
+              )}
+              {capabilities.update && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEdit(current)}
+                >
+                  <Pencil size={15} /> Editar
+                </Button>
+              )}
+            </div>
           </div>
+          {duplicateError && !detail.error && (
+            <p role="alert">{duplicateError}</p>
+          )}
           <RecordOriginLinks record={current} />
         </DialogHeader>
         <nav
