@@ -14,12 +14,21 @@ SQL Server TLS/defaults, and MongoDB connection fields. Native CRUD passed for a
 four engines. The final PostgreSQL, MySQL and MongoDB run passed; SQL Server
 passed separately after replacing log-based startup detection with authenticated
 query readiness. The runner starts and removes each engine sequentially.
-Full repository validation is
-not claimed: the broad admin run encountered failures and timeouts outside the
-targeted suites and was stopped to reduce memory pressure. Global TypeScript
-validation was stopped at admin after more than ten minutes under concurrent host
-load; the API and bridge typechecks completed successfully. Detailed local command
-results are recorded in the execution ledger.
+Repository validation completed on the final implementation:
+
+- `pnpm run typecheck`: passed across all packages.
+- Admin: 138 test files, 710 tests passed.
+- API: 54 test files, 321 tests passed.
+- Remaining workspace packages, run sequentially: 74 test files, 391 tests passed.
+- Repository contracts: 53 tests passed.
+- Total: 1,475 passing tests. Four native fixture tests are intentionally skipped
+  by the unit lane and were verified separately against their database engines.
+
+The earlier admin failures did not recur when run without heavy concurrent load.
+`pnpm run lint` remains non-green: 32 formatting warnings occur in files unchanged
+by this task, and the existing command passes `scripts/dev-local.sh` to Prettier
+without a shell parser. None of the task-modified files appears in those warnings.
+Detailed local command results are recorded in the execution ledger.
 
 The original checklist below remains as the planned specification; the status
 above records the actual delivered and verified scope.
@@ -34,7 +43,7 @@ above records the actual delivered and verified scope.
 
 **Spec:** [Approved design](../specs/2026-09-19-external-database-plugins-design.md).
 
-**Status:** Ready for user review. No functional implementation has started.
+**Status:** Implemented and verified locally on `codex/external-database-adapters`. No deployment, push, or merge performed.
 
 ## Global constraints
 
