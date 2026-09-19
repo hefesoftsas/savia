@@ -83,3 +83,20 @@ END;
 CREATE TRIGGER access_global_role_added AFTER INSERT ON identity_global_role BEGIN
  UPDATE access_revisions SET revision=revision+1;
 END;
+--> statement-breakpoint
+CREATE TRIGGER access_tenant_state_changed AFTER UPDATE OF is_active,kind ON tenants BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope='tenant:'||NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_domain_removed AFTER DELETE ON crm_data_domains BEGIN
+ DELETE FROM access_roles WHERE scope='domain:'||OLD.id;
+ UPDATE access_revisions SET revision=revision+1 WHERE scope='domain:'||OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_object_changed AFTER UPDATE OF config ON crm_objects BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope=CASE WHEN NEW.tenant_id='domain:platform' THEN 'platform' WHEN NEW.tenant_id LIKE 'agency:%' THEN 'tenant:'||substr(NEW.tenant_id,8) ELSE NEW.tenant_id END;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_object_removed AFTER DELETE ON crm_objects BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope=CASE WHEN OLD.tenant_id='domain:platform' THEN 'platform' WHEN OLD.tenant_id LIKE 'agency:%' THEN 'tenant:'||substr(OLD.tenant_id,8) ELSE OLD.tenant_id END;
+END;

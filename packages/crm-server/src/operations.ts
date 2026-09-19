@@ -28,6 +28,8 @@ import {
   csvLine,
 } from "@savia/crm-shared/csv";
 import { buildWhere } from "./query";
+import { policyFor, accessDenied, accessRecord } from "./access-authorization";
+import { decideWrite } from "@savia/crm-shared/access-evaluator";
 import {
   formatRecordCsvValue,
   parseCsvExportColumns,
@@ -97,6 +99,7 @@ export async function runAutomations(
   after: CrmRecord,
   scope?: { ruleId: string },
 ) {
+  if (policyFor(db)) return;
   await assertLocalCollection(db, tenant, objectName);
   const { results } = await db
     .prepare(
@@ -763,6 +766,41 @@ export function registerOperations(app: Hono<Env>) {
         values,
         input.mapping,
       );
+      const policy = policyFor(db);
+      if (policy) {
+        const importPolicy = {
+          ...policy,
+          grants: policy.grants
+            .filter((g) => g.action === "import")
+            .map((g) => ({ ...g, action: "create" as const })),
+        };
+        if (
+          !decideWrite(
+            importPolicy,
+            `collection:${objectName}`,
+            "create",
+            null,
+            {
+              id: "import-preview",
+              createdBy: policy.principalId,
+              values: data,
+            },
+            Object.keys(data),
+          ).allowed
+        )
+          accessDenied();
+        for (const [field, config] of Object.entries(object.config.fields))
+          if (config.config?.relation && data[field])
+            for (const id of Array.isArray(data[field])
+              ? (data[field] as unknown[])
+              : [data[field]])
+              await getRecord(
+                db,
+                tenant,
+                String(config.config.relation),
+                String(id),
+              );
+      }
       if (Object.keys(errors).length) {
         results.push({
           row: index + 2,
@@ -855,6 +893,7 @@ export function registerOperations(app: Hono<Env>) {
       try {
         const record = await createRecord(db, tenant, objectName, data, {
           idempotencyKey: `csv:${input.importId}:${index}`,
+          createdBy: c.get("principalId"),
         });
         let warning: string | undefined;
         try {

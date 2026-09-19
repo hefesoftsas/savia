@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 import { registerLocalSync } from "./local-sync";
+import type { AccessPolicy } from "@savia/crm-shared/access-control";
+import { registerAccessMiddleware } from "./access-middleware";
+import { policyFor, requireQueryAccess } from "./access-authorization";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
@@ -45,6 +48,7 @@ export function createCrmApp(
   options?: {
     seedObjects?: CrmObject[];
     principalId?: string;
+    accessPolicy?: AccessPolicy;
   } & SolutionOptions &
     ExtensionOptions,
 ) {
@@ -113,6 +117,8 @@ export function createCrmApp(
       );
     await next();
   });
+  if (options?.accessPolicy)
+    registerAccessMiddleware(app, options.accessPolicy);
   registerExtensions(app, options);
   registerExtensionActions(app, options);
   registerExtensionSummaries(app, options);
@@ -318,7 +324,12 @@ export function createCrmApp(
     const sortSql = ["created_at", "updated_at", "id"].includes(sort)
       ? sort
       : `json_extract(data,'$.${sort}')`;
-    const { where, args } = buildWhere(object, c.get("tenant"), params);
+    const { where, args } = buildWhere(
+      object,
+      c.get("tenant"),
+      params,
+      policyFor(c.env.DB),
+    );
     // One D1 batch keeps the count and page in the same transaction and avoids
     // a separate network roundtrip before fetching the visible records.
     const [countResult, pageResult] = await c.env.DB.batch([
@@ -357,11 +368,21 @@ export function createCrmApp(
       params.amountField && isNumericAmount(params.amountField)
         ? params.amountField
         : pipeline?.amountField;
+    if (policyFor(c.env.DB))
+      requireQueryAccess(policyFor(c.env.DB)!, object.name, {
+        group,
+        amountField: targetAmountField,
+      });
     const amount =
       targetAmountField && isNumericAmount(targetAmountField)
         ? `CAST(json_extract(data,'$.${targetAmountField}') AS REAL)`
         : "0";
-    const { where, args } = buildWhere(object, c.get("tenant"), params);
+    const { where, args } = buildWhere(
+      object,
+      c.get("tenant"),
+      params,
+      policyFor(c.env.DB),
+    );
     const { results } = await c.env.DB.prepare(
       `SELECT json_extract(data,'$.${group}') AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM crm_records WHERE ${where} GROUP BY value ORDER BY count DESC`,
     )
@@ -406,7 +427,10 @@ export function createCrmApp(
         c.get("tenant"),
         c.req.param("object"),
         input,
-        { idempotencyKey: c.req.header("Idempotency-Key") },
+        {
+          idempotencyKey: c.req.header("Idempotency-Key"),
+          createdBy: c.get("principalId"),
+        },
       );
     await trigger(
       c.env.DB,

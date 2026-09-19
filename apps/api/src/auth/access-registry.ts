@@ -59,7 +59,7 @@ export async function accessCatalog(
   const columns = await db
     .prepare("PRAGMA table_info(crm_records)")
     .all<{ name: string }>();
-  return rows.results.map((row) => {
+  const collections: AccessCatalogEntry[] = rows.results.map((row) => {
     const config = JSON.parse(row.config),
       fields = Object.keys(config.fields ?? {}).filter(
         (f) => accessFieldSchema.safeParse(f).success,
@@ -67,7 +67,8 @@ export async function accessCatalog(
     const restricted = Boolean(
       bound.has(row.name) ||
       config.studio?.business ||
-      config.studio?.collection,
+      config.studio?.collection ||
+      config.studio?.requestPage,
     );
     return {
       resource: `collection:${row.name}` as const,
@@ -94,6 +95,19 @@ export async function accessCatalog(
       restricted,
     };
   });
+  return [
+    ...collections,
+    ...collections
+      .filter((e) => !e.restricted)
+      .map((e) => ({
+        ...e,
+        resource: `page:${e.resource.slice(11)}` as const,
+        fields: [],
+        fieldTypes: {},
+        actions: ["read" as const],
+        creatorSupported: false,
+      })),
+  ];
 }
 function validatePredicate(
   predicate: AccessPredicate,
@@ -118,7 +132,29 @@ function validatePredicate(
       "INVALID_ACCESS_FIELD",
       "Unknown or unsupported predicate field.",
     );
+  const fieldType = entry.fieldTypes[predicate.field];
   const operands = predicate.op === "in" ? predicate.values : [predicate.value];
+  for (const operand of operands) {
+    const valueType =
+      "literal" in operand
+        ? operand.literal === null
+          ? null
+          : typeof operand.literal
+        : operand.variable === "tenantId"
+          ? "number"
+          : "string";
+    const expected = ["Number", "Currency"].includes(fieldType)
+      ? "number"
+      : ["Checkbox", "Switch"].includes(fieldType)
+        ? "boolean"
+        : null;
+    if (expected && valueType && valueType !== expected)
+      throw new AccessControlError(
+        422,
+        "INVALID_ACCESS_PREDICATE",
+        "The condition value must match the field type.",
+      );
+  }
   if (
     predicate.op !== "eq" &&
     predicate.op !== "in" &&

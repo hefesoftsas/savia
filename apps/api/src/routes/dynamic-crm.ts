@@ -1,6 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
 import { actorFromContext } from "../auth/middleware";
+import { hasCustomAccess } from "../auth/access-context";
+import { loadAccessPolicy } from "../auth/access-repository";
 import { AuthenticationError } from "../auth/types";
 import { canAccessSharedCrm, canManageSharedCrm } from "../crm/hubspot-access";
 import { createCollectionGateway } from "../crm/collection-gateway";
@@ -43,6 +45,11 @@ export function registerDynamicCrmRoutes(
       );
     const tenantKey = `agency:${agencyId}`;
     const manager = canManageSharedCrm(actor, tenantKey);
+    const accessPolicy =
+      !manager &&
+      (await hasCustomAccess(db, actor.principal.id, `tenant:${agencyId}`))
+        ? await loadAccessPolicy(db, actor, `tenant:${agencyId}`)
+        : undefined;
     let sharedNames: Set<string> | undefined;
     const requestedPath = new URL(c.req.url).pathname.slice(
       `/v1/dynamic-crm/${c.req.param("agencyId")}`.length,
@@ -50,7 +57,7 @@ export function registerDynamicCrmRoutes(
     const readOnlyBootstrap =
       c.req.method === "POST" &&
       ["/api/bootstrap", "/api/business/setup"].includes(requestedPath);
-    if (!manager) {
+    if (!manager && !accessPolicy) {
       if (
         !canAccessSharedCrm(actor, tenantKey) ||
         (c.req.method !== "GET" && !readOnlyBootstrap)
@@ -118,6 +125,11 @@ export function registerDynamicCrmRoutes(
       c.req.method === "GET" &&
       ["/api/openapi.json", "/api/docs"].includes(path)
     ) {
+      if (accessPolicy)
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "Collection documentation requires administration access.",
+        );
       const document = await dynamicOpenApi(db, agencyId);
       c.header("cache-control", "no-store");
       if (path === "/api/openapi.json") return c.json(document);
@@ -151,6 +163,7 @@ export function registerDynamicCrmRoutes(
       "content-type",
       "idempotency-key",
       "x-savia-sync-principal",
+      "x-savia-policy-revision",
     ]) {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
@@ -165,6 +178,7 @@ export function registerDynamicCrmRoutes(
       files,
       tenant: `agency:${agencyId}`,
       actor,
+      accessPolicy,
       crm: dependencies,
       integrationKey,
       extensionConnectionsEncryptionKey,

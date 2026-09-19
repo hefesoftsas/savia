@@ -271,6 +271,16 @@ export async function saveAccessRole(
   await accessAuthority(db, actor, input.scope, true);
   await validateAccessGrants(db, input.scope, input.grants);
   const old = input.id ? await mutableRole(db, input.scope, input.id) : null;
+  const oldGrants = old
+    ? (
+        await db
+          .prepare(
+            "SELECT resource,action,predicate,fields FROM access_grants WHERE scope=? AND role_id=?",
+          )
+          .bind(input.scope, old.id)
+          .all()
+      ).results
+    : [];
   const id = input.id ?? crypto.randomUUID();
   const statements: D1PreparedStatement[] = [
     db
@@ -311,7 +321,7 @@ export async function saveAccessRole(
     input.expectedRevision,
     "role.saved",
     id,
-    old,
+    old ? { ...old, grants: oldGrants } : null,
     { ...input, id },
     statements,
   );

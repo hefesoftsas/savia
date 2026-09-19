@@ -1,6 +1,9 @@
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { z } from "zod";
 import { fail } from "./context";
+import type { AccessPolicy } from "@savia/crm-shared/access-control";
+import { compileAccessWhere } from "./access-query";
+import { accessColumns, requireQueryAccess } from "./access-authorization";
 export const filterSchema = z.object({
   logic: z.enum(["and", "or"]).default("and"),
   conditions: z
@@ -44,9 +47,27 @@ export function buildWhere(
   object: CrmObject,
   tenant: string,
   params: Record<string, string | undefined>,
+  policy?: AccessPolicy,
 ) {
+  if (policy)
+    requireQueryAccess(
+      policy,
+      object.name,
+      params,
+      object.config.studio?.pipeline?.field ?? "stage",
+    );
   const args: any[] = [tenant, object.name];
   let where = `tenant_id=? AND object_name=? AND deleted_at IS ${params.trash === "true" ? "NOT " : ""}NULL`;
+  if (policy) {
+    const access = compileAccessWhere(
+      policy,
+      `collection:${object.name}`,
+      "read",
+      accessColumns(object),
+    );
+    where += ` AND ${access.sql}`;
+    args.push(...access.bindings);
+  }
   if (params.q) {
     const pattern =
       "%" + params.q.slice(0, 200).replace(/[\\%_]/g, "\\$&") + "%";

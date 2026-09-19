@@ -114,6 +114,7 @@ beforeAll(async () => {
       .split(/;(?!(?:\s*END\b))/i)
       .filter((sql) => sql.trim()))
       await platform.env.DB.prepare(sql).run();
+  await platform.env.DB.prepare("ALTER TABLE crm_records ADD COLUMN created_by TEXT").run();
   await platform.env.DB.prepare(
     "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
   )
