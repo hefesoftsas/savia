@@ -1,4 +1,51 @@
 services:
+  dev:
+    build:
+      context: .devcontainer
+    init: true
+    working_dir: /workspace
+    environment:
+      SAVIA_DEV_HOST: 0.0.0.0
+      SAVIA_ADMIN_PORT: "5173"
+      WRANGLER_SEND_METRICS: "false"
+    ports:
+      - "127.0.0.1:5173:5173"
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - .:/workspace
+      - pnpm_store:/home/node/.local/share/pnpm/store
+      - dev_modules:/workspace/node_modules
+      - apps_admin_modules:/workspace/apps/admin/node_modules
+      - apps_api_modules:/workspace/apps/api/node_modules
+      - apps_auth_modules:/workspace/apps/auth/node_modules
+      - apps_connector_gateway_modules:/workspace/apps/connector-gateway/node_modules
+      - apps_db_bridge_modules:/workspace/apps/db-bridge/node_modules
+      - apps_legacy_exporter_modules:/workspace/apps/legacy-exporter/node_modules
+      - apps_mcp_modules:/workspace/apps/mcp/node_modules
+      - apps_savia_request_modules:/workspace/apps/savia-request/node_modules
+      - packages_crm_server_modules:/workspace/packages/crm-server/node_modules
+      - packages_crm_shared_modules:/workspace/packages/crm-shared/node_modules
+      - packages_db_modules:/workspace/packages/db/node_modules
+      - packages_insurance_portfolio_dashboard_modules:/workspace/packages/insurance-portfolio-dashboard/node_modules
+      - packages_insurance_quotes_modules:/workspace/packages/insurance-quotes/node_modules
+      - packages_provider_contracts_modules:/workspace/packages/provider-contracts/node_modules
+      - packages_release_catalog_modules:/workspace/packages/release-catalog/node_modules
+      - packages_tenant_host_modules:/workspace/packages/tenant-host/node_modules
+      - api_state:/workspace/apps/api/.wrangler
+      - auth_state:/workspace/apps/auth/.wrangler
+      - savia-request_state:/workspace/apps/savia-request/.wrangler
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --silent http://127.0.0.1:8787/health >/dev/null && curl --fail --silent http://127.0.0.1:5173/ >/dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
+    stop_grace_period: 20s
+
   postgres:
     image: postgis/postgis:18-3.6
     platform: linux/amd64
@@ -24,3 +71,24 @@ services:
 
 volumes:
   postgres_data:
+  pnpm_store:
+  dev_modules:
+  apps_admin_modules:
+  apps_api_modules:
+  apps_auth_modules:
+  apps_connector_gateway_modules:
+  apps_db_bridge_modules:
+  apps_legacy_exporter_modules:
+  apps_mcp_modules:
+  apps_savia_request_modules:
+  packages_crm_server_modules:
+  packages_crm_shared_modules:
+  packages_db_modules:
+  packages_insurance_portfolio_dashboard_modules:
+  packages_insurance_quotes_modules:
+  packages_provider_contracts_modules:
+  packages_release_catalog_modules:
+  packages_tenant_host_modules:
+  api_state:
+  auth_state:
+  savia-request_state:

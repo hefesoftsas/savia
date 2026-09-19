@@ -26,6 +26,25 @@ desactivarlo y reactivarlo conservando los registros. Consulta la
 - `apps/connector-gateway`: Worker privado genérico que ejecuta adaptadores
   declarados por extensiones, con conexiones cifradas por tenant.
 
+## Container development
+
+With Docker Desktop (or Docker Engine with Compose) running, start from the
+repository root:
+
+```sh
+docker compose up --build
+```
+
+Open [Admin](http://127.0.0.1:5173/) or the
+[API reference](http://127.0.0.1:8787/docs). The container installs the pinned
+pnpm dependencies, applies local migrations, and starts the development stack
+with live reload. Node and pnpm are not required on the host.
+
+VS Code users can also select **Dev Containers: Reopen in Container**; the
+included `.devcontainer/devcontainer.json` uses the same Compose service.
+See [local setup](docs/onboarding/03-local-setup.md) for login, persistent data,
+optional secrets, and troubleshooting.
+
 ## Inicio local
 
 API, Auth, MCP, el Worker privado de conectores y Admin se ejecutan
