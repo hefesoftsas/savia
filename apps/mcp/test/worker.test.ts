@@ -1,3 +1,4 @@
+/// <reference path="../../api/worker-configuration.d.ts" />
 import { describe, expect, it, vi } from "vitest";
 import worker from "../src/worker";
 import { remoteMcpResponse } from "../../api/src/mcp-gateway";
