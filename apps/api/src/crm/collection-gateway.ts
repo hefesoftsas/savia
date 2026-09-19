@@ -24,6 +24,7 @@ import {
   createCollectionSourceApp,
   handlesCollectionSourceRequest,
 } from "./collection-sources";
+import { createRecordBundlesApp } from "./record-bundles";
 import type { SqlBridgeClient } from "./sql-bridge";
 
 export type CollectionGatewayContext = {
@@ -98,6 +99,8 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
     async prepare() {},
     async fetch(request: Request): Promise<Response> {
       const path = new URL(request.url).pathname;
+      if (/^\/api\/record-bundles\/[^/]+\/?$/.test(path))
+        return createRecordBundlesApp({ db, tenant }).fetch(request);
       if (path === "/api/collection-catalog" && context.externalCollections) {
         try {
           const response = await context.externalCollections.fetch(

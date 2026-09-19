@@ -458,6 +458,87 @@ export async function dynamicOpenApi(
             ),
           },
         };
+  const bundlePath = {
+    post: operation(
+      "record_bundle_save",
+      "Relaciones",
+      "Save a parent and its related records atomically",
+      {
+        type: "object",
+        required: ["data", "related"],
+        properties: {
+          data: { type: "object" },
+          related: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["relationId", "records"],
+              properties: {
+                relationId: { type: "string" },
+                records: { type: "array", items: { type: "object" } },
+              },
+            },
+          },
+        },
+      },
+      {
+        parameters: [
+          parameter("object", "path", { type: "string" }, true),
+          { ...idempotency, required: true },
+        ],
+        description:
+          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
+        body: {
+          type: "object",
+          required: ["record", "relations"],
+          additionalProperties: false,
+          properties: {
+            record: {
+              type: "object",
+              required: ["data"],
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                version: { type: "integer", minimum: 1 },
+                data: { type: "object" },
+              },
+            },
+            relations: {
+              type: "array",
+              maxItems: 10,
+              items: {
+                type: "object",
+                required: ["relationId", "rows"],
+                additionalProperties: false,
+                properties: {
+                  relationId: { type: "string" },
+                  previousIds: {
+                    type: "array",
+                    maxItems: 100,
+                    uniqueItems: true,
+                    items: { type: "string" },
+                  },
+                  rows: {
+                    type: "array",
+                    maxItems: 100,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        id: { type: "string" },
+                        version: { type: "integer", minimum: 1 },
+                        data: { type: "object" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ),
+  };
   const schemas: Record<string, Schema> = {
     CrmError: {
       type: "object",
@@ -556,6 +637,15 @@ export async function dynamicOpenApi(
         ? ["id"]
         : ["id", "_version", "created_at", "updated_at"],
     };
+    if (!binding && !object.config.studio?.business)
+      paths[`/record-bundles/${name}`] = {
+        post: {
+          ...bundlePath.post,
+          operationId: `${name}_bundle_save`,
+          tags: [object.label],
+          parameters: [{ ...idempotency, required: true }],
+        },
+      };
     const record = envelope(ref(`${name}_Record`));
     paths[`/published/${name}`] = {
       get: operation(

@@ -88,6 +88,13 @@ async function purgeExpiredTemporaryAttachments(
   );
 }
 
+export type AutomationRuleSnapshot = {
+  id: string;
+  version: number;
+  name: string;
+  config: string;
+};
+
 /** Each rule/version/record version creates at most one task, even when delivery is repeated. */
 export async function runAutomations(
   db: D1Database,
@@ -95,17 +102,22 @@ export async function runAutomations(
   objectName: string,
   before: CrmRecord | null,
   after: CrmRecord,
-  scope?: { ruleId: string },
+  scope?: { ruleId?: string; rules?: AutomationRuleSnapshot[] },
 ) {
   await assertLocalCollection(db, tenant, objectName);
-  const { results } = await db
-    .prepare(
-      "SELECT * FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1",
-    )
-    .bind(tenant, objectName)
-    .all<any>();
+  const results =
+    scope?.rules ??
+    (
+      await db
+        .prepare(
+          "SELECT * FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1",
+        )
+        .bind(tenant, objectName)
+        .all<AutomationRuleSnapshot>()
+    ).results;
+  let delivered = true;
   for (const rule of results) {
-    if (scope && rule.id !== scope.ruleId) continue;
+    if (scope?.ruleId && rule.id !== scope.ruleId) continue;
     const config = JSON.parse(rule.config);
     if (
       JSON.stringify(before?.[config.field]) ===
@@ -169,6 +181,7 @@ export async function runAutomations(
           ),
       ]);
     } catch (error) {
+      delivered = false;
       await db
         .prepare(
           "INSERT INTO crm_automation_runs (id,tenant_id,automation_id,object_name,record_id,event_key,status,detail) VALUES (?,?,?,?,?,?,'failed',?) ON CONFLICT(tenant_id,automation_id,event_key) DO UPDATE SET status='failed',detail=excluded.detail",
@@ -190,6 +203,7 @@ export async function runAutomations(
         .run();
     }
   }
+  return { delivered };
 }
 
 export function registerOperations(app: Hono<Env>) {

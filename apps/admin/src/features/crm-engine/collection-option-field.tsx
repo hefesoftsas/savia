@@ -60,8 +60,8 @@ export function CollectionOptionField({
             type="button"
             role="combobox"
             aria-expanded={open}
-            aria-labelledby={`${props.fieldName}_label`}
-            id={props.fieldName}
+            aria-labelledby={`${props.config?.inputId ?? props.fieldName}_label`}
+            id={String(props.config?.inputId ?? props.fieldName)}
             disabled={props.readOnly}
             variant="outline"
             className="w-full justify-between font-normal"

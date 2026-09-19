@@ -57,8 +57,8 @@ function textInputType(format: unknown) {
 function TextField(p: IFieldProps) {
   return (
     <Input
-      id={p.fieldName}
-      aria-labelledby={`${p.fieldName}_label`}
+      id={String(p.config?.inputId ?? p.fieldName)}
+      aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
       aria-invalid={!!p.error}
       aria-required={p.required}
       disabled={p.readOnly}
@@ -101,8 +101,8 @@ function NumberField(p: IFieldProps) {
         {calculationError}
       </span>
       <Input
-        id={p.fieldName}
-        aria-labelledby={`${p.fieldName}_label`}
+        id={String(p.config?.inputId ?? p.fieldName)}
+        aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
         aria-invalid={!!p.error}
         aria-required={p.required}
         disabled={p.readOnly}
@@ -295,8 +295,8 @@ function CurrencyField(p: IFieldProps) {
         </span>
         <input
           ref={inputRef}
-          id={p.fieldName}
-          aria-labelledby={`${p.fieldName}_label`}
+          id={String(p.config?.inputId ?? p.fieldName)}
+          aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
           aria-invalid={!!p.error}
           aria-required={p.required}
           disabled={p.readOnly}
@@ -330,8 +330,8 @@ function CurrencyField(p: IFieldProps) {
 function DateField(p: IFieldProps) {
   return (
     <Input
-      id={p.fieldName}
-      aria-labelledby={`${p.fieldName}_label`}
+      id={String(p.config?.inputId ?? p.fieldName)}
+      aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
       aria-invalid={!!p.error}
       aria-required={p.required}
       disabled={p.readOnly}
@@ -355,8 +355,8 @@ function LongText(p: IFieldProps) {
     <Textarea
       minLength={p.config?.minLength as number | undefined}
       maxLength={p.config?.maxLength as number | undefined}
-      id={p.fieldName}
-      aria-labelledby={`${p.fieldName}_label`}
+      id={String(p.config?.inputId ?? p.fieldName)}
+      aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
       aria-invalid={!!p.error}
       aria-required={p.required}
       disabled={p.readOnly}
@@ -378,8 +378,8 @@ function SelectField(p: IFieldProps) {
         }
       >
         <SelectTrigger
-          id={p.fieldName}
-          aria-labelledby={`${p.fieldName}_label`}
+          id={String(p.config?.inputId ?? p.fieldName)}
+          aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
           aria-invalid={!!p.error}
           aria-required={p.required}
         >
@@ -423,8 +423,8 @@ function AutocompleteField(p: IFieldProps) {
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            id={p.fieldName}
-            aria-labelledby={`${p.fieldName}_label`}
+            id={String(p.config?.inputId ?? p.fieldName)}
+            aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
             aria-invalid={!!p.error}
             aria-required={p.required}
             disabled={p.readOnly || waiting}
@@ -585,8 +585,8 @@ export function RelationField(p: IFieldProps) {
       {!p.readOnly && (
         <>
           <Input
-            id={p.fieldName}
-            aria-labelledby={`${p.fieldName}_label`}
+            id={String(p.config?.inputId ?? p.fieldName)}
+            aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
             placeholder="Buscar registros…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -660,8 +660,8 @@ export function RelationField(p: IFieldProps) {
 function BooleanField(p: IFieldProps) {
   return (
     <Switch
-      id={p.fieldName}
-      aria-labelledby={`${p.fieldName}_label`}
+      id={String(p.config?.inputId ?? p.fieldName)}
+      aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
       aria-invalid={!!p.error}
       disabled={p.readOnly}
       checked={p.value === true}

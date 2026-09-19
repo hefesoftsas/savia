@@ -1,3 +1,4 @@
+import { publishRecordBundleChanges } from "../crm/record-bundle-realtime";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
 import { actorFromContext } from "../auth/middleware";
@@ -206,6 +207,19 @@ export function registerDynamicCrmRoutes(
             { action?: string; id?: string } | undefined)
         : undefined;
     const response = await gateway.fetch(request);
+    const bundleMatch = /^\/api\/record-bundles\/([^/]+)$/.exec(path);
+    if (bundleMatch && c.req.method === "POST" && response.ok) {
+      await publishRecordBundleChanges({
+        db,
+        tenant: tenantKey,
+        room: tenantRoom(agencyId),
+        actor: actor.principal.id,
+        object: decodeURIComponent(bundleMatch[1]),
+        response,
+        hub: realtime,
+      });
+    }
+
     if (
       response.ok &&
       ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)

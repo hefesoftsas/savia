@@ -1,3 +1,6 @@
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { PLATFORM_ROOM } from "../realtime/protocol";
+import { publishRecordBundleChanges } from "../crm/record-bundle-realtime";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   actorFromContext,
@@ -101,6 +104,7 @@ export function registerDataDomainRoutes(
   actionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   beforeInstall?: SolutionOptions["beforeInstall"],
+  realtime?: RealtimeHubClient,
 ) {
   app.openapi(listRoute, async (c) => {
     const actor = actorFromContext(c),
@@ -289,6 +293,19 @@ export function registerDataDomainRoutes(
       body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
     });
     const response = await gateway.fetch(request);
+    const bundleMatch = /^\/api\/record-bundles\/([^/]+)$/.exec(path);
+    if (bundleMatch && c.req.method === "POST" && response.ok) {
+      await publishRecordBundleChanges({
+        db,
+        tenant: tenant,
+        room: PLATFORM_ROOM,
+        actor: actorFromContext(c).principal.id,
+        object: decodeURIComponent(bundleMatch[1]),
+        response,
+        hub: realtime,
+      });
+    }
+
     const responseHeaders = new Headers(response.headers);
     responseHeaders.set("cache-control", "no-store");
     if (

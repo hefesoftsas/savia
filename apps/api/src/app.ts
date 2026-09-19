@@ -154,6 +154,7 @@ export function createApp(
     extensionActionExecutor,
     extensionConnectionsEncryptionKey,
     runtimeReleaseCatalog.beforeSolutionInstall(saviaRequestService),
+    realtime,
   );
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
   registerUserPreferenceRoutes(app, db);

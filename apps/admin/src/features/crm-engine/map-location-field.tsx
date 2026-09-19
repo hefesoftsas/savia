@@ -395,7 +395,7 @@ export function MapLocationField(p: IFieldProps) {
   return (
     <div
       className="map-location-field"
-      aria-labelledby={`${p.fieldName}_label`}
+      aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
       aria-invalid={!!p.error}
       aria-required={p.required}
     >

@@ -19,6 +19,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
 
+- [related-record-editing.md](related-record-editing.md) — related subforms, editable tables, atomic saves and recoverable drafts.
+
 - [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
