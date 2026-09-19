@@ -977,38 +977,51 @@ export function InsuranceQuoteWizard({
       // Non-blocking fallback
     }
 
-    try {
-      const responses = await Promise.allSettled(
-        selected.map((product) =>
-          savia.actions.execute("quote", {
-            input: {
-              mode: "live",
-              flowId: product.flowId,
-              quoteInput: toAutoLightQuoteInput(values),
-            },
-          }),
-        ),
-      );
-      const completed: PluginExtensionActionRun[] = [];
-      const failures: string[] = [];
-      const items: QuoteBatchItem[] = [];
+    const initialItems: QuoteBatchItem[] = selected.map((product) => ({
+      productId: product.id,
+      flowId: product.flowId,
+      label: product.label,
+      provider: product.label.split(" · ")[0] ?? "Seguros",
+      status: "pending",
+      detailId: details[product.id]?.id,
+      detailVersion: details[product.id]?.version,
+    }));
 
-      for (let index = 0; index < selected.length; index++) {
-        const product = selected[index];
-        const response = responses[index];
+    setBatchItems(initialItems);
+    setSurface("results");
+
+    try {
+      const itemsMap = new Map<string, QuoteBatchItem>(
+        initialItems.map((item) => [item.productId, item]),
+      );
+      const failures: string[] = [];
+
+      const quotePromises = selected.map(async (product) => {
         const detail = details[product.id];
         const detailId = detail?.id;
         let detailVersion = detail?.version;
         const provider = product.label.split(" · ")[0] ?? "Seguros";
 
-        if (response.status === "fulfilled") {
+        try {
+          const response = await savia.actions.execute<{
+            type?: unknown;
+            provider?: unknown;
+            status?: unknown;
+            data?: unknown;
+          }>("quote", {
+            input: {
+              mode: "live",
+              flowId: product.flowId,
+              quoteInput: toAutoLightQuoteInput(values),
+            },
+          });
+
           const run = runFromResponse(
-            response.value.run,
-            response.value.output,
+            response.run,
+            response.output,
           );
-          completed.push(run);
           const { quoteNumber, premium } = extractQuoteData(
-            response.value.output,
+            response.output,
           );
 
           if (detailId && detailVersion !== undefined) {
@@ -1030,7 +1043,7 @@ export function InsuranceQuoteWizard({
             } catch {}
           }
 
-          items.push({
+          const updatedItem: QuoteBatchItem = {
             productId: product.id,
             flowId: product.flowId,
             label: product.label,
@@ -1041,13 +1054,24 @@ export function InsuranceQuoteWizard({
             detailVersion,
             quoteNumber,
             premium,
-          });
-        } else {
+          };
+          itemsMap.set(product.id, updatedItem);
+
+          setRuns((current) => [run, ...current]);
+          setBatchItems((current) =>
+            current.map((item) =>
+              item.productId === product.id ? updatedItem : item,
+            ),
+          );
+
+          return { status: "fulfilled" as const, product, item: updatedItem };
+        } catch (reason) {
           const err = errorMessage(
-            response.reason,
+            reason,
             "El conector no pudo completar la acción.",
           );
           failures.push(`${product.label}: ${err}`);
+          setProductErrors((current) => [...current, `${product.label}: ${err}`]);
 
           if (detailId && detailVersion !== undefined) {
             try {
@@ -1065,7 +1089,7 @@ export function InsuranceQuoteWizard({
             } catch {}
           }
 
-          items.push({
+          const updatedItem: QuoteBatchItem = {
             productId: product.id,
             flowId: product.flowId,
             label: product.label,
@@ -1074,14 +1098,28 @@ export function InsuranceQuoteWizard({
             error: err,
             detailId,
             detailVersion,
-          });
-        }
-      }
+          };
+          itemsMap.set(product.id, updatedItem);
 
+          setBatchItems((current) =>
+            current.map((item) =>
+              item.productId === product.id ? updatedItem : item,
+            ),
+          );
+
+          return { status: "rejected" as const, product, error: err };
+        }
+      });
+
+      await Promise.allSettled(quotePromises);
+
+      const finalItems = Array.from(itemsMap.values());
       if (createdMasterId && createdMasterVersion !== undefined) {
         try {
-          const anySuccess = items.some((item) => item.status === "succeeded");
-          const validPremiums = items
+          const anySuccess = finalItems.some(
+            (item) => item.status === "succeeded",
+          );
+          const validPremiums = finalItems
             .map((item) => item.premium)
             .filter((p): p is number => typeof p === "number" && p > 0);
           const bestPremium = validPremiums.length
@@ -1104,10 +1142,6 @@ export function InsuranceQuoteWizard({
         } catch {}
       }
 
-      setRuns((current) => [...completed, ...current]);
-      setProductErrors(failures);
-      setBatchItems(items);
-      setSurface("results");
       void refreshRuns();
     } finally {
       setQuoting(false);
@@ -1283,9 +1317,12 @@ export function InsuranceQuoteWizard({
     );
 
     try {
-      const results = await Promise.allSettled(
-        failed.map((item) =>
-          savia.actions.execute<{
+      let anySucceeded = false;
+      const retryPromises = failed.map(async (item) => {
+        let detailVersion =
+          resetDetailVersions.get(item.productId) ?? item.detailVersion;
+        try {
+          const res = await savia.actions.execute<{
             type?: unknown;
             provider?: unknown;
             status?: unknown;
@@ -1296,56 +1333,53 @@ export function InsuranceQuoteWizard({
               flowId: item.flowId,
               quoteInput: toAutoLightQuoteInput(values),
             },
-          }),
-        ),
-      );
-      const newRuns: PluginExtensionActionRun[] = [];
-      let anySucceeded = false;
+          });
+          anySucceeded = true;
+          const newRun = runFromResponse(res.run, res.output);
+          const { quoteNumber, premium } = extractQuoteData(res.output);
 
-      const updatedBatchItems = await Promise.all(
-        batchItems.map(async (item) => {
-          const index = failed.findIndex((f) => f.productId === item.productId);
-          if (index < 0) return item;
-          const res = results[index];
-          let detailVersion =
-            resetDetailVersions.get(item.productId) ?? item.detailVersion;
-          if (res.status === "fulfilled") {
-            anySucceeded = true;
-            const newRun = runFromResponse(res.value.run, res.value.output);
-            newRuns.push(newRun);
-            const { quoteNumber, premium } = extractQuoteData(res.value.output);
-
-            if (item.detailId && detailVersion !== undefined) {
-              try {
-                const updated = await savia.collections
-                  ?.collection?.("cotizaciones_detalle")
-                  ?.update?.(
-                    item.detailId,
-                    {
-                      estado: "Recibida",
-                      numero_cotizacion: quoteNumber,
-                      prima: premium,
-                      run_id: newRun.runId,
-                      error_mensaje: undefined,
-                    },
-                    { version: detailVersion },
-                  );
-                detailVersion = recordVersion(updated) ?? detailVersion + 1;
-              } catch {}
-            }
-
-            return {
-              ...item,
-              status: "succeeded" as const,
-              runId: newRun.runId,
-              detailVersion,
-              quoteNumber,
-              premium,
-              error: undefined,
-            };
+          if (item.detailId && detailVersion !== undefined) {
+            try {
+              const updated = await savia.collections
+                ?.collection?.("cotizaciones_detalle")
+                ?.update?.(
+                  item.detailId,
+                  {
+                    estado: "Recibida",
+                    numero_cotizacion: quoteNumber,
+                    prima: premium,
+                    run_id: newRun.runId,
+                    error_mensaje: undefined,
+                  },
+                  { version: detailVersion },
+                );
+              detailVersion = recordVersion(updated) ?? detailVersion + 1;
+            } catch {}
           }
+
+          const updatedItem: QuoteBatchItem = {
+            ...item,
+            status: "succeeded",
+            runId: newRun.runId,
+            detailVersion,
+            quoteNumber,
+            premium,
+            error: undefined,
+          };
+
+          setRuns((current) => [newRun, ...current]);
+          setBatchItems((current) =>
+            current.map((b) =>
+              b.productId === item.productId ? updatedItem : b,
+            ),
+          );
+          setRetryingIds((current) =>
+            current.filter((id) => id !== item.productId),
+          );
+          return updatedItem;
+        } catch (reason) {
           const err = errorMessage(
-            res.reason,
+            reason,
             "El conector no pudo completar la acción.",
           );
           if (item.detailId && detailVersion !== undefined) {
@@ -1363,16 +1397,25 @@ export function InsuranceQuoteWizard({
               detailVersion = recordVersion(updated) ?? detailVersion + 1;
             } catch {}
           }
-          return {
+          const updatedItem: QuoteBatchItem = {
             ...item,
-            status: "failed" as const,
+            status: "failed",
             error: err,
             detailVersion,
           };
-        }),
-      );
+          setBatchItems((current) =>
+            current.map((b) =>
+              b.productId === item.productId ? updatedItem : b,
+            ),
+          );
+          setRetryingIds((current) =>
+            current.filter((id) => id !== item.productId),
+          );
+          return updatedItem;
+        }
+      });
 
-      setBatchItems(updatedBatchItems);
+      await Promise.allSettled(retryPromises);
 
       if (anySucceeded && masterQuoteId && masterQuoteVersion !== undefined) {
         try {
@@ -1391,10 +1434,7 @@ export function InsuranceQuoteWizard({
         } catch {}
       }
 
-      if (newRuns.length) {
-        setRuns((current) => [...newRuns, ...current]);
-        void refreshRuns();
-      }
+      void refreshRuns();
     } finally {
       setRetryingIds([]);
     }

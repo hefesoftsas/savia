@@ -292,6 +292,7 @@ it("locks quote fields while the insurer batch is running", async () => {
   await user.click(screen.getByRole("button", { name: "Cotizar" }));
 
   await screen.findByText(/Cotizando con .*aseguradoras en vivo/);
+  await user.click(screen.getByRole("button", { name: "Preparar cotización" }));
   expect(
     screen.getByLabelText("Código de ciudad de residencia"),
   ).toBeDisabled();

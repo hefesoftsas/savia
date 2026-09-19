@@ -225,6 +225,13 @@ export function QuoteResults({
   const succeededCount = effectiveBatchItems.filter(
     (item) => item.status === "succeeded",
   ).length;
+  const pendingCount = effectiveBatchItems.filter(
+    (item) => item.status === "pending" || retryingIds.includes(item.productId),
+  ).length;
+  const totalCount = effectiveBatchItems.length;
+  const completedCount = succeededCount + failedCount;
+  const progressPercent =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   // Build unified comparison quotes from effectiveBatchItems ONLY if a quote is active
   const unifiedQuotes: UnifiedComparisonQuote[] = useMemo(() => {
@@ -577,7 +584,15 @@ export function QuoteResults({
                 <strong>Ramo:</strong> Automóviles Livianos
               </span>
               <span className="insurance-fact-status">
-                {succeededCount > 0 ? "✓ Recibida" : "Solicitada"}
+                {pendingCount > 0
+                  ? succeededCount > 0
+                    ? `↻ Recibiendo… (${completedCount}/${totalCount})`
+                    : "↻ Solicitada…"
+                  : succeededCount > 0
+                    ? "✓ Recibida"
+                    : failedCount > 0
+                      ? "✕ Rechazada"
+                      : "Solicitada"}
               </span>
             </div>
           </div>
@@ -590,6 +605,103 @@ export function QuoteResults({
             </span>
           </div>
         </header>
+      ) : null}
+
+      {/* Indicador de progreso en vivo */}
+      {isQuoteActive && pendingCount > 0 ? (
+        <div
+          aria-live="polite"
+          className="insurance-busy-indicator"
+          role="status"
+          style={{ marginBottom: "20px" }}
+        >
+          <div className="insurance-busy-indicator__header">
+            <div className="insurance-busy-indicator__icon-wrap">
+              <span
+                aria-hidden="true"
+                className="insurance-spinner insurance-spinner--md"
+              />
+            </div>
+            <div className="insurance-busy-indicator__content">
+              <strong className="insurance-busy-indicator__title">
+                Cotizando con aseguradoras en vivo… ({completedCount} de {totalCount} recibidas)
+              </strong>
+              <span className="insurance-busy-indicator__subtitle">
+                {succeededCount > 0
+                  ? "Las ofertas recibidas ya están disponibles abajo. Esperando respuestas adicionales…"
+                  : "Consultando tarifas y coberturas oficiales. Cada oferta aparecerá tan pronto responda su aseguradora."}
+              </span>
+            </div>
+          </div>
+          <div aria-hidden="true" className="insurance-progress-track">
+            {totalCount > 0 && completedCount > 0 ? (
+              <div
+                style={{
+                  background: "var(--primary)",
+                  height: "100%",
+                  width: `${progressPercent}%`,
+                  transition: "width 300ms ease",
+                  borderRadius: "999px",
+                }}
+              />
+            ) : (
+              <div className="insurance-progress-bar--indeterminate" />
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Skeletons cuando está cotizando pero aún no ha llegado la primera oferta */}
+      {isQuoteActive && unifiedQuotes.length === 0 && pendingCount > 0 ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "20px",
+            marginTop: "16px",
+            marginBottom: "24px",
+          }}
+        >
+          {effectiveBatchItems.map((item) => (
+            <div
+              key={item.productId}
+              style={{
+                borderRadius: "12px",
+                border: "1px solid var(--border)",
+                padding: "20px",
+                background: "var(--card, #ffffff)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <strong style={{ fontSize: "0.875rem" }}>{item.label}</strong>
+                <span className="insurance-status-badge insurance-status-badge--pending">
+                  ↻ En progreso
+                </span>
+              </div>
+              <div
+                className="quote-skeleton"
+                style={{ height: "16px", width: "60%" }}
+              />
+              <div
+                className="quote-skeleton"
+                style={{ height: "32px", width: "45%", borderRadius: "6px" }}
+              />
+              <div
+                className="quote-skeleton"
+                style={{ height: "12px", width: "80%" }}
+              />
+            </div>
+          ))}
+        </div>
       ) : null}
 
       {/* 2. COMPARATOR CARDS & COMPARISON */}
