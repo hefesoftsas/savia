@@ -15,6 +15,7 @@ export const sidebarNavigationItemIds = [
   "provider-credentials",
   "assistant-configuration",
   "service-credentials",
+  "access-control",
   "users",
   "tenants",
   "page-administrator",

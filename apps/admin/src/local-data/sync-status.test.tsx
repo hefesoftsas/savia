@@ -119,3 +119,67 @@ for (const state of ["error", "conflict"] as const) {
     vi.restoreAllMocks();
   });
 }
+
+it("hides quarantined bundles from recovery and exported changes", async () => {
+  const hidden = {
+    mutationId: "secret-bundle",
+    action: "bundle",
+    state: "conflict",
+    collection: "revoked-policies",
+    id: "secret-parent",
+    quarantined: true,
+    bundle: { members: [{ document: { confidential: "secret-child" } }] },
+  };
+  const visible = {
+    mutationId: "visible",
+    action: "update",
+    state: "error",
+    collection: "people",
+    id: "public",
+  };
+  const workspace = {
+    store: {
+      status: async () => ({ pending: 0, conflicts: 1, errors: 1 }),
+      subscribe: () => () => {},
+      db: {
+        outbox: { toArray: async () => [hidden, visible] },
+        syncState: { toArray: async () => [] },
+        collections: { toArray: async () => [] },
+        conflicts: { toArray: async () => [] },
+      },
+    },
+    resolveBundle: vi.fn(),
+    requestSync: vi.fn(),
+    syncNow: vi.fn(),
+  } as unknown as LocalWorkspace;
+  const originalBlob = Blob;
+  let exported = "";
+  vi.spyOn(globalThis, "Blob").mockImplementation(function (parts, options) {
+    exported = String(parts?.[0]);
+    return new originalBlob(parts, options);
+  });
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static createObjectURL = vi.fn(() => "blob:test");
+      static revokeObjectURL = vi.fn();
+    },
+  );
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  try {
+    render(<LocalSyncStatus workspace={workspace} />);
+    await screen.findByText(/people: public/);
+    expect(screen.queryByText(/secret-parent/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Usar versión del servidor"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Conservar mis cambios")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Descargar cambios pendientes"));
+    expect(JSON.parse(exported)).toEqual([visible]);
+    expect(exported).not.toContain("secret");
+    expect(workspace.resolveBundle).not.toHaveBeenCalled();
+  } finally {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});

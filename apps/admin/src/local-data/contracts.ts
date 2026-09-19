@@ -32,11 +32,13 @@ export type Mutation = {
   error?: string;
   before?: CrmRecord;
   localSnapshot?: CrmRecord;
+  quarantined?: boolean;
 };
 export type SyncState = {
   collection: string;
   /** Atomic record/index revision for snapshot-safe in-memory query caches. */
   dataRevision?: string;
+  policyIdentity?: string;
   cursor?: string;
   hydrated: boolean;
   lastSyncedAt?: number;
@@ -51,6 +53,7 @@ export type Conflict = {
 };
 export type PullBatch = {
   documents: CrmRecord[];
+  removedIds?: string[];
   cursor: string;
   hasMore: boolean;
   reset?: boolean;

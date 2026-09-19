@@ -345,3 +345,156 @@ it("rejects multiple incoming parents and malformed acknowledgements atomically"
   ).rejects.toThrow("Incomplete");
   expect(await s.db.outbox.get("op")).toEqual(mutation);
 });
+it("preserves pending receipt identity across same-policy authentication renewal", async () => {
+  const s = await setup();
+  await s.acceptPolicy("principal:policy1");
+  await s.refreshManifest(manifest);
+  for (const collection of ["parents", "children"])
+    await s.applyPull(collection, {
+      documents: [],
+      cursor: "1",
+      hasMore: false,
+    });
+  await s.enqueueBundle("parents", input(), [definition], "receipt");
+  await s.blockAuthorization("expired", false);
+  expect((await s.db.outbox.get("receipt"))?.state).toBe("pending");
+  expect((await s.db.syncState.get("$policy"))?.policyIdentity).toBe(
+    "principal:policy1",
+  );
+  await s.resumeAuthorization();
+  await s.acceptPolicy("principal:policy1");
+  await s.refreshManifest(manifest);
+  expect((await s.db.outbox.get("receipt"))?.quarantined).not.toBe(true);
+  expect(await s.db.records.count()).toBe(2);
+  await s.acceptPolicy("principal:policy2");
+  await s.refreshManifest(manifest);
+  expect((await s.db.outbox.get("receipt"))?.quarantined).toBe(true);
+  expect(await s.db.records.count()).toBe(0);
+  expect(await s.db.linkSnapshots.count()).toBe(0);
+});
+it("quarantines a whole bundle on child removal and ignores late acknowledgements", async () => {
+  const s = await setup();
+  await s.enqueueBundle("parents", input(), [definition], "op");
+  const mutation = (await s.db.outbox.get("op"))!;
+  const child = mutation.bundle!.members[1];
+  await s.applyPull("children", {
+    documents: [],
+    removedIds: [child.id],
+    cursor: "2",
+    hasMore: false,
+  });
+  expect((await s.db.outbox.get("op"))?.quarantined).toBe(true);
+  expect(await s.db.linkSnapshots.count()).toBe(0);
+  await s.acknowledgeBundle(mutation, {
+    data: mutation.bundle!.members[0].document,
+    related: [{ relationId: "rel", records: [child.document] }],
+  });
+  await s.refreshManifest(manifest);
+  expect(await s.get("children", child.id)).toBeUndefined();
+  expect(await s.db.records.count()).toBe(0);
+});
+it("rebases newly linked server records and rejects overlapping queued owners atomically", async () => {
+  const s = await setup();
+  await s.enqueueBundle("parents", input(), [definition], "op");
+  const mutation = (await s.db.outbox.get("op"))!;
+  await s.rejectMutation(mutation, "conflict", "links changed");
+  const fresh = { id: "fresh", created_at: "", updated_at: "", _version: 3 };
+  const masters = [
+    ...mutation.bundle!.members.map((m) => ({
+      collection: m.collection,
+      id: m.id,
+      document: null,
+    })),
+    { collection: "children", id: fresh.id, document: fresh },
+  ];
+  const groups = [
+    {
+      definition,
+      direction: "outgoing" as const,
+      targetObject: "children",
+      targetLabel: "Children",
+      label: "Children",
+      records: [{ id: fresh.id, label: "Fresh" }],
+      total: 1,
+      canEdit: true,
+    },
+  ];
+  await s.mutate("children", "create", fresh.id, {});
+  await expect(s.resolveBundle("op", "local", masters, groups)).rejects.toThrow(
+    "pending changes",
+  );
+  expect(await s.db.outbox.get("op")).toEqual({
+    ...mutation,
+    state: "conflict",
+    error: "links changed",
+  });
+  await s.db.outbox.where("collection").equals("children").delete();
+  await s.resolveBundle("op", "local", masters, groups);
+  const retry = (await s.db.outbox.toArray())[0];
+  expect(retry.bundle?.input.relations[0].previousIds).toEqual([fresh.id]);
+  expect(retry.bundle?.members.some((m) => m.id === fresh.id)).toBe(true);
+});
+it("quarantines a parent-owned bundle when a child field is redacted", async () => {
+  const s = await setup();
+  const child = {
+    id: "child",
+    created_at: "",
+    updated_at: "",
+    _version: 1,
+    secret: "hidden",
+  };
+  await s.applyPull("children", {
+    documents: [child],
+    cursor: "1",
+    hasMore: false,
+  });
+  await s.enqueueBundle(
+    "parents",
+    {
+      record: { data: {} },
+      relations: [{ relationId: "rel", rows: [{ id: child.id }] }],
+    },
+    [definition],
+    "op",
+  );
+  await s.applyPull("children", {
+    documents: [{ id: child.id, created_at: "", updated_at: "", _version: 1 }],
+    cursor: "2",
+    hasMore: false,
+  });
+  expect((await s.db.outbox.get("op"))?.quarantined).toBe(true);
+  await s.refreshManifest(manifest);
+  expect(await s.get("children", child.id)).not.toHaveProperty("secret");
+  expect(await s.getPendingBundle("children", child.id)).toBeUndefined();
+});
+it("accept-server stores new linked records without overwriting another local mutation", async () => {
+  const s = await setup();
+  await s.enqueueBundle("parents", input(), [definition], "op");
+  const mutation = (await s.db.outbox.get("op"))!;
+  await s.rejectMutation(mutation, "conflict", "links changed");
+  const fresh = { id: "fresh", created_at: "", updated_at: "", _version: 3 };
+  await s.mutate("children", "create", fresh.id, { local: true });
+  const masters = [
+    ...mutation.bundle!.members.map((m) => ({
+      collection: m.collection,
+      id: m.id,
+      document: null,
+    })),
+    { collection: "children", id: fresh.id, document: fresh },
+  ];
+  const groups = [
+    {
+      definition,
+      direction: "outgoing" as const,
+      targetObject: "children",
+      targetLabel: "Children",
+      label: "Children",
+      records: [{ id: fresh.id, label: "Fresh" }],
+      total: 1,
+      canEdit: true,
+    },
+  ];
+  await s.resolveBundle("op", "server", masters, groups);
+  expect(await s.get("children", fresh.id)).toHaveProperty("local", true);
+  expect(await s.db.outbox.count()).toBe(1);
+});

@@ -26,8 +26,10 @@ export async function pendingBundle(
   collection: string,
   id: string,
 ) {
-  return (await s.db.outbox.toArray()).find((m) =>
-    m.bundle?.members.some((r) => r.collection === collection && r.id === id),
+  return (await s.db.outbox.toArray()).find(
+    (m) =>
+      !m.quarantined &&
+      m.bundle?.members.some((r) => r.collection === collection && r.id === id),
   );
 }
 export async function enqueueBundle(
@@ -252,7 +254,7 @@ export async function acknowledgeBundle(
 ) {
   return bundleTransaction(s, async () => {
     const current = await s.db.outbox.get(mutation.mutationId);
-    if (!current?.bundle) return;
+    if (!current?.bundle || current.quarantined) return;
     // A response arriving after access was revoked must not reveal hidden replicas.
     for (const member of current.bundle.members)
       if (
@@ -326,6 +328,8 @@ export async function resolveBundle(
   return bundleTransaction(s, async () => {
     const mutation = await s.db.outbox.get(mutationId);
     if (!mutation?.bundle) throw new Error("Bundle is no longer available");
+    if (mutation.quarantined)
+      throw new Error("Pending work is quarantined after an access change");
     if (mutation.state === "pending")
       throw new Error(
         "Wait for a definitive rejection before resolving this bundle",
@@ -356,6 +360,36 @@ export async function resolveBundle(
       if (!group || group.total !== group.records.length)
         throw new Error("Complete server links are required");
     }
+    const otherMutations = (await s.db.outbox.toArray()).filter(
+      (m) => m.mutationId !== mutationId,
+    );
+    const extraMasters = masters.filter(
+      (master) =>
+        !mutation.bundle!.members.some(
+          (m) => m.collection === master.collection && m.id === master.id,
+        ),
+    );
+    const ownedElsewhere = (master: { collection: string; id: string }) =>
+      otherMutations.some(
+        (m) =>
+          (m.collection === master.collection && m.id === master.id) ||
+          m.bundle?.members.some(
+            (r) => r.collection === master.collection && r.id === master.id,
+          ),
+      );
+    for (const master of extraMasters) {
+      const metadata = await s.db.collections.get(master.collection);
+      if (
+        !metadata ||
+        metadata.capability === "remote" ||
+        (mode === "local" && metadata.capability !== "read-write")
+      )
+        throw new Error("Bundle collection access unavailable");
+      if (mode === "local" && ownedElsewhere(master))
+        throw new Error(
+          "This record has pending changes; synchronize or resolve them first",
+        );
+    }
     const snapshots = groups
       .filter((g) => g.total === g.records.length)
       .map((g) => ({
@@ -372,6 +406,13 @@ export async function resolveBundle(
         await s.db.records.put(await s.row(member.collection, master.document));
       else await s.db.records.delete([member.collection, member.id]);
       await s.touch(member.collection);
+    }
+    for (const master of extraMasters) {
+      if (ownedElsewhere(master)) continue;
+      if (master.document)
+        await s.db.records.put(await s.row(master.collection, master.document));
+      else await s.db.records.delete([master.collection, master.id]);
+      await s.touch(master.collection);
     }
     await s.db.linkSnapshots.put({
       collection: mutation.collection,

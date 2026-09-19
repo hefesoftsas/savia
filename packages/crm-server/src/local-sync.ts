@@ -12,6 +12,17 @@ import {
   parseObject,
   parseRecord,
 } from "./services";
+import {
+  policyFor,
+  projectCrmRecord,
+  accessRecord,
+  accessDenied,
+  accessDatabase,
+  requireRecordAccess,
+  requireWriteAccess,
+} from "./access-authorization";
+import { decideRecord } from "@savia/crm-shared/access-evaluator";
+import { visibleAccessObject } from "./access-middleware";
 import { disabledSolutionObjects } from "./solution-state";
 
 // Remote adapters must explicitly implement their own replication contract before
@@ -106,22 +117,52 @@ export function registerLocalSync(
     const collections = results
       .map(parseObject)
       .filter((o) => !disabled.has(o.name))
+      .filter(
+        (o) =>
+          !policyFor(db) ||
+          policyFor(db)!.grants.some(
+            (g) => g.resource === `collection:${o.name}` && g.action === "read",
+          ),
+      )
+      .filter(
+        (o) =>
+          !policyFor(db) ||
+          policyFor(db)!.grants.some(
+            (g) => g.resource === `page:${o.name}` && g.action === "read",
+          ),
+      )
       .map((object) => {
         const studio = object.config.studio;
         const isRemote = Boolean(
           studio?.business ||
-            studio?.collection ||
-            boundObjects.has(object.name),
+          studio?.collection ||
+          boundObjects.has(object.name),
         );
         return {
           name: object.name,
-          object,
-          capability: isRemote ? ("remote" as const) : ("read-write" as const),
+          object: policyFor(db)
+            ? visibleAccessObject(policyFor(db)!, object)
+            : object,
+          capability: isRemote
+            ? ("remote" as const)
+            : policyFor(db) &&
+                !policyFor(db)!.grants.some(
+                  (g) =>
+                    g.resource === `collection:${object.name}` &&
+                    ["create", "update", "delete"].includes(g.action),
+                )
+              ? ("read-only" as const)
+              : ("read-write" as const),
           schemaVersion: object.version ?? 1,
           latestSequence: sequences.get(object.name) ?? 0,
         };
       });
-    return c.json({ collections, principalId: c.get("principalId") });
+    return c.json({
+      collections,
+      principalId: c.get("principalId"),
+      policyRevision: policyFor(db)?.revision,
+      policyScope: policyFor(db)?.scope,
+    });
   });
   app.get("/api/local-sync/pull/:collection", async (c) => {
     const tenant = c.get("tenant"),
@@ -130,13 +171,28 @@ export function registerLocalSync(
       object = await getObject(db, tenant, name);
     if ((await capability(db, tenant, object)) === "remote")
       return fail("This collection requires its source adapter.", 422);
+    const policy = policyFor(db);
+    if (
+      policy &&
+      !policy.grants.some(
+        (g) => g.resource === `collection:${name}` && g.action === "read",
+      )
+    )
+      accessDenied();
     let sequence = 0;
     const cursor = c.req.query("cursor");
     if (cursor) {
       try {
         const decoded = JSON.parse(atob(cursor));
         if (
-          decoded.v !== 1 ||
+          policy &&
+          (decoded.principalId !== policy.principalId ||
+            decoded.scope !== policy.scope ||
+            decoded.revision !== policy.revision)
+        )
+          return fail("Permissions changed. Reset synchronization.", 409);
+        if (
+          decoded.v !== (policy ? 2 : 1) ||
           decoded.tenant !== tenant ||
           decoded.collection !== name ||
           !Number.isSafeInteger(decoded.sequence) ||
@@ -144,7 +200,8 @@ export function registerLocalSync(
         )
           throw Error();
         sequence = decoded.sequence;
-      } catch {
+      } catch (error) {
+        if (error instanceof HTTPException) throw error;
         return fail("Invalid synchronization cursor.", 422);
       }
     }
@@ -159,10 +216,73 @@ export function registerLocalSync(
       .all();
     const page = results.slice(0, limit);
     if (page.length) sequence = Number(page.at(-1)!.sequence);
+    const documents = [];
+    const removedIds: string[] = [];
+    for (const row of page) {
+      const record = parseRecord(row);
+      if (!policy) {
+        documents.push(record);
+        continue;
+      }
+      const delivered = await db
+        .prepare(
+          "SELECT 1 FROM crm_access_deliveries WHERE principal_id=? AND scope=? AND revision=? AND object_name=? AND record_id=?",
+        )
+        .bind(
+          policy.principalId,
+          policy.scope,
+          policy.revision,
+          name,
+          record.id,
+        )
+        .first();
+      if (
+        !record.deleted_at &&
+        decideRecord(policy, `collection:${name}`, "read", accessRecord(record))
+          .allowed
+      ) {
+        await db.batch([
+          db
+            .prepare(
+              "INSERT OR IGNORE INTO crm_access_deliveries(principal_id,scope,revision,object_name,record_id) VALUES(?,?,?,?,?)",
+            )
+            .bind(
+              policy.principalId,
+              policy.scope,
+              policy.revision,
+              name,
+              record.id,
+            ),
+        ]);
+        documents.push(projectCrmRecord(policy, name, record));
+      } else if (delivered) {
+        removedIds.push(record.id);
+        documents.push({
+          id: record.id,
+          _version: record._version,
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+          deleted_at: record.deleted_at ?? record.updated_at,
+        });
+      }
+    }
     return c.json({
-      documents: page.map(parseRecord),
+      documents,
+      removedIds,
       cursor: btoa(
-        JSON.stringify({ v: 1, tenant, collection: name, sequence }),
+        JSON.stringify({
+          v: policy ? 2 : 1,
+          tenant,
+          collection: name,
+          sequence,
+          ...(policy
+            ? {
+                principalId: policy.principalId,
+                scope: policy.scope,
+                revision: policy.revision,
+              }
+            : {}),
+        }),
       ),
       hasMore: results.length > limit,
     });
@@ -175,6 +295,15 @@ export function registerLocalSync(
       object = await getObject(db, tenant, name);
     if ((await capability(db, tenant, object)) === "remote")
       return fail("This collection requires its source adapter.", 422);
+    const policy = policyFor(db);
+    if (
+      policy &&
+      c.req.header("X-Savia-Policy-Revision") !== String(policy.revision)
+    )
+      return fail(
+        "Permissions changed. Refresh the workspace before submitting pending work.",
+        403,
+      );
     const mutation = mutationSchema.parse(await c.req.json()),
       fingerprint = JSON.stringify([name, mutation]);
     const replay = async () => {
@@ -193,6 +322,29 @@ export function registerLocalSync(
       if (receipt.fingerprint !== fingerprint)
         return fail("Mutation ID already used for another request.", 409);
       const data = parseRecord(JSON.parse(receipt.response));
+      const currentRow = policy
+        ? await db
+            .prepare(
+              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+            )
+            .bind(tenant, name, mutation.id)
+            .first()
+        : null;
+      if (policy && !currentRow) accessDenied();
+      const current = currentRow ? parseRecord(currentRow) : data;
+      requireRecordAccess(db, name, mutation.action, current);
+      if (policy && mutation.action !== "delete")
+        requireRecordAccess(db, name, "read", current);
+      requireRecordAccess(db, name, mutation.action, data);
+      if (mutation.action !== "delete")
+        requireWriteAccess(
+          db,
+          name,
+          mutation.action,
+          receipt.before_state ? JSON.parse(receipt.before_state) : null,
+          data,
+          Object.keys(mutation.data ?? {}),
+        );
       if (!receipt.effects_applied) {
         if (mutation.action !== "delete")
           await onMutation?.(
@@ -209,14 +361,14 @@ export function registerLocalSync(
           .bind(tenant, principal, mutation.mutationId)
           .run();
       }
-      return data;
+      return policy ? projectCrmRecord(policy, name, current) : data;
     };
     const previous = await replay();
     if (previous) return c.json({ data: previous });
     // Every service writes through one transactional batch. Append the durable ACK
     // there so a crash cannot commit the mutation without recording its response.
     let before: ReturnType<typeof parseRecord> | null = null;
-    const transactionalDb = {
+    const receiptDb = {
       prepare: db.prepare.bind(db),
       batch: async (statements: D1PreparedStatement[]) =>
         db.batch([
@@ -224,7 +376,7 @@ export function registerLocalSync(
           db
             .prepare(
               `INSERT INTO crm_sync_receipts(tenant_id,principal_id,mutation_id,fingerprint,before_state,response)
-   SELECT ?,?,?,?,?,json_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at) FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?`,
+   SELECT ?,?,?,?,?,json_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by) FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?`,
             )
             .bind(
               tenant,
@@ -238,6 +390,9 @@ export function registerLocalSync(
             ),
         ]),
     } as D1Database;
+    const transactionalDb = policy
+      ? accessDatabase(receiptDb, policy)
+      : receiptDb;
     try {
       before =
         mutation.action === "update"
@@ -246,6 +401,7 @@ export function registerLocalSync(
       if (mutation.action === "create")
         await createRecord(transactionalDb, tenant, name, mutation.data ?? {}, {
           id: mutation.id,
+          createdBy: principal,
         });
       else if (mutation.action === "update")
         await updateRecord(
@@ -279,7 +435,18 @@ export function registerLocalSync(
           )
           .bind(tenant, name, mutation.id)
           .first();
-        const data = master ? parseRecord(master) : null;
+        const record = master ? parseRecord(master) : null;
+        const data =
+          record && policy
+            ? decideRecord(
+                policy,
+                `collection:${name}`,
+                "read",
+                accessRecord(record),
+              ).allowed
+              ? projectCrmRecord(policy, name, record)
+              : null
+            : record;
         return c.json(
           {
             error: "The record changed. Resolve against the current master.",
