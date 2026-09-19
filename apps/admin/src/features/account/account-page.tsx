@@ -34,6 +34,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { normalizeAvatarUrl } from "@/auth/better-auth-oauth-session";
 import { uploadAccountAvatar } from "./account-avatar-upload";
 
 type Account = {
@@ -75,7 +76,7 @@ async function responseMessage(response: Response): Promise<string> {
   return response.statusText || fallback;
 }
 
-function accountFromSession(payload: unknown): Account {
+function accountFromSession(payload: unknown, apiUrl?: string): Account {
   if (!payload || typeof payload !== "object" || !("user" in payload)) {
     throw new Error("No fue posible leer la sesión de tu cuenta.");
   }
@@ -87,9 +88,10 @@ function accountFromSession(payload: unknown): Account {
   if (typeof value.email !== "string" || typeof value.name !== "string") {
     throw new Error("No fue posible leer la sesión de tu cuenta.");
   }
+  const rawImage = typeof value.image === "string" ? value.image : null;
   return {
     email: value.email,
-    image: typeof value.image === "string" ? value.image : null,
+    image: rawImage && apiUrl ? normalizeAvatarUrl(rawImage, apiUrl) : rawImage,
     name: value.name,
     twoFactorEnabled: value.twoFactorEnabled === true,
   };
@@ -162,7 +164,7 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
     setAccountError(null);
     try {
       const response = await accountRequest(apiUrl, "/api/auth/get-session");
-      setAccount(accountFromSession(await response.json()));
+      setAccount(accountFromSession(await response.json(), apiUrl));
     } catch (error) {
       setAccountError(
         error instanceof Error

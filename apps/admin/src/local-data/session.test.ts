@@ -129,3 +129,23 @@ it("observes another tab clearing the persisted lease instead of trusting its in
     "Conecta para verificar",
   );
 });
+
+it("coalesces concurrent ensureLease calls when verifying remote credentials", async () => {
+  const api = remote();
+  const proof = vi.fn().mockImplementation(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  const session = createLocalSession(api, "test", proof);
+
+  const [id1, id2, id3] = await Promise.all([
+    session.getIdentity(),
+    session.getIdentity(),
+    session.getIdentity(),
+  ]);
+
+  expect(id1.id).toBe("a");
+  expect(id2.id).toBe("a");
+  expect(id3.id).toBe("a");
+  expect(proof).toHaveBeenCalledTimes(1);
+});
+

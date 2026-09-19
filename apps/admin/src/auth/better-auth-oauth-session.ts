@@ -60,6 +60,24 @@ function requestUrl(baseUrl: string, path: string): string {
   return new URL(path, `${baseUrl.replace(/\/$/, "")}/`).toString();
 }
 
+export function normalizeAvatarUrl(image: string, apiUrl: string): string {
+  const trimmed = image.trim();
+  if (!trimmed) return "";
+  try {
+    const api = new URL(apiUrl);
+    const parsed = new URL(trimmed, apiUrl);
+    if (
+      (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
+      parsed.origin !== api.origin
+    ) {
+      return `${api.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
 function defaultNavigation(): BrowserNavigation {
   return {
     currentUrl: () => window.location.href,
@@ -120,6 +138,12 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   private identityPromise: Promise<SaviaIdentity> | null = null;
 
+  private avatarPromise: Promise<string | undefined> | null = null;
+
+  private cachedAvatar: string | undefined;
+
+  private avatarLoaded = false;
+
   /**
    * Last fully-resolved permissions, memory-only (never persisted: tokens
    * and credentials stay out of browser storage). Returned when the network
@@ -135,6 +159,14 @@ export class BetterAuthOAuthSession implements AuthSession {
     this.fetcher =
       settings.fetcher ?? ((input, init) => globalThis.fetch(input, init));
     this.navigation = settings.navigation ?? defaultNavigation();
+    if (typeof window !== "undefined") {
+      window.addEventListener("savia:identity-changed", () => {
+        this.identityPromise = null;
+        this.avatarPromise = null;
+        this.cachedAvatar = undefined;
+        this.avatarLoaded = false;
+      });
+    }
   }
 
   getAuthorizeUrl(): string {
@@ -168,6 +200,9 @@ export class BetterAuthOAuthSession implements AuthSession {
     this.scopes.clear();
     this.callbackPromise = null;
     this.identityPromise = null;
+    this.avatarPromise = null;
+    this.cachedAvatar = undefined;
+    this.avatarLoaded = false;
     this.lastKnownPermissions = undefined;
     this.refreshAllowed = false;
   }
@@ -256,6 +291,9 @@ export class BetterAuthOAuthSession implements AuthSession {
   async verifySession(): Promise<void> {
     const token = await this.requireAccessToken();
     this.identityPromise = null;
+    this.avatarPromise = null;
+    this.cachedAvatar = undefined;
+    this.avatarLoaded = false;
     await this.saviaIdentity(token);
   }
 
@@ -339,7 +377,12 @@ export class BetterAuthOAuthSession implements AuthSession {
     expiresAt: number;
     scopes: Set<string>;
   }): void {
-    if (this.accessToken !== token.accessToken) this.identityPromise = null;
+    if (this.accessToken !== token.accessToken) {
+      this.identityPromise = null;
+      this.avatarPromise = null;
+      this.cachedAvatar = undefined;
+      this.avatarLoaded = false;
+    }
     this.accessToken = token.accessToken;
     this.accessTokenExpiresAt = token.expiresAt;
     this.scopes = token.scopes;
@@ -353,24 +396,44 @@ export class BetterAuthOAuthSession implements AuthSession {
   }
 
   private async sessionAvatar(): Promise<string | undefined> {
-    try {
-      const response = await this.fetcher(
-        requestUrl(this.settings.apiUrl, "/api/auth/get-session"),
-        {
-          method: "GET",
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        },
-      );
-      if (!response.ok) return undefined;
-      const payload = (await response.json()) as BetterAuthSessionResponse;
-      return typeof payload.user?.image === "string" &&
-        payload.user.image.length > 0
-        ? payload.user.image
-        : undefined;
-    } catch {
-      return undefined;
+    if (this.avatarLoaded) {
+      return this.cachedAvatar;
     }
+    if (!this.avatarPromise) {
+      this.avatarPromise = (async () => {
+        try {
+          const response = await this.fetcher(
+            requestUrl(this.settings.apiUrl, "/api/auth/get-session"),
+            {
+              method: "GET",
+              credentials: "include",
+              headers: { Accept: "application/json" },
+            },
+          );
+          if (!response.ok) {
+            this.cachedAvatar = undefined;
+            this.avatarLoaded = true;
+            return undefined;
+          }
+          const payload = (await response.json()) as BetterAuthSessionResponse;
+          const raw =
+            typeof payload.user?.image === "string" &&
+            payload.user.image.length > 0
+              ? payload.user.image
+              : undefined;
+          this.cachedAvatar = raw
+            ? normalizeAvatarUrl(raw, this.settings.apiUrl)
+            : undefined;
+          this.avatarLoaded = true;
+          return this.cachedAvatar;
+        } catch {
+          return undefined;
+        } finally {
+          this.avatarPromise = null;
+        }
+      })();
+    }
+    return this.avatarPromise;
   }
 
   private async saviaIdentity(accessToken: string): Promise<SaviaIdentity> {

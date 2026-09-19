@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { BetterAuthOAuthSession } from "./better-auth-oauth-session";
+import {
+  BetterAuthOAuthSession,
+  normalizeAvatarUrl,
+} from "./better-auth-oauth-session";
 
 describe("BetterAuthOAuthSession", () => {
   it("starts a first-party OAuth authorization flow through the API", async () => {
@@ -371,6 +374,166 @@ describe("BetterAuthOAuthSession", () => {
     );
   });
 
+  it("normalizes loopback avatar URLs to match the remote API origin", async () => {
+    const loopbackAvatar =
+      "http://127.0.0.1:8787/v1/account/avatar?v=2dbb6efe-1b1f-4462-ae99-8084bf9cd37e";
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          access_token: "better-auth-access-token",
+          token_type: "Bearer",
+          scope: "savia.api.read",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          data: {
+            id: "principal-1",
+            attributes: {
+              displayName: "Savia Administrator",
+              email: "admin@savia.test",
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          user: {
+            id: "better-auth-user",
+            image: loopbackAvatar,
+            name: "Savia Administrator",
+            email: "admin@savia.test",
+          },
+        }),
+      );
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "https://savia-preview.hefesoft.com",
+      fetcher,
+    });
+
+    await expect(session.getIdentity()).resolves.toEqual({
+      id: "principal-1",
+      fullName: "Savia Administrator",
+      email: "admin@savia.test",
+      avatar:
+        "https://savia-preview.hefesoft.com/v1/account/avatar?v=2dbb6efe-1b1f-4462-ae99-8084bf9cd37e",
+    });
+  });
+
+  it("coalesces concurrent getIdentity calls to avoid duplicate session requests", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          access_token: "better-auth-access-token",
+          token_type: "Bearer",
+          scope: "savia.api.read",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          data: {
+            id: "principal-1",
+            attributes: {
+              displayName: "Savia Administrator",
+              email: "admin@savia.test",
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          user: {
+            id: "better-auth-user",
+            image: "https://example.com/avatar.png",
+            name: "Savia Administrator",
+            email: "admin@savia.test",
+          },
+        }),
+      );
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "https://savia-preview.hefesoft.com",
+      fetcher,
+    });
+
+    const [id1, id2, id3, id4] = await Promise.all([
+      session.getIdentity(),
+      session.getIdentity(),
+      session.getIdentity(),
+      session.getIdentity(),
+    ]);
+
+    expect(id1).toEqual(id2);
+    expect(id1.avatar).toBe("https://example.com/avatar.png");
+    // Token refresh + identity/me + get-session = exactly 3 calls total
+    expect(fetcher).toHaveBeenCalledTimes(3);
+
+    // Sequential subsequent call uses cached avatar and cached identity
+    const id5 = await session.getIdentity();
+    expect(id5).toEqual(id1);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("refreshes avatar and identity when savia:identity-changed is dispatched", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          access_token: "better-auth-access-token",
+          token_type: "Bearer",
+          scope: "savia.api.read",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          data: {
+            id: "principal-1",
+            attributes: {
+              displayName: "Savia Administrator",
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          user: {
+            image: "https://example.com/avatar-v1.png",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          data: {
+            id: "principal-1",
+            attributes: {
+              displayName: "Savia Administrator Updated",
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          user: {
+            image: "https://example.com/avatar-v2.png",
+          },
+        }),
+      );
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "https://savia-preview.hefesoft.com",
+      fetcher,
+    });
+
+    const first = await session.getIdentity();
+    expect(first.avatar).toBe("https://example.com/avatar-v1.png");
+
+    window.dispatchEvent(new Event("savia:identity-changed"));
+
+    const second = await session.getIdentity();
+    expect(second.avatar).toBe("https://example.com/avatar-v2.png");
+    expect(second.fullName).toBe("Savia Administrator Updated");
+  });
+
   it("exposes active agency memberships with the session permissions", async () => {
     const fetcher = vi
       .fn()
@@ -628,3 +791,52 @@ it("keeps server unavailability distinguishable from rejected credentials during
   });
   await expect(session.checkSession()).rejects.toMatchObject({ status: 503 });
 });
+
+describe("normalizeAvatarUrl", () => {
+  it("rewrites loopback host to target apiUrl origin", () => {
+    expect(
+      normalizeAvatarUrl(
+        "http://127.0.0.1:8787/v1/account/avatar?v=123",
+        "https://savia-preview.hefesoft.com",
+      ),
+    ).toBe("https://savia-preview.hefesoft.com/v1/account/avatar?v=123");
+
+    expect(
+      normalizeAvatarUrl(
+        "http://localhost:8787/v1/account/avatar?v=123",
+        "https://savia-preview.hefesoft.com",
+      ),
+    ).toBe("https://savia-preview.hefesoft.com/v1/account/avatar?v=123");
+  });
+
+  it("resolves relative avatar path against apiUrl", () => {
+    expect(
+      normalizeAvatarUrl(
+        "/v1/account/avatar?v=456",
+        "https://savia-preview.hefesoft.com",
+      ),
+    ).toBe("https://savia-preview.hefesoft.com/v1/account/avatar?v=456");
+  });
+
+  it("leaves external and matching URLs unchanged", () => {
+    expect(
+      normalizeAvatarUrl(
+        "https://cdn.example.com/pic.jpg",
+        "https://savia-preview.hefesoft.com",
+      ),
+    ).toBe("https://cdn.example.com/pic.jpg");
+
+    expect(
+      normalizeAvatarUrl(
+        "http://127.0.0.1:8787/v1/account/avatar?v=123",
+        "http://127.0.0.1:8787",
+      ),
+    ).toBe("http://127.0.0.1:8787/v1/account/avatar?v=123");
+  });
+
+  it("handles empty or whitespace strings safely", () => {
+    expect(normalizeAvatarUrl("", "https://savia-preview.hefesoft.com")).toBe("");
+    expect(normalizeAvatarUrl("   ", "https://savia-preview.hefesoft.com")).toBe("");
+  });
+});
+

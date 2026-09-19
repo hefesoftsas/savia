@@ -77,8 +77,10 @@ export function createLocalSession(
       );
     return profile;
   };
+  let leasePromise: Promise<void> | null = null;
   const invalidate = async () => {
     cached = undefined;
+    leasePromise = null;
     await clearSessionCache(environment);
   };
   const capture = async () => {
@@ -104,8 +106,15 @@ export function createLocalSession(
     try {
       await read();
     } catch {
-      await verifyRemote();
-      await capture();
+      if (!leasePromise) {
+        leasePromise = (async () => {
+          await verifyRemote();
+          await capture();
+        })().finally(() => {
+          leasePromise = null;
+        });
+      }
+      await leasePromise;
     }
   };
   const fallback = async <T>(
