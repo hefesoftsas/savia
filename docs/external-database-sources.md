@@ -53,7 +53,8 @@ Members of a compound key are never treated as independently unique.
 
 MongoDB samples at most 100 documents. Its metadata is an inference, not a schema
 constraint. Empty collections accept explicit field definitions and a selected
-ObjectId or string identifier type. Include `_id` in the selected fields. A
+ObjectId or string identifier type. Include `_id` in the selected fields. The
+native `_id` field and its display order are supported only in MongoDB bindings. A
 hexadecimal string remains a string when that is the identifier type. Mixed or
 unsupported identifier types disable individual writes.
 

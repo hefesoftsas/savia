@@ -359,8 +359,8 @@ const studio = z.object({
 export const configSchema = z
   .object({
     version: z.literal(2),
-    fields: z.record(identifier, fieldSchema),
-    fieldOrder: z.array(identifier),
+    fields: z.record(z.union([identifier, z.literal("_id")]), fieldSchema),
+    fieldOrder: z.array(z.union([identifier, z.literal("_id")])),
     studio: studio.optional(),
   })
   .passthrough()
@@ -368,6 +368,8 @@ export const configSchema = z
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
     const names = Object.keys(config.fields);
+    if (names.includes("_id") && config.studio?.collection?.kind !== "mongodb")
+      issue("The _id field is reserved for MongoDB collections.");
     if (config.studio?.history) {
       if (
         config.studio.collection ||

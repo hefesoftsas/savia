@@ -227,3 +227,84 @@ it("persists source policy changes into collection metadata for catalog refresh"
     .first<{ config: string }>();
   expect(JSON.parse(row!.config).studio.capabilities.update).toBe(false);
 });
+
+it("binds and synchronizes MongoDB native _id metadata", async () => {
+  const mongoBridge: DatabaseBridgeClient = {
+    ...bridge,
+    inspect: async () => ({
+      ...meta,
+      kind: "collection",
+      idType: "objectId",
+      primaryKey: ["_id"],
+      sampled: true,
+      fields: [
+        {
+          ...meta.fields[0],
+          name: "_id",
+          nativeType: "objectId",
+          generated: true,
+          writable: false,
+          hasDefault: true,
+        },
+        meta.fields[1],
+      ],
+    }),
+  };
+  const mongoApp = createCollectionSourceApp(
+    env.DB,
+    env.DOCUMENTS,
+    "mongo-native-id",
+    "owner",
+    KEY,
+    undefined,
+    undefined,
+    undefined,
+    mongoBridge,
+  );
+  expect(
+    (
+      await call(
+        "sources",
+        "POST",
+        {
+          id: "mongo",
+          label: "MongoDB",
+          kind: "mongodb",
+          host: "db.internal",
+          database: "fixture",
+          writeEnabled: true,
+        },
+        mongoApp,
+      )
+    ).status,
+  ).toBe(201);
+  const bound = await call(
+    "collection-bindings",
+    "POST",
+    {
+      name: "mongo_records",
+      label: "Mongo records",
+      sourceId: "mongo",
+      resource: "orders",
+      idColumn: "_id",
+      idType: "objectId",
+      fields: {
+        _id: { type: "Textbox", label: "ID" },
+        name: { type: "Textbox", label: "Name" },
+      },
+    },
+    mongoApp,
+  );
+  expect(bound.status, await bound.clone().text()).toBe(201);
+  const saved = (await bound.json()) as {
+    data: { version: number; config: { fieldOrder: string[] } };
+  };
+  expect(saved.data.config.fieldOrder).toContain("_id");
+  const synced = await call(
+    "collection-bindings/mongo_records/sync",
+    "POST",
+    { version: saved.data.version },
+    mongoApp,
+  );
+  expect(synced.status, await synced.clone().text()).toBe(200);
+});
