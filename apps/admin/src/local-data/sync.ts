@@ -377,16 +377,17 @@ export function createSyncCoordinator(
     subscription?.unsubscribe();
     globalThis.removeEventListener?.("online", requestSync);
   };
-  const syncNow = (collection?: string): Promise<void> => {
-    const key = collection ?? "$all";
+  const syncNow = (collection?: string, force = false): Promise<void> => {
+    const key = `${collection ?? "$all"}:${force ? "refresh" : "provision"}`;
     const existing = foreground.get(key);
-    if (existing) return existing;
+    // A forced refresh follows a committed write and must not reuse an older pull.
+    if (existing && !force) return existing;
     const expectedGeneration = generation;
     const pending = (async () => {
       if (!globalThis.navigator?.locks)
         throw new Error("Background synchronization requires Web Locks");
       const ready = async () => {
-        if (!collection) return false;
+        if (!collection || force) return false;
         const definition = await store.db.collections.get(collection);
         return (
           definition?.capability === "remote" ||

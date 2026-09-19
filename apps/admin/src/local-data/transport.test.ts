@@ -340,3 +340,52 @@ it("refreshes collection versions after saving history settings without caching 
     ),
   ).toHaveLength(2);
 });
+
+it("blocks history recovery while the target has local pending edits", async () => {
+  const local = store();
+  Object.assign(local.db, {
+    outbox: { where: () => ({ equals: () => ({ count: async () => 1 }) }) },
+  });
+  Object.assign(local, { getPendingBundle: async () => null });
+  const network = vi.fn();
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  const result = await transport("/api/record-history/contacts/one/2/restore", {
+    method: "PUT",
+    body: JSON.stringify({
+      fields: ["name"],
+      side: "before",
+      expectedVersion: 2,
+    }),
+  });
+  expect(result.status).toBe(409);
+  expect(network).not.toHaveBeenCalled();
+});
+
+it("refreshes local data after successful history recovery without reporting refresh failure as a write failure", async () => {
+  const local = store();
+  Object.assign(local.db, {
+    outbox: { where: () => ({ equals: () => ({ count: async () => 0 }) }) },
+  });
+  Object.assign(local, { getPendingBundle: async () => null });
+  const network = vi.fn(async () => Response.json({ data: { version: 3 } }));
+  const sync = vi.fn(async () => {
+    throw new Error("Offline after commit");
+  });
+  const requestSync = vi.fn();
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    sync,
+    requestSync,
+  );
+  const result = await transport("/api/record-history/contacts/one/2/restore", {
+    method: "PUT",
+  });
+  expect(result.status).toBe(200);
+  expect(sync).toHaveBeenCalledWith("contacts", true);
+  expect(requestSync).toHaveBeenCalledOnce();
+});

@@ -32,6 +32,31 @@ let settings = {
 setCrmRuntime({
   embedded: false,
   transport: async (path, init) => {
+    if (path.endsWith("/usage"))
+      return Response.json({
+        data: {
+          events: 2,
+          logicalBytes: 140,
+          expiredEvents: 0,
+          oldestExpiredAt: null,
+          limited: false,
+          measuredAt: new Date().toISOString(),
+        },
+      });
+    if (path.endsWith("/restore"))
+      return Response.json({
+        data: {
+          expectedVersion: 2,
+          changes: {
+            status: {
+              current: "Aprobada",
+              before: "En revisión",
+              after: "Aprobada",
+            },
+            approved: { current: true, before: false, after: true },
+          },
+        },
+      });
     if (path.includes("record-history-settings")) {
       if (init?.method === "PUT") {
         const body = JSON.parse(String(init.body));

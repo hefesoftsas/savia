@@ -325,6 +325,10 @@ it("hydrates a requested collection without waiting for unrelated collections an
     const before = calls.length;
     await coordinator.syncNow("people");
     expect(calls).toHaveLength(before);
+    await coordinator.syncNow("people", true);
+    expect(calls.filter((path) => path.includes("/pull/people"))).toHaveLength(
+      2,
+    );
     await backgroundResumed;
   } finally {
     coordinator.stop();

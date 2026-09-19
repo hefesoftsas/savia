@@ -122,6 +122,11 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
       /^\/api\/record-history\/[^/]+\/[^/]+(?:\/[^/]+)?$/.test(path)
     )
       return next();
+    if (
+      (method === "GET" || method === "PUT") &&
+      /^\/api\/record-history\/[^/]+\/[^/]+\/[^/]+\/restore$/.test(path)
+    )
+      return next();
     const recordMatch =
       /^\/api\/records\/([^/]+)(?:\/([^/]+))?(?:\/(restore|bulk))?$/.exec(path);
     const viewMatch = /^\/api\/views\/([^/]+)$/.exec(path);

@@ -812,7 +812,13 @@ export default function RecordDetail({
             supportsRecordHistory(object) &&
             capabilities.read && (
               <Suspense fallback={<p role="status">Cargando historial…</p>}>
-                <RecordHistory object={object} recordId={record.id} />
+                <RecordHistory
+                  object={object}
+                  recordId={record.id}
+                  onRestored={() => {
+                    void client.invalidateQueries();
+                  }}
+                />
               </Suspense>
             )}
           {tab === "tasks" && (

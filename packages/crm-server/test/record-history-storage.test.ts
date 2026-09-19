@@ -278,3 +278,17 @@ it("preserves short embedded-NUL strings and bounds long values after NUL", asyn
     },
   });
 });
+
+it("reports remaining expiration lag after a bounded maintenance batch", async () => {
+  await db
+    .prepare(
+      "UPDATE crm_record_history SET expires_at='2000-01-01T00:00:00.000Z'",
+    )
+    .run();
+  const { maintainRecordHistory } =
+    await import("../src/record-history-storage");
+  const report = await maintainRecordHistory(db, 1);
+  expect(report.deleted).toBe(1);
+  expect(report.oldestExpiredAt).toBe("2000-01-01T00:00:00.000Z");
+  expect(report.lagSeconds).toBeGreaterThan(0);
+});
