@@ -44,6 +44,7 @@ import {
 import { registerExtensions, type ExtensionOptions } from "./extensions";
 import { registerExtensionActions } from "./extension-actions";
 import { registerExtensionSummaries } from "./extension-summaries";
+import { registerWorkflows, type WorkflowOptions } from "./workflows/routes";
 export function createCrmApp(
   agencyTenant?: string,
   options?: {
@@ -51,7 +52,8 @@ export function createCrmApp(
     principalId?: string;
     accessPolicy?: AccessPolicy;
   } & SolutionOptions &
-    ExtensionOptions,
+    ExtensionOptions &
+    WorkflowOptions,
 ) {
   const app = new Hono<Env>();
   app.use(
@@ -726,6 +728,7 @@ export function createCrmApp(
   registerLocalSync(app, trigger);
   registerOfficeFiles(app);
   registerOperations(app);
+  registerWorkflows(app, options);
   return app;
 }
 export default createCrmApp();

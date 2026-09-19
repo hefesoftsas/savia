@@ -35,6 +35,7 @@ import { api } from "./api";
 import { fieldEntries, type CrmObject } from "@savia/crm-shared/metadata";
 import { parseCsv } from "@savia/crm-shared/csv";
 import "./operations.css";
+import Workflows from "./workflows";
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -1321,7 +1322,7 @@ export default function Operations({ objects }: { objects: CrmObject[] }) {
     <main className="operations-page">
       <header className="op-page-title">
         <div>
-          <span className="eyebrow">OPERACIÓN COMERCIAL</span>
+          <span className="eyebrow">OPERACIONES</span>
           <h1>Trabajo y resultados</h1>
           <p>
             Coordina seguimientos, mueve datos y observa cómo avanza tu negocio.
@@ -1333,6 +1334,7 @@ export default function Operations({ objects }: { objects: CrmObject[] }) {
           { id: "tasks", label: "Seguimiento", Icon: CalendarDays },
           { id: "import", label: "Importar y exportar", Icon: FileSpreadsheet },
           { id: "automations", label: "Automatizaciones", Icon: Zap },
+          { id: "workflows", label: "Flujos de trabajo", Icon: ArrowRight },
           { id: "reports", label: "Reportes", Icon: ChartNoAxesCombined },
         ].map(({ id, label, Icon }) => (
           <button
@@ -1349,6 +1351,7 @@ export default function Operations({ objects }: { objects: CrmObject[] }) {
       {tab === "tasks" && <TaskPanel />}
       {tab === "import" && <ImportExport objects={objects} />}
       {tab === "automations" && <Automations objects={objects} />}
+      {tab === "workflows" && <Workflows objects={objects} />}
       {tab === "reports" && <Reports />}
     </main>
   );

@@ -212,12 +212,21 @@ export async function assertLocalCollection(
       422,
     );
 }
+export type RecordCheckpoint = {
+  before: D1PreparedStatement[];
+  after: (record: CrmRecord) => D1PreparedStatement[];
+};
 export async function createRecord(
   db: D1Database,
   tenant: string,
   name: string,
   input: Record<string, unknown>,
-  options: { idempotencyKey?: string; id?: string; createdBy?: string } = {},
+  options: {
+    idempotencyKey?: string;
+    id?: string;
+    createdBy?: string;
+    checkpoint?: RecordCheckpoint;
+  } = {},
 ) {
   await assertLocalCollection(db, tenant, name);
   const object = await getObject(db, tenant, name),
@@ -267,6 +276,7 @@ export async function createRecord(
     [object.version ?? 1, tenant, name],
   );
   const statements = [
+    ...(options.checkpoint?.before ?? []),
     schemaGuard.start,
     ...(await checkRelations(db, tenant, object, data)),
     db
@@ -295,7 +305,10 @@ export async function createRecord(
         .bind(tenant, key, hash, JSON.stringify(result)),
     );
   try {
-    await transaction(db, statements);
+    await transaction(db, [
+      ...statements,
+      ...(options.checkpoint?.after(result) ?? []),
+    ]);
   } catch (e) {
     if (key) {
       const result = await replay();
@@ -311,7 +324,7 @@ export async function updateRecord(
   name: string,
   id: string,
   input: Record<string, unknown>,
-  options: { version: number },
+  options: { version: number; checkpoint?: RecordCheckpoint },
 ) {
   await assertLocalCollection(db, tenant, name);
   if (!Number.isInteger(options.version) || options.version < 1)
@@ -348,7 +361,17 @@ export async function updateRecord(
     [options.version, tenant, name, id],
   );
   const now = new Date().toISOString();
+  const result = {
+    ...data,
+    id,
+    created_at: record.created_at,
+    updated_at: now,
+    _version: options.version + 1,
+    deleted_at: null,
+    ...(record.created_by ? { created_by: record.created_by } : {}),
+  };
   await transaction(db, [
+    ...(options.checkpoint?.before ?? []),
     schemaGuard.start,
     recordGuard.start,
     ...(await checkRelations(db, tenant, object, data)),
@@ -369,16 +392,9 @@ export async function updateRecord(
     }),
     recordGuard.end,
     schemaGuard.end,
+    ...(options.checkpoint?.after(result) ?? []),
   ]);
-  return {
-    ...data,
-    id,
-    created_at: record.created_at,
-    updated_at: now,
-    _version: options.version + 1,
-    deleted_at: null,
-    ...(record.created_by ? { created_by: record.created_by } : {}),
-  };
+  return result;
 }
 export async function deleteRecord(
   db: D1Database,

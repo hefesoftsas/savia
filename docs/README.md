@@ -17,6 +17,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
 - [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
 
 - [related-record-editing.md](related-record-editing.md) — related subforms, editable tables, atomic saves and recoverable drafts.

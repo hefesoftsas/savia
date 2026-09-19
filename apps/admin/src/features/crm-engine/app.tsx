@@ -765,7 +765,13 @@ function App({
               previous ?? (editing === "new" ? undefined : editing);
             const creating = !target;
             if (relations)
-              return saveRelatedRecords(object.name, data, target, relations, saveOptions?.idempotencyKey ?? writeKey);
+              return saveRelatedRecords(
+                object.name,
+                data,
+                target,
+                relations,
+                saveOptions?.idempotencyKey ?? writeKey,
+              );
             const result = await api<{ data: CrmRecord }>(
               `/records/${object.name}${creating ? "" : "/" + target.id}`,
               creating ? "POST" : "PATCH",

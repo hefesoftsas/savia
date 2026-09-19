@@ -1092,3 +1092,49 @@ it("enforces scoped bundle row and field grants and projects immutable replays",
       .first(),
   ).toEqual({ n: 2 });
 });
+
+it("journals each committed bundle member once without duplicating workflow events on replay", async () => {
+  const { tenant, relationId, call } = await fixture();
+  for (const collection of ["parents", "children"]) {
+    const definition = JSON.stringify({
+      trigger: { type: "created", collection },
+      nodes: [{ id: "start", type: "finish" }],
+    });
+    await env.DB.prepare(
+      "INSERT INTO workflows(workspace_id,id,name,definition,created_by) VALUES(?,?,?,?,?)",
+    )
+      .bind(tenant, collection, collection, definition, "owner")
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO workflow_versions(workspace_id,id,workflow_id,definition,owner_id,revision) VALUES(?,?,?,?,?,1)",
+    )
+      .bind(tenant, collection + "-v1", collection, definition, "owner")
+      .run();
+    await env.DB.prepare(
+      "UPDATE workflows SET enabled=1,published_version=? WHERE workspace_id=? AND id=?",
+    )
+      .bind(collection + "-v1", tenant, collection)
+      .run();
+  }
+  const input = {
+      record: { clientId: crypto.randomUUID(), data: { name: "Parent" } },
+      relations: [
+        {
+          relationId,
+          rows: [{ clientId: crypto.randomUUID(), data: { name: "Child" } }],
+        },
+      ],
+    },
+    key = crypto.randomUUID();
+  expect((await call(input, key)).status).toBe(200);
+  expect((await call(input, key)).status).toBe(200);
+  expect((await call(input)).status).toBe(409);
+  for (const table of ["crm_records", "workflow_events", "workflow_executions"])
+    expect(
+      await env.DB.prepare(
+        `SELECT count(*) n FROM ${table} WHERE ${table === "crm_records" ? "tenant_id" : "workspace_id"}=?`,
+      )
+        .bind(tenant)
+        .first(),
+    ).toEqual({ n: 2 });
+});

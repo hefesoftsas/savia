@@ -6,6 +6,7 @@
 **Spec:** ../specs/2026-09-19-offline-related-records-design.md
 
 ## Tasks
+
 - [ ] Backend: test stable client-generated create IDs, idempotent replay and wrong-principal rejection; extend shared contract, endpoint and generated OpenAPI. Inspect/fix the confirmed stale schema-count assertion blocking preview CI.
 - [ ] Local store: test atomic enqueue/rollback, indexed optimistic records, link snapshots, overlapping-write rejection, pull protection, atomic acknowledgement/discard/rebase, and collection revocation. Implement fixed schema v2 and bundle storage helpers.
 - [ ] Sync: send bundles through existing authenticated Web Lock coordinator; preserve operation IDs across network failures, reject conflicts as one unit, and implement explicit online fresh-state resolution. Cache/overlay complete links through local transport.
@@ -13,6 +14,7 @@
 - [ ] Verification: inspect deployment health, exercise policy/beneficiary/coverage-shaped fixtures, run relevant store/sync/transport/form/backend suites and typechecks; independently review concurrency/revocation/replay; merge/push main and verify CI/deployment.
 
 ## Review focus
+
 - A lost response never duplicates client-generated children or changes the replay body.
 - Incoming pulls and unrelated queued edits cannot overwrite any pending bundle member.
 - A revoked child collection prevents delivery and removes visible data for that member.

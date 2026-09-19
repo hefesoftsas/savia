@@ -1,6 +1,9 @@
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { disabledSolutionObjects } from "@savia/crm-server/solution-state";
 import { parseObject } from "@savia/crm-server/services";
+import { z } from "@hono/zod-openapi";
+import { workflowDraftSchema } from "@savia/crm-shared/workflows";
+import { workflowRequests } from "@savia/crm-server/workflows/routes";
 
 type Schema = Record<string, unknown>;
 type Paths = Record<string, Record<string, unknown>>;
@@ -947,6 +950,82 @@ export async function dynamicOpenApi(
           ),
         };
     }
+  }
+  const workflowRoutes = [
+    ["/workflows", "get", "List workflows", null],
+    ["/workflows", "post", "Create workflow draft", workflowDraftSchema],
+    ["/workflows/{id}", "get", "Read workflow draft", null],
+    ["/workflows/{id}", "put", "Save workflow draft", workflowRequests.save],
+    [
+      "/workflows/{id}/publish",
+      "post",
+      "Publish immutable workflow version",
+      workflowRequests.publish,
+    ],
+    [
+      "/workflows/{id}/enabled",
+      "post",
+      "Change workflow activation",
+      workflowRequests.enabled,
+    ],
+    [
+      "/workflows/{id}/start",
+      "post",
+      "Start manual workflow",
+      workflowRequests.start,
+    ],
+    ["/workflows/{id}/executions", "get", "List executions", null],
+    [
+      "/workflow-executions/{id}",
+      "get",
+      "Inspect execution and step results",
+      null,
+    ],
+    ["/workflow-executions/{id}/cancel", "post", "Cancel execution", null],
+    [
+      "/workflow-executions/{id}/retry",
+      "post",
+      "Retry failed or blocked execution",
+      null,
+    ],
+    ["/workflow-inbox", "get", "Read assigned tasks and notifications", null],
+    ["/workflow-inbox/{id}/resolve", "post", "Resolve assigned item", null],
+  ] as const;
+  for (const [path, method, summary, body] of workflowRoutes) {
+    paths[path] ??= {};
+    paths[path][method] = {
+      summary,
+      tags: ["Workflows"],
+      parameters: path.includes("{id}")
+        ? [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string" },
+            },
+          ]
+        : [],
+      ...(body
+        ? {
+            requestBody: {
+              required: true,
+              content: json(z.toJSONSchema(body)),
+            },
+          }
+        : {}),
+      responses: {
+        [path.endsWith("/start")
+          ? 202
+          : method === "post" && path === "/workflows"
+            ? 201
+            : 200]: {
+          description: "Workspace-scoped result",
+          content: json(envelope({})),
+        },
+        ...failures,
+      },
+    };
   }
   const fileId = parameter("id", "path", { type: "string" }, true);
   const fileVersion = parameter(
