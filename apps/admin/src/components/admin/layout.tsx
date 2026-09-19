@@ -13,6 +13,7 @@ import { Error } from "@/components/admin/error";
 import { Loading } from "@/components/admin/loading";
 import { SaviaRequestProvider } from "@/features/savia-request/savia-request-provider";
 import { ArrowLeft, ArrowRight } from "lucide-react";
+import { PwaInstallButton } from "@/pwa";
 
 const AssistantBar = lazy(async () => {
   const module = await import("@/features/assistant/assistant-bar");
@@ -163,9 +164,12 @@ export const Layout = (props: CoreLayoutProps) => {
           <LayoutSidebarTrigger />
           <GlobalHistoryNav />
           <div
-            className="min-w-0 flex flex-1 items-center pr-10 sm:pr-11"
+            className="min-w-0 flex flex-1 items-center pr-2"
             id="breadcrumb"
           />
+          <div className="flex items-center gap-1.5 mr-10 sm:mr-12 shrink-0">
+            <PwaInstallButton variant="header" />
+          </div>
           <div
             id="header-actions"
             className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 sm:right-4"

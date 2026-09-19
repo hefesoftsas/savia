@@ -7,8 +7,8 @@ import {
   useTranslate,
   UserMenuContext,
 } from "ra-core";
-import { ChevronsUpDown, Download, ExternalLink, LogOut } from "lucide-react";
-import { usePwaInstall, PwaInstallDialog } from "@/pwa";
+import { ChevronsUpDown, ExternalLink, LogOut } from "lucide-react";
+import { usePwaInstall, PwaInstallButton } from "@/pwa";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import {
   DropdownMenu,
@@ -44,8 +44,7 @@ export function UserMenu({ children }: UserMenuProps) {
   const currentTenant = useCurrentTenant();
 
   const [open, setOpen] = useState(false);
-  const { isInstallable, isInstalled, isIOS, promptInstall } = usePwaInstall();
-  const [iosDialogOpen, setIosDialogOpen] = useState(false);
+  const { isInstalled } = usePwaInstall();
 
   const handleToggleOpen = useCallback(() => {
     setOpen((prevOpen) => !prevOpen);
@@ -54,15 +53,6 @@ export function UserMenu({ children }: UserMenuProps) {
   const handleClose = useCallback(() => {
     setOpen(false);
   }, []);
-
-  const handleInstallClick = useCallback(async () => {
-    handleClose();
-    if (isIOS) {
-      setIosDialogOpen(true);
-      return;
-    }
-    await promptInstall();
-  }, [handleClose, isIOS, promptInstall]);
 
   useEffect(() => {
     const refreshIdentity = () => {
@@ -166,22 +156,12 @@ export function UserMenu({ children }: UserMenuProps) {
           {Children.count(children) > 0 ? (
             <DropdownMenuSeparator className="my-1" />
           ) : null}
-          {!isInstalled && isInstallable ? (
+          {!isInstalled && (
             <>
-              <DropdownMenuItem
-                onClick={handleInstallClick}
-                className="cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium"
-              >
-                <Download className="size-4 text-muted-foreground" />
-                <span>
-                  {translate("savia.pwa.installApp", {
-                    _: "Instalar aplicación",
-                  })}
-                </span>
-              </DropdownMenuItem>
+              <PwaInstallButton variant="menu" onAction={handleClose} />
               <DropdownMenuSeparator className="my-1" />
             </>
-          ) : null}
+          )}
           <LocalesMenuItems onSelect={handleClose} trailingSeparator />
           {currentTenant.isPlatformAdmin && currentTenant.isDedicated ? (
             <DropdownMenuItem
@@ -208,7 +188,6 @@ export function UserMenu({ children }: UserMenuProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PwaInstallDialog open={iosDialogOpen} onOpenChange={setIosDialogOpen} />
     </UserMenuContext.Provider>
   );
 }

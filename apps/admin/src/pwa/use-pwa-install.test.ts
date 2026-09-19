@@ -30,15 +30,15 @@ describe("usePwaInstall", () => {
     vi.restoreAllMocks();
   });
 
-  it("reports not installed and not installable by default without beforeinstallprompt", () => {
+  it("reports installable in browser tab and hasNativePrompt false by default", () => {
     const { result } = renderHook(() => usePwaInstall());
 
     expect(result.current.isInstalled).toBe(false);
-    expect(result.current.isInstallable).toBe(false);
-    expect(result.current.isIOS).toBe(false);
+    expect(result.current.isInstallable).toBe(true);
+    expect(result.current.hasNativePrompt).toBe(false);
   });
 
-  it("detects when the app is running standalone", () => {
+  it("detects when the app is running standalone and marks not installable", () => {
     isStandaloneMatch = true;
     const { result } = renderHook(() => usePwaInstall());
 
@@ -46,7 +46,7 @@ describe("usePwaInstall", () => {
     expect(result.current.isInstallable).toBe(false);
   });
 
-  it("handles beforeinstallprompt event and allows prompting install", async () => {
+  it("handles beforeinstallprompt event, marks hasNativePrompt true, and allows prompting install", async () => {
     const { result } = renderHook(() => usePwaInstall());
 
     const promptMock = vi.fn().mockResolvedValue(undefined);
@@ -61,6 +61,7 @@ describe("usePwaInstall", () => {
     });
 
     expect(result.current.isInstallable).toBe(true);
+    expect(result.current.hasNativePrompt).toBe(true);
 
     let installResult: boolean | undefined;
     await act(async () => {
@@ -70,6 +71,7 @@ describe("usePwaInstall", () => {
     expect(promptMock).toHaveBeenCalled();
     expect(installResult).toBe(true);
     expect(result.current.isInstalled).toBe(true);
+    expect(result.current.isInstallable).toBe(false);
   });
 
   it("handles user dismissing the install prompt", async () => {
@@ -87,6 +89,7 @@ describe("usePwaInstall", () => {
     });
 
     expect(result.current.isInstallable).toBe(true);
+    expect(result.current.hasNativePrompt).toBe(true);
 
     let installResult: boolean | undefined;
     await act(async () => {
@@ -107,5 +110,6 @@ describe("usePwaInstall", () => {
 
     expect(result.current.isInstalled).toBe(true);
     expect(result.current.isInstallable).toBe(false);
+    expect(result.current.hasNativePrompt).toBe(false);
   });
 });

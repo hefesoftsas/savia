@@ -9,10 +9,25 @@ export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+export type PwaPlatform =
+  | "ios"
+  | "android"
+  | "mac-safari"
+  | "chromium"
+  | "other";
+
 export type PwaInstallState = {
+  /** True when running inside a browser tab and not yet installed in standalone window. */
   isInstallable: boolean;
+  /** True when running in standalone PWA window or home-screen mode. */
   isInstalled: boolean;
+  /** True if the browser fired beforeinstallprompt and has a native modal ready. */
+  hasNativePrompt: boolean;
+  /** Detected browser / OS platform. */
+  platform: PwaPlatform;
+  /** True on iPhone, iPad, or iPod touch. */
   isIOS: boolean;
+  /** Triggers the native browser install prompt if available. Returns true if accepted. */
   promptInstall: () => Promise<boolean>;
 };
 
@@ -27,13 +42,29 @@ function checkIsInstalled(): boolean {
   return isStandalone || isNavigatorStandalone;
 }
 
-function checkIsIOS(): boolean {
-  if (typeof window === "undefined" || !window.navigator) return false;
-  const userAgent = window.navigator.userAgent || "";
-  return (
-    /iPad|iPhone|iPod/.test(userAgent) &&
+export function detectPwaPlatform(): PwaPlatform {
+  if (typeof window === "undefined" || !window.navigator) return "other";
+  const ua = window.navigator.userAgent || "";
+
+  if (
+    /iPad|iPhone|iPod/.test(ua) &&
     !(window as unknown as { MSStream?: unknown }).MSStream
-  );
+  ) {
+    return "ios";
+  }
+  if (/Android/i.test(ua)) {
+    return "android";
+  }
+  if (
+    /Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua) &&
+    /^((?!chrome|android).)*safari/i.test(ua)
+  ) {
+    return "mac-safari";
+  }
+  if (/Chrome|Chromium|Edg\//i.test(ua)) {
+    return "chromium";
+  }
+  return "other";
 }
 
 // Global reference so that if beforeinstallprompt fired before component mount,
@@ -63,7 +94,7 @@ export function usePwaInstall(): PwaInstallState {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(
     () => deferredPrompt,
   );
-  const [isIOS] = useState(checkIsIOS);
+  const [platform] = useState<PwaPlatform>(detectPwaPlatform);
 
   useEffect(() => {
     const handlePromptChange = (newPrompt: BeforeInstallPromptEvent | null) => {
@@ -117,11 +148,16 @@ export function usePwaInstall(): PwaInstallState {
     return false;
   }, [prompt]);
 
-  const isInstallable = !isInstalled && (prompt !== null || isIOS);
+  const hasNativePrompt = prompt !== null;
+  // Always installable if not currently running as an installed standalone app
+  const isInstallable = !isInstalled;
+  const isIOS = platform === "ios";
 
   return {
     isInstallable,
     isInstalled,
+    hasNativePrompt,
+    platform,
     isIOS,
     promptInstall,
   };

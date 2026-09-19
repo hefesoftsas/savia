@@ -79,6 +79,7 @@ import {
 } from "@/features/crm-engine/lucide-lookup-icon";
 import { AppearancePanel } from "@/components/admin/appearance-panel";
 import { UserMenu } from "@/components/admin/user-menu";
+import { PwaInstallButton } from "@/pwa";
 import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -1000,6 +1001,9 @@ export function AppSidebar() {
       <SidebarFooter className="gap-2">
         <AppearancePanel />
         <SidebarMenu className="rounded-xl bg-sidebar-primary/12 p-1 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
+          <SidebarMenuItem>
+            <PwaInstallButton variant="sidebar" />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <UserMenu>
               <DropdownMenuItem

@@ -379,6 +379,10 @@ const saviaEnglish = {
     },
     pwa: {
       installApp: "Install application",
+      installAppShort: "Install app",
+      dialogTitle: "Install Savia on your device",
+      dialogSubtitle:
+        "Install Savia as an application for quick access from your desktop or home screen and full-screen experience.",
       iosTitle: "Install Savia on your device",
       iosSubtitle:
         "Install Savia as an application for quick access from your home screen and full-screen experience.",
@@ -386,6 +390,18 @@ const saviaEnglish = {
       iosStep1Desc: "In the bottom or top bar of Safari, tap",
       iosStep2Title: "Add to Home Screen",
       iosStep2Desc: "Scroll down the list and tap 'Add to Home Screen'.",
+      macSafariStep1Title: "Open the File menu",
+      macSafariStep1Desc: "In the top menu bar of your Mac with Safari active, click the File menu.",
+      macSafariStep2Title: "Select 'Add to Dock…'",
+      macSafariStep2Desc: "Savia will be installed as a standalone desktop app in your macOS Dock.",
+      androidStep1Title: "Open the Chrome menu",
+      androidStep1Desc: "Tap the three dots icon (⋮) in the top-right corner of the browser.",
+      androidStep2Title: "Install application",
+      androidStep2Desc: "Select 'Install application' or 'Add to Home screen'.",
+      desktopStep1Title: "Icon in the address bar",
+      desktopStep1Desc: "In Chrome or Edge, click the install icon (monitor with down arrow) on the right of the address bar.",
+      desktopStep2Title: "Or from the browser menu",
+      desktopStep2Desc: "Click the menu (⋮) in the top-right corner and select 'Install Savia…'.",
       gotIt: "Got it",
     },
     auth: {
@@ -825,6 +841,10 @@ const saviaSpanish = {
     },
     pwa: {
       installApp: "Instalar aplicación",
+      installAppShort: "Instalar app",
+      dialogTitle: "Instalar Savia en tu dispositivo",
+      dialogSubtitle:
+        "Instala Savia como aplicación para acceder rápidamente desde tu escritorio o pantalla de inicio y utilizarla a pantalla completa.",
       iosTitle: "Instalar Savia en tu dispositivo",
       iosSubtitle:
         "Instala Savia como aplicación para acceder rápidamente desde tu pantalla de inicio y utilizarla a pantalla completa.",
@@ -833,6 +853,24 @@ const saviaSpanish = {
       iosStep2Title: "Añadir a pantalla de inicio",
       iosStep2Desc:
         "Baja por la lista de opciones y pulsa 'Añadir a pantalla de inicio'.",
+      macSafariStep1Title: "Abre el menú Archivo",
+      macSafariStep1Desc:
+        "En la barra superior de tu Mac con Safari activo, haz clic en el menú Archivo.",
+      macSafariStep2Title: "Selecciona 'Añadir al Dock…'",
+      macSafariStep2Desc:
+        "Savia se instalará como aplicación nativa en tu Dock de macOS.",
+      androidStep1Title: "Abre el menú de Chrome",
+      androidStep1Desc:
+        "Toca el icono de tres puntos (⋮) en la esquina superior derecha del navegador.",
+      androidStep2Title: "Instalar aplicación",
+      androidStep2Desc:
+        "Selecciona 'Instalar aplicación' o 'Añadir a la pantalla principal'.",
+      desktopStep1Title: "Icono en la barra de direcciones",
+      desktopStep1Desc:
+        "En Chrome o Edge, busca el icono de instalar (pantalla con flecha) a la derecha de la barra de direcciones.",
+      desktopStep2Title: "O desde el menú del navegador",
+      desktopStep2Desc:
+        "Haz clic en el menú (⋮) de la esquina superior derecha y selecciona 'Instalar Savia…'.",
       gotIt: "Entendido",
     },
     auth: {
@@ -1274,6 +1312,10 @@ const saviaPortuguese = {
     },
     pwa: {
       installApp: "Instalar aplicativo",
+      installAppShort: "Instalar app",
+      dialogTitle: "Instalar o Savia no seu dispositivo",
+      dialogSubtitle:
+        "Instale o Savia como aplicativo para acessar rapidamente da sua área de trabalho ou tela inicial e usar em tela cheia.",
       iosTitle: "Instalar o Savia no seu dispositivo",
       iosSubtitle:
         "Instale o Savia como aplicativo para acessar rapidamente da sua tela inicial e usar em tela cheia.",
@@ -1282,6 +1324,24 @@ const saviaPortuguese = {
       iosStep2Title: "Adicionar à Tela de Início",
       iosStep2Desc:
         "Desça na lista e toque em 'Adicionar à Tela de Início'.",
+      macSafariStep1Title: "Abra o menu Arquivo",
+      macSafariStep1Desc:
+        "Na barra superior do Mac com o Safari ativo, clique no menu Arquivo.",
+      macSafariStep2Title: "Selecione 'Adicionar ao Dock…'",
+      macSafariStep2Desc:
+        "O Savia será instalado como aplicativo nativo no Dock do seu macOS.",
+      androidStep1Title: "Abra o menu do Chrome",
+      androidStep1Desc:
+        "Toque no ícone de três pontos (⋮) no canto superior direito do navegador.",
+      androidStep2Title: "Instalar aplicativo",
+      androidStep2Desc:
+        "Selecione 'Instalar aplicativo' ou 'Adicionar à tela inicial'.",
+      desktopStep1Title: "Ícone na barra de endereços",
+      desktopStep1Desc:
+        "No Chrome ou Edge, procure o ícone de instalação (tela com seta) à direita da barra de endereços.",
+      desktopStep2Title: "Ou pelo menu do navegador",
+      desktopStep2Desc:
+        "Clique no menu (⋮) no canto superior direito e selecione 'Instalar Savia…'.",
       gotIt: "Entendido",
     },
     auth: {

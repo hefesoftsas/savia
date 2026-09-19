@@ -34,9 +34,25 @@ vi.mock("@/pwa", () => ({
   usePwaInstall: () => ({
     isInstallable: mockIsInstallable,
     isInstalled: mockIsInstalled,
+    hasNativePrompt: true,
+    platform: "chromium",
     isIOS: false,
     promptInstall: mockPromptInstall,
   }),
+  PwaInstallButton: ({ onAction }: { onAction?: () => void }) => {
+    if (mockIsInstalled) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          onAction?.();
+          mockPromptInstall();
+        }}
+      >
+        Instalar aplicación
+      </button>
+    );
+  },
   PwaInstallDialog: () => null,
 }));
 
