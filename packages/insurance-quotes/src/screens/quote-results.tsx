@@ -1,0 +1,1528 @@
+import { useEffect, useMemo, useState } from "react";
+import type { PluginExtensionActionRun } from "@savia/crm-shared/plugin-api";
+import { downloadQuoteComparisonPdf } from "./quote-comparison-pdf";
+import { ProviderLogo } from "./provider-logo";
+import {
+  formatCop,
+  toUnifiedComparisonQuote,
+  type UnifiedComparisonQuote,
+} from "./unified-quote-model";
+
+type RecordValue = Record<string, unknown>;
+
+function record(value: unknown): RecordValue | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as RecordValue)
+    : null;
+}
+
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function money(value: unknown): string | null {
+  if (!Number.isFinite(Number(value))) return null;
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+}
+
+function resultTitle(
+  data: RecordValue | null,
+  output: RecordValue | null,
+): string {
+  if (output?.type === "vehicle_lookup") return "Consultar placa";
+  const product = text(data?.product);
+  if (product) return product;
+  const operation = [text(data?.operationId), text(data?.quoteNumber)].find(
+    (candidate) => candidate !== null,
+  );
+  if (operation?.includes("sbs-product-8")) return "SBS · Autos Producto 8";
+  if (operation?.includes("sbs-product-10")) return "SBS · Autos Gold";
+  if (operation?.includes("sbs-product-11")) return "SBS · Autos Plata";
+  const provider = text(output?.provider);
+  return provider
+    ? `${provider.toUpperCase()} · Cotización`
+    : "Cotización disponible";
+}
+
+export type QuoteBatchItem = {
+  productId: string;
+  flowId: string;
+  label: string;
+  provider: string;
+  status: "pending" | "succeeded" | "failed";
+  error?: string;
+  runId?: string;
+  detailId?: string;
+  detailVersion?: number;
+  quoteNumber?: string;
+  premium?: number;
+};
+
+export type VehicleInfo = {
+  plate?: string;
+  declaredValue?: number;
+  productionYear?: number;
+  fasecoldaCode?: string;
+};
+
+export type HistoricalQuoteSummary = {
+  id: string;
+  name: string;
+  placa?: string;
+  ramo?: string;
+  valor_asegurado?: number;
+  prima?: number;
+  estado?: string;
+  created_at?: string;
+};
+
+export function QuoteResults({
+  runs,
+  loading,
+  productErrors = [],
+  batchItems = [],
+  onRetrySingle,
+  onRetryAll,
+  retryingIds = [],
+  quoteReference,
+  masterQuoteId,
+  vehicleInfo,
+  historyQuotes = [],
+  selectedHistoryQuoteId,
+  onSelectHistoryQuote,
+  hasSelectedQuote,
+  onGoToForm,
+  showHistorySelector = false,
+}: {
+  runs: readonly PluginExtensionActionRun[];
+  loading: boolean;
+  productErrors?: readonly string[];
+  batchItems?: readonly QuoteBatchItem[];
+  onRetrySingle?: (productId: string) => Promise<void> | void;
+  onRetryAll?: () => Promise<void> | void;
+  retryingIds?: readonly string[];
+  quoteReference?: string;
+  masterQuoteId?: string;
+  vehicleInfo?: VehicleInfo;
+  historyQuotes?: readonly HistoricalQuoteSummary[];
+  selectedHistoryQuoteId?: string | null;
+  onSelectHistoryQuote?: (quoteId: string | null) => void;
+  hasSelectedQuote?: boolean;
+  onGoToForm?: () => void;
+  showHistorySelector?: boolean;
+}) {
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[] | null>(
+    null,
+  );
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyHighlight, setHistoryHighlight] = useState(0);
+
+  const filteredHistoryQuotes = useMemo(() => {
+    const query = historyQuery.trim().toLocaleLowerCase("es-CO");
+    if (!query) return historyQuotes;
+    return historyQuotes.filter((quote) =>
+      [quote.name, quote.placa, quote.estado, quote.ramo]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("es-CO")
+        .includes(query),
+    );
+  }, [historyQuotes, historyQuery]);
+
+  const selectedHistoryQuote = useMemo(
+    () =>
+      historyQuotes.find((quote) => quote.id === selectedHistoryQuoteId) ??
+      null,
+    [historyQuotes, selectedHistoryQuoteId],
+  );
+
+  const historyListId = "insurance-quote-history-listbox";
+  const visibleHistoryQuotes = filteredHistoryQuotes.slice(0, 30);
+  const hiddenHistoryCount =
+    filteredHistoryQuotes.length - visibleHistoryQuotes.length;
+
+  const chooseHistoryQuote = (quoteId: string | null) => {
+    onSelectHistoryQuote?.(quoteId);
+    setHistoryQuery("");
+    setHistoryHighlight(0);
+    setHistoryOpen(false);
+  };
+
+  useEffect(() => {
+    setHistoryQuery("");
+    setHistoryOpen(false);
+    setHistoryHighlight(0);
+  }, [showHistorySelector]);
+
+  useEffect(() => {
+    setHistoryHighlight(0);
+  }, [historyQuery]);
+
+  // Derive batch items from runs only if batchItems is empty AND runs is a small test set (e.g. <= 5)
+  const effectiveBatchItems: readonly QuoteBatchItem[] = useMemo(() => {
+    if (batchItems.length > 0) return batchItems;
+    if (runs.length > 0 && runs.length <= 5) {
+      return runs
+        .filter((r) => r.actionId === "quote")
+        .map((r) => {
+          const output = record(r.output);
+          const data = record(output?.data);
+          const isFailed =
+            r.status !== "succeeded" ||
+            output?.status === "error" ||
+            output?.status === "failed" ||
+            typeof data?.errorCode === "string";
+          const errorCode =
+            text(data?.errorCode) ?? text(output?.errorCode) ?? r.errorCode;
+          const errorMsg = isFailed
+            ? errorCode
+              ? `No se completó: ${errorCode}.`
+              : "La ejecución no se completó."
+            : undefined;
+          const label = resultTitle(data, output);
+          return {
+            productId: r.runId,
+            flowId: String(data?.operationId ?? r.runId),
+            label,
+            provider: String(output?.provider ?? "Seguros"),
+            status: isFailed ? ("failed" as const) : ("succeeded" as const),
+            error: errorMsg,
+            runId: r.runId,
+            quoteNumber: text(data?.quoteNumber) ?? undefined,
+            premium:
+              typeof data?.premiumTotal === "number"
+                ? data.premiumTotal
+                : undefined,
+          };
+        });
+    }
+    return [];
+  }, [batchItems, runs]);
+
+  const isQuoteActive =
+    hasSelectedQuote ??
+    Boolean(
+      selectedHistoryQuoteId ||
+      masterQuoteId ||
+      quoteReference ||
+      (effectiveBatchItems.length > 0 &&
+        effectiveBatchItems.some(
+          (b) => b.quoteNumber || (b.premium != null && b.premium > 0),
+        )),
+    );
+
+  const failedCount = effectiveBatchItems.filter(
+    (item) => item.status === "failed",
+  ).length;
+  const succeededCount = effectiveBatchItems.filter(
+    (item) => item.status === "succeeded",
+  ).length;
+  const pendingCount = effectiveBatchItems.filter(
+    (item) => item.status === "pending" || retryingIds.includes(item.productId),
+  ).length;
+  const totalCount = effectiveBatchItems.length;
+  const completedCount = succeededCount + failedCount;
+  const progressPercent =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  // Build unified comparison quotes from effectiveBatchItems ONLY if a quote is active
+  const unifiedQuotes: UnifiedComparisonQuote[] = useMemo(() => {
+    if (!isQuoteActive) return [];
+    const succeeded = effectiveBatchItems.filter(
+      (b) => b.status === "succeeded",
+    );
+    if (succeeded.length > 0) {
+      return succeeded.map((item) => {
+        const matchingRun = runs.find((r) => r.runId === item.runId);
+        return toUnifiedComparisonQuote(item, matchingRun);
+      });
+    }
+    return [];
+  }, [isQuoteActive, effectiveBatchItems, runs]);
+
+  const uniqueProviders = useMemo(() => {
+    const list: string[] = [];
+    unifiedQuotes.forEach((q) => {
+      if (q.provider && !list.includes(q.provider)) {
+        list.push(q.provider);
+      }
+    });
+    return list;
+  }, [unifiedQuotes]);
+
+  const rankedQuotes = useMemo(
+    () =>
+      [...unifiedQuotes].sort(
+        (a, b) => b.score - a.score || a.premium - b.premium,
+      ),
+    [unifiedQuotes],
+  );
+
+  useEffect(() => {
+    setSelectedQuoteIds(null);
+  }, [masterQuoteId, selectedHistoryQuoteId]);
+
+  const filteredQuotes = useMemo(() => {
+    let result = [...rankedQuotes];
+    if (selectedProvider) {
+      result = result.filter((q) => q.provider === selectedProvider);
+    }
+    return result;
+  }, [rankedQuotes, selectedProvider]);
+
+  const defaultComparedQuoteIds = useMemo(
+    () => rankedQuotes.slice(0, 4).map((quote) => quote.id),
+    [rankedQuotes],
+  );
+
+  const comparedQuoteIds = selectedQuoteIds ?? defaultComparedQuoteIds;
+
+  const comparedQuotesList = useMemo(() => {
+    const byId = new Map(rankedQuotes.map((quote) => [quote.id, quote]));
+    return comparedQuoteIds.flatMap((id) => {
+      const quote = byId.get(id);
+      return quote ? [quote] : [];
+    });
+  }, [comparedQuoteIds, rankedQuotes]);
+
+  const toggleSelectedQuote = (id: string) => {
+    setSelectedQuoteIds((current) => {
+      const currentIds = current ?? defaultComparedQuoteIds;
+      if (currentIds.includes(id)) {
+        return currentIds.filter((item) => item !== id);
+      }
+      if (currentIds.length >= 4) {
+        setActionNotice("Puedes comparar hasta cuatro ofertas a la vez.");
+        return currentIds;
+      }
+      return [...currentIds, id];
+    });
+  };
+
+  if (loading)
+    return (
+      <p className="insurance-quote__empty" role="status">
+        Actualizando resultados…
+      </p>
+    );
+
+  return (
+    <section
+      aria-label="Comparador de cotizaciones"
+      className="insurance-results"
+    >
+      {/* 0. SELECTOR DE COTIZACIÓN ANTERIOR */}
+      {showHistorySelector && historyQuotes.length > 0 ? (
+        <div
+          className="insurance-history-selector-bar"
+          role="region"
+          aria-label="Historial de cotizaciones"
+        >
+          <div className="insurance-history-selector-inner">
+            <div
+              className="insurance-history-combobox"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setHistoryOpen(false);
+                }
+              }}
+            >
+              <div className="insurance-history-combobox-field">
+                <svg
+                  aria-hidden="true"
+                  className="insurance-history-search-icon"
+                  fill="none"
+                  height="15"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="15"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" x2="16.65" y1="21" y2="16.65" />
+                </svg>
+                <input
+                  aria-activedescendant={
+                    historyOpen && visibleHistoryQuotes[historyHighlight]
+                      ? `history-option-${visibleHistoryQuotes[historyHighlight].id}`
+                      : undefined
+                  }
+                  aria-autocomplete="list"
+                  aria-controls={historyListId}
+                  aria-expanded={historyOpen}
+                  aria-label="Seleccionar cotización anterior"
+                  autoComplete="off"
+                  className="insurance-history-combobox-input"
+                  id="insurance-quote-history-select"
+                  onChange={(event) => {
+                    setHistoryQuery(event.target.value);
+                    setHistoryOpen(true);
+                  }}
+                  onFocus={() => setHistoryOpen(true)}
+                  onClick={() => setHistoryOpen(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setHistoryOpen(true);
+                      setHistoryHighlight((current) =>
+                        Math.min(
+                          current + 1,
+                          Math.max(0, visibleHistoryQuotes.length - 1),
+                        ),
+                      );
+                    } else if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setHistoryHighlight((current) =>
+                        Math.max(0, current - 1),
+                      );
+                    } else if (event.key === "Enter") {
+                      const target = visibleHistoryQuotes[historyHighlight];
+                      if (historyOpen && target) {
+                        event.preventDefault();
+                        chooseHistoryQuote(target.id);
+                      }
+                    } else if (event.key === "Escape") {
+                      setHistoryOpen(false);
+                    }
+                  }}
+                  placeholder={
+                    selectedHistoryQuote
+                      ? `${selectedHistoryQuote.name}${selectedHistoryQuote.placa ? ` · ${selectedHistoryQuote.placa}` : ""}`
+                      : "Buscar por placa, referencia o estado…"
+                  }
+                  role="combobox"
+                  type="text"
+                  value={
+                    historyOpen
+                      ? historyQuery
+                      : selectedHistoryQuote
+                        ? `${selectedHistoryQuote.name}${selectedHistoryQuote.placa ? ` · ${selectedHistoryQuote.placa}` : ""}`
+                        : historyQuery
+                  }
+                />
+                {selectedHistoryQuote || historyQuery ? (
+                  <button
+                    aria-label={
+                      selectedHistoryQuote
+                        ? "Quitar cotización seleccionada"
+                        : "Limpiar búsqueda"
+                    }
+                    className="insurance-history-search-clear"
+                    onClick={() => chooseHistoryQuote(null)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      fill="none"
+                      height="13"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.2"
+                      viewBox="0 0 24 24"
+                      width="13"
+                    >
+                      <line x1="18" x2="6" y1="6" y2="18" />
+                      <line x1="6" x2="18" y1="6" y2="18" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    aria-label={
+                      historyOpen
+                        ? "Cerrar opciones"
+                        : "Abrir opciones de cotización"
+                    }
+                    className="insurance-history-combobox-toggle"
+                    onClick={() => setHistoryOpen((current) => !current)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className={
+                        historyOpen
+                          ? "insurance-history-combobox-chevron is-open"
+                          : "insurance-history-combobox-chevron"
+                      }
+                      fill="none"
+                      height="16"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                      width="16"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {historyOpen ? (
+                <ul
+                  className="insurance-history-combobox-list"
+                  id={historyListId}
+                  role="listbox"
+                  aria-label="Cotizaciones disponibles"
+                >
+                  {visibleHistoryQuotes.map((quote, index) => {
+                    const isSelected = quote.id === selectedHistoryQuoteId;
+                    return (
+                      <li
+                        aria-selected={isSelected}
+                        className={`insurance-history-combobox-option${isSelected ? " is-selected" : ""}${index === historyHighlight ? " is-highlighted" : ""}`.trim()}
+                        id={`history-option-${quote.id}`}
+                        key={quote.id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => chooseHistoryQuote(quote.id)}
+                        onMouseEnter={() => setHistoryHighlight(index)}
+                        role="option"
+                      >
+                        <span className="insurance-history-combobox-option-main">
+                          <strong>{quote.name}</strong>
+                          {quote.placa ? (
+                            <span className="insurance-history-combobox-plate">
+                              {quote.placa}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="insurance-history-combobox-option-meta">
+                          {quote.valor_asegurado
+                            ? formatCop(quote.valor_asegurado)
+                            : null}
+                          {quote.valor_asegurado && quote.estado ? " · " : null}
+                          {quote.estado ? quote.estado : null}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {visibleHistoryQuotes.length === 0 ? (
+                    <li
+                      className="insurance-history-combobox-empty"
+                      role="presentation"
+                    >
+                      Sin resultados para “{historyQuery.trim()}”.{" "}
+                      <button
+                        type="button"
+                        className="insurance-history-no-results-clear"
+                        onClick={() => {
+                          setHistoryQuery("");
+                          setHistoryHighlight(0);
+                        }}
+                        onMouseDown={(event) => event.preventDefault()}
+                      >
+                        Ver todas
+                      </button>
+                    </li>
+                  ) : null}
+                  {hiddenHistoryCount > 0 ? (
+                    <li
+                      className="insurance-history-combobox-more"
+                      role="presentation"
+                    >
+                      …y {hiddenHistoryCount} más · refina la búsqueda
+                    </li>
+                  ) : null}
+                </ul>
+              ) : null}
+              <p className="insurance-history-combobox-count" role="status">
+                {historyQuery
+                  ? `${filteredHistoryQuotes.length} de ${historyQuotes.length}`
+                  : selectedHistoryQuote
+                    ? "1 seleccionada"
+                    : `${historyQuotes.length} ${historyQuotes.length === 1 ? "disponible" : "disponibles"}`}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 1. MASTER QUOTE HEADER & VEHICLE CONTEXT (Only if quote is active) */}
+      {isQuoteActive &&
+      (quoteReference || masterQuoteId || vehicleInfo?.plate) ? (
+        <header className="insurance-master-header">
+          <div className="insurance-master-header__main">
+            <div className="insurance-master-header__badge-wrap">
+              <span className="insurance-master-badge">Cotización Maestra</span>
+              <strong className="insurance-master-reference">
+                {quoteReference ?? masterQuoteId ?? "Ref: General"}
+              </strong>
+              {masterQuoteId && quoteReference ? (
+                <span
+                  className="insurance-master-id"
+                  title="ID de Base de Datos"
+                >
+                  (ID: {masterQuoteId})
+                </span>
+              ) : null}
+            </div>
+            <div className="insurance-master-facts">
+              {vehicleInfo?.plate ? (
+                <span className="insurance-fact-item">
+                  <strong>Placa:</strong> {vehicleInfo.plate}
+                </span>
+              ) : null}
+              {vehicleInfo?.declaredValue ? (
+                <span className="insurance-fact-item">
+                  <strong>Valor Asegurado:</strong>{" "}
+                  {formatCop(vehicleInfo.declaredValue)}
+                </span>
+              ) : null}
+              <span className="insurance-fact-item">
+                <strong>Ramo:</strong> Automóviles Livianos
+              </span>
+              <span className="insurance-fact-status">
+                {pendingCount > 0
+                  ? succeededCount > 0
+                    ? `↻ Recibiendo… (${completedCount}/${totalCount})`
+                    : "↻ Solicitada…"
+                  : succeededCount > 0
+                    ? "✓ Recibida"
+                    : failedCount > 0
+                      ? "✕ Rechazada"
+                      : "Solicitada"}
+              </span>
+            </div>
+          </div>
+          <div className="insurance-master-header__side">
+            <span className="insurance-master-count">
+              {unifiedQuotes.length}{" "}
+              {unifiedQuotes.length === 1
+                ? "opción cotejada"
+                : "opciones cotejadas"}
+            </span>
+          </div>
+        </header>
+      ) : null}
+
+      {/* Indicador de progreso en vivo */}
+      {isQuoteActive && pendingCount > 0 ? (
+        <div
+          aria-live="polite"
+          className="insurance-busy-indicator"
+          role="status"
+          style={{ marginBottom: "20px" }}
+        >
+          <div className="insurance-busy-indicator__header">
+            <div className="insurance-busy-indicator__icon-wrap">
+              <span
+                aria-hidden="true"
+                className="insurance-spinner insurance-spinner--md"
+              />
+            </div>
+            <div className="insurance-busy-indicator__content">
+              <strong className="insurance-busy-indicator__title">
+                Cotizando con aseguradoras en vivo… ({completedCount} de {totalCount} recibidas)
+              </strong>
+              <span className="insurance-busy-indicator__subtitle">
+                {succeededCount > 0
+                  ? "Las ofertas recibidas ya están disponibles abajo. Esperando respuestas adicionales…"
+                  : "Consultando tarifas y coberturas oficiales. Cada oferta aparecerá tan pronto responda su aseguradora."}
+              </span>
+            </div>
+          </div>
+          <div aria-hidden="true" className="insurance-progress-track">
+            {totalCount > 0 && completedCount > 0 ? (
+              <div
+                style={{
+                  background: "var(--primary)",
+                  height: "100%",
+                  width: `${progressPercent}%`,
+                  transition: "width 300ms ease",
+                  borderRadius: "999px",
+                }}
+              />
+            ) : (
+              <div className="insurance-progress-bar--indeterminate" />
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Skeletons cuando está cotizando pero aún no ha llegado la primera oferta */}
+      {isQuoteActive && unifiedQuotes.length === 0 && pendingCount > 0 ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "20px",
+            marginTop: "16px",
+            marginBottom: "24px",
+          }}
+        >
+          {effectiveBatchItems.map((item) => (
+            <div
+              key={item.productId}
+              style={{
+                borderRadius: "12px",
+                border: "1px solid var(--border)",
+                padding: "20px",
+                background: "var(--card, #ffffff)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <strong style={{ fontSize: "0.875rem" }}>{item.label}</strong>
+                <span className="insurance-status-badge insurance-status-badge--pending">
+                  ↻ En progreso
+                </span>
+              </div>
+              <div
+                className="quote-skeleton"
+                style={{ height: "16px", width: "60%" }}
+              />
+              <div
+                className="quote-skeleton"
+                style={{ height: "32px", width: "45%", borderRadius: "6px" }}
+              />
+              <div
+                className="quote-skeleton"
+                style={{ height: "12px", width: "80%" }}
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* 2. COMPARATOR CARDS & COMPARISON */}
+      {isQuoteActive && unifiedQuotes.length > 0 ? (
+        <section
+          aria-label="Comparador de pólizas de seguro"
+          className="insurance-comparator"
+        >
+          {/* Top Filter Chips by Provider (only if multiple providers exist) */}
+          {uniqueProviders.length > 1 ? (
+            <div className="insurance-comparator__filter-bar">
+              <div className="insurance-comparator__chips" role="tablist">
+                <button
+                  className={`insurance-comparator__chip ${
+                    selectedProvider === null ? "is-active" : ""
+                  }`}
+                  onClick={() => setSelectedProvider(null)}
+                  type="button"
+                >
+                  Todas las aseguradoras ({unifiedQuotes.length})
+                </button>
+                {uniqueProviders.map((prov) => (
+                  <button
+                    className={`insurance-comparator__chip ${
+                      selectedProvider === prov ? "is-active" : ""
+                    }`}
+                    key={prov}
+                    onClick={() => setSelectedProvider(prov)}
+                    type="button"
+                  >
+                    {prov} (
+                    {unifiedQuotes.filter((q) => q.provider === prov).length})
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className="insurance-comparator__selection-bar"
+            aria-label="Ofertas seleccionadas para comparar"
+          >
+            <span
+              className="insurance-comparator__selection-count"
+              role="status"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.2"
+                viewBox="0 0 24 24"
+                width="15"
+              >
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {comparedQuotesList.length}{" "}
+              {comparedQuotesList.length === 1
+                ? "oferta seleccionada"
+                : "ofertas seleccionadas"}{" "}
+              <span className="insurance-comparator__selection-max">de 4</span>
+            </span>
+            <div className="insurance-comparator__selection-actions">
+              <button
+                aria-label="Limpiar"
+                className="insurance-comparator__btn insurance-comparator__btn--ghost insurance-comparator__btn--icon"
+                disabled={!comparedQuotesList.length}
+                onClick={() => setSelectedQuoteIds([])}
+                title="Quitar las 4 ofertas del comparador"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  height="16"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="16"
+                >
+                  <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                  <path d="M22 21H7" />
+                  <path d="m5 11 9 9" />
+                </svg>
+              </button>
+              <button
+                aria-label="Descargar PDF"
+                className="insurance-comparator__btn insurance-comparator__btn--primary insurance-comparator__btn--icon"
+                disabled={!comparedQuotesList.length}
+                onClick={() => {
+                  void downloadQuoteComparisonPdf({
+                    quoteReference,
+                    quotes: comparedQuotesList,
+                    vehicleInfo,
+                  }).catch(() =>
+                    setActionNotice(
+                      "No se pudo generar el PDF. Inténtalo de nuevo.",
+                    ),
+                  );
+                }}
+                title={
+                  comparedQuotesList.length
+                    ? `Descargar PDF con ${comparedQuotesList.length} ${comparedQuotesList.length === 1 ? "oferta" : "ofertas"}`
+                    : "Selecciona al menos una oferta"
+                }
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  height="16"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="16"
+                >
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                  <path d="M12 18v-6" />
+                  <path d="m9 15 3 3 3-3" />
+                </svg>
+                {comparedQuotesList.length > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="insurance-comparator__btn-count insurance-comparator__btn-count--float"
+                  >
+                    {comparedQuotesList.length}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </div>
+
+          {/* Top Product Cards Grid */}
+          <div className="insurance-comparator__cards">
+            {filteredQuotes.map((quote, idx) => {
+              const isRecommended = idx === 0 && quote.score >= 9.2;
+              const isCompared = comparedQuoteIds.includes(quote.id);
+              const compareOrder = comparedQuoteIds.indexOf(quote.id) + 1;
+              const selectionLimitReached =
+                !isCompared && comparedQuoteIds.length >= 4;
+              return (
+                <article
+                  className={`insurance-card ${isRecommended ? "insurance-card--recommended" : ""} ${isCompared ? "is-compared" : ""}`}
+                  key={quote.id}
+                >
+                  {isRecommended ? (
+                    <div className="insurance-card__ribbon">
+                      <span className="insurance-card__ribbon-tag">
+                        ★ Mejor relación cobertura/precio
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="insurance-card__meta-bar">
+                      <span className="insurance-card__pill">
+                        {quote.badges[0] ?? "Cotización oficial"}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="insurance-card__header">
+                    <div className="insurance-card__brand">
+                      <ProviderLogo provider={quote.provider} />
+                      <div>
+                        <h3 className="insurance-card__provider">
+                          {quote.provider}
+                        </h3>
+                        <p className="insurance-card__product-name">
+                          {quote.productName}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {quote.quoteNumber ? (
+                    <div className="insurance-card__quote-num">
+                      <span>Cotización:</span> <code>{quote.quoteNumber}</code>
+                    </div>
+                  ) : null}
+
+                  <div className="insurance-card__price-row">
+                    <strong className="insurance-card__price">
+                      {quote.premium > 0
+                        ? formatCop(quote.premium)
+                        : "Consultar"}
+                    </strong>
+                    {quote.premium > 0 ? (
+                      <span className="insurance-card__period">COP / año</span>
+                    ) : null}
+                  </div>
+
+                  {quote.highlights.length > 0 ? (
+                    <ul className="insurance-card__bullets">
+                      {quote.highlights.map((bullet, bIdx) => (
+                        <li key={bIdx}>
+                          <svg
+                            aria-hidden="true"
+                            className="insurance-card__check-icon"
+                            fill="none"
+                            height="14"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2.5"
+                            viewBox="0 0 24 24"
+                            width="14"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>{bullet}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  <div className="insurance-card__action-wrap">
+                    <button
+                      aria-label={
+                        isCompared
+                          ? `Quitar ${quote.provider} ${quote.productName} del comparador`
+                          : `Añadir ${quote.provider} ${quote.productName} al comparador`
+                      }
+                      aria-pressed={isCompared}
+                      className={`insurance-card__compare-btn ${isCompared ? "is-selected" : ""}`}
+                      disabled={selectionLimitReached}
+                      onClick={() => toggleSelectedQuote(quote.id)}
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        height="14"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2.2"
+                        viewBox="0 0 24 24"
+                        width="14"
+                      >
+                        {isCompared ? (
+                          <polyline points="20 6 9 17 4 12" />
+                        ) : (
+                          <path d="M12 5v14M5 12h14" />
+                        )}
+                      </svg>
+                      {isCompared
+                        ? `Comparando · ${compareOrder}/4`
+                        : "Comparar"}
+                    </button>
+                    <button
+                      className="insurance-card__copy-btn"
+                      aria-label={
+                        copiedId === quote.id
+                          ? "Datos de cotización copiados"
+                          : "Copiar datos de cotización"
+                      }
+                      onClick={async () => {
+                        const info = [
+                          `Aseguradora: ${quote.provider}`,
+                          `Producto: ${quote.productName}`,
+                          quote.quoteNumber
+                            ? `Número de cotización: ${quote.quoteNumber}`
+                            : null,
+                          quote.premium > 0
+                            ? `Prima total: ${formatCop(quote.premium)} COP`
+                            : null,
+                          vehicleInfo?.plate
+                            ? `Placa: ${vehicleInfo.plate}`
+                            : null,
+                          quoteReference
+                            ? `Referencia Savia: ${quoteReference}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join("\n");
+                        try {
+                          await navigator.clipboard.writeText(info);
+                          setCopiedId(quote.id);
+                          setTimeout(() => setCopiedId(null), 2500);
+                        } catch {
+                          setActionNotice(`Datos de ${quote.provider} listos.`);
+                        }
+                      }}
+                      title={
+                        copiedId === quote.id
+                          ? "Datos de cotización copiados"
+                          : "Copiar datos de cotización"
+                      }
+                      type="button"
+                    >
+                      {copiedId === quote.id ? (
+                        <svg
+                          aria-hidden="true"
+                          fill="none"
+                          height="16"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.25"
+                          viewBox="0 0 24 24"
+                          width="16"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : (
+                        <svg
+                          aria-hidden="true"
+                          fill="none"
+                          height="16"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.8"
+                          viewBox="0 0 24 24"
+                          width="16"
+                        >
+                          <rect height="14" rx="2" width="12" x="8" y="7" />
+                          <path d="M16 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {/* Matriz Detallada de Coberturas Frente a Frente */}
+          {comparedQuotesList.some(
+            (q) =>
+              q.coverages.rce &&
+              !q.coverages.rce.includes("Según condiciones") &&
+              q.coverages.rce !== "No informado por la aseguradora",
+          ) ? (
+            <div className="insurance-comparison">
+              <div className="insurance-comparison__header">
+                <div>
+                  <h3 className="insurance-comparison__title">
+                    Matriz Detallada de Coberturas Frente a Frente
+                  </h3>
+                  <p className="insurance-comparison__subtitle">
+                    Comparativa técnica cláusula por cláusula para asesoría
+                    fiduciaria al cliente
+                  </p>
+                </div>
+                <span className="insurance-comparison__badge">
+                  {comparedQuotesList.length} de {unifiedQuotes.length} Pólizas
+                  cotejadas
+                </span>
+              </div>
+
+              <div className="insurance-comparison__table-container">
+                <table className="insurance-comparison__table">
+                  <thead>
+                    <tr>
+                      <th className="insurance-comparison__th-feature">
+                        DETALLE DE COBERTURA
+                      </th>
+                      {comparedQuotesList.map((q, idx) => (
+                        <th
+                          className={`insurance-comparison__th-plan ${
+                            idx === 0
+                              ? "insurance-comparison__th-plan--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          <div className="insurance-comparison__plan-header">
+                            <div className="insurance-comparison__plan-brand">
+                              <ProviderLogo
+                                compact
+                                decorative
+                                provider={q.provider}
+                              />
+                              <span className="insurance-comparison__plan-tag">
+                                {idx === 0 ? "★ Recomendado" : q.provider}
+                              </span>
+                            </div>
+                            <strong className="insurance-comparison__plan-title">
+                              {q.productName}
+                            </strong>
+                            <span className="insurance-comparison__plan-price">
+                              {q.premium > 0
+                                ? formatCop(q.premium)
+                                : "Consultar"}
+                            </span>
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>
+                          Responsabilidad Civil Extracontractual (RCE)
+                        </strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          <span className="insurance-comparison__val-accent">
+                            {q.coverages.rce}
+                          </span>
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Deducible Pérdida Parcial (Daños/Hurto)</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.partialLossDeductible}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Deducible Pérdida Total</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.totalLossDeductible.includes(
+                            "Sin Deducible",
+                          ) ||
+                          q.coverages.totalLossDeductible.includes("0%") ? (
+                            <span className="insurance-val-badge--good">
+                              ✓ {q.coverages.totalLossDeductible}
+                            </span>
+                          ) : (
+                            q.coverages.totalLossDeductible
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Auto de Reemplazo / Sustituto</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.replacementCar ===
+                          "No informado por la aseguradora" ? (
+                            <span className="insurance-val-badge--neutral">
+                              {q.coverages.replacementCar}
+                            </span>
+                          ) : q.coverages.replacementCar.includes(
+                              "No amparada",
+                            ) ? (
+                            <span className="insurance-val-badge--neutral">
+                              ✕ No amparada
+                            </span>
+                          ) : (
+                            <span className="insurance-val-badge--good">
+                              ✓ {q.coverages.replacementCar}
+                            </span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Grúa y Asistencia en Viaje</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.craneAssistance}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Conductor Elegido</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.designatedDriver.includes(
+                            "No incluido",
+                          ) ? (
+                            <span className="insurance-val-badge--neutral">
+                              No incluido
+                            </span>
+                          ) : (
+                            q.coverages.designatedDriver
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Amparo Patrimonial & Gastos Médicos</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.medicalExpenses}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="insurance-comparison__td-label">
+                        <strong>Asistencia Jurídica en Sitio 24/7</strong>
+                      </td>
+                      {comparedQuotesList.map((q, idx) => (
+                        <td
+                          className={`insurance-comparison__td-val ${
+                            idx === 0
+                              ? "insurance-comparison__td-val--highlight"
+                              : ""
+                          }`}
+                          key={q.id}
+                        >
+                          {q.coverages.legalAssistance}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Bottom Notice */}
+          <footer className="insurance-comparator__footer">
+            <div className="insurance-comparator__footer-notice">
+              <span className="insurance-info-icon" aria-hidden="true">
+                ℹ
+              </span>
+              <span>
+                Valores expresados en Pesos Colombianos (COP) según la respuesta
+                oficial emitida por cada aseguradora en la cotización.
+              </span>
+            </div>
+          </footer>
+          {actionNotice ? (
+            <p className="insurance-action-toast" role="status">
+              {actionNotice}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* Empty State when no quote is active */}
+      {!isQuoteActive ? (
+        <div
+          className="insurance-results-empty"
+          role="region"
+          aria-label="Sin cotización seleccionada"
+        >
+          <span aria-hidden="true" className="insurance-results-empty__glow" />
+          <div className="insurance-results-empty__icon-wrap">
+            <svg
+              aria-hidden="true"
+              className="insurance-results-empty__icon"
+              fill="none"
+              height="34"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.8"
+              viewBox="0 0 24 24"
+              width="34"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" x2="8" y1="13" y2="13" />
+              <line x1="16" x2="8" y1="17" y2="17" />
+            </svg>
+            <span
+              aria-hidden="true"
+              className="insurance-results-empty__icon-dot"
+            />
+          </div>
+          <p className="insurance-results-empty__eyebrow">
+            {showHistorySelector ? "Historial" : "Cotizaciones"}
+          </p>
+          <h3 className="insurance-results-empty__title">
+            Ninguna cotización seleccionada
+          </h3>
+          <p className="insurance-results-empty__desc">
+            {showHistorySelector && historyQuotes.length > 0
+              ? "Selecciona una cotización anterior en el menú desplegable para consultar sus ofertas cotejadas, o prepara una nueva desde el formulario."
+              : "Aún no se ha generado ninguna cotización. Completa el formulario de vehículo y tomador para consultar aseguradoras en línea."}
+          </p>
+          {onGoToForm ? (
+            <button
+              type="button"
+              className="insurance-results-empty__action"
+              onClick={onGoToForm}
+            >
+              Preparar nueva cotización
+              <svg
+                aria-hidden="true"
+                fill="none"
+                height="16"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.2"
+                viewBox="0 0 24 24"
+                width="16"
+              >
+                <line x1="5" x2="19" y1="12" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </button>
+          ) : null}
+          <ol
+            aria-label="Cómo empezar"
+            className="insurance-results-empty__steps"
+          >
+            <li>
+              <span aria-hidden="true">1</span>
+              {showHistorySelector ? "Elige anterior" : "Completa vehículo"}
+            </li>
+            <li>
+              <span aria-hidden="true">2</span>
+              Datos del tomador
+            </li>
+            <li>
+              <span aria-hidden="true">3</span>
+              Compara ofertas
+            </li>
+          </ol>
+        </div>
+      ) : null}
+
+      {/* 3. TECHNICAL REQUESTS & RETRIES PANEL (ACCESSIBLE TO USER AND AUTOMATED TESTS) */}
+      {effectiveBatchItems.length > 0 ? (
+        <details className="insurance-batch-disclosure">
+          <summary className="insurance-batch-disclosure__summary">
+            <span>
+              <h2 className="insurance-batch-panel__title">
+                Solicitudes de cotización
+              </h2>
+              <span className="insurance-batch-disclosure__meta">
+                {quoteReference ? `Ref: ${quoteReference} · ` : ""}
+                {succeededCount} completadas · {failedCount} fallidas de{" "}
+                {effectiveBatchItems.length} productos
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="insurance-batch-disclosure__indicator"
+            />
+          </summary>
+          <section
+            aria-label="Estado de solicitudes de cotización"
+            className="insurance-batch-panel"
+          >
+            <div className="insurance-batch-panel__header">
+              {failedCount > 0 ? (
+                <button
+                  className="insurance-button-retry-all"
+                  disabled={retryingIds.length > 0}
+                  onClick={() => void onRetryAll?.()}
+                  type="button"
+                >
+                  {retryingIds.length > 0
+                    ? "Reintentando..."
+                    : `Reintentar fallidos (${failedCount})`}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="insurance-batch-table-container">
+              <table className="insurance-batch-table">
+                <thead>
+                  <tr>
+                    <th>Aseguradora / Producto</th>
+                    <th>Estado</th>
+                    <th>Detalle</th>
+                    <th className="insurance-batch-table__th--action">
+                      Acción
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {effectiveBatchItems.map((item) => {
+                    const isRetrying = retryingIds.includes(item.productId);
+                    return (
+                      <tr
+                        className={`insurance-batch-row--${item.status}`}
+                        key={item.productId}
+                      >
+                        <td className="insurance-batch-table__product">
+                          <strong>{item.label}</strong>
+                        </td>
+                        <td>
+                          {item.status === "succeeded" ? (
+                            <span className="insurance-status-badge insurance-status-badge--success">
+                              ✓ Completado
+                            </span>
+                          ) : item.status === "pending" || isRetrying ? (
+                            <span className="insurance-status-badge insurance-status-badge--pending">
+                              ↻ En progreso
+                            </span>
+                          ) : (
+                            <span className="insurance-status-badge insurance-status-badge--failed">
+                              ✕ Falló
+                            </span>
+                          )}
+                        </td>
+                        <td className="insurance-batch-table__detail">
+                          {item.error ? (
+                            <span
+                              className="insurance-batch-error-text"
+                              title={item.error}
+                            >
+                              {item.error}
+                            </span>
+                          ) : item.status === "succeeded" ? (
+                            <span className="insurance-batch-success-text">
+                              {item.quoteNumber
+                                ? `Cotización: ${item.quoteNumber}${
+                                    typeof item.premium === "number"
+                                      ? ` · ${money(item.premium)}`
+                                      : ""
+                                  }`
+                                : "Cotización generada"}
+                            </span>
+                          ) : (
+                            <span className="insurance-batch-pending-text">
+                              Consultando proveedor…
+                            </span>
+                          )}
+                        </td>
+                        <td className="insurance-batch-table__action">
+                          {item.status === "failed" ? (
+                            <button
+                              className="insurance-button-retry"
+                              disabled={isRetrying || retryingIds.length > 0}
+                              onClick={() =>
+                                void onRetrySingle?.(item.productId)
+                              }
+                              type="button"
+                            >
+                              {isRetrying ? "Reintentando…" : "Reintentar"}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </details>
+      ) : (
+        productErrors.map((error) => (
+          <p className="insurance-quote__error" key={error} role="alert">
+            {error}
+          </p>
+        ))
+      )}
+
+      {isQuoteActive &&
+      !effectiveBatchItems.length &&
+      !productErrors.length &&
+      !unifiedQuotes.length ? (
+        <p className="insurance-quote__empty">
+          Aún no hay resultados. Completa una cotización para explorarlos aquí.
+        </p>
+      ) : null}
+    </section>
+  );
+}

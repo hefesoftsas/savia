@@ -1,0 +1,101 @@
+name: savia-self-hosted
+x-runtime: &runtime
+  image: savia-self-hosted:local
+  env_file: ${SAVIA_ENV_FILE:-./infra/secrets/self-hosted.env}
+  environment: &environment
+    S3_ENDPOINT: http://storage:8333
+    SAVIA_DATA_DIR: /data
+    SAVIA_ADMIN_DIR: /srv/apps/admin/dist
+services:
+  storage-config:
+    <<: *runtime
+    user: root
+    command:
+      [
+        node,
+        --import,
+        ./apps/self-hosted/node_modules/tsx/dist/loader.mjs,
+        apps/self-hosted/src/storage-init.ts,
+        --credentials,
+      ]
+    volumes:
+      - storage-config:/storage-config
+    restart: "no"
+  storage:
+    image: chrislusf/seaweedfs:4.47
+    command:
+      [
+        server,
+        -s3,
+        -s3.config=/etc/seaweedfs/s3.json,
+        -dir=/data,
+        -master.telemetry=false,
+      ]
+    depends_on:
+      storage-config:
+        condition: service_completed_successfully
+    volumes:
+      - storage-config:/etc/seaweedfs:ro
+      - objects:/data
+    ports:
+      - "${SAVIA_S3_BIND:-127.0.0.1}:${SAVIA_S3_PORT:-8333}:8333"
+    restart: unless-stopped
+  storage-init:
+    <<: *runtime
+    command:
+      [
+        node,
+        --import,
+        ./apps/self-hosted/node_modules/tsx/dist/loader.mjs,
+        apps/self-hosted/src/storage-init.ts,
+      ]
+    depends_on:
+      storage:
+        condition: service_started
+    restart: "no"
+  savia:
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: apps/self-hosted/Dockerfile
+    init: true
+    stop_grace_period: 35s
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+    ports:
+      - "${SAVIA_BIND:-127.0.0.1}:${SAVIA_PORT:-8080}:8080"
+    volumes:
+      - database:/data
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+  db-bridge:
+    <<: *runtime
+    profiles: [external-databases]
+    command:
+      [
+        node,
+        --import,
+        ./apps/self-hosted/node_modules/tsx/dist/loader.mjs,
+        apps/db-bridge/src/index.ts,
+      ]
+    environment:
+      <<: *environment
+      DB_BRIDGE_HOST: 0.0.0.0
+      DB_BRIDGE_PORT: 8791
+    restart: unless-stopped
+volumes:
+  database:
+  objects:
+  storage-config:

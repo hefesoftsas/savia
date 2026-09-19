@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "savia-agencies",
+  "compatibility_date": "2026-08-31",
+  "main": "src/index.ts",
+  "vars": {
+    "SAVIA_OAUTH_ISSUER": "http://127.0.0.1:8787/api/auth",
+    "SAVIA_API_RESOURCE": "http://127.0.0.1:8787",
+  },
+  "services": [
+    { "binding": "SAVIA_REQUEST", "service": "savia-request" },
+    { "binding": "CONNECTOR_GATEWAY", "service": "savia-connectors" },
+    {
+      "binding": "AUTH",
+      "service": "savia-auth",
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "PUBLIC_FORMS_RATE_LIMITER",
+      "namespace_id": "879102",
+      "simple": { "limit": 30, "period": 60 },
+    },
+    {
+      "name": "REALTIME_RATE_LIMITER",
+      "namespace_id": "879101",
+      "simple": { "limit": 30, "period": 60 },
+    },
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "REALTIME_HUB", "class_name": "RealtimeHub" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RealtimeHub"] }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "savia-agencies",
+      "database_id": "local",
+      "migrations_dir": "../../packages/db/migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DOCUMENTS",
+      "bucket_name": "savia-documents",
+    },
+  ],
+}

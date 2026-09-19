@@ -1,0 +1,293 @@
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import type { LocalWorkspace } from "./workspaces";
+import type { Mutation, LocalStatus } from "./contracts";
+import { useOnlineStatus } from "@/offline/use-online-status";
+
+export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
+  const [status, setStatus] = useState<LocalStatus>({
+    pending: 0,
+    conflicts: 0,
+    errors: 0,
+  });
+  const [problems, setProblems] = useState<Mutation[]>([]);
+  const [ready, setReady] = useState(false);
+  const [hasLocal, setHasLocal] = useState(false);
+  const [deletedConflicts, setDeletedConflicts] = useState(new Set<string>());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [readError, setReadError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const online = useOnlineStatus();
+  useEffect(() => {
+    let active = true;
+    let revision = 0;
+    setLoaded(false);
+    setError("");
+    setReadError("");
+    const refresh = () => {
+      const current = ++revision;
+      void Promise.all([
+        workspace.store.status(),
+        workspace.store.db.outbox.toArray(),
+        workspace.store.db.syncState.toArray(),
+        workspace.store.db.collections.toArray(),
+        workspace.store.db.conflicts.toArray(),
+      ])
+        .then(([next, ops, states, collections, conflicts]) => {
+          if (!active || current !== revision) return;
+          setLoaded(true);
+          setReadError("");
+          setStatus(next);
+          setProblems(
+            ops.filter((op) => !op.quarantined && op.state !== "pending"),
+          );
+          setHasLocal(collections.some((c) => c.capability !== "remote"));
+          setDeletedConflicts(
+            new Set(
+              conflicts
+                .filter((c) => c.master?.deleted_at)
+                .map((c) => c.mutationId),
+            ),
+          );
+          setReady(
+            collections.length > 0 &&
+              collections
+                .filter((c) => c.capability !== "remote")
+                .every((c) =>
+                  states.some((s) => s.collection === c.name && s.hydrated),
+                ),
+          );
+        })
+        .catch(() => {
+          if (active && current === revision)
+            setReadError(
+              "No se pudo leer el estado local. Tus cambios no se han descartado. Reintenta la sincronización.",
+            );
+        });
+    };
+    refresh();
+    const unsubscribe = workspace.store.subscribe(refresh);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [workspace]);
+  const act = async (action: () => Promise<unknown>, request = true) => {
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+      if (request) workspace.requestSync();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo sincronizar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section
+      aria-label="Sincronización local"
+      className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-sm"
+    >
+      <span role="status" aria-live="polite" className="text-muted-foreground">
+        {readError
+          ? "Estado local no disponible"
+          : !loaded
+            ? "Comprobando estado local…"
+            : status.authorizationError
+              ? "Acceso revocado · vuelve a iniciar sesión"
+              : status.syncing
+                ? "Sincronizando…"
+                : !online
+                  ? "Sin conexión · los cambios locales se enviarán al reconectar"
+                  : status.syncError
+                    ? "Sincronización interrumpida"
+                    : status.conflicts + status.errors > 0
+                      ? "Hay cambios que requieren atención"
+                      : !hasLocal
+                        ? "Colecciones remotas · requieren conexión"
+                        : !ready
+                          ? "Preparando datos locales"
+                          : "Datos locales disponibles"}
+      </span>
+      {loaded && status.pending > 0 && (
+        <span>
+          {status.pending === 1
+            ? "1 cambio pendiente"
+            : `${status.pending} cambios pendientes`}
+        </span>
+      )}
+      {loaded && status.lastSyncedAt && (
+        <span className="text-muted-foreground">
+          Última comprobación:{" "}
+          <time dateTime={new Date(status.lastSyncedAt).toISOString()}>
+            {new Date(status.lastSyncedAt).toLocaleString()}
+          </time>
+        </span>
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={busy || Boolean(status.syncing) || !online}
+        onClick={() => void act(workspace.syncNow, false)}
+      >
+        {busy || status.syncing
+          ? "Sincronizando…"
+          : status.syncError || readError
+            ? "Reintentar sincronización"
+            : "Sincronizar"}
+      </Button>
+      {status.conflicts + status.errors > 0 && (
+        <details className="w-full">
+          <summary className="cursor-pointer text-destructive">
+            {status.conflicts + status.errors} cambios requieren atención
+          </summary>
+          <ul className="grid gap-3 py-3">
+            {problems.map((op) => (
+              <li
+                key={op.mutationId}
+                className="flex flex-wrap items-center gap-2"
+              >
+                <span className="min-w-0 break-words">
+                  {op.collection}: {op.id}
+                  {op.action === "bundle" &&
+                    ` · Formulario completo (${op.bundle?.members.length ?? 1} registros)`}
+                  {" — "}
+                  {op.error}
+                </span>
+                {op.action === "bundle" ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        busy || !online || Boolean(status.authorizationError)
+                      }
+                      onClick={() =>
+                        void act(() =>
+                          workspace.resolveBundle(op.mutationId, "server"),
+                        )
+                      }
+                    >
+                      Usar versión del servidor
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        busy || !online || Boolean(status.authorizationError)
+                      }
+                      onClick={() =>
+                        void act(() =>
+                          workspace.resolveBundle(op.mutationId, "local"),
+                        )
+                      }
+                    >
+                      Conservar mis cambios
+                    </Button>
+                  </>
+                ) : (
+                  op.state === "conflict" && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void act(() =>
+                            workspace.store.acceptMaster(op.mutationId),
+                          )
+                        }
+                      >
+                        Usar versión del servidor
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || deletedConflicts.has(op.mutationId)}
+                        onClick={() =>
+                          void act(() =>
+                            workspace.store.retryWithLocal(op.mutationId),
+                          )
+                        }
+                      >
+                        Conservar mis cambios
+                      </Button>
+                    </>
+                  )
+                )}
+                {op.action !== "bundle" && op.state === "error" && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy || Boolean(status.authorizationError)}
+                      onClick={() =>
+                        void act(() =>
+                          workspace.store.retryMutation(op.mutationId),
+                        )
+                      }
+                    >
+                      Reintentar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        void act(() =>
+                          workspace.store.discardMutation(op.mutationId),
+                        )
+                      }
+                    >
+                      Descartar cambio
+                    </Button>
+                  </>
+                )}
+                {deletedConflicts.has(op.mutationId) && (
+                  <span>
+                    El registro fue eliminado en el servidor. Restáuralo con
+                    conexión antes de conservar tus cambios.
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const blob = new Blob([JSON.stringify(problems, null, 2)], {
+                type: "application/json",
+              });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "cambios-pendientes.json";
+              link.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Descargar cambios pendientes
+          </Button>
+        </details>
+      )}
+      {readError && (
+        <p role="alert" className="w-full text-destructive">
+          {readError}
+        </p>
+      )}
+      {status.syncError && (
+        <p role="alert" className="w-full text-destructive">
+          {status.syncError}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="w-full text-destructive">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}

@@ -1,0 +1,230 @@
+.public-form-page {
+  min-height: 100dvh;
+  background: var(--background);
+  color: var(--foreground);
+  padding: clamp(1.25rem, 5vw, 4rem) 1.25rem;
+}
+.public-form-shell {
+  max-width: 38rem;
+  margin: 0 auto;
+}
+.public-form-brand {
+  font-weight: 650;
+  font-size: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.public-form-heading {
+  margin: 2.5rem 0 2rem;
+}
+.public-form-heading h1,
+.public-form-notice h1 {
+  font-size: clamp(1.65rem, 4vw, 2.2rem);
+  line-height: 1.2;
+  font-weight: 650;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.public-form-heading p {
+  margin-top: 0.75rem;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.public-form-fields,
+.public-form-fields fieldset,
+.public-link-fields {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.public-form-fields fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.public-form-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.public-form-field label {
+  font-size: 0.9375rem;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.public-form-field input:not([type="checkbox"]),
+.public-form-field select {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+.public-form-field select {
+  width: 100%;
+  border: 1px solid var(--input);
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+}
+.public-form-field input[type="checkbox"],
+.public-link-confirm input {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+.public-form-field select:focus-visible,
+.public-form-field input[type="checkbox"]:focus-visible,
+.public-link-confirm input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.public-form-fields > button {
+  min-height: 2.75rem;
+}
+.public-form-help,
+.public-form-footer {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.public-form-footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+.public-form-notice {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  line-height: 1.6;
+}
+.public-form-notice h2,
+.public-link-manager h2 {
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+.public-form-error {
+  color: var(--destructive);
+  line-height: 1.5;
+}
+.public-form-reference {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.public-form-result {
+  display: grid;
+  gap: 0.75rem;
+}
+.public-form-result div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.public-form-result dt {
+  color: var(--muted-foreground);
+}
+.public-link-manager {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+}
+.public-link-manager header p {
+  margin-top: 0.5rem;
+}
+.public-link-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.public-link-confirm {
+  display: flex;
+  align-items: start;
+  gap: 0.625rem;
+  line-height: 1.5;
+  font-size: 0.875rem;
+}
+.public-link-manager form {
+  display: grid;
+  gap: 1.25rem;
+}
+.public-link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.public-link-list li {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+.public-link-list input {
+  font-size: 0.875rem;
+}
+.public-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.public-link-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  font-size: 0.875rem;
+}
+@media (max-width: 480px) {
+  .public-link-fields {
+    grid-template-columns: 1fr;
+  }
+  .public-link-manager {
+    padding: 1rem;
+  }
+}
+.public-quote-results {
+  display: grid;
+  gap: 1rem;
+}
+.public-quote-results h3 {
+  font-weight: 650;
+}
+.public-quote-results > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.public-quote-results > ul > li {
+  border-top: 1px solid var(--border);
+  padding: 1.25rem 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.public-quote-heading h4 {
+  font-weight: 600;
+}
+.public-quote-heading p {
+  color: var(--muted-foreground);
+}
+.public-quote-price {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.public-quote-price span {
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+.public-quote-results ul[aria-label] {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+@media (max-width: 360px) {
+  .public-form-page {
+    padding-inline: 0.5rem;
+  }
+}

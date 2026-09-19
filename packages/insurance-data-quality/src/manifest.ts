@@ -1,0 +1,12 @@
+import type { ExtensionManifest } from "@savia/crm-shared/extension-package";
+export const manifest = {
+  format: "savia.extension",
+  formatVersion: 1,
+  id: "insurance.data-quality",
+  version: "1.0.0",
+  label: "Importación y calidad",
+  description:
+    "Valida datos, detecta duplicados e importa registros con revisión previa.",
+  requires: [],
+  apiVersion: 1,
+} satisfies ExtensionManifest;

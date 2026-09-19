@@ -1,0 +1,30 @@
+{
+  "name": "@savia/self-hosted",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run --maxWorkers=1",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@hono/node-server": "^1.19.9",
+    "@savia/crm-server": "workspace:*",
+    "@savia/tenant-host": "workspace:*",
+    "hono": "^4.13.5",
+    "nodemailer": "^7.0.0",
+    "quickjs-emscripten": "^0.31.0",
+    "tsx": "^4.21.0",
+    "undici": "^7.29.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^7.0.0",
+    "@types/ws": "^8.18.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@savia/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./schema": "./src/schema.ts",
+    "./internal-schema": "./src/internal-schema.generated.ts",
+    "./core-schema": "./src/core-schema.ts"
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate --config drizzle.config.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.3"
+  }
+}

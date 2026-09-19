@@ -1,0 +1,86 @@
+{
+  "name": "guided_request",
+  "label": "Solicitudes guiadas",
+  "description": "Ejemplo de captura en tres pasos: solicitud, contacto y condiciones.",
+  "config": {
+    "version": 2,
+    "fieldOrder": [
+      "name",
+      "kind",
+      "email",
+      "company",
+      "amount",
+      "due_date",
+      "notes"
+    ],
+    "fields": {
+      "name": {
+        "type": "Textbox",
+        "label": "Nombre de la solicitud",
+        "required": true,
+        "config": { "step": "general" }
+      },
+      "kind": {
+        "type": "Dropdown",
+        "label": "Tipo de solicitud",
+        "required": true,
+        "defaultValue": "Proyecto",
+        "options": [
+          { "value": "Proyecto", "label": "Proyecto" },
+          { "value": "Servicio", "label": "Servicio" }
+        ],
+        "config": { "step": "general" }
+      },
+      "email": {
+        "type": "Textbox",
+        "label": "Correo de contacto",
+        "required": true,
+        "config": { "format": "email", "step": "contact" }
+      },
+      "company": {
+        "type": "Textbox",
+        "label": "Empresa",
+        "config": { "step": "contact" }
+      },
+      "amount": {
+        "type": "Number",
+        "label": "Presupuesto",
+        "required": true,
+        "config": { "minimum": 0, "format": "currency", "step": "terms" }
+      },
+      "due_date": {
+        "type": "DateControl",
+        "label": "Fecha deseada",
+        "config": { "step": "terms" }
+      },
+      "notes": {
+        "type": "Textarea",
+        "label": "Notas",
+        "config": { "step": "terms" }
+      }
+    },
+    "studio": {
+      "columns": 1,
+      "wizard": {
+        "enabled": true,
+        "steps": [
+          {
+            "id": "general",
+            "title": "Solicitud",
+            "description": "Identifica el proyecto o servicio que necesitas."
+          },
+          {
+            "id": "contact",
+            "title": "Contacto",
+            "description": "Indica con quién coordinaremos los próximos pasos."
+          },
+          {
+            "id": "terms",
+            "title": "Condiciones",
+            "description": "Completa el presupuesto y guarda la solicitud."
+          }
+        ]
+      }
+    }
+  }
+}

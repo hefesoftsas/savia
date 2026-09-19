@@ -1,0 +1,30 @@
+{
+  "name": "savia-agencies-api",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "dev": "sh scripts/dev-local.sh",
+    "legacy:postgres": "docker compose --profile legacy-source up -d postgres",
+    "typecheck": "pnpm --filter @savia/api exec tsc --noEmit && pnpm --filter @savia/admin exec tsc --noEmit && pnpm --filter @savia/auth exec tsc --noEmit && pnpm --filter @savia/db exec tsc --noEmit && pnpm --filter @savia/crm-shared exec tsc --noEmit && pnpm --filter @savia/crm-server exec tsc --noEmit && pnpm --filter @savia/db-bridge exec tsc --noEmit && pnpm --filter @savia/insurance-quotes typecheck && pnpm --filter @savia/insurance-portfolio-dashboard typecheck && pnpm --filter @savia/insurance-workbench typecheck && pnpm --filter @savia/insurance-collections typecheck && pnpm --filter @savia/insurance-renewals typecheck && pnpm --filter @savia/insurance-claims typecheck && pnpm --filter @savia/insurance-commissions typecheck && pnpm --filter @savia/insurance-endorsements typecheck && pnpm --filter @savia/insurance-opportunities typecheck && pnpm --filter @savia/insurance-activities typecheck && pnpm --filter @savia/legacy-exporter exec tsc --noEmit && pnpm --filter @savia/mcp exec tsc --noEmit && pnpm --filter @savia/connector-gateway exec tsc --noEmit && pnpm --filter @savia/release-catalog exec tsc --noEmit && pnpm --filter @savia/request run typecheck && pnpm --filter @savia/insurance-issuance typecheck && pnpm --filter @savia/insurance-documents typecheck && pnpm --filter @savia/insurance-service typecheck && pnpm --filter @savia/insurance-automation typecheck && pnpm --filter @savia/insurance-payments typecheck && pnpm --filter @savia/insurance-settlements typecheck && pnpm --filter @savia/insurance-accounting typecheck && pnpm --filter @savia/insurance-communications typecheck && pnpm --filter @savia/insurance-carriers typecheck && pnpm --filter @savia/insurance-calendar typecheck && pnpm --filter @savia/insurance-campaigns typecheck && pnpm --filter @savia/insurance-document-generation typecheck && pnpm --filter @savia/insurance-data-quality typecheck && pnpm --filter @savia/insurance-reports typecheck && pnpm --filter @savia/insurance-compliance typecheck && pnpm --filter @savia/insurance-customer-portal typecheck && pnpm --filter @savia/self-hosted typecheck",
+    "lint": "prettier --check apps/api/package.json apps/api/src apps/api/test/assistant.test.ts apps/api/test/assistant-routes.test.ts apps/api/test/assistant-service.test.ts apps/api/test/auth-fixtures.ts apps/api/test/identity.test.ts apps/api/test/schema.test.ts apps/api/vitest.config.ts apps/auth apps/legacy-exporter apps/mcp apps/connector-gateway docker-compose.yml infra/cloudflare package.json pnpm-workspace.yaml scripts/cloudflare-replacement.mjs scripts/cloudflare-replacement.test.mjs scripts/docker-compose.test.mjs scripts/dev-local.sh scripts/dev-local.test.mjs scripts/import-business-sample.mjs scripts/import-business-sample.test.mjs scripts/import-customer-domain.mjs scripts/import-customer-domain.test.mjs scripts/legacy-import-manifest.mjs scripts/legacy-import-manifest.test.mjs scripts/verify-better-auth-api.mjs",
+    "test": "pnpm run test:unit && pnpm run test:contracts",
+    "test:unit": "pnpm run test:unit:admin && pnpm run test:unit:api && pnpm run test:unit:workspace",
+    "test:unit:admin": "pnpm --filter @savia/admin test",
+    "test:unit:api": "pnpm --filter @savia/api test",
+    "test:unit:workspace": "pnpm -r --workspace-concurrency=3 --filter '!@savia/admin' --filter '!@savia/api' --if-present test",
+    "test:contracts": "node --test scripts/preview-health/worker.test.mjs scripts/upload-cloudflare-secrets.test.mjs scripts/verify-preview-resources.test.mjs scripts/import-savia-request-variables.test.mjs scripts/apply-d1-migrations.test.mjs infra/cloudflare/replacement-state.test.mjs packages/provider-contracts/index.test.mjs scripts/import-business-sample.test.mjs scripts/import-customer-domain.test.mjs scripts/provider-connectivity-live-smoke.test.mjs scripts/public-release-hygiene.test.mjs scripts/cloudflare-replacement.test.mjs scripts/docker-compose.test.mjs scripts/dev-local.test.mjs scripts/github-workflows.test.mjs scripts/legacy-import-manifest.test.mjs scripts/pack-extension.test.mjs scripts/render-cloudflare-production-config.test.mjs scripts/reset-savia-local-state.test.mjs && node --test scripts/api-boundary.test.mjs scripts/dev-api-runtime.test.mjs scripts/insurance-boundary.test.mjs",
+    "test:boundary:insurance": "node --test scripts/insurance-boundary.test.mjs",
+    "typecheck:core": "pnpm --filter @savia/api exec tsc --noEmit && pnpm --filter @savia/admin exec tsc --noEmit && pnpm --filter @savia/auth exec tsc --noEmit && pnpm --filter @savia/db exec tsc --noEmit && pnpm --filter @savia/crm-shared exec tsc --noEmit && pnpm --filter @savia/crm-server exec tsc --noEmit && pnpm --filter @savia/mcp exec tsc --noEmit && pnpm --filter @savia/connector-gateway exec tsc --noEmit && pnpm --filter @savia/release-catalog exec tsc --noEmit",
+    "cloudflare:replacement": "node scripts/cloudflare-replacement.mjs",
+    "favicons:generate": "node scripts/generate-favicons.mjs",
+    "extension:pack": "node scripts/pack-extension.mjs",
+    "savia:credentials:import": "node scripts/import-bitwarden-credentials.mjs"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "jose": "^6.2.10",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.9.6",
+    "sharp": "0.35.2"
+  }
+}

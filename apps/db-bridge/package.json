@@ -1,0 +1,32 @@
+{
+  "name": "@savia/db-bridge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm build && node dist/index.js",
+    "start": "node dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --external:pg --external:mysql2/* --external:mssql --external:mongodb --external:@hono/node-server --external:hono --external:hono/* --external:zod --outfile=dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:live": "SAVIA_DB_LIVE=1 vitest run --config vitest.live.config.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@savia/crm-shared": "workspace:*",
+    "hono": "^4.13.5",
+    "mongodb": "^7.6.0",
+    "mssql": "^12.7.2",
+    "mysql2": "^3.24.4",
+    "pg": "^8.18.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "esbuild": "0.28.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

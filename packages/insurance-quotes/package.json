@@ -1,0 +1,33 @@
+{
+  "name": "@savia/insurance-quotes",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./manifest": "./src/manifest.ts",
+    "./connectors": "./src/connectors.ts",
+    "./savia-request-adapter": "./src/savia-request-adapter.ts",
+    "./normalize": "./src/normalize.ts",
+    "./solution": "./src/solution.ts",
+    "./admin": "./src/admin.tsx",
+    "./assistant-contract": "./src/assistant-contract.ts",
+    "./public-form": "./src/public-form.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/crm-shared": "workspace:*",
+    "@savia/provider-contracts": "workspace:*",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.2.8",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

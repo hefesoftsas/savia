@@ -1,0 +1,180 @@
+name: Deploy Savia production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: savia-production
+  cancel-in-progress: false
+
+jobs:
+  preview-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful preview deployment for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=""
+          for candidate in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-preview.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=100" \
+            --jq '.workflow_runs[] | select(.event == "workflow_run") | .id'); do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate/jobs" \
+              --jq 'any(.jobs[]; .name == "Deploy preview" and .conclusion == "success")' | grep -qx true; then
+              run_id="$candidate"
+              break
+            fi
+          done
+          test -n "$run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name preview-release --dir "$RUNNER_TEMP/preview-release"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const proof = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/preview-release/preview-release.json', 'utf8'));
+          if (proof.sha !== process.env.GITHUB_SHA || proof.repository !== process.env.GITHUB_REPOSITORY || proof.environment !== 'preview') {
+            throw new Error('No verified preview deployment for the production commit');
+          }
+          NODE
+
+  verify:
+    needs: preview-check
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: verify
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' }}
+    name: Deploy production
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Reject superseded deployments
+        shell: bash
+        run: |
+          approved_sha="$(git rev-parse HEAD)"
+          current_sha="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$approved_sha" != "$current_sha" ]; then
+            echo "::error::This commit has been superseded on main; refusing an outdated deployment."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Render Worker configuration
+        run: node scripts/render-cloudflare-production-config.mjs
+        env:
+          SAVIA_AUTH_D1_ID: ${{ vars.SAVIA_AUTH_D1_ID }}
+          SAVIA_DOMAIN_D1_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+
+      - name: Upload secrets using explicit environment configuration
+        run: node scripts/upload-cloudflare-secrets.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: production
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
+
+      - name: Deploy savia-auth
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+          workingDirectory: apps/auth
+          wranglerVersion: 4.127.1
+
+      - name: Deploy private Savia FastMCP
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+          workingDirectory: apps/mcp
+          wranglerVersion: 4.127.1
+
+      - name: Apply Savia domain migrations
+        run: node scripts/apply-d1-migrations.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_DATABASE_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy private Savia request
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+          workingDirectory: apps/savia-request
+          wranglerVersion: 4.127.1
+
+      - name: Deploy private Savia connectors
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+          workingDirectory: apps/connector-gateway
+          wranglerVersion: 4.127.1
+
+      - name: Deploy savia-agencies
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1
+
+      - name: Build admin assets
+        run: pnpm --filter @savia/admin run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=1536"
+
+      - name: Deploy savia gateway
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: --cwd ../admin deploy --config wrangler.production.jsonc
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1
+
+      - name: Verify deployed gateway
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deployments status --name savia --config wrangler.production.jsonc
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1

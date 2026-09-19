@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.settlements",
+  "version": "1.0.0",
+  "label": "Liquidaciones",
+  "description": "Calcula participaciones y estados de liquidación.",
+  "requires": [],
+  "apiVersion": 1
+}

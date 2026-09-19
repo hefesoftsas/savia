@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  esbuild: true
+  protobufjs: false
+  "@scarf/scarf": false
+  workerd: true
+  vue-demi: false
+minimumReleaseAgeExclude:
+  - "@cloudflare/workers-types@5.20260901.1"
+  - lucide-react@1.39.0
+  - "@ai-sdk/gateway@4.0.73"
+  - ai@7.0.91

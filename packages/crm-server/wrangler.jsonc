@@ -1,0 +1,22 @@
+{
+  "name": "savia-crm-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    "POC_LOCAL": "true",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crm-server",
+      "database_id": "00000000-0000-0000-0000-000000000099",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "savia-crm-files",
+    },
+  ],
+}

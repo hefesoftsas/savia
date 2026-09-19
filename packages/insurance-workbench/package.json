@@ -1,0 +1,30 @@
+{
+  "name": "@savia/insurance-workbench",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./data": "./src/data.ts",
+    "./schema": "./src/schema.ts",
+    "./financial": "./src/financial.ts",
+    "./types": "./src/types.ts",
+    "./case-config": "./src/case-config.tsx",
+    "./attachments": "./src/attachments.tsx",
+    "./workbench.css": "./src/workbench.css"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/crm-shared": "workspace:*",
+    "react": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

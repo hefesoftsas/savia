@@ -1,0 +1,404 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-19T13:59:24.765713+00:00",
+  "title": "Design System: Savia Insurance Workbench",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Background",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(26% 0.0000 89.88)",
+          "oklch(38% 0.0000 89.88)",
+          "oklch(49% 0.0000 89.88)",
+          "oklch(61% 0.0000 89.88)",
+          "oklch(72% 0.0000 89.88)",
+          "oklch(84% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Foreground",
+        "tonalRamp": [
+          "oklch(15% 0.0208 185.58)",
+          "oklch(26% 0.0208 185.58)",
+          "oklch(38% 0.0208 185.58)",
+          "oklch(49% 0.0208 185.58)",
+          "oklch(61% 0.0208 185.58)",
+          "oklch(72% 0.0208 185.58)",
+          "oklch(84% 0.0208 185.58)",
+          "oklch(95% 0.0208 185.58)"
+        ]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Muted Foreground",
+        "tonalRamp": [
+          "oklch(15% 0.0228 171.96)",
+          "oklch(26% 0.0228 171.96)",
+          "oklch(38% 0.0228 171.96)",
+          "oklch(49% 0.0228 171.96)",
+          "oklch(61% 0.0228 171.96)",
+          "oklch(72% 0.0228 171.96)",
+          "oklch(84% 0.0228 171.96)",
+          "oklch(95% 0.0228 171.96)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "tonalRamp": [
+          "oklch(15% 0.0109 158.83)",
+          "oklch(26% 0.0109 158.83)",
+          "oklch(38% 0.0109 158.83)",
+          "oklch(49% 0.0109 158.83)",
+          "oklch(61% 0.0109 158.83)",
+          "oklch(72% 0.0109 158.83)",
+          "oklch(84% 0.0109 158.83)",
+          "oklch(95% 0.0109 158.83)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "oklch(15% 0.0041 157.18)",
+          "oklch(26% 0.0041 157.18)",
+          "oklch(38% 0.0041 157.18)",
+          "oklch(49% 0.0041 157.18)",
+          "oklch(61% 0.0041 157.18)",
+          "oklch(72% 0.0041 157.18)",
+          "oklch(84% 0.0041 157.18)",
+          "oklch(95% 0.0041 157.18)"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Primary",
+        "tonalRamp": [
+          "oklch(15% 0.0734 167.66)",
+          "oklch(26% 0.0734 167.66)",
+          "oklch(38% 0.0734 167.66)",
+          "oklch(49% 0.0734 167.66)",
+          "oklch(61% 0.0734 167.66)",
+          "oklch(72% 0.0734 167.66)",
+          "oklch(84% 0.0734 167.66)",
+          "oklch(95% 0.0734 167.66)"
+        ]
+      },
+      "primary-foreground": {
+        "role": "primary",
+        "displayName": "Primary Foreground",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(26% 0.0000 89.88)",
+          "oklch(38% 0.0000 89.88)",
+          "oklch(49% 0.0000 89.88)",
+          "oklch(61% 0.0000 89.88)",
+          "oklch(72% 0.0000 89.88)",
+          "oklch(84% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger",
+        "tonalRamp": [
+          "oklch(15% 0.1600 23.15)",
+          "oklch(26% 0.1600 23.15)",
+          "oklch(38% 0.1600 23.15)",
+          "oklch(49% 0.1600 23.15)",
+          "oklch(61% 0.1600 23.15)",
+          "oklch(72% 0.1600 23.15)",
+          "oklch(84% 0.1600 23.15)",
+          "oklch(95% 0.1600 23.15)"
+        ]
+      },
+      "danger-surface": {
+        "role": "semantic",
+        "displayName": "Danger Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0162 17.44)",
+          "oklch(26% 0.0162 17.44)",
+          "oklch(38% 0.0162 17.44)",
+          "oklch(49% 0.0162 17.44)",
+          "oklch(61% 0.0162 17.44)",
+          "oklch(72% 0.0162 17.44)",
+          "oklch(84% 0.0162 17.44)",
+          "oklch(95% 0.0162 17.44)"
+        ]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Warning",
+        "tonalRamp": [
+          "oklch(15% 0.0991 69.51)",
+          "oklch(26% 0.0991 69.51)",
+          "oklch(38% 0.0991 69.51)",
+          "oklch(49% 0.0991 69.51)",
+          "oklch(61% 0.0991 69.51)",
+          "oklch(72% 0.0991 69.51)",
+          "oklch(84% 0.0991 69.51)",
+          "oklch(95% 0.0991 69.51)"
+        ]
+      },
+      "warning-surface": {
+        "role": "semantic",
+        "displayName": "Warning Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0320 87.29)",
+          "oklch(26% 0.0320 87.29)",
+          "oklch(38% 0.0320 87.29)",
+          "oklch(49% 0.0320 87.29)",
+          "oklch(61% 0.0320 87.29)",
+          "oklch(72% 0.0320 87.29)",
+          "oklch(84% 0.0320 87.29)",
+          "oklch(95% 0.0320 87.29)"
+        ]
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Success",
+        "tonalRamp": [
+          "oklch(15% 0.0848 158.61)",
+          "oklch(26% 0.0848 158.61)",
+          "oklch(38% 0.0848 158.61)",
+          "oklch(49% 0.0848 158.61)",
+          "oklch(61% 0.0848 158.61)",
+          "oklch(72% 0.0848 158.61)",
+          "oklch(84% 0.0848 158.61)",
+          "oklch(95% 0.0848 158.61)"
+        ]
+      },
+      "success-surface": {
+        "role": "semantic",
+        "displayName": "Success Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0141 162.47)",
+          "oklch(26% 0.0141 162.47)",
+          "oklch(38% 0.0141 162.47)",
+          "oklch(49% 0.0141 162.47)",
+          "oklch(61% 0.0141 162.47)",
+          "oklch(72% 0.0141 162.47)",
+          "oklch(84% 0.0141 162.47)",
+          "oklch(95% 0.0141 162.47)"
+        ]
+      },
+      "danger-dark": {
+        "role": "semantic",
+        "displayName": "Danger Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0852 16.30)",
+          "oklch(26% 0.0852 16.30)",
+          "oklch(38% 0.0852 16.30)",
+          "oklch(49% 0.0852 16.30)",
+          "oklch(61% 0.0852 16.30)",
+          "oklch(72% 0.0852 16.30)",
+          "oklch(84% 0.0852 16.30)",
+          "oklch(95% 0.0852 16.30)"
+        ]
+      },
+      "danger-surface-dark": {
+        "role": "semantic",
+        "displayName": "Danger Surface Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0590 14.56)",
+          "oklch(26% 0.0590 14.56)",
+          "oklch(38% 0.0590 14.56)",
+          "oklch(49% 0.0590 14.56)",
+          "oklch(61% 0.0590 14.56)",
+          "oklch(72% 0.0590 14.56)",
+          "oklch(84% 0.0590 14.56)",
+          "oklch(95% 0.0590 14.56)"
+        ]
+      },
+      "warning-dark": {
+        "role": "semantic",
+        "displayName": "Warning Dark",
+        "tonalRamp": [
+          "oklch(15% 0.1024 85.65)",
+          "oklch(26% 0.1024 85.65)",
+          "oklch(38% 0.1024 85.65)",
+          "oklch(49% 0.1024 85.65)",
+          "oklch(61% 0.1024 85.65)",
+          "oklch(72% 0.1024 85.65)",
+          "oklch(84% 0.1024 85.65)",
+          "oklch(95% 0.1024 85.65)"
+        ]
+      },
+      "warning-surface-dark": {
+        "role": "semantic",
+        "displayName": "Warning Surface Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0449 86.14)",
+          "oklch(26% 0.0449 86.14)",
+          "oklch(38% 0.0449 86.14)",
+          "oklch(49% 0.0449 86.14)",
+          "oklch(61% 0.0449 86.14)",
+          "oklch(72% 0.0449 86.14)",
+          "oklch(84% 0.0449 86.14)",
+          "oklch(95% 0.0449 86.14)"
+        ]
+      },
+      "success-dark": {
+        "role": "semantic",
+        "displayName": "Success Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0712 158.48)",
+          "oklch(26% 0.0712 158.48)",
+          "oklch(38% 0.0712 158.48)",
+          "oklch(49% 0.0712 158.48)",
+          "oklch(61% 0.0712 158.48)",
+          "oklch(72% 0.0712 158.48)",
+          "oklch(84% 0.0712 158.48)",
+          "oklch(95% 0.0712 158.48)"
+        ]
+      },
+      "success-surface-dark": {
+        "role": "semantic",
+        "displayName": "Success Surface Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0433 161.89)",
+          "oklch(26% 0.0433 161.89)",
+          "oklch(38% 0.0433 161.89)",
+          "oklch(49% 0.0433 161.89)",
+          "oklch(61% 0.0433 161.89)",
+          "oklch(72% 0.0433 161.89)",
+          "oklch(84% 0.0433 161.89)",
+          "oklch(95% 0.0433 161.89)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "metric": {
+        "displayName": "Metric",
+        "purpose": "Operational totals with tabular figures."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "background 160ms ease-out",
+        "purpose": "Button hover feedback; removed under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "editor-stacked",
+        "value": "1100px"
+      },
+      {
+        "name": "mobile-worklist",
+        "value": "640px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main create and save actions.",
+      "html": "<div class=\"ds-scope\"><button class=\"ds-primary\">Guardar cambios</button></div>",
+      "css": ".ds-scope {font-family:inherit;font-size:0.875rem;line-height:1.5;color:var(--foreground,#172624)} .ds-scope button,.ds-scope input {font:inherit} .ds-scope button {\n  cursor: pointer;\n  border: 1px solid var(--border, #dce4df);\n  border-radius: 7px;\n  padding: 0.55rem 0.8rem;\n  background: var(--background, #fff);\n  color: var(--foreground, #172624);\n  min-height: 40px;\n  white-space: nowrap;\n  transition: background 160ms ease-out;\n}\n.ds-scope button:hover:not(:disabled) {\n  background: var(--muted, #f3f6f4);\n}\n.ds-scope button:disabled {\n  opacity: 0.5;\n  cursor: not-allowed;\n}\n.ds-scope :is(button, input, select, textarea, [tabindex]):focus-visible {\n  outline: 2px solid var(--primary, #21604b);\n  outline-offset: 3px;\n}\n.ds-scope .ds-primary {\n  background: var(--primary, #21604b);\n  color: var(--primary-foreground, #fff);\n  border-color: var(--primary, #21604b);\n  font-weight: 600;\n}\n.ds-scope .ds-primary:hover:not(:disabled) {\n  background: var(--primary, #21604b);\n  filter: brightness(0.92);\n}\n@media(prefers-reduced-motion:reduce){.ds-scope *{transition:none!important}}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Refresh, export, cancel and record actions.",
+      "html": "<div class=\"ds-scope\"><button>Actualizar</button></div>",
+      "css": ".ds-scope {font-family:inherit;font-size:0.875rem;line-height:1.5;color:var(--foreground,#172624)} .ds-scope button,.ds-scope input {font:inherit} .ds-scope button {\n  cursor: pointer;\n  border: 1px solid var(--border, #dce4df);\n  border-radius: 7px;\n  padding: 0.55rem 0.8rem;\n  background: var(--background, #fff);\n  color: var(--foreground, #172624);\n  min-height: 40px;\n  white-space: nowrap;\n  transition: background 160ms ease-out;\n}\n.ds-scope button:hover:not(:disabled) {\n  background: var(--muted, #f3f6f4);\n}\n.ds-scope button:disabled {\n  opacity: 0.5;\n  cursor: not-allowed;\n}\n.ds-scope :is(button, input, select, textarea, [tabindex]):focus-visible {\n  outline: 2px solid var(--primary, #21604b);\n  outline-offset: 3px;\n}\n@media(prefers-reduced-motion:reduce){.ds-scope *{transition:none!important}}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Labelled editable record data.",
+      "html": "<div class=\"ds-scope\"><label>Responsable<input placeholder=\"Nombre del responsable\"></label></div>",
+      "css": ".ds-scope {font-family:inherit;font-size:0.875rem;line-height:1.5;color:var(--foreground,#172624)} .ds-scope button,.ds-scope input {font:inherit} .ds-scope :is(button, input, select, textarea, [tabindex]):focus-visible {\n  outline: 2px solid var(--primary, #21604b);\n  outline-offset: 3px;\n}\n.ds-scope :is(input, select, textarea) {\n  width: 100%;\n  min-height: 40px;\n  border: 1px solid var(--border, #dce4df);\n  background: var(--background, #fff);\n  color: var(--foreground, #172624);\n  padding: 0.55rem 0.7rem;\n  border-radius: 7px;\n}\n.ds-scope input::placeholder {\n  color: var(--muted-foreground, #53645e);\n  opacity: 1;\n}\n@media(prefers-reduced-motion:reduce){.ds-scope *{transition:none!important}}"
+    },
+    {
+      "name": "Priority filters",
+      "kind": "nav",
+      "refersTo": "filter-selected",
+      "description": "Local priority navigation with count and pressed state.",
+      "html": "<div class=\"ds-scope\"><nav class=\"ds-filters\" aria-label=\"Prioridad\"><button aria-pressed=\"true\">Todos<span>24</span></button><button aria-pressed=\"false\">Hoy<span>3</span></button></nav></div>",
+      "css": ".ds-scope {font-family:inherit;font-size:0.875rem;line-height:1.5;color:var(--foreground,#172624)} .ds-scope button,.ds-scope input {font:inherit} .ds-scope button {\n  cursor: pointer;\n  border: 1px solid var(--border, #dce4df);\n  border-radius: 7px;\n  padding: 0.55rem 0.8rem;\n  background: var(--background, #fff);\n  color: var(--foreground, #172624);\n  min-height: 40px;\n  white-space: nowrap;\n  transition: background 160ms ease-out;\n}\n.ds-scope button:hover:not(:disabled) {\n  background: var(--muted, #f3f6f4);\n}\n.ds-scope button:disabled {\n  opacity: 0.5;\n  cursor: not-allowed;\n}\n.ds-scope :is(button, input, select, textarea, [tabindex]):focus-visible {\n  outline: 2px solid var(--primary, #21604b);\n  outline-offset: 3px;\n}\n.ds-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.4rem;\n  border-bottom: 1px solid var(--border, #dce4df);\n  padding-bottom: 1rem;\n}\n.ds-filters button {\n  border-color: transparent;\n  padding: 0.4rem 0.65rem;\n  color: var(--muted-foreground, #53645e);\n}\n.ds-filters button[aria-pressed=\"true\"] {\n  color: var(--primary-foreground, #fff);\n  background: var(--primary, #21604b);\n  font-weight: 600;\n}\n.ds-filters button[aria-pressed=\"true\"]:hover {\n  background: var(--primary, #21604b);\n}\n.ds-filters span {\n  margin-inline-start: 0.6rem;\n  font-size: 0.75rem;\n  font-variant-numeric: tabular-nums;\n  opacity: 0.85;\n}\n@media(prefers-reduced-motion:reduce){.ds-scope *{transition:none!important}}"
+    },
+    {
+      "name": "Status badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Text plus semantic color and a dot.",
+      "html": "<div class=\"ds-scope\"><span class=\"ds-badge\" data-tone=\"warning\">Hoy</span></div>",
+      "css": ".ds-scope {font-family:inherit;font-size:0.875rem;line-height:1.5;color:var(--foreground,#172624)} .ds-scope button,.ds-scope input {font:inherit} .ds-badge {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.4rem;\n  padding: 0.2rem 0.5rem;\n  border-radius: 5px;\n  background: var(--muted, #f3f6f4);\n  font-size: 0.75rem;\n}\n.ds-badge::before {\n  content: \"\";\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: currentColor;\n}\n.ds-badge[data-tone=\"warning\"] {\n  color: #81520d;\n  background: #fff5de;\n}\n.dark .ds-badge[data-tone=\"warning\"] {\n  color: #f7d488;\n  background: #45391e;\n}\n@media(prefers-reduced-motion:reduce){.ds-scope *{transition:none!important}}"
+    },
+    {
+      "name": "Inline editor",
+      "kind": "card",
+      "refersTo": "editor",
+      "description": "Bordered context-preserving editor with a muted heading.",
+      "html": "<div class=\"ds-scope\"><aside class=\"ds-editor\"><header class=\"ds-editor-heading\"><div><p>Gestión del registro</p><h2>Referencia 1042</h2></div><button>Cerrar</button></header><form><label>Responsable<input value=\"Equipo de operaciones\"></label></form></aside></div>",
+      "css": ".ds-scope {font-family:inherit;font-size:0.875rem;line-height:1.5;color:var(--foreground,#172624)} .ds-scope button,.ds-scope input {font:inherit} .ds-scope button {\n  cursor: pointer;\n  border: 1px solid var(--border, #dce4df);\n  border-radius: 7px;\n  padding: 0.55rem 0.8rem;\n  background: var(--background, #fff);\n  color: var(--foreground, #172624);\n  min-height: 40px;\n  white-space: nowrap;\n  transition: background 160ms ease-out;\n}\n.ds-scope button:hover:not(:disabled) {\n  background: var(--muted, #f3f6f4);\n}\n.ds-scope button:disabled {\n  opacity: 0.5;\n  cursor: not-allowed;\n}\n.ds-scope :is(button, input, select, textarea, [tabindex]):focus-visible {\n  outline: 2px solid var(--primary, #21604b);\n  outline-offset: 3px;\n}\n.ds-scope :is(input, select, textarea) {\n  width: 100%;\n  min-height: 40px;\n  border: 1px solid var(--border, #dce4df);\n  background: var(--background, #fff);\n  color: var(--foreground, #172624);\n  padding: 0.55rem 0.7rem;\n  border-radius: 7px;\n}\n.ds-editor {\n  border: 1px solid var(--border, #dce4df);\n  border-radius: 12px;\n  overflow: hidden;\n}\n.ds-editor-heading {\n  display: flex;\n  justify-content: space-between;\n  align-items: start;\n  padding: 1.1rem;\n  background: var(--muted, #f3f6f4);\n  gap: 0.75rem;\n}\n.ds-editor-heading p {\n  margin: 0 0 0.2rem;\n  color: var(--muted-foreground, #53645e);\n  font-size: 0.75rem;\n}\n.ds-editor-heading h2 {\n  font-size: 1.15rem;\n  margin: 0;\n  overflow-wrap: anywhere;\n}\n.ds-editor form {\n  padding: 1.1rem;\n}\n@media(prefers-reduced-motion:reduce){.ds-scope *{transition:none!important}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operational Worklist",
+    "overview": "This package extends Savia's established administrative interface with a shared worklist and inline editor. It belongs to optional insurance solutions; it does not define a new application identity or impose an insurance identity on the platform. Theme colors and the font family come from the host.\n\nThe visual language is compact, direct and quiet: readable record identities, tabular figures, thin rules and explicit action states. The shipped source is the authority for this record, including the compact mobile metrics and stacked table rows. This is an inherited system capture, not a new visual concept.",
+    "keyCharacteristics": [
+      "Host-controlled theme and typography.",
+      "Flat, rule-separated operational information.",
+      "Compact figures and explicit text states.",
+      "Responsive worklist with an inline editor."
+    ],
+    "rules": [
+      {
+        "name": "The Host Theme Rule",
+        "body": "Reuse host theme roles for the workbench shell and actions; keep solution-specific status colors scoped to their semantic states.",
+        "section": "colors"
+      },
+      {
+        "name": "The Comparable Figures Rule",
+        "body": "Use tabular numerals for totals and amounts; right-align numeric table columns on desktop and left-align them within mobile labelled rows.",
+        "section": "typography"
+      },
+      {
+        "name": "The Context Retained Rule",
+        "body": "Keep the editor in the worklist layout, moving it above the list when the side-by-side composition no longer fits.",
+        "section": "layout"
+      },
+      {
+        "name": "The Quiet Separation Rule",
+        "body": "Separate dense information with rules, spacing and tonal surfaces before adding another container.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Footer Context Rule",
+        "body": "Match the list footer to its data: nonfinancial lists show calendar-date context for Bogotá; issuance combines that context with COP units.",
+        "section": "components"
+      },
+      {
+        "name": "The Discovered Fields Rule",
+        "body": "Show relation discovery as a loading status or an explicit error with recovery guidance; keep editor fields and save disabled until discovery succeeds.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** inherit the host theme and font family.",
+      "**Do** keep explicit text labels alongside status color.",
+      "**Do** preserve compact mobile metrics and labelled stacked rows.",
+      "**Do** retain visible keyboard focus and reduced-motion behavior.",
+      "**Do** keep loading, empty and failed states visually and verbally distinct."
+    ],
+    "donts": [
+      "**Don't** promote optional insurance terminology or fallback colors into Savia's core identity.",
+      "**Don't** replace operational figures with decorative metric cards.",
+      "**Don't** hide record values or actions to make mobile rows fit.",
+      "**Don't** introduce shadows as the default separator for this workbench."
+    ]
+  }
+}

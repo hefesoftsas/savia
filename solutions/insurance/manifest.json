@@ -1,0 +1,524 @@
+{
+  "format": "savia.solution",
+  "formatVersion": 1,
+  "id": "savia.insurance",
+  "version": "1.5.0",
+  "label": "Seguros",
+  "description": "Clientes, aseguradoras, cotizaciones, pólizas, pagos y siniestros sobre el motor low code de Savia. Las conexiones con aseguradoras se configuran por separado.",
+  "requires": ["insurance.quotes"],
+  "objects": [
+    {
+      "name": "clientes",
+      "label": "Clientes",
+      "description": "Personas y empresas aseguradas.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Nombre",
+            "required": true
+          },
+          "documento": {
+            "type": "Textbox",
+            "label": "Documento"
+          },
+          "email": {
+            "type": "Textbox",
+            "label": "Correo",
+            "config": {
+              "format": "email"
+            }
+          },
+          "telefono": {
+            "type": "Textbox",
+            "label": "Teléfono"
+          }
+        },
+        "fieldOrder": ["name", "documento", "email", "telefono"]
+      }
+    },
+    {
+      "name": "aseguradoras",
+      "label": "Aseguradoras",
+      "description": "Compañías y contactos comerciales.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Nombre",
+            "required": true
+          },
+          "codigo": {
+            "type": "Textbox",
+            "label": "Código"
+          },
+          "contacto": {
+            "type": "Textbox",
+            "label": "Contacto"
+          }
+        },
+        "fieldOrder": ["name", "codigo", "contacto"]
+      }
+    },
+    {
+      "name": "cotizaciones",
+      "label": "Cotizaciones",
+      "description": "Solicitudes y propuestas de seguro.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Nombre",
+            "required": true
+          },
+          "cliente": {
+            "type": "Dropdown",
+            "label": "Cliente",
+            "options": [],
+            "config": {
+              "relation": "clientes"
+            }
+          },
+          "aseguradora": {
+            "type": "Dropdown",
+            "label": "Aseguradora",
+            "options": [],
+            "config": {
+              "relation": "aseguradoras"
+            }
+          },
+          "ramo": {
+            "type": "Textbox",
+            "label": "Ramo"
+          },
+          "placa": {
+            "type": "Textbox",
+            "label": "Placa"
+          },
+          "valor_asegurado": {
+            "type": "Number",
+            "label": "Valor asegurado",
+            "config": {
+              "format": "currency"
+            }
+          },
+          "prima": {
+            "type": "Number",
+            "label": "Prima",
+            "config": {
+              "format": "currency"
+            }
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Borrador",
+                "value": "Borrador"
+              },
+              {
+                "label": "Solicitada",
+                "value": "Solicitada"
+              },
+              {
+                "label": "Recibida",
+                "value": "Recibida"
+              },
+              {
+                "label": "Aceptada",
+                "value": "Aceptada"
+              },
+              {
+                "label": "Rechazada",
+                "value": "Rechazada"
+              }
+            ]
+          }
+        },
+        "fieldOrder": [
+          "name",
+          "cliente",
+          "aseguradora",
+          "placa",
+          "ramo",
+          "valor_asegurado",
+          "prima",
+          "estado"
+        ],
+        "studio": {
+          "screen": {
+            "hidden": true,
+            "icon": "file-text"
+          }
+        }
+      }
+    },
+    {
+      "name": "cotizaciones_detalle",
+      "label": "Detalles de cotización",
+      "description": "Propuestas y respuestas individuales por aseguradora y producto.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Referencia",
+            "required": true
+          },
+          "cotizacion": {
+            "type": "Dropdown",
+            "label": "Cotización",
+            "options": [],
+            "config": {
+              "relation": "cotizaciones"
+            }
+          },
+          "aseguradora": {
+            "type": "Textbox",
+            "label": "Aseguradora"
+          },
+          "producto": {
+            "type": "Textbox",
+            "label": "Producto"
+          },
+          "flow_id": {
+            "type": "Textbox",
+            "label": "Flow ID"
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Solicitada",
+                "value": "Solicitada"
+              },
+              {
+                "label": "Recibida",
+                "value": "Recibida"
+              },
+              {
+                "label": "Error",
+                "value": "Error"
+              }
+            ]
+          },
+          "prima": {
+            "type": "Number",
+            "label": "Prima",
+            "config": {
+              "format": "currency"
+            }
+          },
+          "numero_cotizacion": {
+            "type": "Textbox",
+            "label": "Número de cotización"
+          },
+          "error_mensaje": {
+            "type": "Textarea",
+            "label": "Mensaje de error"
+          },
+          "run_id": {
+            "type": "Textbox",
+            "label": "ID de ejecución"
+          }
+        },
+        "fieldOrder": [
+          "name",
+          "cotizacion",
+          "aseguradora",
+          "producto",
+          "flow_id",
+          "estado",
+          "prima",
+          "numero_cotizacion",
+          "error_mensaje",
+          "run_id"
+        ],
+        "studio": {
+          "screen": {
+            "hidden": true,
+            "icon": "files"
+          }
+        }
+      }
+    },
+    {
+      "name": "polizas",
+      "label": "Pólizas",
+      "description": "Vigencias y condiciones de los contratos.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Número de póliza",
+            "required": true
+          },
+          "cliente": {
+            "type": "Dropdown",
+            "label": "Cliente",
+            "options": [],
+            "config": {
+              "relation": "clientes"
+            }
+          },
+          "aseguradora": {
+            "type": "Dropdown",
+            "label": "Aseguradora",
+            "options": [],
+            "config": {
+              "relation": "aseguradoras"
+            }
+          },
+          "cotizacion": {
+            "type": "Dropdown",
+            "label": "Cotización",
+            "options": [],
+            "config": {
+              "relation": "cotizaciones"
+            }
+          },
+          "inicio": {
+            "type": "DateControl",
+            "label": "Inicio de vigencia"
+          },
+          "fin": {
+            "type": "DateControl",
+            "label": "Fin de vigencia"
+          },
+          "prima": {
+            "type": "Number",
+            "label": "Prima",
+            "config": {
+              "format": "currency"
+            }
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Vigente",
+                "value": "Vigente"
+              },
+              {
+                "label": "Vencida",
+                "value": "Vencida"
+              },
+              {
+                "label": "Cancelada",
+                "value": "Cancelada"
+              }
+            ]
+          }
+        },
+        "fieldOrder": [
+          "name",
+          "cliente",
+          "aseguradora",
+          "cotizacion",
+          "inicio",
+          "fin",
+          "prima",
+          "estado"
+        ]
+      }
+    },
+    {
+      "name": "pagos",
+      "label": "Pagos",
+      "description": "Seguimiento de recaudos por póliza.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Referencia",
+            "required": true
+          },
+          "poliza": {
+            "type": "Dropdown",
+            "label": "Póliza",
+            "options": [],
+            "config": {
+              "relation": "polizas"
+            }
+          },
+          "valor": {
+            "type": "Number",
+            "label": "Valor",
+            "config": {
+              "format": "currency"
+            }
+          },
+          "fecha": {
+            "type": "DateControl",
+            "label": "Fecha"
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Pendiente",
+                "value": "Pendiente"
+              },
+              {
+                "label": "Pagado",
+                "value": "Pagado"
+              },
+              {
+                "label": "Anulado",
+                "value": "Anulado"
+              }
+            ]
+          }
+        },
+        "fieldOrder": ["name", "poliza", "valor", "fecha", "estado"]
+      }
+    },
+    {
+      "name": "siniestros",
+      "label": "Siniestros",
+      "description": "Avisos y seguimiento de reclamaciones.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Referencia",
+            "required": true
+          },
+          "poliza": {
+            "type": "Dropdown",
+            "label": "Póliza",
+            "options": [],
+            "config": {
+              "relation": "polizas"
+            }
+          },
+          "fecha": {
+            "type": "DateControl",
+            "label": "Fecha del siniestro"
+          },
+          "descripcion": {
+            "type": "Textarea",
+            "label": "Descripción"
+          },
+          "valor": {
+            "type": "Number",
+            "label": "Valor reclamado",
+            "config": {
+              "format": "currency"
+            }
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Reportado",
+                "value": "Reportado"
+              },
+              {
+                "label": "En estudio",
+                "value": "En estudio"
+              },
+              {
+                "label": "Aprobado",
+                "value": "Aprobado"
+              },
+              {
+                "label": "Rechazado",
+                "value": "Rechazado"
+              },
+              {
+                "label": "Cerrado",
+                "value": "Cerrado"
+              }
+            ]
+          }
+        },
+        "fieldOrder": [
+          "name",
+          "poliza",
+          "fecha",
+          "descripcion",
+          "valor",
+          "estado"
+        ]
+      }
+    },
+    {
+      "name": "cotizador",
+      "label": "Cotizador",
+      "description": "Cotiza seguros de autos livianos.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "extension_surface": {
+            "type": "Textbox",
+            "label": "Superficie de extensión",
+            "hidden": true
+          }
+        },
+        "fieldOrder": ["extension_surface"],
+        "studio": {
+          "screen": {
+            "section": "operation",
+            "icon": "calculator"
+          }
+        }
+      }
+    },
+    {
+      "name": "cotizador_por_pasos",
+      "label": "Cotizador por pasos",
+      "description": "Cotiza seguros guiando el proceso paso a paso.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "extension_surface": {
+            "type": "Textbox",
+            "label": "Superficie de extensión",
+            "hidden": true
+          }
+        },
+        "studio": {
+          "screen": {
+            "section": "operation",
+            "icon": "list-ordered"
+          }
+        },
+        "fieldOrder": ["extension_surface"]
+      }
+    },
+    {
+      "name": "administrar_seguros",
+      "label": "Administrar Seguros",
+      "description": "Configura las experiencias y productos del paquete de Seguros.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "extension_surface": {
+            "type": "Textbox",
+            "label": "Superficie de extensión",
+            "hidden": true
+          }
+        },
+        "fieldOrder": ["extension_surface"],
+        "studio": {
+          "screen": {
+            "section": "administration",
+            "icon": "settings-2"
+          }
+        }
+      }
+    }
+  ]
+}

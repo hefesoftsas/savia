@@ -1,0 +1,38 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "savia",
+  "main": "src/edge-gateway.ts",
+  "compatibility_date": "2026-08-31",
+  "routes": [
+    {
+      "pattern": "savia.app.hefesoft.com",
+      "custom_domain": true,
+    },
+    {
+      "pattern": "*.savia.app.hefesoft.com",
+      "custom_domain": true,
+    },
+  ],
+  "services": [{ "binding": "API", "service": "savia-agencies" }],
+  "r2_buckets": [
+    { "binding": "OFFICE_RUNTIME", "bucket_name": "savia-documents" },
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/public/forms",
+      "/public/forms/*",
+      "/office",
+      "/office/*",
+      "/api/*",
+      "/v1/*",
+      "/.well-known/*",
+      "/mcp",
+      "/health",
+      "/docs",
+      "/openapi.json",
+    ],
+  },
+}

@@ -1,0 +1,334 @@
+import { env } from "cloudflare:workers";
+import { beforeAll, expect, it, vi } from "vitest";
+import { makeConfig } from "@savia/crm-shared/metadata";
+import { createPublicQuoteAdapter } from "../src/public-forms/quote-adapter";
+const migrations = Object.entries(
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
+);
+const tenant = "public-quote-test";
+const object = {
+  name: "cotizador",
+  label: "Quotes",
+  description: "",
+  config: makeConfig({
+    extension_surface: { type: "Textbox", label: "Extension", hidden: true },
+  }),
+};
+const values = {
+  vehicle_plate: "abc123",
+  vehicle_fasecoldaCode: "12345678",
+  vehicle_productionYear: "2023",
+  vehicle_isNew: false,
+  vehicle_circulationCity: "11001",
+  vehicle_accessoriesValue: "0",
+  vehicle_declaredValue: "50000000",
+  applicant_documentType: "CC",
+  applicant_documentNumber: "123456789",
+  applicant_firstName: "Ada",
+  applicant_surname: "Example",
+  applicant_secondSurname: "",
+  applicant_gender: "F",
+  applicant_birthDate: "1990-01-01",
+  applicant_city: "11001",
+  applicant_address: "Example 123",
+  applicant_phone: "3001234567",
+  applicant_email: "ada@example.test",
+};
+let settings: any;
+beforeAll(async () => {
+  for (const [, sql] of migrations.sort(([a], [b]) => a.localeCompare(b)))
+    for (const statement of sql.split("--> statement-breakpoint")) {
+      const normalized = statement
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (normalized) await env.DB.exec(normalized);
+    }
+  await env.DB.prepare(
+    "INSERT INTO crm_extension_installations(tenant_id,id,version,manifest) VALUES (?,'insurance.quotes','1.2.0','{}')",
+  )
+    .bind(tenant)
+    .run();
+  settings = {
+    quotePages: { direct: true, wizard: true },
+    vehicleLookup: { enabled: false, flowId: "sura-autos-provider" },
+    clientMapping: {
+      collection: "clientes",
+      matchField: "documento",
+      fieldMap: {},
+    },
+    products: [
+      { id: "sbs-producto-8", label: "Admin label", enabled: true, rank: 1 },
+    ],
+  };
+  await env.DB.prepare(
+    "INSERT INTO extension_settings(tenant_id,extension_id,value,version,updated_at,updated_by_principal_id,created_at,created_by_principal_id) VALUES (?,'insurance.quotes',?,1,'now','admin','now','admin')",
+  )
+    .bind(tenant, JSON.stringify(settings))
+    .run();
+});
+it("freezes only quote products and validates public inputs before executing a fixed server-owned action", async () => {
+  const execute = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: {
+      type: "quote",
+      data: {
+        premiumTotal: 12345,
+        quoteNumber: "customer-secret",
+        credentials: { password: "secret" },
+        customer: values,
+      },
+    },
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute } });
+  const published = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  expect(published.fields.some((f) => f.name === "vehicle_plate")).toBe(true);
+  expect(
+    published.fields.some((f) =>
+      /connection|mode|flow|lookup|operation/i.test(f.name),
+    ),
+  ).toBe(false);
+  await expect(
+    adapter.validate({
+      snapshot: published.snapshot,
+      values: { ...values, mode: "mock" },
+    }),
+  ).rejects.toThrow();
+  const validated = await adapter.validate({
+    snapshot: published.snapshot,
+    values,
+  });
+  const result = await adapter.execute({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    objectName: object.name,
+    submissionId: "server-submission",
+    snapshot: published.snapshot,
+    values: validated,
+    returnResult: true,
+  });
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(execute.mock.calls[0]).toMatchObject([
+    {
+      tenantId: tenant,
+      principalId: "public-form:server-submission",
+      extensionId: "insurance.quotes",
+      actionId: "quote",
+      connectionId: "simulation",
+    },
+    {
+      mode: "live",
+      flowId: "sbs-producto-8",
+      quoteInput: {
+        vehicle: { plate: ["ABC", "123"].join(""), productionYear: 2023 },
+      },
+    },
+  ]);
+  expect(result).toMatchObject({
+    quotes: [{ insurer: "SBS", premiumTotal: 12345, currency: "COP" }],
+  });
+  expect(JSON.stringify(result)).not.toMatch(
+    /customer-secret|credentials|password|Ada|documentNumber|runId|flowId/,
+  );
+});
+it("fails closed for a different tenant, disabled extension, changed policy, and invalid visitor data", async () => {
+  const execute = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: {},
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute } });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  await expect(
+    adapter.validate({
+      snapshot,
+      values: { ...values, applicant_birthDate: "2020-99-99" },
+    }),
+  ).rejects.toThrow();
+  await expect(
+    adapter.execute({
+      db: env.DB,
+      tenant: "other",
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "id",
+      snapshot,
+      values,
+      returnResult: true,
+    }),
+  ).rejects.toThrow();
+  await env.DB.prepare(
+    "UPDATE crm_extension_installations SET enabled=0 WHERE tenant_id=?",
+  )
+    .bind(tenant)
+    .run();
+  await expect(
+    adapter.publish({ db: env.DB, tenant, domainId: "test", object }),
+  ).rejects.toThrow();
+  await env.DB.prepare(
+    "UPDATE crm_extension_installations SET enabled=1 WHERE tenant_id=?",
+  )
+    .bind(tenant)
+    .run();
+  await env.DB.prepare(
+    "UPDATE extension_settings SET version=2 WHERE tenant_id=?",
+  )
+    .bind(tenant)
+    .run();
+  await expect(
+    adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "id",
+      snapshot,
+      values,
+      returnResult: true,
+    }),
+  ).rejects.toThrow();
+  expect(execute).not.toHaveBeenCalled();
+});
+
+it("suppresses results when disabled and never returns provider failure details", async () => {
+  const success = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: {
+      type: "quote",
+      data: {
+        premiumTotal: 1500,
+        coverages: { rce: true, customerDocument: "secret" },
+      },
+    },
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute: success } });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  expect(
+    await adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "ack-only",
+      snapshot,
+      values,
+      returnResult: false,
+    }),
+  ).toBeUndefined();
+  const failed = createPublicQuoteAdapter({
+    executor: {
+      execute: async () => {
+        throw new Error("password=provider-secret customer=12345");
+      },
+    },
+  });
+  await expect(
+    failed.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "provider-failed",
+      snapshot,
+      values,
+      returnResult: true,
+    }),
+  ).rejects.toThrow("No se pudo completar la cotización");
+  const row = await env.DB.prepare(
+    "SELECT output,error_code FROM extension_action_runs WHERE tenant_id=? AND principal_id=?",
+  )
+    .bind(tenant, "public-form:provider-failed")
+    .first();
+  expect(JSON.stringify(row)).not.toMatch(/provider-secret|12345/);
+});
+it("refuses lookup flows or forged private policy and executes no provider for bad values", async () => {
+  const execute = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: {},
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute } });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  const forged = {
+    ...(snapshot as object),
+    products: [{ flowId: "sura-autos-provider" }],
+  };
+  await expect(
+    adapter.validate({ snapshot: forged, values }),
+  ).rejects.toThrow();
+  for (const bad of [
+    { ...values, vehicle_declaredValue: 0 },
+    { ...values, applicant_email: "bad" },
+    { ...values, vehicle_isNew: "false" },
+    { ...values, applicant_firstName: { $ref: "secret" } },
+    { ...values, connectionId: "another-tenant" },
+  ])
+    await expect(
+      adapter.execute({
+        db: env.DB,
+        tenant,
+        domainId: "test",
+        objectName: object.name,
+        submissionId: "bad-values",
+        snapshot,
+        values: bad,
+        returnResult: true,
+      }),
+    ).rejects.toThrow();
+  expect(execute).not.toHaveBeenCalled();
+});
+
+it("scopes provider run receipts to the published policy, not a visitor-chosen UUID shared by other forms", async () => {
+  const execute = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: { type: "quote", data: { premiumTotal: 1200 } },
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute } });
+  const first = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  const second = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  for (const { snapshot } of [first, second])
+    await adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "same-visitor-uuid",
+      snapshot,
+      values,
+      returnResult: false,
+    });
+  expect(execute).toHaveBeenCalledTimes(2);
+});

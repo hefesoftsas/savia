@@ -1,0 +1,50 @@
+{
+  "name": "@savia/release-catalog",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime": "./src/runtime.ts",
+    "./assistant-contracts": "./src/assistant-contracts.ts",
+    "./public-forms": "./src/public-forms.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/crm-shared": "workspace:*",
+    "@savia/insurance-portfolio-dashboard": "workspace:*",
+    "@savia/insurance-quotes": "workspace:*",
+    "@savia/insurance-collections": "workspace:*",
+    "@savia/insurance-renewals": "workspace:*",
+    "@savia/insurance-claims": "workspace:*",
+    "@savia/insurance-commissions": "workspace:*",
+    "@savia/insurance-endorsements": "workspace:*",
+    "@savia/insurance-opportunities": "workspace:*",
+    "@savia/insurance-activities": "workspace:*",
+    "@savia/insurance-issuance": "workspace:*",
+    "@savia/insurance-documents": "workspace:*",
+    "@savia/insurance-service": "workspace:*",
+    "@savia/insurance-automation": "workspace:*",
+    "@savia/insurance-payments": "workspace:*",
+    "@savia/insurance-settlements": "workspace:*",
+    "@savia/insurance-accounting": "workspace:*",
+    "@savia/insurance-communications": "workspace:*",
+    "@savia/insurance-carriers": "workspace:*",
+    "@savia/insurance-calendar": "workspace:*",
+    "@savia/insurance-campaigns": "workspace:*",
+    "@savia/insurance-document-generation": "workspace:*",
+    "@savia/insurance-data-quality": "workspace:*",
+    "@savia/insurance-reports": "workspace:*",
+    "@savia/insurance-compliance": "workspace:*",
+    "@savia/insurance-customer-portal": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "savia-request",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-09-04",
+  "worker_loaders": [
+    {
+      "binding": "LOADER"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flow-lab-local",
+      "database_id": "00000000-0000-0000-0000-000000000096",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": false
+  },
+  "workers_dev": false,
+  "preview_urls": false
+}

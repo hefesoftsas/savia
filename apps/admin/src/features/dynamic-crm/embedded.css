@@ -1,0 +1,188 @@
+/* CRM extends Savia's existing work surface: one account shell and inherited theme. */
+.savia-crm.savia-embedded {
+  background: transparent;
+  color: var(--foreground);
+  width: 100%;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: savia-crm;
+  --designer-primary: var(--primary);
+  --designer-primary-hover: color-mix(in oklab, var(--primary) 86%, black);
+  --designer-bg: var(--background);
+  --designer-surface: var(--card);
+  --designer-panel-bg: var(--card);
+  --designer-card-bg: var(--card);
+  --designer-palette-bg: var(--muted);
+  --designer-canvas-bg: var(--muted);
+  --designer-border: var(--border);
+  --designer-border-focus: var(--ring);
+  --designer-text: var(--foreground);
+  --designer-text-secondary: var(--muted-foreground);
+  --designer-card-selected: var(--accent);
+  --designer-card-hover: var(--accent);
+  --designer-drop-indicator: var(--primary);
+  --designer-font-family: inherit;
+}
+.savia-crm.savia-embedded .sidebar,
+.savia-crm.savia-embedded .sidebar-backdrop,
+.savia-crm.savia-embedded .topbar,
+.savia-crm.savia-embedded .app-footer,
+.savia-crm.savia-embedded .eyebrow {
+  display: none;
+}
+.savia-crm.savia-embedded .app-shell {
+  display: block;
+  min-height: 0;
+  width: 100%;
+}
+.savia-crm.savia-embedded .main {
+  display: block;
+  width: 100%;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+}
+.savia-crm.savia-embedded .page-content {
+  padding: 8px 0 24px;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+}
+.savia-crm.savia-embedded .page-heading {
+  margin-bottom: 20px;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.savia-crm.savia-embedded .page-heading .select-input {
+  flex-shrink: 0;
+  align-self: center;
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.savia-crm.savia-embedded .page-heading h1 {
+  font-size: 1.875rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.savia-crm.savia-embedded .screen-admin header h1 {
+  font-size: 1.875rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.savia-crm.savia-embedded .page-heading > div,
+.savia-crm.savia-embedded .page-heading h1,
+.savia-crm.savia-embedded .page-heading p {
+  min-width: 0;
+  max-width: 100%;
+}
+.savia-crm.savia-embedded .screens-page .page-heading {
+  margin-bottom: 0.75rem;
+}
+.savia-crm.savia-embedded .screens-page .page-heading h1 {
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.savia-crm.savia-embedded .heading-actions {
+  flex-wrap: wrap;
+}
+.savia-crm.savia-embedded .list-toolbar,
+.savia-crm.savia-embedded .view-tabs,
+.savia-crm.savia-embedded .list-footer {
+  min-width: 0;
+  max-width: 100%;
+}
+.savia-crm.savia-embedded .search-wrap {
+  min-width: 0;
+  max-width: none;
+  flex: 1 1 100%;
+}
+.savia-crm.savia-embedded .empty-state {
+  box-sizing: border-box;
+}
+.savia-crm.savia-embedded .table-card,
+.savia-crm.savia-embedded .records-table,
+.savia-crm.savia-embedded .op-panel,
+.savia-crm.savia-embedded .empty-state {
+  max-width: 100%;
+}
+.savia-embedded p {
+  color: var(--muted-foreground);
+}
+.savia-embedded h1,
+.savia-embedded h2,
+.savia-embedded h3 {
+  color: var(--foreground);
+}
+.savia-embedded .table-card,
+.savia-embedded .pipeline-column,
+.savia-embedded .op-panel {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-color: var(--border);
+}
+
+.savia-embedded .page-heading button,
+.savia-embedded .view-tabs button,
+.savia-embedded .save-view-trigger {
+  font-size: 13px;
+}
+
+.crm-domain-context-trigger {
+  color: var(--muted-foreground);
+}
+.crm-domain-context-trigger:hover,
+.crm-domain-context-trigger[data-state="open"] {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 45%, transparent);
+}
+#header-actions:empty {
+  display: none;
+}
+
+@container savia-crm (max-width: 44rem) {
+  .page-heading {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .heading-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .list-toolbar {
+    flex-wrap: wrap;
+  }
+  .search-wrap {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+  .view-config-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-content {
+    padding-top: 4px;
+  }
+}
+
+@container savia-crm (max-width: 32rem) {
+  .page-heading h1 {
+    font-size: 1.5rem;
+    letter-spacing: -0.04em;
+    flex-wrap: wrap;
+  }
+  .screens-page .page-heading h1 {
+    font-size: 1.125rem;
+  }
+  .heading-actions button {
+    flex: 1 1 calc(50% - 9px);
+  }
+  .view-tabs {
+    gap: 16px;
+  }
+}
