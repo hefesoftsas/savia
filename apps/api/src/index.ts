@@ -1,3 +1,4 @@
+import { purgeExpiredRecordHistory } from "@savia/crm-server/record-history-storage";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
 export { RealtimeHub } from "./realtime/hub";
@@ -231,6 +232,7 @@ export default {
     const results = await Promise.allSettled([
       runScheduledCrmSync(environment),
       runScheduledWorkflows(environment.DB),
+      purgeExpiredRecordHistory(environment.DB),
     ]);
     const failures = results.filter((result) => result.status === "rejected");
     if (failures.length)

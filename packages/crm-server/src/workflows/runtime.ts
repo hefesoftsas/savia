@@ -1,3 +1,4 @@
+import { historyDatabase } from "../record-history-storage";
 import {
   evaluateWorkflowCondition,
   resolveWorkflowValue,
@@ -179,6 +180,11 @@ async function executeNode(
   token: string,
   now: number,
 ) {
+  db = historyDatabase(db, run.workspace_id, {
+    kind: "workflow",
+    id: run.owner_id,
+    causeId: run.id,
+  });
   const value = (v: Parameters<typeof resolveWorkflowValue>[0]) =>
     resolveWorkflowValue(v, context);
   const mapped = (values: Record<string, Parameters<typeof value>[0]>) =>

@@ -1,3 +1,8 @@
+import {
+  recordHistorySettingsSchema,
+  isHistoryField,
+  type RecordHistorySettings,
+} from "./record-history";
 import { resourceMetadataSchema, isDatabaseKind } from "./database-sources";
 import { collectionOptionsSchema } from "./collection-options";
 import { requestPageSchema, type RequestPageConfig } from "./request-page";
@@ -94,6 +99,7 @@ export type CollectionBindingMetadata = z.infer<
   typeof collectionBindingMetadataSchema
 >;
 export type StudioConfig = {
+  history?: RecordHistorySettings;
   collection?: CollectionBindingMetadata;
   capabilities?: CollectionCapabilities;
   business?: "customer" | "quotation" | "managed-customer" | "managed-agency";
@@ -289,6 +295,7 @@ export const fieldSchema = z
   })
   .passthrough();
 const studio = z.object({
+  history: recordHistorySettingsSchema.optional(),
   collection: collectionBindingMetadataSchema.optional(),
   capabilities: collectionCapabilitiesSchema.optional(),
   business: z
@@ -354,6 +361,18 @@ export const configSchema = z
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
     const names = Object.keys(config.fields);
+    if (config.studio?.history) {
+      if (
+        config.studio.collection ||
+        ["managed-customer", "managed-agency"].includes(
+          config.studio.business ?? "",
+        )
+      )
+        issue("History is supported only for local collections.");
+      for (const name of config.studio.history.fields)
+        if (!isHistoryField(name, config.fields[name]))
+          issue(`Unsupported history field: ${name}`);
+    }
     if (!names.length || names.length > 100)
       issue("El objeto necesita entre 1 y 100 campos.");
     if (

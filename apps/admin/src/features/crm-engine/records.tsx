@@ -1,3 +1,4 @@
+import RecordHistorySettingsButton from "./record-history-settings";
 import { useDebouncedSearch } from "./use-debounced-search";
 import { RetainedListResults } from "./retained-list-results";
 import { recordOptionLabel } from "./record-option-label";
@@ -757,6 +758,7 @@ export default function Records({
               </TooltipContent>
             </Tooltip>
           </div>
+          <RecordHistorySettingsButton object={object} />
           <RecordsCommandToolbar
             object={object}
             capabilities={capabilities}

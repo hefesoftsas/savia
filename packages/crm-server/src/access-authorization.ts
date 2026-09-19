@@ -12,6 +12,15 @@ import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
 import { HTTPException } from "hono/http-exception";
 const contexts = new WeakMap<D1Database, AccessPolicy>();
 export const policyFor = (db: D1Database) => contexts.get(db);
+/** Preserve policy metadata when a wrapper delegates to an already guarded database. */
+export function inheritAccessPolicy(
+  source: D1Database,
+  target: D1Database,
+): D1Database {
+  const policy = policyFor(source);
+  if (policy) contexts.set(target, policy);
+  return target;
+}
 export function accessDenied(): never {
   throw new HTTPException(403, {
     message: "You do not have permission for this operation.",

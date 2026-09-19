@@ -1,3 +1,4 @@
+import { historyDatabase } from "@savia/crm-server/record-history-storage";
 import {
   scopedRecordLinks,
   scopedRelationDefinitions,
@@ -112,9 +113,13 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       const path = new URL(request.url).pathname;
       if (/^\/api\/record-bundles\/[^/]+\/?$/.test(path))
         return createRecordBundlesApp({
-          db: context.accessPolicy
-            ? accessDatabase(db, context.accessPolicy)
-            : db,
+          db: historyDatabase(
+            context.accessPolicy
+              ? accessDatabase(db, context.accessPolicy)
+              : db,
+            tenant,
+            { kind: "user", id: actor.principal.id },
+          ),
           tenant,
         }).fetch(request);
       if (
@@ -198,7 +203,13 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
         });
       }
       if (/^\/api\/record-bundles\/[^/]+\/?$/.test(path))
-        return createRecordBundlesApp({ db, tenant }).fetch(request);
+        return createRecordBundlesApp({
+          db: historyDatabase(db, tenant, {
+            kind: "user",
+            id: actor.principal.id,
+          }),
+          tenant,
+        }).fetch(request);
       if (path === "/api/collection-catalog" && context.externalCollections) {
         try {
           const response = await context.externalCollections.fetch(

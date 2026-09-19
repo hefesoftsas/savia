@@ -1,3 +1,5 @@
+const RecordHistory = lazy(() => import("./record-history"));
+import { supportsRecordHistory } from "./record-history-client";
 import { canDuplicateRecord } from "./record-duplication";
 import { OfficeEditButton } from "./office-edit-button";
 import { recordOptionLabel } from "./record-option-label";
@@ -13,7 +15,7 @@ import {
 import { CustomerActions } from "./business-panel";
 import { getCrmRuntime } from "./runtime";
 import { crmFetch, downloadCrm } from "./api";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -273,6 +275,9 @@ export default function RecordDetail({
             count: relation.total,
           }))
         : [{ id: "relations", label: "Relaciones" }]),
+    ...(supportsRecordHistory(object) && capabilities.read
+      ? [{ id: "history", label: "Historial" }]
+      : []),
     { id: "activity", label: "Actividad" },
     { id: "tasks", label: "Tareas" },
     {
@@ -283,6 +288,7 @@ export default function RecordDetail({
     (item) =>
       !managedCustomer ||
       item.id === "summary" ||
+      item.id === "history" ||
       item.id === "relations" ||
       item.id.startsWith("relation:") ||
       item.id.startsWith("legacy-relation:"),
@@ -802,6 +808,13 @@ export default function RecordDetail({
               )}
             </section>
           )}
+          {tab === "history" &&
+            supportsRecordHistory(object) &&
+            capabilities.read && (
+              <Suspense fallback={<p role="status">Cargando historial…</p>}>
+                <RecordHistory object={object} recordId={record.id} />
+              </Suspense>
+            )}
           {tab === "tasks" && (
             <TaskPanel
               objectName={object.name}

@@ -303,6 +303,25 @@ export function createLocalTransport(
       return Response.json({ ok: true });
     if (method !== "GET" && result.ok) {
       requestSync();
+      if (segments[1] === "record-history-settings" && method === "PUT") {
+        // The settings write increments the collection version. Invalidate all
+        // metadata sources used by the object editor before it can save again.
+        await removeWorkspaceMetadata(`${store.scope}:metadata:/api/objects`);
+        await removeWorkspaceMetadata(`${store.scope}:objects`);
+        try {
+          const [principal, apiBasePath] = JSON.parse(store.scope) as [
+            string,
+            string,
+          ];
+          await removeWorkspaceMetadata(
+            `${principal}:navigation:${apiBasePath}`,
+          );
+        } catch {}
+        for (const cachedKey of revalidatedMetadata.keys()) {
+          if (cachedKey.startsWith(`${store.scope}:metadata:/api/objects`))
+            revalidatedMetadata.delete(cachedKey);
+        }
+      }
       if (segments[1] === "extensions") {
         void removeWorkspaceMetadata(`${store.scope}:metadata:/api/extensions`);
         for (const k of revalidatedMetadata.keys()) {

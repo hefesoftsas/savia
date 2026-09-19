@@ -276,18 +276,16 @@ it("caches extension settings metadata offline and invalidates on mutation", asy
   );
 
   // 1. First fetch reaches the network and caches to workspace metadata
-  const first = await transport(
-    "/api/extensions/insurance.quotes/settings",
-    { method: "GET" },
-  );
+  const first = await transport("/api/extensions/insurance.quotes/settings", {
+    method: "GET",
+  });
   expect(await first.json()).toEqual(settingsData);
   expect(network).toHaveBeenCalledTimes(1);
 
   // 2. Second fetch returns immediately from local cached metadata without network
-  const second = await transport(
-    "/api/extensions/insurance.quotes/settings",
-    { method: "GET" },
-  );
+  const second = await transport("/api/extensions/insurance.quotes/settings", {
+    method: "GET",
+  });
   expect(await second.json()).toEqual(settingsData);
   expect(network).toHaveBeenCalledTimes(1);
 
@@ -302,11 +300,43 @@ it("caches extension settings metadata offline and invalidates on mutation", asy
   // 4. Subsequent fetch after mutation goes back to the server
   const updatedData = { data: { value: { prefix: "COT-2-" }, version: 2 } };
   network.mockResolvedValueOnce(Response.json(updatedData));
-  const third = await transport(
-    "/api/extensions/insurance.quotes/settings",
-    { method: "GET" },
-  );
+  const third = await transport("/api/extensions/insurance.quotes/settings", {
+    method: "GET",
+  });
   expect(await third.json()).toEqual(updatedData);
   expect(network).toHaveBeenCalledTimes(3);
 });
 
+it("refreshes collection versions after saving history settings without caching history", async () => {
+  const local = { ...store(), scope: "history-settings-test" };
+  const network = vi
+    .fn()
+    .mockImplementation(async (path) =>
+      Response.json(
+        path === "/api/objects"
+          ? { data: [{ name: "contacts", version: 1 }] }
+          : { data: [], version: 1 },
+      ),
+    );
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  await transport("/api/objects");
+  await transport("/api/record-history-settings/contacts", { method: "PUT" });
+  network.mockResolvedValueOnce(
+    Response.json({ data: [{ name: "contacts", version: 2 }] }),
+  );
+  const refreshed = await transport("/api/objects");
+  expect(await refreshed.json()).toEqual({
+    data: [{ name: "contacts", version: 2 }],
+  });
+  await transport("/api/record-history/contacts/one");
+  await transport("/api/record-history/contacts/one");
+  expect(
+    network.mock.calls.filter(
+      ([path]) => path === "/api/record-history/contacts/one",
+    ),
+  ).toHaveLength(2);
+});
