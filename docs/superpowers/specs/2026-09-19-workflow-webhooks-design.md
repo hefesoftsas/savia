@@ -1,6 +1,6 @@
 # Workflow webhooks
 
-Status: proposed specification; conversational design approved, written review pending.
+Status: written specification approved by the user; implementation plan review pending.
 
 ## Intent and scope
 
