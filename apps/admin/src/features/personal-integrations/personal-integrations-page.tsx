@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type ElementType } from "react";
 import Nango from "@nangohq/frontend";
 import GoogleCalendar from "@thesvg/react/google-calendar";
@@ -214,6 +215,16 @@ export function PersonalIntegrationsPage({
   };
   nangoFactory?: PersonalNangoConnectFactory;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab =
+    searchParams.get("tab") === "virtual-employees"
+      ? "virtual-employees"
+      : "connections";
+  const selectTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next);
+  };
   const [providers, setProviders] = useState<PersonalIntegrationProvider[]>([]);
   const [connections, setConnections] = useState<
     PersonalIntegrationConnection[]
@@ -360,7 +371,11 @@ export function PersonalIntegrationsPage({
         description="Conecta tus cuentas, servicios y configura los empleados virtuales de IA para Savia."
       />
 
-      <Tabs defaultValue="connections" className="w-full space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={selectTab}
+        className="w-full space-y-6"
+      >
         <TabsList className="mb-2">
           <TabsTrigger value="connections">Cuentas y Conexiones</TabsTrigger>
           <TabsTrigger value="virtual-employees">
@@ -464,4 +479,3 @@ export function PersonalIntegrationsPage({
     </IntegrationsPageShell>
   );
 }
-

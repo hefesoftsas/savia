@@ -5374,6 +5374,8 @@ export interface paths {
               data: {
                 /** @enum {number} */
                 version: 2;
+                /** @enum {number} */
+                presetVersion?: 2;
                 blocks: (
                   | {
                       /** @enum {string} */
@@ -5397,6 +5399,14 @@ export interface paths {
                             | "users"
                             | "tenants"
                             | "page-administrator"
+                            | "domain-sources"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                            | "domain-history"
+                            | "domain-packages"
+                            | "virtual-employees"
+                            | "tenant-branding"
                           )
                         | string
                       )[];
@@ -5420,6 +5430,14 @@ export interface paths {
                             | "users"
                             | "tenants"
                             | "page-administrator"
+                            | "domain-sources"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                            | "domain-history"
+                            | "domain-packages"
+                            | "virtual-employees"
+                            | "tenant-branding"
                           )
                         | string
                       )[];
@@ -5439,6 +5457,14 @@ export interface paths {
                       | "users"
                       | "tenants"
                       | "page-administrator"
+                      | "domain-sources"
+                      | "domain-workflows"
+                      | "domain-reports"
+                      | "domain-api"
+                      | "domain-history"
+                      | "domain-packages"
+                      | "virtual-employees"
+                      | "tenant-branding"
                     )
                   | string
                 )[];
@@ -5472,6 +5498,8 @@ export interface paths {
               data: {
                 /** @enum {number} */
                 version: 2;
+                /** @enum {number} */
+                presetVersion?: 2;
                 blocks: (
                   | {
                       /** @enum {string} */
@@ -5495,6 +5523,14 @@ export interface paths {
                             | "users"
                             | "tenants"
                             | "page-administrator"
+                            | "domain-sources"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                            | "domain-history"
+                            | "domain-packages"
+                            | "virtual-employees"
+                            | "tenant-branding"
                           )
                         | string
                       )[];
@@ -5518,6 +5554,14 @@ export interface paths {
                             | "users"
                             | "tenants"
                             | "page-administrator"
+                            | "domain-sources"
+                            | "domain-workflows"
+                            | "domain-reports"
+                            | "domain-api"
+                            | "domain-history"
+                            | "domain-packages"
+                            | "virtual-employees"
+                            | "tenant-branding"
                           )
                         | string
                       )[];
@@ -5537,6 +5581,14 @@ export interface paths {
                       | "users"
                       | "tenants"
                       | "page-administrator"
+                      | "domain-sources"
+                      | "domain-workflows"
+                      | "domain-reports"
+                      | "domain-api"
+                      | "domain-history"
+                      | "domain-packages"
+                      | "virtual-employees"
+                      | "tenant-branding"
                     )
                   | string
                 )[];

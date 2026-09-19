@@ -113,7 +113,9 @@ it("identifies plugin screens with a Plugin badge and shows sidebar subtitles in
       label: "Pólizas",
       description: "",
       version: 1,
-      config: makeConfig({ title: { type: "Textbox" as const, label: "Título" } }),
+      config: makeConfig({
+        title: { type: "Textbox" as const, label: "Título" },
+      }),
     },
     {
       name: "custom_subscreen",
@@ -141,9 +143,15 @@ it("identifies plugin screens with a Plugin badge and shows sidebar subtitles in
   );
 
   // Check section subtitles explaining sidebar visibility
-  expect(screen.getByText("Visibles en la barra lateral")).toBeInTheDocument();
   expect(
-    screen.getByText(/Ocultas de la barra lateral · Accesibles desde otras páginas/),
+    screen.getByText(
+      "Disponibles para el menú según tus permisos y preferencias",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      /Fuera del menú del dominio · Accesibles mediante enlaces con permiso/,
+    ),
   ).toBeInTheDocument();
 
   // Check Plugin badge is rendered for polizas

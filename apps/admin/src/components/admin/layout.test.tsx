@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { Layout } from "./layout";
@@ -21,12 +27,12 @@ vi.mock("ra-core", async (importOriginal) => {
 });
 
 vi.mock("@/components/ui/sidebar", () => ({
-  SidebarProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SidebarTrigger: ({
-    "aria-label": ariaLabel,
-  }: {
-    "aria-label"?: string;
-  }) => <button aria-label={ariaLabel} type="button" />,
+  SidebarProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SidebarTrigger: ({ "aria-label": ariaLabel }: { "aria-label"?: string }) => (
+    <button aria-label={ariaLabel} type="button" />
+  ),
 }));
 vi.mock("@/components/admin/app-sidebar", () => ({
   AppSidebar: () => <aside>Navigation</aside>,
@@ -50,7 +56,9 @@ vi.mock("@/features/assistant/assistant-bar", () => ({
   AssistantBar: () => null,
 }));
 vi.mock("@/features/savia-request/savia-request-provider", () => ({
-  SaviaRequestProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SaviaRequestProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 afterEach(cleanup);
@@ -63,7 +71,9 @@ function RouteControls() {
       <button
         type="button"
         onClick={() =>
-          navigate("/crm?domain=platform&object=customer_profiles&view=screen-relations")
+          navigate(
+            "/crm?domain=platform&object=customer_profiles&view=screen-relations",
+          )
         }
       >
         Abrir relaciones
@@ -86,13 +96,20 @@ describe("admin layout", () => {
     expect(
       screen.getByRole("button", { name: "Mostrar u ocultar menú" }),
     ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Instalar|Install/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Volver" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Adelante" })).toBeDisabled();
   });
 
   it("keeps an app-level back control for in-app navigation", async () => {
     render(
-      <MemoryRouter initialEntries={["/crm?domain=platform&object=customer_profiles&view=admin-screen"]}>
+      <MemoryRouter
+        initialEntries={[
+          "/crm?domain=platform&object=customer_profiles&view=admin-screen",
+        ]}
+      >
         <Layout>
           <RouteControls />
         </Layout>

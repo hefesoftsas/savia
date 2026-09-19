@@ -1316,8 +1316,30 @@ function Reports() {
   );
 }
 
-export default function Operations({ objects }: { objects: CrmObject[] }) {
-  const [tab, setTab] = useState("tasks");
+export default function Operations({
+  objects,
+  tab: controlledTab,
+  onTabChange,
+}: {
+  objects: CrmObject[];
+  tab?: string;
+  onTabChange?: (tab: string) => void;
+}) {
+  const [localTab, setLocalTab] = useState("tasks");
+  const requestedTab = controlledTab ?? localTab;
+  const tab = [
+    "tasks",
+    "import",
+    "automations",
+    "workflows",
+    "reports",
+  ].includes(requestedTab)
+    ? requestedTab
+    : "tasks";
+  const setTab = (value: string) => {
+    setLocalTab(value);
+    onTabChange?.(value);
+  };
   return (
     <main className="operations-page">
       <header className="op-page-title">

@@ -31,10 +31,10 @@ const surfaceLabels: Record<RecordSurface, string> = {
 };
 
 const screenNavigationSectionLabels: Record<ScreenNavigationSection, string> = {
-  operation: "Operación",
-  productivity: "Productividad",
+  operation: "Trabajo",
+  productivity: "Construir",
   administration: "Administración",
-  management: "Gestión",
+  management: "Plataforma",
 };
 
 function ScreenNavigationFields({
@@ -376,16 +376,21 @@ export default function ScreenManager({
           <div className="screen-sidebar-visibility-toggle mb-4">
             <div className="flex items-center justify-between gap-4 py-2 border-b border-border/50">
               <div className="space-y-0.5">
-                <span className="text-sm font-medium">Mostrar en la barra lateral</span>
+                <span className="text-sm font-medium">
+                  Mostrar en la barra lateral
+                </span>
                 <p className="text-xs text-muted-foreground">
-                  Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.
+                  Desactívalo si esta pantalla solo se llamará desde otras
+                  páginas o flujos.
                 </p>
               </div>
               <Switch
                 aria-label={`Mostrar u ocultar ${object.label} en la barra lateral`}
                 checked={!hidden}
                 disabled={!!busy}
-                onCheckedChange={(checked) => save(object, { hidden: !checked })}
+                onCheckedChange={(checked) =>
+                  save(object, { hidden: !checked })
+                }
               />
             </div>
           </div>
@@ -505,7 +510,9 @@ export default function ScreenManager({
                           </label>
                           <div className="flex items-center gap-1.5">
                             {isPluginScreen(object.name) ? (
-                              <span className="screen-admin-plugin-badge">Plugin</span>
+                              <span className="screen-admin-plugin-badge">
+                                Plugin
+                              </span>
                             ) : null}
                             <span
                               className={`screen-setting-status${hidden ? " is-hidden" : ""}`}

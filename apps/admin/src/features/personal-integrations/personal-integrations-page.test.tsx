@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ApiClientError } from "@/api/api-client";
@@ -152,9 +152,7 @@ describe("PersonalIntegrationsPage", () => {
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Google" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Microsoft" })).toBeVisible();
-    expect(
-      await screen.findByRole("heading", { name: "CRM" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "CRM" })).toBeVisible();
     expect(screen.getByLabelText("Logo de Google Calendar")).toBeVisible();
     expect(screen.getByLabelText("Logo de HubSpot")).toBeVisible();
   });
@@ -169,7 +167,9 @@ describe("PersonalIntegrationsPage", () => {
     );
 
     await screen.findByRole("heading", { name: "Integraciones" });
-    await waitFor(() => expect(services.crm.listProviders).toHaveBeenCalledWith());
+    await waitFor(() =>
+      expect(services.crm.listProviders).toHaveBeenCalledWith(),
+    );
     await waitFor(() =>
       expect(services.crm.listConnections).toHaveBeenCalledWith(),
     );
@@ -297,4 +297,34 @@ describe("PersonalIntegrationsPage", () => {
     expect(screen.getByText("@ventas")).toBeVisible();
     expect(screen.getByText("Especialista en Ventas")).toBeVisible();
   });
+});
+
+function NavigationProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output aria-label="Current URL">{location.search}</output>
+      <button onClick={() => navigate(-1)}>Back</button>
+    </>
+  );
+}
+
+it("opens employee deep links and preserves query context and history when switching tabs", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter
+      initialEntries={["/my-integrations?domain=demo&tab=virtual-employees"]}
+    >
+      <NavigationProbe />
+      <PersonalIntegrationsPage services={createServices()} />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText("Sofía")).toBeVisible();
+  await user.click(screen.getByRole("tab", { name: "Cuentas y Conexiones" }));
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "?domain=demo&tab=connections",
+  );
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(await screen.findByText("Sofía")).toBeVisible();
 });

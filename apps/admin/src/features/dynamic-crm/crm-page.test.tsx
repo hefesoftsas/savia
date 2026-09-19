@@ -94,13 +94,16 @@ describe("CRM domain integration", () => {
       }),
     ).toBeVisible();
   });
-  it("moves an active domain behind its contextual control", async () => {
+  it("shows the active domain name in its contextual control", async () => {
     mount(
       servicesFor([platform], true),
       "/crm?domain=platform&object=agency_profiles&view=records",
     );
     await screen.findByText(/Espacio CRM/);
     expect(document.querySelector("#crm-domain")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Dominio: Plataforma" }),
+    ).toHaveTextContent("Plataforma");
     expect(
       screen
         .getByRole("button", {

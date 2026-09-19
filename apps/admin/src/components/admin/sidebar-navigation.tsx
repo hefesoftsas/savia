@@ -1,9 +1,11 @@
+import type { AuthPermissions } from "@/auth/auth-session";
 import { useMemo } from "react";
 import {
   useCanAccessResources,
   useHasDashboard,
   useResourceDefinitions,
   useTranslate,
+  usePermissions,
 } from "ra-core";
 import { useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
@@ -15,6 +17,12 @@ import {
   Link2,
   KeyRound,
   ListTree,
+  Database,
+  ChartNoAxesCombined,
+  History,
+  Package,
+  Bot,
+  Palette,
   UsersRound,
 } from "lucide-react";
 import {
@@ -49,6 +57,7 @@ export type SidebarNavigationItem = {
   icon: LucideIcon | string;
   active: boolean;
   count?: number;
+  searchTerms?: string;
 };
 
 export const sidebarNavigationSections = [
@@ -61,12 +70,68 @@ export const sidebarNavigationSections = [
   labelKey: string;
 }>;
 
-const navigationDefinitions: Record<
+export const navigationDefinitions: Record<
   StaticSidebarNavigationItemId,
   Omit<SidebarNavigationItem, "active" | "label" | "labelKey"> & {
     labelKey: string;
   }
 > = {
+  "domain-sources": {
+    id: "domain-sources",
+    labelKey: "savia.sidebar.items.domain-sources",
+    route: "/crm?view=collection-sources",
+    section: "productivity",
+    icon: Database,
+  },
+  "domain-workflows": {
+    id: "domain-workflows",
+    labelKey: "savia.sidebar.items.domain-workflows",
+    route: "/crm?view=operations&tab=workflows",
+    section: "productivity",
+    icon: Workflow,
+  },
+  "domain-reports": {
+    id: "domain-reports",
+    labelKey: "savia.sidebar.items.domain-reports",
+    route: "/crm?view=operations&tab=reports",
+    section: "operation",
+    icon: ChartNoAxesCombined,
+  },
+  "domain-api": {
+    id: "domain-api",
+    labelKey: "savia.sidebar.items.domain-api",
+    route: "/crm?view=integrations",
+    section: "productivity",
+    icon: Link2,
+  },
+  "domain-history": {
+    id: "domain-history",
+    labelKey: "savia.sidebar.items.domain-history",
+    route: "/crm?view=audit",
+    section: "administration",
+    icon: History,
+  },
+  "domain-packages": {
+    id: "domain-packages",
+    labelKey: "savia.sidebar.items.domain-packages",
+    route: "/crm?view=admin&tab=packages",
+    section: "productivity",
+    icon: Package,
+  },
+  "virtual-employees": {
+    id: "virtual-employees",
+    labelKey: "savia.sidebar.items.virtual-employees",
+    route: "/my-integrations?tab=virtual-employees",
+    section: "productivity",
+    icon: Bot,
+  },
+  "tenant-branding": {
+    id: "tenant-branding",
+    labelKey: "savia.sidebar.items.tenant-branding",
+    route: "/tenant-branding",
+    section: "administration",
+    icon: Palette,
+  },
   "access-control": {
     id: "access-control",
     labelKey: "savia.sidebar.items.access-control",
@@ -92,13 +157,13 @@ const navigationDefinitions: Record<
     id: "my-day",
     labelKey: "savia.sidebar.items.my-day",
     route: "/my-day",
-    section: "productivity",
+    section: "operation",
     icon: CalendarDays,
   },
   integrations: {
     id: "integrations",
     labelKey: "savia.sidebar.items.integrations",
-    route: "/my-integrations",
+    route: "/my-integrations?tab=connections",
     section: "productivity",
     icon: Link2,
   },
@@ -106,7 +171,7 @@ const navigationDefinitions: Record<
     id: "provider-credentials",
     labelKey: "savia.sidebar.items.provider-credentials",
     route: "/savia-request",
-    section: "administration",
+    section: "productivity",
     icon: Workflow,
   },
   "service-credentials": {
@@ -134,14 +199,14 @@ const navigationDefinitions: Record<
     id: "users",
     labelKey: "savia.sidebar.items.users",
     route: "/users",
-    section: "management",
+    section: "administration",
     icon: UsersRound,
   },
   "page-administrator": {
     id: "page-administrator",
     labelKey: "savia.sidebar.items.page-administrator",
     route: "/crm",
-    section: "management",
+    section: "productivity",
     icon: ListTree,
   },
 };
@@ -157,6 +222,7 @@ export function useVisibleSidebarNavigation(): {
   itemsById: Partial<Record<SidebarNavigationItemId, SidebarNavigationItem>>;
 } {
   const resources = useResourceDefinitions();
+  const { permissions } = usePermissions<AuthPermissions>();
   const hasDashboard = useHasDashboard();
   const location = useLocation();
   const translate = useTranslate();
@@ -175,8 +241,20 @@ export function useVisibleSidebarNavigation(): {
     }
 
     const visibleItemIds = sidebarNavigationItemIds.filter((id) => {
-      if (id === "assistant-configuration" || id === "page-administrator")
+      if (
+        id.startsWith("domain-") ||
+        id === "assistant-configuration" ||
+        id === "page-administrator"
+      )
         return false;
+      if (id === "tenant-branding")
+        return Boolean(
+          permissions?.canManageIdentity ||
+          permissions?.memberships?.some((member) =>
+            ["tenant_admin", "agency_admin"].includes(member.role),
+          ),
+        );
+      if (id === "virtual-employees") return Boolean(canAccess.integrations);
       const permissionResource =
         id === "provider-credentials" ? "savia-request" : id;
       if (id === "service-credentials")
@@ -198,7 +276,13 @@ export function useVisibleSidebarNavigation(): {
             active:
               definition.route === "/"
                 ? location.pathname === "/" || location.pathname === "/my-day"
-                : location.pathname.startsWith(definition.route),
+                : definition.route.startsWith("/my-integrations")
+                  ? location.pathname === "/my-integrations" &&
+                    (new URLSearchParams(location.search).get("tab") ===
+                    "virtual-employees"
+                      ? id === "virtual-employees"
+                      : id === "integrations")
+                  : location.pathname.startsWith(definition.route),
           },
         ];
       }),
@@ -217,6 +301,8 @@ export function useVisibleSidebarNavigation(): {
     hasDashboard,
     isPending,
     location.pathname,
+    location.search,
+    permissions,
     resources,
     translate,
   ]);

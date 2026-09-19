@@ -78,9 +78,7 @@ import {
   hasLucideIconLoader,
   LucideLookupIcon,
 } from "@/features/crm-engine/lucide-lookup-icon";
-import { AppearancePanel } from "@/components/admin/appearance-panel";
 import { UserMenu } from "@/components/admin/user-menu";
-import { PwaInstallButton } from "@/pwa";
 import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -107,12 +105,14 @@ import {
   sidebarBlockSortableId,
   sidebarSectionEndDropId,
   toggleNavigationItemVisibility,
+  upgradeSidebarNavigationPreset,
 } from "./sidebar-navigation-layout";
 import {
   defaultSidebarNavigationLayout,
   reconcileSidebarNavigation,
   sidebarNavigationSections,
   useVisibleSidebarNavigation,
+  navigationDefinitions,
   type SidebarNavigationItem,
   type SidebarNavigationItemId,
   type SidebarNavigationLayout,
@@ -359,12 +359,57 @@ export function AppSidebar() {
         label: translate("savia.sidebar.items.page-administrator"),
         labelKey: "savia.sidebar.items.page-administrator",
         route: pageAdmin.route,
-        section: "management",
+        section: "productivity",
         icon: ListTree,
         active:
           location.pathname === "/crm" &&
           isCrmChildActive(pageAdmin, location.search),
       };
+    }
+    if (pageAdmin && domainId) {
+      const base = new URLSearchParams(pageAdmin.route.split("?")[1]);
+      const current = new URLSearchParams(location.search);
+      for (const id of [
+        "domain-sources",
+        "domain-workflows",
+        "domain-reports",
+        "domain-api",
+        "domain-history",
+        "domain-packages",
+      ] as const) {
+        const definition = navigationDefinitions[id];
+        const target = new URLSearchParams(definition.route.split("?")[1]);
+        const params = new URLSearchParams(base);
+        for (const [key, value] of target) params.set(key, value);
+        const active =
+          location.pathname === "/crm" &&
+          current.get("view") === target.get("view") &&
+          (target.has("tab") ? current.get("tab") === target.get("tab") : true);
+        items[id] = {
+          ...definition,
+          label: translate(definition.labelKey),
+          route: `/crm?${params}`,
+          active,
+          searchTerms: translate(`savia.sidebar.searchTerms.${id}`),
+        };
+      }
+      if (items["page-administrator"]) {
+        items["page-administrator"].active =
+          location.pathname === "/crm" &&
+          [
+            "admin",
+            "admin-screen",
+            "screens",
+            "screen-settings",
+            "screen-relations",
+            "screen-audit",
+            "designer",
+            "new-object",
+            "import-spreadsheet",
+            "import-request",
+          ].includes(current.get("view") ?? "") &&
+          current.get("tab") !== "packages";
+      }
     }
     return items;
   }, [
@@ -479,8 +524,9 @@ export function AppSidebar() {
     void preferences.getSidebarNavigation().then(
       (saved) => {
         if (!active) return;
-        setLayout(saved);
-        setConfirmedLayout(saved);
+        const upgraded = upgradeSidebarNavigationPreset(saved);
+        setLayout(upgraded);
+        setConfirmedLayout(upgraded);
       },
       () => {
         if (!active) return;
@@ -515,6 +561,7 @@ export function AppSidebar() {
       );
       if (operationBlock) {
         nextLayout = {
+          ...nextLayout,
           version: 2,
           ...(nextLayout.hiddenItems
             ? { hiddenItems: nextLayout.hiddenItems }
@@ -553,6 +600,7 @@ export function AppSidebar() {
   const toggleSection = (blockId: string, collapsed: boolean) => {
     if (saving || organizationMode || searching) return;
     void persistLayout({
+      ...displayedLayout,
       version: 2,
       ...(displayedLayout.hiddenItems
         ? { hiddenItems: displayedLayout.hiddenItems }
@@ -775,7 +823,7 @@ export function AppSidebar() {
             {!organizationMode ? (
               <Button
                 aria-label={translate("savia.sidebar.organizeMenu")}
-                className="absolute top-1/2 right-1.5 -translate-y-1/2 md:pointer-events-none md:opacity-0 md:group-hover/sidebar-header:pointer-events-auto md:group-hover/sidebar-header:opacity-100 md:group-focus-within/sidebar-header:pointer-events-auto md:group-focus-within/sidebar-header:opacity-100"
+                className="absolute top-1/2 right-1.5 -translate-y-1/2"
                 disabled={!canOrganize}
                 onClick={() => setOrganizationMode(true)}
                 size="icon"
@@ -879,13 +927,17 @@ export function AppSidebar() {
                 if (!item) return false;
                 if (
                   !organizationMode &&
+                  !searching &&
                   isNavigationItemHidden(displayedLayout, id)
                 ) {
                   return false;
                 }
                 return (
                   organizationMode ||
-                  matchesNavigationSearch(search, item.label)
+                  matchesNavigationSearch(
+                    search,
+                    `${item.label} ${item.searchTerms ?? ""}`,
+                  )
                 );
               });
               const items = itemIds
@@ -996,8 +1048,10 @@ export function AppSidebar() {
             const item = itemsById[id];
             return (
               !item ||
-              isNavigationItemHidden(displayedLayout, id) ||
-              !matchesNavigationSearch(search, item.label)
+              !matchesNavigationSearch(
+                search,
+                `${item.label} ${item.searchTerms ?? ""}`,
+              )
             );
           }),
         ) ? (
@@ -1011,11 +1065,7 @@ export function AppSidebar() {
         ) : null}
       </SidebarContent>
       <SidebarFooter className="gap-2">
-        <AppearancePanel />
         <SidebarMenu className="rounded-xl bg-sidebar-primary/12 p-1 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
-          <SidebarMenuItem>
-            <PwaInstallButton variant="sidebar" />
-          </SidebarMenuItem>
           <SidebarMenuItem>
             <UserMenu>
               <DropdownMenuItem
@@ -1358,6 +1408,35 @@ function SortableNavigationItem({
               <ChevronRight className="size-3.5" />
             </button>
           </div>
+        </div>
+      ) : isHidden ? (
+        <div className="flex items-center gap-1">
+          <SidebarMenuButton
+            asChild
+            isActive={item.active}
+            className="h-auto min-h-10 flex-1"
+          >
+            <LinkBase to={item.route} onClick={onNavigate}>
+              <SidebarItemIcon icon={item.icon} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{item.label}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {translate("savia.sidebar.hiddenResult")}
+                </span>
+              </span>
+            </LinkBase>
+          </SidebarMenuButton>
+          <Button
+            size="icon"
+            variant="ghost"
+            disabled={saving}
+            aria-label={translate("savia.sidebar.showItem", {
+              item: item.label,
+            })}
+            onClick={() => onToggleVisibility?.(item.id)}
+          >
+            <Plus className="size-4" />
+          </Button>
         </div>
       ) : item.id === "provider-credentials" && saviaRequestActive ? (
         <SaviaRequestCollapsibleMenu item={item} onNavigate={onNavigate} />

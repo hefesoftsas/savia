@@ -89,6 +89,8 @@ export default function ScreenAdministration({
   onDeletePermanent,
   onSolutionsChanged,
   defaultTab = "screens",
+  tab,
+  onTabChange,
 }: {
   objects: CrmObject[];
   selected: string;
@@ -108,6 +110,8 @@ export default function ScreenAdministration({
   ) => Promise<void>;
   onSolutionsChanged?: () => void | Promise<unknown>;
   defaultTab?: "screens" | "packages";
+  tab?: "screens" | "packages";
+  onTabChange?: (tab: "screens" | "packages") => void;
 }) {
   const [currentTab, setCurrentTab] = useState<"screens" | "packages">(
     defaultTab,
@@ -158,7 +162,7 @@ export default function ScreenAdministration({
   const screen = objects.find((o) => o.name === selected);
   const domainActions = [
     {
-      label: "Página desde Savia request",
+      label: "Pantalla desde Savia request",
       icon: Plug,
       view: "request-page-generator",
       primary: false,
@@ -228,15 +232,16 @@ export default function ScreenAdministration({
   const screenGroups = [
     {
       id: "active",
-      label: "Pantallas activas",
-      subtitle: "Visibles en la barra lateral",
+      label: "Pantallas disponibles",
+      subtitle: "Disponibles para el menú según tus permisos y preferencias",
       screens: filteredActive,
       hidden: false,
     },
     {
       id: "inactive",
-      label: "Pantallas inactivas",
-      subtitle: "Ocultas de la barra lateral · Accesibles desde otras páginas",
+      label: "Pantallas fuera del menú",
+      subtitle:
+        "Fuera del menú del dominio · Accesibles mediante enlaces con permiso",
       screens: filteredInactive,
       hidden: true,
     },
@@ -804,8 +809,12 @@ export default function ScreenAdministration({
   return (
     <section aria-label="Administrar pantallas" className="screen-admin">
       <Tabs
-        value={currentTab}
-        onValueChange={(val) => setCurrentTab(val as "screens" | "packages")}
+        value={tab ?? currentTab}
+        onValueChange={(val) => {
+          const nextTab = val as "screens" | "packages";
+          setCurrentTab(nextTab);
+          onTabChange?.(nextTab);
+        }}
         className="screen-admin-tabs w-full space-y-6"
       >
         <div className="screen-admin-tabs-nav flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/80 pb-4">
@@ -842,7 +851,7 @@ export default function ScreenAdministration({
                 <h1>Pantallas</h1>
                 {active.length > 0 && (
                   <span className="screen-admin-count">
-                    {active.length} activas
+                    {active.length} disponibles
                   </span>
                 )}
               </div>
@@ -906,8 +915,8 @@ export default function ScreenAdministration({
                 <Search aria-hidden="true" />
                 <Input
                   type="search"
-                  aria-label="Filtrar páginas"
-                  placeholder="Filtrar páginas"
+                  aria-label="Filtrar pantallas"
+                  placeholder="Filtrar pantallas"
                   value={filter}
                   onChange={(event) => setFilter(event.target.value)}
                 />
@@ -919,7 +928,7 @@ export default function ScreenAdministration({
                     variant="outline"
                     size="icon"
                     className="size-8"
-                    aria-label="Ordenar páginas de A a Z"
+                    aria-label="Ordenar pantallas de A a Z"
                     disabled={pendingScreen === "__menu__"}
                     onClick={sortMenuAlphabetically}
                   >
@@ -927,7 +936,7 @@ export default function ScreenAdministration({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  Ordenar páginas de A a Z
+                  Ordenar pantallas de A a Z
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -1091,7 +1100,7 @@ export default function ScreenAdministration({
                   aria-hidden="true"
                 />
                 <div>
-                  <h2>No se encontraron páginas</h2>
+                  <h2>No se encontraron pantallas</h2>
                   <p>Prueba con otro nombre o limpia el filtro.</p>
                 </div>
               </div>

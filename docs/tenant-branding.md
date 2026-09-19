@@ -3,7 +3,7 @@
 Owner: Savia platform team. Last reviewed: 2026-09-19.
 
 Commercial tenants can customize their public identity without changing authentication
-or access to application data. Open **Identidad del tenant** from the account menu.
+or access to application data. Open **Administración → Identidad del espacio** from the sidebar.
 Platform administrators can configure any active commercial tenant. Active tenant
 administrators (`tenant_admin` or `agency_admin`) can configure only their own tenants.
 Other members may read the saved configuration but cannot change it or upload images.

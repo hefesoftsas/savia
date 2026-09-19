@@ -19,6 +19,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [navigation.md](navigation.md) — sidebar grouping, hidden destinations, direct links, and personal preferences.
+
 - [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
 - [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
 

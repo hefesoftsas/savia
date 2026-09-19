@@ -35,6 +35,7 @@ const sidebarNavigationBlockSchema = z.discriminatedUnion("kind", [
 
 const sidebarNavigationLayoutSchema = z.object({
   version: z.literal(2),
+  presetVersion: z.literal(2).optional(),
   blocks: z.array(sidebarNavigationBlockSchema),
   hiddenItems: z.array(sidebarNavigationItemSchema).optional(),
 });

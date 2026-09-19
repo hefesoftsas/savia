@@ -3,6 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const refetch = vi.fn();
+const setTheme = vi.fn();
+const setColorTheme = vi.fn();
+let mockBranding: object | null = null;
+vi.mock("@/components/admin/use-theme", () => ({
+  useTheme: () => ({
+    theme: "light",
+    colorTheme: "emerald",
+    setTheme,
+    setColorTheme,
+  }),
+}));
+vi.mock("@/features/tenant-branding/tenant-branding-provider", () => ({
+  useTenantBranding: () => ({ branding: mockBranding }),
+}));
 let mockPermissions: {
   canManageIdentity: boolean;
   memberships: Array<{ role: string }>;
@@ -78,6 +92,7 @@ function renderMenu() {
 
 describe("UserMenu", () => {
   beforeEach(() => {
+    mockBranding = null;
     mockPermissions = { canManageIdentity: false, memberships: [] };
     mockIsInstallable = false;
     mockIsInstalled = false;
@@ -117,16 +132,68 @@ describe("UserMenu", () => {
     { canManageIdentity: false, memberships: [{ role: "tenant_admin" }] },
     { canManageIdentity: false, memberships: [{ role: "agency_admin" }] },
   ])(
-    "links authorized administrators to tenant branding: %j",
+    "keeps tenant branding out of the personal menu for administrators: %j",
     async (permissions) => {
       mockPermissions = permissions;
-      const { getByRole, findByRole } = renderMenu();
+      const { getByRole, queryByRole } = renderMenu();
       const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
       fireEvent.pointerDown(trigger);
       fireEvent.click(trigger);
       expect(
-        await findByRole("menuitem", { name: "Identidad del tenant" }),
-      ).toHaveAttribute("href", "/tenant-branding");
+        queryByRole("menuitem", { name: "Identidad del tenant" }),
+      ).not.toBeInTheDocument();
     },
   );
+  it("links personal connections to the connections tab", async () => {
+    const { getByRole, findByRole } = renderMenu();
+    const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    expect(
+      await findByRole("menuitem", { name: "Mis conexiones" }),
+    ).toHaveAttribute("href", "/my-integrations?tab=connections");
+  });
+
+  it("changes personal appearance through the account submenu", async () => {
+    const { getByRole, findByRole } = renderMenu();
+    const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    fireEvent.click(
+      await findByRole("menuitem", { name: "savia.appearance.title" }),
+    );
+    fireEvent.click(
+      await findByRole("menuitemradio", { name: "savia.appearance.darkMode" }),
+    );
+    expect(setTheme).toHaveBeenCalledWith("dark");
+  });
+
+  it("changes the personal palette through the account submenu", async () => {
+    const { getByRole, findByRole } = renderMenu();
+    const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    fireEvent.click(
+      await findByRole("menuitem", { name: "savia.appearance.title" }),
+    );
+    fireEvent.click(await findByRole("menuitemradio", { name: "Blue" }));
+    expect(setColorTheme).toHaveBeenCalledWith("blue");
+  });
+
+  it("respects tenant branding by hiding personal palette choices", async () => {
+    mockBranding = { name: "Tenant" };
+    const { getByRole, findByRole, queryByRole } = renderMenu();
+    const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    fireEvent.click(
+      await findByRole("menuitem", { name: "savia.appearance.title" }),
+    );
+    expect(
+      await findByRole("menuitemradio", { name: "savia.appearance.darkMode" }),
+    ).toBeVisible();
+    expect(
+      queryByRole("menuitemradio", { name: "Blue" }),
+    ).not.toBeInTheDocument();
+  });
 });

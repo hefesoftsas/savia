@@ -47,7 +47,7 @@ it("lists active screens dynamically and opens the selected screen configuration
   expect(
     screen.getAllByRole("button", { name: "Configurar Proyectos" }).length,
   ).toBeGreaterThan(0);
-  expect(screen.getByText("Pantallas inactivas")).toBeInTheDocument();
+  expect(screen.getByText("Pantallas fuera del menú")).toBeInTheDocument();
   expect(screen.getByText("Oculta")).toBeInTheDocument();
   expect(screen.queryByText("Agencias")).not.toBeInTheDocument();
   fireEvent.click(
@@ -70,9 +70,12 @@ it("filters active and inactive screens without persisting a menu change", () =>
     />,
   );
 
-  fireEvent.change(screen.getByRole("searchbox", { name: "Filtrar páginas" }), {
-    target: { value: "oculta" },
-  });
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Filtrar pantallas" }),
+    {
+      target: { value: "oculta" },
+    },
+  );
 
   expect(screen.getByText("Oculta")).toBeInTheDocument();
   expect(screen.queryByText("Proyectos")).not.toBeInTheDocument();
@@ -102,7 +105,7 @@ it("persists an alphabetical active menu order while retaining sections", async 
   );
 
   fireEvent.click(
-    screen.getByRole("button", { name: "Ordenar páginas de A a Z" }),
+    screen.getByRole("button", { name: "Ordenar pantallas de A a Z" }),
   );
 
   await vi.waitFor(() =>
@@ -187,7 +190,7 @@ it("keeps tools scoped to the screen and hides endpoint configuration for local 
   );
   expect(screen.getByRole("heading", { name: "Inventario" })).toBeVisible();
   expect(
-    screen.queryByRole("button", { name: /Pantallas activas/ }),
+    screen.queryByRole("button", { name: /Pantallas disponibles/ }),
   ).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: /Operaciones del API/ }),

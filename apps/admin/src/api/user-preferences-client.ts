@@ -19,6 +19,14 @@ export const sidebarNavigationItemIds = [
   "users",
   "tenants",
   "page-administrator",
+  "domain-sources",
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+  "domain-history",
+  "domain-packages",
+  "virtual-employees",
+  "tenant-branding",
 ] as const;
 
 export type SidebarNavigationSection =
@@ -53,6 +61,7 @@ export type SidebarNavigationBlock =
 
 export type SidebarNavigationLayout = {
   version: 2;
+  presetVersion?: 2;
   blocks: SidebarNavigationBlock[];
   hiddenItems?: SidebarNavigationItemId[];
 };

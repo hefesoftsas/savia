@@ -17,6 +17,14 @@ export const sidebarNavigationItemIds = [
   "users",
   "tenants",
   "page-administrator",
+  "domain-sources",
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+  "domain-history",
+  "domain-packages",
+  "virtual-employees",
+  "tenant-branding",
 ] as const;
 
 export type SidebarNavigationSection =
@@ -56,6 +64,7 @@ type SidebarNavigationBlockInput =
 
 type SidebarNavigationLayoutInput = {
   version: 2;
+  presetVersion?: 2;
   blocks: SidebarNavigationBlockInput[];
   hiddenItems?: SidebarNavigationItemId[];
 };
@@ -65,6 +74,7 @@ export type SidebarNavigationBlock =
 
 export type SidebarNavigationLayout = {
   version: 2;
+  presetVersion?: 2;
   blocks: SidebarNavigationBlock[];
   hiddenItems?: SidebarNavigationItemId[];
 };
@@ -159,19 +169,33 @@ export class SidebarNavigationLayoutError extends Error {
 }
 
 export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
-  return normalizeSidebarNavigationLayout({
-    version: 1,
-    sections: {
-      operation: ["dashboard", "dynamic-crm"],
-      productivity: ["my-day", "integrations"],
-      administration: [
-        "provider-credentials",
-        "service-credentials",
-        "access-control",
-      ],
-      management: ["tenants", "users", "page-administrator"],
-    },
-  });
+  return {
+    ...normalizeSidebarNavigationLayout({
+      version: 1,
+      sections: {
+        operation: ["my-day", "dashboard", "dynamic-crm", "domain-reports"],
+        productivity: [
+          "page-administrator",
+          "domain-sources",
+          "domain-workflows",
+          "domain-api",
+          "provider-credentials",
+          "virtual-employees",
+          "integrations",
+          "domain-packages",
+        ],
+        administration: [
+          "users",
+          "access-control",
+          "service-credentials",
+          "tenant-branding",
+          "domain-history",
+        ],
+        management: ["tenants"],
+      },
+    }),
+    presetVersion: 2,
+  };
 }
 
 function parseItemId(
@@ -221,6 +245,9 @@ export function normalizeSidebarNavigationLayout(
   if (value.version === 2) {
     return {
       version: 2,
+      ...("presetVersion" in value && value.presetVersion === 2
+        ? { presetVersion: 2 as const }
+        : {}),
       blocks: value.blocks.map((block) =>
         block.kind === "builtin"
           ? {
@@ -352,6 +379,7 @@ export function parseSidebarNavigationLayout(
 
   return {
     version: 2,
+    ...(value.presetVersion === 2 ? { presetVersion: 2 as const } : {}),
     blocks,
     ...(hiddenItems ? { hiddenItems } : {}),
   };

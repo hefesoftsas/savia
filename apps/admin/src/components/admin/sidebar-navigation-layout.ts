@@ -29,6 +29,7 @@ type SidebarNavigationBlockInput =
 
 type SidebarNavigationLayoutInput = {
   version: 2;
+  presetVersion?: 2;
   blocks: SidebarNavigationBlockInput[];
   hiddenItems?: SidebarNavigationItemId[];
 };
@@ -43,24 +44,39 @@ export type SidebarNavigationLayoutV1 = {
 
 export type SidebarNavigationLayout = {
   version: 2;
+  presetVersion?: 2;
   blocks: SidebarNavigationBlock[];
   hiddenItems?: SidebarNavigationItemId[];
 };
 
 export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
-  return normalizeSidebarNavigationLayout({
-    version: 1,
-    sections: {
-      operation: ["dashboard", "dynamic-crm"],
-      productivity: ["my-day", "integrations"],
-      administration: [
-        "provider-credentials",
-        "service-credentials",
-        "access-control",
-      ],
-      management: ["tenants", "users", "page-administrator"],
-    },
-  });
+  return {
+    ...normalizeSidebarNavigationLayout({
+      version: 1,
+      sections: {
+        operation: ["my-day", "dashboard", "dynamic-crm", "domain-reports"],
+        productivity: [
+          "page-administrator",
+          "domain-sources",
+          "domain-workflows",
+          "domain-api",
+          "provider-credentials",
+          "virtual-employees",
+          "integrations",
+          "domain-packages",
+        ],
+        administration: [
+          "users",
+          "access-control",
+          "service-credentials",
+          "tenant-branding",
+          "domain-history",
+        ],
+        management: ["tenants"],
+      },
+    }),
+    presetVersion: 2,
+  };
 }
 
 export function normalizeSidebarNavigationLayout(
@@ -76,6 +92,9 @@ export function normalizeSidebarNavigationLayout(
   if (value.version === 2) {
     return {
       version: 2,
+      ...("presetVersion" in value && value.presetVersion === 2
+        ? { presetVersion: 2 as const }
+        : {}),
       blocks: value.blocks.map((block) =>
         block.kind === "builtin"
           ? {
@@ -354,20 +373,28 @@ export function defaultSectionForItem(
 ): SidebarNavigationSection {
   const configured = configuredSections[itemId];
   if (configured) return configured;
-  if (itemId === "page-administrator") return "management";
+  if (itemId === "page-administrator") return "productivity";
   if (itemId.startsWith("page:")) return "operation";
   const defaults: Partial<
     Record<SidebarNavigationItemId, SidebarNavigationSection>
   > = {
+    "domain-sources": "productivity",
+    "domain-workflows": "productivity",
+    "domain-api": "productivity",
+    "domain-packages": "productivity",
+    "virtual-employees": "productivity",
+    "domain-reports": "operation",
+    "domain-history": "administration",
+    "tenant-branding": "administration",
     dashboard: "operation",
     "dynamic-crm": "operation",
-    "my-day": "productivity",
+    "my-day": "operation",
     integrations: "productivity",
-    "provider-credentials": "administration",
+    "provider-credentials": "productivity",
     "service-credentials": "administration",
     "access-control": "administration",
     tenants: "management",
-    users: "management",
+    users: "administration",
   };
   return defaults[itemId as SidebarNavigationItemId] ?? "operation";
 }
@@ -449,9 +476,60 @@ export function reconcileSidebarNavigation(
 
   return {
     version: 2,
+    ...(normalized.presetVersion === 2 ? { presetVersion: 2 as const } : {}),
     blocks,
     ...(normalized.hiddenItems
       ? { hiddenItems: [...normalized.hiddenItems] }
       : {}),
   };
+}
+
+/** Upgrade recognized legacy defaults only; preserve customized built-in and custom groups. */
+export function upgradeSidebarNavigationPreset(
+  layout: SidebarNavigationLayout,
+): SidebarNavigationLayout {
+  if (layout.presetVersion === 2) return layout;
+  let next = normalizeSidebarNavigationLayout(layout);
+  const relocations: Array<
+    [
+      SidebarNavigationItemId,
+      SidebarNavigationSection,
+      SidebarNavigationSection,
+    ]
+  > = [
+    ["my-day", "productivity", "operation"],
+    ["provider-credentials", "administration", "productivity"],
+    ["users", "management", "administration"],
+    ["page-administrator", "management", "productivity"],
+  ];
+  const legacyDefaults: Partial<
+    Record<SidebarNavigationSection, SidebarNavigationItemId[]>
+  > = {
+    productivity: ["my-day", "integrations"],
+    administration: [
+      "provider-credentials",
+      "service-credentials",
+      "access-control",
+    ],
+    management: ["tenants", "users", "page-administrator"],
+  };
+  const untouchedSections = new Set(
+    layout.blocks
+      .filter(
+        (block) =>
+          block.kind === "builtin" &&
+          JSON.stringify(
+            block.items.filter((id) => !id.startsWith("page:")),
+          ) === JSON.stringify(legacyDefaults[block.id]),
+      )
+      .map((block) => block.id),
+  );
+  for (const [item, from, to] of relocations) {
+    if (!untouchedSections.has(from)) continue;
+    const block = navigationBlockForItem(next, item);
+    if (block?.kind === "builtin" && block.id === from) {
+      next = moveNavigationItem(next, item, to, Number.MAX_SAFE_INTEGER);
+    }
+  }
+  return { ...next, presetVersion: 2 };
 }

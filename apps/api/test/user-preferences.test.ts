@@ -151,7 +151,10 @@ describe("user sidebar navigation preferences", () => {
     await repository.saveSidebarNavigation("principal-a", savedLayout as any);
 
     const retrieved = await repository.getSidebarNavigation("principal-a");
-    expect(retrieved?.hiddenItems).toEqual(["dashboard", "page:platform:cotizador"]);
+    expect(retrieved?.hiddenItems).toEqual([
+      "dashboard",
+      "page:platform:cotizador",
+    ]);
   });
 
   it("rejects invalid or duplicate hidden items in the layout", () => {
@@ -233,6 +236,24 @@ describe("user sidebar navigation preferences", () => {
     });
   });
 
+  it("persists new tool visibility and the preset marker through the HTTP API", async () => {
+    const app = appFor("principal-a");
+    const layout = {
+      ...defaultSidebarNavigationLayout(),
+      hiddenItems: ["domain-workflows", "virtual-employees"],
+    };
+    const url = "https://savia.test/v1/user-preferences/sidebar-navigation";
+    const saved = await app.request(url, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(layout),
+    });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toEqual({ data: layout });
+    const restored = await app.request(url);
+    expect(await restored.json()).toEqual({ data: layout });
+  });
+
   it("persists appearance preferences per principal", async () => {
     const repository = createUserPreferencesRepository(env.DB);
 
@@ -309,4 +330,18 @@ describe("user sidebar navigation preferences", () => {
       error: { code: "INVALID_SIDEBAR_NAVIGATION" },
     });
   });
+});
+
+it("round trips the navigation preset version and newly addressable tools", () => {
+  const layout = defaultSidebarNavigationLayout();
+  expect(layout.presetVersion).toBe(2);
+  expect(parseSidebarNavigationLayout(layout)).toEqual(layout);
+  expect(layout.blocks.flatMap((block) => block.items)).toEqual(
+    expect.arrayContaining([
+      "domain-workflows",
+      "domain-sources",
+      "virtual-employees",
+      "tenant-branding",
+    ]),
+  );
 });

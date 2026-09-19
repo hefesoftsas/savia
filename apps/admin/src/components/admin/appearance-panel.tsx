@@ -1,64 +1,63 @@
-import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { SidebarMenu, useSidebar } from "@/components/ui/sidebar";
+import { Palette } from "lucide-react";
 import { useTranslate } from "ra-core";
-import { ColorThemeToggle } from "@/components/admin/color-theme-toggle";
-import { ThemeModeToggle } from "@/components/admin/theme-mode-toggle";
+import { colorThemes, type ColorTheme } from "@/color-theme";
+import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
+import { useTheme } from "@/components/admin/use-theme";
+import {
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "@/components/ui/dropdown-menu";
 
-/**
- * Sidebar footer panel for palette and light/dark mode.
- * Collapses to a compact header so the account block stays visible.
- */
+/** Personal appearance preferences, persisted through the existing theme provider. */
 export function AppearancePanel() {
-  const { state } = useSidebar();
   const { branding } = useTenantBranding();
+  const { theme, setTheme, colorTheme, setColorTheme } = useTheme();
   const translate = useTranslate();
-  const iconCollapsed = state === "collapsed";
-  const [open, setOpen] = useState(true);
-
-  if (iconCollapsed) {
-    return (
-      <SidebarMenu>
-        {!branding && <ColorThemeToggle />}
-        <ThemeModeToggle />
-      </SidebarMenu>
-    );
-  }
 
   return (
-    <Collapsible
-      className="group/appearance rounded-xl bg-sidebar-foreground/[0.06] p-1"
-      onOpenChange={setOpen}
-      open={open}
-    >
-      <CollapsibleTrigger
-        aria-label={
-          open
-            ? translate("savia.appearance.hide")
-            : translate("savia.appearance.show")
-        }
-        className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-      >
-        <span className="text-[0.68rem] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          {translate("savia.appearance.title")}
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          className="ml-auto size-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]/appearance:rotate-180"
-        />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <SidebarMenu>
-          {!branding && <ColorThemeToggle />}
-          <ThemeModeToggle />
-        </SidebarMenu>
-      </CollapsibleContent>
-    </Collapsible>
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2.5 rounded-lg px-2.5 py-2">
+        <Palette aria-hidden="true" className="size-4 text-muted-foreground" />
+        {translate("savia.appearance.title")}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-[min(28rem,70vh)] w-56 overflow-y-auto">
+        <DropdownMenuRadioGroup
+          value={theme}
+          onValueChange={(value) => {
+            if (value === "light" || value === "dark") setTheme(value);
+          }}
+        >
+          <DropdownMenuRadioItem value="light">
+            {translate("savia.appearance.lightMode")}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">
+            {translate("savia.appearance.darkMode")}
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        {!branding && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>
+              {translate("savia.appearance.palette")}
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={colorTheme}
+              onValueChange={(value) => setColorTheme(value as ColorTheme)}
+            >
+              {colorThemes.map((option) => (
+                <DropdownMenuRadioItem key={option.id} value={option.id}>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }

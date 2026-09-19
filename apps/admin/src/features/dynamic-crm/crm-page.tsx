@@ -160,12 +160,13 @@ export function CrmPage({ services }: { services: AppServices }) {
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="crm-domain-context-trigger size-8 shrink-0"
+            size="sm"
+            className="crm-domain-context-trigger h-8 min-w-0 max-w-[40vw] gap-1.5 px-2 sm:max-w-64"
             aria-label={`Dominio: ${selected.label}`}
             title={`Dominio: ${selected.label}`}
           >
-            <ChevronDown aria-hidden="true" size={16} />
+            <span className="truncate">{selected.label}</span>
+            <ChevronDown aria-hidden="true" className="shrink-0" size={16} />
           </Button>
         </PopoverTrigger>
         <PopoverContent

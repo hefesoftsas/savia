@@ -76,10 +76,10 @@ const surfaceLabels: Record<RecordSurface, string> = {
 };
 
 const screenNavigationSectionLabels: Record<ScreenNavigationSection, string> = {
-  operation: "Operación",
-  productivity: "Productividad",
+  operation: "Trabajo",
+  productivity: "Construir",
   administration: "Administración",
-  management: "Gestión",
+  management: "Plataforma",
 };
 
 export function CollectionImportWizard({

@@ -465,7 +465,7 @@ function App({
     setEditing(null);
     setDuplicate(null);
   };
-  const selectScreensTab = (tab: "menu" | "screens") => {
+  const selectTab = (tab: string) => {
     const params = new URLSearchParams(location);
     params.set("tab", tab);
     updateLocation(params);
@@ -680,6 +680,38 @@ function App({
         <Button onClick={() => window.location.reload()}>Reintentar</Button>
       </div>
     );
+  const domainContent =
+    view === "integrations" ? (
+      <Suspense fallback={<Loading />}>
+        {!getCrmRuntime().apiBasePath?.startsWith("/v1/dynamic-crm/") && (
+          <div className="mb-5 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(selected, "collection-sources")}
+            >
+              Fuentes y colecciones
+            </Button>
+          </div>
+        )}
+        <Integrations
+          onImported={(name) => {
+            refresh();
+            navigate(name);
+          }}
+        />
+      </Suspense>
+    ) : view === "operations" ? (
+      <Suspense fallback={<Loading />}>
+        <Operations
+          objects={objects}
+          tab={location.get("tab") ?? "tasks"}
+          onTabChange={selectTab}
+        />
+      </Suspense>
+    ) : view === "audit" ? (
+      <Audit />
+    ) : null;
   if (!object)
     return objectsQuery.error ? (
       <div role="alert">{(objectsQuery.error as Error).message}</div>
@@ -687,35 +719,40 @@ function App({
       <Loading />
     ) : (
       <main className="page-content">
-        {view === "collection-sources" ? (
-          <>
+        {domainContent ??
+          (view === "collection-sources" ? (
+            <>
+              <Suspense fallback={<Loading />}>
+                <CollectionSourcesPanel
+                  onBound={async (bound) => {
+                    await refresh();
+                    navigate(bound.name, "admin-screen");
+                  }}
+                />
+              </Suspense>
+            </>
+          ) : (
             <Suspense fallback={<Loading />}>
-              <CollectionSourcesPanel
-                onBound={async (bound) => {
-                  await refresh();
-                  navigate(bound.name, "admin-screen");
-                }}
+              <ScreenAdministration
+                objects={[]}
+                selected={selected}
+                detail={false}
+                domainTools={Boolean(
+                  getCrmRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
+                )}
+                onNavigate={navigate}
+                onVisibilityChange={updateScreenVisibility}
+                menuLayout={resolvedMenuLayout}
+                onMenuLayoutChange={saveMenuLayout}
+                onDeletePermanent={deleteScreenPermanently}
+                onSolutionsChanged={refresh}
+                tab={
+                  location.get("tab") === "packages" ? "packages" : "screens"
+                }
+                onTabChange={selectTab}
               />
             </Suspense>
-          </>
-        ) : (
-          <Suspense fallback={<Loading />}>
-            <ScreenAdministration
-              objects={[]}
-              selected={selected}
-              detail={false}
-              domainTools={Boolean(
-                getCrmRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
-              )}
-              onNavigate={navigate}
-              onVisibilityChange={updateScreenVisibility}
-              menuLayout={resolvedMenuLayout}
-              onMenuLayoutChange={saveMenuLayout}
-              onDeletePermanent={deleteScreenPermanently}
-              onSolutionsChanged={refresh}
-            />
-          </Suspense>
-        )}
+          ))}
         {newObject && (
           <NewObject
             initialMode={
@@ -981,7 +1018,9 @@ function App({
           </header>
         ) : null}
         <div className="page-content">
-          {view.startsWith("admin") || view === "new-object" ? (
+          {domainContent ? (
+            domainContent
+          ) : view.startsWith("admin") || view === "new-object" ? (
             <Suspense fallback={<Loading />}>
               <ScreenAdministration
                 key={`${view}:${selected}`}
@@ -997,6 +1036,10 @@ function App({
                 onMenuLayoutChange={saveMenuLayout}
                 onDeletePermanent={deleteScreenPermanently}
                 onSolutionsChanged={refresh}
+                tab={
+                  location.get("tab") === "packages" ? "packages" : "screens"
+                }
+                onTabChange={selectTab}
               />
             </Suspense>
           ) : ExtensionScreen ? (
@@ -1049,9 +1092,7 @@ function App({
               {view === "screens" ? (
                 <Tabs
                   value={screensTab}
-                  onValueChange={(val) =>
-                    selectScreensTab(val as "menu" | "screens")
-                  }
+                  onValueChange={(val) => selectTab(val as "menu" | "screens")}
                   className="w-full space-y-4"
                 >
                   <TabsList className="bg-muted/70 p-1 rounded-xl h-10">
@@ -1314,26 +1355,6 @@ function App({
                 }}
               />
             </Suspense>
-          ) : view === "integrations" ? (
-            <Suspense fallback={<Loading />}>
-              {!getCrmRuntime().apiBasePath?.startsWith("/v1/dynamic-crm/") && (
-                <div className="mb-5 flex justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => navigate(selected, "collection-sources")}
-                  >
-                    Fuentes y colecciones
-                  </Button>
-                </div>
-              )}
-              <Integrations
-                onImported={(name) => {
-                  refresh();
-                  navigate(name);
-                }}
-              />
-            </Suspense>
           ) : view === "service-credentials" ? (
             <Suspense fallback={<Loading />}>
               <ServiceCredentials
@@ -1343,10 +1364,6 @@ function App({
                 )}
                 onNavigate={navigate}
               />
-            </Suspense>
-          ) : view === "operations" ? (
-            <Suspense fallback={<Loading />}>
-              <Operations objects={objects} />
             </Suspense>
           ) : (
             <Audit

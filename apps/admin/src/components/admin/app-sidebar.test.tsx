@@ -169,7 +169,7 @@ describe("AppSidebar navigation preferences", () => {
     vi.restoreAllMocks();
   });
 
-  it("saves an item moved from Productividad to Operación", async () => {
+  it("saves an item moved from Work to Build", async () => {
     const user = userEvent.setup();
     const services = createServices();
 
@@ -179,7 +179,7 @@ describe("AppSidebar navigation preferences", () => {
       await screen.findByRole("button", { name: "Organizar menú" }),
     );
     await user.click(
-      screen.getByRole("button", { name: "Mover Mi día al grupo anterior" }),
+      screen.getByRole("button", { name: "Mover Mi día al grupo siguiente" }),
     );
 
     await waitFor(() =>
@@ -190,7 +190,7 @@ describe("AppSidebar navigation preferences", () => {
           blocks: expect.arrayContaining([
             expect.objectContaining({
               kind: "builtin",
-              id: "operation",
+              id: "productivity",
               items: expect.arrayContaining(["my-day"]),
             }),
           ]),
@@ -206,11 +206,11 @@ describe("AppSidebar navigation preferences", () => {
     render(<App services={services} />);
 
     await user.click(
-      await screen.findByRole("button", { name: "Contraer Operación" }),
+      await screen.findByRole("button", { name: "Contraer Trabajo" }),
     );
 
     expect(
-      within(sidebarGroup("Operación")).queryByRole("link", { name: "Inicio" }),
+      within(sidebarGroup("Trabajo")).queryByRole("link", { name: "Inicio" }),
     ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
@@ -238,10 +238,10 @@ describe("AppSidebar navigation preferences", () => {
 
     render(<App services={services} />);
 
-    await user.click(await screen.findByText("Operación", { exact: true }));
+    await user.click(await screen.findByText("Trabajo", { exact: true }));
 
     expect(
-      await screen.findByRole("button", { name: "Expandir Operación" }),
+      await screen.findByRole("button", { name: "Expandir Trabajo" }),
     ).toBeVisible();
   });
 
@@ -275,10 +275,10 @@ describe("AppSidebar navigation preferences", () => {
     render(<App services={services} />);
 
     expect(
-      await screen.findByRole("button", { name: "Expandir Operación" }),
+      await screen.findByRole("button", { name: "Expandir Trabajo" }),
     ).toBeVisible();
     expect(
-      within(sidebarGroup("Operación")).queryByRole("link", { name: "Inicio" }),
+      within(sidebarGroup("Trabajo")).queryByRole("link", { name: "Inicio" }),
     ).not.toBeInTheDocument();
     expect(
       await screen.findByRole("button", { name: "Expandir Reportes" }),
@@ -302,7 +302,7 @@ describe("AppSidebar navigation preferences", () => {
       await screen.findByRole("button", { name: "Organizar menú" }),
     );
     await user.click(
-      screen.getByRole("button", { name: "Mover Mi día al grupo anterior" }),
+      screen.getByRole("button", { name: "Mover Mi día al grupo siguiente" }),
     );
 
     await waitFor(() =>
@@ -317,12 +317,12 @@ describe("AppSidebar navigation preferences", () => {
       ).toBe(true),
     );
     expect(
-      within(sidebarGroup("Operación")).queryByRole("link", {
+      within(sidebarGroup("Construir")).queryByRole("link", {
         name: "Mi día",
       }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarGroup("Productividad")).getByRole("link", {
+      within(sidebarGroup("Trabajo")).getByRole("link", {
         name: "Mi día",
       }),
     ).toBeVisible();
@@ -381,7 +381,7 @@ describe("AppSidebar navigation preferences", () => {
     });
     await user.click(screen.getByRole("button", { name: "Listo" }));
     expect(
-      within(sidebarGroup("Productividad")).getByRole("link", {
+      within(sidebarGroup("Construir")).getByRole("link", {
         name: /^Empresas/,
       }),
     ).toBeVisible();
@@ -389,7 +389,7 @@ describe("AppSidebar navigation preferences", () => {
     render(<App services={services} />);
     await waitFor(() =>
       expect(
-        within(sidebarGroup("Productividad")).getByRole("link", {
+        within(sidebarGroup("Construir")).getByRole("link", {
           name: /^Empresas/,
         }),
       ).toBeVisible(),
@@ -422,12 +422,12 @@ describe("AppSidebar navigation preferences", () => {
     expect(screen.getByRole("link", { name: /^Contactos/ })).toBeVisible();
   });
 
-  it("shows page administration under Gestión with the current domain", async () => {
+  it("shows page administration under Construir with the current domain", async () => {
     render(<App services={createServices()} />);
     await screen.findByRole("link", { name: /^Empresas/ });
     expect(
-      within(sidebarGroup("Gestión")).getByRole("link", {
-        name: "Administrar páginas",
+      within(sidebarGroup("Construir")).getByRole("link", {
+        name: "Pantallas",
       }),
     ).toHaveAttribute(
       "href",
@@ -435,11 +435,100 @@ describe("AppSidebar navigation preferences", () => {
     );
   });
 
+  it("exposes scoped building destinations and keeps users beside roles", async () => {
+    render(<App services={createServices()} />);
+    expect(
+      await screen.findByRole("link", { name: "Flujos de trabajo" }),
+    ).toHaveAttribute(
+      "href",
+      "#/crm?domain=platform&object=account&view=operations&tab=workflows",
+    );
+    expect(screen.getByRole("link", { name: "Empleados IA" })).toHaveAttribute(
+      "href",
+      "#/my-integrations?tab=virtual-employees",
+    );
+    expect(
+      within(sidebarGroup("Administración")).getByRole("link", {
+        name: "Usuarios",
+      }),
+    ).toBeVisible();
+    expect(
+      within(sidebarGroup("Administración")).getByRole("link", {
+        name: "Roles y permisos",
+      }),
+    ).toBeVisible();
+    expect(
+      within(sidebarGroup("Construir")).getByRole("link", {
+        name: "Pantallas",
+      }),
+    ).toBeVisible();
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Buscar en el menú" }),
+      { target: { value: "automatizaciones" } },
+    );
+    expect(
+      screen.getByRole("link", { name: "Flujos de trabajo" }),
+    ).toBeVisible();
+  });
+
+  it("does not reveal denied domain tools through search", async () => {
+    const services = createServices();
+    vi.mocked(services.authProvider.canAccess!).mockImplementation(
+      async ({ resource }) => resource === "my-day",
+    );
+    render(<App services={services} />);
+    await screen.findByRole("link", { name: "Mi día" });
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Buscar en el menú" }),
+      { target: { value: "flujos" } },
+    );
+    expect(
+      screen.queryByRole("link", { name: "Flujos de trabajo" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Empleados IA" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("finds personally hidden screens without changing saved visibility", async () => {
+    const services = createServices();
+    vi.mocked(services.userPreferences.getSidebarNavigation).mockResolvedValue({
+      ...defaultLayout,
+      hiddenItems: ["page:platform:account"],
+    });
+    render(<App services={services} />);
+    // Wait for the asynchronous permission and domain catalog queries before exercising search.
+    await screen.findByRole(
+      "link",
+      { name: /^Contactos/ },
+      { timeout: 10_000 },
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("link", { name: /^Empresas/ }),
+      ).not.toBeInTheDocument(),
+    );
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Buscar en el menú" }),
+      { target: { value: "empresas" } },
+    );
+    expect(
+      await screen.findByRole("link", { name: /^Empresas/ }),
+    ).toHaveAttribute("href", "#/crm?domain=platform&object=account");
+    expect(screen.getByText("Oculta de mi menú")).toBeVisible();
+    expect(
+      services.userPreferences.saveSidebarNavigation,
+    ).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Mostrar Empresas" }),
+    ).toBeVisible();
+  });
+
   it("finds a CRM object when searching the menu", async () => {
     const user = userEvent.setup();
     render(<App services={createServices()} />);
 
-    await screen.findByRole("link", { name: /^Empresas/ });
+    await screen.findByRole("link", { name: /^Empresas/ }, { timeout: 10_000 });
     fireEvent.change(
       screen.getByRole("searchbox", { name: "Buscar en el menú" }),
       {

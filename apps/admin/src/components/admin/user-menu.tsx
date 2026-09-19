@@ -1,16 +1,15 @@
 import { Link } from "react-router-dom";
-import type { AuthPermissions } from "@/auth/auth-session";
+import { AppearancePanel } from "@/components/admin/appearance-panel";
 import { Children, useCallback, useEffect, useState } from "react";
 import {
   Translate,
   useAuthProvider,
-  usePermissions,
   useGetIdentity,
   useLogout,
   useTranslate,
   UserMenuContext,
 } from "ra-core";
-import { ChevronsUpDown, ExternalLink, LogOut } from "lucide-react";
+import { ChevronsUpDown, ExternalLink, LogOut, Plug } from "lucide-react";
 import { usePwaInstall, PwaInstallButton } from "@/pwa";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import {
@@ -45,12 +44,6 @@ export function UserMenu({ children }: UserMenuProps) {
   const translate = useTranslate();
   const { isMobile } = useSidebar();
   const currentTenant = useCurrentTenant();
-  const { permissions } = usePermissions<AuthPermissions>();
-  const canBrandTenant =
-    permissions?.canManageIdentity ||
-    permissions?.memberships?.some((member) =>
-      ["tenant_admin", "agency_admin"].includes(member.role),
-    );
 
   const [open, setOpen] = useState(false);
   const { isInstalled } = usePwaInstall();
@@ -161,11 +154,24 @@ export function UserMenu({ children }: UserMenuProps) {
             ) : null}
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="my-1" />
-          {canBrandTenant && (
-            <DropdownMenuItem asChild onClick={handleClose}>
-              <Link to="/tenant-branding">Identidad del tenant</Link>
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem
+            asChild
+            onClick={handleClose}
+            className="cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium"
+          >
+            <Link to="/my-integrations?tab=connections">
+              <Plug
+                aria-hidden="true"
+                className="size-4 text-muted-foreground"
+              />
+              <span>
+                {translate("savia.userMenu.myConnections", {
+                  _: "Mis conexiones",
+                })}
+              </span>
+            </Link>
+          </DropdownMenuItem>
+          <AppearancePanel />
           {children}
           {Children.count(children) > 0 ? (
             <DropdownMenuSeparator className="my-1" />

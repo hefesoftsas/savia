@@ -13,7 +13,6 @@ import { Error } from "@/components/admin/error";
 import { Loading } from "@/components/admin/loading";
 import { SaviaRequestProvider } from "@/features/savia-request/savia-request-provider";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { PwaInstallButton } from "@/pwa";
 
 const AssistantBar = lazy(async () => {
   const module = await import("@/features/assistant/assistant-bar");
@@ -149,48 +148,45 @@ export const Layout = (props: CoreLayoutProps) => {
       <SaviaRequestProvider>
         <AppSidebar />
         <main
-        className={cn(
-          "ml-auto min-w-0 w-full max-w-full overflow-x-hidden",
-          "md:peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]",
-          "md:peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]",
-          "sm:transition-[width] sm:duration-200 sm:ease-linear",
-          "group-data-[resizing]/sidebar-wrapper:transition-none",
-          "flex h-svh flex-col",
-          "group-data-[scroll-locked=1]/body:h-full",
-          "has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh",
-        )}
-      >
-        <header className="relative flex h-16 md:h-12 shrink-0 items-center gap-2 px-3 sm:px-4">
-          <LayoutSidebarTrigger />
-          <GlobalHistoryNav />
-          <div
-            className="min-w-0 flex flex-1 items-center pr-2"
-            id="breadcrumb"
-          />
-          <div className="flex items-center gap-1.5 mr-10 sm:mr-12 shrink-0">
-            <PwaInstallButton variant="header" />
-          </div>
-          <div
-            id="header-actions"
-            className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 sm:right-4"
-          />
-        </header>
-        <ErrorBoundary
-          onError={handleError}
-          fallbackRender={({ error, resetErrorBoundary }) => (
-            <Error
-              error={error}
-              errorInfo={errorInfo}
-              resetErrorBoundary={resetErrorBoundary}
-            />
+          className={cn(
+            "ml-auto min-w-0 w-full max-w-full overflow-x-hidden",
+            "md:peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]",
+            "md:peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]",
+            "sm:transition-[width] sm:duration-200 sm:ease-linear",
+            "group-data-[resizing]/sidebar-wrapper:transition-none",
+            "flex h-svh flex-col",
+            "group-data-[scroll-locked=1]/body:h-full",
+            "has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh",
           )}
         >
-          <Suspense fallback={<Loading />}>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-6 sm:px-4">
-              {props.children}
-            </div>
-          </Suspense>
-        </ErrorBoundary>
+          <header className="relative flex h-16 md:h-12 shrink-0 items-center gap-2 px-3 sm:px-4">
+            <LayoutSidebarTrigger />
+            <GlobalHistoryNav />
+            <div
+              className="min-w-0 flex flex-1 items-center pr-2"
+              id="breadcrumb"
+            />
+            <div
+              id="header-actions"
+              className="flex min-w-0 shrink-0 items-center gap-1"
+            />
+          </header>
+          <ErrorBoundary
+            onError={handleError}
+            fallbackRender={({ error, resetErrorBoundary }) => (
+              <Error
+                error={error}
+                errorInfo={errorInfo}
+                resetErrorBoundary={resetErrorBoundary}
+              />
+            )}
+          >
+            <Suspense fallback={<Loading />}>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-6 sm:px-4">
+                {props.children}
+              </div>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </SaviaRequestProvider>
       <Notification />

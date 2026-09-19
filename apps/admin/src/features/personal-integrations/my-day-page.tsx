@@ -265,7 +265,7 @@ export function MyDayPage({
       if (connectedCalendars.length === 0) {
         setEvents([]);
         setFeedback(
-          "Conecta Google Calendar u Outlook desde Mis integraciones.",
+          "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
         );
         return;
       }
@@ -313,7 +313,9 @@ export function MyDayPage({
       return;
     }
     if (calendarProviders.length === 0) {
-      setFeedback("Conecta Google Calendar u Outlook desde Mis integraciones.");
+      setFeedback(
+        "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
+      );
       return;
     }
     const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
