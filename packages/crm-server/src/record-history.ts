@@ -18,6 +18,7 @@ import {
   accessRecord,
   policyFor,
   requireRecordAccess,
+  requireWriteAccess,
 } from "./access-authorization";
 import {
   assertLocalCollection,
@@ -26,6 +27,7 @@ import {
   guard,
   parseRecord,
   transaction,
+  updateRecord,
 } from "./services";
 
 /** Mutable row predicates cannot authorize historical values without historical context. */
@@ -85,6 +87,7 @@ async function historyAccess(
   }
   return {
     object,
+    record,
     settings: settingsFor(object),
     fields: allowed.sort(),
     policy,
@@ -127,7 +130,16 @@ const keySchema = z.string().min(1).max(128);
 const idSchema = z.string().min(1).max(256);
 const retentionWhere = "h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')";
 
-export function registerRecordHistory(app: Hono<Env>) {
+export function registerRecordHistory(
+  app: Hono<Env>,
+  trigger?: (
+    db: D1Database,
+    tenant: string,
+    name: string,
+    before: any,
+    after: any,
+  ) => Promise<void>,
+) {
   app.use("/api/record-history/*", async (c, next) => {
     c.header("cache-control", "no-store");
     await next();
@@ -135,6 +147,164 @@ export function registerRecordHistory(app: Hono<Env>) {
   app.use("/api/record-history-settings/*", async (c, next) => {
     c.header("cache-control", "no-store");
     await next();
+  });
+  app.get("/api/record-history-settings/:object/usage", async (c) => {
+    const db = c.env.DB,
+      tenant = c.get("tenant"),
+      name = keySchema.parse(c.req.param("object"));
+    if (policyFor(db))
+      return fail(
+        "Solo los administradores de esquema pueden consultar el consumo.",
+        403,
+      );
+    await assertLocalCollection(db, tenant, name);
+    await getObject(db, tenant, name);
+    // Bound work as well as response size. Totals become lower bounds above 1,000 events.
+    const data = await db
+      .prepare(
+        `SELECT count(*) AS events, COALESCE(sum(bytes),0) AS logicalBytes,
+      COALESCE(sum(expired),0) AS expiredEvents, min(IIF(expired,expires_at,NULL)) AS oldestExpiredAt
+      FROM (SELECT length(CAST(changes AS BLOB)) AS bytes, expires_at,
+        expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') AS expired
+        FROM crm_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1000)`,
+      )
+      .bind(tenant, name)
+      .first<{
+        events: number;
+        logicalBytes: number;
+        expiredEvents: number;
+        oldestExpiredAt: string | null;
+      }>();
+    const more = await db
+      .prepare(
+        "SELECT 1 FROM crm_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1 OFFSET 1000",
+      )
+      .bind(tenant, name)
+      .first();
+    return c.json({
+      data: { ...data, limited: !!more, measuredAt: new Date().toISOString() },
+    });
+  });
+  const restorePath = "/api/record-history/:object/:id/:version/restore";
+  app.on(["GET", "PUT"], restorePath, async (c) => {
+    const db = c.env.DB,
+      tenant = c.get("tenant"),
+      name = keySchema.parse(c.req.param("object")),
+      id = idSchema.parse(c.req.param("id"));
+    const version = z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .parse(c.req.param("version"));
+    const { record, object, fields, policy } = await historyAccess(
+      db,
+      tenant,
+      name,
+      id,
+    );
+    if (record.deleted_at)
+      return fail(
+        "Recupera el registro de la papelera antes de restaurar campos.",
+        409,
+      );
+    requireRecordAccess(db, name, "update", record);
+    const row = await db
+      .prepare(
+        `SELECT changes FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND ${retentionWhere}`,
+      )
+      .bind(tenant, name, id, version)
+      .first<{ changes: string }>();
+    if (!row) return fail("El cambio no existe o ya venció su retención.", 404);
+    const source = JSON.parse(row.changes) as RecordHistoryDetail["changes"];
+    const writable = policy
+      ? new Set(
+          decideRecord(
+            policy,
+            `collection:${name}`,
+            "update",
+            accessRecord(record),
+          ).fields,
+        )
+      : null;
+    const changes = Object.fromEntries(
+      fields
+        .filter(
+          (f) => Object.hasOwn(source, f) && (!writable || writable.has(f)),
+        )
+        .map((f) => [f, { ...source[f], current: record[f] }]),
+    );
+    if (c.req.method === "GET")
+      return c.json({ data: { expectedVersion: record._version, changes } });
+    const body = z
+      .object({
+        expectedVersion: z.number().int().positive(),
+        side: z.enum(["before", "after"]),
+        fields: z
+          .array(keySchema)
+          .min(1)
+          .max(50)
+          .refine((v) => new Set(v).size === v.length),
+      })
+      .strict()
+      .parse(await c.req.json());
+    if (record._version !== body.expectedVersion)
+      return fail(
+        "El registro cambió. Vuelve a revisar la comparación antes de restaurar.",
+        409,
+      );
+    const input: Record<string, unknown> = {};
+    for (const field of body.fields) {
+      const change = changes[field];
+      if (
+        !change ||
+        !Object.hasOwn(change, body.side) ||
+        change[body.side === "before" ? "beforeTruncated" : "afterTruncated"]
+      )
+        return fail(
+          "Solo se pueden restaurar campos autorizados con valores completos disponibles.",
+          422,
+        );
+      input[field] = change[body.side];
+    }
+    requireWriteAccess(
+      db,
+      name,
+      "update",
+      record,
+      { ...record, ...input },
+      body.fields,
+    );
+    const sourceGuard = guard(
+      db,
+      `SELECT EXISTS(SELECT 1 FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND changes=? AND ${retentionWhere}) AND EXISTS(SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=? AND version=?)`,
+      [
+        tenant,
+        name,
+        id,
+        version,
+        row.changes,
+        tenant,
+        name,
+        object.version ?? 1,
+      ],
+    );
+    const result = await updateRecord(db, tenant, name, id, input, {
+      version: body.expectedVersion,
+      checkpoint: {
+        before: [sourceGuard.start],
+        after: () => [
+          audit(db, tenant, "record.history_restored", name, id, {
+            sourceVersion: version,
+            side: body.side,
+            fields: body.fields,
+          }),
+          sourceGuard.end,
+        ],
+      },
+    });
+    await trigger?.(db, tenant, name, record, result);
+    return c.json({ data: { version: result._version } });
   });
   app.get("/api/record-history-settings/:object", async (c) => {
     const db = c.env.DB,

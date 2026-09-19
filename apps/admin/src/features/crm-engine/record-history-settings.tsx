@@ -1,3 +1,4 @@
+import { RecordHistoryUsage } from "./record-history-usage";
 import { useEffect, useState } from "react";
 import { getListObjectsQueryKey } from "./generated/crm";
 import { useQueryClient } from "@tanstack/react-query";
@@ -188,6 +189,7 @@ function SettingsForm({ object }: { object: CrmObject }) {
             ))}
         </fieldset>
       </fieldset>
+      <RecordHistoryUsage path={path} />
       {saved && <p role="status">Configuración guardada.</p>}
       <Button
         type="submit"

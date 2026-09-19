@@ -1,3 +1,4 @@
+import { FieldValueDisplay } from "./field-value-display";
 const RecordHistory = lazy(() => import("./record-history"));
 import { supportsRecordHistory } from "./record-history-client";
 import { canDuplicateRecord } from "./record-duplication";
@@ -103,19 +104,7 @@ const display = (value: unknown): string => {
           ? JSON.stringify(value)
           : String(value);
 };
-const money = (v: unknown, currency = "COP", decimals = 2) => {
-  const code = currency || "COP";
-  try {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    }).format(Number(v) || 0);
-  } catch {
-    return String(v ?? "");
-  }
-};
+
 const activityNames: Record<string, string> = {
   note: "Nota",
   call: "Llamada",
@@ -549,22 +538,7 @@ export default function RecordDetail({
                                     ),
                                   );
                             })()
-                          : field.type === "Currency" ||
-                              field.config?.format === "currency"
-                            ? current[name] == null || current[name] === ""
-                              ? "—"
-                              : money(
-                                  current[name],
-                                  String(field.config?.currency || "COP"),
-                                  typeof field.config?.decimals === "number"
-                                    ? Number(field.config.decimals)
-                                    : field.config?.integer
-                                      ? 0
-                                      : 2,
-                                )
-                            : display(
-                                recordOptionLabel(current[name], field.options),
-                              )}
+                          : <FieldValueDisplay value={current[name]} field={field}/>}
                     </dd>
                   </div>
                 ))}
@@ -812,7 +786,13 @@ export default function RecordDetail({
             supportsRecordHistory(object) &&
             capabilities.read && (
               <Suspense fallback={<p role="status">Cargando historial…</p>}>
-                <RecordHistory object={object} recordId={record.id} />
+                <RecordHistory
+                  object={object}
+                  recordId={record.id}
+                  onRestored={() => {
+                    void client.invalidateQueries();
+                  }}
+                />
               </Suspense>
             )}
           {tab === "tasks" && (

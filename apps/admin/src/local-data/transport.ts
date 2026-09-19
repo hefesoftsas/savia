@@ -17,7 +17,7 @@ const revalidatedMetadata = new Map<string, number>();
 export function createLocalTransport(
   store: LocalStore,
   network: SyncTransport,
-  syncNow: (collection?: string) => Promise<void>,
+  syncNow: (collection?: string, force?: boolean) => Promise<void>,
   requestSync: () => void = () => {
     void syncNow().catch(() => undefined);
   },
@@ -66,6 +66,36 @@ export function createLocalTransport(
         segments[2],
         segments[3],
       );
+    if (
+      segments[1] === "record-history" &&
+      segments.length === 6 &&
+      segments[5] === "restore" &&
+      ["GET", "PUT"].includes(method)
+    ) {
+      const collection = segments[2],
+        id = segments[3];
+      if (
+        (await store.db.outbox
+          .where("[collection+id]")
+          .equals([collection, id])
+          .count()) ||
+        (await store.getPendingBundle(collection, id))
+      )
+        return response(
+          "Hay cambios locales pendientes. Sincroniza o resuelve los conflictos antes de restaurar.",
+          409,
+        );
+      const result = await network(path, init);
+      if (method === "PUT" && result.ok) {
+        // The commit already succeeded; a failed refresh must not be reported as a failed write.
+        try {
+          await syncNow(collection, true);
+        } catch {
+          requestSync();
+        }
+      }
+      return result;
+    }
     const recordRoute =
       segments[1] === "records" &&
       ((segments.length === 3 && ["GET", "POST"].includes(method)) ||
@@ -303,9 +333,13 @@ export function createLocalTransport(
       return Response.json({ ok: true });
     if (method !== "GET" && result.ok) {
       requestSync();
-      if (segments[1] === "record-history-settings" && method === "PUT") {
-        // The settings write increments the collection version. Invalidate all
-        // metadata sources used by the object editor before it can save again.
+      if (
+        (segments[1] === "record-history-settings" && method === "PUT") ||
+        segments[1] === "collection-bindings" ||
+        segments[1] === "sources"
+      ) {
+        // Bindings and source policies change the authoritative collection catalog.
+        // Refresh every metadata fallback before navigating or editing again.
         await removeWorkspaceMetadata(`${store.scope}:metadata:/api/objects`);
         await removeWorkspaceMetadata(`${store.scope}:objects`);
         try {

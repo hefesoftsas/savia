@@ -1,3 +1,5 @@
+import { RecordHistoryRestore } from "./record-history-restore";
+import { collectionCapabilities } from "./collection-capabilities";
 import { useEffect, useState } from "react";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import type {
@@ -33,6 +35,7 @@ const value = (v: unknown) =>
 export default function RecordHistory(props: {
   object: CrmObject;
   recordId: string;
+  onRestored?: () => void;
 }) {
   return (
     <HistorySession
@@ -44,10 +47,14 @@ export default function RecordHistory(props: {
 function HistorySession({
   object,
   recordId,
+  onRestored,
 }: {
   object: CrmObject;
   recordId: string;
+  onRestored?: () => void;
 }) {
+  const [restoring, setRestoring] = useState(false);
+  const [restored, setRestored] = useState(false);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [refresh, setRefresh] = useState(0);
   const [page, setPage] = useState<RecordHistoryPage>();
@@ -110,6 +117,22 @@ function HistorySession({
   };
   return (
     <section aria-label="Historial del registro" className="grid gap-4">
+      {restored && (
+        <p role="status">Campos restaurados. Se guardó una nueva edición.</p>
+      )}
+      {restoring && selected && (
+        <RecordHistoryRestore
+          object={object}
+          path={`${base}/${selected.version}/restore`}
+          onClose={() => setRestoring(false)}
+          onRestored={() => {
+            setRestoring(false);
+            setRestored(true);
+            newest();
+            onRestored?.();
+          }}
+        />
+      )}
       <div className="op-section-title">
         <div>
           <h3>Historial de cambios</h3>
@@ -183,6 +206,14 @@ function HistorySession({
                       className="mt-3 grid gap-3"
                       aria-label={`Cambios de versión ${entry.version}`}
                     >
+                      {detail && collectionCapabilities(object).update && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setRestoring(true)}
+                        >
+                          Restaurar campos
+                        </Button>
+                      )}
                       {detailError ? (
                         <div role="alert">
                           <p>{detailError}</p>

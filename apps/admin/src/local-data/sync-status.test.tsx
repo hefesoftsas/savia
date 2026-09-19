@@ -183,3 +183,70 @@ it("hides quarantined bundles from recovery and exported changes", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it("keeps pending work visible offline and shows the last successful check", async () => {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  const workspace = statusWorkspace({
+    pending: 3,
+    lastSyncedAt: 1789812000000,
+  });
+  try {
+    render(<LocalSyncStatus workspace={workspace} />);
+    await screen.findByText("3 cambios pendientes");
+    expect(screen.getByText(/Sin conexión/)).toBeVisible();
+    expect(screen.getByText(/Última comprobación/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Sincronizar" })).toBeDisabled();
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+it("shows background activity and avoids starting a duplicate manual pass", async () => {
+  render(<LocalSyncStatus workspace={statusWorkspace({ syncing: true })} />);
+  await screen.findByRole("button", { name: "Sincronizando…" });
+  expect(screen.getByRole("button", { name: "Sincronizando…" })).toBeDisabled();
+});
+it("retries a synchronization failure once without scheduling a second pass", async () => {
+  const workspace = statusWorkspace({ syncError: "No se pudo conectar" });
+  render(<LocalSyncStatus workspace={workspace} />);
+  const retry = await screen.findByRole("button", {
+    name: "Reintentar sincronización",
+  });
+  fireEvent.click(retry);
+  await waitFor(() => expect(workspace.syncNow).toHaveBeenCalledOnce());
+  expect(workspace.requestSync).not.toHaveBeenCalled();
+});
+function statusWorkspace(extra: Record<string, unknown>) {
+  return {
+    store: {
+      status: async () => ({ pending: 0, errors: 0, conflicts: 0, ...extra }),
+      subscribe: () => () => {},
+      db: {
+        outbox: { toArray: async () => [] },
+        syncState: {
+          toArray: async () => [{ collection: "people", hydrated: true }],
+        },
+        collections: {
+          toArray: async () => [{ name: "people", capability: "read-write" }],
+        },
+        conflicts: { toArray: async () => [] },
+      },
+    },
+    syncNow: vi.fn().mockResolvedValue(undefined),
+    requestSync: vi.fn(),
+  } as unknown as LocalWorkspace;
+}
+
+it("reports local status read failures instead of silently showing success", async () => {
+  const workspace = statusWorkspace({});
+  workspace.store.status = vi
+    .fn()
+    .mockRejectedValue(new Error("Storage unavailable"));
+  render(<LocalSyncStatus workspace={workspace} />);
+  await screen.findByText(/No se pudo leer el estado local/);
+  expect(
+    screen.queryByText("Datos locales disponibles"),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Reintentar sincronización" }),
+  ).toBeEnabled();
+});

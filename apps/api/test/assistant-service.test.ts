@@ -8,6 +8,25 @@ import {
   SaviaAssistantService,
 } from "../src/assistant/service";
 
+// These tests cover configuration and MCP transport, not provider networking.
+// Keep model streams local so requests cannot outlive the Worker test context.
+const { streamTextMock } = vi.hoisted(() => ({ streamTextMock: vi.fn() }));
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return { ...actual, streamText: streamTextMock };
+});
+beforeEach(() => {
+  streamTextMock.mockReset();
+  streamTextMock.mockImplementation(({ onEnd }) => ({
+    toUIMessageStreamResponse: () => {
+      onEnd?.();
+      return new Response('data: {"type":"finish"}\n\n', {
+        headers: { "content-type": "text/event-stream" },
+      });
+    },
+  }));
+});
+
 const migrationSqls = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -549,7 +568,6 @@ describe("SaviaAssistantService MCP transport", () => {
   });
 
   it("exposes CRM collections and aggregation tools to the model while keeping writes confirmed", async () => {
-    let capturedTools: Record<string, unknown> = {};
     const toolsMock = vi.fn(async () => ({
       savia_list_crm_collections: { description: "list collections" },
       savia_list_crm_records: { description: "query records" },
@@ -575,7 +593,6 @@ describe("SaviaAssistantService MCP transport", () => {
       },
     );
 
-    // Stream text will receive the tools; we can verify toolsMock was called
     const response = await service.chat({
       principalId: "test-platform-admin",
       authorization: "Bearer current-user-token",
@@ -590,6 +607,12 @@ describe("SaviaAssistantService MCP transport", () => {
 
     expect(response).toBeInstanceOf(Response);
     expect(toolsMock).toHaveBeenCalledOnce();
+    const modelTools = streamTextMock.mock.calls[0][0].tools;
+    expect(modelTools).toHaveProperty("savia_list_crm_collections");
+    expect(modelTools).toHaveProperty("savia_aggregate_crm_records");
+    expect(modelTools).not.toHaveProperty("savia_create_crm_record");
+    expect(modelTools).not.toHaveProperty("savia_update_crm_record");
+    expect(await response.text()).toContain('"type":"finish"');
   });
 
   it("resolves virtual employee from @handle and attaches employee identity headers", async () => {

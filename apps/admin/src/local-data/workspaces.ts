@@ -76,7 +76,7 @@ export function createWorkspaceManager(
         String(JSON.parse(principal)[1]),
       );
       let closed = false;
-      const syncNow = async (collection?: string) => {
+      const syncNow = async (collection?: string, force = false) => {
         if (closed || expected !== generation) return;
         if (await store.authorizationError()) {
           // This is a real authenticated request for this tenant. Cached session
@@ -95,7 +95,7 @@ export function createWorkspaceManager(
           await store.resumeAuthorization();
           coordinator.start();
         }
-        await coordinator.syncNow(collection);
+        await coordinator.syncNow(collection, force);
       };
       const workspace = {
         store,

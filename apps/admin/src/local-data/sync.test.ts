@@ -325,8 +325,87 @@ it("hydrates a requested collection without waiting for unrelated collections an
     const before = calls.length;
     await coordinator.syncNow("people");
     expect(calls).toHaveLength(before);
+    await coordinator.syncNow("people", true);
+    expect(calls.filter((path) => path.includes("/pull/people"))).toHaveLength(
+      2,
+    );
     await backgroundResumed;
   } finally {
+    coordinator.stop();
+    if (original) Object.defineProperty(navigator, "locks", original);
+    else Reflect.deleteProperty(navigator, "locks");
+  }
+});
+it("exposes background failures and activity, retains queued edits, and persists only successful full checks", async () => {
+  const { vi } = await import("vitest");
+  store = await openLocalStore(crypto.randomUUID());
+  const collection = {
+    name: "people",
+    object: { config: { fields: {} } },
+    capability: "read-write",
+    schemaVersion: 1,
+  } as const;
+  await store.refreshManifest([collection as never]);
+  await store.mutate("people", "create", "a", { name: "Retained" });
+  const original = Object.getOwnPropertyDescriptor(navigator, "locks");
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: async (
+        _n: string,
+        _o: unknown,
+        cb: (lock: object) => Promise<void>,
+      ) => cb({}),
+    },
+  });
+  let fail = true;
+  let release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { createSyncCoordinator } = await import("./sync");
+  const coordinator = createSyncCoordinator(store, async (path) => {
+    if (fail) {
+      await barrier;
+      throw new TypeError("Failed to fetch");
+    }
+    if (path.endsWith("manifest"))
+      return Response.json({ collections: [collection] });
+    if (path.includes("/push/"))
+      return Response.json({
+        data: { id: "a", name: "Retained", _version: 1 },
+      });
+    return Response.json({ documents: [], cursor: "1", hasMore: false });
+  });
+  try {
+    coordinator.start();
+    await vi.waitFor(async () =>
+      expect((await store.status()).syncing).toBe(true),
+    );
+    release();
+    await vi.waitFor(async () =>
+      expect((await store.status()).syncError).toBeTruthy(),
+    );
+    expect((await store.status()).pending).toBe(1);
+    expect((await store.status()).lastSyncedAt).toBeUndefined();
+    fail = false;
+    await coordinator.syncNow("people", true);
+    expect((await store.status()).syncError).toBeTruthy();
+    expect((await store.status()).lastSyncedAt).toBeUndefined();
+    await coordinator.syncNow();
+    const status = await store.status();
+    expect(status.syncing).toBe(false);
+    expect(status.syncError).toBeUndefined();
+    expect(status.pending).toBe(0);
+    expect(status.lastSyncedAt).toEqual(expect.any(Number));
+    const reopened = await openLocalStore(store.scope);
+    try {
+      expect((await reopened.status()).lastSyncedAt).toBe(status.lastSyncedAt);
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    release();
     coordinator.stop();
     if (original) Object.defineProperty(navigator, "locks", original);
     else Reflect.deleteProperty(navigator, "locks");

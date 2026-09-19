@@ -142,7 +142,7 @@ export function createCrmApp(
   });
   if (options?.accessPolicy)
     registerAccessMiddleware(app, options.accessPolicy);
-  registerRecordHistory(app);
+  registerRecordHistory(app, trigger);
   registerExtensions(app, options);
   registerExtensionActions(app, options);
   registerExtensionSummaries(app, options);

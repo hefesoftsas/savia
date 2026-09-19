@@ -109,3 +109,23 @@ export async function purgeExpiredRecordHistory(db: D1Database, limit = 500) {
     .bind(bounded)
     .run();
 }
+
+/** One indexed probe after cleanup exposes lag without counting the entire backlog. */
+export async function maintainRecordHistory(db: D1Database, limit = 500) {
+  const result = await purgeExpiredRecordHistory(db, limit);
+  const row = await db
+    .prepare(
+      "SELECT expires_at FROM crm_record_history WHERE expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY expires_at LIMIT 1",
+    )
+    .first<{ expires_at: string }>();
+  return {
+    deleted: result.meta.changes,
+    oldestExpiredAt: row?.expires_at ?? null,
+    lagSeconds: row
+      ? Math.max(
+          0,
+          Math.floor((Date.now() - Date.parse(row.expires_at)) / 1000),
+        )
+      : 0,
+  };
+}

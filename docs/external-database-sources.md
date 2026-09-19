@@ -53,7 +53,8 @@ Members of a compound key are never treated as independently unique.
 
 MongoDB samples at most 100 documents. Its metadata is an inference, not a schema
 constraint. Empty collections accept explicit field definitions and a selected
-ObjectId or string identifier type. Include `_id` in the selected fields. A
+ObjectId or string identifier type. Include `_id` in the selected fields. The
+native `_id` field and its display order are supported only in MongoDB bindings. A
 hexadecimal string remains a string when that is the identifier type. Mixed or
 unsupported identifier types disable individual writes.
 
@@ -123,3 +124,46 @@ not automatically emit Savia realtime events. Filters are equality predicates
 combined with AND, and pages contain at most 100 records. Discovery returns at
 most 500 resources. MongoDB inference is limited to top-level fields; nested
 objects and arrays are edited as JSON.
+
+### Managed preview bridge
+
+`infra/db-bridge/compose.preview.yml` runs a dedicated bridge, Cloudflare tunnel,
+and four isolated fixture databases. This stack is for preview verification;
+SQL Server uses the Developer edition. Database ports are not published. The
+bridge only accepts the four fixture service names, and its local health port
+binds to loopback. Do not attach business databases to this fixture stack.
+
+Build `apps/db-bridge/Dockerfile` from a clean `git archive` of the release commit.
+On the host, create a private `.env` (mode 0600) alongside the Compose file with
+`DB_BRIDGE_IMAGE`, a random `DB_BRIDGE_SHARED_SECRET`, a strong random
+`FIXTURE_PASSWORD`, and the dedicated Cloudflare `TUNNEL_TOKEN`. Configure the
+tunnel hostname to route to `http://bridge:8791`, with a final `http_status:404`
+ingress rule. Create a proxied CNAME to the tunnel ID's `cfargotunnel.com` name.
+Start the stack with `docker compose -f compose.preview.yml up -d`.
+
+Set the matching `SQL_BRIDGE_URL` (HTTPS) and `SQL_BRIDGE_SECRET` in the GitHub
+`preview` environment. Preview and production workflows upload this optional
+pair to their respective API Workers. Both values must be present together;
+invalid or partial configuration stops before any secret upload. Existing
+installations without this pair continue deploying without a bridge.
+
+Verify authenticated connection tests, discovery, metadata, and CRUD for each
+fixture engine before testing source registration and bindings in the preview
+UI. Keep fixture credentials outside the repository. Promote only after the
+same commit passes CI and preview evidence, following the production workflow.
+Production requires its own bridge secret, approved database allowlist, and
+HTTPS endpoint; never reuse the preview fixture database stack as production.
+
+### Production bridge
+
+Use `infra/db-bridge/compose.production.yml` for the independently authenticated
+production bridge and tunnel. It publishes only a loopback health port (8792)
+and does not include fixture databases. Set its private `.env` values as for
+preview, using a different shared secret and dedicated tunnel. An omitted or
+empty `DB_BRIDGE_ALLOWED_HOSTS` explicitly denies all database hosts; add only
+approved destination hostnames when real sources are ready. Configure the matching
+HTTPS URL and shared secret in the GitHub `production` environment.
+
+After source policy changes, binding, unbinding, or metadata synchronization,
+the client invalidates its cached collection catalog so navigation and editing
+use the current backend definitions and capabilities.

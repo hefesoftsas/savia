@@ -36,3 +36,11 @@ it("rejects malformed public paths without falling through to private login", ()
   expect(screen.getByRole("alert")).toHaveTextContent("no es válido");
   expect(calls.admin).not.toHaveBeenCalled();
 });
+
+it("registers update recovery before importing the private application", async () => {
+  render(<ApplicationRoot pathname="/" />);
+  expect(await screen.findByText("Private app")).toBeInTheDocument();
+  expect(calls.worker.mock.invocationCallOrder[0]).toBeLessThan(
+    calls.admin.mock.invocationCallOrder[0],
+  );
+});

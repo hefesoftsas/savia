@@ -26,3 +26,42 @@ test("preview secrets always use explicit preview configuration and names", () =
   assert.throws(() => buildSecretUploads("other", values), /environment/);
   assert.throws(() => buildSecretUploads("preview", {}), /required/);
 });
+
+test("database bridge requires a complete HTTPS configuration", () => {
+  for (const environment of ["preview", "production"]) {
+    const bridge = {
+      SQL_BRIDGE_URL: "https://bridge.example.com",
+      SQL_BRIDGE_SECRET: "test-bridge-secret",
+    };
+    const api = buildSecretUploads(environment, { ...values, ...bridge }).find(
+      (plan) => plan.app === "api",
+    );
+    assert.equal(api.secrets.SQL_BRIDGE_URL, bridge.SQL_BRIDGE_URL);
+    assert.equal(api.secrets.SQL_BRIDGE_SECRET, bridge.SQL_BRIDGE_SECRET);
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          SQL_BRIDGE_URL: bridge.SQL_BRIDGE_URL,
+        }),
+      /SQL_BRIDGE/,
+    );
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          SQL_BRIDGE_SECRET: bridge.SQL_BRIDGE_SECRET,
+        }),
+      /SQL_BRIDGE/,
+    );
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          ...bridge,
+          SQL_BRIDGE_URL: "http://bridge.example.com",
+        }),
+      /HTTPS/,
+    );
+  }
+});

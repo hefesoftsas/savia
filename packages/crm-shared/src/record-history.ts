@@ -35,16 +35,21 @@ export const defaultRecordHistorySettings: RecordHistorySettings = {
 const types = new Set([
   "Textbox",
   "Textarea",
+  "RichText",
   "Email",
   "Phone",
   "Url",
   "Address",
   "Number",
   "Currency",
+  "Percentage",
+  "Rating",
   "Dropdown",
   "Autocomplete",
   "Toggle",
   "DateControl",
+  "DateTime",
+  "Time",
 ]);
 export function isHistoryField(
   name: string,

@@ -254,3 +254,85 @@ it("discards a late response after the workspace changes", async () => {
   );
   setCrmRuntime({ embedded: false });
 });
+
+it("requires an explicit field selection and reloads comparison after a conflict", async () => {
+  vi.mocked(api).mockImplementation(async (path, method) => {
+    if (path.endsWith("/restore")) {
+      if (method === "PUT")
+        throw Object.assign(new Error("El registro cambió"), { status: 409 });
+      return {
+        data: {
+          expectedVersion: 3,
+          changes: {
+            name: { current: "Current", before: "Old", after: "New" },
+          },
+        },
+      };
+    }
+    return path.endsWith("/2")
+      ? {
+          data: {
+            ...entry,
+            changes: { name: { before: "Old", after: "New" } },
+          },
+        }
+      : { data: [entry], nextCursor: null, enabled: true, retentionDays: 90 };
+  });
+  render(<RecordHistory object={object} recordId="one" />);
+  fireEvent.click(await screen.findByRole("button", { name: /Ver cambios/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Restaurar campos" }),
+  );
+  await screen.findByText("Current");
+  expect(
+    screen.getByRole("button", { name: "Confirmar restauración" }),
+  ).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Nombre" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar restauración" }),
+  );
+  await screen.findByText(/El registro cambió/);
+  expect(
+    screen.queryByRole("button", { name: "Confirmar restauración" }),
+  ).not.toBeInTheDocument();
+  expect(api).toHaveBeenCalledWith(
+    expect.stringContaining("/2/restore"),
+    "PUT",
+    { expectedVersion: 3, side: "before", fields: ["name"] },
+    expect.anything(),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Revisar comparación de nuevo" }),
+  );
+  await screen.findByText("Current");
+  expect(
+    screen.getByRole("button", { name: "Confirmar restauración" }),
+  ).toBeDisabled();
+});
+
+it("loads bounded usage only on request and labels partial counts", async () => {
+  const { RecordHistoryUsage } = await import("../record-history-usage");
+  vi.mocked(api).mockResolvedValue({
+    data: {
+      events: 1000,
+      logicalBytes: 30000,
+      expiredEvents: 5,
+      oldestExpiredAt: null,
+      limited: true,
+      measuredAt: "2026-09-19T12:00:00Z",
+    },
+  });
+  render(<RecordHistoryUsage path="/record-history-settings/contacts" />);
+  expect(api).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Consultar consumo del historial" }),
+  );
+  await screen.findByText(/Medición parcial/);
+  expect(screen.getByText("Al menos 5")).toBeInTheDocument();
+  expect(api).toHaveBeenCalledWith(
+    "/record-history-settings/contacts/usage",
+    "GET",
+    undefined,
+    expect.objectContaining({ cache: "no-store" }),
+  );
+});

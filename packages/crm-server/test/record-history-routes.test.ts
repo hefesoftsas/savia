@@ -323,3 +323,226 @@ it("honors the factory access policy even when its caller supplies the raw datab
     name: { after: "First" },
   });
 });
+
+it("previews and restores selected complete values without overwriting concurrent edits", async () => {
+  const name = await fixture();
+  await enable(name);
+  const record = await create(name);
+  await request(`/records/${name}/${record.id}`, "PATCH", {
+    name: "Second",
+    _version: 1,
+  });
+  const path = `/record-history/${name}/${record.id}/2/restore`;
+  const preview = await request(path);
+  expect(preview.status).toBe(200);
+  expect(await preview.json()).toMatchObject({
+    data: {
+      expectedVersion: 2,
+      changes: {
+        name: { current: "Second", before: "First", after: "Second" },
+      },
+    },
+  });
+  const response = await request(path, "PUT", {
+    expectedVersion: 2,
+    side: "before",
+    fields: ["name"],
+  });
+  expect(response.status, await response.clone().text()).toBe(200);
+  const result = (await (
+    await request(`/records/${name}/${record.id}`)
+  ).json()) as any;
+  expect(result.data).toMatchObject({
+    name: "First",
+    secret: "hidden",
+    _version: 3,
+  });
+  expect(
+    (
+      await request(path, "PUT", {
+        expectedVersion: 2,
+        side: "before",
+        fields: ["name"],
+      })
+    ).status,
+  ).toBe(409);
+  const history = (await (
+    await request(`/record-history/${name}/${record.id}/3`)
+  ).json()) as any;
+  expect(history.data).toMatchObject({
+    actor: { kind: "user", id: "alice" },
+    changes: { name: { before: "Second", after: "First" } },
+  });
+});
+
+it("rejects forbidden, missing, expired and truncated restoration sources", async () => {
+  const name = await fixture();
+  await enable(name);
+  const record = await create(name);
+  const path = `/record-history/${name}/${record.id}/1/restore`;
+  expect(
+    (
+      await request(path, "PUT", {
+        expectedVersion: 1,
+        side: "before",
+        fields: ["name"],
+      })
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await request(path, "PUT", {
+        expectedVersion: 1,
+        side: "after",
+        fields: ["status"],
+      })
+    ).status,
+  ).toBe(422);
+  const reader = createCrmApp("history", {
+    principalId: "alice",
+    accessPolicy: policy(name),
+  });
+  expect(
+    (
+      await request(
+        path,
+        "PUT",
+        { expectedVersion: 1, side: "after", fields: ["name"] },
+        reader,
+      )
+    ).status,
+  ).toBe(403);
+  await platform.env.DB.prepare(
+    "UPDATE crm_record_history SET changes=json_set(changes,'$.name.afterTruncated',json('true')) WHERE object_name=?",
+  )
+    .bind(name)
+    .run();
+  expect(
+    (
+      await request(path, "PUT", {
+        expectedVersion: 1,
+        side: "after",
+        fields: ["name"],
+      })
+    ).status,
+  ).toBe(422);
+  await platform.env.DB.prepare(
+    "UPDATE crm_record_history SET expires_at='2000-01-01' WHERE object_name=?",
+  )
+    .bind(name)
+    .run();
+  expect((await request(path)).status).toBe(404);
+});
+
+it("reports bounded collection storage and expired backlog only to schema administrators", async () => {
+  const name = await fixture();
+  await enable(name);
+  await create(name);
+  const path = `/record-history-settings/${name}/usage`;
+  const response = await request(path);
+  expect(response.status).toBe(200);
+  const result = (await response.json()) as any;
+  expect(result.data).toMatchObject({
+    events: 1,
+    expiredEvents: 0,
+    limited: false,
+  });
+  expect(result.data.logicalBytes).toBeGreaterThan(0);
+  expect((await scoped(name, policy(name))(path)).status).toBe(403);
+  await platform.env.DB.prepare(
+    "UPDATE crm_record_history SET expires_at='2000-01-01' WHERE object_name=?",
+  )
+    .bind(name)
+    .run();
+  expect(await (await request(path)).json()).toMatchObject({
+    data: { expiredEvents: 1, oldestExpiredAt: "2000-01-01" },
+  });
+});
+
+it("restores only writable fields for custom roles and rejects changed schema validation", async () => {
+  const name = await fixture();
+  await enable(name);
+  const record = await create(name);
+  await request(`/records/${name}/${record.id}`, "PATCH", {
+    name: "Second",
+    _version: 1,
+  });
+  const p = policy(name);
+  p.grants.push({
+    ...p.grants[0],
+    id: "update",
+    action: "update",
+    fields: ["name"],
+  });
+  const selected = createCrmApp("history", {
+    principalId: "alice",
+    accessPolicy: p,
+  });
+  const path = `/record-history/${name}/${record.id}/2/restore`;
+  const preview = await request(path, "GET", undefined, selected);
+  expect(preview.status).toBe(200);
+  expect(Object.keys(((await preview.json()) as any).data.changes)).toEqual([
+    "name",
+  ]);
+  expect(
+    (
+      await request(
+        path,
+        "PUT",
+        { expectedVersion: 2, side: "before", fields: ["name"] },
+        selected,
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        `/record-history/${name}/${record.id}/1/restore`,
+        "PUT",
+        { expectedVersion: 3, side: "after", fields: ["secret"] },
+        selected,
+      )
+    ).status,
+  ).toBe(422);
+  await platform.env.DB.prepare(
+    "UPDATE crm_objects SET config=json_set(config,'$.fields.name.type','Number'),version=version+1 WHERE name=?",
+  )
+    .bind(name)
+    .run();
+  expect(
+    (
+      await request(path, "PUT", {
+        expectedVersion: 3,
+        side: "before",
+        fields: ["name"],
+      })
+    ).status,
+  ).toBe(422);
+});
+
+it("caps usage scans and does not expose another tenant's collection", async () => {
+  const name = await fixture();
+  await enable(name);
+  const record = await create(name);
+  await platform.env.DB.prepare(
+    `WITH RECURSIVE n(v) AS (SELECT 2 UNION ALL SELECT v+1 FROM n WHERE v<1001)
+    INSERT INTO crm_record_history(tenant_id,object_name,record_id,version,action,created_at,actor_kind,changes,expires_at)
+    SELECT 'history',?,?,v,'updated','2026-09-19','system','{}','2099-01-01' FROM n`,
+  )
+    .bind(name, record.id)
+    .run();
+  const path = `/record-history-settings/${name}/usage`;
+  expect(await (await request(path)).json()).toMatchObject({
+    data: { events: 1000, limited: true },
+  });
+  expect(
+    (
+      await request(
+        path,
+        "GET",
+        undefined,
+        createCrmApp("other", { principalId: "bob" }),
+      )
+    ).status,
+  ).toBe(404);
+});
