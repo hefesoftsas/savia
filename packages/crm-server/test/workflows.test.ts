@@ -348,6 +348,11 @@ describe("general workflows on real D1", () => {
       "update",
     ]);
     const result = detail.jobs[1].output as { id: string };
+    expect(detail.jobs[1].output).toMatchObject({ created_by: owner });
+    expect(detail.jobs[2].output).toMatchObject({ created_by: owner });
+    expect(await getRecord(db, tenant, "requests", result.id)).toMatchObject({
+      created_by: owner,
+    });
     expect((await getRecord(db, tenant, "requests", result.id)).status).toBe(
       "complete",
     );

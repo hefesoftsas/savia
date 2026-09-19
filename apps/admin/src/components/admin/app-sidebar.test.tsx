@@ -44,7 +44,10 @@ function createServices(): AppServices {
         id: "principal-1",
         fullName: "Admin Savia",
       }),
-      getPermissions: vi.fn(),
+      getPermissions: vi.fn().mockResolvedValue({
+        canManageIdentity: true,
+        memberships: [],
+      }),
       login: vi.fn(),
       logout: vi.fn(),
       canAccess: vi.fn().mockResolvedValue(true),
@@ -149,6 +152,14 @@ function sidebarGroup(label: string): HTMLElement {
 
 describe("AppSidebar navigation preferences", () => {
   beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = new URL(String(input), window.location.origin).pathname;
+      if (path !== "/api/public/tenant-branding")
+        throw new Error(`Unexpected sidebar request: ${path}`);
+      return new Response(JSON.stringify({ data: null }), {
+        headers: { "content-type": "application/json" },
+      });
+    });
     window.history.replaceState({}, "", "/");
     window.location.hash = "#/";
   });

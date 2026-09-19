@@ -18,6 +18,14 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 ## Standing guides
 
 - [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.
+- [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
+
+- [related-record-editing.md](related-record-editing.md) — related subforms, editable tables, atomic saves and recoverable drafts.
+
+- [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
+
+- [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
+- [permissions.md](permissions.md) — scoped roles, record and field permissions, revocation and rollout.
 
 - [local-first-collections.md](local-first-collections.md) — local replicas, synchronization, recovery and deployment.
 

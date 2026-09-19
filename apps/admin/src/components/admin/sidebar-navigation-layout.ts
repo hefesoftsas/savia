@@ -53,7 +53,11 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
     sections: {
       operation: ["dashboard", "dynamic-crm"],
       productivity: ["my-day", "integrations"],
-      administration: ["provider-credentials", "service-credentials"],
+      administration: [
+        "provider-credentials",
+        "service-credentials",
+        "access-control",
+      ],
       management: ["tenants", "users", "page-administrator"],
     },
   });
@@ -361,6 +365,7 @@ export function defaultSectionForItem(
     integrations: "productivity",
     "provider-credentials": "administration",
     "service-credentials": "administration",
+    "access-control": "administration",
     tenants: "management",
     users: "management",
   };

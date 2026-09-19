@@ -427,6 +427,8 @@ function CrmWorkspace({
         apiBasePath: domain.apiBasePath,
         transport: local?.transport ?? transport,
         localWorkspace: local,
+        publicFormTransport: (path, init) =>
+          services.apiClient.requestResponse(path, init),
         requestTransport: (path, init) =>
           services.apiClient.requestResponse("/v1/request-pages" + path, init),
         navigate: (query, replace) => navigate.current(query, replace),

@@ -1,5 +1,5 @@
 import { getCrmRuntime } from "./runtime";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,12 @@ import ExtensionManager from "./extension-manager";
 import SolutionManager from "./solution-manager";
 import "./screen-administration.css";
 
+const PublicLinkManager = lazy(() =>
+  import("../public-forms/public-link-manager").then((module) => ({
+    default: module.PublicLinkManager,
+  })),
+);
+
 const screenDragType = "application/x-savia-screen-order";
 const sectionDragType = "application/x-savia-menu-section";
 export default function ScreenAdministration({
@@ -107,6 +113,7 @@ export default function ScreenAdministration({
     defaultTab,
   );
   const [operations, setOperations] = useState(false);
+  const [publicLinks, setPublicLinks] = useState(false);
   const [filter, setFilter] = useState("");
   const [pendingScreen, setPendingScreen] = useState<string | null>(null);
   const [removingScreen, setRemovingScreen] = useState<string | null>(null);
@@ -606,6 +613,13 @@ export default function ScreenAdministration({
     );
   };
   if (detail && screen) {
+    const runtime = getCrmRuntime();
+    const isQuote = ["cotizador", "cotizador_por_pasos"].includes(screen.name);
+    const canPublish =
+      runtime.domainId &&
+      runtime.publicFormTransport &&
+      (isQuote ||
+        (!isPluginScreen(screen.name) && !screen.config.studio?.collection));
     const capabilities = collectionCapabilities(screen),
       binding = screen.config.studio?.collection,
       usesSourceFormSettings =
@@ -754,6 +768,29 @@ export default function ScreenAdministration({
             </section>
           ))}
         </div>
+        {canPublish && (
+          <section aria-label="Acceso público">
+            <Button
+              type="button"
+              variant="outline"
+              aria-expanded={publicLinks}
+              onClick={() => setPublicLinks(!publicLinks)}
+            >
+              {publicLinks ? "Ocultar enlaces públicos" : "Enlaces públicos"}
+            </Button>
+            {publicLinks && (
+              <Suspense fallback={<p role="status">Cargando enlaces…</p>}>
+                <PublicLinkManager
+                  key={`${runtime.domainId}:${screen.name}`}
+                  domainId={runtime.domainId!}
+                  objectName={screen.name}
+                  kind={isQuote ? "quote" : "record"}
+                  request={runtime.publicFormTransport!}
+                />
+              </Suspense>
+            )}
+          </section>
+        )}
         {operations && (
           <CollectionOperationsPanel
             name={screen.name}

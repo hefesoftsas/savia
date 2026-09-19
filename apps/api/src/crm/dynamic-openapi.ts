@@ -461,6 +461,87 @@ export async function dynamicOpenApi(
             ),
           },
         };
+  const bundlePath = {
+    post: operation(
+      "record_bundle_save",
+      "Relaciones",
+      "Save a parent and its related records atomically",
+      {
+        type: "object",
+        required: ["data", "related"],
+        properties: {
+          data: { type: "object" },
+          related: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["relationId", "records"],
+              properties: {
+                relationId: { type: "string" },
+                records: { type: "array", items: { type: "object" } },
+              },
+            },
+          },
+        },
+      },
+      {
+        parameters: [
+          parameter("object", "path", { type: "string" }, true),
+          { ...idempotency, required: true },
+        ],
+        description:
+          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
+        body: {
+          type: "object",
+          required: ["record", "relations"],
+          additionalProperties: false,
+          properties: {
+            record: {
+              type: "object",
+              required: ["data"],
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                version: { type: "integer", minimum: 1 },
+                data: { type: "object" },
+              },
+            },
+            relations: {
+              type: "array",
+              maxItems: 10,
+              items: {
+                type: "object",
+                required: ["relationId", "rows"],
+                additionalProperties: false,
+                properties: {
+                  relationId: { type: "string" },
+                  previousIds: {
+                    type: "array",
+                    maxItems: 100,
+                    uniqueItems: true,
+                    items: { type: "string" },
+                  },
+                  rows: {
+                    type: "array",
+                    maxItems: 100,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        id: { type: "string" },
+                        version: { type: "integer", minimum: 1 },
+                        data: { type: "object" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ),
+  };
   const schemas: Record<string, Schema> = {
     CrmError: {
       type: "object",
@@ -559,6 +640,15 @@ export async function dynamicOpenApi(
         ? ["id"]
         : ["id", "_version", "created_at", "updated_at"],
     };
+    if (!binding && !object.config.studio?.business)
+      paths[`/record-bundles/${name}`] = {
+        post: {
+          ...bundlePath.post,
+          operationId: `${name}_bundle_save`,
+          tags: [object.label],
+          parameters: [{ ...idempotency, required: true }],
+        },
+      };
     const record = envelope(ref(`${name}_Record`));
     paths[`/published/${name}`] = {
       get: operation(
@@ -922,6 +1012,106 @@ export async function dynamicOpenApi(
       },
     };
   }
+  const fileId = parameter("id", "path", { type: "string" }, true);
+  const fileVersion = parameter(
+    "version",
+    "path",
+    { type: "integer", minimum: 1 },
+    true,
+  );
+  const officeFile = {
+    type: "object",
+    required: ["id", "name", "mime", "size", "version"],
+    properties: {
+      id: { type: "string" },
+      name: { type: "string" },
+      mime: { type: "string" },
+      size: { type: "integer" },
+      version: { type: "integer", minimum: 1 },
+      field: { type: "string" },
+      object: { type: "string" },
+      recordId: { type: "string" },
+      readOnly: { type: "boolean" },
+      maxSize: { type: "integer" },
+    },
+  };
+  paths["/file/{id}/office"] = {
+    get: operation(
+      "office_file_metadata",
+      "Office attachments",
+      "Read editable attachment metadata",
+      envelope(officeFile),
+      { parameters: [fileId] },
+    ),
+  };
+  paths["/file/{id}/revisions"] = {
+    get: operation(
+      "office_file_revisions",
+      "Office attachments",
+      "List attachment revisions",
+      envelope({
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            version: { type: "integer" },
+            size: { type: "integer" },
+            created_at: { type: "string", format: "date-time" },
+            created_by: { type: ["string", "null"] },
+          },
+        },
+      }),
+      { parameters: [fileId] },
+    ),
+    post: {
+      ...operation(
+        "office_file_save",
+        "Office attachments",
+        "Save an immutable attachment revision",
+        envelope(officeFile),
+        {
+          parameters: [fileId],
+          status: 201,
+          description:
+            "Requires the current file version. A stale version returns 409 without overwriting the current revision. Maximum 5 MiB, subject to the attachment field policy.",
+        },
+      ),
+      requestBody: {
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: {
+              type: "object",
+              required: ["version", "file"],
+              properties: {
+                version: { type: "integer", minimum: 1 },
+                file: { type: "string", format: "binary" },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  paths["/file/{id}/revisions/{version}/download"] = {
+    get: {
+      operationId: "office_file_revision_download",
+      tags: ["Office attachments"],
+      summary: "Download an attachment revision",
+      parameters: [fileId, fileVersion],
+      responses: {
+        ...failures,
+        200: {
+          description: "Original Office file bytes",
+          content: {
+            "application/octet-stream": {
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        },
+      },
+    },
+  };
   return {
     openapi: "3.1.0" as const,
     info: {
@@ -933,6 +1123,10 @@ export async function dynamicOpenApi(
     servers: [{ url: `${apiBasePath}/api` }],
     security: [{ bearerAuth: [] }],
     tags: [
+      {
+        name: "Office attachments",
+        description: "Versioned DOCX, XLSX and PPTX attachments.",
+      },
       ...objects.map((o) => ({ name: o.label, description: o.description })),
       ...(typeof agencyId === "number"
         ? []

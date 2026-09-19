@@ -1,4 +1,9 @@
 import {
+  officeAssetResponse,
+  officeDocumentHeaders,
+  type OfficeAssetBucket,
+} from "./office-gateway";
+import {
   DEFAULT_CANONICAL_HOST,
   normalizeCanonicalHost,
   parseTenantSlugFromHostname,
@@ -9,6 +14,7 @@ export type GatewayFetcher = {
 };
 
 export type GatewayEnv = {
+  OFFICE_RUNTIME?: OfficeAssetBucket;
   API: GatewayFetcher;
   ASSETS: GatewayFetcher;
   /** Overrides the canonical host (default: savia.app.hefesoft.com). */
@@ -18,7 +24,9 @@ export type GatewayEnv = {
 /** Header carrying the tenant slug resolved from the public hostname. */
 export const TENANT_SLUG_HEADER = "x-savia-tenant-slug";
 
-export function canonicalHostFromEnv(env?: Pick<GatewayEnv, "CANONICAL_HOST">): string {
+export function canonicalHostFromEnv(
+  env?: Pick<GatewayEnv, "CANONICAL_HOST">,
+): string {
   return normalizeCanonicalHost(env?.CANONICAL_HOST ?? DEFAULT_CANONICAL_HOST);
 }
 
@@ -48,8 +56,26 @@ export async function gatewayFetch(
   request: Request,
   env: GatewayEnv,
 ): Promise<Response> {
-  if (!isServicePath(new URL(request.url).pathname)) {
-    return env.ASSETS.fetch(request);
+  const pathname = new URL(request.url).pathname;
+  if (pathname.startsWith("/office/runtime/"))
+    return officeAssetResponse(request, env.OFFICE_RUNTIME);
+  if (pathname === "/office" || pathname.startsWith("/office/")) {
+    const response = await env.ASSETS.fetch(request);
+    const isolated = new Response(response.body, response);
+    for (const [key, value] of Object.entries(officeDocumentHeaders))
+      isolated.headers.set(key, value);
+    return isolated;
+  }
+  if (!isServicePath(pathname)) {
+    const response = await env.ASSETS.fetch(request);
+    if (pathname === "/public/forms" || pathname.startsWith("/public/forms/")) {
+      const publicPage = new Response(response.body, response);
+      publicPage.headers.set("Cache-Control", "no-store");
+      publicPage.headers.set("Referrer-Policy", "no-referrer");
+      publicPage.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return publicPage;
+    }
+    return response;
   }
   const slug = tenantSlugFromRequest(request, env);
   if (!slug) return env.API.fetch(request);

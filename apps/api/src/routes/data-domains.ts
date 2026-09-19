@@ -1,9 +1,13 @@
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { PLATFORM_ROOM } from "../realtime/protocol";
+import { publishRecordBundleChanges } from "../crm/record-bundle-realtime";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   actorFromContext,
   requirePlatformAdministrator,
 } from "../auth/middleware";
 import { AuthenticationError } from "../auth/types";
+import { loadAccessPolicy } from "../auth/access-repository";
 import { createCollectionGateway } from "../crm/collection-gateway";
 import type { SqlBridgeClient } from "../crm/sql-bridge";
 import { dynamicOpenApi } from "../crm/dynamic-openapi";
@@ -101,6 +105,7 @@ export function registerDataDomainRoutes(
   actionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   beforeInstall?: SolutionOptions["beforeInstall"],
+  realtime?: RealtimeHubClient,
 ) {
   app.openapi(listRoute, async (c) => {
     const actor = actorFromContext(c),
@@ -108,12 +113,24 @@ export function registerDataDomainRoutes(
     const allowed = actor.memberships
       .filter((m) => m.isActive)
       .map((m) => m.tenantId ?? m.agencyId);
-    if (!platform && !allowed.length)
+    const assigned = platform
+      ? []
+      : (
+          await db
+            .prepare(
+              "SELECT d.id,d.label FROM crm_data_domains d WHERE EXISTS(SELECT 1 FROM access_assignments a JOIN access_roles r ON r.id=a.role_id AND r.scope=a.scope WHERE a.scope='domain:'||d.id AND a.principal_id=? AND r.enabled=1)",
+            )
+            .bind(actor.principal.id)
+            .all<{ id: string; label: string }>()
+        ).results;
+    if (!platform && !allowed.length && !assigned.length)
       throw new AuthenticationError(
         "AUTHORIZATION_FORBIDDEN",
         "No tienes dominios de datos para administrar.",
       );
-    const data: z.infer<typeof domainSchema>[] = [];
+    const data: z.infer<typeof domainSchema>[] = assigned.map((d) =>
+      customDomain(d.id, d.label),
+    );
     if (platform) {
       data.push({
         id: "platform",
@@ -168,8 +185,15 @@ export function registerDataDomainRoutes(
     return c.json({ data: customDomain(input.name, input.label) }, 201);
   });
   app.all("/v1/data-domains/:domainId/api/*", async (c) => {
-    requirePlatformAdministrator(actorFromContext(c));
     const id = c.req.param("domainId");
+    const actor = actorFromContext(c);
+    const accessPolicy = actor.globalRoles.includes("platform_admin")
+      ? undefined
+      : await loadAccessPolicy(
+          db,
+          actor,
+          id === "platform" ? "platform" : `domain:${id}`,
+        );
     if (!/^[a-z][a-z0-9_-]{0,47}$/.test(id))
       return c.json(
         { error: { code: "INVALID_DOMAIN", message: "Dominio inválido." } },
@@ -207,6 +231,7 @@ export function registerDataDomainRoutes(
       files,
       tenant,
       actor: actorFromContext(c),
+      accessPolicy,
       integrationKey,
       extensionConnectionsEncryptionKey,
       crm: dependencies,
@@ -279,6 +304,7 @@ export function registerDataDomainRoutes(
       "content-type",
       "idempotency-key",
       "x-savia-sync-principal",
+      "x-savia-policy-revision",
     ]) {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
@@ -289,6 +315,19 @@ export function registerDataDomainRoutes(
       body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
     });
     const response = await gateway.fetch(request);
+    const bundleMatch = /^\/api\/record-bundles\/([^/]+)$/.exec(path);
+    if (bundleMatch && c.req.method === "POST" && response.ok) {
+      await publishRecordBundleChanges({
+        db,
+        tenant: tenant,
+        room: PLATFORM_ROOM,
+        actor: actorFromContext(c).principal.id,
+        object: decodeURIComponent(bundleMatch[1]),
+        response,
+        hub: realtime,
+      });
+    }
+
     const responseHeaders = new Headers(response.headers);
     responseHeaders.set("cache-control", "no-store");
     if (

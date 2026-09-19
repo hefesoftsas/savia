@@ -403,6 +403,968 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/access-control/roles": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          scope: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              revision: number;
+              roles: {
+                id: string;
+                scope: string;
+                name: string;
+                label: string;
+                description: string;
+                enabled: boolean;
+                protected: boolean;
+                legacy_role: string | null;
+                grants: {
+                  resource: string;
+                  /** @enum {string} */
+                  action:
+                    | "read"
+                    | "create"
+                    | "update"
+                    | "delete"
+                    | "restore"
+                    | "import"
+                    | "export"
+                    | "execute"
+                    | "configure"
+                    | "manage";
+                  predicate: {
+                    [key: string]: unknown;
+                  };
+                  fields: string[];
+                  id: string;
+                  roleId: string;
+                }[];
+              }[];
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            scope: string;
+            name: string;
+            label: string;
+            description: string;
+            enabled: boolean;
+            expectedRevision: number;
+            grants: {
+              resource: string;
+              /** @enum {string} */
+              action:
+                | "read"
+                | "create"
+                | "update"
+                | "delete"
+                | "restore"
+                | "import"
+                | "export"
+                | "execute"
+                | "configure"
+                | "manage";
+              predicate: {
+                [key: string]: unknown;
+              };
+              fields: string[];
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Success */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              id: string;
+              revision: number;
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/access-control/roles/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: {
+      parameters: {
+        query: {
+          scope: string;
+          expectedRevision?: number | null;
+        };
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              revision: number;
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            scope: string;
+            name: string;
+            label: string;
+            description: string;
+            enabled: boolean;
+            expectedRevision: number;
+            grants: {
+              resource: string;
+              /** @enum {string} */
+              action:
+                | "read"
+                | "create"
+                | "update"
+                | "delete"
+                | "restore"
+                | "import"
+                | "export"
+                | "execute"
+                | "configure"
+                | "manage";
+              predicate: {
+                [key: string]: unknown;
+              };
+              fields: string[];
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              id: string;
+              revision: number;
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  "/v1/access-control/assignments/{principalId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          scope: string;
+        };
+        header?: never;
+        path: {
+          principalId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              revision: number;
+              roleIds: string[];
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          principalId: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            scope: string;
+            roleIds: string[];
+            expectedRevision: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              revision: number;
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/access-control/catalog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          scope: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              resources: {
+                resource: string;
+                label: string;
+                fields: string[];
+                actions: (
+                  | "read"
+                  | "create"
+                  | "update"
+                  | "delete"
+                  | "restore"
+                  | "import"
+                  | "export"
+                  | "execute"
+                  | "configure"
+                  | "manage"
+                )[];
+                creatorSupported: boolean;
+                fieldTypes: {
+                  [key: string]: string;
+                };
+                restricted: boolean;
+              }[];
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/access-control/effective": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          scope: string;
+          principalId?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              principalId: string;
+              scope: string;
+              revision: number;
+              grants: {
+                resource: string;
+                /** @enum {string} */
+                action:
+                  | "read"
+                  | "create"
+                  | "update"
+                  | "delete"
+                  | "restore"
+                  | "import"
+                  | "export"
+                  | "execute"
+                  | "configure"
+                  | "manage";
+                predicate: {
+                  [key: string]: unknown;
+                };
+                fields: string[];
+                id: string;
+                roleId: string;
+              }[];
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/access-control/members": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          scope: string;
+          q?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              members: {
+                id: string;
+                displayName: string;
+                email: string;
+              }[];
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Policy changed */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid policy */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/identity/me": {
     parameters: {
       query?: never;
@@ -1391,6 +2353,276 @@ export interface paths {
                 clientId: string;
                 clientSecret: string;
               };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/realtime/ticket": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue a realtime subscription ticket
+     * @description Returns a single-use ticket for the realtime WebSocket. The socket carries only change hints; data is refetched through the API.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            topics: ("users" | "tenants" | "records")[];
+            tenantId?: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Ticket bound to the authorized room and topics */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                room: string;
+                ticket: string;
+                topics: ("users" | "tenants" | "records")[];
+                /** Format: date-time */
+                expiresAt: string;
+              };
+            };
+          };
+        };
+        /** @description Topic or tenant is not authorized for this actor */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Tenant was not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Realtime request or connection limit exceeded */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Realtime is not configured */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/public-forms": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          domainId: string;
+          objectName: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            domainId: string;
+            objectName: string;
+            /** @enum {string} */
+            kind: "record" | "quote";
+            /** Format: date-time */
+            expiresAt?: string;
+            /** @default 25 */
+            dailyLimit?: number;
+            /** @default false */
+            returnResult?: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Public form response */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/public-forms/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/forms/{token}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            submissionId: string;
+            token: string;
+            values: {
+              [key: string]: string | number | boolean | null;
+            };
+          };
+        };
+      };
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
             };
           };
         };
@@ -2743,7 +3975,7 @@ export interface paths {
       };
     };
     put?: never;
-    /** Enable customer create/update synchronization to my connected HubSpot account */
+    /** Enable automatic HubSpot customer synchronization */
     post: {
       parameters: {
         query?: never;
@@ -2799,7 +4031,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Delete my synchronization rule */
+    /** Delete an automatic synchronization rule */
     delete: {
       parameters: {
         query?: never;
@@ -2822,7 +4054,7 @@ export interface paths {
     };
     options?: never;
     head?: never;
-    /** Enable or pause my synchronization rule */
+    /** Enable or pause an automatic synchronization rule */
     patch: {
       parameters: {
         query?: never;
@@ -2871,7 +4103,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Read my recent customer synchronization outcomes */
+    /** Read recent automatic synchronization outcomes */
     get: {
       parameters: {
         query?: {
@@ -2923,7 +4155,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Retry a known failed synchronization */
+    /** Retry a known failed automatic synchronization */
     post: {
       parameters: {
         query?: never;
@@ -3941,6 +5173,7 @@ export interface paths {
                             | "provider-credentials"
                             | "assistant-configuration"
                             | "service-credentials"
+                            | "access-control"
                             | "users"
                             | "tenants"
                             | "page-administrator"
@@ -3963,6 +5196,7 @@ export interface paths {
                             | "provider-credentials"
                             | "assistant-configuration"
                             | "service-credentials"
+                            | "access-control"
                             | "users"
                             | "tenants"
                             | "page-administrator"
@@ -3981,6 +5215,7 @@ export interface paths {
                       | "provider-credentials"
                       | "assistant-configuration"
                       | "service-credentials"
+                      | "access-control"
                       | "users"
                       | "tenants"
                       | "page-administrator"
@@ -4036,6 +5271,7 @@ export interface paths {
                             | "provider-credentials"
                             | "assistant-configuration"
                             | "service-credentials"
+                            | "access-control"
                             | "users"
                             | "tenants"
                             | "page-administrator"
@@ -4058,6 +5294,7 @@ export interface paths {
                             | "provider-credentials"
                             | "assistant-configuration"
                             | "service-credentials"
+                            | "access-control"
                             | "users"
                             | "tenants"
                             | "page-administrator"
@@ -4076,6 +5313,7 @@ export interface paths {
                       | "provider-credentials"
                       | "assistant-configuration"
                       | "service-credentials"
+                      | "access-control"
                       | "users"
                       | "tenants"
                       | "page-administrator"
@@ -4460,6 +5698,107 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/current": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get current tenant context from host */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Current workspace tenant info */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                isDedicated: boolean;
+                slug: string | null;
+                name: string;
+                /** @enum {string} */
+                kind: "commercial" | "platform";
+                id: number | null;
+              };
+            };
+          };
+        };
+        /** @description Rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/tenants/{tenantId}": {
     parameters: {
       query?: never;
@@ -4746,264 +6085,7 @@ export interface paths {
     };
     trace?: never;
   };
-  "/v1/insurance-results/flows/{flowId}/runs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Ejecutar un flow y devolver su resultado estándar
-     * @description Ejecuta una sola vez. mode=live contacta al proveedor y puede crear una cotización; no hay reintentos automáticos. Sin versionId usa el borrador, con versionId ejecuta esa versión publicada. Conserva la respuesta original en Savia request. Solo administradores de plataforma.
-     */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          flowId: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            /** @enum {string} */
-            mode: "mock" | "live";
-            input: {
-              [key: string]: string;
-            };
-            /** Format: uuid */
-            versionId?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        400: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        401: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        409: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        415: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        422: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        502: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-results/flows/{flowId}/runs/{runId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Normalizar una ejecución guardada sin contactar al proveedor
-     * @description Permite consumir o reprocesar resultados históricos por ID, incluso fuera de las últimas 20 ejecuciones. Solo administradores de plataforma.
-     */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          flowId: string;
-          runId: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        400: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        401: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        409: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        415: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        422: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        502: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-        /** @description Resultado estándar; revisar status, errors y warnings. */
-        503: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["InsuranceResult"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/domains": {
+  "/v1/tenants/{tenantId}/branding": {
     parameters: {
       query?: never;
       header?: never;
@@ -5014,12 +6096,14 @@ export interface paths {
       parameters: {
         query?: never;
         header?: never;
-        path?: never;
+        path: {
+          tenantId: number;
+        };
         cookie?: never;
       };
       requestBody?: never;
       responses: {
-        /** @description Available domain collections */
+        /** @description Tenant branding */
         200: {
           headers: {
             [name: string]: unknown;
@@ -5027,2003 +6111,46 @@ export interface paths {
           content: {
             "application/json": {
               data: {
-                id: string;
-                collections: {
-                  domain: string;
-                  collection: string;
-                  title: string;
-                  description: string;
-                }[];
-                commands: {
-                  domain: string;
-                  command: string;
-                  title: string;
-                  description: string;
-                  input: {
-                    name: string;
-                    /** @enum {string} */
-                    type: "string" | "integer" | "number" | "boolean" | "array";
-                    required: boolean;
-                    description: string;
-                  }[];
-                }[];
-              }[];
-            };
-          };
-        };
-        /** @description Active membership is required */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
+                displayName: string;
+                loginTitle: string;
+                loginDescription: string;
+                primaryColor: string;
+                accentColor: string;
+                logoUrl: string | null;
+                coverUrl: string | null;
+                version: number;
               };
+              canManage?: boolean;
             };
           };
         };
       };
     };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/document-storage/attachments": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List private attachments
-     * @description Private file metadata linked to a domain aggregate.
-     */
-    get: operations["listDocumentStorageAttachments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/document-storage/attachments/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get private attachments
-     * @description Private file metadata linked to a domain aggregate.
-     */
-    get: operations["getDocumentStorageAttachments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/countries": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List geographic countries
-     * @description Reference countries available for agency and customer locations.
-     */
-    get: operations["listGeographicCatalogCountries"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/countries/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get geographic countries
-     * @description Reference countries available for agency and customer locations.
-     */
-    get: operations["getGeographicCatalogCountries"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/departments": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List geographic departments
-     * @description Reference departments linked to their country.
-     */
-    get: operations["listGeographicCatalogDepartments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/departments/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get geographic departments
-     * @description Reference departments linked to their country.
-     */
-    get: operations["getGeographicCatalogDepartments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/cities": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List geographic cities
-     * @description Reference cities linked to their department and country.
-     */
-    get: operations["listGeographicCatalogCities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/cities/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get geographic cities
-     * @description Reference cities linked to their department and country.
-     */
-    get: operations["getGeographicCatalogCities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/currencies": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List currencies
-     * @description Read-only currency values defined by the source insurance domain.
-     */
-    get: operations["listReferenceValuesCurrencies"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/currencies/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get currencies
-     * @description Read-only currency values defined by the source insurance domain.
-     */
-    get: operations["getReferenceValuesCurrencies"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/identification-types": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List identification types
-     * @description Read-only identification values for natural, legal, and incomplete clients.
-     */
-    get: operations["listReferenceValuesIdentificationTypes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/identification-types/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get identification types
-     * @description Read-only identification values for natural, legal, and incomplete clients.
-     */
-    get: operations["getReferenceValuesIdentificationTypes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/person-attributes": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List person attributes
-     * @description Read-only gender and marital-status values for natural-person profiles.
-     */
-    get: operations["listReferenceValuesPersonAttributes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/person-attributes/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get person attributes
-     * @description Read-only gender and marital-status values for natural-person profiles.
-     */
-    get: operations["getReferenceValuesPersonAttributes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/finance-reference/banks": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List banks
-     * @description Banks selectable in seller and payment details.
-     */
-    get: operations["listFinanceReferenceBanks"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/finance-reference/banks/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get banks
-     * @description Banks selectable in seller and payment details.
-     */
-    get: operations["getFinanceReferenceBanks"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/finance-reference/economic-activities": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List economic activities
-     * @description Economic activity codes selectable for legal customers.
-     */
-    get: operations["listFinanceReferenceEconomicActivities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/finance-reference/economic-activities/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get economic activities
-     * @description Economic activity codes selectable for legal customers.
-     */
-    get: operations["getFinanceReferenceEconomicActivities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/operations-catalog/task-types": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List task types
-     * @description Workflow task types selectable by operations.
-     */
-    get: operations["listOperationsCatalogTaskTypes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/operations-catalog/task-types/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get task types
-     * @description Workflow task types selectable by operations.
-     */
-    get: operations["getOperationsCatalogTaskTypes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/operations-catalog/task-tags": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List task tags
-     * @description Global or agency-scoped labels selectable on tasks.
-     */
-    get: operations["listOperationsCatalogTaskTags"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/operations-catalog/task-tags/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get task tags
-     * @description Global or agency-scoped labels selectable on tasks.
-     */
-    get: operations["getOperationsCatalogTaskTags"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/agency-profiles": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List agency profiles
-     * @description Agency aggregates with people, offices, and locations.
-     */
-    get: operations["listAgencyNetworkAgencyProfiles"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/agency-profiles/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get agency profiles
-     * @description Agency aggregates with people, offices, and locations.
-     */
-    get: operations["getAgencyNetworkAgencyProfiles"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/insurance-partners": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance partners
-     * @description Insurance organizations and their operational channels.
-     */
-    get: operations["listInsuranceCatalogInsurancePartners"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/insurance-partners/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance partners
-     * @description Insurance organizations and their operational channels.
-     */
-    get: operations["getInsuranceCatalogInsurancePartners"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/product-lines": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance product lines
-     * @description Product-line aggregates with their business classification.
-     */
-    get: operations["listInsuranceCatalogProductLines"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/product-lines/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance product lines
-     * @description Product-line aggregates with their business classification.
-     */
-    get: operations["getInsuranceCatalogProductLines"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/customer-profiles": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List customer profiles
-     * @description Customers enrolled with an agency and their personal profile.
-     */
-    get: operations["listCustomerPortfolioCustomerProfiles"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/customer-profiles/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get customer profiles
-     * @description Customers enrolled with an agency and their personal profile.
-     */
-    get: operations["getCustomerPortfolioCustomerProfiles"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/quotes": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance quotes
-     * @description Commercial insurance quotations with their customer and offer.
-     */
-    get: operations["listSalesPipelineQuotes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/quotes/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance quotes
-     * @description Commercial insurance quotations with their customer and offer.
-     */
-    get: operations["getSalesPipelineQuotes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/policy-lifecycle/policies": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance policies
-     * @description Issued policies with product line, customer, and terms.
-     */
-    get: operations["listPolicyLifecyclePolicies"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/policy-lifecycle/policies/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance policies
-     * @description Issued policies with product line, customer, and terms.
-     */
-    get: operations["getPolicyLifecyclePolicies"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/collections/payments": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List policy payments
-     * @description Collection installments connected to policy terms.
-     */
-    get: operations["listCollectionsPayments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/collections/payments/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get policy payments
-     * @description Collection installments connected to policy terms.
-     */
-    get: operations["getCollectionsPayments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/claims": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance claims
-     * @description Claims attached to an insurance policy and its status flow.
-     */
-    get: operations["listClaimsClaims"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/claims/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance claims
-     * @description Claims attached to an insurance policy and its status flow.
-     */
-    get: operations["getClaimsClaims"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/product-categories": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance product categories
-     * @description Top-level insurance product classifications.
-     */
-    get: operations["listInsuranceCatalogProductCategories"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/product-categories/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance product categories
-     * @description Top-level insurance product classifications.
-     */
-    get: operations["getInsuranceCatalogProductCategories"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/product-specializations": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List insurance product specializations
-     * @description Product classifications nested under a category.
-     */
-    get: operations["listInsuranceCatalogProductSpecializations"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/product-specializations/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get insurance product specializations
-     * @description Product classifications nested under a category.
-     */
-    get: operations["getInsuranceCatalogProductSpecializations"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/workflow-statuses": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List claim workflow statuses
-     * @description Claim status flow with its selectable substatuses.
-     */
-    get: operations["listClaimsWorkflowStatuses"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/workflow-statuses/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get claim workflow statuses
-     * @description Claim status flow with its selectable substatuses.
-     */
-    get: operations["getClaimsWorkflowStatuses"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/workflow-types": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List claim workflow types
-     * @description Claim type catalog used when registering a loss.
-     */
-    get: operations["listClaimsWorkflowTypes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/workflow-types/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get claim workflow types
-     * @description Claim type catalog used when registering a loss.
-     */
-    get: operations["getClaimsWorkflowTypes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/sales-offers": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List sales offers
-     * @description Products and plans configured for insurance quotations.
-     */
-    get: operations["listSalesPipelineSalesOffers"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/sales-offers/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get sales offers
-     * @description Products and plans configured for insurance quotations.
-     */
-    get: operations["getSalesPipelineSalesOffers"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/policy-options": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List policy options
-     * @description Read-only policy type, payment type, and renewal type values.
-     */
-    get: operations["listReferenceValuesPolicyOptions"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/reference-values/policy-options/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get policy options
-     * @description Read-only policy type, payment type, and renewal type values.
-     */
-    get: operations["getReferenceValuesPolicyOptions"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/renewal-catalog/non-renewal-reasons": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List non-renewal reasons
-     * @description Selectable reasons used when ending a renewal.
-     */
-    get: operations["listRenewalCatalogNonRenewalReasons"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/renewal-catalog/non-renewal-reasons/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get non-renewal reasons
-     * @description Selectable reasons used when ending a renewal.
-     */
-    get: operations["getRenewalCatalogNonRenewalReasons"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/policy-lifecycle/reinvestment-activities": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List reinvestment activities
-     * @description Activities selectable for policy reinvestments.
-     */
-    get: operations["listPolicyLifecycleReinvestmentActivities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/policy-lifecycle/reinvestment-activities/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get reinvestment activities
-     * @description Activities selectable for policy reinvestments.
-     */
-    get: operations["getPolicyLifecycleReinvestmentActivities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/document-tags": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List document tags
-     * @description Global or agency-scoped labels selectable on documents.
-     */
-    get: operations["listAgencyNetworkDocumentTags"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/document-tags/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get document tags
-     * @description Global or agency-scoped labels selectable on documents.
-     */
-    get: operations["getAgencyNetworkDocumentTags"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/providers": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List sales providers
-     * @description Providers selectable in sales contracts.
-     */
-    get: operations["listSalesPipelineProviders"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/providers/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get sales providers
-     * @description Providers selectable in sales contracts.
-     */
-    get: operations["getSalesPipelineProviders"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commercial-units": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List commercial units
-     * @description Agency-scoped commercial units selectable for customers and policies.
-     */
-    get: operations["listAgencyNetworkCommercialUnits"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commercial-units/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get commercial units
-     * @description Agency-scoped commercial units selectable for customers and policies.
-     */
-    get: operations["getAgencyNetworkCommercialUnits"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/customer-groups": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * List customer groups
-     * @description Global or agency-scoped customer grouping options.
-     */
-    get: operations["listCustomerPortfolioCustomerGroups"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/customer-groups/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Get customer groups
-     * @description Global or agency-scoped customer grouping options.
-     */
-    get: operations["getCustomerPortfolioCustomerGroups"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/document-storage/commands/prepare-attachment-upload": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Prepare private attachment upload
-     * @description Issues a private R2 upload for one customer, quote, policy, or claim attachment.
-     */
-    post: operations["executeDocumentStoragePrepareAttachmentUpload"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/document-storage/commands/complete-attachment-upload": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Complete private attachment upload
-     * @description Verifies the R2 object and publishes it as an attachment document.
-     */
-    post: operations["executeDocumentStorageCompleteAttachmentUpload"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/document-storage/commands/create-attachment-download": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Create private attachment download
-     * @description Creates a temporary private download URL for a ready attachment.
-     */
-    post: operations["executeDocumentStorageCreateAttachmentDownload"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/commands/register-country": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register geographic country
-     * @description Adds one country to the geographic reference catalog.
-     */
-    post: operations["executeGeographicCatalogRegisterCountry"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/commands/register-department": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register geographic department
-     * @description Adds one department under an existing country.
-     */
-    post: operations["executeGeographicCatalogRegisterDepartment"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/geographic-catalog/commands/register-city": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register geographic city
-     * @description Adds one city under an existing department.
-     */
-    post: operations["executeGeographicCatalogRegisterCity"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/finance-reference/commands/register-bank": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register bank
-     * @description Adds one bank selectable in financial details.
-     */
-    post: operations["executeFinanceReferenceRegisterBank"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/finance-reference/commands/register-economic-activity": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register economic activity
-     * @description Adds one activity code selectable for legal customers.
-     */
-    post: operations["executeFinanceReferenceRegisterEconomicActivity"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/operations-catalog/commands/define-task-type": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define task type
-     * @description Adds one type selectable in operations workflows.
-     */
-    post: operations["executeOperationsCatalogDefineTaskType"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/operations-catalog/commands/define-task-tag": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define task tag
-     * @description Adds one global or agency-scoped label for tasks.
-     */
-    post: operations["executeOperationsCatalogDefineTaskTag"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commands/create-agency-profile": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Create agency profile
-     * @description Creates one agency profile with a server-assigned identifier.
-     */
-    post: operations["executeAgencyNetworkCreateAgencyProfile"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commands/update-agency-profile": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Update agency profile
-     * @description Updates one existing agency profile.
-     */
-    post: operations["executeAgencyNetworkUpdateAgencyProfile"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commands/delete-agency-profile": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Delete agency profile
-     * @description Deletes one agency profile that has no dependent records.
-     */
-    post: operations["executeAgencyNetworkDeleteAgencyProfile"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commands/define-document-tag": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define document tag
-     * @description Adds one global or agency-scoped label for documents.
-     */
-    post: operations["executeAgencyNetworkDefineDocumentTag"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/agency-network/commands/define-commercial-unit": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define commercial unit
-     * @description Adds one commercial unit scoped to an existing agency.
-     */
-    post: operations["executeAgencyNetworkDefineCommercialUnit"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/commands/define-product-category": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define insurance product category
-     * @description Adds one top-level insurance classification.
-     */
-    post: operations["executeInsuranceCatalogDefineProductCategory"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/commands/define-product-specialization": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define insurance product specialization
-     * @description Adds one insurance specialization below an existing category.
-     */
-    post: operations["executeInsuranceCatalogDefineProductSpecialization"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/commands/define-product-line": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define insurance product line
-     * @description Adds one insurance product line below an existing specialization.
-     */
-    post: operations["executeInsuranceCatalogDefineProductLine"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/insurance-catalog/commands/register-insurance-partner": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register insurance partner
-     * @description Adds one insurer to the business partner catalog.
-     */
-    post: operations["executeInsuranceCatalogRegisterInsurancePartner"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/commands/create-customer-profile": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Create customer profile
-     * @description Creates one agency-scoped customer profile with server-assigned identifiers.
-     */
-    post: operations["executeCustomerPortfolioCreateCustomerProfile"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/commands/update-customer-profile": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Update customer profile
-     * @description Updates one existing agency-scoped customer profile.
-     */
-    post: operations["executeCustomerPortfolioUpdateCustomerProfile"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/commands/delete-customer-profile": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Delete customer profile
-     * @description Deletes one customer profile that has no dependent records.
-     */
-    post: operations["executeCustomerPortfolioDeleteCustomerProfile"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/customer-portfolio/commands/define-customer-group": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define customer group
-     * @description Adds one global or agency-scoped customer group.
-     */
-    post: operations["executeCustomerPortfolioDefineCustomerGroup"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/commands/register-sales-entity": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register sales entity
-     * @description Adds one sales configuration entity.
-     */
-    post: operations["executeSalesPipelineRegisterSalesEntity"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/commands/register-sales-operator": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register sales operator
-     * @description Adds one sales operator configuration.
-     */
-    post: operations["executeSalesPipelineRegisterSalesOperator"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/commands/register-sales-product": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register sales product
-     * @description Adds one quotation product with its configured dependencies.
-     */
-    post: operations["executeSalesPipelineRegisterSalesProduct"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/commands/register-sales-plan": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register sales plan
-     * @description Adds one plan that can optionally belong to a sales product.
-     */
-    post: operations["executeSalesPipelineRegisterSalesPlan"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/sales-pipeline/commands/register-sales-provider": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Register sales provider
-     * @description Adds one provider selectable in sales contracts.
-     */
-    post: operations["executeSalesPipelineRegisterSalesProvider"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/policy-lifecycle/commands/define-reinvestment-activity": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define reinvestment activity
-     * @description Adds one activity selectable for policy reinvestments.
-     */
-    post: operations["executePolicyLifecycleDefineReinvestmentActivity"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/commands/define-claim-type": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define claim type
-     * @description Adds one selectable claim type.
-     */
-    post: operations["executeClaimsDefineClaimType"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/commands/define-claim-status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define claim status
-     * @description Adds one status in the claims workflow.
-     */
-    post: operations["executeClaimsDefineClaimStatus"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/claims/commands/define-claim-substatus": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define claim substatus
-     * @description Adds one selectable substatus below an existing claim status.
-     */
-    post: operations["executeClaimsDefineClaimSubstatus"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/renewal-catalog/commands/define-non-renewal-reason": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Define non-renewal reason
-     * @description Adds one reason selectable when a renewal is not continued.
-     */
-    post: operations["executeRenewalCatalogDefineNonRenewalReason"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/lifecycle/commands/bootstrap-demo": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Bootstrap insurance lifecycle demo
-     * @description Creates an idempotent local agency-to-claim demonstration graph in D1.
-     */
-    post: operations["executeLifecycleBootstrapDemo"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/crm/customer-sync": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Synchronize agency-owned customers to the connected CRM
-     * @description The server resolves each customer agency, CRM connection, remote object, and CRM link. Browser callers provide customer IDs only.
-     */
-    post: {
+    put: {
       parameters: {
         query?: never;
         header?: never;
-        path?: never;
+        path: {
+          tenantId: number;
+        };
         cookie?: never;
       };
       requestBody: {
         content: {
           "application/json": {
-            customerIds: number[];
+            displayName: string;
+            loginTitle: string;
+            loginDescription: string;
+            primaryColor: string;
+            accentColor: string;
+            logoUrl: string | null;
+            coverUrl: string | null;
+            version: number;
           };
         };
       };
       responses: {
-        /** @description Itemized safe synchronization outcomes */
+        /** @description Tenant branding */
         200: {
           headers: {
             [name: string]: unknown;
@@ -7031,64 +6158,29 @@ export interface paths {
           content: {
             "application/json": {
               data: {
-                items: {
-                  customerId: number;
-                  /** @enum {string} */
-                  provider: "hubspot";
-                  /** @enum {string} */
-                  status: "created" | "updated" | "skipped" | "failed";
-                  /** @enum {string} */
-                  reason?:
-                    | "AMBIGUOUS_COMPANY"
-                    | "AMBIGUOUS_CONTACT"
-                    | "CRM_CONNECTION_NOT_READY"
-                    | "CRM_RECONNECT_REQUIRED"
-                    | "CRM_UNAVAILABLE"
-                    | "CUSTOMER_NOT_FOUND"
-                    | "CUSTOMER_NOT_SYNCABLE"
-                    | "UPSTREAM_FAILURE";
-                  primaryLink?: {
-                    /** @enum {string} */
-                    provider: "hubspot";
-                    /** @enum {string} */
-                    objectKind: "contact" | "company";
-                    /** Format: uri */
-                    url: string;
-                  };
-                }[];
-                summary: {
-                  created: number;
-                  updated: number;
-                  skipped: number;
-                  failed: number;
-                };
+                displayName: string;
+                loginTitle: string;
+                loginDescription: string;
+                primaryColor: string;
+                accentColor: string;
+                logoUrl: string | null;
+                coverUrl: string | null;
+                version: number;
               };
+              canManage?: boolean;
             };
           };
         };
-        /** @description One through one hundred customer IDs are required */
-        400: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        /** @description The actor cannot update one of the customers */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
       };
     };
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  "/v1/crm/customer-sync-links": {
+  "/v1/tenants/{tenantId}/branding/assets/{kind}": {
     parameters: {
       query?: never;
       header?: never;
@@ -7097,57 +6189,126 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** List server-derived CRM links for agency-owned customers */
     post: {
       parameters: {
         query?: never;
         header?: never;
-        path?: never;
+        path: {
+          tenantId: number;
+          kind: "logo" | "cover";
+        };
         cookie?: never;
       };
       requestBody: {
         content: {
-          "application/json": {
-            customerIds: number[];
+          "multipart/form-data": {
+            /** Format: binary */
+            file?: string;
           };
         };
       };
       responses: {
-        /** @description Remote links derived from persisted mappings */
-        200: {
+        /** @description Uploaded image awaiting branding save */
+        201: {
           headers: {
             [name: string]: unknown;
           };
           content: {
             "application/json": {
               data: {
-                customerId: number;
-                /** @enum {string} */
-                provider: "hubspot";
-                /** @enum {string} */
-                objectKind: "contact" | "company";
-                /** Format: uri */
                 url: string;
-              }[];
+              };
             };
           };
         };
-        /** @description One through one hundred customer IDs are required */
-        400: {
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/tenant-branding": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Branding for the requested tenant hostname */
+        200: {
           headers: {
             [name: string]: unknown;
           };
-          content?: never;
-        };
-        /** @description The actor cannot update one of the customers */
-        403: {
-          headers: {
-            [name: string]: unknown;
+          content: {
+            "application/json": {
+              data: {
+                displayName: string;
+                loginTitle: string;
+                loginDescription: string;
+                primaryColor: string;
+                accentColor: string;
+                logoUrl: string | null;
+                coverUrl: string | null;
+                version: number;
+              } | null;
+            };
           };
-          content?: never;
         };
       };
     };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/tenant-branding/assets/{tenantId}/{assetId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+          assetId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Published tenant logo or cover */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "image/png": string;
+            "image/jpeg": string;
+            "image/webp": string;
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -7188,218 +6349,6 @@ export interface components {
         };
       };
     } | null;
-    InsuranceResult:
-      | {
-          /** @enum {string} */
-          schemaVersion: "1.0";
-          /** @enum {string} */
-          status: "success" | "partial" | "no_result" | "error" | "pending";
-          errors: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          warnings: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          metadata: {
-            provider: string | null;
-            flowId: string | null;
-            runId: string | null;
-            versionId: string | null;
-            createdAt: string | null;
-            simulated: boolean | null;
-            adapter: string | null;
-            providerFields: {
-              [key: string]: unknown;
-            };
-          };
-          /** @enum {string} */
-          type: "vehicle_lookup";
-          data: {
-            vehicle: {
-              plate: string | null;
-              year: number | null;
-              fasecoldaCode: string | null;
-              brand: string | null;
-              model: string | null;
-              engineNumber: string | null;
-              chassisNumber: string | null;
-              insuredValue: number | null;
-              accessoriesValue: number | null;
-              currency: string | null;
-            } | null;
-          };
-        }
-      | {
-          /** @enum {string} */
-          schemaVersion: "1.0";
-          /** @enum {string} */
-          status: "success" | "partial" | "no_result" | "error" | "pending";
-          errors: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          warnings: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          metadata: {
-            provider: string | null;
-            flowId: string | null;
-            runId: string | null;
-            versionId: string | null;
-            createdAt: string | null;
-            simulated: boolean | null;
-            adapter: string | null;
-            providerFields: {
-              [key: string]: unknown;
-            };
-          };
-          /** @enum {string} */
-          type: "quote";
-          data: {
-            offers: {
-              provider: string | null;
-              reference: string | null;
-              product: {
-                id: string | null;
-                name: string | null;
-              };
-              premium: {
-                total: number | null;
-                net: number | null;
-                tax: number | null;
-                currency: string | null;
-              };
-              coverages:
-                | {
-                    code: string | null;
-                    name: string | null;
-                    insuredValue: number | null;
-                  }[]
-                | null;
-              deductibles:
-                | {
-                    code: string | null;
-                    description: string | null;
-                    amount: number | null;
-                  }[]
-                | null;
-              documents: {
-                type: string;
-                /** Format: uri */
-                url: string;
-              }[];
-              metadata: {
-                providerFields: {
-                  [key: string]: unknown;
-                };
-              };
-            }[];
-          };
-        }
-      | {
-          /** @enum {string} */
-          schemaVersion: "1.0";
-          /** @enum {string} */
-          status: "success" | "partial" | "no_result" | "error" | "pending";
-          errors: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          warnings: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          metadata: {
-            provider: string | null;
-            flowId: string | null;
-            runId: string | null;
-            versionId: string | null;
-            createdAt: string | null;
-            simulated: boolean | null;
-            adapter: string | null;
-            providerFields: {
-              [key: string]: unknown;
-            };
-          };
-          /** @enum {string} */
-          type: "authentication";
-          data: {
-            authenticated: boolean | null;
-          };
-        }
-      | {
-          /** @enum {string} */
-          schemaVersion: "1.0";
-          /** @enum {string} */
-          status: "success" | "partial" | "no_result" | "error" | "pending";
-          errors: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          warnings: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          metadata: {
-            provider: string | null;
-            flowId: string | null;
-            runId: string | null;
-            versionId: string | null;
-            createdAt: string | null;
-            simulated: boolean | null;
-            adapter: string | null;
-            providerFields: {
-              [key: string]: unknown;
-            };
-          };
-          /** @enum {string} */
-          type: "request";
-          data: {
-            result: null;
-          };
-        }
-      | {
-          /** @enum {string} */
-          schemaVersion: "1.0";
-          /** @enum {string} */
-          status: "success" | "partial" | "no_result" | "error" | "pending";
-          errors: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          warnings: {
-            code: string;
-            message: string;
-            field: string | null;
-          }[];
-          metadata: {
-            provider: string | null;
-            flowId: string | null;
-            runId: string | null;
-            versionId: string | null;
-            createdAt: string | null;
-            simulated: boolean | null;
-            adapter: string | null;
-            providerFields: {
-              [key: string]: unknown;
-            };
-          };
-          /** @enum {string} */
-          type: "unknown";
-          data: null;
-        };
   };
   responses: never;
   parameters: never;
@@ -7408,7236 +6357,4 @@ export interface components {
   pathItems: never;
 }
 export type $defs = Record<string, never>;
-export interface operations {
-  listDocumentStorageAttachments: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Private attachments */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getDocumentStorageAttachments: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Private attachments */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listGeographicCatalogCountries: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Geographic countries */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getGeographicCatalogCountries: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Geographic countries */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listGeographicCatalogDepartments: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Geographic departments */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getGeographicCatalogDepartments: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Geographic departments */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listGeographicCatalogCities: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Geographic cities */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getGeographicCatalogCities: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Geographic cities */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listReferenceValuesCurrencies: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Currencies */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getReferenceValuesCurrencies: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Currencies */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listReferenceValuesIdentificationTypes: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Identification types */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getReferenceValuesIdentificationTypes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Identification types */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listReferenceValuesPersonAttributes: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Person attributes */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getReferenceValuesPersonAttributes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Person attributes */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listFinanceReferenceBanks: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Banks */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getFinanceReferenceBanks: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Banks */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listFinanceReferenceEconomicActivities: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Economic activities */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getFinanceReferenceEconomicActivities: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Economic activities */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listOperationsCatalogTaskTypes: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Task types */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getOperationsCatalogTaskTypes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Task types */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listOperationsCatalogTaskTags: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Task tags */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getOperationsCatalogTaskTags: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Task tags */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listAgencyNetworkAgencyProfiles: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Agency profiles */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getAgencyNetworkAgencyProfiles: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Agency profiles */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listInsuranceCatalogInsurancePartners: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance partners */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getInsuranceCatalogInsurancePartners: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance partners */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listInsuranceCatalogProductLines: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance product lines */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getInsuranceCatalogProductLines: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance product lines */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listCustomerPortfolioCustomerProfiles: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-        agencyId?: number;
-        q?: string;
-        source?: "direct" | "prospect";
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Customer profiles */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getCustomerPortfolioCustomerProfiles: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Customer profiles */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listSalesPipelineQuotes: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance quotes */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getSalesPipelineQuotes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance quotes */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listPolicyLifecyclePolicies: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance policies */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getPolicyLifecyclePolicies: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance policies */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listCollectionsPayments: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Policy payments */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getCollectionsPayments: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Policy payments */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listClaimsClaims: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance claims */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getClaimsClaims: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance claims */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listInsuranceCatalogProductCategories: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance product categories */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getInsuranceCatalogProductCategories: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance product categories */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listInsuranceCatalogProductSpecializations: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Insurance product specializations */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getInsuranceCatalogProductSpecializations: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Insurance product specializations */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listClaimsWorkflowStatuses: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Claim workflow statuses */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getClaimsWorkflowStatuses: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Claim workflow statuses */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listClaimsWorkflowTypes: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Claim workflow types */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getClaimsWorkflowTypes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Claim workflow types */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listSalesPipelineSalesOffers: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Sales offers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getSalesPipelineSalesOffers: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Sales offers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listReferenceValuesPolicyOptions: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Policy options */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getReferenceValuesPolicyOptions: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Policy options */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listRenewalCatalogNonRenewalReasons: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Non-renewal reasons */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getRenewalCatalogNonRenewalReasons: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Non-renewal reasons */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listPolicyLifecycleReinvestmentActivities: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Reinvestment activities */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getPolicyLifecycleReinvestmentActivities: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Reinvestment activities */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listAgencyNetworkDocumentTags: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Document tags */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getAgencyNetworkDocumentTags: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Document tags */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listSalesPipelineProviders: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Sales providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getSalesPipelineProviders: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Sales providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listAgencyNetworkCommercialUnits: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Commercial units */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getAgencyNetworkCommercialUnits: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Commercial units */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  listCustomerPortfolioCustomerGroups: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number | null;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Documents from Customer groups */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            data: {
-              id: string;
-              kind: string;
-              attributes?: unknown;
-              relationships?: unknown;
-            }[];
-            page: {
-              limit: number;
-              offset: number;
-              total?: number;
-            };
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  getCustomerPortfolioCustomerGroups: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Document from Customer groups */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Active membership is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Document not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeDocumentStoragePrepareAttachmentUpload: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeDocumentStorageCompleteAttachmentUpload: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeDocumentStorageCreateAttachmentDownload: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeGeographicCatalogRegisterCountry: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          id: number;
-          name: string;
-          code: string;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeGeographicCatalogRegisterDepartment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeGeographicCatalogRegisterCity: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeFinanceReferenceRegisterBank: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeFinanceReferenceRegisterEconomicActivity: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeOperationsCatalogDefineTaskType: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeOperationsCatalogDefineTaskTag: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeAgencyNetworkCreateAgencyProfile: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          idSlug: string;
-          name: string;
-          address: string;
-          idCheckDigit: string;
-          idNumber: string;
-          phone?: string | null;
-          logo?: string | null;
-          cityId?: number | null;
-          coordinates?: {
-            /** @enum {string} */
-            type: "Point";
-            coordinates: [number, number];
-          } | null;
-          lrIdNumber: string;
-          lrIdType: string;
-          lrName: string;
-          /** Format: email */
-          paymentsEmail: string;
-          isActive: boolean;
-          /** Format: email */
-          email: string;
-          isInHouse: boolean;
-          emailDomain: string;
-          /** Format: email */
-          birthdayFromEmail: string;
-          /** Format: email */
-          paymentFromEmail: string;
-          /** Format: email */
-          renewalFromEmail: string;
-          /** Format: uri */
-          homeUrl: string;
-          shortName: string;
-          sellerRequired: boolean;
-          hasCompliance: boolean;
-          defaultCcEmails?: string[] | null;
-          surnames: string;
-          type: string;
-          theme: string;
-          /** Format: date */
-          retirementDate?: string | null;
-          tenantId?: number;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeAgencyNetworkUpdateAgencyProfile: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          idSlug?: string;
-          name?: string;
-          address?: string;
-          idCheckDigit?: string;
-          idNumber?: string;
-          phone?: string | null;
-          logo?: string | null;
-          cityId?: number | null;
-          coordinates?: {
-            /** @enum {string} */
-            type: "Point";
-            coordinates: [number, number];
-          } | null;
-          lrIdNumber?: string;
-          lrIdType?: string;
-          lrName?: string;
-          /** Format: email */
-          paymentsEmail?: string;
-          isActive?: boolean;
-          /** Format: email */
-          email?: string;
-          isInHouse?: boolean;
-          emailDomain?: string;
-          /** Format: email */
-          birthdayFromEmail?: string;
-          /** Format: email */
-          paymentFromEmail?: string;
-          /** Format: email */
-          renewalFromEmail?: string;
-          /** Format: uri */
-          homeUrl?: string;
-          shortName?: string;
-          sellerRequired?: boolean;
-          hasCompliance?: boolean;
-          defaultCcEmails?: string[] | null;
-          surnames?: string;
-          type?: string;
-          theme?: string;
-          /** Format: date */
-          retirementDate?: string | null;
-          id: number;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeAgencyNetworkDeleteAgencyProfile: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          id: number;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeAgencyNetworkDefineDocumentTag: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeAgencyNetworkDefineCommercialUnit: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeInsuranceCatalogDefineProductCategory: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeInsuranceCatalogDefineProductSpecialization: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeInsuranceCatalogDefineProductLine: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeInsuranceCatalogRegisterInsurancePartner: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeCustomerPortfolioCreateCustomerProfile: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json":
-          | {
-              agencyId: number;
-              idNumber: string;
-              externalReference?: string;
-              /**
-               * @default direct
-               * @enum {string}
-               */
-              source?: "direct" | "prospect";
-              commercialUnitId?: number | null;
-              /** @default true */
-              birthdayNotification?: boolean;
-              /** @default true */
-              paymentNotification?: boolean;
-              /** @default true */
-              renewalNotification?: boolean;
-              /** @enum {string} */
-              personType: "natural";
-              givenName: string;
-              familyName: string;
-              identificationType: string;
-              /** Format: email */
-              email: string;
-              phone: string;
-            }
-          | {
-              agencyId: number;
-              idNumber: string;
-              externalReference?: string;
-              /**
-               * @default direct
-               * @enum {string}
-               */
-              source?: "direct" | "prospect";
-              commercialUnitId?: number | null;
-              /** @default true */
-              birthdayNotification?: boolean;
-              /** @default true */
-              paymentNotification?: boolean;
-              /** @default true */
-              renewalNotification?: boolean;
-              /** @enum {string} */
-              personType: "legal";
-              businessName: string;
-              verificationDigit: string;
-              legalRepresentativeName: string;
-              legalRepresentativeIdentificationType: string;
-              legalRepresentativeIdentificationNumber: string;
-            };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeCustomerPortfolioUpdateCustomerProfile: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json":
-          | {
-              agencyId: number;
-              idNumber: string;
-              externalReference?: string;
-              /**
-               * @default direct
-               * @enum {string}
-               */
-              source?: "direct" | "prospect";
-              commercialUnitId?: number | null;
-              /** @default true */
-              birthdayNotification?: boolean;
-              /** @default true */
-              paymentNotification?: boolean;
-              /** @default true */
-              renewalNotification?: boolean;
-              /** @enum {string} */
-              personType: "natural";
-              givenName: string;
-              familyName: string;
-              identificationType: string;
-              /** Format: email */
-              email: string;
-              phone: string;
-              id: number;
-            }
-          | {
-              agencyId: number;
-              idNumber: string;
-              externalReference?: string;
-              /**
-               * @default direct
-               * @enum {string}
-               */
-              source?: "direct" | "prospect";
-              commercialUnitId?: number | null;
-              /** @default true */
-              birthdayNotification?: boolean;
-              /** @default true */
-              paymentNotification?: boolean;
-              /** @default true */
-              renewalNotification?: boolean;
-              /** @enum {string} */
-              personType: "legal";
-              businessName: string;
-              verificationDigit: string;
-              legalRepresentativeName: string;
-              legalRepresentativeIdentificationType: string;
-              legalRepresentativeIdentificationNumber: string;
-              id: number;
-            };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeCustomerPortfolioDeleteCustomerProfile: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          id: number;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeCustomerPortfolioDefineCustomerGroup: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeSalesPipelineRegisterSalesEntity: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeSalesPipelineRegisterSalesOperator: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeSalesPipelineRegisterSalesProduct: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeSalesPipelineRegisterSalesPlan: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeSalesPipelineRegisterSalesProvider: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executePolicyLifecycleDefineReinvestmentActivity: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeClaimsDefineClaimType: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeClaimsDefineClaimStatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeClaimsDefineClaimSubstatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeRenewalCatalogDefineNonRenewalReason: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-  executeLifecycleBootstrapDemo: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          [key: string]: unknown;
-        };
-      };
-    };
-    responses: {
-      /** @description Documental command result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            id: string;
-            kind: string;
-            attributes?: unknown;
-            relationships?: unknown;
-          };
-        };
-      };
-      /** @description Invalid command input */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Platform administrator role is required */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Domain command not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-      /** @description Command conflicts with current state */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: {
-              code: string;
-              message: string;
-            };
-          };
-        };
-      };
-    };
-  };
-}
+export type operations = Record<string, never>;

@@ -1,3 +1,4 @@
+import { RelatedPresentationSettings } from "./related-presentation-settings";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { GroupedDesignerCanvas } from "./grouped-designer-canvas";
 import { FormHtmlEditorModal } from "./form-html-editor-modal";
@@ -198,9 +199,11 @@ function Flag({
   );
 }
 function Properties({
+  objectName,
   studio,
   setStudio,
 }: {
+  objectName: string;
   studio: Studio;
   setStudio: (studio: Studio) => void;
 }) {
@@ -310,6 +313,7 @@ function Properties({
         className="studio-properties-body"
         data-filtering={filtering ? "true" : "false"}
       >
+        {config.collectionRelation ? <RelatedPresentationSettings objectName={objectName} config={config} objects={objects.data?.data ?? []} onChange={next => updateField(id, {config: next})} /> : null}
         {studio.requestPage ? (
           <PropertySection
             title="Eventos y acciones"
@@ -1857,7 +1861,7 @@ function Editor({
                 requestPage={studio.requestPage}
                 onPaletteDrop={addPaletteField}
               />
-              <Properties studio={studio} setStudio={setStudio} />
+              <Properties objectName={object.name} studio={studio} setStudio={setStudio} />
             </div>
           </div>
         </div>

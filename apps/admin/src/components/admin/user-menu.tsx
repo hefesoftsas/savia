@@ -1,7 +1,10 @@
+import { Link } from "react-router-dom";
+import type { AuthPermissions } from "@/auth/auth-session";
 import { Children, useCallback, useEffect, useState } from "react";
 import {
   Translate,
   useAuthProvider,
+  usePermissions,
   useGetIdentity,
   useLogout,
   useTranslate,
@@ -42,6 +45,12 @@ export function UserMenu({ children }: UserMenuProps) {
   const translate = useTranslate();
   const { isMobile } = useSidebar();
   const currentTenant = useCurrentTenant();
+  const { permissions } = usePermissions<AuthPermissions>();
+  const canBrandTenant =
+    permissions?.canManageIdentity ||
+    permissions?.memberships?.some((member) =>
+      ["tenant_admin", "agency_admin"].includes(member.role),
+    );
 
   const [open, setOpen] = useState(false);
   const { isInstalled } = usePwaInstall();
@@ -152,6 +161,11 @@ export function UserMenu({ children }: UserMenuProps) {
             ) : null}
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="my-1" />
+          {canBrandTenant && (
+            <DropdownMenuItem asChild onClick={handleClose}>
+              <Link to="/tenant-branding">Identidad del tenant</Link>
+            </DropdownMenuItem>
+          )}
           {children}
           {Children.count(children) > 0 ? (
             <DropdownMenuSeparator className="my-1" />

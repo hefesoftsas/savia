@@ -12,6 +12,7 @@ export type CrmRuntime = {
   businessSetupEnabled?: boolean;
   transport?: CrmTransport;
   requestTransport?: CrmTransport;
+  publicFormTransport?: CrmTransport;
   navigate?: (query: string, replace?: boolean) => void;
 };
 

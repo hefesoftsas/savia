@@ -1,6 +1,9 @@
 // Include operational routes even though React loads them on demand. Only walk
 // static imports: optional studio panels and icon catalogs must remain on demand.
 const operationalRoutes = [
+  "/src/app.tsx",
+  "/admin/appearance-cache.ts",
+  "/pwa/register-service-worker.ts",
   "/dynamic-crm/crm-page.tsx",
   "/crm-engine/app.tsx",
   "/crm-engine/records.tsx",
@@ -29,7 +32,7 @@ export function collectOfflineShellAssets(bundle: Record<string, BundleItem>) {
   for (const item of Object.values(bundle)) {
     if (
       item.type === "chunk" &&
-      (item.isEntry ||
+      ((item.isEntry && !item.facadeModuleId?.includes("/office/")) ||
         operationalRoutes.some((route) => item.facadeModuleId?.endsWith(route)))
     )
       visit(item.fileName);

@@ -1,3 +1,4 @@
+import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
 import tailwindcss from "@tailwindcss/vite";
@@ -73,6 +74,7 @@ function offlineShellPlugin(): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    officePlugin(),
     tailwindcss(),
     reactSandboxPlugin(),
     precompressionPlugin(),
@@ -82,11 +84,18 @@ export default defineConfig({
     // payload (or credential-adjacent response) ever lands in Cache Storage.
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "auto",
+      // Only the private bootstrap registers a worker; public visitors must not
+      // download the administrative offline shell.
+      injectRegister: false,
       manifest: false,
       workbox: {
         navigateFallback: "index.html",
-        navigateFallbackDenylist: [/^\/api/, /^\/v1/],
+        navigateFallbackDenylist: [
+          /^\/api/,
+          /^\/v1/,
+          /^\/public\/forms/,
+          /^\/office(?:\/|$)/,
+        ],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // Precache only the boot shell: dist ships ~9k chunks (43 MB),
@@ -118,6 +127,7 @@ export default defineConfig({
               sameOrigin &&
               !url.pathname.startsWith("/v1") &&
               !url.pathname.startsWith("/api") &&
+              !url.pathname.startsWith("/office/") &&
               (url.pathname.startsWith("/assets/") ||
                 /\.(js|css|woff2?|ttf|eot)$/.test(url.pathname)),
             handler: "CacheFirst",
@@ -158,6 +168,10 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 800,
     rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        office: fileURLToPath(new URL("./office/index.html", import.meta.url)),
+      },
       output: {
         // manualChunks removed
       },

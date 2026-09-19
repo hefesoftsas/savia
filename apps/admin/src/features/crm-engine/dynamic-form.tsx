@@ -1,3 +1,5 @@
+import { RelatedRecordEditor } from "./related-record-editor";
+import type { RelatedRecordChanges } from "@savia/crm-shared/related-records";
 import { DateTimeField } from "./date-time-field";
 import { CollectionOptionField } from "./collection-option-field";
 import {
@@ -75,7 +77,7 @@ function WizardField({
       hidden={hidden}
       {...(hidden ? { inert: true, "aria-hidden": true } : {})}
     >
-      {props.config?.dateTime === true ? <DateTimeField {...props} /> : props.config?.collectionOptions ? <CollectionOptionField {...props} objectName={object.name} numeric={object.config.fields[props.fieldName!]?.type === "Number" || object.config.fields[props.fieldName!]?.type === "Currency"} /> : cloneElement(element, props)}
+      {props.config?.collectionRelationTarget && ["subform", "table"].includes(String(props.config?.relationPresentation)) ? <RelatedRecordEditor {...props} /> : props.config?.dateTime === true ? <DateTimeField {...props} /> : props.config?.collectionOptions ? <CollectionOptionField {...props} objectName={object.name} numeric={object.config.fields[props.fieldName!]?.type === "Number" || object.config.fields[props.fieldName!]?.type === "Currency"} /> : cloneElement(element, props)}
     </div>
   );
 }
@@ -89,6 +91,21 @@ const wizardRegistry = (object: CrmObject) =>
       />,
     ]),
   );
+
+function FormValuesObserver({
+  onChange,
+}: {
+  onChange?: (values: Record<string, unknown>) => void;
+}) {
+  const values = useWatch();
+  const callback = useRef(onChange);
+  callback.current = onChange;
+  const serialized = JSON.stringify(values);
+  useEffect(() => {
+    callback.current?.(JSON.parse(serialized));
+  }, [serialized]);
+  return null;
+}
 
 function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
   const values = useWatch();
@@ -159,7 +176,7 @@ function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
         !(wizard?.activeTitle && section.label === wizard.activeTitle) && (
         <h3 className="studio-section-title">{section.label}</h3>
       )}
-      <Label htmlFor={name} id={`${name}_label`}>
+      <Label htmlFor={String(cfg.inputId ?? name)} id={`${cfg.inputId ?? name}_label`}>
         {label}
         {required ? (
           <span className="required" aria-hidden="true">
@@ -181,6 +198,8 @@ export type DynamicFormProps = {
   onSave: (
     data: Record<string, unknown>,
     previous?: CrmRecord,
+    relations?: RelatedRecordChanges[],
+    options?: { idempotencyKey: string },
   ) => Promise<CrmRecord | void>;
   onPersistAttachments?: (
     record: CrmRecord,
@@ -203,6 +222,7 @@ export type DynamicFormProps = {
   submitLabel?: string;
   formActions?: React.ReactNode;
   renderFieldActions?: (field: string) => React.ReactNode;
+  onValuesChange?: (values: Record<string, unknown>) => void;
 };
 export type PendingAttachment = { field: string; files: File[] };
 export type AttachmentUploadStatus = {
@@ -212,6 +232,7 @@ export type AttachmentUploadStatus = {
 };
 export default function DynamicForm(props: DynamicFormProps) {
   if (
+    !Object.values(props.object.config.fields).some(field => field.config?.collectionRelationTarget && ["subform", "table"].includes(String(field.config?.relationPresentation))) &&
     props.object.config.studio?.wizard?.enabled &&
     props.object.config.studio.wizard.presentation !== "steps"
   )
@@ -231,12 +252,15 @@ function StepForm({
   submitLabel = "Guardar registro",
   formActions,
   renderFieldActions,
+  onValuesChange,
 }: {
   object: CrmObject;
   values?: Record<string, unknown>;
   onSave: (
     data: Record<string, unknown>,
     previous?: CrmRecord,
+    relations?: RelatedRecordChanges[],
+    options?: { idempotencyKey: string },
   ) => Promise<CrmRecord | void>;
   onPersistAttachments?: (
     record: CrmRecord,
@@ -259,6 +283,7 @@ function StepForm({
   submitLabel?: string;
   formActions?: React.ReactNode;
   renderFieldActions?: (field: string) => React.ReactNode;
+  onValuesChange?: (values: Record<string, unknown>) => void;
 }) {
   const managedObject = ["managed-customer", "managed-agency"].includes(
     object.config.studio?.business ?? "",
@@ -605,7 +630,7 @@ function StepForm({
               isManualSave
               renderSaveButton={() => null}
               renderLabel={({ id }) => <><FieldLabel object={object} name={id} />{renderFieldActions?.(id)}</>}
-              renderStatus={() => null}
+              renderStatus={() => <FormValuesObserver onChange={onValuesChange} />}
               renderError={({ id, error: runtimeError }) =>
                 fieldErrors[id] || runtimeError ? (
                   <p
@@ -627,7 +652,32 @@ function StepForm({
                 setError("");
                 setFieldErrors({});
                 try {
-                  const result = validateRecord(object, data);
+                  const related = Object.entries(object.config.fields).filter(
+                    ([, field]) =>
+                      field.config?.collectionRelationTarget &&
+                      ["subform", "table"].includes(
+                        String(field.config?.relationPresentation),
+                      ),
+                  );
+                  // Validate required relation selections as IDs, then preserve staged rows.
+                  const validationData = { ...data };
+                  for (const [name, field] of related) {
+                    const rows = Array.isArray(data[name])
+                      ? (data[name] as unknown[])
+                      : [];
+                    validationData[name] = field.config?.multiple
+                      ? rows.map((_, index) => String(index))
+                      : rows.length
+                        ? "selected"
+                        : "";
+                  }
+                  const result = validateRecord(object, validationData);
+                  for (const [name] of related)
+                    result.data[name] = data[name];
+                  for (const [name] of related) {
+                    const invalid = Array.isArray(data[name]) && (data[name] as Array<{__errors?:string[]}>).some(row=>row.__errors?.length);
+                    if(invalid) result.errors[name] = "Revisa los campos del registro relacionado antes de guardar.";
+                  }
                   const changedFields = managedEdit
                     ? new Set(
                         Object.keys(object.config.fields).filter(

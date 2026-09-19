@@ -28,6 +28,8 @@ import {
   csvLine,
 } from "@savia/crm-shared/csv";
 import { buildWhere } from "./query";
+import { policyFor, accessDenied, accessRecord } from "./access-authorization";
+import { decideWrite } from "@savia/crm-shared/access-evaluator";
 import {
   formatRecordCsvValue,
   parseCsvExportColumns,
@@ -88,6 +90,13 @@ async function purgeExpiredTemporaryAttachments(
   );
 }
 
+export type AutomationRuleSnapshot = {
+  id: string;
+  version: number;
+  name: string;
+  config: string;
+};
+
 /** Each rule/version/record version creates at most one task, even when delivery is repeated. */
 export async function runAutomations(
   db: D1Database,
@@ -95,17 +104,23 @@ export async function runAutomations(
   objectName: string,
   before: CrmRecord | null,
   after: CrmRecord,
-  scope?: { ruleId: string },
+  scope?: { ruleId?: string; rules?: AutomationRuleSnapshot[] },
 ) {
+  if (policyFor(db)) return { delivered: false };
   await assertLocalCollection(db, tenant, objectName);
-  const { results } = await db
-    .prepare(
-      "SELECT * FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1",
-    )
-    .bind(tenant, objectName)
-    .all<any>();
+  const results =
+    scope?.rules ??
+    (
+      await db
+        .prepare(
+          "SELECT * FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1",
+        )
+        .bind(tenant, objectName)
+        .all<AutomationRuleSnapshot>()
+    ).results;
+  let delivered = true;
   for (const rule of results) {
-    if (scope && rule.id !== scope.ruleId) continue;
+    if (scope?.ruleId && rule.id !== scope.ruleId) continue;
     const config = JSON.parse(rule.config);
     if (
       JSON.stringify(before?.[config.field]) ===
@@ -169,6 +184,7 @@ export async function runAutomations(
           ),
       ]);
     } catch (error) {
+      delivered = false;
       await db
         .prepare(
           "INSERT INTO crm_automation_runs (id,tenant_id,automation_id,object_name,record_id,event_key,status,detail) VALUES (?,?,?,?,?,?,'failed',?) ON CONFLICT(tenant_id,automation_id,event_key) DO UPDATE SET status='failed',detail=excluded.detail",
@@ -190,6 +206,7 @@ export async function runAutomations(
         .run();
     }
   }
+  return { delivered };
 }
 
 export function registerOperations(app: Hono<Env>) {
@@ -681,8 +698,23 @@ export function registerOperations(app: Hono<Env>) {
     if (!file) return c.json({ ok: true });
     if (file.version !== version)
       return fail("El adjunto cambió. Actualiza la ficha.", 409);
-    await c.env.FILES.delete(file.storage_key);
-    await db.batch([
+    const revisions = row
+      ? await db
+          .prepare(
+            "SELECT storage_key FROM crm_file_revisions WHERE tenant_id=? AND file_id=?",
+          )
+          .bind(tenant, file.id)
+          .all<{ storage_key: string }>()
+      : { results: [] };
+    const gate = guard(
+      db,
+      row
+        ? "SELECT version=? FROM crm_files WHERE tenant_id=? AND id=?"
+        : "SELECT version=? FROM crm_file_drafts WHERE tenant_id=? AND id=?",
+      [version, tenant, file.id],
+    );
+    await transaction(db, [
+      gate.start,
       db
         .prepare(
           row
@@ -700,7 +732,17 @@ export function registerOperations(app: Hono<Env>) {
           name: file.name,
         },
       ),
+      gate.end,
     ]);
+    // Remove bytes only after the version-checked deletion commits.
+    const keys = [
+      ...new Set([
+        file.storage_key,
+        ...revisions.results.map((r) => r.storage_key),
+      ]),
+    ];
+    for (let offset = 0; offset < keys.length; offset += 1000)
+      await c.env.FILES.delete(keys.slice(offset, offset + 1000));
     return c.json({ ok: true });
   });
 
@@ -763,6 +805,41 @@ export function registerOperations(app: Hono<Env>) {
         values,
         input.mapping,
       );
+      const policy = policyFor(db);
+      if (policy) {
+        const importPolicy = {
+          ...policy,
+          grants: policy.grants
+            .filter((g) => g.action === "import")
+            .map((g) => ({ ...g, action: "create" as const })),
+        };
+        if (
+          !decideWrite(
+            importPolicy,
+            `collection:${objectName}`,
+            "create",
+            null,
+            {
+              id: "import-preview",
+              createdBy: policy.principalId,
+              values: data,
+            },
+            Object.keys(data),
+          ).allowed
+        )
+          accessDenied();
+        for (const [field, config] of Object.entries(object.config.fields))
+          if (config.config?.relation && data[field])
+            for (const id of Array.isArray(data[field])
+              ? (data[field] as unknown[])
+              : [data[field]])
+              await getRecord(
+                db,
+                tenant,
+                String(config.config.relation),
+                String(id),
+              );
+      }
       if (Object.keys(errors).length) {
         results.push({
           row: index + 2,
@@ -855,6 +932,7 @@ export function registerOperations(app: Hono<Env>) {
       try {
         const record = await createRecord(db, tenant, objectName, data, {
           idempotencyKey: `csv:${input.importId}:${index}`,
+          createdBy: c.get("principalId"),
         });
         let warning: string | undefined;
         try {

@@ -14,11 +14,18 @@
     },
   ],
   "services": [{ "binding": "API", "service": "savia-agencies" }],
+  "r2_buckets": [
+    { "binding": "OFFICE_RUNTIME", "bucket_name": "savia-documents" },
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": [
+      "/public/forms",
+      "/public/forms/*",
+      "/office",
+      "/office/*",
       "/api/*",
       "/v1/*",
       "/.well-known/*",

@@ -1,7 +1,15 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 const refetch = vi.fn();
+let mockPermissions: {
+  canManageIdentity: boolean;
+  memberships: Array<{ role: string }>;
+} = {
+  canManageIdentity: false,
+  memberships: [],
+};
 
 vi.mock("ra-core", () => ({
   Translate: ({ children }: { children: React.ReactNode }) => children,
@@ -9,6 +17,7 @@ vi.mock("ra-core", () => ({
     Provider: ({ children }: { children: React.ReactNode }) => children,
   },
   useAuthProvider: () => ({}),
+  usePermissions: () => ({ permissions: mockPermissions }),
   useGetIdentity: () => ({
     data: { avatar: "https://api.savia.test/v1/account/avatar?v=version" },
     refetch,
@@ -20,9 +29,10 @@ vi.mock("ra-core", () => ({
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({
-  SidebarMenuButton: ({ children, ...props }: React.ComponentProps<"button">) => (
-    <button {...props}>{children}</button>
-  ),
+  SidebarMenuButton: ({
+    children,
+    ...props
+  }: React.ComponentProps<"button">) => <button {...props}>{children}</button>,
   useSidebar: () => ({ isMobile: false }),
 }));
 
@@ -58,13 +68,26 @@ vi.mock("@/pwa", () => ({
 
 import { UserMenu } from "./user-menu";
 
+function renderMenu() {
+  return render(
+    <MemoryRouter>
+      <UserMenu />
+    </MemoryRouter>,
+  );
+}
+
 describe("UserMenu", () => {
+  beforeEach(() => {
+    mockPermissions = { canManageIdentity: false, memberships: [] };
+    mockIsInstallable = false;
+    mockIsInstalled = false;
+  });
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
   it("refreshes the identity when an account avatar changes", () => {
-    render(<UserMenu />);
+    renderMenu();
 
     fireEvent(window, new Event("savia:identity-changed"));
 
@@ -75,7 +98,7 @@ describe("UserMenu", () => {
     mockIsInstallable = true;
     mockIsInstalled = false;
 
-    const { getByRole, findByText } = render(<UserMenu />);
+    const { getByRole, findByText } = renderMenu();
 
     // Open dropdown
     const menuButton = getByRole("button", { name: /Abrir menú de cuenta/i });
@@ -88,4 +111,22 @@ describe("UserMenu", () => {
     fireEvent.click(installOption);
     expect(mockPromptInstall).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    { canManageIdentity: true, memberships: [] },
+    { canManageIdentity: false, memberships: [{ role: "tenant_admin" }] },
+    { canManageIdentity: false, memberships: [{ role: "agency_admin" }] },
+  ])(
+    "links authorized administrators to tenant branding: %j",
+    async (permissions) => {
+      mockPermissions = permissions;
+      const { getByRole, findByRole } = renderMenu();
+      const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
+      fireEvent.pointerDown(trigger);
+      fireEvent.click(trigger);
+      expect(
+        await findByRole("menuitem", { name: "Identidad del tenant" }),
+      ).toHaveAttribute("href", "/tenant-branding");
+    },
+  );
 });

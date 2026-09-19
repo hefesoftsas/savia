@@ -12,8 +12,8 @@ function LongText(p: IFieldProps) {
     <Textarea
       minLength={p.config?.minLength as number | undefined}
       maxLength={p.config?.maxLength as number | undefined}
-      id={p.fieldName}
-      aria-labelledby={`${p.fieldName}_label`}
+      id={String(p.config?.inputId ?? p.fieldName)}
+      aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
       aria-invalid={!!p.error}
       aria-required={p.required}
       disabled={p.readOnly}
@@ -87,8 +87,8 @@ function AddressAutocompleteField({
   return (
     <div ref={rootRef} className="relative">
       <Input
-        id={p.fieldName}
-        aria-labelledby={`${p.fieldName}_label`}
+        id={String(p.config?.inputId ?? p.fieldName)}
+        aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
         aria-invalid={!!p.error}
         aria-required={p.required}
         aria-autocomplete="list"

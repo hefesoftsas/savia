@@ -14,6 +14,7 @@ const saviaEnglish = {
         integrations: "Integrations",
         "provider-credentials": "Savia request",
         "service-credentials": "Keys and services",
+        "access-control": "Roles and permissions",
         "assistant-configuration": "Assistant",
         tenants: "Tenants",
         users: "Users",
@@ -391,17 +392,22 @@ const saviaEnglish = {
       iosStep2Title: "Add to Home Screen",
       iosStep2Desc: "Scroll down the list and tap 'Add to Home Screen'.",
       macSafariStep1Title: "Open the File menu",
-      macSafariStep1Desc: "In the top menu bar of your Mac with Safari active, click the File menu.",
+      macSafariStep1Desc:
+        "In the top menu bar of your Mac with Safari active, click the File menu.",
       macSafariStep2Title: "Select 'Add to Dock…'",
-      macSafariStep2Desc: "Savia will be installed as a standalone desktop app in your macOS Dock.",
+      macSafariStep2Desc:
+        "Savia will be installed as a standalone desktop app in your macOS Dock.",
       androidStep1Title: "Open the Chrome menu",
-      androidStep1Desc: "Tap the three dots icon (⋮) in the top-right corner of the browser.",
+      androidStep1Desc:
+        "Tap the three dots icon (⋮) in the top-right corner of the browser.",
       androidStep2Title: "Install application",
       androidStep2Desc: "Select 'Install application' or 'Add to Home screen'.",
       desktopStep1Title: "Icon in the address bar",
-      desktopStep1Desc: "In Chrome or Edge, click the install icon (monitor with down arrow) on the right of the address bar.",
+      desktopStep1Desc:
+        "In Chrome or Edge, click the install icon (monitor with down arrow) on the right of the address bar.",
       desktopStep2Title: "Or from the browser menu",
-      desktopStep2Desc: "Click the menu (⋮) in the top-right corner and select 'Install Savia…'.",
+      desktopStep2Desc:
+        "Click the menu (⋮) in the top-right corner and select 'Install Savia…'.",
       gotIt: "Got it",
     },
     auth: {
@@ -475,6 +481,7 @@ const saviaSpanish = {
         integrations: "Integraciones",
         "provider-credentials": "Savia request",
         "service-credentials": "Claves y servicios",
+        "access-control": "Roles y permisos",
         "assistant-configuration": "Asistente",
         tenants: "Tenants",
         users: "Usuarios",
@@ -944,6 +951,7 @@ const saviaPortuguese = {
         integrations: "Integrações",
         "provider-credentials": "Savia request",
         "service-credentials": "Chaves e serviços",
+        "access-control": "Papéis e permissões",
         "assistant-configuration": "Assistente",
         tenants: "Tenants",
         users: "Usuários",
@@ -1322,8 +1330,7 @@ const saviaPortuguese = {
       iosStep1Title: "Toque no botão Compartilhar",
       iosStep1Desc: "Na barra inferior ou superior do Safari, toque em",
       iosStep2Title: "Adicionar à Tela de Início",
-      iosStep2Desc:
-        "Desça na lista e toque em 'Adicionar à Tela de Início'.",
+      iosStep2Desc: "Desça na lista e toque em 'Adicionar à Tela de Início'.",
       macSafariStep1Title: "Abra o menu Arquivo",
       macSafariStep1Desc:
         "Na barra superior do Mac com o Safari ativo, clique no menu Arquivo.",

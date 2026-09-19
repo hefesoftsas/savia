@@ -30,8 +30,11 @@ export type TestAppOptions = {
   personalIntegrations?: Param<15>;
   crmIntegrationKey?: Param<16>;
   externalCollections?: Param<17>;
-  extensionActionExecutor?: Param<18>;
-  extensionConnectionsEncryptionKey?: Param<19>;
+  sqlBridge?: Param<18>;
+  extensionActionExecutor?: Param<19>;
+  extensionConnectionsEncryptionKey?: Param<20>;
+  realtime?: Param<21>;
+  publicForms?: Param<22>;
 };
 
 /**
@@ -60,7 +63,10 @@ export function createTestApp(options: TestAppOptions = {}) {
     options.personalIntegrations,
     options.crmIntegrationKey,
     options.externalCollections,
+    options.sqlBridge,
     options.extensionActionExecutor,
     options.extensionConnectionsEncryptionKey,
+    options.realtime,
+    options.publicForms,
   );
 }

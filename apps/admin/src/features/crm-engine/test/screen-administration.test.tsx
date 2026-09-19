@@ -3,12 +3,21 @@ import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { setCrmRuntime } from "../runtime";
 import ScreenAdministration from "../screen-administration";
 import { makeConfig } from "@savia/crm-shared/metadata";
 vi.mock("../collection-operations-panel", () => ({
   default: ({ name }: any) => <div>Operaciones para {name}</div>,
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setCrmRuntime({ embedded: false });
+});
+vi.mock("../../public-forms/public-link-manager", () => ({
+  PublicLinkManager: ({ objectName }: { objectName: string }) => (
+    <div>Public links for {objectName}</div>
+  ),
+}));
 const objects = ["Proyectos", "Inventario", "Oculta"].map((label, i) => ({
   name: "screen_" + i,
   label,
@@ -314,4 +323,31 @@ it("requires acknowledging record deletion when a screen has data", async () => 
       { deleteRecords: true },
     ),
   );
+});
+
+it("loads public link management only when requested in screen configuration", async () => {
+  setCrmRuntime({
+    embedded: true,
+    domainId: "sales",
+    publicFormTransport: vi.fn(),
+  });
+  render(
+    <ScreenAdministration
+      objects={objects}
+      selected="screen_0"
+      detail
+      domainTools
+      onNavigate={vi.fn()}
+      onVisibilityChange={vi.fn()}
+      onMenuLayoutChange={vi.fn()}
+      onDeletePermanent={vi.fn()}
+    />,
+  );
+  expect(
+    screen.queryByText("Public links for screen_0"),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Enlaces públicos" }));
+  expect(
+    await screen.findByText("Public links for screen_0"),
+  ).toBeInTheDocument();
 });

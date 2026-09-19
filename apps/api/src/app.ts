@@ -1,8 +1,16 @@
+import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
+import { canonicalHostForApi } from "./auth/tenant-host-guard";
+import { registerAccessControlRoutes } from "./routes/access-control";
 import {
   installRequestResultEnvelope,
   registerRequestResultRoutes,
 } from "./request-results/routes";
 
+import {
+  registerPublicFormRoutes,
+  type PublicFormsOptions,
+} from "./public-forms/routes";
+import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { registerRequestPageRoutes } from "./request-pages/routes";
 import { registerDataDomainRoutes } from "./routes/data-domains";
 import { registerDynamicCrmRoutes } from "./routes/dynamic-crm";
@@ -75,6 +83,7 @@ export function createApp(
   extensionActionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   realtime?: RealtimeHubClient,
+  publicForms?: PublicFormsOptions,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -85,6 +94,7 @@ export function createApp(
     oauthUrls,
   );
   installRequestResultEnvelope(app);
+  registerAccessControlRoutes(app, db);
   registerAssistantRoutes(app, assistantService, {
     db,
     documents,
@@ -107,6 +117,15 @@ export function createApp(
   registerRealtimeRoutes(app, realtime);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerLookupRoutes(app, saviaRequestService);
+  registerPublicFormRoutes(app, db, {
+    ...publicForms,
+    quote:
+      publicForms?.quote ??
+      createPublicQuoteAdapter({
+        executor: extensionActionExecutor,
+        encryptionKey: extensionConnectionsEncryptionKey,
+      }),
+  });
   registerRequestPageRoutes(app, db, saviaRequestService);
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
@@ -137,6 +156,7 @@ export function createApp(
     extensionActionExecutor,
     extensionConnectionsEncryptionKey,
     runtimeReleaseCatalog.beforeSolutionInstall(saviaRequestService),
+    realtime,
   );
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
   registerUserPreferenceRoutes(app, db);
@@ -145,7 +165,14 @@ export function createApp(
     db,
     userAdministrator ?? betterAuthUserAdministrator(resolvedAuthService),
     realtime,
+    documents,
   );
   registerAccountAvatarRoutes(app, documents, resolvedAuthService);
+  registerTenantBrandingRoutes(
+    app,
+    db,
+    documents,
+    canonicalHostForApi(oauthUrls.authorizationUrl),
+  );
   return app;
 }

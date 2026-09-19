@@ -17,7 +17,7 @@ import {
   type OAuthManagementAuth,
   type ScalarOAuthClient,
 } from "./oauth";
-import { oauthPageResponse } from "./oauth-pages";
+import { oauthPageResponse, tenantBrandingFromHeader } from "./oauth-pages";
 import { deliverSmtpEmail, type SMTPEmail, type SMTPSettings } from "./smtp";
 
 type AuthWorkerEnvironment = {
@@ -153,9 +153,7 @@ export function createBetterAuth(
     baseURL: requiredValue(environment.BETTER_AUTH_URL, "BETTER_AUTH_URL"),
     trustedOrigins: (request?: Request) => {
       const defaultOrigin = new URL(adminLoginUrl(environment)).origin;
-      const canonical = normalizeCanonicalHost(
-        new URL(defaultOrigin).hostname,
-      );
+      const canonical = normalizeCanonicalHost(new URL(defaultOrigin).hostname);
       const wildcard = `https://*.${canonical}`;
       const origin = request?.headers?.get("origin");
       if (origin && isAllowedPublicOrigin(origin, canonical)) {
@@ -542,6 +540,9 @@ export default {
     const pathname = new URL(request.url).pathname;
     const oauthPage = oauthPageResponse(request, {
       restartUrl: adminLoginUrl(environment),
+      branding: tenantBrandingFromHeader(
+        request.headers.get("x-savia-tenant-branding"),
+      ),
     });
     if (oauthPage) return oauthPage;
     if (

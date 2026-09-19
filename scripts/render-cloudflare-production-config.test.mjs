@@ -68,6 +68,17 @@ test("writes only the supported production workers and retains their runtime set
         NANGO_OUTLOOK_INTEGRATION_ID: "outlook",
       },
     );
+    assert.deepEqual(
+      api.ratelimits.find(
+        (binding) => binding.name === "PUBLIC_FORMS_RATE_LIMITER",
+      ),
+      {
+        name: "PUBLIC_FORMS_RATE_LIMITER",
+        namespace_id: "879102",
+        simple: { limit: 30, period: 60 },
+      },
+    );
+    assert.equal("TURNSTILE_SECRET_KEY" in api.vars, false);
     assert.equal(api.keep_vars, true);
     assert.deepEqual(api.triggers, { crons: ["* * * * *"] });
     assert.deepEqual(api.observability, {
@@ -122,11 +133,16 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(connectors.secrets, {
       required: ["EXTENSION_CONNECTIONS_ENCRYPTION_KEY"],
     });
+    assert.deepEqual(admin.r2_buckets, [
+      { binding: "OFFICE_RUNTIME", bucket_name: "savia-documents" },
+    ]);
+    assert.ok(admin.assets.run_worker_first.includes("/office/*"));
     assert.equal(admin.name, "savia");
     assert.deepEqual(admin.routes, [
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
     ]);
     assert.ok(admin.assets.run_worker_first.includes("/health"));
+    assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {
     await rm(outputRoot, { force: true, recursive: true });

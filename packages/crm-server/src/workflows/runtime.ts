@@ -253,7 +253,7 @@ async function executeNode(
       run.workspace_id,
       node.collection,
       mapped(node.values),
-      { id, checkpoint: nativeCheckpoint(id) },
+      { id, createdBy: run.owner_id, checkpoint: nativeCheckpoint(id) },
     );
     return;
   }

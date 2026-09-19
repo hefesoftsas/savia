@@ -21,9 +21,9 @@ export function DateTimeField(props: IFieldProps) {
   }
   return <Input
     type="datetime-local"
-    id={props.fieldName}
+    id={String(props.config?.inputId ?? props.fieldName)}
     name={props.fieldName}
-    aria-labelledby={`${props.fieldName}_label`}
+    aria-labelledby={`${props.config?.inputId ?? props.fieldName}_label`}
     aria-invalid={!!props.error}
     aria-required={props.required}
     required={props.required}

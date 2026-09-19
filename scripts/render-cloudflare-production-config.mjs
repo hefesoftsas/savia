@@ -64,6 +64,11 @@ function apiConfig({ documentsBucket, domainD1Id, publicOrigin }) {
     ],
     ratelimits: [
       {
+        name: "PUBLIC_FORMS_RATE_LIMITER",
+        namespace_id: "879102",
+        simple: { limit: 30, period: 60 },
+      },
+      {
         name: "REALTIME_RATE_LIMITER",
         namespace_id: "879101",
         simple: { limit: 30, period: 60 },
@@ -163,7 +168,7 @@ function mcpConfig({ publicOrigin }) {
   };
 }
 
-function gatewayConfig({ publicOrigin }) {
+function gatewayConfig({ publicOrigin, documentsBucket }) {
   const hostname = new URL(publicOrigin).hostname;
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
@@ -172,11 +177,16 @@ function gatewayConfig({ publicOrigin }) {
     main: "src/edge-gateway.ts",
     routes: [{ custom_domain: true, pattern: hostname }],
     services: [{ binding: "API", service: "savia-agencies" }],
+    r2_buckets: [{ binding: "OFFICE_RUNTIME", bucket_name: documentsBucket }],
     assets: {
       directory: "./dist",
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
+        "/public/forms",
+        "/public/forms/*",
+        "/office",
+        "/office/*",
         "/api/*",
         "/v1/*",
         "/.well-known/*",
