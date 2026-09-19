@@ -70,6 +70,8 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
       path = c.req.path,
       method = c.req.method;
     c.header("cache-control", "no-store");
+    if (path === "/api/access-context" && method === "GET")
+      return c.json({ data: policy });
     if (path === "/api/health") return next();
     if (path === "/api/bootstrap" && method === "POST")
       return c.json({ ok: true });

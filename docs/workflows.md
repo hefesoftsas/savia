@@ -102,3 +102,39 @@ a fixed test identity and must never be deployed or pointed at user data.
 
 - [NocoBase workflow concepts](https://docs.nocobase.com/handbook/workflow)
 - [Cloudflare Workflows](https://developers.cloudflare.com/workflows/)
+
+## Release-contributed bundles and matched creation
+
+Trusted optional packages can contribute workflow bundles through the release
+catalog. The host exposes available bundles under `/workflow-bundles` and their
+preparation operation in the generated API reference. Only installed/enabled
+contributing extensions expose their bundles. Preparation requires both workflow
+design and publish authorization, adds compatible fields and deterministic draft
+IDs, and never publishes or replaces an edited workflow. Missing collections and
+incompatible scalar/multiple relationships are rejected before applying changes.
+A concurrent schema conflict can leave earlier additive changes in place; retry
+repairs the remaining work. Existing published flows remain independently managed.
+
+Create steps can select a **unique text field** under **Evitar duplicados por campo
+único**. The engine returns an existing record for the same key without replacing
+its values. A native unique index arbitrates concurrent executions and the normal
+job checkpoint records the returned ID. Only scalar Textbox/Dropdown fields with
+`config.unique` are accepted; numbers and multiple relations are rejected at
+publication and execution. An empty/non-string runtime key fails visibly.
+Queries can compare the native record `id`, scoped to their workspace/collection.
+The **Fecha posterior** condition compares two valid ISO calendar dates; missing
+variables fail, and empty or invalid date values do not satisfy the condition.
+
+## Calendar expressions and absolute waits
+
+Workflow values support bounded text concatenation and calendar-day offsets in
+addition to literals and references. The editor exposes **Combinar textos** and
+**Desplazar fecha** controls. Offsets require real ISO calendar dates and accept
+up to 3,660 days in either direction. Expressions nest at most three levels;
+concatenations accept at most twelve parts and 4,000 output characters.
+
+A wait chooses either seconds or an absolute UTC date expression. Past dates
+resume on the next scheduler pass; waiting does not run a browser timer. Follow-up
+flows should re-read the source record after the wait and check its current state
+before creating a task. Publication validates references and preserves the normal
+owner permissions, execution checkpoints and error history.

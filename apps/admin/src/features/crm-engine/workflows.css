@@ -241,3 +241,29 @@
     align-items: stretch;
   }
 }
+
+.wf-bundles {
+  margin-block: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.wf-bundles summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.wf-bundles article {
+  padding-block: 1rem;
+  border-top: 1px solid var(--border);
+}
+.wf-bundles h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.wf-bundles p {
+  max-width: 70ch;
+  color: var(--muted-foreground);
+}
+.wf-bundles button {
+  white-space: normal;
+}

@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.calendar",
+  "version": "1.0.0",
+  "label": "Calendario",
+  "description": "Eventos, exportación y sincronización de agenda.",
+  "requires": [],
+  "apiVersion": 1
+}

@@ -122,6 +122,7 @@ export function createCrmApp(
   });
   if (options?.accessPolicy)
     registerAccessMiddleware(app, options.accessPolicy);
+  app.get("/api/access-context", (c) => c.json({ data: null }));
   registerExtensions(app, options);
   registerExtensionActions(app, options);
   registerExtensionSummaries(app, options);

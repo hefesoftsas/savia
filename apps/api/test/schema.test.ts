@@ -44,9 +44,23 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(292);
+    expect(names).toHaveLength(306);
     expect(names).toEqual(
       expect.arrayContaining([
+        "access_revisions",
+        "access_roles",
+        "access_grants",
+        "access_assignments",
+        "access_audit",
+        "crm_access_deliveries",
+        "crm_file_revisions",
+        "workflows",
+        "workflow_versions",
+        "workflow_events",
+        "workflow_executions",
+        "workflow_jobs",
+        "workflow_tasks",
+        "workflow_write_context",
         "assistant_virtual_employees",
         "assistant_virtual_employee_files",
         "assistant_virtual_employee_chunks",

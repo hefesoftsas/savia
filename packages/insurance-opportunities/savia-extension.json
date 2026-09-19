@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.opportunities",
+  "version": "1.0.0",
+  "label": "Oportunidades",
+  "description": "Prospectos, negociación y seguimiento comercial de seguros.",
+  "requires": [],
+  "apiVersion": 1
+}

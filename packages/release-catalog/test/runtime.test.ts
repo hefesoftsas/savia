@@ -13,7 +13,14 @@ describe("runtime release catalog", () => {
       runtimeReleaseCatalog
         .createConnectorActions(undefined)
         .map((action) => action.actionId),
-    ).toEqual(["quote"]);
+    ).toEqual(
+      expect.arrayContaining([
+        "quote",
+        "send",
+        "request-signature",
+        "signature-status",
+      ]),
+    );
     expect(
       runtimeReleaseCatalog.extensionSummaryProviders.map(
         (provider) => provider.id,

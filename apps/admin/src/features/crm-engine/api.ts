@@ -2,11 +2,17 @@ import type { DataProvider } from "ra-core";
 import { getCrmRuntime } from "./runtime";
 export async function apiFetch<T>(
   url: string,
-  options?: RequestInit,
+  options?: RequestInit & { responseType?: "blob" },
 ): Promise<T> {
+  const { responseType, ...init } = options ?? {};
   const response = await crmFetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    ...init,
+    headers: {
+      ...(init.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
+      ...init.headers,
+    },
   });
   if (response.status === 204 || response.status === 205) return undefined as T;
   if (!response.ok) {
@@ -20,6 +26,7 @@ export async function apiFetch<T>(
       { status: response.status },
     );
   }
+  if (responseType === "blob") return (await response.blob()) as T;
   const data: any = await response.json();
   return data as T;
 }
@@ -27,12 +34,14 @@ export const api = <T = any>(
   url: string,
   method = "GET",
   data?: unknown,
-  options?: RequestInit,
+  options?: RequestInit & { responseType?: "blob" },
 ) =>
   apiFetch<T>("/api" + url, {
     ...options,
     method,
-    ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
+    ...(data !== undefined
+      ? { body: data instanceof FormData ? data : JSON.stringify(data) }
+      : {}),
   });
 const list = (resource: string, params: any) =>
   api(

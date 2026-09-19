@@ -69,3 +69,23 @@ worked example in `packages/insurance-portfolio-dashboard/README.md`.
 No D1/Env/secrets access, no other tenant, no permission bypass, no generic
 filters/aggregations until a real case requires them, ordinary screens intact
 on disable.
+
+## Additional worked examples
+
+`packages/insurance-collections/` and `packages/insurance-renewals/` contribute
+independently installable worklists with versioned record updates. Their shared
+sector UI lives in `packages/insurance-workbench/`. Claims, commissions,
+endorsements, opportunities, activities, issuance, documents and service use the same host contract in their
+independent `packages/insurance-*` packages. See the
+[operations guide](../insurance-operations.md) for supported workflows and limits.
+
+`packages/insurance-automation/` contributes declarative relation/workflow bundles
+to the release catalog. Generic preparation and matched creation live in the host;
+sector field mappings stay inside this optional package. See the operations guide
+for explicit publication and scheduler requirements.
+
+The current optional insurance catalog and its activation dependencies are listed in
+[Insurance plugin coverage](../insurance-plugin-coverage.md). `PluginApi.files`
+uses the native record-file routes (multipart upload, authenticated binary download
+and versioned deletion). `PluginApi.access.effective()` reads only the current
+authenticated policy; it never accepts a client-selected principal or scope.

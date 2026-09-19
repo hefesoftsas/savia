@@ -1,0 +1,10 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.activities",
+  "version": "1.0.0",
+  "label": "Actividades",
+  "description": "Agenda operativa, responsables y seguimiento de compromisos.",
+  "requires": [],
+  "apiVersion": 1
+}

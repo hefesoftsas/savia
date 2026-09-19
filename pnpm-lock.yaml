@@ -641,6 +641,517 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/insurance-accounting:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-activities:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-automation:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-calendar:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-communications':
+        specifier: workspace:*
+        version: link:../insurance-communications
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-campaigns:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-communications':
+        specifier: workspace:*
+        version: link:../insurance-communications
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-carriers:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-communications':
+        specifier: workspace:*
+        version: link:../insurance-communications
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-claims:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-collections:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-commissions:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-communications:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-compliance:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-customer-portal:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-data-quality:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-document-generation:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-communications':
+        specifier: workspace:*
+        version: link:../insurance-communications
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-documents:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-endorsements:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-issuance:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-opportunities:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-payments:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
   packages/insurance-portfolio-dashboard:
     dependencies:
       '@savia/crm-shared':
@@ -697,6 +1208,134 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
 
+  packages/insurance-renewals:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-reports:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-service:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-settlements:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      '@savia/insurance-workbench':
+        specifier: workspace:*
+        version: link:../insurance-workbench
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/insurance-workbench:
+    dependencies:
+      '@savia/crm-shared':
+        specifier: workspace:*
+        version: link:../crm-shared
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
   packages/provider-contracts: {}
 
   packages/release-catalog:
@@ -704,12 +1343,81 @@ importers:
       '@savia/crm-shared':
         specifier: workspace:*
         version: link:../crm-shared
+      '@savia/insurance-accounting':
+        specifier: workspace:*
+        version: link:../insurance-accounting
+      '@savia/insurance-activities':
+        specifier: workspace:*
+        version: link:../insurance-activities
+      '@savia/insurance-automation':
+        specifier: workspace:*
+        version: link:../insurance-automation
+      '@savia/insurance-calendar':
+        specifier: workspace:*
+        version: link:../insurance-calendar
+      '@savia/insurance-campaigns':
+        specifier: workspace:*
+        version: link:../insurance-campaigns
+      '@savia/insurance-carriers':
+        specifier: workspace:*
+        version: link:../insurance-carriers
+      '@savia/insurance-claims':
+        specifier: workspace:*
+        version: link:../insurance-claims
+      '@savia/insurance-collections':
+        specifier: workspace:*
+        version: link:../insurance-collections
+      '@savia/insurance-commissions':
+        specifier: workspace:*
+        version: link:../insurance-commissions
+      '@savia/insurance-communications':
+        specifier: workspace:*
+        version: link:../insurance-communications
+      '@savia/insurance-compliance':
+        specifier: workspace:*
+        version: link:../insurance-compliance
+      '@savia/insurance-customer-portal':
+        specifier: workspace:*
+        version: link:../insurance-customer-portal
+      '@savia/insurance-data-quality':
+        specifier: workspace:*
+        version: link:../insurance-data-quality
+      '@savia/insurance-document-generation':
+        specifier: workspace:*
+        version: link:../insurance-document-generation
+      '@savia/insurance-documents':
+        specifier: workspace:*
+        version: link:../insurance-documents
+      '@savia/insurance-endorsements':
+        specifier: workspace:*
+        version: link:../insurance-endorsements
+      '@savia/insurance-issuance':
+        specifier: workspace:*
+        version: link:../insurance-issuance
+      '@savia/insurance-opportunities':
+        specifier: workspace:*
+        version: link:../insurance-opportunities
+      '@savia/insurance-payments':
+        specifier: workspace:*
+        version: link:../insurance-payments
       '@savia/insurance-portfolio-dashboard':
         specifier: workspace:*
         version: link:../insurance-portfolio-dashboard
       '@savia/insurance-quotes':
         specifier: workspace:*
         version: link:../insurance-quotes
+      '@savia/insurance-renewals':
+        specifier: workspace:*
+        version: link:../insurance-renewals
+      '@savia/insurance-reports':
+        specifier: workspace:*
+        version: link:../insurance-reports
+      '@savia/insurance-service':
+        specifier: workspace:*
+        version: link:../insurance-service
+      '@savia/insurance-settlements':
+        specifier: workspace:*
+        version: link:../insurance-settlements
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
