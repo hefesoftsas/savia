@@ -282,7 +282,7 @@ function Properties({
     isFormHtml ||
     isDisplayText ||
     field.type === "Number" ||
-    field.type === "Currency" ||
+    field.type === "Currency" || field.type === "Percentage" || field.type === "Rating" ||
     (field.type === "MapLocation" && !!mapPicker) ||
     field.type === "Address" ||
     ["Email", "Phone", "Url", "Textbox", "Textarea"].includes(field.type) ||
@@ -517,6 +517,16 @@ function Properties({
                     updateField(id, { type, config: rest });
                     return;
                   }
+                  if (type === "Percentage" || type === "Rating") {
+                    updateField(id, {type, defaultValue: undefined, options: undefined, config: {
+                      ...config, dateTime: undefined, format: undefined, formula: undefined, multiple: undefined,
+                      relation: undefined, collectionRelation: undefined, collectionOptions: undefined, optionsWhen: undefined,
+                      onDelete: undefined, addressAutocomplete: undefined, mapPicker: undefined, formHtml: undefined, displayText: undefined,
+                      minimum: type === "Rating" ? 1 : 0, maximum: type === "Rating" ? 5 : 100,
+                      decimals: type === "Percentage" ? 2 : undefined, ratingStyle: type === "Rating" ? "stars" : undefined,
+                    }});
+                    return;
+                  }
                   if (type === "MultiSelect" || type === "RichText") {
                     updateField(id, {
                       type, defaultValue: undefined,
@@ -657,7 +667,7 @@ function Properties({
                 ) : (
                   <Input
                     type={
-                      field.type === "Number" || field.type === "Currency"
+                      ["Number", "Currency", "Percentage", "Rating"].includes(field.type)
                         ? "number"
                         : field.type === "DateTime" || config.dateTime === true
                           ? "datetime-local"
@@ -898,6 +908,17 @@ function Properties({
                   />
                 </Control>
               </fieldset>
+            ) : field.type === "Percentage" ? (
+              <>
+                <div className="studio-two">{numeric("minimum", "Minimum percentage")}{numeric("maximum", "Maximum percentage")}</div>
+                <Control label="Decimal places"><Choice value={String(config.decimals ?? 2)} onChange={value => patch("decimals", Number(value))}>{[0,1,2,3,4,5,6].map(value => <option key={value} value={value}>{value}</option>)}</Choice></Control>
+                <p className="text-sm text-muted-foreground">25 is stored as 25 and displayed as 25%.</p>
+              </>
+            ) : field.type === "Rating" ? (
+              <>
+                <Control label="Maximum rating"><Choice value={String(config.maximum ?? 5)} onChange={value => patch("maximum",Number(value))}>{Array.from({length:10},(_,index)=>index+1).map(value => <option key={value} value={value}>{value}</option>)}</Choice></Control>
+                <Control label="Rating display"><Choice value={String(config.ratingStyle ?? "stars")} onChange={value=>patch("ratingStyle",value)}><option value="stars">Stars</option><option value="number">Number</option></Choice></Control>
+              </>
             ) : field.type === "Number" || field.type === "Currency" ? (
               <>
                 <div className="studio-two">
@@ -1587,6 +1608,8 @@ function Editor({
         content: `{{values.${sampleField}}}`,
       };
     }
+    if (type === "Percentage") { config.minimum = 0; config.maximum = 100; config.decimals = 2; }
+    if (type === "Rating") { config.maximum = 5; config.ratingStyle = "stars"; }
     if (type === "Currency") {
       config.currency = "COP";
       config.decimals = 2;

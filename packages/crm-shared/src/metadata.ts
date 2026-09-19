@@ -166,6 +166,8 @@ export const supportedTypes = [
   DISPLAY_TEXT_TYPE,
   "Number",
   "Currency",
+  "Percentage",
+  "Rating",
   "Dropdown",
   "MultiSelect",
   "Autocomplete",
@@ -258,6 +260,7 @@ export const fieldSchema = z
         integer: z.boolean().optional(),
         currency: z.string().trim().min(2).max(10).optional(),
         decimals: z.number().int().min(0).max(6).optional(),
+        ratingStyle: z.enum(["stars", "number"]).optional(),
         dateTime: z.boolean().optional(),
         collectionOptions: collectionOptionsSchema.optional(),
         relation: identifier.optional(),
@@ -578,6 +581,32 @@ export const configSchema = z
           next = config.fields[next]?.config?.optionsWhen?.field;
         }
       }
+      if (["Percentage", "Rating"].includes(f.type)) {
+        if (
+          c?.multiple ||
+          c?.relation ||
+          c?.collectionRelation ||
+          c?.collectionOptions ||
+          c?.dateTime ||
+          c?.formula ||
+          c?.format
+        )
+          issue(
+            `${f.label}: this numeric field cannot use relation or alternate value settings.`,
+          );
+        if (
+          f.type === "Rating" &&
+          (!Number.isInteger(c?.maximum ?? 5) ||
+            (c?.maximum ?? 5) < 1 ||
+            (c?.maximum ?? 5) > 10 ||
+            (c?.minimum !== undefined && c.minimum !== 1))
+        )
+          issue(
+            `${f.label}: ratings require a maximum integer from 1 to 10 and a minimum of 1.`,
+          );
+        if (f.type === "Percentage" && (c?.minimum ?? 0) > (c?.maximum ?? 100))
+          issue(`${f.label}: minimum must not exceed maximum.`);
+      }
       if (
         f.type === "MultiSelect" &&
         (c?.unique ||
@@ -828,6 +857,32 @@ export function validateRecord(
       if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
         errors[name] = `${field.label}: enter a valid time (HH:mm)`;
       else clean[name] = value;
+      continue;
+    }
+    if (field.type === "Percentage" || field.type === "Rating") {
+      const rating = field.type === "Rating";
+      const min = rating ? 1 : Number(c.minimum ?? 0);
+      const max = Number(c.maximum ?? (rating ? 5 : 100));
+      if (
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        value < min ||
+        value > max ||
+        (rating && !Number.isInteger(value))
+      )
+        errors[name] =
+          `${field.label}: enter ${rating ? "an integer" : "a number"} between ${min} and ${max}`;
+      else if (!rating) {
+        const scaled = value * 10 ** Number(c.decimals ?? 2);
+        if (
+          !Number.isFinite(scaled) ||
+          Math.abs(scaled - Math.round(scaled)) >
+            Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8
+        )
+          errors[name] =
+            `${field.label}: use at most ${c.decimals ?? 2} decimal places`;
+      }
+      clean[name] = value;
       continue;
     }
     if (field.type === "MultiSelect") {

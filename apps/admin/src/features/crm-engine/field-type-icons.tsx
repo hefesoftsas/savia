@@ -2,6 +2,8 @@ import {
   Type,
   Hash,
   CircleDollarSign,
+  Percent,
+  Star,
   Rows3,
   ListChecks,
   Bold,
@@ -41,6 +43,18 @@ export const fieldTypePalette: {
   { type: "FormHtml", label: "HTML personalizado", icon: Code2 },
   { type: DISPLAY_TEXT_TYPE, label: "Texto fijo", icon: Heading },
   { type: "Number", label: "Número", icon: Hash },
+  {
+    type: "Percentage",
+    label: "Percentage",
+    icon: Percent,
+    searchTerms: "porcentaje tasa descuento percent",
+  },
+  {
+    type: "Rating",
+    label: "Rating",
+    icon: Star,
+    searchTerms: "calificación estrellas puntuación escala score",
+  },
   {
     type: "Currency",
     label: "Moneda",

@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import type { IFieldConfig } from "@form-eng/core";
 import { Badge } from "@/components/ui/badge";
 import { formatFieldValue } from "./field-value";
@@ -9,6 +10,33 @@ export function FieldValueDisplay({
   value: unknown;
   field: IFieldConfig;
 }) {
+  if (
+    field.type === "Rating" &&
+    typeof value === "number" &&
+    field.config?.ratingStyle !== "number"
+  ) {
+    const max = Math.max(1, Math.min(10, Number(field.config?.maximum ?? 5)));
+    return (
+      <span
+        role="img"
+        aria-label={`${value} of ${max}`}
+        className="inline-flex flex-wrap gap-0.5"
+      >
+        {Array.from({ length: max }, (_, index) => (
+          <Star
+            key={index}
+            aria-hidden="true"
+            size={16}
+            className={
+              value > index
+                ? "fill-current text-primary"
+                : "text-muted-foreground"
+            }
+          />
+        ))}
+      </span>
+    );
+  }
   if (field.type === "RichText" && typeof value === "string" && value.trim())
     return <RichTextValue value={value} />;
   if (field.type === "MultiSelect" && Array.isArray(value) && value.length)

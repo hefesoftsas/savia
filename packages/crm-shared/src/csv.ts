@@ -106,7 +106,9 @@ export function mapCsvRow(
         conversionErrors[key] =
           `${field.label}: use a JSON array for multiple values.`;
       }
-    } else if (field.type === "Number" || field.type === "Currency") {
+    } else if (
+      ["Number", "Currency", "Percentage", "Rating"].includes(field.type)
+    ) {
       input[key] = Number(raw);
       if (!Number.isFinite(input[key]))
         conversionErrors[key] = `${field.label}: número inválido.`;

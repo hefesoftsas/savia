@@ -469,3 +469,63 @@ it("forwards principal binding through both authenticated synchronization gatewa
     expect(response.status).toBe(403);
   }
 });
+
+it("generates numeric and collection schemas for the expanded low-code fields", async () => {
+  const app = admin();
+  const created = await app.request(prefix + "/objects", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "field_contracts",
+      label: "Field contracts",
+      description: "",
+      config: makeConfig({
+        rate: {
+          type: "Percentage",
+          label: "Rate",
+          required: true,
+          config: { decimals: 1 },
+        },
+        score: {
+          type: "Rating",
+          label: "Score",
+          required: true,
+          config: { maximum: 10 },
+        },
+        tags: {
+          type: "MultiSelect",
+          label: "Tags",
+          required: true,
+          options: [{ value: "a", label: "A" }],
+        },
+        notes: { type: "RichText", label: "Notes", required: true },
+        appointment: { type: "DateTime", label: "Appointment", required: true },
+        time: { type: "Time", label: "Time", required: true },
+      }),
+    }),
+  });
+  expect(created.status).toBe(201);
+  const response = await app.request(prefix + "/openapi.json");
+  expect(response.status).toBe(200);
+  const document = (await response.json()) as any;
+  const fields = document.components.schemas.field_contracts_Create.properties;
+  expect(fields.rate).toMatchObject({
+    type: "number",
+    minimum: 0,
+    maximum: 100,
+    multipleOf: 0.1,
+  });
+  expect(fields.score).toMatchObject({
+    type: "integer",
+    minimum: 1,
+    maximum: 10,
+  });
+  expect(fields.tags).toMatchObject({
+    type: "array",
+    items: { type: "string", enum: ["a"] },
+    minItems: 1,
+  });
+  expect(fields.notes).toMatchObject({ type: "string", maxLength: 100000 });
+  expect(fields.appointment.format).toBe("date-time");
+  expect(fields.time.pattern).toBeTruthy();
+});

@@ -106,8 +106,9 @@ export function RecordsFiltersPanel({
               <Input
                 aria-label={`Valor del filtro ${index + 1}`}
                 type={
-                  object.config.fields[condition.field]?.type === "Number" ||
-                  object.config.fields[condition.field]?.type === "Currency"
+                  ["Number", "Currency", "Percentage", "Rating"].includes(
+                    object.config.fields[condition.field]?.type ?? "",
+                  )
                     ? "number"
                     : "text"
                 }
@@ -115,11 +116,9 @@ export function RecordsFiltersPanel({
                 onChange={(event) =>
                   onConditionChange(index, {
                     value:
-                      (object.config.fields[condition.field]?.type ===
-                        "Number" ||
-                        object.config.fields[condition.field]?.type ===
-                          "Currency") &&
-                      event.target.value !== ""
+                      ["Number", "Currency", "Percentage", "Rating"].includes(
+                        object.config.fields[condition.field]?.type ?? "",
+                      ) && event.target.value !== ""
                         ? Number(event.target.value)
                         : event.target.value,
                   })

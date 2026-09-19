@@ -60,3 +60,22 @@ scripts and images are not rendered. Links allow HTTP, HTTPS and mailto only;
 unsupported link destinations become plain text. Existing HTML presentation
 blocks are separate from editable rich-text data. Rich text is eligible for
 record history; multi-select history remains unsupported.
+
+## Percentage and rating
+
+`Percentage` stores a number in percent units: `25` means 25%, not 0.25. Its
+initial range is 0–100, with at most two decimal places. The designer can change
+the minimum, maximum and precision (0–6 decimal places). Saving rejects values
+outside those bounds or with excess precision rather than silently rounding.
+Tables, details and summaries append the percent sign using locale formatting.
+
+`Rating` stores an integer from 1 to a configurable maximum of 1–10 (default 5).
+The designer chooses stars or numeric entry. Star controls support keyboard
+navigation, read-only display and clearing; a cleared required rating fails
+validation. Tables, details and summaries show stars or the score and maximum.
+An empty value is distinct from a score; zero is not a valid rating.
+
+Both types support numeric CSV import, numeric filter operands, field conversion
+and record history. Access-policy comparisons enforce numeric literals. General
+formula outputs and automatic monetary summary inference retain their existing
+Number/Currency scope. No database migration is required.

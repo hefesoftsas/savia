@@ -166,10 +166,14 @@ export function PredicateEditor({
                 field: value.field,
                 op: value.op === "in" ? "eq" : value.op,
                 value: {
-                  literal:
-                    entry.fieldTypes[value.field] === "Number"
-                      ? Number(e.target.value)
-                      : e.target.value,
+                  literal: [
+                    "Number",
+                    "Currency",
+                    "Percentage",
+                    "Rating",
+                  ].includes(entry.fieldTypes[value.field])
+                    ? Number(e.target.value)
+                    : e.target.value,
                 },
               })
             }

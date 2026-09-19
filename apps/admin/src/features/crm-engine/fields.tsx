@@ -1,3 +1,4 @@
+import { PercentageField, RatingField } from "./percentage-rating-fields";
 import { MultiSelectField } from "./multi-select-field";
 import { RichTextField } from "./rich-text-field";
 import { DateTimeField } from "./date-time-field";
@@ -710,6 +711,8 @@ export const registry = {
   DisplayText: <DisplayTextField />,
   Number: <NumberField />,
   Currency: <CurrencyField />,
+  Percentage: <PercentageField />,
+  Rating: <RatingField />,
   DateControl: <DateField />,
   DateTime: <DateTimeField />,
   Time: <TimeField />,

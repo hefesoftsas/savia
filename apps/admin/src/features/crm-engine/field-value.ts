@@ -21,6 +21,13 @@ export function formatFieldValue(
   const location = parseMapLocation(value);
   if (location) return formatMapLocationSummary(location);
   if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (field.type === "Percentage" && typeof value === "number")
+    return new Intl.NumberFormat(locale, {
+      style: "percent",
+      maximumFractionDigits: Number(field.config?.decimals ?? 2),
+    }).format(value / 100);
+  if (field.type === "Rating")
+    return `${value} / ${field.config?.maximum ?? 5}`;
   if (field.type === "Currency" || field.config?.format === "currency") {
     const decimals =
       typeof field.config?.decimals === "number"

@@ -42,6 +42,8 @@ const types = new Set([
   "Address",
   "Number",
   "Currency",
+  "Percentage",
+  "Rating",
   "Dropdown",
   "Autocomplete",
   "Toggle",
