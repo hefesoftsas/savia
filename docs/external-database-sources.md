@@ -152,3 +152,17 @@ UI. Keep fixture credentials outside the repository. Promote only after the
 same commit passes CI and preview evidence, following the production workflow.
 Production requires its own bridge secret, approved database allowlist, and
 HTTPS endpoint; never reuse the preview fixture database stack as production.
+
+### Production bridge
+
+Use `infra/db-bridge/compose.production.yml` for the independently authenticated
+production bridge and tunnel. It publishes only a loopback health port (8792)
+and does not include fixture databases. Set its private `.env` values as for
+preview, using a different shared secret and dedicated tunnel. An omitted or
+empty `DB_BRIDGE_ALLOWED_HOSTS` explicitly denies all database hosts; add only
+approved destination hostnames when real sources are ready. Configure the matching
+HTTPS URL and shared secret in the GitHub `production` environment.
+
+After source policy changes, binding, unbinding, or metadata synchronization,
+the client invalidates its cached collection catalog so navigation and editing
+use the current backend definitions and capabilities.

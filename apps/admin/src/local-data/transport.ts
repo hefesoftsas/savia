@@ -333,9 +333,13 @@ export function createLocalTransport(
       return Response.json({ ok: true });
     if (method !== "GET" && result.ok) {
       requestSync();
-      if (segments[1] === "record-history-settings" && method === "PUT") {
-        // The settings write increments the collection version. Invalidate all
-        // metadata sources used by the object editor before it can save again.
+      if (
+        (segments[1] === "record-history-settings" && method === "PUT") ||
+        segments[1] === "collection-bindings" ||
+        segments[1] === "sources"
+      ) {
+        // Bindings and source policies change the authoritative collection catalog.
+        // Refresh every metadata fallback before navigating or editing again.
         await removeWorkspaceMetadata(`${store.scope}:metadata:/api/objects`);
         await removeWorkspaceMetadata(`${store.scope}:objects`);
         try {

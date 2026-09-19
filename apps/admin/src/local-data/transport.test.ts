@@ -389,3 +389,28 @@ it("refreshes local data after successful history recovery without reporting ref
   expect(sync).toHaveBeenCalledWith("contacts", true);
   expect(requestSync).toHaveBeenCalledOnce();
 });
+
+it.each([
+  ["/api/collection-bindings", "POST"],
+  ["/api/collection-bindings/external/sync", "POST"],
+  ["/api/collection-bindings/external", "DELETE"],
+  ["/api/sources/external", "PATCH"],
+])("refreshes backend collection metadata after %s", async (path, method) => {
+  const local = { ...store(), scope: `external-metadata-${path}` };
+  const network = vi.fn(async () =>
+    Response.json({ data: [{ name: "contacts", version: 1 }] }),
+  );
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  await transport("/api/objects");
+  await transport(path, { method });
+  network.mockResolvedValueOnce(
+    Response.json({ data: [{ name: "external", version: 2 }] }),
+  );
+  expect(await (await transport("/api/objects")).json()).toEqual({
+    data: [{ name: "external", version: 2 }],
+  });
+});
