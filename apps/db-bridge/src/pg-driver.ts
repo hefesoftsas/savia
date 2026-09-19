@@ -45,12 +45,8 @@ export function serializeValue(
   value: unknown,
 ): string | number | boolean | null {
   if (value === null || value === undefined) return null;
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  )
-    return Number.isFinite(value) ? (value as string | number | boolean) : null;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "bigint") return value.toString();
   if (value instanceof Date)
     return Number.isNaN(value.getTime()) ? null : value.toISOString();
