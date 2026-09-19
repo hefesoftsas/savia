@@ -1,3 +1,5 @@
+import { DeploymentRecovery } from "@/pwa/deployment-recovery-ui";
+import { isModuleLoadError } from "@/pwa/deployment-recovery";
 import type { FallbackProps } from "react-error-boundary";
 import { useResetErrorBoundaryOnLocationChange, Translate } from "ra-core";
 import { CircleAlert, History } from "lucide-react";
@@ -22,6 +24,8 @@ export const Error = (props: InternalErrorProps & {}) => {
   const { error, errorInfo, resetErrorBoundary, ...rest } = props;
 
   useResetErrorBoundaryOnLocationChange(resetErrorBoundary);
+
+  if (isModuleLoadError(error)) return <DeploymentRecovery />;
 
   const errorMessage: string =
     typeof error === "object" &&
