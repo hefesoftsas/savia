@@ -1,0 +1,464 @@
+/* Collection Import Wizard - Impeccable Design System */
+.import-wizard-dialog {
+  max-width: 860px !important;
+  width: 95vw !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  background: var(--crm-canvas, #f9faf7) !important;
+  border: 1px solid var(--crm-border, #e1e6df) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.12) !important;
+  overflow: hidden !important;
+}
+
+.import-wizard-header {
+  padding: 20px 24px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--crm-border, #e1e6df);
+}
+
+.import-wizard-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.import-wizard-title-row h2 {
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--crm-foreground, #26382e);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-wizard-title-row p {
+  font-size: 0.85rem;
+  color: var(--crm-muted-foreground, #69736b);
+  margin: 4px 0 0 0;
+}
+
+/* Stepper */
+.import-wizard-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.import-wizard-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  color: var(--crm-muted-foreground, #8a968d);
+  cursor: default;
+  transition: color 0.15s ease;
+}
+
+.import-wizard-step-item.active {
+  color: var(--crm-primary, #285841);
+  font-weight: 600;
+}
+
+.import-wizard-step-item.completed {
+  color: var(--crm-foreground, #26382e);
+}
+
+.import-wizard-step-number {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  background: #e6eae5;
+  color: #556258;
+}
+
+.import-wizard-step-item.active .import-wizard-step-number {
+  background: var(--crm-primary, #285841);
+  color: #ffffff;
+}
+
+.import-wizard-step-item.completed .import-wizard-step-number {
+  background: #d8e5dd;
+  color: var(--crm-primary, #285841);
+}
+
+.import-wizard-step-divider {
+  flex: 1;
+  height: 1px;
+  background: var(--crm-border, #e1e6df);
+  max-width: 32px;
+}
+
+/* Body */
+.import-wizard-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Step 1: Dropzone */
+.wizard-dropzone {
+  border: 2px dashed #cfd8ce;
+  border-radius: 10px;
+  padding: 44px 20px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wizard-dropzone:hover,
+.wizard-dropzone.drag-active {
+  border-color: var(--crm-primary, #285841);
+  background: #f4f8f4;
+}
+
+.wizard-dropzone-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #eef3ec;
+  color: var(--crm-primary, #285841);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.wizard-dropzone h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #26382e;
+  margin: 0 0 6px 0;
+}
+
+.wizard-dropzone p {
+  font-size: 0.85rem;
+  color: #69736b;
+  margin: 0;
+}
+
+.wizard-file-card {
+  background: #ffffff;
+  border: 1px solid var(--crm-border, #e1e6df);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wizard-file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wizard-file-icon {
+  color: var(--crm-primary, #285841);
+}
+
+.wizard-file-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #26382e;
+}
+
+.wizard-file-meta {
+  font-size: 0.8rem;
+  color: #69736b;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Step 2: Screen Configuration */
+.wizard-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid var(--crm-border, #e1e6df);
+}
+
+.wizard-field-full {
+  grid-column: 1 / -1;
+}
+
+.wizard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wizard-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #26382e;
+}
+
+.wizard-field select,
+.wizard-field input {
+  height: 38px;
+  border-radius: 6px;
+  border: 1px solid #dce2da;
+  padding: 0 10px;
+  font-size: 0.875rem;
+  background: #ffffff;
+}
+
+.wizard-field select:focus,
+.wizard-field input:focus {
+  outline: none;
+  border-color: var(--crm-primary, #285841);
+  box-shadow: 0 0 0 2px rgba(40, 88, 65, 0.15);
+}
+
+.wizard-card-option {
+  background: #ffffff;
+  border: 1px solid var(--crm-border, #e1e6df);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Step 3: Fields Matrix Table */
+.wizard-table-container {
+  background: #ffffff;
+  border: 1px solid var(--crm-border, #e1e6df);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.wizard-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.wizard-matrix-table th {
+  background: #f4f6f2;
+  color: #49544c;
+  font-weight: 650;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e1e6df;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.wizard-matrix-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #edf1eb;
+  vertical-align: middle;
+}
+
+.wizard-matrix-table tr:hover {
+  background: #fafbf9;
+}
+
+.wizard-matrix-table tr.row-excluded {
+  opacity: 0.45;
+  background: #f8f9f7;
+}
+
+.wizard-type-select {
+  height: 32px;
+  font-size: 0.825rem;
+  border-radius: 6px;
+  border: 1px solid #dce2da;
+  padding: 0 8px;
+  background: #ffffff;
+  color: #26382e;
+}
+
+.wizard-sample-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  background: #edf2e9;
+  color: #3b4d41;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.wizard-key-badge {
+  font-family: monospace;
+  font-size: 0.775rem;
+  color: #69736b;
+  background: #f2f4ee;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Step 4: Summary */
+.wizard-summary-card {
+  background: #ffffff;
+  border: 1px solid var(--crm-border, #e1e6df);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wizard-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.wizard-summary-metric {
+  background: #f7f9f6;
+  border-radius: 8px;
+  padding: 14px;
+  border: 1px solid #e7ece5;
+}
+
+.wizard-summary-metric-label {
+  font-size: 0.775rem;
+  color: #69736b;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.wizard-summary-metric-val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #26382e;
+  margin-top: 4px;
+}
+
+/* Footer */
+.import-wizard-footer {
+  padding: 16px 24px;
+  background: #ffffff;
+  border-top: 1px solid var(--crm-border, #e1e6df);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wizard-button-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wizard-button-primary {
+  background: var(--crm-primary, #285841) !important;
+  color: #ffffff !important;
+  height: 38px !important;
+  padding: 0 18px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.wizard-button-primary:hover {
+  background: #1f4432 !important;
+}
+
+/* Progress Bar for Chunked Batch Import */
+.wizard-progress-box {
+  background: #f7f9f6;
+  border: 1px solid #dce2da;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wizard-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #26382e;
+}
+
+.wizard-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e1e6df;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.wizard-progress-bar {
+  height: 100%;
+  background: var(--crm-primary, #285841);
+  transition: width 0.3s ease-in-out;
+  border-radius: 4px;
+}
+
+/* Badges for Advanced Phase 3 Features */
+.wizard-formula-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 4px;
+  font-size: 0.725rem;
+  font-weight: 600;
+}
+
+.wizard-relation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 0.725rem;
+  font-weight: 600;
+}
+
+.wizard-section-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #f4f4f5;
+  color: #52525b;
+  border-radius: 4px;
+  font-size: 0.725rem;
+}

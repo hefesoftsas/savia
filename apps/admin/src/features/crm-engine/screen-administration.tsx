@@ -48,6 +48,7 @@ import {
   KeyRound,
   Trash2,
   Undo2,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import {
@@ -161,6 +162,13 @@ export default function ScreenAdministration({
       icon: Plus,
       view: "new-object",
       primary: true,
+      visible: true,
+    },
+    {
+      label: "Desde Excel o CSV",
+      icon: FileSpreadsheet,
+      view: "import-spreadsheet",
+      primary: false,
       visible: true,
     },
     {
@@ -340,7 +348,13 @@ export default function ScreenAdministration({
         onClick={() => openScreenConfig(item)}
       >
         <span className="screen-admin-row-icon" aria-hidden="true">
-          {hasSource ? <Database /> : fromPlugin ? <Plug /> : <LayoutDashboard />}
+          {hasSource ? (
+            <Database />
+          ) : fromPlugin ? (
+            <Plug />
+          ) : (
+            <LayoutDashboard />
+          )}
         </span>
         <span className="screen-admin-row-copy">
           <span className="screen-admin-row-title-wrap">

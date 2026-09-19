@@ -75,7 +75,9 @@ import {
   Check,
   Code2,
   X,
+  FileSpreadsheet,
 } from "lucide-react";
+import { CollectionImportWizard } from "./collection-import-wizard";
 import { api, dataProvider } from "./api";
 import {
   attachTemporaryR2Attachments,
@@ -344,9 +346,7 @@ function App({
     }
     return extensionScreenDefaultHidden(o.name);
   };
-  const visibleObjects = sortScreens(
-    objects.filter((o) => !isObjectHidden(o)),
-  );
+  const visibleObjects = sortScreens(objects.filter((o) => !isObjectHidden(o)));
   const resolvedMenuLayout = useMemo(
     () =>
       reconcileMenuLayout(
@@ -368,7 +368,8 @@ function App({
       }))
       .filter((block) => block.objects.length > 0);
   }, [resolvedMenuLayout, visibleObjects]);
-  const newObject = view === "new-object" || newObjectState;
+  const newObject =
+    view === "new-object" || view === "import-spreadsheet" || newObjectState;
   const removeScreen =
     view === "remove-screen"
       ? objects.find((item) => item.name === selected)
@@ -376,9 +377,7 @@ function App({
   const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
   const recordId = location.get("record");
   const object =
-    objects.find((o) => o.name === selected) ??
-    visibleObjects[0] ??
-    objects[0];
+    objects.find((o) => o.name === selected) ?? visibleObjects[0] ?? objects[0];
   const resolvedObjectName = object?.name ?? selected;
   const contribution = extensionScreenFor(resolvedObjectName, view);
   const extensionsQuery = useQuery({
@@ -701,6 +700,9 @@ function App({
         )}
         {newObject && (
           <NewObject
+            initialMode={
+              view === "import-spreadsheet" ? "spreadsheet" : "blank"
+            }
             onClose={() => {
               setNewObject(false);
               navigate(selected, "admin");
@@ -1323,9 +1325,11 @@ function App({
       </main>
       {newObject && (
         <NewObject
+          initialMode={view === "import-spreadsheet" ? "spreadsheet" : "blank"}
           onClose={() => {
             setNewObject(false);
-            if (view === "new-object") navigate(object.name);
+            if (view === "new-object" || view === "import-spreadsheet")
+              navigate(object.name);
           }}
           onCreated={async (name) => {
             await refresh();
@@ -1447,16 +1451,30 @@ function DeleteRecord({
 function NewObject({
   onClose,
   onCreated,
+  initialMode = "blank",
 }: {
   onClose: () => void;
   onCreated: (name: string) => void | Promise<void>;
+  initialMode?: "spreadsheet" | "blank";
 }) {
+  const [mode, setMode] = useState<"spreadsheet" | "blank">(initialMode);
   const [name, setName] = useState(""),
     [label, setLabel] = useState(""),
     [description, setDescription] = useState(""),
     [showInSidebar, setShowInSidebar] = useState(true),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+
+  if (mode === "spreadsheet") {
+    return (
+      <CollectionImportWizard
+        onClose={onClose}
+        onCreated={onCreated}
+        onSwitchToBlank={() => setMode("blank")}
+      />
+    );
+  }
+
   return (
     <Modal
       title="Crea un objeto a tu medida"
@@ -1464,6 +1482,21 @@ function NewObject({
       onClose={onClose}
       dialogClassName="savia-crm-new-object-dialog"
     >
+      <div className="flex items-center justify-between p-2.5 mb-4 bg-emerald-50/70 border border-emerald-200/80 rounded-lg">
+        <div className="flex items-center gap-2 text-xs text-emerald-900 font-medium">
+          <FileSpreadsheet size={16} className="text-emerald-700 shrink-0" />
+          <span>¿Tienes un archivo Excel o CSV?</span>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="text-xs h-7 gap-1 bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300 shadow-none font-semibold cursor-pointer"
+          onClick={() => setMode("spreadsheet")}
+        >
+          Crear desde archivo
+        </Button>
+      </div>
       <form
         className="standard-form new-object-form"
         onSubmit={async (e) => {
@@ -1547,7 +1580,8 @@ function NewObject({
                 Mostrar en la barra lateral
               </Label>
               <p className="text-xs text-muted-foreground">
-                Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.
+                Desactívalo si esta pantalla solo se llamará desde otras páginas
+                o flujos.
               </p>
             </div>
             <Switch

@@ -15,6 +15,12 @@ No todas las pantallas necesitan mostrarse en la barra lateral izquierda del CRM
 - **Al crear una pantalla**: El modal de «Nueva pantalla» incluye la opción «Mostrar en la barra lateral» (activa por defecto). Si se desactiva, la pantalla se crea con `studio: { screen: { hidden: true } }`. Permanece accesible directamente por URL (`/crm?object=<nombre>`), deep link y mensajes de navegación entre componentes (`postMessage`).
 - **En Organizar pantallas**: La lista se divide en «Pantallas activas» (visibles en la barra lateral) y «Pantallas inactivas» (ocultas de la barra lateral pero accesibles desde otras páginas). Se puede cambiar la visibilidad en cualquier momento activando o desactivando la opción correspondiente.
 - **En la configuración de la pantalla (`admin-screen`)**: La sección «Visibilidad en la barra lateral» incluye un interruptor directo para mostrar u ocultar la pantalla del menú sin alterar sus datos, campos ni configuraciones.
-- **Pantallas de extensiones / plugins**: Las extensiones pueden declarar `hidden: true` en su definición `ExtensionScreenContribution` (`packages/release-catalog`). Las pantallas originadas por plugins se identifican visualmente con una insignia `Plugin` en el panel de administración y sus defaults de visibilidad son respetados por la navegación.
+## Creación desde archivo Excel o CSV (Spreadsheet Generator)
+
+Desde la barra de administración de pantallas o el diálogo de nueva pantalla se puede invocar «Desde Excel o CSV» para generar de forma asistida una colección y su pantalla:
+
+- **Lectura e inferencia en el cliente**: Admite `.xlsx`, `.xls` y `.csv`. Analiza tipos (`Toggle`, `DateControl`, `Currency`, `Number`, `Dropdown`, `Email`, `Phone`, `Url`, `Textarea`, `Textbox`) y sanitiza cabeceras a identificadores válidos para D1.
+- **Configuración de pantalla**: Permite definir sección de menú, icono Lucide, superficie (`drawer-long`, `modal`, etc.), distribución en columnas y activación opcional de vista Pipeline Kanban si se detectan etapas.
+- **Matriz de campos e importación**: Ofrece una tabla interactiva para redefinir tipos, editar etiquetas y desmarcar columnas antes de crear el objeto e importar los registros iniciales.
 
 Verificación: pruebas con nombres arbitrarios y pantallas ocultas, navegación contextual, relaciones, filtro de auditoría en D1, TypeScript y revisión visual en navegador.
