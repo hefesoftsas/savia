@@ -5,13 +5,12 @@ COPY apps/db-bridge/package.json apps/db-bridge/
 COPY packages/crm-shared/package.json packages/crm-shared/
 RUN corepack enable && pnpm install --filter @savia/db-bridge... --prod=false
 
-FROM node:22-alpine AS build
+FROM deps AS build
 WORKDIR /srv
-COPY --from=deps /srv/node_modules ./node_modules
-COPY --from=deps /srv/apps/db-bridge/node_modules ./apps/db-bridge/node_modules
-COPY --from=deps /srv/packages/crm-shared/node_modules ./packages/crm-shared/node_modules
-COPY . .
-RUN corepack enable && pnpm --filter @savia/db-bridge build
+COPY apps/db-bridge/src ./apps/db-bridge/src
+COPY apps/db-bridge/tsconfig.json ./apps/db-bridge/tsconfig.json
+COPY packages/crm-shared/src ./packages/crm-shared/src
+RUN pnpm --filter @savia/db-bridge build
 
 FROM node:22-alpine
 WORKDIR /srv/apps/db-bridge
