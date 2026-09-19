@@ -161,10 +161,10 @@ describe("App", () => {
     await screen.findByRole("heading", { name: "Integraciones" });
     await user.type(
       screen.getByRole("searchbox", { name: "Buscar en el menú" }),
-      "integraciones",
+      "conexiones",
     );
 
-    expect(screen.getByRole("link", { name: "Integraciones" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Conexiones" })).toBeVisible();
     expect(
       screen.queryByRole("link", { name: "Autos livianos" }),
     ).not.toBeInTheDocument();
@@ -217,13 +217,9 @@ describe("App", () => {
 
     const footer = accountMenuTrigger.closest('[data-slot="sidebar-footer"]');
     expect(footer).toBeTruthy();
-    const appearanceHeading = screen.getByText("Apariencia");
-    expect(
-      appearanceHeading.compareDocumentPosition(accountMenuTrigger) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
+    expect(screen.queryByText("Apariencia")).not.toBeInTheDocument();
     await user.click(accountMenuTrigger);
+    expect(screen.getByRole("menuitem", { name: "Apariencia" })).toBeVisible();
 
     expect(screen.getByRole("menuitem", { name: "Mi cuenta" })).toHaveAttribute(
       "href",
@@ -240,9 +236,9 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "Integraciones" }),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "Integraciones" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Conexiones" })).toHaveAttribute(
       "href",
-      "#/my-integrations",
+      "#/my-integrations?tab=connections",
     );
   });
 
@@ -281,8 +277,8 @@ describe("App", () => {
     render(<App services={administrator} />);
 
     expect(
-      await screen.findByRole("link", { name: "Integraciones" }),
-    ).toHaveAttribute("href", "#/my-integrations");
+      await screen.findByRole("link", { name: "Conexiones" }),
+    ).toHaveAttribute("href", "#/my-integrations?tab=connections");
     expect(await screen.findByRole("heading", { name: "CRM" })).toBeVisible();
   });
 

@@ -22,13 +22,13 @@ describe("i18n messages", () => {
   it("loads Spanish, English, and Portuguese bundles", () => {
     expect(
       (saviaMessages("es").sidebar as Record<string, unknown>).items,
-    ).toMatchObject({ integrations: "Integraciones" });
+    ).toMatchObject({ integrations: "Conexiones" });
     expect(
       (saviaMessages("en").sidebar as Record<string, unknown>).items,
-    ).toMatchObject({ integrations: "Integrations" });
+    ).toMatchObject({ integrations: "Connections" });
     expect(
       (saviaMessages("pt").sidebar as Record<string, unknown>).items,
-    ).toMatchObject({ integrations: "Integrações" });
+    ).toMatchObject({ integrations: "Conexões" });
   });
 
   it("translates react-admin navigation strings in Spanish", () => {

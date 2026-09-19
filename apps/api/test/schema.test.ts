@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(308);
+    expect(names).toHaveLength(315);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -61,6 +61,14 @@ describe("full D1 schema projection", () => {
         "workflow_jobs",
         "workflow_tasks",
         "workflow_write_context",
+        "workflow_webhook_endpoints",
+        "workflow_webhook_receipts",
+        "workflow_webhook_admissions",
+        "workflow_webhook_destinations",
+        "workflow_webhook_destination_versions",
+        "workflow_webhook_deliveries",
+        "workflow_webhook_attempts",
+
         "assistant_virtual_employees",
         "assistant_virtual_employee_files",
         "assistant_virtual_employee_chunks",
@@ -115,6 +123,14 @@ describe("full D1 schema projection", () => {
         "workflow_jobs",
         "workflow_tasks",
         "workflow_write_context",
+        "workflow_webhook_endpoints",
+        "workflow_webhook_receipts",
+        "workflow_webhook_admissions",
+        "workflow_webhook_destinations",
+        "workflow_webhook_destination_versions",
+        "workflow_webhook_deliveries",
+        "workflow_webhook_attempts",
+
         "access_revisions",
         "access_roles",
         "access_grants",
