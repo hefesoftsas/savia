@@ -169,6 +169,8 @@ export const supportedTypes = [
   "Autocomplete",
   "Toggle",
   "DateControl",
+  "DateTime",
+  "Time",
   R2_ATTACHMENT_TYPE,
 ] as const;
 
@@ -780,6 +782,22 @@ export function validateRecord(
         : value === undefined && field.type === "Toggle"
           ? false
           : null;
+      continue;
+    }
+    if (field.type === "DateTime" || c.dateTime === true) {
+      if (
+        typeof value !== "string" ||
+        !z.iso.datetime({ offset: true }).safeParse(value).success
+      )
+        errors[name] =
+          `${field.label}: enter a valid date and time with a time zone`;
+      else clean[name] = new Date(value).toISOString();
+      continue;
+    }
+    if (field.type === "Time") {
+      if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
+        errors[name] = `${field.label}: enter a valid time (HH:mm)`;
+      else clean[name] = value;
       continue;
     }
     if (c.multiple) {

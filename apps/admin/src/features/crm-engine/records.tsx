@@ -1,7 +1,7 @@
+import { formatFieldValue } from "./field-value";
 import RecordHistorySettingsButton from "./record-history-settings";
 import { useDebouncedSearch } from "./use-debounced-search";
 import { RetainedListResults } from "./retained-list-results";
-import { recordOptionLabel } from "./record-option-label";
 import { RecordOriginLinks } from "./record-origin-links";
 import {
   collectionCapabilities,
@@ -1573,34 +1573,11 @@ function RecordTable({
                               )}
                               value={r[key]}
                             />
-                          ) : object.config.fields[key].type === "Currency" ||
-                            object.config.fields[key].config?.format ===
-                              "currency" ? (
-                            money(
-                              r[key],
-                              String(
-                                object.config.fields[key].config?.currency ||
-                                  "COP",
-                              ),
-                              typeof object.config.fields[key].config
-                                ?.decimals === "number"
-                                ? Number(
-                                    object.config.fields[key].config?.decimals,
-                                  )
-                                : object.config.fields[key].config?.integer
-                                  ? 0
-                                  : 2,
-                            )
                           ) : object.config.studio?.business ===
                               "managed-customer" && key === "email" ? (
                             displayCustomerEmail(r[key])
                           ) : (
-                            display(
-                              recordOptionLabel(
-                                r[key],
-                                object.config.fields[key].options,
-                              ),
-                            )
+                            formatFieldValue(r[key], object.config.fields[key])
                           )}
                         </span>
                       );

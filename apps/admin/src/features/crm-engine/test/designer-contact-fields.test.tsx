@@ -73,15 +73,34 @@ it("offers contact field types from the designer palette", async () => {
     screen.getByRole("checkbox", { name: "Autocompletar con mapas" }),
   ).toBeTruthy();
 
-  fireEvent.click(screen.getByRole("checkbox", { name: "Autocompletar con mapas" }));
-  fireEvent.change(
-    screen.getByDisplayValue("Photon (OpenStreetMap, gratis)"),
-    { target: { value: "geoapify" } },
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Autocompletar con mapas" }),
   );
+  fireEvent.change(screen.getByDisplayValue("Photon (OpenStreetMap, gratis)"), {
+    target: { value: "geoapify" },
+  });
   fireEvent.focus(
     screen.getByRole("button", { name: "Ayuda sobre proveedor" }),
   );
   expect(
     await screen.findByRole("link", { name: "Claves y servicios" }),
   ).toBeVisible();
+});
+
+it("adds dedicated date-time and time fields from the palette", () => {
+  const object: CrmObject = {
+    name: "appointments",
+    label: "Appointments",
+    description: "",
+    config: makeConfig({ name: { type: "Textbox", label: "Name" } }),
+  };
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Designer object={object} onSaved={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  for (const label of ["Date and time", "Time"]) {
+    fireEvent.click(screen.getByRole("button", { name: label, exact: true }));
+    expect(screen.getAllByText(label).length).toBeGreaterThan(1);
+  }
 });

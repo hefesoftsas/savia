@@ -1,3 +1,4 @@
+import { localDateTime } from "./date-time-field";
 import { RelatedPresentationSettings } from "./related-presentation-settings";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { GroupedDesignerCanvas } from "./grouped-designer-canvas";
@@ -643,16 +644,27 @@ function Properties({
                 ) : (
                   <Input
                     type={
-                      field.type === "Number"
+                      field.type === "Number" || field.type === "Currency"
                         ? "number"
-                        : field.type === "DateControl"
-                          ? "date"
-                          : "text"
+                        : field.type === "DateTime" || config.dateTime === true
+                          ? "datetime-local"
+                          : field.type === "Time"
+                            ? "time"
+                            : field.type === "DateControl"
+                              ? "date"
+                              : "text"
                     }
-                    value={String(field.defaultValue ?? "")}
+                    value={
+                      field.type === "DateTime" || config.dateTime === true
+                        ? localDateTime(field.defaultValue)
+                        : String(field.defaultValue ?? "")
+                    }
                     onChange={(e) =>
                       updateField(id, {
-                        defaultValue: parseValue(e.target.value, field.type),
+                        defaultValue:
+                          (field.type === "DateTime" || config.dateTime === true) && e.target.value
+                            ? new Date(e.target.value).toISOString()
+                            : parseValue(e.target.value, field.type),
                       })
                     }
                   />

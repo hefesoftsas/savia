@@ -1,3 +1,4 @@
+import { formatFieldValue } from "./field-value";
 import {
   cloneElement,
   createContext,
@@ -46,10 +47,6 @@ import {
   prepareRecord,
 } from "@savia/crm-shared/rules";
 import { FORM_HTML_TYPE, DISPLAY_TEXT_TYPE } from "@savia/crm-shared/metadata";
-import {
-  formatMapLocationSummary,
-  parseMapLocation,
-} from "@savia/crm-shared/map-location";
 import { registry } from "./fields";
 import { api } from "./api";
 import { useFieldLabelLocale } from "./localized-field-label-editor";
@@ -200,36 +197,7 @@ function SummaryValue({
   if (blank(value))
     return <span className="conversation-empty-value">Sin completar</span>;
   if (ids.length) return <>{names.data?.join(", ") ?? "Cargando…"}</>;
-  if (field.type === "Toggle") return <>{value ? "Sí" : "No"}</>;
-  if (field.type === "MapLocation") {
-    const location = parseMapLocation(value);
-    return <>{location ? formatMapLocationSummary(location) : String(value)}</>;
-  }
-  if (field.type === "Currency" || field.config?.format === "currency") {
-    const code = String(field.config?.currency || "COP");
-    const decimals =
-      typeof field.config?.decimals === "number"
-        ? field.config.decimals
-        : field.config?.integer
-          ? 0
-          : 2;
-    return (
-      <>
-        {new Intl.NumberFormat("es-CO", {
-          style: "currency",
-          currency: code,
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-        }).format(Number(value))}
-      </>
-    );
-  }
-  return (
-    <>
-      {field.options?.find((option) => option.value === value)?.label ??
-        String(value)}
-    </>
-  );
+  return <>{formatFieldValue(value, field)}</>;
 }
 export default function ConversationWizard({
   object,

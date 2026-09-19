@@ -1,3 +1,5 @@
+import { DateTimeField } from "./date-time-field";
+import { TimeField } from "./time-field";
 import { CollectionRelationPicker } from "./collection-relation-picker";
 import { useDependentOptions } from "./dependent-options";
 import { useEffect, useRef, useState } from "react";
@@ -707,6 +709,8 @@ export const registry = {
   Number: <NumberField />,
   Currency: <CurrencyField />,
   DateControl: <DateField />,
+  DateTime: <DateTimeField />,
+  Time: <TimeField />,
   Textarea: <LongText />,
   Dropdown: <SelectField />,
   Autocomplete: <AutocompleteField />,

@@ -7,6 +7,7 @@ import {
   Search,
   ToggleLeft,
   Calendar,
+  Clock,
   Paperclip,
   HelpCircle,
   Mail,
@@ -18,7 +19,10 @@ import {
   Heading,
   type LucideIcon,
 } from "lucide-react";
-import { DISPLAY_TEXT_TYPE, R2_ATTACHMENT_TYPE } from "@savia/crm-shared/metadata";
+import {
+  DISPLAY_TEXT_TYPE,
+  R2_ATTACHMENT_TYPE,
+} from "@savia/crm-shared/metadata";
 
 export const fieldTypePalette: {
   type: string;
@@ -46,6 +50,18 @@ export const fieldTypePalette: {
   { type: "Autocomplete", label: "Autocompletar", icon: Search },
   { type: "Toggle", label: "Sí / No", icon: ToggleLeft },
   { type: "DateControl", label: "Fecha", icon: Calendar },
+  {
+    type: "DateTime",
+    label: "Date and time",
+    icon: Calendar,
+    searchTerms: "fecha hora datetime timestamp",
+  },
+  {
+    type: "Time",
+    label: "Time",
+    icon: Clock,
+    searchTerms: "hora horario time",
+  },
   { type: R2_ATTACHMENT_TYPE, label: "Archivo adjunto", icon: Paperclip },
 ];
 
@@ -62,11 +78,7 @@ export function fieldTypeLabel(type: string) {
 }
 
 export function normalizePaletteTypeSearch(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "");
+  return value.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 }
 
 export function filterPaletteFieldTypes<

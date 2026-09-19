@@ -45,6 +45,8 @@ const types = new Set([
   "Autocomplete",
   "Toggle",
   "DateControl",
+  "DateTime",
+  "Time",
 ]);
 export function isHistoryField(
   name: string,
