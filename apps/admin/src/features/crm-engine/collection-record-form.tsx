@@ -1,3 +1,4 @@
+import { isDatabaseKind } from "@savia/crm-shared/database-sources";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CrmRecord } from "@savia/crm-shared/metadata";
@@ -24,12 +25,109 @@ const enc = encodeURIComponent;
 
 export default function CollectionRecordForm(props: DynamicFormProps) {
   const runtime = getCrmRuntime();
+  if (isDatabaseKind(props.object.config.studio?.collection?.kind))
+    return <DatabaseRecordForm {...props} />;
   if (!/^\/v1\/(data-domains|dynamic-crm)\//.test(runtime.apiBasePath ?? ""))
     return <DynamicForm {...props} />;
   return (
     <ManualRelationsForm
       key={`${runtime.localWorkspace?.scope ?? ""}:${runtime.apiBasePath}:${props.object.name}:${props.values?.id ?? "new"}`}
       {...props}
+    />
+  );
+}
+
+function DatabaseRecordForm(props: DynamicFormProps) {
+  const binding = props.object.config.studio!.collection!;
+  const metadata = binding.databaseMetadata;
+  const editing = Boolean(props.values?.id);
+  const values = Object.fromEntries(
+    Object.entries(props.values ?? {}).map(([name, value]) => [
+      name,
+      metadata?.fields.find((f) => f.name === name)?.valueType === "json" &&
+      value != null
+        ? JSON.stringify(value)
+        : value,
+    ]),
+  );
+  const optionalBoolean = (name: string) =>
+    !editing &&
+    metadata?.fields.some(
+      (f) =>
+        f.name === name &&
+        f.valueType === "boolean" &&
+        (f.nullable || f.hasDefault),
+    );
+  const object = {
+    ...props.object,
+    config: {
+      ...props.object.config,
+      fields: Object.fromEntries(
+        Object.entries(props.object.config.fields).map(([name, field]) => [
+          name,
+          {
+            ...field,
+            ...(optionalBoolean(name)
+              ? {
+                  type: "Dropdown",
+                  defaultValue: "",
+                  options: [
+                    { value: "true", label: "Sí" },
+                    { value: "false", label: "No" },
+                  ],
+                  description:
+                    "Deja sin seleccionar para usar el valor predeterminado de la base de datos.",
+                }
+              : {}),
+            readOnly: field.readOnly || (editing && name === binding.idColumn),
+          },
+        ]),
+      ),
+    },
+  };
+  return (
+    <DynamicForm
+      {...props}
+      object={object}
+      values={values}
+      onSave={async (data, previous) => {
+        const filtered = Object.fromEntries(
+          Object.entries(data).filter(([name, value]) => {
+            const native = metadata?.fields.find((f) => f.name === name);
+            if (
+              !object.config.fields[name] ||
+              object.config.fields[name].readOnly ||
+              native?.generated ||
+              (native && !native.writable)
+            )
+              return false;
+            if (editing) {
+              const original = values[name] ?? "";
+              return JSON.stringify(value ?? "") !== JSON.stringify(original);
+            }
+            if (optionalBoolean(name) && value == null) return false;
+            return (
+              value !== undefined &&
+              !(
+                value === "" &&
+                (!native || native.nullable || native.hasDefault)
+              )
+            );
+          }),
+        );
+        if (editing && !Object.keys(filtered).length) return;
+        return props.onSave(
+          Object.fromEntries(
+            Object.entries(filtered).map(([name, value]) => [
+              name,
+              optionalBoolean(name) && (value === "true" || value === "false")
+                ? value === "true"
+                : value,
+            ]),
+          ),
+          previous,
+        );
+      }}
     />
   );
 }

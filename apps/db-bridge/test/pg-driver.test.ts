@@ -73,3 +73,14 @@ describe("pg-driver query builders", () => {
     expect(built.text).not.toContain('"id" DESC, ');
   });
 });
+
+it.each(["Acme", "", true, false, 0, 1.5, null])("preserves scalar %j", async (value) => {
+  const { serializeValue } = await import("../src/pg-driver");
+  expect(serializeValue(value)).toBe(value);
+});
+it("preserves bigint precision and rejects nonfinite numbers", async () => {
+  const { serializeValue } = await import("../src/pg-driver");
+  expect(serializeValue(9007199254740993n)).toBe("9007199254740993");
+  expect(serializeValue(NaN)).toBeNull();
+  expect(serializeValue(Infinity)).toBeNull();
+});

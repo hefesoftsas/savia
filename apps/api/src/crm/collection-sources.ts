@@ -1,4 +1,20 @@
 import {
+  isDatabaseKind,
+  databaseSourceInputSchema,
+  databaseSourceConfigFromInput,
+  databaseFieldInterface,
+  deriveDatabaseCapabilities,
+  resolveRecordKey,
+  DatabaseBridgeError,
+  type DatabaseKind,
+  type ResourceMetadata,
+} from "@savia/crm-shared/database-sources";
+import {
+  createDatabaseSourceService,
+  type DatabaseSourceRow,
+} from "./database-source-service";
+import type { DatabaseBridgeClient } from "./database-bridge";
+import {
   assertCollectionOption,
   loadCollectionOptions,
 } from "./collection-options";
@@ -23,7 +39,6 @@ import {
   postgresFieldLabel,
   postgresSourceConfigFromInput,
   postgresSourceConfigSchema,
-  postgresSourceInputSchema,
   postgresTypeToFieldType,
   sqlIdentifier,
   type BridgeTable,
@@ -90,7 +105,7 @@ const optionsSchema = z
     totalPointer: z.string().max(300).optional(),
   })
   .strict();
-const sourceSchema = z.discriminatedUnion("kind", [
+const sourceSchema = z.union([
   z
     .object({
       id: slug,
@@ -101,7 +116,7 @@ const sourceSchema = z.discriminatedUnion("kind", [
       options: optionsSchema.optional(),
     })
     .strict(),
-  postgresSourceInputSchema,
+  databaseSourceInputSchema,
 ]);
 const sourceInspectionSchema = z
   .object({
@@ -129,12 +144,14 @@ const bindingSchema = z
       )
       .optional(),
     capabilities: capabilitiesSchema.optional(),
+    idColumn: z.string().optional(),
+    idType: z.enum(["string", "objectId"]).optional(),
   })
   .strict();
 type SourceRow = {
   id: string;
   label: string;
-  kind: "jsonapi" | "postgres";
+  kind: "jsonapi" | DatabaseKind;
   config: string;
   encrypted_secret: string | null;
 };
@@ -177,7 +194,7 @@ const expose = (row: SourceRow) => ({
   label: row.label,
   kind: row.kind,
   ...JSON.parse(row.config),
-  ...(row.kind === "postgres"
+  ...(isDatabaseKind(row.kind)
     ? { hasPassword: Boolean(row.encrypted_secret) }
     : { hasToken: Boolean(row.encrypted_secret) }),
 });
@@ -571,7 +588,14 @@ export function createCollectionSourceApp(
   fetcher?: typeof fetch,
   provider: CollectionDomainProvider = emptyCollectionDomainProvider,
   sqlBridge?: SqlBridgeClient,
+  databaseBridge: DatabaseBridgeClient | undefined = sqlBridge?.database,
 ) {
+  const databases = createDatabaseSourceService({
+    tenant,
+    principalId,
+    integrationKey,
+    bridge: databaseBridge,
+  });
   const supportsBoundDomainQuery = (config: BindingConfig) =>
     config.kind === "domain" &&
     provider.isQueryableCollection(config.domain, config.collection);
@@ -579,7 +603,10 @@ export function createCollectionSourceApp(
   const postgresConnection = async (
     row: SourceRow,
   ): Promise<BridgeConnectionWithPassword> => {
-    const parsed = postgresSourceConfigSchema.parse(JSON.parse(row.config));
+    const { writeEnabled: _writeEnabled, ...legacyConfig } = JSON.parse(
+      row.config,
+    );
+    const parsed = postgresSourceConfigSchema.parse(legacyConfig);
     if (!sqlBridge) fail("El puente SQL no está disponible.", 503);
     const password = row.encrypted_secret
       ? await decryptSecret(
@@ -638,6 +665,15 @@ export function createCollectionSourceApp(
     }),
   );
   app.onError((e, c) => {
+    if (e instanceof DatabaseBridgeError)
+      return c.json(
+        {
+          error: e.message,
+          code: e.code,
+          ...(e.outcome ? { outcome: e.outcome } : {}),
+        },
+        e.status,
+      );
     if (e instanceof DomainCommandError)
       return c.json(
         { error: e.message },
@@ -670,8 +706,8 @@ export function createCollectionSourceApp(
   });
   app.post("/api/sources", async (c) => {
     const input = sourceSchema.parse(await c.req.json());
-    if (input.kind === "postgres") {
-      const config = postgresSourceConfigFromInput(input);
+    if (input.kind !== "jsonapi") {
+      const config = databaseSourceConfigFromInput(input);
       const encrypted = input.password
         ? await encryptSecret(
             input.password,
@@ -683,9 +719,17 @@ export function createCollectionSourceApp(
       try {
         await db
           .prepare(
-            "INSERT INTO crm_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,'postgres',?,?,?)",
+            "INSERT INTO crm_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,?,?,?,?)",
           )
-          .bind(tenant, input.id, input.label, stored, encrypted, principalId)
+          .bind(
+            tenant,
+            input.id,
+            input.label,
+            input.kind,
+            stored,
+            encrypted,
+            principalId,
+          )
           .run();
       } catch (error) {
         if (isUniqueConstraint(error))
@@ -697,7 +741,7 @@ export function createCollectionSourceApp(
           data: expose({
             id: input.id,
             label: input.label,
-            kind: "postgres",
+            kind: input.kind,
             config: stored,
             encrypted_secret: encrypted,
           }),
@@ -748,6 +792,7 @@ export function createCollectionSourceApp(
         token: z.string().max(10000).nullable().optional(),
         password: z.string().max(10000).nullable().optional(),
         label: z.string().trim().min(1).max(100).optional(),
+        writeEnabled: z.boolean().optional(),
       })
       .strict()
       .parse(await c.req.json());
@@ -758,11 +803,11 @@ export function createCollectionSourceApp(
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
     if (!row) fail("Fuente no encontrada.", 404);
-    if (row.kind === "postgres" && input.token !== undefined)
+    if (isDatabaseKind(row.kind) && input.token !== undefined)
       fail("Esta fuente usa contraseña, no token.");
     if (row.kind === "jsonapi" && input.password !== undefined)
       fail("Esta fuente usa token, no contraseña.");
-    const secretInput = row.kind === "postgres" ? input.password : input.token;
+    const secretInput = isDatabaseKind(row.kind) ? input.password : input.token;
     const encrypted =
       secretInput === undefined
         ? row.encrypted_secret
@@ -773,19 +818,107 @@ export function createCollectionSourceApp(
               context(JSON.stringify([tenant, principalId]), row.id),
             )
           : null;
-    await db
-      .prepare(
-        "UPDATE crm_collection_sources SET label=?,encrypted_secret=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
-      )
-      .bind(input.label ?? row.label, encrypted, tenant, row.id, principalId)
-      .run();
+    if (row.kind === "jsonapi" && input.writeEnabled !== undefined)
+      fail("Database write policy does not apply to JSON:API.");
+    const storedConfig =
+      input.writeEnabled === undefined
+        ? row.config
+        : JSON.stringify({
+            ...JSON.parse(row.config),
+            writeEnabled: input.writeEnabled,
+          });
+    const changes: D1PreparedStatement[] = [
+      db
+        .prepare(
+          "UPDATE crm_collection_sources SET config=?,label=?,encrypted_secret=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        )
+        .bind(
+          storedConfig,
+          input.label ?? row.label,
+          encrypted,
+          tenant,
+          row.id,
+          principalId,
+        ),
+    ];
+    if (isDatabaseKind(row.kind) && input.writeEnabled !== undefined) {
+      const linked = await db
+        .prepare(
+          "SELECT b.object_name,b.config,o.config AS object_config,o.version FROM crm_collection_bindings b JOIN crm_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? AND b.source_id=?",
+        )
+        .bind(tenant, row.id)
+        .all<{
+          object_name: string;
+          config: string;
+          object_config: string;
+          version: number;
+        }>();
+      for (const linkedRow of linked.results) {
+        const config = JSON.parse(linkedRow.config) as BindingConfig;
+        if (
+          config.sourceOwnerPrincipalId !== principalId ||
+          !config.databaseMetadata
+        )
+          continue;
+        const capabilities = deriveDatabaseCapabilities(
+          config.databaseMetadata,
+          input.writeEnabled && !config.schemaIssues?.length,
+          config.idColumn,
+        );
+        if (config.writePermissions)
+          for (const action of ["create", "update", "delete"] as const)
+            capabilities[action] =
+              capabilities[action] && config.writePermissions[action];
+        config.capabilities = capabilities;
+        const definition = JSON.parse(linkedRow.object_config);
+        definition.studio = {
+          ...definition.studio,
+          collection: config,
+          capabilities,
+        };
+        const g = guard(
+          db,
+          "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+          [linkedRow.version, tenant, linkedRow.object_name],
+        );
+        changes.push(
+          g.start,
+          db
+            .prepare(
+              "UPDATE crm_collection_bindings SET config=? WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(JSON.stringify(config), tenant, linkedRow.object_name),
+          db
+            .prepare(
+              "UPDATE crm_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
+            )
+            .bind(JSON.stringify(definition), tenant, linkedRow.object_name),
+          g.end,
+        );
+      }
+    }
+    await transaction(db, changes);
     return c.json({
       data: expose({
         ...row,
+        config: storedConfig,
         label: input.label ?? row.label,
         encrypted_secret: encrypted,
       }),
     });
+  });
+  app.post("/api/sources/:id/test", async (c) => {
+    const row = await db
+      .prepare(
+        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+      )
+      .bind(tenant, c.req.param("id"), principalId)
+      .first<SourceRow>();
+    if (!row) fail("Source not found.", 404);
+    if (!isDatabaseKind(row.kind))
+      fail("Connection testing is only available for database sources.");
+    await databases.test(row as DatabaseSourceRow);
+    return c.json({ data: { ok: true } });
   });
   app.post("/api/sources/:id/inspect", async (c) => {
     const input = sourceInspectionSchema.parse(await c.req.json());
@@ -796,6 +929,15 @@ export function createCollectionSourceApp(
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
     if (!row) fail("Fuente no encontrada.", 404);
+    if (isDatabaseKind(row.kind) && databaseBridge)
+      return c.json({
+        data: await databases.inspection(
+          row as DatabaseSourceRow,
+          input.resource,
+        ),
+      });
+    if (isDatabaseKind(row.kind) && row.kind !== "postgres")
+      fail("Database bridge unavailable.", 503);
     if (row.kind === "postgres")
       return c.json({ data: await inspectPostgres(row, input.resource) });
     if (!input.resource) fail("Indica el recurso a inspeccionar.");
@@ -1048,7 +1190,80 @@ export function createCollectionSourceApp(
         .bind(tenant, input.sourceId, principalId)
         .first<SourceRow>();
       if (!storedSource) fail("Fuente no encontrada.", 404);
-      if (storedSource.kind === "postgres") {
+      if (isDatabaseKind(storedSource.kind) && databaseBridge) {
+        if (input.relationships && Object.keys(input.relationships).length)
+          fail("Database relationships are not supported.");
+        const metadata = await databases.inspect(
+          storedSource as DatabaseSourceRow,
+          input.resource,
+        );
+        if (
+          storedSource.kind === "mongodb" &&
+          !metadata.fields.length &&
+          input.idType
+        ) {
+          metadata.idType = input.idType;
+          metadata.fields = Object.keys(input.fields).map((name) => ({
+            name,
+            nativeType: "json",
+            valueType: "json" as const,
+            nullable: true,
+            generated: name === "_id" && input.idType === "objectId",
+            writable: name !== "_id" || input.idType === "string",
+            hasDefault: name === "_id" && input.idType === "objectId",
+          }));
+        }
+        const idColumn = resolveRecordKey(metadata, input.idColumn);
+        if (idColumn && !input.fields[idColumn])
+          fail(`Include identifier field ${idColumn}.`);
+        const live = new Map(metadata.fields.map((f) => [f.name, f]));
+        fields = Object.fromEntries(
+          Object.entries(input.fields).map(([key, value]) => {
+            const native = live.get(key);
+            if (!native) fail(`Unknown field ${key}.`);
+            return [
+              key,
+              {
+                ...(value as object),
+                ...databaseFieldInterface(native),
+                label: (value as any)?.label ?? key,
+              },
+            ];
+          }),
+        );
+        const capabilities = deriveDatabaseCapabilities(
+          metadata,
+          Boolean(JSON.parse(storedSource.config).writeEnabled),
+          idColumn,
+        );
+        if (input.capabilities)
+          for (const operation of ["create", "update", "delete"] as const)
+            capabilities[operation] =
+              capabilities[operation] && input.capabilities[operation];
+        config = {
+          kind: storedSource.kind,
+          sourceOwnerPrincipalId: principalId,
+          writePermissions: input.capabilities
+            ? {
+                create: input.capabilities.create,
+                update: input.capabilities.update,
+                delete: input.capabilities.delete,
+              }
+            : undefined,
+          sourceId: input.sourceId,
+          resource: input.resource,
+          capabilities,
+          idColumn,
+          idType: metadata.idType,
+          primaryKey: metadata.primaryKey,
+          databaseMetadata: metadata,
+        };
+      } else if (
+        isDatabaseKind(storedSource.kind) &&
+        storedSource.kind !== "postgres"
+      ) {
+        fail("Database bridge unavailable.", 503);
+      } else if (storedSource.kind === "postgres") {
         if (input.resourceType)
           fail("Postgres no usa tipos de recurso JSON:API.");
         if (input.relationships && Object.keys(input.relationships).length)
@@ -1116,7 +1331,7 @@ export function createCollectionSourceApp(
     for (const key of Object.keys(fields))
       // En Postgres la PK suele llamarse `id` y coincide con el
       // identificador del sobre; el resto de reservadas sigue bloqueado.
-      if (reserved.has(key) && !(config.kind === "postgres" && key === "id"))
+      if (reserved.has(key) && !(isDatabaseKind(config.kind) && key === "id"))
         fail(`Campo reservado: ${key}.`);
     const definition = objectSchema.parse({
       name: input.name,
@@ -1153,7 +1368,7 @@ export function createCollectionSourceApp(
       if (!definition.config.fields[key])
         fail("Toda relación debe tener un campo explícito.");
     const sourceGuard =
-      config.kind === "jsonapi" || config.kind === "postgres"
+      config.kind === "jsonapi" || isDatabaseKind(config.kind)
         ? guard(
             db,
             "SELECT 1 FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
@@ -1198,6 +1413,117 @@ export function createCollectionSourceApp(
     ]);
     return c.json({ data: { ...definition, version: 1 } }, 201);
   });
+  app.post("/api/collection-bindings/:name/sync", async (c) => {
+    const input = z
+      .object({
+        version: z.number().int(),
+        fields: z.array(z.string()).min(1).max(100).optional(),
+      })
+      .strict()
+      .parse(await c.req.json());
+    const name = c.req.param("name");
+    const row = await binding(db, tenant, name);
+    if (!row) fail("Binding not found.", 404);
+    const config = JSON.parse(row.config) as BindingConfig;
+    if (!isDatabaseKind(config.kind))
+      fail("This binding does not use database metadata.", 405);
+    if (
+      config.sourceOwnerPrincipalId &&
+      config.sourceOwnerPrincipalId !== principalId
+    )
+      fail("Source not available.", 404);
+    const source = await db
+      .prepare(
+        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+      )
+      .bind(tenant, config.sourceId, principalId)
+      .first<SourceRow>();
+    if (!source) fail("Source not available.", 404);
+    const object = await getObject(db, tenant, name);
+    if (object.version !== input.version)
+      fail("Collection changed. Reload before synchronizing.", 409);
+    const metadata = await databases.inspect(
+      source as DatabaseSourceRow,
+      config.resource,
+    );
+    const selected = input.fields ?? Object.keys(object.config.fields);
+    const issues: string[] = [];
+    const fields = Object.fromEntries(
+      selected.map((key) => {
+        const native = metadata.fields.find((f) => f.name === key);
+        const old = object.config.fields[key];
+        if (!native) {
+          issues.push(`Missing field: ${key}`);
+          return [key, { ...old, readOnly: true }];
+        }
+        const previous = config.databaseMetadata?.fields.find(
+          (f) => f.name === key,
+        );
+        if (
+          !input.fields &&
+          previous &&
+          previous.nativeType !== native.nativeType
+        )
+          issues.push(`Changed type: ${key}`);
+        return [
+          key,
+          {
+            ...old,
+            ...databaseFieldInterface(native),
+            label: old?.label ?? key,
+          },
+        ];
+      }),
+    );
+    const key = resolveRecordKey(metadata, config.idColumn);
+    if (key && !selected.includes(key))
+      fail(`Include identifier field ${key}.`);
+    const capabilities = deriveDatabaseCapabilities(
+      metadata,
+      Boolean(JSON.parse(source.config).writeEnabled) && !issues.length,
+      key,
+    );
+    const next = {
+      ...config,
+      idColumn: key,
+      idType: metadata.idType,
+      databaseMetadata: metadata,
+      schemaIssues: issues,
+      capabilities,
+    };
+    if (config.writePermissions)
+      for (const action of ["create", "update", "delete"] as const)
+        next.capabilities[action] =
+          next.capabilities[action] && config.writePermissions[action];
+    object.config.fields = fields;
+    object.config.fieldOrder = selected;
+    object.config.studio = {
+      ...object.config.studio,
+      collection: next,
+      capabilities: next.capabilities,
+    };
+    const g = guard(
+      db,
+      "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+      [input.version, tenant, name],
+    );
+    await transaction(db, [
+      g.start,
+      db
+        .prepare(
+          "UPDATE crm_collection_bindings SET config=? WHERE tenant_id=? AND object_name=?",
+        )
+        .bind(JSON.stringify(next), tenant, name),
+      db
+        .prepare(
+          "UPDATE crm_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
+        )
+        .bind(JSON.stringify(object.config), tenant, name),
+      audit(db, tenant, "collection.metadata.synced", name, null, { issues }),
+      g.end,
+    ]);
+    return c.json({ data: { ...object, version: input.version + 1 } });
+  });
   app.all("/api/*", async (c) => {
     const path = decodeURIComponent(new URL(c.req.url).pathname),
       method = c.req.method;
@@ -1219,6 +1545,38 @@ export function createCollectionSourceApp(
     )
       fail("Colección no disponible.", 404);
     const object = await getObject(db, tenant, name);
+    if (isDatabaseKind(config.kind) && databaseBridge) {
+      if (
+        config.sourceOwnerPrincipalId &&
+        config.sourceOwnerPrincipalId !== principalId
+      )
+        fail("Source not available.", 404);
+      const source = await db
+        .prepare(
+          "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        )
+        .bind(tenant, config.sourceId, principalId)
+        .first<SourceRow>();
+      if (!source) fail("Source not available.", 404);
+      const metadata =
+        config.databaseMetadata ??
+        (await databases.inspect(source as DatabaseSourceRow, config.resource));
+      config.capabilities = deriveDatabaseCapabilities(
+        metadata,
+        Boolean(JSON.parse(source.config).writeEnabled) &&
+          !config.schemaIssues?.length,
+        config.idColumn,
+      );
+      if (config.writePermissions)
+        for (const action of ["create", "update", "delete"] as const)
+          config.capabilities[action] =
+            config.capabilities[action] && config.writePermissions[action];
+      object.config.studio = {
+        ...object.config.studio,
+        collection: { ...config },
+        capabilities: config.capabilities,
+      };
+    }
     if (surface === "objects") {
       if (method === "PATCH" && id === "screen") return fallback(c.req.raw);
       if (method === "GET" && (!id || id === "versions"))
@@ -1502,7 +1860,57 @@ export function createCollectionSourceApp(
         result = { data: flatten(doc, config, provider) };
       }
     } else {
-      if (config.kind === "postgres") {
+      if (isDatabaseKind(config.kind) && databaseBridge) {
+        const source = await db
+          .prepare(
+            "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+          )
+          .bind(tenant, config.sourceId, principalId)
+          .first<SourceRow>();
+        if (!source) fail("Source not available.", 404);
+        const body =
+          operation === "create" || operation === "update"
+            ? await c.req.json<Record<string, unknown>>()
+            : undefined;
+        const databaseResult = await databases.execute(
+          source as DatabaseSourceRow,
+          config,
+          object.config.fields,
+          operation,
+          id,
+          params,
+          body,
+        );
+        const key =
+          config.idColumn ?? (config.kind === "mongodb" ? "_id" : "id");
+        const withId = (record: Record<string, unknown>) => ({
+          ...record,
+          id: String(record[key] ?? record.id ?? ""),
+        });
+        result = {
+          ...databaseResult,
+          data: Array.isArray(databaseResult.data)
+            ? databaseResult.data.map(withId)
+            : databaseResult.data
+              ? withId(databaseResult.data)
+              : null,
+        };
+        if (["create", "update", "delete"].includes(operation)) {
+          try {
+            await audit(
+              db,
+              tenant,
+              `collection.record.${operation}`,
+              name,
+              id ?? String(result.data?.id ?? ""),
+              { sourceId: config.sourceId },
+            ).run();
+          } catch {
+            console.error("Database write committed; local audit unavailable.");
+            c.header("X-Savia-Write-Outcome", "committed");
+          }
+        }
+      } else if (config.kind === "postgres") {
         const source = await db
           .prepare(
             "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",

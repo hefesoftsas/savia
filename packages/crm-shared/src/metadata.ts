@@ -1,3 +1,4 @@
+import { resourceMetadataSchema, isDatabaseKind } from "./database-sources";
 import { collectionOptionsSchema } from "./collection-options";
 import { requestPageSchema, type RequestPageConfig } from "./request-page";
 import type { IFormConfig, IFieldConfig } from "@form-eng/core";
@@ -66,11 +67,26 @@ export type CollectionCapabilities = z.infer<
 export const collectionBindingMetadataSchema = z.object({
   sourceId: z.string().min(1).max(120),
   resource: z.string().min(1).max(300),
-  kind: z.enum(["domain", "jsonapi", "postgres", "crm"]),
+  kind: z.enum([
+    "domain",
+    "jsonapi",
+    "postgres",
+    "mysql",
+    "mssql",
+    "mongodb",
+    "crm",
+  ]),
   domain: z.string().optional(),
   collection: z.string().optional(),
   capabilities: collectionCapabilitiesSchema,
   /** Postgres v1: columna identificadora y PK real de la tabla. */
+  databaseMetadata: resourceMetadataSchema.optional(),
+  sourceOwnerPrincipalId: z.string().optional(),
+  writePermissions: z
+    .object({ create: z.boolean(), update: z.boolean(), delete: z.boolean() })
+    .optional(),
+  idType: z.enum(["string", "objectId"]).optional(),
+  schemaIssues: z.array(z.string()).optional(),
   idColumn: z.string().min(1).max(63).optional(),
   primaryKey: z.array(z.string().min(1).max(63)).max(10).optional(),
 });
@@ -355,7 +371,7 @@ export const configSchema = z
           ].includes(n) &&
           // Postgres externo: la PK suele llamarse `id` y coincide con el
           // identificador del sobre (solo lectura, sin escrituras locales).
-          !(config.studio?.collection?.kind === "postgres" && n === "id"),
+          !(isDatabaseKind(config.studio?.collection?.kind) && n === "id"),
       )
     )
       issue("Nombre de campo reservado.");
