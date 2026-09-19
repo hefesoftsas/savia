@@ -17,6 +17,14 @@ it("precaches record routes and their static closure without traversing optional
     isEntry: name === "entry.js",
   });
   const bundle = {
+    "office.js": {
+      ...chunk("office.js", "/office/index.html", ["office-engine.js"]),
+      isEntry: true,
+    },
+    "office-engine.js": chunk(
+      "office-engine.js",
+      "/features/office/office-engine.ts",
+    ),
     "entry.js": chunk("entry.js", "/src/main.tsx", ["shared.js"], ["crm.js"]),
     "private-app.js": chunk("private-app.js", "/src/app.tsx", ["shared.js"]),
     "appearance.js": chunk("appearance.js", "/admin/appearance-cache.ts"),

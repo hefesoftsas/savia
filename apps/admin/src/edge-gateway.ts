@@ -1,4 +1,9 @@
 import {
+  officeAssetResponse,
+  officeDocumentHeaders,
+  type OfficeAssetBucket,
+} from "./office-gateway";
+import {
   DEFAULT_CANONICAL_HOST,
   normalizeCanonicalHost,
   parseTenantSlugFromHostname,
@@ -9,6 +14,7 @@ export type GatewayFetcher = {
 };
 
 export type GatewayEnv = {
+  OFFICE_RUNTIME?: OfficeAssetBucket;
   API: GatewayFetcher;
   ASSETS: GatewayFetcher;
   /** Overrides the canonical host (default: savia.app.hefesoft.com). */
@@ -51,6 +57,15 @@ export async function gatewayFetch(
   env: GatewayEnv,
 ): Promise<Response> {
   const pathname = new URL(request.url).pathname;
+  if (pathname.startsWith("/office/runtime/"))
+    return officeAssetResponse(request, env.OFFICE_RUNTIME);
+  if (pathname === "/office" || pathname.startsWith("/office/")) {
+    const response = await env.ASSETS.fetch(request);
+    const isolated = new Response(response.body, response);
+    for (const [key, value] of Object.entries(officeDocumentHeaders))
+      isolated.headers.set(key, value);
+    return isolated;
+  }
   if (!isServicePath(pathname)) {
     const response = await env.ASSETS.fetch(request);
     if (pathname === "/public/forms" || pathname.startsWith("/public/forms/")) {

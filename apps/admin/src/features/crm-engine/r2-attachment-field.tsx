@@ -1,3 +1,4 @@
+import { OfficeEditButton } from "./office-edit-button";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Paperclip, Trash2 } from "lucide-react";
@@ -75,11 +76,14 @@ export function R2AttachmentField({
 
   async function remove(file: CrmFileAttachment) {
     setError("");
-    const response = await crmFetch(`/api/file/${encodeURIComponent(file.id)}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: file.version }),
-    });
+    const response = await crmFetch(
+      `/api/file/${encodeURIComponent(file.id)}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: file.version }),
+      },
+    );
     const body = (await response.json()) as { error?: string };
     if (!response.ok) {
       setError(body.error ?? "No se pudo eliminar el archivo.");
@@ -107,19 +111,25 @@ export function R2AttachmentField({
               className="flex min-w-0 items-center gap-3 rounded-md border bg-background px-3 py-2"
               key={file.id}
             >
-              <Paperclip aria-hidden="true" className="shrink-0 text-primary" size={16} />
+              <Paperclip
+                aria-hidden="true"
+                className="shrink-0 text-primary"
+                size={16}
+              />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {file.name}
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">
                 {formatBytes(file.size)}
               </span>
+              <OfficeEditButton file={file} disabled={disabled} />
               <Button
                 aria-label={`Descargar ${file.name}`}
                 onClick={() =>
-                  void downloadCrm(`/api/file/${file.id}/download`, file.name).catch(
-                    (cause: Error) => setError(cause.message),
-                  )
+                  void downloadCrm(
+                    `/api/file/${file.id}/download`,
+                    file.name,
+                  ).catch((cause: Error) => setError(cause.message))
                 }
                 size="icon"
                 type="button"

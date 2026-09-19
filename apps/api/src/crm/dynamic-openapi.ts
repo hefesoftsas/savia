@@ -843,6 +843,106 @@ export async function dynamicOpenApi(
         };
     }
   }
+  const fileId = parameter("id", "path", { type: "string" }, true);
+  const fileVersion = parameter(
+    "version",
+    "path",
+    { type: "integer", minimum: 1 },
+    true,
+  );
+  const officeFile = {
+    type: "object",
+    required: ["id", "name", "mime", "size", "version"],
+    properties: {
+      id: { type: "string" },
+      name: { type: "string" },
+      mime: { type: "string" },
+      size: { type: "integer" },
+      version: { type: "integer", minimum: 1 },
+      field: { type: "string" },
+      object: { type: "string" },
+      recordId: { type: "string" },
+      readOnly: { type: "boolean" },
+      maxSize: { type: "integer" },
+    },
+  };
+  paths["/file/{id}/office"] = {
+    get: operation(
+      "office_file_metadata",
+      "Office attachments",
+      "Read editable attachment metadata",
+      envelope(officeFile),
+      { parameters: [fileId] },
+    ),
+  };
+  paths["/file/{id}/revisions"] = {
+    get: operation(
+      "office_file_revisions",
+      "Office attachments",
+      "List attachment revisions",
+      envelope({
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            version: { type: "integer" },
+            size: { type: "integer" },
+            created_at: { type: "string", format: "date-time" },
+            created_by: { type: ["string", "null"] },
+          },
+        },
+      }),
+      { parameters: [fileId] },
+    ),
+    post: {
+      ...operation(
+        "office_file_save",
+        "Office attachments",
+        "Save an immutable attachment revision",
+        envelope(officeFile),
+        {
+          parameters: [fileId],
+          status: 201,
+          description:
+            "Requires the current file version. A stale version returns 409 without overwriting the current revision. Maximum 5 MiB, subject to the attachment field policy.",
+        },
+      ),
+      requestBody: {
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: {
+              type: "object",
+              required: ["version", "file"],
+              properties: {
+                version: { type: "integer", minimum: 1 },
+                file: { type: "string", format: "binary" },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  paths["/file/{id}/revisions/{version}/download"] = {
+    get: {
+      operationId: "office_file_revision_download",
+      tags: ["Office attachments"],
+      summary: "Download an attachment revision",
+      parameters: [fileId, fileVersion],
+      responses: {
+        ...failures,
+        200: {
+          description: "Original Office file bytes",
+          content: {
+            "application/octet-stream": {
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        },
+      },
+    },
+  };
   return {
     openapi: "3.1.0" as const,
     info: {
@@ -854,6 +954,10 @@ export async function dynamicOpenApi(
     servers: [{ url: `${apiBasePath}/api` }],
     security: [{ bearerAuth: [] }],
     tags: [
+      {
+        name: "Office attachments",
+        description: "Versioned DOCX, XLSX and PPTX attachments.",
+      },
       ...objects.map((o) => ({ name: o.label, description: o.description })),
       ...(typeof agencyId === "number"
         ? []

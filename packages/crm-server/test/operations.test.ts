@@ -109,6 +109,7 @@ beforeAll(async () => {
     "0006_r2_attachment_fields.sql",
     "0007_temporary_r2_attachments.sql",
     "0011_solutions.sql",
+    "0016_office_revisions.sql",
   ])
     for (const sql of readFileSync(`migrations/${name}`, "utf8")
       .split(/;(?!(?:\s*END\b))/i)

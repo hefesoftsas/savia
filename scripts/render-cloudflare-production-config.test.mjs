@@ -133,6 +133,10 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(connectors.secrets, {
       required: ["EXTENSION_CONNECTIONS_ENCRYPTION_KEY"],
     });
+    assert.deepEqual(admin.r2_buckets, [
+      { binding: "OFFICE_RUNTIME", bucket_name: "savia-documents" },
+    ]);
+    assert.ok(admin.assets.run_worker_first.includes("/office/*"));
     assert.equal(admin.name, "savia");
     assert.deepEqual(admin.routes, [
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },

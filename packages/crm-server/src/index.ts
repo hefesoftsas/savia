@@ -1,3 +1,4 @@
+import { registerOfficeFiles } from "./office-files";
 import { Hono } from "hono";
 import { registerLocalSync } from "./local-sync";
 import { HTTPException } from "hono/http-exception";
@@ -699,6 +700,7 @@ export function createCrmApp(
   registerGeocoding(app);
   registerGeocodingSettings(app);
   registerLocalSync(app, trigger);
+  registerOfficeFiles(app);
   registerOperations(app);
   return app;
 }

@@ -17,6 +17,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Direct Office editing](office-editing.md): WASM editor, revision storage, runtime setup and deployment.
+
 - [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.

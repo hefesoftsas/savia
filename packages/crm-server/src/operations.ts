@@ -681,8 +681,23 @@ export function registerOperations(app: Hono<Env>) {
     if (!file) return c.json({ ok: true });
     if (file.version !== version)
       return fail("El adjunto cambió. Actualiza la ficha.", 409);
-    await c.env.FILES.delete(file.storage_key);
-    await db.batch([
+    const revisions = row
+      ? await db
+          .prepare(
+            "SELECT storage_key FROM crm_file_revisions WHERE tenant_id=? AND file_id=?",
+          )
+          .bind(tenant, file.id)
+          .all<{ storage_key: string }>()
+      : { results: [] };
+    const gate = guard(
+      db,
+      row
+        ? "SELECT version=? FROM crm_files WHERE tenant_id=? AND id=?"
+        : "SELECT version=? FROM crm_file_drafts WHERE tenant_id=? AND id=?",
+      [version, tenant, file.id],
+    );
+    await transaction(db, [
+      gate.start,
       db
         .prepare(
           row
@@ -700,7 +715,17 @@ export function registerOperations(app: Hono<Env>) {
           name: file.name,
         },
       ),
+      gate.end,
     ]);
+    // Remove bytes only after the version-checked deletion commits.
+    const keys = [
+      ...new Set([
+        file.storage_key,
+        ...revisions.results.map((r) => r.storage_key),
+      ]),
+    ];
+    for (let offset = 0; offset < keys.length; offset += 1000)
+      await c.env.FILES.delete(keys.slice(offset, offset + 1000));
     return c.json({ ok: true });
   });
 

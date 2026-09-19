@@ -53,6 +53,35 @@ describe("CRM inside Savia", () => {
       agencyMemberAuthenticator(),
     );
     expect((await viewer.request(prefix + "/objects")).status).toBe(403);
+    for (const [suffix, method] of [
+      ["/office", "GET"],
+      ["/revisions", "GET"],
+      ["/revisions/1/download", "GET"],
+      ["/revisions", "POST"],
+    ]) {
+      expect(
+        (
+          await anonymous.request(prefix + "/file/office-test" + suffix, {
+            method,
+          })
+        ).status,
+      ).toBe(401);
+      expect(
+        (
+          await viewer.request(prefix + "/file/office-test" + suffix, {
+            method,
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await admin().request(
+            "/v1/dynamic-crm/202/api/file/office-test" + suffix,
+            { method },
+          )
+        ).status,
+      ).toBe(403);
+    }
     expect(
       (await admin().request("/v1/dynamic-crm/202/api/objects")).status,
     ).toBe(403);
