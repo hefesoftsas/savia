@@ -16,3 +16,10 @@ condition = "AND"
 paths = ['''^apps/api/test/dynamic-crm\.test\.ts$''']
 regexTarget = "secret"
 regexes = ['''^integration-test-key-with-at-least-32-characters$''']
+
+[[allowlists]]
+description = "Literal YOUR_SECRET placeholder in workflow webhook examples"
+condition = "AND"
+paths = ['''^docs/workflows\.md$''', '''^apps/admin/src/features/crm-engine/workflow-webhooks\.tsx$''']
+regexTarget = "secret"
+regexes = ['''^(?:Bearer )?YOUR_SECRET$''']

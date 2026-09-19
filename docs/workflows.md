@@ -123,8 +123,8 @@ remains disabled. Other hosts with cron disabled need an intentional scheduler t
 
 The executor is a bounded D1 scheduler (up to 100 steps and 50 due schedules per tick).
 It runs with the API scheduled handler alongside existing CRM synchronization. Production
-configuration already schedules one tick per minute. Preview configurations disable cron;
-enable an intentional scheduler before expecting executions there. Local `pnpm dev` uses
+configuration schedules one tick per minute. Preview uses the same cadence in
+workflow-only mode, without CRM synchronization or history maintenance. Local `pnpm dev` uses
 the existing development scheduled-event runner. Delays have scheduler-granularity timing,
 not second-accurate delivery.
 
