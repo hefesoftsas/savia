@@ -1,7 +1,7 @@
 # External database plugins design
 
 Date: 2026-09-19
-Status: Proposed design; user confirmed CRUD scope, written design awaiting review.
+Status: Approved by the user on 2026-09-19; implementation plan awaiting review.
 
 ## Intent
 
