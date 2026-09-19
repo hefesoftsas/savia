@@ -59,6 +59,9 @@ export type PullBatch = {
   reset?: boolean;
 };
 export type LocalStatus = {
+  syncing?: boolean;
+  /** Last completed workspace-wide check, not a guarantee that conflicts are resolved. */
+  lastSyncedAt?: number;
   syncError?: string;
   pending: number;
   conflicts: number;

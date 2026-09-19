@@ -1105,11 +1105,11 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                       id="rule-value"
                       required
                       value={String(editing.config.value)}
-                      type={field?.type === "Number" ? "number" : "text"}
+                      type={["Number", "Currency", "Percentage", "Rating"].includes(field?.type ?? "") ? "number" : "text"}
                       onChange={(e) =>
                         setConfig({
                           value:
-                            field?.type === "Number"
+                            ["Number", "Currency", "Percentage", "Rating"].includes(field?.type ?? "")
                               ? Number(e.target.value)
                               : e.target.value,
                         })

@@ -19,6 +19,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [low-code-fields.md](low-code-fields.md) — field types, temporal values and consistent record display.
+
 - [navigation.md](navigation.md) — sidebar grouping, hidden destinations, direct links, and personal preferences.
 
 - [workflows.md](workflows.md) — general-purpose workflow authoring, execution, permissions and recovery.

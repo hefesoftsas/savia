@@ -1,3 +1,4 @@
+const observedRegistrations = new WeakSet<ServiceWorkerRegistration>();
 /**
  * Registers the PWA Service Worker in both development and production environments.
  */
@@ -10,8 +11,24 @@ export function registerPwaServiceWorker(): void {
     const swUrl = import.meta.env.DEV ? "/dev-sw.js?dev-sw" : "/sw.js";
 
     navigator.serviceWorker
-      .register(swUrl, { scope: "/" })
+      .register(swUrl, { scope: "/", updateViaCache: "none" })
       .then((registration) => {
+        if (!observedRegistrations.has(registration)) {
+          observedRegistrations.add(registration);
+          let lastCheck = -Infinity;
+          const check = () => {
+            if (
+              document.visibilityState !== "visible" ||
+              navigator.onLine === false ||
+              Date.now() - lastCheck < 60_000
+            )
+              return;
+            lastCheck = Date.now();
+            void registration.update().catch(() => undefined);
+          };
+          window.addEventListener("online", check);
+          document.addEventListener("visibilitychange", check);
+        }
         if (import.meta.env.DEV) {
           console.debug(
             "[PWA] Service worker registered successfully:",

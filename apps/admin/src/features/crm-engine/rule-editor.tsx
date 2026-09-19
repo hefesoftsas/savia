@@ -26,7 +26,8 @@ function Choice({
 }
 
 export function parseValue(text: string, type?: string): unknown {
-  if (type === "Number") return text === "" ? undefined : Number(text);
+  if (["Number", "Currency", "Percentage", "Rating"].includes(type ?? ""))
+    return text === "" ? undefined : Number(text);
   if (type === "Toggle") return text === "true";
   return text;
 }
@@ -106,7 +107,11 @@ export function RuleEditor({
                 aria-label={`${label}: valor`}
                 value={String(value.value ?? "")}
                 type={
-                  fields[value.field]?.type === "Number" ? "number" : "text"
+                  ["Number", "Currency", "Percentage", "Rating"].includes(
+                    fields[value.field]?.type ?? "",
+                  )
+                    ? "number"
+                    : "text"
                 }
                 onChange={(e) =>
                   onChange({

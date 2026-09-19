@@ -62,3 +62,41 @@ it("does not save an incomplete OR condition as unrestricted access", async () =
   );
   expect(onSave).not.toHaveBeenCalled();
 });
+
+it.each(["Percentage", "Rating", "Currency"])(
+  "sends numeric permission literals for %s",
+  async (fieldType) => {
+    const { GrantEditor } = await import("./grant-editor");
+    const change = vi.fn();
+    render(
+      <GrantEditor
+        entry={{
+          resource: "collection:reviews",
+          label: "Reviews",
+          fields: ["score"],
+          fieldTypes: { score: fieldType },
+          actions: ["read"],
+          creatorSupported: false,
+          restricted: false,
+        }}
+        grants={[
+          {
+            resource: "collection:reviews",
+            action: "read",
+            fields: ["score"],
+            predicate: { field: "score", op: "gte", value: { literal: 3 } },
+          },
+        ]}
+        onChange={change}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Condition value"), {
+      target: { value: "4" },
+    });
+    expect(change).toHaveBeenCalledWith([
+      expect.objectContaining({
+        predicate: { field: "score", op: "gte", value: { literal: 4 } },
+      }),
+    ]);
+  },
+);

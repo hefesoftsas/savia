@@ -40,6 +40,12 @@ function overlay(
 export class LocalStore {
   readonly db: LocalDatabase;
   private syncError?: string;
+  private syncing = false;
+  setSyncing(value: boolean) {
+    if (this.syncing === value) return;
+    this.syncing = value;
+    for (const listener of this.listeners) listener();
+  }
   private listeners = new Set<() => void>();
   setSyncError(message?: string) {
     if (this.syncError === message) return;
@@ -747,9 +753,12 @@ export class LocalStore {
     );
   }
   async status(): Promise<LocalStatus> {
-    const all = await this.db.outbox.toArray();
+    const all = (await this.db.outbox.toArray()).filter((m) => !m.quarantined);
+    const lastSyncedAt = (await this.db.syncState.get("$sync"))?.lastSyncedAt;
     const authorizationError = await this.authorizationError();
     return {
+      syncing: this.syncing,
+      ...(lastSyncedAt ? { lastSyncedAt } : {}),
       ...(authorizationError ? { authorizationError } : {}),
       ...(this.syncError ? { syncError: this.syncError } : {}),
       pending: all.filter((m) => m.state === "pending").length,

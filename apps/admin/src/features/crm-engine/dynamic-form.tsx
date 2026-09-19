@@ -526,7 +526,7 @@ function StepForm({
         name,
         values[name] ??
           field.defaultValue ??
-          (field.config?.multiple || field.type === R2_ATTACHMENT_TYPE
+          (field.config?.multiple || field.type === "MultiSelect" || field.type === R2_ATTACHMENT_TYPE
             ? []
             : field.type === "Toggle"
               ? false

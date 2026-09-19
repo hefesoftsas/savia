@@ -143,7 +143,9 @@ function validatePredicate(
         : operand.variable === "tenantId"
           ? "number"
           : "string";
-    const expected = ["Number", "Currency"].includes(fieldType)
+    const expected = ["Number", "Currency", "Percentage", "Rating"].includes(
+      fieldType,
+    )
       ? "number"
       : ["Checkbox", "Switch"].includes(fieldType)
         ? "boolean"

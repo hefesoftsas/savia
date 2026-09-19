@@ -190,3 +190,21 @@ work proportional to the collection; its result is reused for later pages.
 ## Scoped permissions
 
 See [Roles and permissions](permissions.md) for policy revision binding, creator attribution, row removals, field redaction and quarantine behavior. Policy changes require clearing old projections before replay. An acknowledged mutation is reauthorized against the current record before its response is returned. The existing offline lease still bounds disconnected access.
+
+## Application updates and retired assets
+
+The private bootstrap registers the service worker before loading the application modules. Returning to a visible tab or reconnecting checks for a new worker, at most once per minute and without polling. A replacement controller shows an update notice; it never reloads an open form automatically.
+
+If a deployment removes an old lazy-loaded JavaScript or stylesheet asset, both the boot boundary and the administrative error boundary offer **Actualizar y recargar** instead of retrying the same rejected module import. This recovery code is part of the statically imported boot shell. On explicit confirmation it checks the worker script without the HTTP cache, waits for the replacement worker to activate, then reloads the complete document so module failures are no longer cached in memory. Offline, failed, redundant or stalled installations remain retryable; the overall update deadline is 15 seconds, with no automatic reload loop.
+
+Recovery never clears IndexedDB, pending mutation queues, caches or credentials. A full reload still discards form edits that have not been saved locally, so the interface explains that before confirmation. Public form visitors neither register nor update the administrative worker; their recovery only reloads their document. Browsers without service workers also use a normal document reload.
+
+Clients already running a version from before this recovery mechanism may require one complete reload to receive it. Subsequent deployments expose the update and recovery controls in the running application.
+
+## Synchronization visibility and recovery
+
+The collection workspace keeps the pending-change count visible while disconnected and shows activity while its coordinator holds the synchronization lock. A persisted **Última comprobación** timestamp records the last successful full workspace pass, survives reopening the app and is shared across tabs. It does not mean every edit was accepted: rejected edits and conflicts remain separately visible. Collection-only provisioning and failed or cancelled passes do not advance this timestamp.
+
+Transient synchronization failures now appear in the status bar while the existing bounded automatic backoff continues. **Reintentar sincronización** requests one full pass using the same durable mutation IDs; it never clears the outbox or schedules an extra pass after success. The manual button is disabled while offline or while this workspace is synchronizing. Storage-capacity and authorization failures keep their existing stop/recovery rules. Quarantined edits remain preserved but are excluded from visible pending/problem counts and recovery exports.
+
+The status view reports local storage read failures instead of silently presenting stale success, and ignores stale asynchronous snapshots after newer updates. Activity reflects this tab's coordinator; committed queue changes and the last full-check timestamp are observed across tabs. Synchronization runs while the collection workspace is open, not as an operating-system background service.

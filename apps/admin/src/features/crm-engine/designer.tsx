@@ -1,3 +1,4 @@
+import { localDateTime } from "./date-time-field";
 import { RelatedPresentationSettings } from "./related-presentation-settings";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 import { GroupedDesignerCanvas } from "./grouped-designer-canvas";
@@ -281,12 +282,12 @@ function Properties({
     isFormHtml ||
     isDisplayText ||
     field.type === "Number" ||
-    field.type === "Currency" ||
+    field.type === "Currency" || field.type === "Percentage" || field.type === "Rating" ||
     (field.type === "MapLocation" && !!mapPicker) ||
     field.type === "Address" ||
     ["Email", "Phone", "Url", "Textbox", "Textarea"].includes(field.type) ||
     field.type === "Dropdown" ||
-    field.type === "Autocomplete";
+    field.type === "Autocomplete" || field.type === "MultiSelect" || field.type === "RichText";
   return (
     <aside className="studio-properties" key={id}>
       <div className="studio-properties-header">
@@ -516,6 +517,24 @@ function Properties({
                     updateField(id, { type, config: rest });
                     return;
                   }
+                  if (type === "Percentage" || type === "Rating") {
+                    updateField(id, {type, defaultValue: undefined, options: undefined, config: {
+                      ...config, dateTime: undefined, format: undefined, formula: undefined, multiple: undefined,
+                      relation: undefined, collectionRelation: undefined, collectionOptions: undefined, optionsWhen: undefined,
+                      onDelete: undefined, addressAutocomplete: undefined, mapPicker: undefined, formHtml: undefined, displayText: undefined,
+                      minimum: type === "Rating" ? 1 : 0, maximum: type === "Rating" ? 5 : 100,
+                      decimals: type === "Percentage" ? 2 : undefined, ratingStyle: type === "Rating" ? "stars" : undefined,
+                    }});
+                    return;
+                  }
+                  if (type === "MultiSelect" || type === "RichText") {
+                    updateField(id, {
+                      type, defaultValue: undefined,
+                      options: type === "MultiSelect" ? field.options?.length ? field.options : [{value: "option_1", label: "Option 1"}] : undefined,
+                      config: {section: config.section, minLength: type === "RichText" ? config.minLength : undefined, maxLength: type === "RichText" ? config.maxLength : undefined},
+                    });
+                    return;
+                  }
                   if (type === "Currency") {
                     const { addressAutocomplete, mapPicker, formHtml, displayText, ...rest } =
                       config;
@@ -640,19 +659,35 @@ function Properties({
                     <option value="false">No</option>
                     <option value="true">Sí</option>
                   </Choice>
+                ) : field.type === "MultiSelect" ? (
+                  <select multiple aria-label="Default choices" className="w-full rounded-md border p-2" value={Array.isArray(field.defaultValue) ? field.defaultValue.map(String) : []}
+                    onChange={event => updateField(id, {defaultValue: Array.from(event.currentTarget.selectedOptions, option => option.value)})}>
+                    {(field.options ?? []).map(option => <option key={String(option.value)} value={String(option.value)}>{String(option.label)}</option>)}
+                  </select>
                 ) : (
                   <Input
                     type={
-                      field.type === "Number"
+                      ["Number", "Currency", "Percentage", "Rating"].includes(field.type)
                         ? "number"
-                        : field.type === "DateControl"
-                          ? "date"
-                          : "text"
+                        : field.type === "DateTime" || config.dateTime === true
+                          ? "datetime-local"
+                          : field.type === "Time"
+                            ? "time"
+                            : field.type === "DateControl"
+                              ? "date"
+                              : "text"
                     }
-                    value={String(field.defaultValue ?? "")}
+                    value={
+                      field.type === "DateTime" || config.dateTime === true
+                        ? localDateTime(field.defaultValue)
+                        : String(field.defaultValue ?? "")
+                    }
                     onChange={(e) =>
                       updateField(id, {
-                        defaultValue: parseValue(e.target.value, field.type),
+                        defaultValue:
+                          (field.type === "DateTime" || config.dateTime === true) && e.target.value
+                            ? new Date(e.target.value).toISOString()
+                            : parseValue(e.target.value, field.type),
                       })
                     }
                   />
@@ -873,6 +908,17 @@ function Properties({
                   />
                 </Control>
               </fieldset>
+            ) : field.type === "Percentage" ? (
+              <>
+                <div className="studio-two">{numeric("minimum", "Minimum percentage")}{numeric("maximum", "Maximum percentage")}</div>
+                <Control label="Decimal places"><Choice value={String(config.decimals ?? 2)} onChange={value => patch("decimals", Number(value))}>{[0,1,2,3,4,5,6].map(value => <option key={value} value={value}>{value}</option>)}</Choice></Control>
+                <p className="text-sm text-muted-foreground">25 is stored as 25 and displayed as 25%.</p>
+              </>
+            ) : field.type === "Rating" ? (
+              <>
+                <Control label="Maximum rating"><Choice value={String(config.maximum ?? 5)} onChange={value => patch("maximum",Number(value))}>{Array.from({length:10},(_,index)=>index+1).map(value => <option key={value} value={value}>{value}</option>)}</Choice></Control>
+                <Control label="Rating display"><Choice value={String(config.ratingStyle ?? "stars")} onChange={value=>patch("ratingStyle",value)}><option value="stars">Stars</option><option value="number">Number</option></Choice></Control>
+              </>
             ) : field.type === "Number" || field.type === "Currency" ? (
               <>
                 <div className="studio-two">
@@ -1189,6 +1235,8 @@ function Properties({
                   />
                 </Control>
               </>
+            ) : field.type === "RichText" ? (
+              <div className="studio-two">{numeric("minLength", "Minimum length")}{numeric("maxLength", "Maximum length")}</div>
             ) : ["Textbox", "Textarea"].includes(field.type) ? (
               <>
                 <Control label="Formato">
@@ -1293,7 +1341,7 @@ function Properties({
                 )}
               </>
             )}
-            {field.type === "Autocomplete" && (
+            {(field.type === "Autocomplete" || field.type === "MultiSelect") && (
               <>
                 <Control label="Opciones (valor | etiqueta, una por línea)">
                   <Textarea
@@ -1315,12 +1363,12 @@ function Properties({
                     }
                   />
                 </Control>
-                <DependentOptionsEditor
+                {field.type !== "MultiSelect" && <DependentOptionsEditor
                   name={id}
                   fields={state.fields}
                   value={config.optionsWhen as any}
                   onChange={(v) => patch("optionsWhen", v)}
-                />
+                />}
               </>
             )}
           </PropertySection>
@@ -1560,6 +1608,8 @@ function Editor({
         content: `{{values.${sampleField}}}`,
       };
     }
+    if (type === "Percentage") { config.minimum = 0; config.maximum = 100; config.decimals = 2; }
+    if (type === "Rating") { config.maximum = 5; config.ratingStyle = "stars"; }
     if (type === "Currency") {
       config.currency = "COP";
       config.decimals = 2;
@@ -1571,7 +1621,7 @@ function Editor({
         ? { readOnly: true, required: false }
         : {}),
       ...(Object.keys(config).length ? { config } : {}),
-      ...(type === "Dropdown" || type === "Autocomplete"
+      ...(type === "Dropdown" || type === "Autocomplete" || type === "MultiSelect"
         ? { options: [{ value: "opcion_1", label: "Opción 1" }] }
         : {}),
     };

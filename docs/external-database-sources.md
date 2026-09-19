@@ -53,7 +53,8 @@ Members of a compound key are never treated as independently unique.
 
 MongoDB samples at most 100 documents. Its metadata is an inference, not a schema
 constraint. Empty collections accept explicit field definitions and a selected
-ObjectId or string identifier type. Include `_id` in the selected fields. A
+ObjectId or string identifier type. Include `_id` in the selected fields. The
+native `_id` field and its display order are supported only in MongoDB bindings. A
 hexadecimal string remains a string when that is the identifier type. Mixed or
 unsupported identifier types disable individual writes.
 
@@ -152,3 +153,17 @@ UI. Keep fixture credentials outside the repository. Promote only after the
 same commit passes CI and preview evidence, following the production workflow.
 Production requires its own bridge secret, approved database allowlist, and
 HTTPS endpoint; never reuse the preview fixture database stack as production.
+
+### Production bridge
+
+Use `infra/db-bridge/compose.production.yml` for the independently authenticated
+production bridge and tunnel. It publishes only a loopback health port (8792)
+and does not include fixture databases. Set its private `.env` values as for
+preview, using a different shared secret and dedicated tunnel. An omitted or
+empty `DB_BRIDGE_ALLOWED_HOSTS` explicitly denies all database hosts; add only
+approved destination hostnames when real sources are ready. Configure the matching
+HTTPS URL and shared secret in the GitHub `production` environment.
+
+After source policy changes, binding, unbinding, or metadata synchronization,
+the client invalidates its cached collection catalog so navigation and editing
+use the current backend definitions and capabilities.
