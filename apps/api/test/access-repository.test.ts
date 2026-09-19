@@ -158,3 +158,46 @@ it("stops resolving grants after membership suspension", async () => {
     .bind(viewer.principal.id)
     .run();
 });
+
+it("invalidates only the mapped policy scope when collection schemas change or disappear", async () => {
+  const mappings = [
+    ["domain:platform", "platform"],
+    ["agency:101", "tenant:101"],
+    ["domain:acl_private", "domain:acl_private"],
+  ] as const;
+  for (const [tenant, scope] of mappings) {
+    await f.db
+      .prepare("INSERT OR IGNORE INTO access_revisions(scope) VALUES (?)")
+      .bind(scope)
+      .run();
+    const name = "revision_probe_" + scope.replace(/:/g, "_");
+    await f.db
+      .prepare(
+        "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,'{}')",
+      )
+      .bind(tenant, name, name)
+      .run();
+    for (const sql of [
+      "UPDATE crm_objects SET config='{\"fields\":{}}' WHERE tenant_id=? AND name=?",
+      "DELETE FROM crm_objects WHERE tenant_id=? AND name=?",
+    ]) {
+      const before = (
+        await f.db
+          .prepare("SELECT scope,revision FROM access_revisions ORDER BY scope")
+          .all<{ scope: string; revision: number }>()
+      ).results;
+      await f.db.prepare(sql).bind(tenant, name).run();
+      const after = (
+        await f.db
+          .prepare("SELECT scope,revision FROM access_revisions ORDER BY scope")
+          .all<{ scope: string; revision: number }>()
+      ).results;
+      expect(after).toEqual(
+        before.map((row) => ({
+          ...row,
+          revision: row.revision + (row.scope === scope ? 1 : 0),
+        })),
+      );
+    }
+  }
+});

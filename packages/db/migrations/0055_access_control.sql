@@ -93,10 +93,11 @@ CREATE TRIGGER access_domain_removed AFTER DELETE ON crm_data_domains BEGIN
  UPDATE access_revisions SET revision=revision+1 WHERE scope='domain:'||OLD.id;
 END;
 --> statement-breakpoint
+-- IIF avoids an unparenthesized CASE END being mistaken for the trigger END by the remote D1 splitter.
 CREATE TRIGGER access_object_changed AFTER UPDATE OF config ON crm_objects BEGIN
- UPDATE access_revisions SET revision=revision+1 WHERE scope=CASE WHEN NEW.tenant_id='domain:platform' THEN 'platform' WHEN NEW.tenant_id LIKE 'agency:%' THEN 'tenant:'||substr(NEW.tenant_id,8) ELSE NEW.tenant_id END;
+ UPDATE access_revisions SET revision=revision+1 WHERE scope=IIF(NEW.tenant_id='domain:platform','platform',IIF(NEW.tenant_id LIKE 'agency:%','tenant:'||substr(NEW.tenant_id,8),NEW.tenant_id));
 END;
 --> statement-breakpoint
 CREATE TRIGGER access_object_removed AFTER DELETE ON crm_objects BEGIN
- UPDATE access_revisions SET revision=revision+1 WHERE scope=CASE WHEN OLD.tenant_id='domain:platform' THEN 'platform' WHEN OLD.tenant_id LIKE 'agency:%' THEN 'tenant:'||substr(OLD.tenant_id,8) ELSE OLD.tenant_id END;
+ UPDATE access_revisions SET revision=revision+1 WHERE scope=IIF(OLD.tenant_id='domain:platform','platform',IIF(OLD.tenant_id LIKE 'agency:%','tenant:'||substr(OLD.tenant_id,8),OLD.tenant_id));
 END;

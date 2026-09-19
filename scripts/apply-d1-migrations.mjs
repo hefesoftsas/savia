@@ -92,7 +92,43 @@ for (const file of files) {
   const statements = splitStatements(
     await readFile(migrationsDir + file, "utf8"),
   );
+  // Only recover the verified prefix from the failed preview deployment.
+  // Replaying bootstrap assignments could restore roles deliberately removed
+  // after that prefix committed, so none of its data statements run again.
+  const completedPrefix = new Set();
+  if (file === "0055_access_control.sql") {
+    const [schema] = await query(
+      "SELECT name, type, sql FROM sqlite_master WHERE name LIKE 'access_%'",
+    );
+    const existing = new Map(
+      (schema?.results ?? []).map((row) => [row.name, row]),
+    );
+    if (existing.size) {
+      const normalize = (value) =>
+        value.replace(/\s+/g, " ").trim().replace(/;$/, "");
+      for (const [index, statement] of statements.entries()) {
+        const definition = statement.replace(/^--[^\n]*(?:\n|$)/gm, "").trim();
+        const object = /^CREATE (TABLE|INDEX|TRIGGER) (access_[a-z_]+)/.exec(
+          definition,
+        );
+        if (object) {
+          const saved = existing.get(object[2]);
+          if (!saved && index >= 22) continue;
+          if (
+            !saved ||
+            saved.type !== object[1].toLowerCase() ||
+            normalize(saved.sql) !== normalize(definition)
+          )
+            throw new Error(
+              `Unexpected ${object[2]} schema; refusing migration recovery`,
+            );
+        }
+        completedPrefix.add(index);
+      }
+    }
+  }
   for (const [index, statement] of statements.entries()) {
+    if (completedPrefix.has(index)) continue;
     try {
       // 0046 previously failed after committing its first 34 statements. Its
       // data moves and staging tables are replayable, but SQLite has no
