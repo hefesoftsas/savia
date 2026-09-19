@@ -200,3 +200,11 @@ If a deployment removes an old lazy-loaded JavaScript or stylesheet asset, both 
 Recovery never clears IndexedDB, pending mutation queues, caches or credentials. A full reload still discards form edits that have not been saved locally, so the interface explains that before confirmation. Public form visitors neither register nor update the administrative worker; their recovery only reloads their document. Browsers without service workers also use a normal document reload.
 
 Clients already running a version from before this recovery mechanism may require one complete reload to receive it. Subsequent deployments expose the update and recovery controls in the running application.
+
+## Synchronization visibility and recovery
+
+The collection workspace keeps the pending-change count visible while disconnected and shows activity while its coordinator holds the synchronization lock. A persisted **Última comprobación** timestamp records the last successful full workspace pass, survives reopening the app and is shared across tabs. It does not mean every edit was accepted: rejected edits and conflicts remain separately visible. Collection-only provisioning and failed or cancelled passes do not advance this timestamp.
+
+Transient synchronization failures now appear in the status bar while the existing bounded automatic backoff continues. **Reintentar sincronización** requests one full pass using the same durable mutation IDs; it never clears the outbox or schedules an extra pass after success. The manual button is disabled while offline or while this workspace is synchronizing. Storage-capacity and authorization failures keep their existing stop/recovery rules. Quarantined edits remain preserved but are excluded from visible pending/problem counts and recovery exports.
+
+The status view reports local storage read failures instead of silently presenting stale success, and ignores stale asynchronous snapshots after newer updates. Activity reflects this tab's coordinator; committed queue changes and the last full-check timestamp are observed across tabs. Synchronization runs while the collection workspace is open, not as an operating-system background service.

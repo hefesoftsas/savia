@@ -264,6 +264,7 @@ export function createSyncCoordinator(
     const controller = new AbortController();
     controllers.add(controller);
     if (background) backgroundController = controller;
+    store.setSyncing(true);
     try {
       await syncOnce(
         store,
@@ -279,8 +280,22 @@ export function createSyncCoordinator(
         expectedPrincipalId,
         collection,
       );
-      store.setSyncError();
+      if (!collection) {
+        await store.db.syncState.put({
+          collection: "$sync",
+          hydrated: true,
+          lastSyncedAt: Date.now(),
+        });
+        store.setSyncError();
+      }
     } catch (error) {
+      if (
+        !controller.signal.aborted &&
+        !(error instanceof SyncAuthorizationError)
+      )
+        store.setSyncError(
+          "No se pudo completar la sincronización. Tus cambios pendientes se conservan; se reintentará automáticamente mientras este espacio esté abierto. También puedes reintentar ahora.",
+        );
       if (error instanceof SyncAuthorizationError) stop();
       if (isStorageCapacityError(error)) {
         store.setSyncError(
@@ -290,6 +305,7 @@ export function createSyncCoordinator(
       }
       throw error;
     } finally {
+      store.setSyncing(false);
       controllers.delete(controller);
       if (backgroundController === controller) backgroundController = undefined;
     }
