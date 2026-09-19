@@ -7,6 +7,7 @@ import {
   activePlatformAdministratorCount,
   deletePrincipal,
   findPrincipal,
+  findPrincipalBySubject,
   grantMembership,
   loadActor,
   removeMembership,
@@ -588,16 +589,32 @@ export function registerIdentityRoutes(
     const documents = await Promise.all(
       (await userAdministrator.listUsers(context.req.raw)).map(
         async (account) => {
-          const principal = await upsertPrincipal(d1, {
-            issuer: userAdministrator.issuer,
-            subject: account.subject,
-            email: account.email,
-            displayName: account.displayName,
-          });
-          if (account.role === "admin") {
-            await setPlatformAdministrator(d1, principal.id, true);
+          let principal = await findPrincipalBySubject(
+            d1,
+            userAdministrator.issuer,
+            account.subject,
+          );
+          if (
+            !principal ||
+            principal.email !== account.email ||
+            principal.displayName !== account.displayName
+          ) {
+            principal = await upsertPrincipal(d1, {
+              issuer: userAdministrator.issuer,
+              subject: account.subject,
+              email: account.email,
+              displayName: account.displayName,
+            });
           }
-          return managedActorDocument(await loadActor(d1, principal), account);
+          const actor = await loadActor(d1, principal);
+          if (
+            account.role === "admin" &&
+            !actor.globalRoles.includes("platform_admin")
+          ) {
+            await setPlatformAdministrator(d1, principal.id, true);
+            actor.globalRoles = ["platform_admin"];
+          }
+          return managedActorDocument(actor, account);
         },
       ),
     );

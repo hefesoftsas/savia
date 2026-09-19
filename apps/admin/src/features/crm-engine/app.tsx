@@ -385,6 +385,7 @@ function App({
         }>;
       }>("/extensions"),
     enabled: ready && Boolean(contribution),
+    staleTime: 60_000,
   });
   const ExtensionScreen = isExtensionScreenEnabled(
     contribution,

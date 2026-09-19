@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./combined-app";
 import {
   ensureBootstrapAdministrator,
+  findPrincipalBySubject,
   upsertPrincipal,
 } from "../src/auth/identity-repository";
 import {
@@ -1135,5 +1136,29 @@ describe("Identity and access", () => {
       .bind(identity.issuer, identity.subject)
       .first<{ total: number }>();
     expect(users?.total).toBe(1);
+  });
+
+  it("finds an existing principal by subject", async () => {
+    const identity = {
+      issuer: "savia:better-auth",
+      subject: "find-subject-test",
+      email: "find@savia.test",
+      displayName: "Find Me",
+    };
+    const created = await upsertPrincipal(env.DB, identity);
+    const found = await findPrincipalBySubject(
+      env.DB,
+      identity.issuer,
+      identity.subject,
+    );
+    expect(found?.id).toBe(created.id);
+    expect(found?.email).toBe(identity.email);
+
+    const notFound = await findPrincipalBySubject(
+      env.DB,
+      identity.issuer,
+      "non-existent",
+    );
+    expect(notFound).toBeUndefined();
   });
 });

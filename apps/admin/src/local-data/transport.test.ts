@@ -264,3 +264,49 @@ it("schedules post-bootstrap synchronization in the background instead of a full
   expect(background).toHaveBeenCalledOnce();
   expect(foreground).not.toHaveBeenCalled();
 });
+
+it("caches extension settings metadata offline and invalidates on mutation", async () => {
+  const local = store();
+  const settingsData = { data: { value: { prefix: "COT-" }, version: 1 } };
+  const network = vi.fn().mockResolvedValue(Response.json(settingsData));
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+
+  // 1. First fetch reaches the network and caches to workspace metadata
+  const first = await transport(
+    "/api/extensions/insurance.quotes/settings",
+    { method: "GET" },
+  );
+  expect(await first.json()).toEqual(settingsData);
+  expect(network).toHaveBeenCalledTimes(1);
+
+  // 2. Second fetch returns immediately from local cached metadata without network
+  const second = await transport(
+    "/api/extensions/insurance.quotes/settings",
+    { method: "GET" },
+  );
+  expect(await second.json()).toEqual(settingsData);
+  expect(network).toHaveBeenCalledTimes(1);
+
+  // 3. Mutation invalidates extension metadata cache
+  const mutationResponse = Response.json({ ok: true });
+  network.mockResolvedValueOnce(mutationResponse);
+  await transport("/api/extensions/insurance.quotes/settings", {
+    method: "PUT",
+    body: JSON.stringify({ value: { prefix: "COT-2-" }, version: 1 }),
+  });
+
+  // 4. Subsequent fetch after mutation goes back to the server
+  const updatedData = { data: { value: { prefix: "COT-2-" }, version: 2 } };
+  network.mockResolvedValueOnce(Response.json(updatedData));
+  const third = await transport(
+    "/api/extensions/insurance.quotes/settings",
+    { method: "GET" },
+  );
+  expect(await third.json()).toEqual(updatedData);
+  expect(network).toHaveBeenCalledTimes(3);
+});
+

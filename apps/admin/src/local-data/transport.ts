@@ -3,7 +3,11 @@ import { validateRecord } from "@savia/crm-shared/metadata";
 import type { LocalStore } from "./store";
 import type { SyncTransport } from "./contracts";
 import { queryRecords, querySummary, queryRecordDetail } from "./query";
-import { readWorkspaceMetadata, writeWorkspaceMetadata } from "./session";
+import {
+  readWorkspaceMetadata,
+  writeWorkspaceMetadata,
+  removeWorkspaceMetadata,
+} from "./session";
 
 const response = (error: string, status = 503) =>
   Response.json({ error }, { status });
@@ -196,9 +200,14 @@ export function createLocalTransport(
       }
     }
     // Only non-sensitive UI metadata is cached; credentials and actions never are.
+    const isExtensionSettings =
+      segments[1] === "extensions" &&
+      (segments.length === 2 ||
+        (segments.length === 4 && segments[3] === "settings"));
     const cacheable =
       method === "GET" &&
-      ["objects", "views", "collection-relations"].includes(segments[1]);
+      (["objects", "views", "collection-relations"].includes(segments[1]) ||
+        isExtensionSettings);
     const key = `${store.scope}:metadata:${path}`;
     let cached = cacheable
       ? await readWorkspaceMetadata<unknown>(key)
@@ -263,6 +272,7 @@ export function createLocalTransport(
       throw error;
     }
     if (cacheable && result.ok) {
+      revalidatedMetadata.set(key, Date.now());
       const body = await result.clone().json();
       await writeWorkspaceMetadata(key, body);
       if (segments[1] === "objects" && segments.length === 2)
@@ -277,7 +287,17 @@ export function createLocalTransport(
       (await store.db.collections.count()) > 0
     )
       return Response.json({ ok: true });
-    if (method !== "GET" && result.ok) requestSync();
+    if (method !== "GET" && result.ok) {
+      requestSync();
+      if (segments[1] === "extensions") {
+        void removeWorkspaceMetadata(`${store.scope}:metadata:/api/extensions`);
+        for (const k of revalidatedMetadata.keys()) {
+          if (k.startsWith(`${store.scope}:metadata:/api/extensions`)) {
+            revalidatedMetadata.delete(k);
+          }
+        }
+      }
+    }
     return result;
   };
 }

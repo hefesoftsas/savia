@@ -22,7 +22,16 @@ export type UserUpdateInput =
   paths["/v1/identity/users/{principalId}"]["patch"]["requestBody"]["content"]["application/json"];
 
 export class IdentityClient {
+  private listPromise: Promise<ManagedIdentityUser[]> | null = null;
+  private listCache: { data: ManagedIdentityUser[]; timestamp: number } | null =
+    null;
+
   constructor(private readonly client: ApiClient) {}
+
+  invalidateList(): void {
+    this.listCache = null;
+    this.listPromise = null;
+  }
 
   async me(): Promise<CurrentIdentityResponse["data"]> {
     return (await this.client.get<CurrentIdentityResponse>("/v1/identity/me"))
@@ -30,8 +39,24 @@ export class IdentityClient {
   }
 
   async list(): Promise<ManagedIdentityUser[]> {
-    return (await this.client.get<IdentityUsersResponse>("/v1/identity/users"))
-      .data;
+    if (this.listCache && Date.now() - this.listCache.timestamp < 30_000) {
+      return this.listCache.data;
+    }
+    if (this.listPromise) {
+      return this.listPromise;
+    }
+    this.listPromise = this.client
+      .get<IdentityUsersResponse>("/v1/identity/users")
+      .then((res) => {
+        this.listCache = { data: res.data, timestamp: Date.now() };
+        this.listPromise = null;
+        return res.data;
+      })
+      .catch((err) => {
+        this.listPromise = null;
+        throw err;
+      });
+    return this.listPromise;
   }
 
   async get(principalId: string): Promise<ManagedIdentityUser> {
@@ -43,6 +68,7 @@ export class IdentityClient {
   }
 
   async provision(input: UserProvisionInput): Promise<ManagedIdentityUser> {
+    this.invalidateList();
     return (
       await this.client.post<{ data: ManagedIdentityUser }>(
         "/v1/identity/users",
@@ -55,6 +81,7 @@ export class IdentityClient {
     principalId: string,
     input: UserUpdateInput,
   ): Promise<ManagedIdentityUser> {
+    this.invalidateList();
     return (
       await this.client.patch<{ data: ManagedIdentityUser }>(
         `/v1/identity/users/${encodeURIComponent(principalId)}`,
@@ -67,6 +94,7 @@ export class IdentityClient {
     principalId: string,
     input: { tenantId?: number; agencyId?: number; role: AgencyAccessRole },
   ): Promise<ManagedIdentityUser> {
+    this.invalidateList();
     return (
       await this.client.post<{ data: ManagedIdentityUser }>(
         `/v1/identity/users/${encodeURIComponent(principalId)}/memberships`,
@@ -76,18 +104,21 @@ export class IdentityClient {
   }
 
   removeMembership(principalId: string, agencyId: number): Promise<void> {
+    this.invalidateList();
     return this.client.delete(
       `/v1/identity/users/${encodeURIComponent(principalId)}/memberships/${agencyId}`,
     );
   }
 
   suspend(principalId: string): Promise<void> {
+    this.invalidateList();
     return this.client.post(
       `/v1/identity/users/${encodeURIComponent(principalId)}/suspension`,
     );
   }
 
   reactivate(principalId: string): Promise<void> {
+    this.invalidateList();
     return this.client.delete(
       `/v1/identity/users/${encodeURIComponent(principalId)}/suspension`,
     );
@@ -106,6 +137,7 @@ export class IdentityClient {
   }
 
   remove(principalId: string): Promise<void> {
+    this.invalidateList();
     return this.client.delete(
       `/v1/identity/users/${encodeURIComponent(principalId)}`,
     );

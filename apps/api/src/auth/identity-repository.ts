@@ -101,6 +101,24 @@ export async function findPrincipal(
   return row ? principal(row) : undefined;
 }
 
+export async function findPrincipalBySubject(
+  d1: D1Database,
+  issuer: string,
+  subject: string,
+): Promise<IdentityPrincipal | undefined> {
+  const row = await database(d1)
+    .select()
+    .from(identityPrincipals)
+    .where(
+      and(
+        eq(identityPrincipals.issuer, issuer),
+        eq(identityPrincipals.subject, subject),
+      ),
+    )
+    .get();
+  return row ? principal(row) : undefined;
+}
+
 export async function deletePrincipal(
   d1: D1Database,
   principalId: string,
