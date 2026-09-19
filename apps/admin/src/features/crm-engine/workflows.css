@@ -241,3 +241,25 @@
     align-items: stretch;
   }
 }
+
+.wf-webhook {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  min-width: 0;
+}
+.wf-webhook pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  padding: 0.75rem;
+  background: var(--muted);
+}
+.wf-destination-form,
+.wf-webhook-secret {
+  display: grid;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}

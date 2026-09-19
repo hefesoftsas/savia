@@ -1,3 +1,7 @@
+import {
+  acceptWorkflowWebhook,
+  readWebhookJson,
+} from "../../src/workflows/webhook-endpoints";
 // Isolated, loopback-only browser verification fixture. Never a production entrypoint.
 import { createCrmApp } from "../../src/index";
 import { makeConfig } from "@savia/crm-shared/metadata";
@@ -33,8 +37,40 @@ export default {
         .run();
       response = Response.json({ ready: true });
     } else if (new URL(request.url).pathname === "/preview/tick") {
-      await processWorkflows(env.DB, async () => true);
+      await processWorkflows(env.DB, async () => true, {
+        webhooks: {
+          fetcher: (async (url: RequestInfo | URL) => {
+            if (String(url).includes("cloudflare-dns.com"))
+              return Response.json({
+                Status: 0,
+                Answer: [{ type: 1, data: "93.184.216.34" }],
+              });
+            return Response.json({ accepted: true, fixture: true });
+          }) as typeof fetch,
+        },
+      });
       response = Response.json({ ready: true });
+    } else if (
+      new URL(request.url).pathname.startsWith("/api/public/workflow-webhooks/")
+    ) {
+      response = Response.json(
+        {
+          data: await acceptWorkflowWebhook(
+            env.DB,
+            {
+              endpointId: new URL(request.url).pathname.split("/").pop()!,
+              secret: (request.headers.get("authorization") ?? "").replace(
+                /^Bearer /,
+                "",
+              ),
+              key: request.headers.get("idempotency-key") ?? "",
+              data: await readWebhookJson(request),
+            },
+            async () => true,
+          ),
+        },
+        { status: 202 },
+      );
     } else response = await app.fetch(request, env);
     const result = new Response(response.body, response);
     result.headers.set("Access-Control-Allow-Origin", "http://127.0.0.1:5189");

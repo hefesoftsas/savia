@@ -194,6 +194,12 @@ expect(screen.queryByText(otherWorkspaceDestination)).not.toBeInTheDocument();
 - [ ] Exercise the controlled local fixture: send the same authenticated incoming event twice, tick scheduler with injected receiver returning 503 then 200, assert one execution and two identical outgoing bodies/keys. Inspect editor and history in the browser at desktop and narrow widths using the browser skill. No production writes or cron changes.
 - [ ] Commit `feat: configure and inspect webhooks in workflow editor`. Mark the spec implemented only after this verification. Request whole-change review using the code-review skill, resolve findings and rerun affected tests. Report checks and any remaining deployment prerequisites; merging/pushing this feature requires the applicable current user authorization.
 
+## Implementation outcome
+
+Implemented in `codex/workflow-webhooks`. Focused verification: 7 shared schema tests, 39 real-D1/runtime/transport tests, 2 host API/scheduler tests, and 8 editor tests passed. Full monorepo typecheck passed; affected packages were rechecked after review fixes. Desktop and mobile browser checks and a local incoming-to-outgoing smoke test passed. Independent review findings were reproduced and corrected: concurrent credential rotation, response-key redaction, transient DNS handling, and final uncertain-attempt closure.
+
+The shared database fixture exercises multiple tasks together, so implementation is committed as one integrated change. No deployment or production migration was performed. Detailed acceptance and operation instructions are in `docs/workflows.md`.
+
 ## Execution handoff
 
 Tasks run in dependency order; do not split repository/runtime interface edits between concurrent implementers. Recommended execution is native in this session followed by an independent whole-change review, because incoming receipts, publication, destination versions and delivery leases share invariants. The current checkout is already a managed worktree; preserve its existing navigation commits and untracked `.impeccable/` artifact. Use a dedicated `codex/workflow-webhooks` branch from the current commit when execution begins, after verifying no conflicting branch or user edits.

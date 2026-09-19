@@ -39,6 +39,15 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...base,
+      type: z.literal("webhook"),
+      destinationId: z.uuid(),
+      destinationRevision: z.number().int().positive(),
+      values,
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
       type: z.literal("condition"),
       left: workflowValueSchema,
       operator: z.enum([
@@ -105,6 +114,7 @@ export const workflowNodeSchema = z.discriminatedUnion("type", [
 ]);
 export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 const trigger = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("webhook") }).strict(),
   z.object({ type: z.literal("created"), collection: key }).strict(),
   z
     .object({

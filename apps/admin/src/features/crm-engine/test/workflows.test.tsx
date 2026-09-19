@@ -157,3 +157,90 @@ it("reuses the manual delivery key after an uncertain network failure", async ()
     .mock.calls.filter(([url]) => url.endsWith("/start"));
   expect((starts[0][2] as any).key).toBe((starts[1][2] as any).key);
 });
+it("offers incoming webhooks without requiring a collection", async () => {
+  setup();
+  fireEvent.click(await screen.findByRole("button", { name: "Nuevo flujo" }));
+  fireEvent.change(screen.getByLabelText("Disparador"), {
+    target: { value: "webhook" },
+  });
+  expect(
+    screen.getByText("Guarda el borrador para crear la URL del webhook."),
+  ).toBeInTheDocument();
+  expect(screen.queryByLabelText("Colección")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      "/workflows",
+      "POST",
+      expect.objectContaining({
+        definition: expect.objectContaining({ trigger: { type: "webhook" } }),
+      }),
+    ),
+  );
+});
+import {
+  WorkflowWebhookSettings,
+  WorkflowDestinationPicker,
+} from "../workflow-webhooks";
+it("reveals an incoming secret transiently and never puts it in the query cache", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  vi.mocked(api).mockImplementation(async (_url, method) => ({
+    data: method === "POST" ? { id: "endpoint", secret: "reveal-once" } : null,
+  }));
+  render(
+    <QueryClientProvider client={client}>
+      <WorkflowWebhookSettings workflowId="test" />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Crear URL y secreto" }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Crear URL y secreto" }));
+  expect(await screen.findByDisplayValue("reveal-once")).toBeInTheDocument();
+  expect(
+    JSON.stringify(
+      client
+        .getQueryCache()
+        .getAll()
+        .map((q) => q.state.data),
+    ),
+  ).not.toContain("reveal-once");
+  fireEvent.click(screen.getByRole("button", { name: "Ocultar secreto" }));
+  expect(screen.queryByDisplayValue("reveal-once")).not.toBeInTheDocument();
+});
+it("selects an immutable destination revision for an outgoing step", async () => {
+  const onChange = vi.fn();
+  vi.mocked(api).mockResolvedValue({
+    data: [
+      {
+        id: "receiver",
+        name: "Receiver",
+        revision: 3,
+        enabled: true,
+        url: "https://hooks.hefesoft.com",
+        authType: "none",
+        hasSecret: false,
+      },
+    ],
+  });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <WorkflowDestinationPicker
+        value={{ destinationId: "", destinationRevision: 1 }}
+        onChange={onChange}
+      />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole("option", { name: "Receiver" });
+  fireEvent.change(screen.getByLabelText("Destino HTTPS"), {
+    target: { value: "receiver" },
+  });
+  expect(onChange).toHaveBeenCalledWith({
+    destinationId: "receiver",
+    destinationRevision: 3,
+  });
+});

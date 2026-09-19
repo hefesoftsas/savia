@@ -1,6 +1,6 @@
 # Workflow webhooks
 
-Status: written specification approved by the user; implementation plan review pending.
+Status: implemented and verified locally; migrations and deployment pending.
 
 ## Intent and scope
 

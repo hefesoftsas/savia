@@ -1,3 +1,4 @@
+import { WebhookDestinationRepository } from "./webhook-destinations";
 import {
   workflowDraftSchema,
   type WorkflowDefinition,
@@ -104,6 +105,12 @@ export class WorkflowRepository {
     return this.get(id);
   }
   async validate(definition: WorkflowDefinition) {
+    for (const node of definition.nodes)
+      if (node.type === "webhook")
+        await new WebhookDestinationRepository(
+          this.db,
+          this.workspace,
+        ).validate(node.destinationId, node.destinationRevision);
     for (const item of [definition.trigger, ...definition.nodes]) {
       if (!("collection" in item) || !item.collection) continue;
       await assertLocalCollection(this.db, this.workspace, item.collection);
@@ -269,7 +276,15 @@ export class WorkflowRepository {
       input: JSON.parse(j.input),
       output: JSON.parse(j.output),
     }));
-    return { ...row, context: JSON.parse(row.context), jobs };
+    const deliveries = (
+      await this.db
+        .prepare(
+          "SELECT node_id,sequence,started_at,finished_at,status,error,output FROM workflow_webhook_attempts WHERE workspace_id=? AND execution_id=? ORDER BY node_id,sequence",
+        )
+        .bind(this.workspace, id)
+        .all()
+    ).results;
+    return { ...row, context: JSON.parse(row.context), jobs, deliveries };
   }
   async cancel(id: string) {
     await this.execution(id);
@@ -282,14 +297,25 @@ export class WorkflowRepository {
     return this.execution(id);
   }
   async retry(id: string) {
-    const result = await this.db
-      .prepare(
-        "UPDATE workflow_executions SET status='queued',attempts=0,wake_at=0,error=NULL WHERE workspace_id=? AND id=? AND status IN ('failed','blocked')",
-      )
-      .bind(this.workspace, id)
-      .run();
-    if (!result.meta.changes)
-      fail("Only failed or blocked executions can be retried", 409);
+    const g = guard(
+      this.db,
+      "SELECT 1 FROM workflow_executions WHERE workspace_id=? AND id=? AND status IN ('failed','blocked')",
+      [this.workspace, id],
+    );
+    await transaction(this.db, [
+      g.start,
+      this.db
+        .prepare(
+          "UPDATE workflow_webhook_deliveries SET generation_attempts=0,retry_generation=retry_generation+1 WHERE workspace_id=? AND execution_id=? AND node_id=(SELECT node_id FROM workflow_executions WHERE workspace_id=? AND id=?)",
+        )
+        .bind(this.workspace, id, this.workspace, id),
+      this.db
+        .prepare(
+          "UPDATE workflow_executions SET status='queued',attempts=0,wake_at=0,error=NULL WHERE workspace_id=? AND id=?",
+        )
+        .bind(this.workspace, id),
+      g.end,
+    ]);
     return this.execution(id);
   }
   async inbox(user: string) {

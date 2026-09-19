@@ -1,3 +1,6 @@
+import { WebhookEndpointRepository } from "./webhook-endpoints";
+import { WebhookDestinationRepository } from "./webhook-destinations";
+import { webhookDestinationSchema } from "@savia/crm-shared/workflow-webhooks";
 import type { Hono, Context } from "hono";
 import { z } from "zod";
 import type { Env } from "../context";
@@ -14,6 +17,14 @@ export type WorkflowOptions = {
   }) => Promise<boolean>;
 };
 export const workflowRequests = {
+  destination: webhookDestinationSchema,
+  destinationUpdate: z
+    .object({
+      revision: z.number().int().positive(),
+      config: webhookDestinationSchema,
+    })
+    .strict(),
+  secret: z.object({ secret: z.string().min(1).max(8192) }).strict(),
   save: z
     .object({
       revision: z.number().int().positive(),
@@ -43,6 +54,59 @@ export function registerWorkflows(
       fail("Workflow permission required", 403);
     return new WorkflowRepository(c.env.DB, workspace);
   };
+  const endpoints = async (c: Context<Env>, action: WorkflowAction) => {
+    const repo = await repository(c, action);
+    return new WebhookEndpointRepository(repo.db, repo.workspace);
+  };
+  const destinations = async (c: Context<Env>, action: WorkflowAction) => {
+    const repo = await repository(c, action);
+    return new WebhookDestinationRepository(repo.db, repo.workspace, {
+      encryptionKey: c.env.INTEGRATION_KEY,
+    });
+  };
+  app.get("/api/workflows/:id/webhook", async (c) =>
+    c.json({
+      data: await (await endpoints(c, "view")).metadata(c.req.param("id")),
+    }),
+  );
+  app.post("/api/workflows/:id/webhook", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      data: await (await endpoints(c, "design")).ensure(c.req.param("id")),
+    });
+  });
+  app.post("/api/workflows/:id/webhook/rotate", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      data: await (await endpoints(c, "design")).rotate(c.req.param("id")),
+    });
+  });
+  app.get("/api/workflow-webhook-destinations", async (c) =>
+    c.json({ data: await (await destinations(c, "view")).list() }),
+  );
+  app.post("/api/workflow-webhook-destinations", async (c) => {
+    const repo = await destinations(c, "design");
+    return c.json({ data: await repo.create(await c.req.json()) }, 201);
+  });
+  app.put("/api/workflow-webhook-destinations/:id", async (c) => {
+    const repo = await destinations(c, "design"),
+      body = workflowRequests.destinationUpdate.parse(await c.req.json());
+    return c.json({
+      data: await repo.update(c.req.param("id"), body.revision, body.config),
+    });
+  });
+  app.post("/api/workflow-webhook-destinations/:id/secret", async (c) => {
+    const repo = await destinations(c, "design"),
+      body = workflowRequests.secret.parse(await c.req.json());
+    return c.json({ data: await repo.rotate(c.req.param("id"), body.secret) });
+  });
+  app.post("/api/workflow-webhook-destinations/:id/enabled", async (c) => {
+    const repo = await destinations(c, "design"),
+      body = workflowRequests.enabled.parse(await c.req.json());
+    return c.json({
+      data: await repo.setEnabled(c.req.param("id"), body.enabled),
+    });
+  });
   app.get("/api/workflows", async (c) =>
     c.json({ data: await (await repository(c, "view")).list() }),
   );

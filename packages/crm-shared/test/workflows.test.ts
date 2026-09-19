@@ -119,3 +119,31 @@ describe("general workflow definitions", () => {
     ).toBe(false);
   });
 });
+
+it("accepts incoming and outgoing webhooks with pinned destinations", () => {
+  const flow = {
+    trigger: { type: "webhook" },
+    nodes: [
+      {
+        id: "send",
+        type: "webhook",
+        destinationId: "a12aa1d0-5393-4a7f-a807-80ad8a7abcde",
+        destinationRevision: 1,
+        values: { name: { ref: "trigger.name" } },
+      },
+    ],
+  };
+  expect(workflowDefinitionSchema.safeParse(flow).success).toBe(true);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [{ ...flow.nodes[0], destinationRevision: 0 }],
+    }).success,
+  ).toBe(false);
+  expect(
+    workflowDefinitionSchema.safeParse({
+      ...flow,
+      nodes: [{ ...flow.nodes[0], values: { x: { ref: "steps.missing.id" } } }],
+    }).success,
+  ).toBe(false);
+});

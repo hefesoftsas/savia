@@ -231,7 +231,7 @@ export default {
   ): Promise<void> {
     const results = await Promise.allSettled([
       runScheduledCrmSync(environment),
-      runScheduledWorkflows(environment.DB),
+      runScheduledWorkflows(environment.DB, environment.CRM_INTEGRATION_KEY),
       maintainRecordHistory(environment.DB).then((report) => {
         console.info(
           JSON.stringify({ event: "record_history_cleanup", ...report }),

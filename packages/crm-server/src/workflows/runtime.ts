@@ -1,3 +1,5 @@
+import { executeWebhookNode } from "./webhook-delivery";
+import type { WebhookDependencies } from "./webhook-destinations";
 import { historyDatabase } from "../record-history-storage";
 import {
   evaluateWorkflowCondition,
@@ -98,7 +100,11 @@ async function schedule(db: D1Database, now: number) {
 export async function processWorkflows(
   db: D1Database,
   authorize: WorkflowAuthorization,
-  options: { now?: number; maxSteps?: number } = {},
+  options: {
+    now?: number;
+    maxSteps?: number;
+    webhooks?: WebhookDependencies;
+  } = {},
 ) {
   const now = options.now ?? Date.now();
   await schedule(db, now);
@@ -148,7 +154,17 @@ export async function processWorkflows(
           .run();
         continue;
       }
-      await executeNode(db, run, node, context, token, now);
+      if (node.type === "webhook")
+        await executeWebhookNode(
+          db,
+          run,
+          node,
+          context,
+          token,
+          now,
+          options.webhooks ?? {},
+        );
+      else await executeNode(db, run, node, context, token, now);
     } catch (error) {
       const status =
         error && typeof error === "object" && "status" in error

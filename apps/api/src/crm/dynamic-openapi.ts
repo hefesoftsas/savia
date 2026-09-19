@@ -1052,6 +1052,44 @@ export async function dynamicOpenApi(
     }
   }
   const workflowRoutes = [
+    ["/workflows/{id}/webhook", "get", "Read webhook endpoint", null],
+    ["/workflows/{id}/webhook", "post", "Create webhook endpoint", null],
+    [
+      "/workflows/{id}/webhook/rotate",
+      "post",
+      "Rotate incoming webhook secret",
+      null,
+    ],
+    [
+      "/workflow-webhook-destinations",
+      "get",
+      "List webhook destinations",
+      null,
+    ],
+    [
+      "/workflow-webhook-destinations",
+      "post",
+      "Create webhook destination",
+      workflowRequests.destination,
+    ],
+    [
+      "/workflow-webhook-destinations/{id}",
+      "put",
+      "Update webhook destination",
+      workflowRequests.destinationUpdate,
+    ],
+    [
+      "/workflow-webhook-destinations/{id}/secret",
+      "post",
+      "Rotate destination credential",
+      workflowRequests.secret,
+    ],
+    [
+      "/workflow-webhook-destinations/{id}/enabled",
+      "post",
+      "Enable webhook destination",
+      workflowRequests.enabled,
+    ],
     ["/workflows", "get", "List workflows", null],
     ["/workflows", "post", "Create workflow draft", workflowDraftSchema],
     ["/workflows/{id}", "get", "Read workflow draft", null],

@@ -1,3 +1,4 @@
+import { WorkflowDestinationPicker } from "./workflow-webhooks";
 import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import type {
 } from "@savia/crm-shared/workflows";
 
 export const stepLabels: Record<WorkflowNode["type"], string> = {
+  webhook: "Enviar webhook",
   condition: "Condición",
   transform: "Transformar datos",
   query: "Consultar registros",
@@ -25,6 +27,14 @@ export function newStep(
 ): WorkflowNode {
   const base = { id };
   switch (type) {
+    case "webhook":
+      return {
+        ...base,
+        type,
+        destinationId: "",
+        destinationRevision: 1,
+        values: {},
+      };
     case "condition":
       return { ...base, type, left: "", operator: "eq", right: "" };
     case "transform":
@@ -241,7 +251,7 @@ export function TriggerEditor({
           onChange={(e) => {
             const type = e.target.value as typeof trigger.type;
             set(
-              type === "manual"
+              type === "manual" || type === "webhook"
                 ? { type }
                 : type === "schedule"
                   ? {
@@ -260,12 +270,18 @@ export function TriggerEditor({
           }}
         >
           <option value="manual">Acción manual</option>
+          <option value="webhook">Webhook recibido</option>
           <option value="created">Registro creado</option>
           <option value="updated">Registro actualizado</option>
           <option value="schedule">Programación</option>
         </select>
       </label>
-      {trigger.type !== "schedule" ? (
+      {trigger.type === "webhook" ? (
+        <p className="wf-muted">
+          Un sistema externo inicia este flujo mediante una solicitud
+          autenticada.
+        </p>
+      ) : trigger.type !== "schedule" ? (
         <label>
           Colección
           <select
@@ -384,9 +400,11 @@ export function StepEditor({
       .flatMap((n) =>
         n.type === "transform"
           ? Object.keys(n.values).map((k) => `steps.${n.id}.${k}`)
-          : n.type === "query"
-            ? [`steps.${n.id}.count`]
-            : [`steps.${n.id}.id`],
+          : n.type === "webhook"
+            ? [`steps.${n.id}.status`, `steps.${n.id}.body`]
+            : n.type === "query"
+              ? [`steps.${n.id}.count`]
+              : [`steps.${n.id}.id`],
       ),
   ];
   const destination = (label: string, key: "next" | "otherwise") => (
@@ -477,6 +495,9 @@ export function StepEditor({
             variables={variables}
           />
         </>
+      ) : null}
+      {node.type === "webhook" ? (
+        <WorkflowDestinationPicker value={node} onChange={patch} />
       ) : null}
       {"values" in node ? (
         <Mappings

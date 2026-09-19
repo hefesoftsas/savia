@@ -1,3 +1,4 @@
+import { registerWorkflowWebhookRoutes } from "./workflow-webhooks";
 import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
 import { canonicalHostForApi } from "./auth/tenant-host-guard";
 import { registerAccessControlRoutes } from "./routes/access-control";
@@ -117,6 +118,9 @@ export function createApp(
   registerRealtimeRoutes(app, realtime);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerLookupRoutes(app, saviaRequestService);
+  registerWorkflowWebhookRoutes(app, db, {
+    rateLimiter: publicForms?.rateLimiter,
+  });
   registerPublicFormRoutes(app, db, {
     ...publicForms,
     quote:

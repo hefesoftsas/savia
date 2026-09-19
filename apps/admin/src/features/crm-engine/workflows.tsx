@@ -1,3 +1,4 @@
+import { WorkflowWebhookSettings } from "./workflow-webhooks";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -32,10 +33,18 @@ type Draft = {
 type Run = {
   id: string;
   status: string;
+  wake_at?: number;
   version_id: string;
   node_id: string | null;
   error?: string;
   created_at: string;
+  deliveries?: {
+    node_id: string;
+    sequence: number;
+    status: number | null;
+    error: string | null;
+    finished_at: number | null;
+  }[];
   jobs?: { node_id: string; type: string; output: unknown; attempts: number }[];
 };
 const fresh = (): Draft => ({
@@ -295,6 +304,15 @@ function WorkspaceWorkflows({
               objects={native}
               onChange={(definition) => change({ ...draft, definition })}
             />
+            {draft.definition.trigger.type === "webhook" ? (
+              draft.id ? (
+                <WorkflowWebhookSettings key={draft.id} workflowId={draft.id} />
+              ) : (
+                <p className="wf-muted">
+                  Guarda el borrador para crear la URL del webhook.
+                </p>
+              )
+            ) : null}
             {native.length < objects.length ? (
               <p className="wf-muted">
                 Las fuentes externas aún no admiten pasos de workflow.
@@ -514,9 +532,27 @@ function WorkspaceWorkflows({
                       Versión {detail.data.data.version_id} · Paso{" "}
                       {detail.data.data.node_id ?? "finalizado"}
                     </p>
+                    {detail.data.data.status === "waiting" &&
+                    !!detail.data.data.wake_at ? (
+                      <p className="wf-muted">
+                        Próximo intento o reanudación:{" "}
+                        {new Date(detail.data.data.wake_at).toLocaleString()}
+                      </p>
+                    ) : null}
                     {detail.data.data.error ? (
                       <p role="alert">{detail.data.data.error}</p>
                     ) : null}
+                    {detail.data.data.deliveries?.map((attempt) => (
+                      <p key={`${attempt.node_id}:${attempt.sequence}`}>
+                        {attempt.node_id} · Intento {attempt.sequence} ·{" "}
+                        {attempt.status
+                          ? `HTTP ${attempt.status}`
+                          : attempt.finished_at
+                            ? "Sin respuesta"
+                            : "Envío en curso o resultado pendiente"}
+                        {attempt.error ? ` · ${attempt.error}` : ""}
+                      </p>
+                    ))}
                     {detail.data.data.jobs?.map((job) => (
                       <details key={job.node_id}>
                         <summary>
