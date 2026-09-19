@@ -90,6 +90,31 @@ function createServices(
   } as unknown as AppServices;
 }
 
+function mockAccountRequests(actionPath: string) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const path = new URL(String(input), window.location.origin).pathname;
+    if (path === "/api/public/tenant-branding")
+      return new Response(JSON.stringify({ data: null }), {
+        headers: { "content-type": "application/json" },
+      });
+    if (path === "/api/auth/get-session")
+      return new Response(
+        JSON.stringify({
+          user: {
+            id: "account-1",
+            name: "Admin Savia",
+            email: "admin@savia.test",
+            twoFactorEnabled: true,
+          },
+          session: { id: "session-1" },
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    if (path === actionPath) return new Response(null, { status: 200 });
+    throw new Error(`Unexpected account request: ${path}`);
+  });
+}
+
 describe("App", () => {
   afterEach(() => {
     cleanup();
@@ -97,6 +122,14 @@ describe("App", () => {
   });
 
   beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = new URL(String(input), window.location.origin).pathname;
+      if (path !== "/api/public/tenant-branding")
+        throw new Error(`Unexpected app request: ${path}`);
+      return new Response(JSON.stringify({ data: null }), {
+        headers: { "content-type": "application/json" },
+      });
+    });
     window.history.replaceState({}, "", "/");
     window.location.hash = "#/my-integrations";
   });
@@ -367,21 +400,7 @@ describe("App", () => {
 
   it("changes the signed-in user's password with their current password", async () => {
     window.location.hash = "#/account";
-    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          user: {
-            id: "account-1",
-            name: "Admin Savia",
-            email: "admin@savia.test",
-            twoFactorEnabled: true,
-          },
-          session: { id: "session-1" },
-        }),
-        { headers: { "content-type": "application/json" } },
-      ),
-    );
-    fetcher.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const fetcher = mockAccountRequests("/api/auth/change-password");
     const user = userEvent.setup();
 
     render(<App services={createServices()} />);
@@ -407,7 +426,7 @@ describe("App", () => {
     );
 
     await waitFor(() =>
-      expect(fetcher).toHaveBeenLastCalledWith(
+      expect(fetcher).toHaveBeenCalledWith(
         new URL("/api/auth/change-password", window.location.origin).toString(),
         expect.objectContaining({
           method: "POST",
@@ -421,7 +440,7 @@ describe("App", () => {
       ),
     );
     expect(
-      screen.getByText(
+      await screen.findByText(
         "Tu contraseña se actualizó y las demás sesiones se cerraron.",
       ),
     ).toBeVisible();
@@ -429,21 +448,7 @@ describe("App", () => {
 
   it("lets the signed-in user disable their active MFA with their current password", async () => {
     window.location.hash = "#/account";
-    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          user: {
-            id: "account-1",
-            name: "Admin Savia",
-            email: "admin@savia.test",
-            twoFactorEnabled: true,
-          },
-          session: { id: "session-1" },
-        }),
-        { headers: { "content-type": "application/json" } },
-      ),
-    );
-    fetcher.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const fetcher = mockAccountRequests("/api/auth/two-factor/disable");
     const user = userEvent.setup();
 
     render(<App services={createServices()} />);
@@ -457,7 +462,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Desactivar MFA" }));
 
     await waitFor(() =>
-      expect(fetcher).toHaveBeenLastCalledWith(
+      expect(fetcher).toHaveBeenCalledWith(
         new URL(
           "/api/auth/two-factor/disable",
           window.location.origin,
@@ -469,7 +474,9 @@ describe("App", () => {
         }),
       ),
     );
-    expect(screen.getByText("MFA desactivada para esta cuenta.")).toBeVisible();
+    expect(
+      await screen.findByText("MFA desactivada para esta cuenta."),
+    ).toBeVisible();
   });
 
   it("starts Better Auth immediately when the login route opens", async () => {

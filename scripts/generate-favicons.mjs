@@ -1,28 +1,22 @@
-import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import sharp from "sharp";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, "..");
-const publicDir = resolve(rootDir, "apps/admin/public");
-const defaultSourceImage = resolve(rootDir, "apps/admin/public/savia-logo-source.png");
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const publicDir = join(rootDir, "apps/admin/public");
+const source = readFileSync(
+  join(rootDir, "assets/brand/savia-mark.svg"),
+  "utf8",
+);
+const mark = source.replace(/<svg[^>]*>/, "").replace("</svg>", "");
 
-function ensureDir(dir) {
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-}
-
-function resizeWithSips(source, target, size) {
-  execFileSync("/usr/bin/sips", [
-    "-z",
-    String(size),
-    String(size),
-    source,
-    "--out",
-    target,
-  ]);
+// Normal icons use almost the entire canvas. Maskable icons reserve the
+// central 80%-diameter safe circle; the OS supplies the outer silhouette.
+function iconSvg(maskable = false) {
+  const scale = maskable ? 0.6 : 0.96;
+  const inset = (64 - 64 * scale) / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#ffffff"/><g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
 }
 
 function createIco(pngBuffers) {
@@ -55,76 +49,37 @@ function createIco(pngBuffers) {
   ]);
 }
 
-export function generateFavicons(sourcePath = defaultSourceImage) {
-  if (!existsSync(sourcePath)) {
-    throw new Error(`Source image not found: ${sourcePath}`);
-  }
-
-  ensureDir(publicDir);
-
+export async function generateFavicons() {
   const targets = [
-    { name: "favicon-16x16.png", size: 16 },
-    { name: "favicon-32x32.png", size: 32 },
-    { name: "favicon-48x48.png", size: 48 },
-    { name: "apple-touch-icon.png", size: 180 },
-    { name: "android-chrome-192x192.png", size: 192 },
-    { name: "android-chrome-512x512.png", size: 512 },
+    ["favicon-16-v2.png", 16, false],
+    ["favicon-32-v2.png", 32, false],
+    ["favicon-48-v2.png", 48, false],
+    ["apple-touch-icon-v2.png", 180, false],
+    ["savia-icon-192-v2.png", 192, false],
+    ["savia-icon-512-v2.png", 512, false],
+    ["savia-maskable-192-v2.png", 192, true],
+    ["savia-maskable-512-v2.png", 512, true],
   ];
-
-  console.log(`Generating icons from ${sourcePath} into ${publicDir}...`);
-
-  for (const { name, size } of targets) {
-    const dest = join(publicDir, name);
-    resizeWithSips(sourcePath, dest, size);
-    console.log(`✓ Generated ${name} (${size}x${size})`);
+  for (const [name, size, maskable] of targets) {
+    await sharp(Buffer.from(iconSvg(maskable)), { density: 384 })
+      .resize(size, size)
+      .png()
+      .toFile(join(publicDir, name));
+    console.log(`Generated ${name}`);
   }
-
-  // Generate multi-resolution favicon.ico
-  const icoBuffers = [16, 32, 48].map((size) => ({
-    width: size,
-    height: size,
-    buffer: readFileSync(join(publicDir, `favicon-${size}x${size}.png`)),
-  }));
-
-  const icoPath = join(publicDir, "favicon.ico");
-  writeFileSync(icoPath, createIco(icoBuffers));
-  console.log(`✓ Generated favicon.ico (16, 32, 48 multi-size)`);
-
-  // Copy full resolution logo.png
-  copyFileSync(sourcePath, join(publicDir, "logo.png"));
-  console.log(`✓ Copied full-res logo.png`);
-
-  // Write site.webmanifest
-  const manifest = {
-    name: "Savia",
-    short_name: "Savia",
-    description: "Plataforma low-code multi-inquilino de seguros",
-    icons: [
-      {
-        src: "/android-chrome-192x192.png",
-        sizes: "192x192",
-        type: "image/png",
-      },
-      {
-        src: "/android-chrome-512x512.png",
-        sizes: "512x512",
-        type: "image/png",
-      },
-    ],
-    theme_color: "#0d9488",
-    background_color: "#ffffff",
-    display: "standalone",
-    start_url: "/",
-  };
-
-  writeFileSync(
-    join(publicDir, "site.webmanifest"),
-    JSON.stringify(manifest, null, 2) + "\n",
+  writeFileSync(join(publicDir, "favicon.svg"), iconSvg() + "\n");
+  const ico = createIco(
+    [16, 32, 48].map((size) => ({
+      width: size,
+      height: size,
+      buffer: readFileSync(join(publicDir, `favicon-${size}-v2.png`)),
+    })),
   );
-  console.log(`✓ Generated site.webmanifest`);
+  writeFileSync(join(publicDir, "favicon.ico"), ico);
+  // The manifest is authored separately: generating icons must not erase
+  // installed-app identity, shortcuts, scope, or display settings.
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const customSource = process.argv[2] || defaultSourceImage;
-  generateFavicons(customSource);
+  await generateFavicons();
 }

@@ -1,3 +1,4 @@
+import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
 import { useEffect, useMemo, useState } from "react";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host";
 import { usePermissions } from "ra-core";
@@ -25,11 +26,12 @@ export function formatSlugToDisplayName(slug: string): string {
 export function useCurrentTenant(options?: {
   hostname?: string;
 }): CurrentTenantInfo {
+  const { branding } = useTenantBranding();
   const hostname =
     options?.hostname ??
     (typeof window !== "undefined" ? window.location.hostname : "");
   const slug = useMemo(() => parseTenantSlugFromHostname(hostname), [hostname]);
-  const isDedicated = Boolean(slug);
+  const isDedicated = Boolean(slug) || Boolean(branding);
   const fallbackName = slug ? formatSlugToDisplayName(slug) : "Savia";
 
   let isPlatformAdmin = false;
@@ -38,9 +40,9 @@ export function useCurrentTenant(options?: {
     const { permissions } = usePermissions();
     isPlatformAdmin = Boolean(
       permissions &&
-        typeof permissions === "object" &&
-        "canManageIdentity" in permissions &&
-        permissions.canManageIdentity,
+      typeof permissions === "object" &&
+      "canManageIdentity" in permissions &&
+      permissions.canManageIdentity,
     );
   } catch {
     // Outside react-admin context (e.g. unit tests)
@@ -119,7 +121,7 @@ export function useCurrentTenant(options?: {
     };
   }, [isDedicated, slug, fallbackName, appServices?.apiClient]);
 
-  const name = tenantData.name || fallbackName;
+  const name = branding?.displayName || tenantData.name || fallbackName;
   const monogram = name.charAt(0).toUpperCase() || "S";
 
   return {

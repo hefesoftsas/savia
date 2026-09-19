@@ -1,3 +1,6 @@
+import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
+import { canonicalHostForApi } from "./auth/tenant-host-guard";
+import { registerAccessControlRoutes } from "./routes/access-control";
 import {
   installRequestResultEnvelope,
   registerRequestResultRoutes,
@@ -91,6 +94,7 @@ export function createApp(
     oauthUrls,
   );
   installRequestResultEnvelope(app);
+  registerAccessControlRoutes(app, db);
   registerAssistantRoutes(app, assistantService, {
     db,
     documents,
@@ -152,6 +156,7 @@ export function createApp(
     extensionActionExecutor,
     extensionConnectionsEncryptionKey,
     runtimeReleaseCatalog.beforeSolutionInstall(saviaRequestService),
+    realtime,
   );
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
   registerUserPreferenceRoutes(app, db);
@@ -160,7 +165,14 @@ export function createApp(
     db,
     userAdministrator ?? betterAuthUserAdministrator(resolvedAuthService),
     realtime,
+    documents,
   );
   registerAccountAvatarRoutes(app, documents, resolvedAuthService);
+  registerTenantBrandingRoutes(
+    app,
+    db,
+    documents,
+    canonicalHostForApi(oauthUrls.authorizationUrl),
+  );
   return app;
 }

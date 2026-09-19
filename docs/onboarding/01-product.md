@@ -1,15 +1,17 @@
 # 01 — Product (30 min)
 
-Savia is a low-code platform for insurance agencies, deployed on Cloudflare
-Workers + D1/R2. Each agency operates in its own space with its customers,
-and the platform adds CRM, insurer quoting, and an AI assistant.
+Savia is a general-purpose low-code platform, deployed on Cloudflare
+Workers + D1/R2. Workspaces organize collections, screens, integrations,
+and workflows. Industry-specific capabilities, including insurance,
+are optional solution packages rather than prerequisites of the core.
 
 ## Actors
 
-- **Agency advisor**: quotes, compares offers, manages customers and policies.
-- **Platform administrator**: operates across agencies, configures domains,
+- **Workspace user**: works with records, screens and assigned activities.
+- **Workspace administrator**: configures collections and workflows within an authorized space.
+- **Platform administrator**: operates across workspaces, configures domains,
   integrations, and provider credentials.
-- **Insurer (provider)**: Sura, SBS, Equidad, Liberty, Mapfre, Qualitas,
+- **Optional insurance solution provider**: Sura, SBS, Equidad, Liberty, Mapfre, Qualitas,
   Bolívar, Allianz, HDI, Zurich — invoked over API/SOAP with per-agency
   credentials, never from the browser.
 
@@ -26,6 +28,9 @@ and the platform adds CRM, insurer quoting, and an AI assistant.
    queue).
 5. **Solution packages**: configuration installable per space
    (`solutions/insurance/`); see [solution-packages.md](../solution-packages.md).
+6. **Workflows**: native record events, manual actions and schedules connected
+   to versioned steps; see [workflows.md](../workflows.md). No industry solution
+   is required.
 
 ## What it does NOT do
 

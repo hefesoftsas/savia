@@ -11,8 +11,8 @@ visible record and its outbox mutation in one local transaction. The UI can fini
 without waiting for HTTP. Server validation, authorization and business rules
 remain authoritative; rejected edits remain visible in the synchronization panel.
 
-Each database has five fixed stores: `records`, `collections`, `outbox`,
-`syncState`, and `conflicts`. Collection names are data, not IndexedDB schema.
+Each database has six fixed stores: `records`, `collections`, `outbox`,
+`syncState`, `conflicts`, and `linkSnapshots`. Collection names are data, not IndexedDB schema.
 Creating a collection does not upgrade the database version. Scope includes the
 API environment, principal, domain API prefix and permissions snapshot. No access
 tokens are persisted by this subsystem.
@@ -48,6 +48,18 @@ durable pull cursor, not a socket event, establishes completeness. A central
 jitter. Local queries use IndexedDB indexes for pagination and ordering; complex
 filters use scalar index ranges and set intersections/unions. Derived match IDs
 and exact totals are reused across pages.
+
+## Related form bundles
+
+Prepared parent/detail forms save all local records, complete link snapshots and one
+outbox entry atomically. The fixed `linkSnapshots` store is introduced by database
+version 2; adding collections does not create additional schema versions. Bundles
+use stable client IDs and replay the same receipt key after uncertain network
+failures. Ordinary writes cannot overlap records in a pending bundle. Conflicts
+are resolved for the complete form using fresh server records and links, including
+newly linked records. Inverse links whose complete snapshot is unknown remain
+unavailable offline until synchronized. See [related record editing](related-record-editing.md)
+for preparation requirements and limits.
 
 ## Offline access and recovery
 
@@ -174,3 +186,7 @@ measured the former compound-filter scan at 283.9 ms, the indexed first query at
 163.5 ms, and the cached next page at 22.6 ms. These are illustrative local timings,
 not production latency guarantees. Unrestricted first-time text search still does
 work proportional to the collection; its result is reused for later pages.
+
+## Scoped permissions
+
+See [Roles and permissions](permissions.md) for policy revision binding, creator attribution, row removals, field redaction and quarantine behavior. Policy changes require clearing old projections before replay. An acknowledged mutation is reauthorized against the current record before its response is returned. The existing offline lease still bounds disconnected access.

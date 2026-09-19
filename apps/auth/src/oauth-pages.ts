@@ -1,6 +1,10 @@
+import {
+  parseTenantBranding,
+  type TenantBranding,
+} from "@savia/tenant-host/branding";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host";
 import { renderOAuthSurface } from "./login-ui";
-import { oauthUiCss } from "./oauth-ui-css";
+import { oauthUiCssForBranding } from "./oauth-ui-css";
 
 const securityHeaders = {
   "cache-control": "no-store",
@@ -26,7 +30,7 @@ function page(title: string, content: string, restartUrl?: string): string {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
+    <title>${htmlAttribute(title)}</title>
     <link rel="stylesheet" href="/api/auth/oauth-ui.css">
   </head>
   <body${restartAttribute}>
@@ -46,23 +50,41 @@ function htmlResponse(content: string): Response {
   });
 }
 
-function loginPage(restartUrl?: string, tenantSlug?: string | null): Response {
-  const title = tenantSlug
-    ? `Iniciar sesión en ${tenantSlug} | Savia`
-    : "Iniciar sesión | Savia";
+function loginPage(
+  restartUrl?: string,
+  tenantSlug?: string | null,
+  branding?: TenantBranding,
+): Response {
+  const title = branding
+    ? `${branding.loginTitle} | ${branding.displayName}`
+    : tenantSlug
+      ? `Iniciar sesión en ${tenantSlug} | Savia`
+      : "Iniciar sesión | Savia";
   return htmlResponse(
-    page(title, renderOAuthSurface("login", { tenantSlug }), restartUrl),
+    page(
+      title,
+      renderOAuthSurface("login", { tenantSlug, branding }),
+      restartUrl,
+    ),
   );
 }
 
-function mfaEnrollmentPage(): Response {
+function mfaEnrollmentPage(branding?: TenantBranding): Response {
   return htmlResponse(
-    page("Configura MFA | Savia", renderOAuthSurface("enroll")),
+    page(
+      `Configura MFA | ${branding?.displayName ?? "Savia"}`,
+      renderOAuthSurface("enroll", { branding }),
+    ),
   );
 }
 
-function consentPage(): Response {
-  return htmlResponse(page("Autorizar Savia", renderOAuthSurface("consent")));
+function consentPage(branding?: TenantBranding): Response {
+  return htmlResponse(
+    page(
+      `Autorizar ${branding?.displayName ?? "Savia"}`,
+      renderOAuthSurface("consent", { branding }),
+    ),
+  );
 }
 
 function scriptResponse(): Response {
@@ -74,8 +96,8 @@ function scriptResponse(): Response {
   });
 }
 
-function styleResponse(): Response {
-  return new Response(oauthUiCss, {
+function styleResponse(branding?: TenantBranding): Response {
+  return new Response(oauthUiCssForBranding(branding), {
     headers: {
       ...securityHeaders,
       "content-type": "text/css; charset=utf-8",
@@ -85,22 +107,23 @@ function styleResponse(): Response {
 
 export function oauthPageResponse(
   request: Request,
-  options?: { restartUrl?: string },
+  options?: { restartUrl?: string; branding?: TenantBranding },
 ): Response | undefined {
   if (request.method !== "GET") return undefined;
   const url = new URL(request.url);
   const tenantSlug = parseTenantSlugFromHostname(url.hostname);
+  const branding = parseTenantBranding(options?.branding) ?? undefined;
   switch (url.pathname) {
     case "/api/auth/login":
-      return loginPage(options?.restartUrl, tenantSlug);
+      return loginPage(options?.restartUrl, tenantSlug, branding);
     case "/api/auth/mfa-enroll":
-      return mfaEnrollmentPage();
+      return mfaEnrollmentPage(branding);
     case "/api/auth/consent":
-      return consentPage();
+      return consentPage(branding);
     case "/api/auth/oauth-ui.js":
       return scriptResponse();
     case "/api/auth/oauth-ui.css":
-      return styleResponse();
+      return styleResponse(branding);
     default:
       return undefined;
   }
@@ -336,3 +359,14 @@ const oauthUiScript = String.raw`(() => {
   bindPasswordVisibility();
   bindForms();
 })();`;
+
+export function tenantBrandingFromHeader(
+  value: string | null,
+): TenantBranding | undefined {
+  if (!value || value.length > 12000) return undefined;
+  try {
+    return parseTenantBranding(decodeURIComponent(value)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}

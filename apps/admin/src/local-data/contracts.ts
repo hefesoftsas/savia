@@ -1,3 +1,5 @@
+import type { RelatedRecordBundle } from "@savia/crm-shared/related-records";
+import type { RelationDefinition } from "@savia/crm-shared/relations";
 import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
 export type StoredRecord = {
   collection: string;
@@ -16,7 +18,13 @@ export type Mutation = {
   mutationId: string;
   collection: string;
   id: string;
-  action: "create" | "update" | "delete";
+  action: "create" | "update" | "delete" | "bundle";
+  bundle?: {
+    input: RelatedRecordBundle;
+    definitions: RelationDefinition[];
+    members: BundleMember[];
+    groups: LinkSnapshot["groups"];
+  };
   data?: Record<string, unknown>;
   baseVersion?: number;
   sequence: number;
@@ -24,11 +32,13 @@ export type Mutation = {
   error?: string;
   before?: CrmRecord;
   localSnapshot?: CrmRecord;
+  quarantined?: boolean;
 };
 export type SyncState = {
   collection: string;
   /** Atomic record/index revision for snapshot-safe in-memory query caches. */
   dataRevision?: string;
+  policyIdentity?: string;
   cursor?: string;
   hydrated: boolean;
   lastSyncedAt?: number;
@@ -43,6 +53,7 @@ export type Conflict = {
 };
 export type PullBatch = {
   documents: CrmRecord[];
+  removedIds?: string[];
   cursor: string;
   hasMore: boolean;
   reset?: boolean;
@@ -58,3 +69,15 @@ export type SyncTransport = (
   path: string,
   init?: RequestInit,
 ) => Promise<Response>;
+
+export type BundleMember = {
+  collection: string;
+  id: string;
+  before?: CrmRecord;
+  document: CrmRecord;
+};
+export type LinkSnapshot = {
+  collection: string;
+  id: string;
+  groups: Array<{ definition: RelationDefinition; ids: string[] }>;
+};

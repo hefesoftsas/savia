@@ -13,6 +13,7 @@ export const sidebarNavigationItemIds = [
   "provider-credentials",
   "assistant-configuration",
   "service-credentials",
+  "access-control",
   "users",
   "tenants",
   "page-administrator",
@@ -163,7 +164,11 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
     sections: {
       operation: ["dashboard", "dynamic-crm"],
       productivity: ["my-day", "integrations"],
-      administration: ["provider-credentials", "service-credentials"],
+      administration: [
+        "provider-credentials",
+        "service-credentials",
+        "access-control",
+      ],
       management: ["tenants", "users", "page-administrator"],
     },
   });

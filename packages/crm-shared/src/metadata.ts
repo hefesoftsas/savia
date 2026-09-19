@@ -252,6 +252,14 @@ export const fieldSchema = z
         collectionOptions: collectionOptionsSchema.optional(),
         relation: identifier.optional(),
         collectionRelation: z.string().min(1).max(120).optional(),
+        relationPresentation: z
+          .enum(["selector", "subform", "table"])
+          .optional(),
+        relationFields: z.array(identifier).optional(),
+        relationAllowCreate: z.boolean().optional(),
+        relationAllowEdit: z.boolean().optional(),
+        relationAllowLink: z.boolean().optional(),
+        relationAllowUnlink: z.boolean().optional(),
         multiple: z.boolean().optional(),
         onDelete: z.enum(["restrict", "clear"]).optional(),
         section: identifier.optional(),
@@ -375,6 +383,29 @@ export const configSchema = z
       issue("El orden debe incluir cada campo una sola vez.");
     for (const [name, f] of Object.entries(config.fields)) {
       const c = f.config;
+      if (c?.relationPresentation && c.relationPresentation !== "selector") {
+        if (!c.collectionRelation)
+          issue(
+            `${f.label}: configura una relación local antes de elegir un subformulario o tabla.`,
+          );
+        if (c.relationPresentation === "table" && !c.multiple)
+          issue(
+            `${f.label}: una tabla necesita una relación de varios registros.`,
+          );
+        if (
+          !["Textbox", "Dropdown"].includes(f.type) ||
+          c.relation ||
+          c.collectionOptions
+        )
+          issue(
+            `${f.label}: esta presentación requiere un campo vinculado a una relación local.`,
+          );
+      }
+      if (
+        c?.relationFields &&
+        new Set(c.relationFields).size !== c.relationFields.length
+      )
+        issue(`${f.label}: los campos relacionados no pueden repetirse.`);
       if (
         f.type !== R2_ATTACHMENT_TYPE &&
         f.required &&
@@ -524,7 +555,7 @@ export const configSchema = z
           next = config.fields[next]?.config?.optionsWhen?.field;
         }
       }
-      if (c?.multiple && !c.relation)
+      if (c?.multiple && !c.relation && !c.collectionRelation)
         issue(`${f.label}: selección múltiple requiere una relación.`);
       if (c?.unique && (c.multiple || c.formula))
         issue(

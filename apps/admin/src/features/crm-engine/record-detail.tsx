@@ -1,3 +1,4 @@
+import { OfficeEditButton } from "./office-edit-button";
 import { recordOptionLabel } from "./record-option-label";
 import { RecordOriginLinks } from "./record-origin-links";
 import RecordLinks, {
@@ -315,6 +316,10 @@ export default function RecordDetail({
                 KB · {file.mime}
               </span>
             </div>
+            <OfficeEditButton
+              file={file}
+              disabled={Boolean(object.config.fields[field]?.readOnly)}
+            />
             <Button
               type="button"
               size="icon"
@@ -795,6 +800,16 @@ export default function RecordDetail({
                           )}
                         </p>
                       </div>
+                      <OfficeEditButton
+                        file={file}
+                        disabled={
+                          saving ||
+                          Boolean(
+                            file.field &&
+                            object.config.fields[file.field]?.readOnly,
+                          )
+                        }
+                      />
                       <Button variant="ghost" size="icon" asChild>
                         <a
                           aria-label={`Descargar ${file.name}`}

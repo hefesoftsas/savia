@@ -19,7 +19,10 @@ const migrations = Object.entries(
 beforeAll(async () => {
   for (const [, sql] of migrations.sort(([a], [b]) => a.localeCompare(b)))
     for (const statement of sql.split("--> statement-breakpoint")) {
-      const normalized = statement.replace(/^--.*$/gm, "").replace(/\s+/g, " ").trim();
+      const normalized = statement
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
       if (normalized) await env.DB.exec(normalized);
     }
   await seedTenantAgency(env.DB, 101);
@@ -77,6 +80,17 @@ it("publishes individual typed paths from current agency metadata and refreshes 
   expect(response.headers.get("cache-control")).toBe("no-store");
   const spec: any = await response.json();
   expect(spec.openapi).toBe("3.1.0");
+  expect(spec.paths["/file/{id}/office"].get.operationId).toBe(
+    "office_file_metadata",
+  );
+  expect(
+    spec.paths["/file/{id}/revisions"].post.requestBody.content[
+      "multipart/form-data"
+    ].schema.required,
+  ).toEqual(["version", "file"]);
+  expect(
+    spec.paths["/file/{id}/revisions/{version}/download"].get.responses[200],
+  ).toBeTruthy();
   expect(spec.servers).toEqual([{ url: prefix }]);
   expect(spec.paths["/published/published_clients"].post.operationId).toBe(
     "published_clients_create",

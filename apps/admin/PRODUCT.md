@@ -4,75 +4,58 @@
 
 ## Platform
 
-web, pwa (instalable en escritorio y móvil)
+web
 
 ## Users
 
-Usuarios autenticados de agencias de seguros que consultan vehículos, solicitan
-cotizaciones, comparan opciones y actualizan datos para sus clientes. Los
-administradores de plataforma también pueden operar y consultar información
-entre agencias.
+Authenticated workspace users and administrators operating data-driven applications
+across many domains. Platform administrators manage shared configuration.
 
 ## Product Purpose
 
-Savia concentra la operación de agencias de seguros. El cotizador de autos
-livianos reduce el trabajo de pedir cotizaciones a varias aseguradoras, y el
-asistente permite consultar datos vigentes o preparar cambios para confirmar.
+Savia is a general-purpose low-code platform for collections, screens, forms,
+integrations, workflows, and assisted work. Insurance and CRM integrations are
+optional solutions; they do not define the platform's core user or data model.
 
 ## Positioning
 
-El cotizador persiste cada intención y oferta antes de ejecutar un proveedor.
-El asistente usa el mismo catálogo MCP que la API de dominio y prepara cambios
-que el mismo usuario debe confirmar explícitamente.
+Configure an application around its data and processes. Keep authorization and
+execution state in the backend, with inspectable results and explicit changes.
 
 ## Operating Context
 
-El usuario trabaja dentro del panel administrativo, elige su agencia cuando
-aplica, consulta una placa y completa datos de vehículo, tomador, conductor y
-cobertura. Equidad es la fuente primaria de vehículo y Sura es el respaldo.
-Las solicitudes se agrupan por agencia; las ofertas pueden quedar pendientes,
-en progreso, exitosas o fallidas y se comparan cuando sus datos están
-normalizados. La barra del asistente está disponible en todas las pantallas
-autenticadas.
+Users work in a configurable administrative interface on desktop and mobile.
+Each data domain or workspace isolates its collections and configuration.
+Solution-specific screens retain their specialized behavior and terminology.
 
 ## Capabilities and Constraints
 
-- Ocho aseguradoras están habilitadas para autos livianos: Allianz, Bolívar,
-  Equidad, HDI, Liberty, Mapfre, SBS y Zurich.
-- La aplicación web y la API manejan únicamente datos canónicos. Las
-  plantillas y credenciales de proveedor permanecen en el gateway interno.
-- No se emiten pólizas ni se realizan reintentos automáticos. Un reintento
-  visible crea un intento nuevo.
-- Todos los usuarios autenticados con membresía activa pueden usar el recurso
-  dentro de su agencia; los administradores de plataforma tienen visibilidad
-  global.
-- Las lecturas del asistente se ejecutan de inmediato por FastMCP; los cambios
-  quedan como propuestas de vigencia limitada y exigen confirmación explícita.
-- El access token y las credenciales de OpenRouter permanecen fuera del
-  almacenamiento persistente del navegador.
-- La aplicación web es instalable como PWA (Progressive Web App) en navegadores de escritorio y móviles (Chrome, Edge, Android, iOS Safari), con precarga de shell y acceso rápido a pantallas clave.
+- Collections, relations, screens and forms are configured through metadata.
+- General workflows support native collections, immutable published versions,
+  durable executions and per-step results. External workflow actions are deferred.
+- Credentials remain on the server; the assistant prepares changes for confirmation.
+- The application is installable as a PWA. Workflow management requires a server
+  connection; it adds no browser-persistence fallback.
+- Insurer retry and issuance restrictions remain specific to that solution.
 
 ## Brand Commitments
 
-Savia conserva el panel administrativo existente: voz directa y operativa,
-interfaz clara de trabajo, temas configurables y componentes compartidos de
-React Admin y shadcn.
+Preserve the established administrative UI: direct operational language,
+configurable themes, shared React Admin/shadcn components and clear states.
 
 ## Evidence on Hand
 
-Las respuestas, estados y datos normalizados se obtienen de la API de Savia.
-No hay imágenes, resultados reales de aseguradoras ni credenciales que la
-interfaz pueda fabricar o mostrar.
+Records and results come from Savia APIs. Identify test data explicitly;
+do not fabricate successful integrations or execution.
 
 ## Product Principles
 
-- Guardar antes de ejecutar para que el asesor nunca pierda una solicitud.
-- Hacer visible el estado de cada aseguradora y de la solicitud completa.
-- Comparar solo lo que un proveedor respondió de forma inequívoca.
-- Mantener la agencia y la información del cliente dentro de su alcance.
-- Hacer visibles las consecuencias antes de ejecutar un cambio con asistencia.
+- Make changes and execution state inspectable.
+- Keep data and permissions scoped to the authorized workspace.
+- Separate editable drafts from published behavior.
+- Present failures and recovery actions clearly.
+- Keep industry assumptions inside optional solutions.
 
 ## Accessibility & Inclusion
 
-El asistente y el cotizador deben ser navegables por teclado, conservar foco
-visible y adaptarse a pantallas móviles.
+Support keyboard navigation, visible focus and responsive desktop/mobile layouts.

@@ -2,6 +2,12 @@ import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
 import { validateRecord, fieldEntries } from "@savia/crm-shared/metadata";
 import { fail } from "./context";
 import { disabledSolutionObjects } from "./solution-state";
+import {
+  policyFor,
+  requireRecordAccess,
+  requireWriteAccess,
+} from "./access-authorization";
+import type { AccessAction } from "@savia/crm-shared/access-control";
 export const parseObject = (row: any): CrmObject => ({
   ...row,
   config: JSON.parse(row.config),
@@ -13,6 +19,7 @@ export const parseRecord = (row: any): CrmRecord => ({
   updated_at: row.updated_at,
   _version: row.version,
   deleted_at: row.deleted_at,
+  ...(row.created_by ? { created_by: row.created_by } : {}),
 });
 export async function getObject(db: D1Database, tenant: string, name: string) {
   if ((await disabledSolutionObjects(db, tenant)).has(name))
@@ -29,6 +36,7 @@ export async function getRecord(
   tenant: string,
   object: string,
   id: string,
+  action: AccessAction = "read",
 ) {
   await getObject(db, tenant, object);
   const row = await db
@@ -38,7 +46,9 @@ export async function getRecord(
     .bind(tenant, object, id)
     .first();
   if (!row) return fail("El registro no existe.", 404);
-  return parseRecord(row);
+  const record = parseRecord(row);
+  requireRecordAccess(db, object, action, record);
+  return record;
 }
 export function audit(
   db: D1Database,
@@ -155,6 +165,8 @@ export async function checkRelations(
           ? [data[name]]
           : [];
       for (const id of ids as string[]) {
+        if (policyFor(db))
+          await getRecord(db, tenant, String(field.config.relation), id);
         const row = await db
           .prepare(
             "SELECT version FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
@@ -200,12 +212,21 @@ export async function assertLocalCollection(
       422,
     );
 }
+export type RecordCheckpoint = {
+  before: D1PreparedStatement[];
+  after: (record: CrmRecord) => D1PreparedStatement[];
+};
 export async function createRecord(
   db: D1Database,
   tenant: string,
   name: string,
   input: Record<string, unknown>,
-  options: { idempotencyKey?: string; id?: string } = {},
+  options: {
+    idempotencyKey?: string;
+    id?: string;
+    createdBy?: string;
+    checkpoint?: RecordCheckpoint;
+  } = {},
 ) {
   await assertLocalCollection(db, tenant, name);
   const object = await getObject(db, tenant, name),
@@ -233,7 +254,10 @@ export async function createRecord(
     return null;
   };
   const previous = await replay();
-  if (previous) return previous;
+  if (previous) {
+    requireRecordAccess(db, name, "create", previous);
+    return previous;
+  }
   const id = options.id ?? crypto.randomUUID(),
     now = new Date().toISOString(),
     result = {
@@ -243,20 +267,31 @@ export async function createRecord(
       updated_at: now,
       _version: 1,
       deleted_at: null,
+      created_by: policyFor(db)?.principalId ?? options.createdBy ?? null,
     };
+  requireWriteAccess(db, name, "create", null, result, Object.keys(input));
   const schemaGuard = guard(
     db,
     "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
     [object.version ?? 1, tenant, name],
   );
   const statements = [
+    ...(options.checkpoint?.before ?? []),
     schemaGuard.start,
     ...(await checkRelations(db, tenant, object, data)),
     db
       .prepare(
-        "INSERT INTO crm_records(id,tenant_id,object_name,data,created_at,updated_at) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO crm_records(id,tenant_id,object_name,data,created_at,updated_at,created_by) VALUES (?,?,?,?,?,?,?)",
       )
-      .bind(id, tenant, name, JSON.stringify(data), now, now),
+      .bind(
+        id,
+        tenant,
+        name,
+        JSON.stringify(data),
+        now,
+        now,
+        result.created_by,
+      ),
     ...uniqueStatements(db, tenant, object, id, data),
     audit(db, tenant, "record.created", name, id, { after: data }),
     schemaGuard.end,
@@ -270,7 +305,10 @@ export async function createRecord(
         .bind(tenant, key, hash, JSON.stringify(result)),
     );
   try {
-    await transaction(db, statements);
+    await transaction(db, [
+      ...statements,
+      ...(options.checkpoint?.after(result) ?? []),
+    ]);
   } catch (e) {
     if (key) {
       const result = await replay();
@@ -286,13 +324,13 @@ export async function updateRecord(
   name: string,
   id: string,
   input: Record<string, unknown>,
-  options: { version: number },
+  options: { version: number; checkpoint?: RecordCheckpoint },
 ) {
   await assertLocalCollection(db, tenant, name);
   if (!Number.isInteger(options.version) || options.version < 1)
     return fail("Se necesita la versión del registro para editarlo.", 428);
   const object = await getObject(db, tenant, name),
-    record = await getRecord(db, tenant, name, id);
+    record = await getRecord(db, tenant, name, id, "update");
   if (record._version !== options.version)
     return fail(
       "Otra edición modificó este registro. Recarga antes de guardar.",
@@ -302,6 +340,14 @@ export async function updateRecord(
     fieldEntries(object).map(([key]) => [key, record[key]]),
   );
   const { errors, data } = validateRecord(object, { ...stored, ...input });
+  requireWriteAccess(
+    db,
+    name,
+    "update",
+    record,
+    { ...record, ...data },
+    Object.keys(input),
+  );
   if (Object.keys(errors).length)
     return fail(Object.values(errors).join(". "), 422);
   const schemaGuard = guard(
@@ -315,7 +361,17 @@ export async function updateRecord(
     [options.version, tenant, name, id],
   );
   const now = new Date().toISOString();
+  const result = {
+    ...data,
+    id,
+    created_at: record.created_at,
+    updated_at: now,
+    _version: options.version + 1,
+    deleted_at: null,
+    ...(record.created_by ? { created_by: record.created_by } : {}),
+  };
   await transaction(db, [
+    ...(options.checkpoint?.before ?? []),
     schemaGuard.start,
     recordGuard.start,
     ...(await checkRelations(db, tenant, object, data)),
@@ -336,15 +392,9 @@ export async function updateRecord(
     }),
     recordGuard.end,
     schemaGuard.end,
+    ...(options.checkpoint?.after(result) ?? []),
   ]);
-  return {
-    ...data,
-    id,
-    created_at: record.created_at,
-    updated_at: now,
-    _version: options.version + 1,
-    deleted_at: null,
-  };
+  return result;
 }
 export async function deleteRecord(
   db: D1Database,
@@ -354,7 +404,7 @@ export async function deleteRecord(
   options: { version: number },
 ) {
   await assertLocalCollection(db, tenant, name);
-  const record = await getRecord(db, tenant, name, id);
+  const record = await getRecord(db, tenant, name, id, "delete");
   if (!Number.isInteger(options.version) || options.version < 1)
     return fail("Se necesita la versión del registro.", 428);
   if (record._version !== options.version)
@@ -433,6 +483,16 @@ export async function deleteRecord(
     relationGuards: D1PreparedStatement[] = [];
   const now = new Date().toISOString();
   for (const { object, row, before, after } of pending.values()) {
+    requireWriteAccess(
+      db,
+      object.name,
+      "update",
+      parseRecord(row),
+      { ...parseRecord(row), ...after },
+      Object.keys(after).filter(
+        (k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]),
+      ),
+    );
     const check = validateRecord(object, after);
     if (Object.keys(check.errors).length)
       return fail("La desvinculación dejaría datos inválidos.", 409);
@@ -515,6 +575,7 @@ export async function restoreRecord(
     .bind(tenant, name, id)
     .first<any>();
   if (!row) return fail("El registro no está en la papelera.", 404);
+  requireRecordAccess(db, name, "restore", parseRecord(row));
   const object = await getObject(db, tenant, name),
     { data, errors } = validateRecord(object, JSON.parse(row.data));
   if (Object.keys(errors).length)

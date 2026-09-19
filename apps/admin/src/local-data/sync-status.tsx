@@ -30,7 +30,9 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
         .then(([next, ops, states, collections, conflicts]) => {
           if (!active) return;
           setStatus(next);
-          setProblems(ops.filter((op) => op.state !== "pending"));
+          setProblems(
+            ops.filter((op) => !op.quarantined && op.state !== "pending"),
+          );
           setHasLocal(collections.some((c) => c.capability !== "remote"));
           setDeletedConflicts(
             new Set(
@@ -107,17 +109,23 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
                 className="flex flex-wrap items-center gap-2"
               >
                 <span className="min-w-0 break-words">
-                  {op.collection}: {op.id} — {op.error}
+                  {op.collection}: {op.id}
+                  {op.action === "bundle" &&
+                    ` · Formulario completo (${op.bundle?.members.length ?? 1} registros)`}
+                  {" — "}
+                  {op.error}
                 </span>
-                {op.state === "conflict" && (
+                {op.action === "bundle" ? (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={busy}
+                      disabled={
+                        busy || !online || Boolean(status.authorizationError)
+                      }
                       onClick={() =>
                         void act(() =>
-                          workspace.store.acceptMaster(op.mutationId),
+                          workspace.resolveBundle(op.mutationId, "server"),
                         )
                       }
                     >
@@ -126,18 +134,49 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={busy || deletedConflicts.has(op.mutationId)}
+                      disabled={
+                        busy || !online || Boolean(status.authorizationError)
+                      }
                       onClick={() =>
                         void act(() =>
-                          workspace.store.retryWithLocal(op.mutationId),
+                          workspace.resolveBundle(op.mutationId, "local"),
                         )
                       }
                     >
                       Conservar mis cambios
                     </Button>
                   </>
+                ) : (
+                  op.state === "conflict" && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void act(() =>
+                            workspace.store.acceptMaster(op.mutationId),
+                          )
+                        }
+                      >
+                        Usar versión del servidor
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || deletedConflicts.has(op.mutationId)}
+                        onClick={() =>
+                          void act(() =>
+                            workspace.store.retryWithLocal(op.mutationId),
+                          )
+                        }
+                      >
+                        Conservar mis cambios
+                      </Button>
+                    </>
+                  )
                 )}
-                {op.state === "error" && (
+                {op.action !== "bundle" && op.state === "error" && (
                   <>
                     <Button
                       variant="outline"

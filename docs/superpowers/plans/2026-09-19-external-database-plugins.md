@@ -30,6 +30,13 @@ by this task, and the existing command passes `scripts/dev-local.sh` to Prettier
 without a shell parser. None of the task-modified files appears in those warnings.
 Detailed local command results are recorded in the execution ledger.
 
+Integration verification against `main` at `02b4764`: full TypeScript check passed,
+471 tests in the affected admin suites passed, all 397 API tests passed, all
+450 workspace tests passed, and repository contracts passed. The prior merged
+admin-wide run also passed 781 tests. The form conflict retains both database
+adaptation and related-record scope handling; a duplicate OpenAPI import from
+the automatic merge was removed.
+
 The original checklist below remains as the planned specification; the status
 above records the actual delivered and verified scope.
 
@@ -43,7 +50,7 @@ above records the actual delivered and verified scope.
 
 **Spec:** [Approved design](../specs/2026-09-19-external-database-plugins-design.md).
 
-**Status:** Implemented and verified locally on `codex/external-database-adapters`. No deployment, push, or merge performed.
+**Status:** Implemented and verified. Integration with current `main` preserves scoped permissions, related-record forms, offline bundles, and workflows.
 
 ## Global constraints
 

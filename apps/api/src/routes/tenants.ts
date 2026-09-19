@@ -1,3 +1,4 @@
+import { deleteTenantBrandingAssets } from "../tenant-branding/service";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   normalizeTenantSlug,
@@ -14,11 +15,73 @@ import {
   grantMembership,
   upsertPrincipal,
 } from "../auth/identity-repository";
-import { isForeignKeyConstraint, isUniqueConstraint } from "../lib/database-errors";
+import {
+  isForeignKeyConstraint,
+  isUniqueConstraint,
+} from "../lib/database-errors";
 import type { Context } from "hono";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { PLATFORM_ROOM } from "../realtime/protocol";
+
+/** Discover restrictive references from the schema before any external cleanup. */
+async function hasRestrictingTenantReference(db: D1Database, tenantId: number) {
+  type ForeignKey = {
+    id: number;
+    table: string;
+    from: string;
+    to: string | null;
+    on_delete: string;
+  };
+  const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  const tables = await db
+    .prepare(
+      "SELECT name,sql FROM sqlite_master WHERE type='table' AND sql LIKE '%tenants%'",
+    )
+    .all<{ name: string; sql: string }>();
+  const names = tables.results
+    .map((table) => table.name)
+    .filter((name) => identifier.test(name));
+  if (!names.length) return false;
+  const keys = await db.batch<ForeignKey>(
+    names.map((name) => db.prepare(`PRAGMA foreign_key_list("${name}")`)),
+  );
+  const probes: string[] = [];
+  keys.forEach((result, index) => {
+    const groups = new Map<number, ForeignKey[]>();
+    for (const key of result.results) {
+      if (
+        key.table !== "tenants" ||
+        !["NO ACTION", "RESTRICT"].includes(key.on_delete)
+      )
+        continue;
+      const group = groups.get(key.id) ?? [];
+      group.push(key);
+      groups.set(key.id, group);
+    }
+    for (const group of groups.values()) {
+      if (
+        group.some(
+          (key) =>
+            !identifier.test(key.from) || !identifier.test(key.to ?? "id"),
+        )
+      )
+        throw new Error("Unsupported tenant foreign key identifier");
+      probes.push(
+        `SELECT 1 FROM "${names[index]}" child JOIN tenants parent ON ${group.map((key) => `child."${key.from}"=parent."${key.to ?? "id"}"`).join(" AND ")} WHERE parent.id=?`,
+      );
+    }
+  });
+  return (
+    probes.length > 0 &&
+    Boolean(
+      await db
+        .prepare(probes.join(" UNION ALL ") + " LIMIT 1")
+        .bind(...probes.map(() => tenantId))
+        .first(),
+    )
+  );
+}
 
 const tenantSchema = z.object({
   id: z.number(),
@@ -202,6 +265,7 @@ export function registerTenantRoutes(
   db: D1Database,
   userAdministrator?: IdentityUserAdministrator,
   realtime?: RealtimeHubClient,
+  documents?: R2Bucket,
 ) {
   app.openapi(listRoute, async (c) => {
     const actor = actorFromContext(c);
@@ -286,7 +350,9 @@ export function registerTenantRoutes(
         403,
       );
     const row = await db
-      .prepare(`${select} WHERE t.id=?${platform ? "" : " AND t.kind='commercial' AND t.is_active=1"}`)
+      .prepare(
+        `${select} WHERE t.id=?${platform ? "" : " AND t.kind='commercial' AND t.is_active=1"}`,
+      )
       .bind(id)
       .first<TenantRow>();
     if (!row) return c.json(missing, 404);
@@ -345,9 +411,13 @@ export function registerTenantRoutes(
       await grantMembership(db, principal.id, tenantId, input.initialUser.role);
     } catch (error) {
       if (principalId) await deletePrincipal(db, principalId);
-      if (tenantId) await db.prepare("DELETE FROM tenants WHERE id=?").bind(tenantId).run();
+      if (tenantId)
+        await db.prepare("DELETE FROM tenants WHERE id=?").bind(tenantId).run();
       if (authenticatedUser) {
-        await userAdministrator.deleteUser(authenticatedUser.subject, c.req.raw);
+        await userAdministrator.deleteUser(
+          authenticatedUser.subject,
+          c.req.raw,
+        );
       }
       if (isUniqueConstraint(error)) return c.json(conflict, 409);
       throw error;
@@ -357,7 +427,8 @@ export function registerTenantRoutes(
       .bind(tenantId)
       .first<TenantRow>();
     notifyTenantRoom(realtime, c, "tenants", "created", tenantId!);
-    if (principalId) notifyTenantRoom(realtime, c, "users", "created", principalId);
+    if (principalId)
+      notifyTenantRoom(realtime, c, "users", "created", principalId);
     return c.json({ data: document(row!) }, 201);
   });
   app.openapi(updateDefinition, async (c) => {
@@ -404,6 +475,8 @@ export function registerTenantRoutes(
       .bind(id)
       .first();
     if (!commercial) return c.json(missing, 404);
+    if (await hasRestrictingTenantReference(db, id))
+      return c.json(conflict, 409);
     const linked = await db
       .prepare(
         "SELECT 1 FROM identity_tenant_membership WHERE tenant_id=? UNION ALL SELECT 1 FROM crm_objects WHERE tenant_id=? LIMIT 1",
@@ -420,19 +493,19 @@ export function registerTenantRoutes(
       .map((table) => table.name)
       .filter((name) => /^[a-z_]+$/.test(name));
     if (names.length) {
-      const remaining = await db
-        .prepare(
-          names
-            .map(
-              (name) =>
-                `SELECT 1 FROM "${name}" WHERE tenant_id=? OR tenant_id LIKE ?`,
+      const remaining = await db.batch(
+        names.map((name) =>
+          db
+            .prepare(
+              `SELECT 1 FROM "${name}" WHERE tenant_id=? OR tenant_id LIKE ? LIMIT 1`,
             )
-            .join(" UNION ALL ") + " LIMIT 1",
-        )
-        .bind(...names.flatMap(() => [`agency:${id}`, `agency:${id}:%`]))
-        .first();
-      if (remaining) return c.json(conflict, 409);
+            .bind(`agency:${id}`, `agency:${id}:%`),
+        ),
+      );
+      if (remaining.some((result) => result.results.length > 0))
+        return c.json(conflict, 409);
     }
+    await deleteTenantBrandingAssets(db, documents, id);
     try {
       const deleted = await db
         .prepare("DELETE FROM tenants WHERE id=? RETURNING id")

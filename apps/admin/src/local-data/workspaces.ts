@@ -38,7 +38,10 @@ export function createWorkspaceManager(
       const saved = await readWorkspaceMetadata<T>(key);
       if (saved !== undefined) {
         const lastRevalidated = revalidatedWorkspaceMetadata.get(key) ?? 0;
-        if (navigator.onLine !== false && Date.now() - lastRevalidated > 60_000) {
+        if (
+          navigator.onLine !== false &&
+          Date.now() - lastRevalidated > 60_000
+        ) {
           revalidatedWorkspaceMetadata.set(key, Date.now());
           void load()
             .then((value) => writeWorkspaceMetadata(key, value))
@@ -103,6 +106,11 @@ export function createWorkspaceManager(
           syncNow,
           coordinator.requestSync,
         ),
+        resolveBundle: async (mutationId: string, mode: "server" | "local") => {
+          if (closed || expected !== generation)
+            throw new Error("La sesión cambió.");
+          await coordinator.resolveBundle(mutationId, mode);
+        },
         requestSync: coordinator.requestSync,
         syncNow,
         close: () => {

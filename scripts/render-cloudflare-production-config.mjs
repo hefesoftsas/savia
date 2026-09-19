@@ -168,7 +168,7 @@ function mcpConfig({ publicOrigin }) {
   };
 }
 
-function gatewayConfig({ publicOrigin }) {
+function gatewayConfig({ publicOrigin, documentsBucket }) {
   const hostname = new URL(publicOrigin).hostname;
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
@@ -177,6 +177,7 @@ function gatewayConfig({ publicOrigin }) {
     main: "src/edge-gateway.ts",
     routes: [{ custom_domain: true, pattern: hostname }],
     services: [{ binding: "API", service: "savia-agencies" }],
+    r2_buckets: [{ binding: "OFFICE_RUNTIME", bucket_name: documentsBucket }],
     assets: {
       directory: "./dist",
       binding: "ASSETS",
@@ -184,6 +185,8 @@ function gatewayConfig({ publicOrigin }) {
       run_worker_first: [
         "/public/forms",
         "/public/forms/*",
+        "/office",
+        "/office/*",
         "/api/*",
         "/v1/*",
         "/.well-known/*",

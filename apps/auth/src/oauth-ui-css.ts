@@ -1,3 +1,8 @@
+import {
+  parseTenantBranding,
+  brandingForeground,
+  type TenantBranding,
+} from "@savia/tenant-host/branding";
 export const oauthUiCss = String.raw`:root {
   --background: #f7f9fb;
   --foreground: #102a43;
@@ -84,3 +89,30 @@ button, input { font: inherit; }
 @media (max-width: 900px) { .oauth-screen { grid-template-columns: 1fr; } .oauth-aside { display: none; } .oauth-workspace { padding: 1.5rem clamp(1.25rem, 8vw, 3.5rem); } .oauth-form-column { padding: 3.25rem 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 `;
+
+/** Tenant colors are validated before entering the stylesheet; no inline styles are needed. */
+export function oauthUiCssForBranding(value?: TenantBranding): string {
+  const branding = parseTenantBranding(value);
+  if (!branding) return oauthUiCss;
+  const foreground = brandingForeground(branding.accentColor);
+  return `${oauthUiCss}
+.oauth-screen[data-tenant-branding] {
+  --primary: ${branding.primaryColor};
+  --primary-foreground: ${brandingForeground(branding.primaryColor)};
+  --ring: ${branding.primaryColor};
+  --aside: ${branding.accentColor};
+  --aside-muted: ${foreground};
+}
+.oauth-screen[data-tenant-branding] .savia-brand-logo { max-width: min(100%, 18rem); height: 3rem; }
+.oauth-screen[data-tenant-branding] .oauth-kicker { color: var(--foreground) !important; }
+.oauth-screen[data-tenant-branding] .oauth-submit:hover { background: color-mix(in srgb, var(--primary) 90%, var(--primary-foreground)); }
+.oauth-screen[data-tenant-branding] .oauth-aside { color: ${foreground}; }
+.oauth-screen[data-tenant-branding] .oauth-aside-eyebrow { color: inherit !important; }
+.oauth-screen[data-tenant-branding] .oauth-aside-title { max-width: 16ch; overflow-wrap: anywhere; }
+.oauth-screen[data-tenant-branding] .oauth-aside.has-cover { color: #ffffff; --aside-muted: #ffffff; }
+.oauth-screen[data-tenant-branding] .oauth-aside.has-cover::before { inset: 0; width: auto; height: auto; border: 0; border-radius: 0; background: #00000099; z-index: 1; }
+.oauth-screen[data-tenant-branding] .oauth-aside.has-cover::after,
+.oauth-screen[data-tenant-branding] .oauth-aside.has-cover .oauth-aside-illustration { display: none; }
+.oauth-screen[data-tenant-branding] .oauth-aside > .oauth-aside-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+`;
+}

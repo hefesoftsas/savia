@@ -1,3 +1,4 @@
+import { saveRelatedRecords } from "./save-related-records";
 import { reconcileLocalQueries } from "./local-query-sync";
 import { RecordOriginLinks } from "./record-origin-links";
 import {
@@ -753,7 +754,7 @@ function App({
           object={object}
           values={editing === "new" ? {} : editing}
           onCancel={editorSurface === "page" ? undefined : closeEditor}
-          onSave={async (data, previous) => {
+          onSave={async (data, previous, relations, saveOptions) => {
             if (object.config.studio?.collection)
               data = Object.fromEntries(
                 Object.entries(data).filter(
@@ -763,6 +764,14 @@ function App({
             const target =
               previous ?? (editing === "new" ? undefined : editing);
             const creating = !target;
+            if (relations)
+              return saveRelatedRecords(
+                object.name,
+                data,
+                target,
+                relations,
+                saveOptions?.idempotencyKey ?? writeKey,
+              );
             const result = await api<{ data: CrmRecord }>(
               `/records/${object.name}${creating ? "" : "/" + target.id}`,
               creating ? "POST" : "PATCH",
@@ -778,9 +787,13 @@ function App({
           onUploadTemporaryAttachment={(field, file) =>
             uploadTemporaryR2Attachment(object.name, field, file)
           }
-          onSaved={() => {
+          onSaved={(saved) => {
             toast.success(
-              editing === "new" ? "Registro creado" : "Cambios guardados",
+              saved && saved._localPending
+                ? "Guardado en este dispositivo · sincronización pendiente"
+                : editing === "new"
+                  ? "Registro creado"
+                  : "Cambios guardados",
             );
             closeEditor();
             refresh();
