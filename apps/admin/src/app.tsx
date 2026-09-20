@@ -23,6 +23,7 @@ import { PasswordResetPage } from "@/features/users/password-reset-page";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { Admin } from "@/components/admin";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import { resolveInitialAppLocale } from "@/i18n/locale-storage";
 import { OfflineBanner } from "@/offline/offline-banner";
 import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
@@ -54,7 +55,7 @@ const AccountPage = lazy(async () => {
   return { default: module.AccountPage };
 });
 
-const adminStore = memoryStore();
+const adminStore = memoryStore({ locale: resolveInitialAppLocale() });
 const SaviaRequestPage = lazy(async () => {
   const module = await import("@/features/savia-request/savia-request-page");
   return { default: module.SaviaRequestPage };

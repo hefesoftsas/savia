@@ -9,17 +9,22 @@ import {
   memoryStore,
   StoreContextProvider,
 } from "ra-core";
-import { ExtensionLocaleBridge, useAppI18nProvider } from "@/i18n/app-locale-provider";
+import {
+  ExtensionLocaleBridge,
+  useAppI18nProvider,
+} from "@/i18n/app-locale-provider";
+import { resolveInitialAppLocale } from "@/i18n/locale-storage";
 import { Layout } from "@/components/admin/layout";
 import { LoginPage } from "@/components/admin/login-page";
 import { NotFound } from "@/components/admin/not-found";
 import { Ready } from "@/components/admin/ready";
 import { ThemeProvider } from "@/components/admin/theme-provider";
 import { LocaleHtmlSync } from "@/i18n/locale-html-sync";
+import { LocalePersistenceSync } from "@/i18n/locale-persistence-sync";
 import { AuthCallback } from "@/components/admin/authentication";
 import { useEffect } from "react";
 
-const defaultStore = memoryStore();
+const defaultStore = memoryStore({ locale: resolveInitialAppLocale() });
 
 /**
  * Context provider for the Admin component.
@@ -61,6 +66,7 @@ const AdminUI = (props: CoreAdminUIProps) => {
   return (
     <ThemeProvider>
       <LocaleHtmlSync />
+      <LocalePersistenceSync />
       <CoreAdminUI
         layout={Layout}
         loginPage={LoginPage}
@@ -146,23 +152,23 @@ const LocalizedAdmin = (props: CoreAdminProps) => {
       store={store}
     >
       <ExtensionLocaleBridge>
-      <AdminUI
-        accessDenied={accessDenied}
-        authCallbackPage={authCallbackPage}
-        authenticationError={authenticationError}
-        catchAll={catchAll}
-        dashboard={dashboard}
-        disableTelemetry={disableTelemetry}
-        error={error}
-        layout={layout}
-        loading={loading}
-        loginPage={loginPage}
-        ready={ready}
-        requireAuth={requireAuth}
-        title={title}
-      >
-        {children}
-      </AdminUI>
+        <AdminUI
+          accessDenied={accessDenied}
+          authCallbackPage={authCallbackPage}
+          authenticationError={authenticationError}
+          catchAll={catchAll}
+          dashboard={dashboard}
+          disableTelemetry={disableTelemetry}
+          error={error}
+          layout={layout}
+          loading={loading}
+          loginPage={loginPage}
+          ready={ready}
+          requireAuth={requireAuth}
+          title={title}
+        >
+          {children}
+        </AdminUI>
       </ExtensionLocaleBridge>
     </AdminContext>
   );

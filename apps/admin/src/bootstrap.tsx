@@ -1,6 +1,8 @@
 import { StoreContextProvider, memoryStore, useSetLocale } from "ra-core";
 import { AppLocaleProvider } from "./i18n/app-locale-provider";
 import { LocaleHtmlSync } from "./i18n/locale-html-sync";
+import { LocalePersistenceSync } from "./i18n/locale-persistence-sync";
+import { resolveInitialAppLocale } from "./i18n/locale-storage";
 import {
   appLocaleOptions,
   defaultAppLocale,
@@ -48,11 +50,15 @@ export function ApplicationRoot({
 }
 
 function PublicApplication({ pathname }: { pathname: string }) {
-  const store = useMemo(() => memoryStore({ locale: defaultAppLocale }), []);
+  const store = useMemo(
+    () => memoryStore({ locale: resolveInitialAppLocale() }),
+    [],
+  );
   return (
     <StoreContextProvider value={store}>
       <AppLocaleProvider>
         <LocaleHtmlSync />
+        <LocalePersistenceSync />
         <PublicApplicationContent pathname={pathname} />
       </AppLocaleProvider>
     </StoreContextProvider>
