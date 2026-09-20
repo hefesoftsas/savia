@@ -51,6 +51,8 @@ import type {
 } from "@/api/assistant-configuration-client";
 import { ModelInput } from "@/features/assistant-configuration/assistant-configuration-page";
 import { ModelCapabilityBadges } from "@/features/assistant-configuration/model-capability-badges";
+import { useMessages } from "@/i18n/core";
+import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
 
 const AVATAR_ICONS: Record<string, ElementType> = {
   briefcase: Briefcase,
@@ -76,6 +78,7 @@ export function VirtualEmployeesManagement({
   client: VirtualEmployeesClient;
   assistantConfigClient?: AssistantConfigurationClient;
 }) {
+  const t = useMessages(personalIntegrationsMessages);
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
   const [models, setModels] = useState<AssistantModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +134,7 @@ export function VirtualEmployeesManagement({
       const data = await client.list();
       setEmployees(data);
     } catch (err: any) {
-      toast.error(err.message || "Error al cargar empleados virtuales");
+      toast.error(err.message || t("Error al cargar empleados virtuales"));
     } finally {
       setLoading(false);
     }
@@ -207,17 +210,17 @@ export function VirtualEmployeesManagement({
 
   async function handleSave() {
     if (!name.trim()) {
-      toast.error("El nombre del empleado es obligatorio");
+      toast.error(t("El nombre del empleado es obligatorio"));
       setActiveTab("profile");
       return;
     }
     if (!handle.trim()) {
-      toast.error("El handle (@mención) es obligatorio");
+      toast.error(t("El handle (@mención) es obligatorio"));
       setActiveTab("profile");
       return;
     }
     if (!systemPrompt.trim()) {
-      toast.error("El rol / instrucciones del sistema son obligatorios");
+      toast.error(t("El rol / instrucciones del sistema son obligatorios"));
       setActiveTab("prompt");
       return;
     }
@@ -238,7 +241,7 @@ export function VirtualEmployeesManagement({
           model: model.trim() || null,
           status,
         });
-        toast.success("Empleado virtual actualizado con éxito");
+        toast.success(t("Empleado virtual actualizado con éxito"));
       } else {
         await client.create({
           name,
@@ -251,29 +254,36 @@ export function VirtualEmployeesManagement({
           model: model.trim() || null,
           status,
         });
-        toast.success("Empleado virtual creado con éxito");
+        toast.success(t("Empleado virtual creado con éxito"));
       }
 
       setIsCreateOpen(false);
       await loadEmployees();
     } catch (err: any) {
-      toast.error(err.message || "Error al guardar empleado virtual");
+      toast.error(err.message || t("Error al guardar empleado virtual"));
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(emp: VirtualEmployee) {
-    if (!confirm(`¿Eliminar al empleado virtual @${emp.handle} (${emp.name})?`)) {
+    if (
+      !confirm(
+        t("¿Eliminar al empleado virtual @%{handle} (%{name})?", {
+          handle: emp.handle,
+          name: emp.name,
+        }),
+      )
+    ) {
       return;
     }
 
     try {
       await client.delete(emp.id);
-      toast.success("Empleado virtual eliminado");
+      toast.success(t("Empleado virtual eliminado"));
       await loadEmployees();
     } catch (err: any) {
-      toast.error(err.message || "Error al eliminar empleado");
+      toast.error(err.message || t("Error al eliminar empleado"));
     }
   }
 
@@ -285,10 +295,14 @@ export function VirtualEmployeesManagement({
     try {
       const uploaded = await client.uploadFile(editingEmployee.id, file);
       setCurrentFiles((prev) => [uploaded, ...prev]);
-      toast.success(`Archivo indexado en Cloudflare RAG (${uploaded.name})`);
+      toast.success(
+        t("Archivo indexado en Cloudflare RAG (%{name})", {
+          name: uploaded.name,
+        }),
+      );
       await loadEmployees();
     } catch (err: any) {
-      toast.error(err.message || "Error al subir archivo");
+      toast.error(err.message || t("Error al subir archivo"));
     } finally {
       setUploadingFile(false);
       e.target.value = "";
@@ -300,10 +314,10 @@ export function VirtualEmployeesManagement({
     try {
       await client.deleteFile(editingEmployee.id, fileId);
       setCurrentFiles((prev) => prev.filter((f) => f.id !== fileId));
-      toast.success("Archivo y vectores RAG eliminados");
+      toast.success(t("Archivo y vectores RAG eliminados"));
       await loadEmployees();
     } catch (err: any) {
-      toast.error(err.message || "Error al eliminar archivo");
+      toast.error(err.message || t("Error al eliminar archivo"));
     }
   }
 
@@ -370,15 +384,21 @@ export function VirtualEmployeesManagement({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight">
-            Empleados Virtuales de IA
+            {t("Empleados Virtuales de IA")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Digital colleagues que puedes invocar usando <code className="bg-muted px-1 py-0.5 rounded font-mono text-xs">@nombre</code> en el chat, con acceso scoped a colecciones y base de conocimiento Cloudflare RAG.
+            {t("Digital colleagues que puedes invocar usando")}{" "}
+            <code className="bg-muted px-1 py-0.5 rounded font-mono text-xs">
+              @nombre
+            </code>{" "}
+            {t(
+              "en el chat, con acceso scoped a colecciones y base de conocimiento Cloudflare RAG.",
+            )}
           </p>
         </div>
         <Button onClick={openCreate} className="shrink-0 gap-1.5">
           <Plus className="size-4" />
-          Nuevo Empleado
+          {t("Nuevo Empleado")}
         </Button>
       </div>
 
@@ -386,14 +406,14 @@ export function VirtualEmployeesManagement({
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar empleado por nombre o @handle..."
+            placeholder={t("Buscar empleado por nombre o @handle...")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
         <Badge variant="outline" className="text-xs">
-          {filteredEmployees.length} empleados
+          {t("%{count} empleados", { count: filteredEmployees.length })}
         </Badge>
       </div>
 
@@ -409,13 +429,15 @@ export function VirtualEmployeesManagement({
       ) : filteredEmployees.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed bg-card/40">
           <Bot className="size-12 text-muted-foreground mb-3" />
-          <h3 className="font-semibold text-lg">No hay empleados virtuales</h3>
+          <h3 className="font-semibold text-lg">{t("No hay empleados virtuales")}</h3>
           <p className="text-sm text-muted-foreground max-w-md mt-1 mb-4">
-            Crea tu primer empleado virtual asignándole un rol, colecciones permitidas y documentos para potenciar tu equipo.
+            {t(
+              "Crea tu primer empleado virtual asignándole un rol, colecciones permitidas y documentos para potenciar tu equipo.",
+            )}
           </p>
           <Button onClick={openCreate} size="sm">
             <Plus className="size-4 mr-1.5" />
-            Crear Empleado
+            {t("Crear Empleado")}
           </Button>
         </div>
       ) : (
@@ -448,7 +470,7 @@ export function VirtualEmployeesManagement({
                       variant={emp.status === "active" ? "default" : "secondary"}
                       className="text-[10px] uppercase font-semibold tracking-wider"
                     >
-                      {emp.status === "active" ? "Activo" : "Inactivo"}
+                      {emp.status === "active" ? t("Activo") : t("Inactivo")}
                     </Badge>
                   </div>
 
@@ -467,11 +489,13 @@ export function VirtualEmployeesManagement({
                       <Database className="size-3.5 text-muted-foreground" />
                       {isAll ? (
                         <Badge variant="outline" className="text-[10px] font-normal py-0">
-                          Todas las colecciones
+                          {t("Todas las colecciones")}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] font-normal py-0">
-                          {emp.allowedCollections.length} colecciones
+                          {t("%{count} colecciones", {
+                            count: emp.allowedCollections.length,
+                          })}
                         </Badge>
                       )}
                     </span>
@@ -479,7 +503,7 @@ export function VirtualEmployeesManagement({
                     <span className="inline-flex items-center gap-1 font-medium">
                       <FileCode className="size-3.5 text-muted-foreground" />
                       <Badge variant="outline" className="text-[10px] font-normal py-0">
-                        {emp.filesCount ?? 0} docs RAG
+                        {t("%{count} docs RAG", { count: emp.filesCount ?? 0 })}
                       </Badge>
                     </span>
                   </div>
@@ -506,7 +530,7 @@ export function VirtualEmployeesManagement({
                     onClick={() => void openEdit(emp)}
                   >
                     <Pencil className="size-3.5" />
-                    Editar
+                    {t("Editar")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -529,38 +553,42 @@ export function VirtualEmployeesManagement({
           <DialogHeader>
             <DialogTitle>
               {editingEmployee
-                ? `Editar Empleado Virtual: @${editingEmployee.handle}`
-                : "Nuevo Empleado Virtual de IA"}
+                ? t("Editar Empleado Virtual: @%{handle}", {
+                    handle: editingEmployee.handle,
+                  })
+                : t("Nuevo Empleado Virtual de IA")}
             </DialogTitle>
             <DialogDescription>
-              Configura el perfil, personalidad, colecciones accesibles y base de conocimiento Cloudflare RAG.
+              {t(
+                "Configura el perfil, personalidad, colecciones accesibles y base de conocimiento Cloudflare RAG.",
+              )}
             </DialogDescription>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid grid-cols-5 w-full">
-              <TabsTrigger value="profile">Perfil</TabsTrigger>
-              <TabsTrigger value="prompt">Rol & Prompt</TabsTrigger>
-              <TabsTrigger value="collections">Colecciones</TabsTrigger>
-              <TabsTrigger value="rag">Base RAG</TabsTrigger>
-              <TabsTrigger value="model">Modelo</TabsTrigger>
+              <TabsTrigger value="profile">{t("Perfil")}</TabsTrigger>
+              <TabsTrigger value="prompt">{t("Rol & Prompt")}</TabsTrigger>
+              <TabsTrigger value="collections">{t("Colecciones")}</TabsTrigger>
+              <TabsTrigger value="rag">{t("Base RAG")}</TabsTrigger>
+              <TabsTrigger value="model">{t("Modelo")}</TabsTrigger>
             </TabsList>
 
             {/* TAB 1: PERFIL */}
             <TabsContent value="profile" className="space-y-4 pt-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="emp-name">Nombre Visible</Label>
+                  <Label htmlFor="emp-name">{t("Nombre Visible")}</Label>
                   <Input
                     id="emp-name"
-                    placeholder="Ej. Laura - Ventas"
+                    placeholder={t("Ej. Laura - Ventas")}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="emp-handle">
-                    Identificador para Mención (<code className="text-primary">@handle</code>)
+                    {t("Identificador para Mención (@handle)")}
                   </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-muted-foreground font-mono">
@@ -568,7 +596,7 @@ export function VirtualEmployeesManagement({
                     </span>
                     <Input
                       id="emp-handle"
-                      placeholder="ventas"
+                      placeholder={t("ventas")}
                       value={handle}
                       onChange={(e) => setHandle(e.target.value.replace(/[@\s]/g, ""))}
                       className="pl-7 font-mono"
@@ -578,17 +606,19 @@ export function VirtualEmployeesManagement({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="emp-pos">Cargo o Rol de Negocio</Label>
+                <Label htmlFor="emp-pos">{t("Cargo o Rol de Negocio")}</Label>
                 <Input
                   id="emp-pos"
-                  placeholder="Ej. Asesora Comercial y Especialista en Cotizaciones"
+                  placeholder={t(
+                    "Ej. Asesora Comercial y Especialista en Cotizaciones",
+                  )}
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label>Avatar / Icono Representativo</Label>
+                <Label>{t("Avatar / Icono Representativo")}</Label>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {Object.entries(AVATAR_ICONS).map(([key, IconComponent]) => (
                     <button
@@ -608,10 +638,14 @@ export function VirtualEmployeesManagement({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="emp-greeting">Mensaje de Saludo (Greeting)</Label>
+                <Label htmlFor="emp-greeting">
+                  {t("Mensaje de Saludo (Greeting)")}
+                </Label>
                 <Input
                   id="emp-greeting"
-                  placeholder="Ej. ¡Hola! Soy Laura. ¿Qué oportunidad o cotización deseas revisar hoy?"
+                  placeholder={t(
+                    "Ej. ¡Hola! Soy Laura. ¿Qué oportunidad o cotización deseas revisar hoy?",
+                  )}
                   value={greeting}
                   onChange={(e) => setGreeting(e.target.value)}
                 />
@@ -619,9 +653,13 @@ export function VirtualEmployeesManagement({
 
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">Estado del Empleado</Label>
+                  <Label className="text-sm font-medium">
+                    {t("Estado del Empleado")}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    Los empleados inactivos no pueden ser invocados con @ en el chat.
+                    {t(
+                      "Los empleados inactivos no pueden ser invocados con @ en el chat.",
+                    )}
                   </p>
                 </div>
                 <Switch
@@ -638,23 +676,25 @@ export function VirtualEmployeesManagement({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="emp-prompt" className="text-sm font-medium">
-                    Instrucciones de Rol (System Prompt)
+                    {t("Instrucciones de Rol (System Prompt)")}
                   </Label>
                   <span className="text-xs text-muted-foreground">
-                    Define identidad, límites y tono de respuesta
+                    {t("Define identidad, límites y tono de respuesta")}
                   </span>
                 </div>
                 <Textarea
                   id="emp-prompt"
                   rows={9}
-                  placeholder={`Eres Laura, especialista en ventas y cotizaciones en Savia.\n\nTus objetivos:\n1. Asesorar al usuario sobre oportunidades de cotización y pólizas.\n2. Identificar productos adecuados según las necesidades del cliente.\n3. Mantener un tono ejecutivo, cordial y enfocado en el cierre comercial.\n\nRestricciones:\n- No inventes precios ni pólizas fuera del catálogo.\n- Para confirmar emisiones solicita siempre aprobación expresa.`}
+                  placeholder={t("Ejemplo de prompt de ventas")}
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   className="font-mono text-xs leading-relaxed"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Tip estilo NocoBase: Delimita claramente el ámbito del empleado para que no responda sobre áreas ajenas a su especialidad.
+                {t(
+                  "Tip: delimita claramente el ámbito del empleado para que no responda sobre áreas ajenas a su especialidad.",
+                )}
               </p>
             </TabsContent>
 
@@ -663,10 +703,12 @@ export function VirtualEmployeesManagement({
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5 pr-4">
                   <Label className="text-sm font-medium">
-                    Acceso a Todas las Colecciones CRM
+                    {t("Acceso a Todas las Colecciones CRM")}
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Si está activo, el empleado puede consultar cualquier colección del CRM sin restricciones.
+                    {t(
+                      "Si está activo, el empleado puede consultar cualquier colección del CRM sin restricciones.",
+                    )}
                   </p>
                 </div>
                 <Switch
@@ -680,10 +722,12 @@ export function VirtualEmployeesManagement({
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Label className="text-sm font-medium">
-                        Colecciones Permitidas (Acceso Scoped)
+                        {t("Colecciones Permitidas (Acceso Scoped)")}
                       </Label>
                       <Badge variant="outline" className="text-xs font-mono">
-                        {selectedCollections.length} seleccionada{selectedCollections.length === 1 ? "" : "s"}
+                        {t("%{count} seleccionadas", {
+                          count: selectedCollections.length,
+                        })}
                       </Badge>
                     </div>
 
@@ -696,7 +740,7 @@ export function VirtualEmployeesManagement({
                         onClick={selectAllCollections}
                         disabled={filteredCollections.length === 0}
                       >
-                        Seleccionar visibles
+                        {t("Seleccionar visibles")}
                       </Button>
                       <Button
                         type="button"
@@ -706,7 +750,7 @@ export function VirtualEmployeesManagement({
                         onClick={clearSelectedCollections}
                         disabled={selectedCollections.length === 0}
                       >
-                        Limpiar selección
+                        {t("Limpiar selección")}
                       </Button>
                     </div>
                   </div>
@@ -715,7 +759,9 @@ export function VirtualEmployeesManagement({
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar por nombre o identificador (ej. Empresas, Contactos, cotizaciones)..."
+                      placeholder={t(
+                        "Buscar por nombre o identificador (ej. Empresas, Contactos, cotizaciones)...",
+                      )}
                       value={collectionSearch}
                       onChange={(e) => setCollectionSearch(e.target.value)}
                       className="pl-9 text-xs h-9"
@@ -726,14 +772,23 @@ export function VirtualEmployeesManagement({
                   {loadingCollections ? (
                     <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
                       <Loader2 className="size-4 animate-spin text-primary" />
-                      <span>Cargando colecciones del sistema...</span>
+                      <span>{t("Cargando colecciones del sistema...")}</span>
                     </div>
                   ) : filteredCollections.length === 0 ? (
                     <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground bg-muted/10">
                       {collectionSearch.trim() ? (
-                        <p>No se encontraron colecciones que coincidan con &quot;{collectionSearch}&quot;.</p>
+                        <p>
+                          {t(
+                            "No se encontraron colecciones que coincidan con \"%{query}\".",
+                            { query: collectionSearch },
+                          )}
+                        </p>
                       ) : (
-                        <p>No hay colecciones disponibles en este dominio. Puedes añadir una abajo.</p>
+                        <p>
+                          {t(
+                            "No hay colecciones disponibles en este dominio. Puedes añadir una abajo.",
+                          )}
+                        </p>
                       )}
                     </div>
                   ) : (
@@ -780,11 +835,11 @@ export function VirtualEmployeesManagement({
                   {/* Añadir colección personalizada */}
                   <div className="pt-2">
                     <Label className="text-xs text-muted-foreground">
-                      Añadir colección personalizada:
+                      {t("Añadir colección personalizada:")}
                     </Label>
                     <div className="flex gap-2 mt-1">
                       <Input
-                        placeholder="nombre_coleccion"
+                        placeholder={t("nombre_coleccion")}
                         value={customCollectionInput}
                         onChange={(e) => setCustomCollectionInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -802,7 +857,7 @@ export function VirtualEmployeesManagement({
                         className="h-8 text-xs"
                         onClick={addCustomCollection}
                       >
-                        Añadir
+                        {t("Añadir")}
                       </Button>
                     </div>
                   </div>
@@ -811,7 +866,9 @@ export function VirtualEmployeesManagement({
                   {selectedCollections.length > 0 && (
                     <div className="pt-2">
                       <Label className="text-xs text-muted-foreground mb-1.5 block">
-                        Colecciones seleccionadas ({selectedCollections.length}):
+                        {t("Colecciones seleccionadas (%{count}):", {
+                          count: selectedCollections.length,
+                        })}
                       </Label>
                       <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
                         {selectedCollections.map((colName) => {
@@ -828,7 +885,7 @@ export function VirtualEmployeesManagement({
                                 type="button"
                                 onClick={() => toggleCollection(colName)}
                                 className="ml-1 hover:text-destructive text-muted-foreground transition"
-                                title="Quitar"
+                                title={t("Quitar")}
                               >
                                 ×
                               </button>
@@ -846,16 +903,22 @@ export function VirtualEmployeesManagement({
             <TabsContent value="rag" className="space-y-4 pt-3">
               <div>
                 <Label className="text-sm font-medium">
-                  Documentos de Referencia (Cloudflare RAG)
+                  {t("Documentos de Referencia (Cloudflare RAG)")}
                 </Label>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Sube manuales, políticas de suscripción, tarifas o catálogos (PDF, MD, TXT, CSV, JSON). El motor RAG de Cloudflare (Workers AI + Vectorize) generará embeddings vectoriales para recuperar contexto relevante al consultar a este empleado.
+                  {t(
+                    "Sube manuales, políticas, tarifas o catálogos (PDF, MD, TXT, CSV, JSON). El motor RAG de Cloudflare generará embeddings para recuperar contexto relevante.",
+                  )}
                 </p>
               </div>
 
               {!editingEmployee ? (
                 <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground bg-muted/20">
-                  <p>Guarda el empleado primero para habilitar la carga de documentos RAG.</p>
+                  <p>
+                    {t(
+                      "Guarda el empleado primero para habilitar la carga de documentos RAG.",
+                    )}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -876,17 +939,21 @@ export function VirtualEmployeesManagement({
                         disabled={uploadingFile}
                       >
                         <Upload className="size-4" />
-                        {uploadingFile ? "Indexando RAG..." : "Subir Documento"}
+                        {uploadingFile
+                          ? t("Indexando RAG...")
+                          : t("Subir Documento")}
                       </Button>
                     </label>
                     <span className="text-xs text-muted-foreground">
-                      Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)
+                      {t("Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)")}
                     </span>
                   </div>
 
                   {currentFiles.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
-                      No hay documentos cargados para este empleado virtual.
+                      {t(
+                        "No hay documentos cargados para este empleado virtual.",
+                      )}
                     </p>
                   ) : (
                     <div className="rounded-lg border divide-y">
@@ -910,19 +977,19 @@ export function VirtualEmployeesManagement({
                             {file.ragStatus === "indexed" && (
                               <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20">
                                 <CheckCircle2 className="size-3 mr-1" />
-                                Indexado RAG
+                                {t("Indexado RAG")}
                               </Badge>
                             )}
                             {file.ragStatus === "pending" && (
                               <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 bg-amber-50">
                                 <Clock className="size-3 mr-1" />
-                                Procesando
+                                {t("Procesando")}
                               </Badge>
                             )}
                             {file.ragStatus === "failed" && (
                               <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
                                 <AlertCircle className="size-3 mr-1" />
-                                Error
+                                {t("Error")}
                               </Badge>
                             )}
 
@@ -948,15 +1015,17 @@ export function VirtualEmployeesManagement({
             <TabsContent value="model" className="space-y-4 pt-3">
               <ModelInput
                 id="emp-model"
-                label="Modelo LLM Específico (Opcional)"
+                label={t("Modelo LLM Específico (Opcional)")}
                 value={model}
                 onChange={setModel}
                 models={models}
                 fallbackModel=""
-                fallbackLabel="Hereda de la agencia o global"
+                fallbackLabel={t("Hereda de la agencia o global")}
               />
               <p className="text-xs text-muted-foreground">
-                Si especificas un modelo aquí, este empleado utilizará este modelo cuando sea invocado mediante <code className="font-mono text-primary">@{handle || "nombre"}</code> en el chat. Sus capacidades (visión, archivos, voz, etc.) se activarán automáticamente.
+                {t(
+                  "Si especificas un modelo aquí, este empleado utilizará este modelo cuando sea invocado en el chat. Sus capacidades se activarán automáticamente.",
+                )}
               </p>
             </TabsContent>
           </Tabs>
@@ -967,10 +1036,14 @@ export function VirtualEmployeesManagement({
               onClick={() => setIsCreateOpen(false)}
               disabled={saving}
             >
-              Cancelar
+              {t("Cancelar")}
             </Button>
             <Button onClick={() => void handleSave()} disabled={saving}>
-              {saving ? "Guardando..." : editingEmployee ? "Guardar Cambios" : "Crear Empleado"}
+              {saving
+                ? t("Guardando...")
+                : editingEmployee
+                  ? t("Guardar Cambios")
+                  : t("Crear Empleado")}
             </Button>
           </DialogFooter>
         </DialogContent>
