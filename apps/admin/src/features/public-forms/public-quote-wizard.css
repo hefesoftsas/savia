@@ -1,0 +1,141 @@
+.public-quote {
+  margin-top: 2rem;
+}
+
+.public-quote-shell {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.public-quote-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted-foreground);
+}
+
+.public-quote-title {
+  font-size: clamp(1.65rem, 4vw, 2.2rem);
+  line-height: 1.2;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.public-quote-products {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.public-quote-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.public-quote-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+
+.public-quote-steps li[data-active="true"] {
+  color: var(--foreground);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.public-quote-steps li[data-done="true"] {
+  color: var(--foreground);
+}
+
+.public-quote-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.public-quote-steps li[data-active="true"] .public-quote-step-index {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.public-quote-form {
+  display: grid;
+  gap: 1.25rem;
+  text-align: left;
+}
+
+.public-quote-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.public-quote-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.public-quote-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.public-quote-actions > button {
+  min-height: 2.75rem;
+  flex: 1 1 10rem;
+}
+
+.public-quote-notice {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .public-quote-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-quote-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .public-quote-steps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-quote * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
