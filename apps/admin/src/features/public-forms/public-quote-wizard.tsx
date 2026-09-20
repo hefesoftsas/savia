@@ -35,21 +35,24 @@ const CONTACT_STEP_NAMES = new Set([
   "applicant_email",
 ]);
 
-function stepsFor(fields: QuoteField[]) {
+function stepsFor(
+  fields: QuoteField[],
+  titles: { vehicle: string; applicant: string; contact: string },
+) {
   return [
     {
       id: "vehicle",
-      title: "Vehículo",
+      title: titles.vehicle,
       fields: fields.filter((f) => f.name.startsWith("vehicle_")),
     },
     {
       id: "applicant",
-      title: "Solicitante y conductor",
+      title: titles.applicant,
       fields: fields.filter((f) => APPLICANT_STEP_NAMES.has(f.name)),
     },
     {
       id: "contact",
-      title: "Contacto y cotización",
+      title: titles.contact,
       fields: fields.filter((f) => CONTACT_STEP_NAMES.has(f.name)),
     },
   ];
@@ -77,10 +80,15 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
       : [];
   const heading =
     definition.presentation?.entry === "direct"
-      ? "Cotizador de seguros"
-      : "Cotizador por pasos";
+      ? t("Cotizador de seguros")
+      : t("Cotizador por pasos");
+  const eyebrow = t("SEGUROS · AUTOS LIVIANOS");
 
-  const steps = stepsFor(definition.fields);
+  const steps = stepsFor(definition.fields, {
+    vehicle: t("Vehículo"),
+    applicant: t("Solicitante y conductor"),
+    contact: t("Contacto y cotización"),
+  });
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [parseError, setParseError] = useState("");
@@ -168,7 +176,7 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
         className="public-quote-notice"
         role="status"
       >
-        <p className="public-quote-eyebrow">SEGUROS · AUTOS LIVIANOS</p>
+        <p className="public-quote-eyebrow">{eyebrow}</p>
         <h1 id="public-quote-success">{t("Solicitud recibida")}</h1>
         <p>{t("Conserva esta referencia para consultar con quien compartió el formulario.")}</p>
         <p className="public-form-reference">{receipt.reference}</p>
@@ -183,7 +191,7 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
   if (duplicate) {
     return (
       <section className="public-quote-notice" role="status">
-        <p className="public-quote-eyebrow">SEGUROS · AUTOS LIVIANOS</p>
+        <p className="public-quote-eyebrow">{eyebrow}</p>
         <h2>{t("Envío registrado")}</h2>
         <p>{t("Este envío ya fue recibido o está en proceso. No lo vuelvas a enviar.")}</p>
         <p>{t("Si necesitas confirmar el resultado, contacta a quien compartió el enlace.")}</p>
@@ -197,10 +205,12 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
   return (
     <section className="public-quote" aria-label={heading}>
       <div className="public-quote-shell">
-        <p className="public-quote-eyebrow">SEGUROS · AUTOS LIVIANOS</p>
+        <p className="public-quote-eyebrow">{eyebrow}</p>
         <h1 className="public-quote-title">{heading}</h1>
         <p className="public-quote-products">
-          {`${products.length} ${products.length === 1 ? "producto" : "productos"}`}
+          {products.length === 1
+            ? t("%{count} producto", { count: products.length })
+            : t("%{count} productos", { count: products.length })}
         </p>
         <ol className="public-quote-steps">
           {steps.map((s, index) => (
@@ -308,12 +318,12 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
           <div className="public-quote-actions">
             {step > 0 && (
               <Button type="button" variant="outline" onClick={goPrev}>
-                Anterior
+                {t("Anterior")}
               </Button>
             )}
             {step < steps.length - 1 && (
               <Button type="button" onClick={goNext}>
-                Siguiente paso
+                {t("Siguiente paso")}
               </Button>
             )}
             {step === steps.length - 1 && (

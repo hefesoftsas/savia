@@ -1,4 +1,5 @@
-import { I18nContextProvider } from "ra-core";
+import { I18nContextProvider, StoreContextProvider, memoryStore, useSetLocale } from "ra-core";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import type { ReactElement, ReactNode } from "react";
 import {
   act,
@@ -195,4 +196,44 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
   expect(payload.values).not.toHaveProperty("flowId");
   expect(payload.values).not.toHaveProperty("actionId");
   expect(JSON.stringify(payload)).not.toMatch(/provider|secret|credential/i);
+});
+
+function LocaleSwitcher() {
+  const setLocale = useSetLocale();
+  return (
+    <>
+      <button onClick={() => setLocale("es")}>ES</button>
+      <button onClick={() => setLocale("en")}>EN</button>
+    </>
+  );
+}
+
+it("keeps field names and step controls across locales with Spanish by default", async () => {
+  testingRender(
+    <StoreContextProvider value={memoryStore({ locale: "es" })}>
+      <AppLocaleProvider>
+        <LocaleSwitcher />
+        <PublicQuoteForm
+          definition={quoteDefinition}
+          endpoint="https://api.test/api/public/forms/quote-token"
+        />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+  // Spanish by default.
+  expect(await screen.findByText("SEGUROS · AUTOS LIVIANOS")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Cotizador por pasos" })).toBeInTheDocument();
+  expect(screen.getByText("Vehículo")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Siguiente paso" })).toBeInTheDocument();
+  const plate = screen.getByLabelText(/Placa/);
+  fireEvent.change(plate, { target: { value: "ABC123" } });
+
+  fireEvent.click(screen.getByText("EN"));
+  await screen.findByText("INSURANCE · LIGHT VEHICLES");
+  expect(screen.getByRole("heading", { name: "Step-by-step quote" })).toBeInTheDocument();
+  expect(screen.getByText("Vehicle")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Next step" })).toBeInTheDocument();
+  // Business content preserved, field names intact.
+  expect(screen.getByLabelText(/Placa/)).toHaveValue("ABC123");
+  expect(widget?.language).toBe("en");
 });
