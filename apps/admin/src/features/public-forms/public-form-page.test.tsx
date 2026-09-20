@@ -336,6 +336,50 @@ function LocaleSwitcher() {
     </>
   );
 }
+it("selects the public quote wizard for quote definitions with a presentation descriptor", async () => {
+  fetchMock.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        ...definition,
+        kind: "quote",
+        title: "Cotizador por pasos",
+        presentation: {
+          renderer: "insurance-quote-wizard",
+          entry: "wizard",
+          products: [
+            { flowId: "sbs-producto-8", label: "SBS · Autos Producto 8" },
+          ],
+        },
+      }),
+    ),
+  );
+  render(<PublicFormPage token="quote-token" />);
+  expect(await screen.findByText(/Cotizador por pasos/)).toBeInTheDocument();
+  expect(screen.queryByLabelText(/Nombre/)).not.toBeInTheDocument();
+});
+it("keeps the generic form for record definitions without a presentation descriptor", async () => {
+  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(definition)));
+  render(<PublicFormPage token="record-token" />);
+  expect(await screen.findByLabelText(/Nombre/)).toBeInTheDocument();
+  expect(screen.queryByText(/Cotizador por pasos/)).not.toBeInTheDocument();
+});
+it("fails closed for an unknown presentation descriptor", async () => {
+  fetchMock.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        ...definition,
+        kind: "quote",
+        presentation: {
+          renderer: "evil-widget",
+          entry: "wizard",
+          products: [{ flowId: "x", label: "X" }],
+        },
+      }),
+    ),
+  );
+  render(<PublicFormPage token="evil-token" />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("no está disponible");
+});
 it("switches public form chrome and captcha language while preserving entered business content", async () => {
   testingRender(
     <StoreContextProvider value={memoryStore({ locale: "en" })}>

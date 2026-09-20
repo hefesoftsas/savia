@@ -10,6 +10,20 @@ import {
   publicError,
   usePublicFormSubmission,
 } from "./public-form-submission";
+import { PublicQuoteForm } from "./public-quote-wizard";
+
+const publicQuotePresentation = z
+  .object({
+    renderer: z.literal("insurance-quote-wizard"),
+    entry: z.enum(["wizard", "direct"]),
+    products: z
+      .array(
+        z.object({ flowId: z.string(), label: z.string() }).strict(),
+      )
+      .min(1)
+      .max(20),
+  })
+  .strict();
 
 const publicDefinition = z
   .object({
@@ -19,6 +33,7 @@ const publicDefinition = z
     kind: z.enum(["record", "quote"]),
     captchaProvider: z.enum(["turnstile", "altcha"]).default("turnstile"),
     siteKey: z.string().min(1).optional(),
+    presentation: publicQuotePresentation.optional(),
     fields: z
       .array(
         z.object({
@@ -112,11 +127,20 @@ export function PublicFormPage({ token }: { token: string }) {
             </p>
           </div>
         ) : definition ? (
-          <SubmissionForm
-            key={token}
-            definition={definition}
-            endpoint={endpoint}
-          />
+          definition.kind === "quote" &&
+          definition.presentation?.renderer === "insurance-quote-wizard" ? (
+            <PublicQuoteForm
+              key={token}
+              definition={definition}
+              endpoint={endpoint}
+            />
+          ) : (
+            <SubmissionForm
+              key={token}
+              definition={definition}
+              endpoint={endpoint}
+            />
+          )
         ) : null}
         <footer className="public-form-footer">
           {t("Formulario compartido mediante Savia.")}
