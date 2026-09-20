@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DynamicForm from "../dynamic-form";
 import { makeConfig, type CrmObject } from "@savia/crm-shared/metadata";
@@ -18,7 +13,11 @@ const markerDragEnd = vi.fn();
 vi.mock("leaflet", () => {
   const marker = {
     addTo: vi.fn().mockReturnThis(),
-    on: vi.fn(function (this: typeof marker, event: string, handler: () => void) {
+    on: vi.fn(function (
+      this: typeof marker,
+      event: string,
+      handler: () => void,
+    ) {
       if (event === "dragend") markerDragEnd.mockImplementation(handler);
       return this;
     }),
@@ -30,7 +29,11 @@ vi.mock("leaflet", () => {
     setView: vi.fn(),
     fitBounds: vi.fn(),
     getZoom: vi.fn(() => 14),
-    on: vi.fn(function (this: typeof map, event: string, handler: (event: { latlng: { lat: number; lng: number } }) => void) {
+    on: vi.fn(function (
+      this: typeof map,
+      event: string,
+      handler: (event: { latlng: { lat: number; lng: number } }) => void,
+    ) {
       if (event === "click") mapClick.mockImplementation(handler);
       return this;
     }),
@@ -151,24 +154,26 @@ it("loads address suggestions and moves the map marker", async () => {
 });
 
 it("stores coordinates selected on the map", async () => {
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const url = String(input);
-    if (url.includes("/api/geocoding/reverse")) {
-      return new Response(
-        JSON.stringify({
-          data: {
-            label: "Carrera 7 # 45-67, Bogotá",
-            address: "Carrera 7 # 45-67, Bogotá",
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-    return new Response(JSON.stringify({ data: [] }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/geocoding/reverse")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              label: "Carrera 7 # 45-67, Bogotá",
+              address: "Carrera 7 # 45-67, Bogotá",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     });
-  });
 
   const object: CrmObject = {
     name: "visits",
@@ -200,8 +205,10 @@ it("stores coordinates selected on the map", async () => {
   mapClick({ latlng: { lat: 4.651, lng: -74.083 } });
 
   await waitFor(() =>
-    expect(fetchMock.mock.calls.some(([url]) =>
-      String(url).includes("/api/geocoding/reverse"),
-    )).toBe(true),
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes("/api/geocoding/reverse"),
+      ),
+    ).toBe(true),
   );
 });

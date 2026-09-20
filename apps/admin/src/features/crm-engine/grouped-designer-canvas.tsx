@@ -1,3 +1,5 @@
+import { useMessages, translateMessage } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import {
   useMemo,
   useCallback,
@@ -37,9 +39,13 @@ function zoneKey(sectionId: string) {
   return sectionId || "unassigned";
 }
 
-function fieldTypeMeta(field: { type: string; required?: boolean }) {
-  const parts = [fieldTypeLabel(field.type)];
-  if (field.required) parts.push("Obligatorio");
+function fieldTypeMeta(
+  field: { type: string; required?: boolean },
+  locale: import("@/i18n/app-locale").AppLocale,
+) {
+  const parts = [fieldTypeLabel(field.type, locale)];
+  if (field.required)
+    parts.push(translateMessage(studioMessages, "Obligatorio", locale));
   return parts.join(" · ");
 }
 
@@ -65,6 +71,7 @@ export function GroupedDesignerCanvas({
     beforeFieldId?: string,
   ) => void;
 }) {
+  const t = useMessages(studioMessages);
   const labelLocale = useFieldLabelLocale();
   const {
     state,
@@ -101,8 +108,8 @@ export function GroupedDesignerCanvas({
       label: section.label,
     }));
     if (!hasUnassigned) return base;
-    return [...base, { id: "", label: "Sin sección" }];
-  }, [sectionIds, sections, state.fieldOrder, state.fields]);
+    return [...base, { id: "", label: t("Sin sección") }];
+  }, [sectionIds, sections, state.fieldOrder, state.fields, t]);
 
   const fieldsBySection = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -306,7 +313,7 @@ export function GroupedDesignerCanvas({
       const typeIcon = card.querySelector(".grouped-designer-field-type-icon");
       dragGhostRef.current = mountGroupedDesignerDragGhost({
         label: resolveFieldLabel(field, labelLocale),
-        meta: fieldTypeMeta(field),
+        meta: fieldTypeMeta(field, labelLocale),
         typeIconHtml: typeIcon instanceof HTMLElement ? typeIcon.innerHTML : "",
         dataTransfer: event.dataTransfer,
       });
@@ -322,7 +329,7 @@ export function GroupedDesignerCanvas({
       ]
         .filter(Boolean)
         .join(" ")}
-      aria-label="Campos del formulario por sección"
+      aria-label={t("Campos del formulario por sección")}
       onDragEnter={(event) => {
         if (isPaletteFieldDrag(event.dataTransfer)) setPaletteDragActive(true);
       }}
@@ -359,7 +366,7 @@ export function GroupedDesignerCanvas({
                 .join(" ")}
               open={isZoneOpen(group.id)}
               aria-label={`${group.label} (${ids.length} ${
-                ids.length === 1 ? "campo" : "campos"
+                ids.length === 1 ? t("campo") : t("campos")
               })`}
               onDragEnter={(event) => {
                 if (
@@ -443,8 +450,8 @@ export function GroupedDesignerCanvas({
                   {group.label}
                 </span>
                 <span className="wizard-step-zone-count">
-                  {ids.length} {ids.length === 1 ? "campo" : "campos"}
-                  {sectionMeta?.visibleWhen ? " · Condicional" : ""}
+                  {ids.length} {ids.length === 1 ? t("campo") : t("campos")}
+                  {sectionMeta?.visibleWhen ? t("· Condicional") : ""}
                 </span>
               </summary>
               <div className="wizard-step-zone-body">
@@ -459,7 +466,7 @@ export function GroupedDesignerCanvas({
                       .filter(Boolean)
                       .join(" ")}
                   >
-                    Arrastra campos aquí
+                    {t("Arrastra campos aquí")}
                   </p>
                 )}
                 <ul
@@ -543,7 +550,9 @@ export function GroupedDesignerCanvas({
                               type="button"
                               className="grouped-designer-field-grip"
                               draggable
-                              aria-label={`Arrastrar ${displayLabel}`}
+                              aria-label={t("Arrastrar %{v1}", {
+                                v1: displayLabel,
+                              })}
                               onDragStart={(event) => startDrag(id, event)}
                               onDragEnd={clearDragState}
                             >
@@ -568,7 +577,7 @@ export function GroupedDesignerCanvas({
                                 {displayLabel}
                               </span>
                               <span className="grouped-designer-field-meta">
-                                {fieldTypeMeta(field)}
+                                {fieldTypeMeta(field, labelLocale)}
                               </span>
                             </button>
                             <div className="grouped-designer-field-actions">
@@ -577,7 +586,9 @@ export function GroupedDesignerCanvas({
                                 size="icon"
                                 variant="ghost"
                                 className="size-7 shrink-0"
-                                aria-label={`Duplicar ${displayLabel}`}
+                                aria-label={t("Duplicar %{v1}", {
+                                  v1: displayLabel,
+                                })}
                                 onClick={() => duplicateField(id)}
                               >
                                 <Copy size={14} />
@@ -587,7 +598,9 @@ export function GroupedDesignerCanvas({
                                 size="icon"
                                 variant="ghost"
                                 className="size-7 shrink-0"
-                                aria-label={`Eliminar ${displayLabel}`}
+                                aria-label={t("Eliminar %{v1}", {
+                                  v1: displayLabel,
+                                })}
                                 onClick={() => removeField(id)}
                               >
                                 <Trash2 size={14} />
@@ -603,11 +616,13 @@ export function GroupedDesignerCanvas({
                                   return (
                                     <span
                                       key={action.id}
-                                      title={`Se completa con ${actionLabel}`}
+                                      title={t("Se completa con %{v1}", {
+                                        v1: actionLabel,
+                                      })}
                                       className="grouped-designer-field-note grouped-designer-field-note--primary"
                                     >
                                       <Zap size={13} aria-hidden="true" />
-                                      Se completa con {actionLabel}
+                                      {t("Se completa con")} {actionLabel}
                                     </span>
                                   );
                                 })}
@@ -650,7 +665,7 @@ export function GroupedDesignerCanvas({
       </div>
       {!state.fieldOrder.length && (
         <p className="grouped-designer-empty">
-          Agrega campos desde el panel izquierdo.
+          {t("Agrega campos desde el panel izquierdo.")}
         </p>
       )}
     </div>

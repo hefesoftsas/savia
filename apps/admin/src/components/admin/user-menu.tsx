@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { Link } from "react-router-dom";
 import { AppearancePanel } from "@/components/admin/appearance-panel";
 import { Children, useCallback, useEffect, useState } from "react";
@@ -38,6 +40,7 @@ export type UserMenuProps = {
  * @see {@link https://marmelab.com/shadcn-admin-kit/docs/usermenu UserMenu documentation}
  */
 export function UserMenu({ children }: UserMenuProps) {
+  const t = useMessages(settingsMessages);
   const authProvider = useAuthProvider();
   const { data: identity, refetch } = useGetIdentity();
   const logout = useLogout();
@@ -148,7 +151,7 @@ export function UserMenu({ children }: UserMenuProps) {
                   {currentTenant.name}
                 </span>
                 <span className="ml-2 shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                  Workspace
+                  {t("Workspace")}
                 </span>
               </div>
             ) : null}

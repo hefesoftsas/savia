@@ -1,7 +1,9 @@
+import { I18nContextProvider } from "ra-core";
+import type { ReactElement, ReactNode } from "react";
 import {
   cleanup,
   fireEvent,
-  render,
+  render as testingRender,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -86,3 +88,19 @@ it("explains missing captcha configuration when publishing is unavailable", asyn
     "falta configurar",
   );
 });
+
+function render(ui: ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <I18nContextProvider
+        value={{
+          translate: (key: string) => key,
+          changeLocale: async () => {},
+          getLocale: () => "es",
+        }}
+      >
+        {children}
+      </I18nContextProvider>
+    ),
+  });
+}

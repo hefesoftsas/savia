@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +10,7 @@ export function PropertyPanelSearch({
   onQueryChange,
   matchCount = 0,
   filtering = false,
-  ariaLabel = "Buscar propiedad",
+  ariaLabel,
 }: {
   query: string;
   onQueryChange: (query: string) => void;
@@ -16,6 +18,7 @@ export function PropertyPanelSearch({
   filtering?: boolean;
   ariaLabel?: string;
 }) {
+  const t = useMessages(studioMessages);
   const trimmedQuery = query.trim();
 
   return (
@@ -29,8 +32,8 @@ export function PropertyPanelSearch({
         <Input
           type="search"
           className="studio-properties-search-input"
-          aria-label={ariaLabel}
-          placeholder="etiqueta, obligatorio, consulta…"
+          aria-label={ariaLabel ?? t("Buscar propiedad")}
+          placeholder={t("etiqueta, obligatorio, consulta…")}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
@@ -46,15 +49,15 @@ export function PropertyPanelSearch({
             variant="ghost"
             size="icon"
             className="studio-properties-search-clear"
-            aria-label="Limpiar búsqueda"
+            aria-label={t("Limpiar búsqueda")}
             onClick={() => onQueryChange("")}
           >
             <X size={14} aria-hidden="true" />
           </Button>
         ) : (
           <div className="studio-properties-search-help">
-            <StudioHelpTooltip label="Ayuda sobre la búsqueda">
-              Filtra las opciones visibles en este panel.
+            <StudioHelpTooltip label={t("Ayuda sobre la búsqueda")}>
+              {t("Filtra las opciones visibles en este panel.")}
             </StudioHelpTooltip>
           </div>
         )}
@@ -62,7 +65,12 @@ export function PropertyPanelSearch({
       {filtering ? (
         <div className="studio-properties-search-meta">
           <span className="studio-properties-search-count" aria-live="polite">
-            {matchCount} coincidencia{matchCount === 1 ? "" : "s"}
+            {t(
+              matchCount === 1
+                ? "%{count} coincidencia"
+                : "%{count} coincidencias",
+              { count: matchCount },
+            )}
           </span>
         </div>
       ) : null}

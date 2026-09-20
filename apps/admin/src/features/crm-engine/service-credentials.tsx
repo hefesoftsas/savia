@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, KeyRound, MapPin, Plug, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,8 @@ export default function ServiceCredentials({
   domainTools: boolean;
   onNavigate: (name: string, view: string) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const integrations = useQuery({
     queryKey: ["integrations"],
     queryFn: () => api<{ data: IntegrationSummary[] }>("/integrations"),
@@ -45,15 +49,16 @@ export default function ServiceCredentials({
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Configuración</p>
-          <h1>Claves y servicios</h1>
+          <p className="eyebrow">{t("Configuración")}</p>
+          <h1>{t("Claves y servicios")}</h1>
           <p>
-            Administra las credenciales del espacio. Se cifran en el servidor y
-            no se devuelven al navegador.
+            {t(
+              "Administra las credenciales del espacio. Se cifran en el servidor y no se devuelven al navegador.",
+            )}
           </p>
         </div>
         <span className="neutral-badge">
-          <KeyRound size={14} aria-hidden="true" /> Secretos del tenant
+          <KeyRound size={14} aria-hidden="true" /> {t("Secretos del tenant")}
         </span>
       </div>
 
@@ -61,10 +66,11 @@ export default function ServiceCredentials({
         <div className="credentials-section-heading">
           <MapPin size={18} aria-hidden="true" />
           <div>
-            <h2>Mapas y direcciones</h2>
+            <h2>{t("Mapas y direcciones")}</h2>
             <p>
-              Necesaria solo si activas autocompletar de direcciones con
-              Geoapify. Photon y Nominatim no requieren clave.
+              {t(
+                "Necesaria solo si activas autocompletar de direcciones con Geoapify. Photon y Nominatim no requieren clave.",
+              )}
             </p>
           </div>
         </div>
@@ -75,15 +81,16 @@ export default function ServiceCredentials({
         <div className="credentials-section-heading">
           <Plug size={18} aria-hidden="true" />
           <div>
-            <h2>Integraciones OpenAPI</h2>
+            <h2>{t("Integraciones OpenAPI")}</h2>
             <p>
-              Cada integración guarda su propia URL base y credencial cuando
-              conectas un proveedor externo.
+              {t(
+                "Cada integración guarda su propia URL base y credencial cuando conectas un proveedor externo.",
+              )}
             </p>
           </div>
         </div>
         {integrations.isLoading ? (
-          <p className="credentials-muted">Cargando integraciones…</p>
+          <p className="credentials-muted">{t("Cargando integraciones…")}</p>
         ) : integrations.error ? (
           <p className="credentials-error" role="alert">
             {integrations.error.message}
@@ -97,13 +104,13 @@ export default function ServiceCredentials({
                   <span className="credentials-muted">
                     {item.connection?.mode === "external"
                       ? item.connection.authType === "none"
-                        ? "Conexión externa sin autenticación"
+                        ? t("Conexión externa sin autenticación")
                         : item.hasSecret
-                          ? "Credencial guardada"
-                          : "Falta credencial"
+                          ? t("Credencial guardada")
+                          : t("Falta credencial")
                       : item.connection?.mode === "demo"
-                        ? "Modo demo"
-                        : "Sin conexión guardada"}
+                        ? t("Modo demo")
+                        : t("Sin conexión guardada")}
                   </span>
                 </div>
               </li>
@@ -111,20 +118,21 @@ export default function ServiceCredentials({
           </ul>
         ) : (
           <p className="credentials-muted">
-            Aún no importaste integraciones en este espacio.
+            {t("Aún no importaste integraciones en este espacio.")}
           </p>
         )}
-        {(pendingIntegrations.length > 0 || configuredIntegrations.length > 0) && (
+        {(pendingIntegrations.length > 0 ||
+          configuredIntegrations.length > 0) && (
           <p className="credentials-muted">
-            {configuredIntegrations.length} con credencial ·{" "}
-            {pendingIntegrations.length} pendientes
+            {configuredIntegrations.length} {t("con credencial ·")}{" "}
+            {pendingIntegrations.length} {t("pendientes")}
           </p>
         )}
         <Button
           variant="outline"
           onClick={() => onNavigate(selected, "integrations")}
         >
-          Administrar integraciones
+          {t("Administrar integraciones")}
           <ArrowUpRight size={15} aria-hidden="true" />
         </Button>
       </section>
@@ -134,10 +142,11 @@ export default function ServiceCredentials({
           <div className="credentials-section-heading">
             <Database size={18} aria-hidden="true" />
             <div>
-              <h2>Fuentes de datos externas</h2>
+              <h2>{t("Fuentes de datos externas")}</h2>
               <p>
-                Los tokens de acceso para recursos JSON:API se guardan por
-                fuente, no de forma global.
+                {t(
+                  "Los tokens de acceso para recursos JSON:API se guardan por fuente, no de forma global.",
+                )}
               </p>
             </div>
           </div>
@@ -145,7 +154,7 @@ export default function ServiceCredentials({
             variant="outline"
             onClick={() => onNavigate(selected, "collection-sources")}
           >
-            Administrar fuentes de datos
+            {t("Administrar fuentes de datos")}
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </section>

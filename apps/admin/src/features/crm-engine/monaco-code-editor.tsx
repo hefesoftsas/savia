@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -23,6 +25,8 @@ export function MonacoCodeEditor({
   placeholder?: string;
   ariaLabel: string;
 }) {
+  const t = useMessages(recordsMessages);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<MonacoEditorInstance | null>(null);
   const onChangeRef = useRef(onChange);
@@ -125,7 +129,7 @@ export function MonacoCodeEditor({
   return (
     <div className="monaco-code-editor" data-status={status}>
       {status === "loading" ? (
-        <p className="monaco-code-editor-loading">Cargando editor…</p>
+        <p className="monaco-code-editor-loading">{t("Cargando editor…")}</p>
       ) : null}
       <div
         ref={containerRef}

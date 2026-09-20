@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { RecordHistoryUsage } from "./record-history-usage";
 import { useEffect, useState } from "react";
 import { getListObjectsQueryKey } from "./generated/crm";
@@ -29,13 +31,15 @@ export default function RecordHistorySettingsButton({
 }: {
   object: CrmObject;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [open, setOpen] = useState(false);
   if (!supportsRecordHistory(object) || !collectionCapabilities(object).schema)
     return null;
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        Configurar historial
+        {t("Configurar historial")}
       </Button>
       {open && (
         <Dialog open onOpenChange={setOpen}>
@@ -44,10 +48,13 @@ export default function RecordHistorySettingsButton({
             aria-describedby="history-settings-description"
           >
             <DialogHeader>
-              <DialogTitle>Historial de {object.label}</DialogTitle>
+              <DialogTitle>
+                {t("Historial de")} {object.label}
+              </DialogTitle>
               <DialogDescription id="history-settings-description">
-                Selecciona los campos cuyos cambios quieres conservar. El
-                seguimiento empieza al activarlo.
+                {t(
+                  "Selecciona los campos cuyos cambios quieres conservar. El seguimiento empieza al activarlo.",
+                )}
               </DialogDescription>
             </DialogHeader>
             <SettingsForm
@@ -61,6 +68,8 @@ export default function RecordHistorySettingsButton({
   );
 }
 function SettingsForm({ object }: { object: CrmObject }) {
+  const t = useMessages(recordsMessages);
+
   const client = useQueryClient();
   const [settings, setSettings] = useState<SettingsResponse>();
   const [error, setError] = useState("");
@@ -93,11 +102,11 @@ function SettingsForm({ object }: { object: CrmObject }) {
           <div role="alert">
             <p>{error}</p>
             <Button variant="outline" onClick={() => setReload((v) => v + 1)}>
-              Recargar configuración
+              {t("Recargar configuración")}
             </Button>
           </div>
         ) : (
-          <p role="status">Cargando configuración…</p>
+          <p role="status">{t("Cargando configuración…")}</p>
         )}
       </div>
     );
@@ -126,7 +135,7 @@ function SettingsForm({ object }: { object: CrmObject }) {
           setError(
             e instanceof Error
               ? e.message
-              : "No se pudo guardar la configuración.",
+              : t("No se pudo guardar la configuración."),
           );
         } finally {
           setSaving(false);
@@ -140,15 +149,15 @@ function SettingsForm({ object }: { object: CrmObject }) {
             checked={settings.data.enabled}
             onChange={(e) => patch({ enabled: e.target.checked })}
           />
-          Activar historial de cambios
+          {t("Activar historial de cambios")}
         </label>
         <p className="text-sm text-muted-foreground">
-          Al desactivarlo se detiene la captura. Los cambios guardados
-          permanecen disponibles hasta su vencimiento original. La duración
-          elegida se aplica a los próximos cambios.
+          {t(
+            "Al desactivarlo se detiene la captura. Los cambios guardados permanecen disponibles hasta su vencimiento original. La duración elegida se aplica a los próximos cambios.",
+          )}
         </p>
         <label className="grid gap-2">
-          Días de conservación para nuevos cambios
+          {t("Días de conservación para nuevos cambios")}
           <Input
             type="number"
             min={1}
@@ -160,7 +169,8 @@ function SettingsForm({ object }: { object: CrmObject }) {
         </label>
         <fieldset className="grid gap-2">
           <legend className="mb-2 font-medium">
-            Campos a conservar ({settings.data.fields.length}/50)
+            {t("Campos a conservar (")}
+            {settings.data.fields.length}/50)
           </legend>
           {Object.entries(object.config.fields)
             .filter(([name, field]) => isHistoryField(name, field))
@@ -190,7 +200,7 @@ function SettingsForm({ object }: { object: CrmObject }) {
         </fieldset>
       </fieldset>
       <RecordHistoryUsage path={path} />
-      {saved && <p role="status">Configuración guardada.</p>}
+      {saved && <p role="status">{t("Configuración guardada.")}</p>}
       <Button
         type="submit"
         disabled={
@@ -201,7 +211,7 @@ function SettingsForm({ object }: { object: CrmObject }) {
           settings.data.retentionDays > 365
         }
       >
-        {saving ? "Guardando…" : "Guardar configuración"}
+        {saving ? t("Guardando…") : t("Guardar configuración")}
       </Button>
     </form>
   );

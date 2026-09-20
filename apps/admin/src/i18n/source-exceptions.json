@@ -1,0 +1,247 @@
+[
+  {
+    "file": "../features/crm-engine/collection-operations-panel.tsx",
+    "text": "{id}",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-relations.tsx",
+    "text": "id",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "crm_externo",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "https://api.example.com/v1",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "/meta/total",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "JSON:API",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "orders",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "contacts",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "_id",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "ObjectId",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "{\"company_id\":{\"type\":\"companies\"}}",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "contactos_externos",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/collection-sources-panel.tsx",
+    "text": "HubSpot",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/crm-engine/conversation-wizard.tsx",
+    "text": "Ctrl / ⌘ + Enter",
+    "reason": "Keyboard shortcut notation shared by all supported locales."
+  },
+  {
+    "file": "../features/crm-engine/crm-workspace-panel.tsx",
+    "text": "HubSpot",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "application/pdf, image/png",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "<button type=\"button\" data-savia-set-value=\"nombre\" data-savia-value=\"Ejemplo\">",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "getValue(name), setValue(name, value), container",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "{{values.campo}} · {{record.id}} · {{object.label}}",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "COP ($)",
+    "reason": "ISO currency code and symbol; never a localized currency value."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "USD ($)",
+    "reason": "ISO currency code and symbol; never a localized currency value."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "EUR (€)",
+    "reason": "ISO currency code and symbol; never a localized currency value."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "MXN ($)",
+    "reason": "ISO currency code and symbol; never a localized currency value."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "co",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "URL",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/crm-engine/designer.tsx",
+    "text": "mi_campo",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/form-html-editor-modal.tsx",
+    "text": "<div><p>{{values.nombre}}</p></div>",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/form-html-editor-modal.tsx",
+    "text": "container.querySelector('[data-savia-set-value]')?.addEventListener('click', () => setValue('nombre', 'Ejemplo'))",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/operations.tsx",
+    "text": "{{nombre_del_campo}}",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "React",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "HTML",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "rows[]",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "columns[]",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "disabled",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "load(id)",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "export default",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "rows[n].values[",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/workflow-webhooks.tsx",
+    "text": "trigger.name",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/users/user-pages.tsx",
+    "text": "MFA",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/service-credentials/crm-domain-credentials-section.tsx",
+    "text": "Geoapify",
+    "reason": "Product name, technology name, or internationally used acronym."
+  },
+  {
+    "file": "../features/assistant-configuration/assistant-configuration-page.tsx",
+    "text": "OpenRouter",
+    "reason": "Product name or technical acronym shared by supported languages."
+  },
+  {
+    "file": "../features/public-forms/public-form-page.tsx",
+    "text": "Savia",
+    "reason": "Product name or technical acronym shared by supported languages."
+  },
+  {
+    "file": "../features/public-forms/public-form-page.tsx",
+    "text": "COP",
+    "reason": "ISO currency code, preserved independently of the interface language."
+  },
+  {
+    "file": "../components/admin/app-sidebar.tsx",
+    "text": "Savia",
+    "reason": "Product brand name remains unchanged in every locale."
+  },
+  {
+    "file": "../components/admin/error.tsx",
+    "text": "StackOverflow",
+    "reason": "External community product brand remains unchanged in every locale."
+  },
+  {
+    "file": "../components/admin/error.tsx",
+    "text": "Shadcn Enterprise Edition",
+    "reason": "External product edition name remains unchanged in every locale."
+  },
+  {
+    "file": "../components/admin/ready.tsx",
+    "text": "GitHub",
+    "reason": "External platform brand remains unchanged in every locale."
+  },
+  {
+    "file": "../components/admin/simple-form-iterator.tsx",
+    "text": "ra.action.move_up",
+    "reason": "React-admin translation key consumed by IconButtonWithTooltip; its visible label is translated by that component."
+  },
+  {
+    "file": "../components/admin/simple-form-iterator.tsx",
+    "text": "ra.action.move_down",
+    "reason": "React-admin translation key consumed by IconButtonWithTooltip; its visible label is translated by that component."
+  }
+]

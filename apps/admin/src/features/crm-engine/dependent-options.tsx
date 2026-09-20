@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect } from "react";
 import { useWatch } from "react-hook-form";
 import type { IFieldProps } from "@form-eng/core";
@@ -45,15 +47,17 @@ export function DependentOptionsEditor({
   value?: OptionDependency;
   onChange: (value: OptionDependency | undefined) => void;
 }) {
+  const t = useMessages(recordsMessages);
+
   const field = fields[name];
   return (
     <fieldset
       className="dependent-options-editor"
       data-property-search="opciones dependientes cascada dropdown autocompletar"
     >
-      <legend>Opciones dependientes</legend>
+      <legend>{t("Opciones dependientes")}</legend>
       <label>
-        Depende de
+        {t("Depende de")}
         <select
           value={value?.field ?? ""}
           onChange={(e) =>
@@ -62,7 +66,7 @@ export function DependentOptionsEditor({
             )
           }
         >
-          <option value="">Sin dependencia</option>
+          <option value="">{t("Sin dependencia")}</option>
           {Object.entries(fields)
             .filter(
               ([key, f]) =>
@@ -80,13 +84,15 @@ export function DependentOptionsEditor({
       {value && (
         <>
           <p>
-            Marca qué opciones se ofrecen para cada respuesta del campo
-            anterior. Al cambiarla, se limpia cualquier selección incompatible.
+            {t(
+              "Marca qué opciones se ofrecen para cada respuesta del campo anterior. Al cambiarla, se limpia cualquier selección incompatible.",
+            )}
           </p>
           {(fields[value.field]?.options ?? []).map((parent: any) => (
             <fieldset key={parent.value}>
               <legend>
-                Cuando {fields[value.field].label} es {parent.label}
+                {t("Cuando")} {fields[value.field].label} {t("es")}{" "}
+                {parent.label}
               </legend>
               {(field.options ?? [])
                 .filter((o: any) => o.value !== "")

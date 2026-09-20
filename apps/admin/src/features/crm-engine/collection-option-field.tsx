@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { IFieldProps } from "@form-eng/core";
@@ -23,6 +25,8 @@ export function CollectionOptionField({
   numeric,
   ...props
 }: IFieldProps & { objectName: string; numeric: boolean }) {
+  const t = useMessages(recordsMessages);
+
   const [open, setOpen] = useState(false);
   const [pages, setPages] = useState(1);
   const runtime = getCrmRuntime();
@@ -69,10 +73,10 @@ export function CollectionOptionField({
             <span className="truncate">
               {selected?.label ??
                 (current
-                  ? `Valor actual: ${current}`
+                  ? t("Valor actual: %{p0}", { p0: current })
                   : result.isPending
-                    ? "Cargando opciones…"
-                    : "Seleccionar…")}
+                    ? t("Cargando opciones…")
+                    : t("Seleccionar…"))}
             </span>
             <ChevronsUpDown size={14} />
           </Button>
@@ -82,9 +86,9 @@ export function CollectionOptionField({
           className="w-[var(--radix-popover-trigger-width)] p-0"
         >
           <Command>
-            <CommandInput placeholder="Buscar entre opciones cargadas…" />
+            <CommandInput placeholder={t("Buscar entre opciones cargadas…")} />
             <CommandList>
-              <CommandEmpty>Sin coincidencias.</CommandEmpty>
+              <CommandEmpty>{t("Sin coincidencias.")}</CommandEmpty>
               <CommandItem
                 value="__empty"
                 onSelect={() => {
@@ -92,7 +96,7 @@ export function CollectionOptionField({
                   setOpen(false);
                 }}
               >
-                Sin seleccionar
+                {t("Sin seleccionar")}
               </CommandItem>
               {result.data?.data
                 .filter(
@@ -122,20 +126,20 @@ export function CollectionOptionField({
               disabled={result.isFetching}
               onClick={() => setPages((p) => p + 1)}
             >
-              Cargar más opciones
+              {t("Cargar más opciones")}
             </Button>
           )}
         </PopoverContent>
       </Popover>
       {result.error && (
         <div role="alert" className="text-sm">
-          No se pudieron cargar las opciones.{" "}
+          {t("No se pudieron cargar las opciones.")}{" "}
           <button
             type="button"
             className="underline"
             onClick={() => void result.refetch()}
           >
-            Reintentar
+            {t("Reintentar")}
           </button>
         </div>
       )}

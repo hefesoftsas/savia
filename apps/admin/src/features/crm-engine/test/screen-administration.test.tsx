@@ -2,7 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { screen, fireEvent, cleanup } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { setCrmRuntime } from "../runtime";
 import ScreenAdministration from "../screen-administration";
 import { makeConfig } from "@savia/crm-shared/metadata";

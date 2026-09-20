@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { isDatabaseKind } from "@savia/crm-shared/database-sources";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,6 +40,8 @@ export default function CollectionRecordForm(props: DynamicFormProps) {
 }
 
 function DatabaseRecordForm(props: DynamicFormProps) {
+  const t = useMessages(recordsMessages);
+
   const binding = props.object.config.studio!.collection!;
   const metadata = binding.databaseMetadata;
   const editing = Boolean(props.values?.id);
@@ -72,11 +76,12 @@ function DatabaseRecordForm(props: DynamicFormProps) {
                   type: "Dropdown",
                   defaultValue: "",
                   options: [
-                    { value: "true", label: "Sí" },
-                    { value: "false", label: "No" },
+                    { value: "true", label: t("Sí") },
+                    { value: "false", label: t("No") },
                   ],
-                  description:
+                  description: t(
                     "Deja sin seleccionar para usar el valor predeterminado de la base de datos.",
+                  ),
                 }
               : {}),
             readOnly: field.readOnly || (editing && name === binding.idColumn),
@@ -133,6 +138,8 @@ function DatabaseRecordForm(props: DynamicFormProps) {
 }
 
 function ManualRelationsForm(props: DynamicFormProps) {
+  const t = useMessages(recordsMessages);
+
   const runtime = getCrmRuntime();
   const client = useQueryClient();
   const object = props.object.name;
@@ -257,11 +264,15 @@ function ManualRelationsForm(props: DynamicFormProps) {
           )
         )
           throw new Error(
-            "Esta relación supera el límite de 100 registros. Edita sus vínculos desde la colección.",
+            t(
+              "Esta relación supera el límite de 100 registros. Edita sus vínculos desde la colección.",
+            ),
           );
         if (page > 100)
           throw new Error(
-            "No se pudieron cargar todos los vínculos. Reintenta antes de guardar.",
+            t(
+              "No se pudieron cargar todos los vínculos. Reintenta antes de guardar.",
+            ),
           );
         for (const group of groups)
           result[group.definition.id] = [
@@ -319,7 +330,9 @@ function ManualRelationsForm(props: DynamicFormProps) {
         );
       } catch {
         setWarning(
-          "No se pudo abrir el borrador local. Mantén el formulario abierto para conservar los cambios.",
+          t(
+            "No se pudo abrir el borrador local. Mantén el formulario abierto para conservar los cambios.",
+          ),
         );
       }
     }
@@ -363,7 +376,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
         const links = await existing.refetch();
         if (links.error) throw links.error;
         if (!response.data?.id)
-          throw new Error("No se pudo recargar el registro.");
+          throw new Error(t("No se pudo recargar el registro."));
         const previousIds = links.data ?? {};
         next = {
           ...next,
@@ -405,7 +418,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
       setWarning(
         error instanceof Error
           ? error.message
-          : "No se pudo recargar el registro. Se conserva el borrador.",
+          : t("No se pudo recargar el registro. Se conserva el borrador."),
       );
     } finally {
       setBusy(false);
@@ -415,7 +428,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
   async function save(data: Record<string, unknown>, previous?: CrmRecord) {
     if (!initialized)
       throw new Error(
-        "Espera a que se carguen las relaciones antes de guardar.",
+        t("Espera a que se carguen las relaciones antes de guardar."),
       );
     setBusy(true);
     try {
@@ -432,7 +445,9 @@ function ManualRelationsForm(props: DynamicFormProps) {
           groups.reduce((count, group) => count + group.rows.length, 0) > 100
         )
           throw new Error(
-            "El formulario admite hasta 10 relaciones y 100 registros relacionados en total.",
+            t(
+              "El formulario admite hasta 10 relaciones y 100 registros relacionados en total.",
+            ),
           );
         const parent = Object.fromEntries(
           Object.entries(completeValues).filter(
@@ -450,7 +465,9 @@ function ManualRelationsForm(props: DynamicFormProps) {
         });
         if (!saved)
           throw new Error(
-            "No se recibió confirmación del guardado. El borrador se conserva para reintentar.",
+            t(
+              "No se recibió confirmación del guardado. El borrador se conserva para reintentar.",
+            ),
           );
         confirmed.current = true;
         await draft.current?.clear();
@@ -473,7 +490,9 @@ function ManualRelationsForm(props: DynamicFormProps) {
         if (!saved) {
           if (wanted.length || current.length)
             throw new Error(
-              "No se recibió el identificador del registro para guardar sus relaciones.",
+              t(
+                "No se recibió el identificador del registro para guardar sus relaciones.",
+              ),
             );
           continue;
         }
@@ -502,7 +521,15 @@ function ManualRelationsForm(props: DynamicFormProps) {
     } catch (error) {
       if (savedRecord.current)
         throw new Error(
-          `El registro está guardado, pero falta completar la operación. ${error instanceof Error ? error.message : "No se pudieron guardar las relaciones."} Puedes reintentar sin crear otro registro.`,
+          t(
+            "El registro está guardado, pero falta completar la operación. %{p0} Puedes reintentar sin crear otro registro.",
+            {
+              p0:
+                error instanceof Error
+                  ? error.message
+                  : t("No se pudieron guardar las relaciones."),
+            },
+          ),
         );
       throw error;
     } finally {
@@ -511,7 +538,9 @@ function ManualRelationsForm(props: DynamicFormProps) {
   }
   return (
     <div className="space-y-5">
-      {!initialized && !error && <p role="status">Cargando relaciones…</p>}
+      {!initialized && !error && (
+        <p role="status">{t("Cargando relaciones…")}</p>
+      )}
       {error && (
         <p role="alert">
           {error.message}{" "}
@@ -523,7 +552,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
               if (recordId) void existing.refetch();
             }}
           >
-            Reintentar
+            {t("Reintentar")}
           </Button>
         </p>
       )}
@@ -532,7 +561,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
         <div className="flex items-center gap-3">
           {restored && (
             <p role="status">
-              Borrador recuperado. Se conservan las versiones originales.
+              {t("Borrador recuperado. Se conservan las versiones originales.")}
             </p>
           )}
           <Button
@@ -541,7 +570,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
             disabled={busy}
             onClick={() => void discardDraft()}
           >
-            Descartar borrador y recargar
+            {t("Descartar borrador y recargar")}
           </Button>
         </div>
       )}

@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { RESULT_REACT_EXAMPLE } from "./result-react-example";
 import { resultHtmlExample } from "./result-html-example";
 import { ResultCards } from "./result-cards";
@@ -25,16 +27,10 @@ import { getCrmRuntime } from "./runtime";
 import { jsonPointer } from "@savia/crm-shared/collection-operations";
 import DynamicForm from "./dynamic-form";
 import { LookupActions } from "./lookup-actions";
-const labels: Record<string, string> = {
-  running: "En proceso",
-  success: "Resultado disponible",
-  partial: "Resultado parcial",
-  no_result: "Sin resultados",
-  error: "No se completó",
-  failed: "No se completó",
-  pending: "En proceso",
-};
+
 function RefreshResultsButton({ onClick }: { onClick: () => void }) {
+  const t = useMessages(automationMessages);
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -42,14 +38,14 @@ function RefreshResultsButton({ onClick }: { onClick: () => void }) {
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Actualizar resultados"
+          aria-label={t("Actualizar resultados")}
           onClick={onClick}
         >
           <RefreshCw size={15} aria-hidden="true" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Actualizar resultados
+        {t("Actualizar resultados")}
       </TooltipContent>
     </Tooltip>
   );
@@ -67,12 +63,16 @@ function ExecutionModeControl({
   inline?: boolean;
   onChange: (mode: "live" | "mock") => void;
 }) {
+  const t = useMessages(automationMessages);
+
   function change(next: "live" | "mock") {
     if (
       next === "live" &&
       mode === "mock" &&
       !window.confirm(
-        "En modo Real las cotizaciones contactan a las aseguradoras. ¿Continuar?",
+        t(
+          "En modo Real las cotizaciones contactan a las aseguradoras. ¿Continuar?",
+        ),
       )
     ) {
       return;
@@ -89,14 +89,14 @@ function ExecutionModeControl({
             className={`request-mode-chip request-mode-chip--${mode}`}
             aria-hidden="true"
           >
-            {mode === "live" ? "Real" : "Simulación"}
+            {mode === "live" ? t("Real") : t("Simulación")}
           </span>
           <span className="request-execution-mode-label">
-            Modo de ejecución
+            {t("Modo de ejecución")}
           </span>
         </summary>
         <fieldset disabled={busy} className="request-execution-mode-options">
-          <legend className="sr-only">Modo de ejecución</legend>
+          <legend className="sr-only">{t("Modo de ejecución")}</legend>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="radio"
@@ -104,7 +104,7 @@ function ExecutionModeControl({
               checked={mode === "live"}
               onChange={() => change("live")}
             />
-            Real — contacta aseguradoras
+            {t("Real — contacta aseguradoras")}
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -113,7 +113,7 @@ function ExecutionModeControl({
               checked={mode === "mock"}
               onChange={() => change("mock")}
             />
-            Simulación — respuestas de prueba
+            {t("Simulación — respuestas de prueba")}
           </label>
         </fieldset>
       </details>
@@ -121,16 +121,16 @@ function ExecutionModeControl({
   }
   return (
     <label className="grid gap-1 text-sm">
-      Modo de ejecución
+      {t("Modo de ejecución")}
       <select
-        aria-label="Modo de ejecución"
+        aria-label={t("Modo de ejecución")}
         className="rounded-md border bg-background p-2"
         value={mode}
         disabled={busy}
         onChange={(e) => change(e.target.value as "live" | "mock")}
       >
-        <option value="live">Real</option>
-        <option value="mock">Simulación</option>
+        <option value="live">{t("Real")}</option>
+        <option value="mock">{t("Simulación")}</option>
       </select>
     </label>
   );
@@ -139,22 +139,37 @@ function defaultSelectedActions(actions: RequestAction[]) {
   const submitActions = actions.filter((action) => action.kind === "submit");
   return submitActions.length ? [submitActions[0].id] : [];
 }
-function display(value: unknown, format: string, currency?: string | null) {
-  if (value === null || value === undefined || value === "")
-    return "No informado";
-  if (format === "money" && Number.isFinite(Number(value))) {
-    try {
-      return new Intl.NumberFormat("es-CO", {
-        style: "currency",
-        currency: currency ?? "COP",
-      }).format(Number(value));
-    } catch {
-      return String(value);
-    }
-  }
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
+
 export default function RequestPage({ object }: { object: CrmObject }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+  const labels: Record<string, string> = {
+    running: t("En proceso"),
+    complete: t("Completado"),
+    success: t("Resultado disponible"),
+    partial: t("Resultado parcial"),
+    no_result: t("Sin resultados"),
+    error: t("No se completó"),
+    failed: t("No se completó"),
+    pending: t("En proceso"),
+  };
+
+  function display(value: unknown, format: string, currency?: string | null) {
+    if (value === null || value === undefined || value === "")
+      return t("No informado");
+    if (format === "money" && Number.isFinite(Number(value))) {
+      try {
+        return new Intl.NumberFormat(intlLocale(locale), {
+          style: "currency",
+          currency: currency ?? "COP",
+        }).format(Number(value));
+      } catch {
+        return String(value);
+      }
+    }
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
+  }
+
   const config = requestPageSchema.parse(object.config.studio?.requestPage);
   const isWizard = !!object.config.studio?.wizard?.enabled;
   const [surface, setSurface] = useState<"form" | "results">("form");
@@ -245,8 +260,10 @@ export default function RequestPage({ object }: { object: CrmObject }) {
             }
           >
             {isWizard
-              ? "Cotiza auto liviano en tres pasos."
-              : "Completa los datos y selecciona las operaciones que deseas ejecutar."}
+              ? t("Cotiza auto liviano en tres pasos.")
+              : t(
+                  "Completa los datos y selecciona las operaciones que deseas ejecutar.",
+                )}
           </p>
         </div>
         {isWizard ? (
@@ -267,7 +284,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
       {isWizard && (
         <nav
           className="view-tabs request-wizard-tabs"
-          aria-label="Vista del cotizador"
+          aria-label={t("Vista del cotizador")}
         >
           <button
             type="button"
@@ -275,7 +292,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
             aria-pressed={surface === "form"}
             onClick={() => setSurface("form")}
           >
-            Preparar cotización
+            {t("Preparar cotización")}
           </button>
           <button
             type="button"
@@ -283,7 +300,8 @@ export default function RequestPage({ object }: { object: CrmObject }) {
             aria-pressed={surface === "results"}
             onClick={() => setSurface("results")}
           >
-            Resultados{runs.length ? ` (${runs.length})` : ""}
+            {t("Resultados")}
+            {runs.length ? ` (${runs.length})` : ""}
           </button>
         </nav>
       )}
@@ -302,14 +320,16 @@ export default function RequestPage({ object }: { object: CrmObject }) {
               className="request-products-chevron"
               aria-hidden="true"
             />
-            <span className="request-products-summary-label">Cotizar con</span>
+            <span className="request-products-summary-label">
+              {t("Cotizar con")}
+            </span>
             <span className="request-products-summary-meta">
               {selected.length}{" "}
-              {selected.length === 1 ? "producto" : "productos"}
+              {selected.length === 1 ? t("producto") : t("productos")}
             </span>
           </summary>
           <fieldset disabled={busy} className="request-products-fieldset">
-            <legend className="sr-only">Cotizar con</legend>
+            <legend className="sr-only">{t("Cotizar con")}</legend>
             <div className="request-products-options">
               {config.actions
                 .filter((a) => a.kind === "submit")
@@ -336,7 +356,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
           key={formVersion}
           object={object}
           values={values}
-          submitLabel={busy ? "Cotizando…" : config.submitLabel}
+          submitLabel={busy ? t("Cotizando…") : config.submitLabel}
           renderFieldActions={(field) => {
             const actions = config.actions.filter(
               (a) => a.kind === "lookup" && Object.values(a.input)[0] === field,
@@ -355,7 +375,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
               (a) => selected.includes(a.id) && a.kind === "submit",
             );
             if (!submitActions.length)
-              throw new Error("Selecciona al menos una operación.");
+              throw new Error(t("Selecciona al menos una operación."));
             submitting.current = true;
             setBusy(true);
             try {
@@ -380,11 +400,13 @@ export default function RequestPage({ object }: { object: CrmObject }) {
       <section
         className="rounded-xl border bg-card p-6 space-y-4"
         hidden={isWizard && surface !== "results"}
-        aria-label="Resultados de la página"
+        aria-label={t("Resultados de la página")}
       >
         {!isWizard && (
           <header className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Resultados e historial</h2>
+            <h2 className="text-lg font-semibold">
+              {t("Resultados e historial")}
+            </h2>
             <RefreshResultsButton onClick={() => void refresh()} />
           </header>
         )}
@@ -394,7 +416,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
             checked={showHistory}
             onChange={(e) => setShowHistory(e.target.checked)}
           />
-          Mostrar todas las ejecuciones
+          {t("Mostrar todas las ejecuciones")}
         </label>
         {error && (
           <p role="alert" className="text-destructive">
@@ -404,7 +426,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
         {loading ? (
           <div className="space-y-3" role="status" aria-live="polite">
             <p className="text-xs font-medium text-muted-foreground">
-              Cargando resultados…
+              {t("Cargando resultados…")}
             </p>
             <div className="overflow-hidden rounded-md border bg-card">
               <div className="flex items-center gap-4 border-b bg-muted/40 px-4 py-3">
@@ -430,7 +452,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
           </div>
         ) : runs.length === 0 ? (
           <p className="text-muted-foreground">
-            Al ejecutar una operación, sus resultados aparecerán aquí.
+            {t("Al ejecutar una operación, sus resultados aparecerán aquí.")}
           </p>
         ) : config.resultLayout && config.resultLayout !== "table" ? (
           <ResultCards
@@ -498,14 +520,14 @@ export default function RequestPage({ object }: { object: CrmObject }) {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="p-3">Operación / fecha</th>
-                  <th className="p-3">Estado</th>
+                  <th className="p-3">{t("Operación / fecha")}</th>
+                  <th className="p-3">{t("Estado")}</th>
                   {config.resultColumns.map((col) => (
                     <th className="p-3" key={col.pointer}>
                       {col.label}
                     </th>
                   ))}
-                  <th className="p-3">Detalle</th>
+                  <th className="p-3">{t("Detalle")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -525,14 +547,18 @@ export default function RequestPage({ object }: { object: CrmObject }) {
                       <td className="p-3">
                         <strong>{run.label}</strong>
                         <small className="block text-muted-foreground">
-                          {new Date(run.createdAt).toLocaleString("es-CO")}
+                          {new Date(run.createdAt).toLocaleString(
+                            intlLocale(locale),
+                          )}
                         </small>
-                        {run.mode === "mock" && <small>Simulación</small>}
+                        {run.mode === "mock" && (
+                          <small>{t("Simulación")}</small>
+                        )}
                       </td>
                       <td className="p-3">
                         {run.status === "running" &&
                         Date.now() - Date.parse(run.createdAt) >= 360000
-                          ? "Sin confirmación"
+                          ? t("Sin confirmación")
                           : labels[run.result?.status ?? run.status]}
                         {run.error && <p role="alert">{run.error}</p>}
                         {run.result?.errors.map((e, i) => (
@@ -553,7 +579,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
                       <td className="p-3 space-y-2">
                         <details>
                           <summary className="cursor-pointer">
-                            Ver respuesta
+                            {t("Ver respuesta")}
                           </summary>
                           <div className="max-w-md space-y-2">
                             {run.result?.warnings.map((w, i) => (
@@ -595,7 +621,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
                             setMode(run.mode);
                           }}
                         >
-                          Cargar datos
+                          {t("Cargar datos")}
                         </Button>
                         {(run.status === "failed" ||
                           run.result?.status === "error") && (
@@ -616,7 +642,7 @@ export default function RequestPage({ object }: { object: CrmObject }) {
                               setFormVersion((v) => v + 1);
                             }}
                           >
-                            Preparar reintento
+                            {t("Preparar reintento")}
                           </Button>
                         )}
                       </td>

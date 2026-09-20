@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useState } from "react";
 import { Download, FileDown, RefreshCw } from "lucide-react";
 import type { CrmObject } from "@savia/crm-shared/metadata";
@@ -37,11 +39,6 @@ type Preview = {
   conflicts: string[];
   canInstall: boolean;
 };
-const actions = { create: "Crear", update: "Actualizar", keep: "Sin cambios" };
-const message = (error: unknown) =>
-  error instanceof Error
-    ? error.message
-    : "No se pudo completar la operación. Intenta de nuevo.";
 
 function download(manifest: Manifest) {
   const url = URL.createObjectURL(
@@ -59,6 +56,18 @@ export default function SolutionManager({
 }: {
   onChanged: () => void | Promise<unknown>;
 }) {
+  const t = useMessages(automationMessages);
+  const actions = {
+    create: t("Crear"),
+    update: t("Actualizar"),
+    keep: t("Sin cambios"),
+  };
+
+  const message = (error: unknown) =>
+    error instanceof Error
+      ? error.message
+      : t("No se pudo completar la operación. Intenta de nuevo.");
+
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -119,20 +128,21 @@ export default function SolutionManager({
     );
   return (
     <section
-      aria-label="Paquetes de soluciones"
+      aria-label={t("Paquetes de soluciones")}
       className="savia-surface-card space-y-5 p-6"
     >
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">
-            Paquetes
+            {t("Paquetes")}
           </h2>
           <StudioHelpTooltip
-            label="Cómo funcionan los paquetes de soluciones"
+            label={t("Cómo funcionan los paquetes de soluciones")}
             side="bottom"
           >
-            Un paquete añade modelos y pantallas a este espacio. Revísalo antes
-            de instalarlo.
+            {t(
+              "Un paquete añade modelos y pantallas a este espacio. Revísalo antes de instalarlo.",
+            )}
           </StudioHelpTooltip>
         </div>
       </header>
@@ -147,19 +157,20 @@ export default function SolutionManager({
         </p>
       )}
       <section
-        aria-label="Importar paquete"
+        aria-label={t("Importar paquete")}
         className="flex flex-wrap items-center gap-x-2 gap-y-3 border-y py-4"
       >
         <div className="flex items-center gap-2">
           <label htmlFor="solution-file" className="text-sm font-medium">
-            Importar JSON
+            {t("Importar JSON")}
           </label>
           <StudioHelpTooltip
-            label="Información sobre la importación de paquetes"
+            label={t("Información sobre la importación de paquetes")}
             side="bottom"
           >
-            Máximo 2 MB. El archivo contiene definiciones, no registros ni
-            credenciales.
+            {t(
+              "Máximo 2 MB. El archivo contiene definiciones, no registros ni credenciales.",
+            )}
           </StudioHelpTooltip>
         </div>
         <Input
@@ -177,14 +188,18 @@ export default function SolutionManager({
               setPreview(null);
               if (file.size > 2 * 1024 * 1024)
                 throw new Error(
-                  "El archivo supera 2 MB. Selecciona un paquete más pequeño.",
+                  t(
+                    "El archivo supera 2 MB. Selecciona un paquete más pequeño.",
+                  ),
                 );
               let manifest: unknown;
               try {
                 manifest = JSON.parse(await file.text());
               } catch {
                 throw new Error(
-                  "El archivo no contiene JSON válido. Revisa el archivo e intenta de nuevo.",
+                  t(
+                    "El archivo no contiene JSON válido. Revisa el archivo e intenta de nuevo.",
+                  ),
                 );
               }
               await inspect(manifest);
@@ -192,9 +207,9 @@ export default function SolutionManager({
           }}
         />
       </section>
-      <section aria-label="Catálogo de paquetes" className="space-y-2">
+      <section aria-label={t("Catálogo de paquetes")} className="space-y-2">
         <header className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Disponibles</h2>
+          <h2 className="text-sm font-semibold">{t("Disponibles")}</h2>
           {!loading ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -204,22 +219,22 @@ export default function SolutionManager({
                   className="size-8"
                   disabled={busy}
                   onClick={() => void run(reload)}
-                  aria-label="Actualizar catálogo"
+                  aria-label={t("Actualizar catálogo")}
                 >
                   <RefreshCw aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left" sideOffset={6}>
-                Actualizar catálogo
+                {t("Actualizar catálogo")}
               </TooltipContent>
             </Tooltip>
           ) : null}
         </header>
         {loading ? (
-          <p role="status">Cargando paquetes…</p>
+          <p role="status">{t("Cargando paquetes…")}</p>
         ) : entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No hay paquetes disponibles. Puedes importar un archivo JSON.
+            {t("No hay paquetes disponibles. Puedes importar un archivo JSON.")}
           </p>
         ) : (
           <ul className="divide-y">
@@ -233,31 +248,36 @@ export default function SolutionManager({
                   <Badge variant={installed?.enabled ? "secondary" : "outline"}>
                     {installed
                       ? installed.enabled
-                        ? "Activo"
-                        : "Inactivo"
-                      : "Disponible"}
+                        ? t("Activo")
+                        : t("Inactivo")
+                      : t("Disponible")}
                   </Badge>
                   <StudioHelpTooltip
-                    label={`Más información sobre ${manifest.label}`}
+                    label={t("Más información sobre %{value0}", {
+                      value0: manifest.label,
+                    })}
                     side="bottom"
                   >
                     <span className="block max-w-xs space-y-1">
                       <span className="block">{manifest.description}</span>
                       <span className="block text-primary-foreground/75">
-                        Versión {manifest.version}
+                        {t("Versión")} {manifest.version}
                         {installed
-                          ? ` · ${installed.version === "0.0.0" ? "Configuración existente" : `Instalada ${installed.version}`}`
+                          ? ` · ${installed.version === "0.0.0" ? t("Configuración existente") : t("Instalada %{value0}", { value0: installed.version })}`
                           : ""}
                       </span>
                     </span>
                   </StudioHelpTooltip>
                   {installed ? (
                     <StudioHelpTooltip
-                      label={`Qué ocurre al activar o desactivar ${manifest.label}`}
+                      label={t("Qué ocurre al activar o desactivar %{value0}", {
+                        value0: manifest.label,
+                      })}
                       side="bottom"
                     >
-                      Desactivar oculta sus pantallas y conserva los datos. Al
-                      activarlo, las pantallas vuelven a estar disponibles.
+                      {t(
+                        "Desactivar oculta sus pantallas y conserva los datos. Al activarlo, las pantallas vuelven a estar disponibles.",
+                      )}
                     </StudioHelpTooltip>
                   ) : null}
                 </div>
@@ -274,13 +294,15 @@ export default function SolutionManager({
                             download(manifest);
                           })
                         }
-                        aria-label={`Descargar ${manifest.label}`}
+                        aria-label={t("Descargar %{value0}", {
+                          value0: manifest.label,
+                        })}
                       >
                         <Download aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      Descargar {manifest.label}
+                      {t("Descargar")} {manifest.label}
                     </TooltipContent>
                   </Tooltip>
                   {installed && (
@@ -291,7 +313,9 @@ export default function SolutionManager({
                           variant="ghost"
                           className="size-8"
                           disabled={busy}
-                          aria-label={`Exportar instalado ${manifest.label}`}
+                          aria-label={t("Exportar instalado %{value0}", {
+                            value0: manifest.label,
+                          })}
                           onClick={() =>
                             void run(async () => {
                               download(
@@ -306,7 +330,7 @@ export default function SolutionManager({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={6}>
-                        Exportar instalado
+                        {t("Exportar instalado")}
                       </TooltipContent>
                     </Tooltip>
                   )}
@@ -317,7 +341,7 @@ export default function SolutionManager({
                       disabled={busy}
                       onClick={() => void run(() => inspect(manifest))}
                     >
-                      Revisar {manifest.label}
+                      {t("Revisar")} {manifest.label}
                     </Button>
                   ) : null}
                   {installed && installed.version !== manifest.version ? (
@@ -327,7 +351,7 @@ export default function SolutionManager({
                       disabled={busy}
                       onClick={() => void run(() => inspect(manifest))}
                     >
-                      Actualizar {manifest.label}
+                      {t("Actualizar")} {manifest.label}
                     </Button>
                   ) : null}
                   {installed && (
@@ -348,13 +372,17 @@ export default function SolutionManager({
                           await reload();
                           setNotice(
                             installed.enabled
-                              ? "Paquete desactivado. Sus datos se conservan."
-                              : "Paquete activado. Sus pantallas están disponibles.",
+                              ? t(
+                                  "Paquete desactivado. Sus datos se conservan.",
+                                )
+                              : t(
+                                  "Paquete activado. Sus pantallas están disponibles.",
+                                ),
                           );
                         })
                       }
                     >
-                      {installed.enabled ? "Desactivar" : "Activar"}{" "}
+                      {installed.enabled ? t("Desactivar") : t("Activar")}{" "}
                       {manifest.label}
                     </Button>
                   )}
@@ -366,11 +394,11 @@ export default function SolutionManager({
       </section>
       {preview && (
         <section
-          aria-label="Vista previa del paquete"
+          aria-label={t("Vista previa del paquete")}
           className="space-y-3 border-t pt-4"
         >
           <h2 className="break-words font-semibold">
-            Revisar {preview.id} · {preview.version}
+            {t("Revisar")} {preview.id} · {preview.version}
           </h2>
           <ul className="space-y-2 text-sm">
             {preview.objects.map((object) => (
@@ -388,7 +416,7 @@ export default function SolutionManager({
           {preview.conflicts.length > 0 && (
             <div role="alert">
               <p className="font-medium">
-                Resuelve estos conflictos antes de instalar:
+                {t("Resuelve estos conflictos antes de instalar:")}
               </p>
               <ul className="list-inside list-disc text-sm">
                 {preview.conflicts.map((conflict, index) => (
@@ -409,17 +437,21 @@ export default function SolutionManager({
                   await reload();
                   setNotice(
                     isUpdating
-                      ? "Paquete actualizado. Las pantallas están disponibles en este espacio."
-                      : "Paquete instalado. Las pantallas están disponibles en este espacio.",
+                      ? t(
+                          "Paquete actualizado. Las pantallas están disponibles en este espacio.",
+                        )
+                      : t(
+                          "Paquete instalado. Las pantallas están disponibles en este espacio.",
+                        ),
                   );
                 })
               }
             >
               {busy
-                ? "Procesando…"
+                ? t("Procesando…")
                 : isUpdating
-                  ? "Actualizar paquete"
-                  : "Instalar paquete"}
+                  ? t("Actualizar paquete")
+                  : t("Instalar paquete")}
             </Button>
             <Button
               variant="outline"
@@ -429,7 +461,7 @@ export default function SolutionManager({
                 setCandidate(null);
               }}
             >
-              Cancelar revisión
+              {t("Cancelar revisión")}
             </Button>
           </div>
         </section>

@@ -4,13 +4,14 @@ export async function mountAltcha(
   challenge: string,
   onVerified: (payload: string) => void,
   onState: (state: string) => void,
+  locale: "es" | "en" | "pt" = "es",
 ) {
   if (!customElements.get("altcha-widget")) await import("altcha/i18n");
   const element = document.createElement("altcha-widget") as HTMLElement & {
     reset(): void;
   };
   element.setAttribute("challenge", challenge);
-  element.setAttribute("language", "es");
+  element.setAttribute("language", locale);
   element.setAttribute(
     "configuration",
     JSON.stringify({

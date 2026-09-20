@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import React, { useState, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import {
@@ -68,14 +70,17 @@ const FIELD_TYPES = [
   { value: "Url", label: "Enlace web (URL)" },
 ] as const;
 
-const surfaceLabels: Record<RecordSurface, string> = {
+const surfaceLabels: Record<RecordSurface, keyof typeof studioMessages> = {
   "drawer-long": "Panel lateral largo (Recomendado)",
   modal: "Ventana modal",
   drawer: "Panel lateral corto",
   page: "Página completa",
 };
 
-const screenNavigationSectionLabels: Record<ScreenNavigationSection, string> = {
+const screenNavigationSectionLabels: Record<
+  ScreenNavigationSection,
+  keyof typeof studioMessages
+> = {
   operation: "Trabajo",
   productivity: "Construir",
   administration: "Administración",
@@ -91,6 +96,7 @@ export function CollectionImportWizard({
   onCreated: (name: string) => void | Promise<void>;
   onSwitchToBlank?: () => void;
 }) {
+  const t = useMessages(studioMessages);
   const [step, setStep] = useState<WizardStep>("upload");
   const [parsing, setParsing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -194,7 +200,7 @@ export function CollectionImportWizard({
         enableSections,
       );
     } catch (err) {
-      setError((err as Error).message || "No se pudo leer el archivo.");
+      setError((err as Error).message || t("No se pudo leer el archivo."));
     } finally {
       setParsing(false);
     }
@@ -277,13 +283,13 @@ export function CollectionImportWizard({
     setBusy(true);
     setError("");
     setImportProgress(0);
-    setStatusMessage("Creando colección y pantalla en Savia...");
+    setStatusMessage(t("Creando colección y pantalla en Savia..."));
 
     try {
       const includedColumns = columns.filter((c) => c.included);
       if (includedColumns.length === 0) {
         throw new Error(
-          "Debes incluir al menos un campo para crear la colección.",
+          t("Debes incluir al menos un campo para crear la colección."),
         );
       }
 
@@ -359,8 +365,19 @@ export function CollectionImportWizard({
           setImportProgress(Math.round((b / totalBatches) * 100));
           setStatusMessage(
             totalBatches > 1
-              ? `Importando lote ${currentBatch} de ${totalBatches} (${endIdx} de ${allRows.length} registros)...`
-              : `Importando ${chunk.length} registros en ${collectionLabel}...`,
+              ? t(
+                  "Importando lote %{v1} de %{v2} (%{v3} de %{v4} registros)...",
+                  {
+                    v1: currentBatch,
+                    v2: totalBatches,
+                    v3: endIdx,
+                    v4: allRows.length,
+                  },
+                )
+              : t("Importando %{v1} registros en %{v2}...", {
+                  v1: chunk.length,
+                  v2: collectionLabel,
+                }),
           );
 
           const csvPayload =
@@ -389,12 +406,14 @@ export function CollectionImportWizard({
       }
 
       toast.success(
-        `Colección y Pantalla "${collectionLabel}" creadas con éxito`,
+        t('Colección y Pantalla "%{v1}" creadas con éxito', {
+          v1: collectionLabel,
+        }),
       );
       await onCreated(collectionName);
     } catch (e) {
       setError(
-        (e as Error).message || "Ocurrió un error al crear la colección.",
+        (e as Error).message || t("Ocurrió un error al crear la colección."),
       );
     } finally {
       setBusy(false);
@@ -410,11 +429,12 @@ export function CollectionImportWizard({
             <div>
               <DialogTitle className="flex items-center gap-2 text-xl font-bold">
                 <Sparkles className="text-emerald-700" size={22} />
-                Crear Colección y Pantalla desde Archivo
+                {t("Crear Colección y Pantalla desde Archivo")}
               </DialogTitle>
               <DialogDescription>
-                Convierte tus datos de Excel o CSV en una pantalla completamente
-                funcional en segundos.
+                {t(
+                  "Convierte tus datos de Excel o CSV en una pantalla completamente funcional en segundos.",
+                )}
               </DialogDescription>
             </div>
           </div>
@@ -429,7 +449,7 @@ export function CollectionImportWizard({
               <div className="import-wizard-step-number">
                 {spreadsheet && step !== "upload" ? <Check size={12} /> : "1"}
               </div>
-              <span>Archivo</span>
+              <span>{t("Archivo")}</span>
             </div>
             <div className="import-wizard-step-divider" />
 
@@ -449,7 +469,7 @@ export function CollectionImportWizard({
                   "2"
                 )}
               </div>
-              <span>Pantalla</span>
+              <span>{t("Pantalla")}</span>
             </div>
             <div className="import-wizard-step-divider" />
 
@@ -465,7 +485,7 @@ export function CollectionImportWizard({
               <div className="import-wizard-step-number">
                 {step === "confirm" ? <Check size={12} /> : "3"}
               </div>
-              <span>Campos y Tipos</span>
+              <span>{t("Campos y Tipos")}</span>
             </div>
             <div className="import-wizard-step-divider" />
 
@@ -475,7 +495,7 @@ export function CollectionImportWizard({
               }`}
             >
               <div className="import-wizard-step-number">4</div>
-              <span>Confirmar</span>
+              <span>{t("Confirmar")}</span>
             </div>
           </div>
         </DialogHeader>
@@ -502,12 +522,15 @@ export function CollectionImportWizard({
                       <Upload size={24} />
                     </div>
                     <h4>
-                      Arrastra y suelta tu archivo Excel (.xlsx, .xls) o CSV
+                      {t(
+                        "Arrastra y suelta tu archivo Excel (.xlsx, .xls) o CSV",
+                      )}
                     </h4>
-                    <p>o haz clic para explorar tus documentos</p>
+                    <p>{t("o haz clic para explorar tus documentos")}</p>
                     <span className="text-xs text-muted-foreground mt-3">
-                      Inferencia automática de tipos, fechas, monedas, fórmulas
-                      y relaciones
+                      {t(
+                        "Inferencia automática de tipos, fechas, monedas, fórmulas y relaciones",
+                      )}
                     </span>
                   </div>
                   {onSwitchToBlank && (
@@ -517,8 +540,9 @@ export function CollectionImportWizard({
                         className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
                         onClick={onSwitchToBlank}
                       >
-                        ¿Prefieres diseñar un objeto en blanco desde cero? Haz
-                        clic aquí
+                        {t(
+                          "¿Prefieres diseñar un objeto en blanco desde cero? Haz clic aquí",
+                        )}
                       </button>
                     </div>
                   )}
@@ -533,17 +557,20 @@ export function CollectionImportWizard({
                           {spreadsheet.fileName}
                         </div>
                         <div className="wizard-file-meta">
-                          <span>{spreadsheet.totalRowsCount} registros</span>
+                          <span>
+                            {spreadsheet.totalRowsCount} {t("registros")}
+                          </span>
                           <span>•</span>
                           <span>
-                            {spreadsheet.headers.length} columnas detectadas
+                            {spreadsheet.headers.length}{" "}
+                            {t("columnas detectadas")}
                           </span>
                           {spreadsheet.totalRowsCount > 1000 && (
                             <>
                               <span>•</span>
                               <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs border border-amber-200 font-medium">
                                 {Math.ceil(spreadsheet.totalRowsCount / 1000)}{" "}
-                                lotes automáticos
+                                {t("lotes automáticos")}
                               </span>
                             </>
                           )}
@@ -556,7 +583,7 @@ export function CollectionImportWizard({
                       size="sm"
                       onClick={() => setSpreadsheet(null)}
                     >
-                      Cambiar archivo
+                      {t("Cambiar archivo")}
                     </Button>
                   </div>
 
@@ -564,11 +591,12 @@ export function CollectionImportWizard({
                     <div className="wizard-card-option">
                       <div>
                         <Label className="font-semibold text-sm">
-                          Hoja de cálculo activa
+                          {t("Hoja de cálculo activa")}
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Este libro contiene varias pestañas. Selecciona la que
-                          deseas convertir en pantalla.
+                          {t(
+                            "Este libro contiene varias pestañas. Selecciona la que deseas convertir en pantalla.",
+                          )}
                         </p>
                       </div>
                       <select
@@ -592,11 +620,11 @@ export function CollectionImportWizard({
                     />
                     <div>
                       <p className="font-semibold">
-                        Inferencia de esquema lista
+                        {t("Inferencia de esquema lista")}
                       </p>
                       <p className="text-xs text-emerald-800 mt-0.5">
-                        Detectamos {columns.length} campos tipados listos para
-                        diseñar tu pantalla.
+                        {t("Detectamos")} {columns.length}{" "}
+                        {t("campos tipados listos para diseñar tu pantalla.")}
                       </p>
                     </div>
                   </div>
@@ -611,7 +639,7 @@ export function CollectionImportWizard({
               <div className="wizard-form-grid">
                 <div className="wizard-field">
                   <Label htmlFor="col-label">
-                    Nombre visible de la Colección
+                    {t("Nombre visible de la Colección")}
                   </Label>
                   <Input
                     id="col-label"
@@ -631,7 +659,9 @@ export function CollectionImportWizard({
                 </div>
 
                 <div className="wizard-field">
-                  <Label htmlFor="col-name">Identificador interno (slug)</Label>
+                  <Label htmlFor="col-name">
+                    {t("Identificador interno (slug)")}
+                  </Label>
                   <Input
                     id="col-name"
                     value={collectionName}
@@ -642,18 +672,18 @@ export function CollectionImportWizard({
                 </div>
 
                 <div className="wizard-field wizard-field-full">
-                  <Label htmlFor="col-desc">Descripción</Label>
+                  <Label htmlFor="col-desc">{t("Descripción")}</Label>
                   <Input
                     id="col-desc"
                     value={collectionDescription}
                     onChange={(e) => setCollectionDescription(e.target.value)}
-                    placeholder="Describe el propósito de esta pantalla..."
+                    placeholder={t("Describe el propósito de esta pantalla...")}
                   />
                 </div>
 
                 <div className="wizard-field">
                   <Label htmlFor="menu-section">
-                    Sección en el Menú lateral
+                    {t("Sección en el Menú lateral")}
                   </Label>
                   <select
                     id="menu-section"
@@ -664,14 +694,14 @@ export function CollectionImportWizard({
                   >
                     {screenNavigationSections.map((sec) => (
                       <option key={sec} value={sec}>
-                        {screenNavigationSectionLabels[sec]}
+                        {t(screenNavigationSectionLabels[sec])}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="wizard-field">
-                  <Label>Icono del menú lateral</Label>
+                  <Label>{t("Icono del menú lateral")}</Label>
                   <LookupIconPicker
                     value={menuIcon}
                     onChange={setMenuIcon}
@@ -680,7 +710,9 @@ export function CollectionImportWizard({
                 </div>
 
                 <div className="wizard-field">
-                  <Label htmlFor="form-mode">Superficie del Formulario</Label>
+                  <Label htmlFor="form-mode">
+                    {t("Superficie del Formulario")}
+                  </Label>
                   <select
                     id="form-mode"
                     value={formMode}
@@ -697,14 +729,16 @@ export function CollectionImportWizard({
                       ] as RecordSurface[]
                     ).map((m) => (
                       <option key={m} value={m}>
-                        {surfaceLabels[m]}
+                        {t(surfaceLabels[m])}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="wizard-field">
-                  <Label htmlFor="form-cols">Distribución de columnas</Label>
+                  <Label htmlFor="form-cols">
+                    {t("Distribución de columnas")}
+                  </Label>
                   <select
                     id="form-cols"
                     value={formColumns}
@@ -712,8 +746,10 @@ export function CollectionImportWizard({
                       setFormColumns(Number(e.target.value) as 1 | 2)
                     }
                   >
-                    <option value={1}>1 columna (vertical compacto)</option>
-                    <option value={2}>2 columnas (balanceado)</option>
+                    <option value={1}>
+                      {t("1 columna (vertical compacto)")}
+                    </option>
+                    <option value={2}>{t("2 columnas (balanceado)")}</option>
                   </select>
                 </div>
               </div>
@@ -723,12 +759,17 @@ export function CollectionImportWizard({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 font-semibold text-sm">
                     <FolderTree size={16} className="text-emerald-700" />
-                    <span>Organizar campos en Secciones</span>
+                    <span>{t("Organizar campos en Secciones")}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {sections.length > 0
-                      ? `Agrupa los campos en ${sections.length} bloques temáticos (Información General, Contacto, Valores, Estado).`
-                      : "Agrupa los campos automáticamente en bloques visuales colapsables en el formulario."}
+                      ? t(
+                          "Agrupa los campos en %{v1} bloques temáticos (Información General, Contacto, Valores, Estado).",
+                          { v1: sections.length },
+                        )
+                      : t(
+                          "Agrupa los campos automáticamente en bloques visuales colapsables en el formulario.",
+                        )}
                   </p>
                 </div>
                 <Switch
@@ -753,11 +794,12 @@ export function CollectionImportWizard({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 font-semibold text-sm">
                     <Kanban size={16} className="text-emerald-700" />
-                    <span>Vista Pipeline Kanban</span>
+                    <span>{t("Vista Pipeline Kanban")}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Habilita un tablero visual de tarjetas agrupadas por fases
-                    comerciales o estados.
+                    {t(
+                      "Habilita un tablero visual de tarjetas agrupadas por fases comerciales o estados.",
+                    )}
                   </p>
                 </div>
                 <Switch
@@ -769,12 +811,12 @@ export function CollectionImportWizard({
               {enablePipeline && (
                 <div className="p-4 bg-white border border-border rounded-lg grid grid-cols-2 gap-4">
                   <div className="wizard-field">
-                    <Label>Campo de etapa / estado</Label>
+                    <Label>{t("Campo de etapa / estado")}</Label>
                     <select
                       value={pipelineStageField}
                       onChange={(e) => setPipelineStageField(e.target.value)}
                     >
-                      <option value="">Selecciona campo...</option>
+                      <option value="">{t("Selecciona campo...")}</option>
                       {columns
                         .filter(
                           (c) => c.type === "Dropdown" || c.type === "Textbox",
@@ -788,12 +830,12 @@ export function CollectionImportWizard({
                   </div>
 
                   <div className="wizard-field">
-                    <Label>Campo de importe (opcional)</Label>
+                    <Label>{t("Campo de importe (opcional)")}</Label>
                     <select
                       value={pipelineAmountField}
                       onChange={(e) => setPipelineAmountField(e.target.value)}
                     >
-                      <option value="">Ninguno</option>
+                      <option value="">{t("Ninguno")}</option>
                       {columns
                         .filter(
                           (c) => c.type === "Currency" || c.type === "Number",
@@ -815,12 +857,13 @@ export function CollectionImportWizard({
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
                 <span>
-                  Configura tipos, relaciones y fórmulas detectadas. Desmarca
-                  columnas que no desees incluir.
+                  {t(
+                    "Configura tipos, relaciones y fórmulas detectadas. Desmarca columnas que no desees incluir.",
+                  )}
                 </span>
                 <span>
-                  {columns.filter((c) => c.included).length} de {columns.length}{" "}
-                  campos activos
+                  {columns.filter((c) => c.included).length} {t("de")}{" "}
+                  {columns.length} {t("campos activos")}
                 </span>
               </div>
 
@@ -830,11 +873,11 @@ export function CollectionImportWizard({
                     <thead>
                       <tr>
                         <th style={{ width: 44 }}></th>
-                        <th>Etiqueta en pantalla</th>
-                        <th>Identificador</th>
-                        <th>Tipo de dato</th>
-                        <th>Obligatorio</th>
-                        <th>Muestra de datos</th>
+                        <th>{t("Etiqueta en pantalla")}</th>
+                        <th>{t("Identificador")}</th>
+                        <th>{t("Tipo de dato")}</th>
+                        <th>{t("Obligatorio")}</th>
+                        <th>{t("Muestra de datos")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -901,7 +944,7 @@ export function CollectionImportWizard({
                               >
                                 {FIELD_TYPES.map((ft) => (
                                   <option key={ft.value} value={ft.value}>
-                                    {ft.label}
+                                    {t(ft.label as keyof typeof studioMessages)}
                                   </option>
                                 ))}
                               </select>
@@ -909,7 +952,14 @@ export function CollectionImportWizard({
                               {col.formula && (
                                 <span
                                   className="wizard-formula-badge"
-                                  title={`Fórmula calculada automáticamente: ${col.formula.fields.join(" y ")}`}
+                                  title={t(
+                                    "Fórmula calculada automáticamente: %{v1}",
+                                    {
+                                      v1: col.formula.fields.join(
+                                        ` ${t("y")} `,
+                                      ),
+                                    },
+                                  )}
                                 >
                                   <Calculator size={11} />
                                   {col.formula.op === "product"
@@ -925,7 +975,7 @@ export function CollectionImportWizard({
                               {col.relation && (
                                 <div className="flex items-center gap-1 mt-0.5">
                                   <span className="wizard-relation-badge">
-                                    <Link2 size={11} /> Relación:
+                                    <Link2 size={11} /> {t("Relación:")}
                                   </span>
                                   <select
                                     className="text-[11px] h-6 border rounded px-1 bg-white max-w-[130px]"
@@ -951,7 +1001,9 @@ export function CollectionImportWizard({
                                       setColumns(next);
                                     }}
                                   >
-                                    <option value="">(Sin relación)</option>
+                                    <option value="">
+                                      {t("(Sin relación)")}
+                                    </option>
                                     {knownCollections.map((kc) => (
                                       <option key={kc.name} value={kc.name}>
                                         {kc.label} ({kc.name})
@@ -989,7 +1041,7 @@ export function CollectionImportWizard({
                                 ))
                               ) : (
                                 <span className="text-xs text-muted-foreground italic">
-                                  vacío
+                                  {t("vacío")}
                                 </span>
                               )}
                             </div>
@@ -1008,12 +1060,14 @@ export function CollectionImportWizard({
             <div className="flex flex-col gap-4">
               <div className="wizard-summary-card">
                 <h4 className="font-semibold text-base text-foreground">
-                  Resumen de la nueva Pantalla
+                  {t("Resumen de la nueva Pantalla")}
                 </h4>
 
                 <div className="wizard-summary-grid">
                   <div className="wizard-summary-metric">
-                    <div className="wizard-summary-metric-label">Colección</div>
+                    <div className="wizard-summary-metric-label">
+                      {t("Colección")}
+                    </div>
                     <div className="wizard-summary-metric-val">
                       {collectionLabel}
                     </div>
@@ -1024,33 +1078,38 @@ export function CollectionImportWizard({
 
                   <div className="wizard-summary-metric">
                     <div className="wizard-summary-metric-label">
-                      Menú lateral
+                      {t("Menú lateral")}
                     </div>
                     <div className="wizard-summary-metric-val capitalize">
-                      {screenNavigationSectionLabels[menuSection]}
+                      {t(screenNavigationSectionLabels[menuSection])}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      Icono: {menuIcon}
+                      {t("Icono:")} {menuIcon}
                     </span>
                   </div>
 
                   <div className="wizard-summary-metric">
-                    <div className="wizard-summary-metric-label">Campos</div>
+                    <div className="wizard-summary-metric-label">
+                      {t("Campos")}
+                    </div>
                     <div className="wizard-summary-metric-val">
                       {columns.filter((c) => c.included).length}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {columns.filter((c) => !c.included).length} excluidos
+                      {columns.filter((c) => !c.included).length}{" "}
+                      {t("excluidos")}
                     </span>
                   </div>
 
                   <div className="wizard-summary-metric">
-                    <div className="wizard-summary-metric-label">Registros</div>
+                    <div className="wizard-summary-metric-label">
+                      {t("Registros")}
+                    </div>
                     <div className="wizard-summary-metric-val">
                       {spreadsheet?.totalRowsCount ?? 0}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      en el archivo
+                      {t("en el archivo")}
                     </span>
                   </div>
                 </div>
@@ -1060,16 +1119,27 @@ export function CollectionImportWizard({
               <div className="wizard-card-option">
                 <div className="space-y-1">
                   <Label className="font-semibold text-sm">
-                    ¿Importar los registros iniciales ahora?
+                    {t("¿Importar los registros iniciales ahora?")}
                   </Label>
                   <p className="text-xs text-muted-foreground">
                     {importRows
-                      ? `Se crearán ${spreadsheet?.totalRowsCount ?? 0} registros en la pantalla inmediatamente${
-                          (spreadsheet?.totalRowsCount ?? 0) > 1000
-                            ? ` (en ${Math.ceil((spreadsheet?.totalRowsCount ?? 0) / 1000)} lotes secuenciales).`
-                            : "."
-                        }`
-                      : "Se creará la pantalla vacía, lista para capturar nuevos registros."}
+                      ? t(
+                          "Se crearán %{v1} registros en la pantalla inmediatamente%{v2}",
+                          {
+                            v1: spreadsheet?.totalRowsCount ?? 0,
+                            v2:
+                              (spreadsheet?.totalRowsCount ?? 0) > 1000
+                                ? t(" (en %{v1} lotes secuenciales).", {
+                                    v1: Math.ceil(
+                                      (spreadsheet?.totalRowsCount ?? 0) / 1000,
+                                    ),
+                                  })
+                                : ".",
+                          },
+                        )
+                      : t(
+                          "Se creará la pantalla vacía, lista para capturar nuevos registros.",
+                        )}
                   </p>
                 </div>
                 <Switch
@@ -1089,7 +1159,7 @@ export function CollectionImportWizard({
                     <div>
                       <p className="font-semibold text-sm">{statusMessage}</p>
                       <p className="text-xs text-emerald-700">
-                        Procesando en base de datos D1. Por favor espera.
+                        {t("Procesando en base de datos D1. Por favor espera.")}
                       </p>
                     </div>
                   </div>
@@ -1097,7 +1167,7 @@ export function CollectionImportWizard({
                   {spreadsheet && spreadsheet.rows.length > 0 && importRows && (
                     <div className="wizard-progress-box mt-2">
                       <div className="wizard-progress-header">
-                        <span>Progreso de importación</span>
+                        <span>{t("Progreso de importación")}</span>
                         <span>{importProgress}%</span>
                       </div>
                       <div className="wizard-progress-track">
@@ -1129,11 +1199,11 @@ export function CollectionImportWizard({
                 className="gap-2"
               >
                 <ArrowLeft size={16} />
-                Anterior
+                {t("Anterior")}
               </Button>
             ) : (
               <Button variant="ghost" onClick={onClose} disabled={busy}>
-                Cancelar
+                {t("Cancelar")}
               </Button>
             )}
           </div>
@@ -1148,11 +1218,11 @@ export function CollectionImportWizard({
                 {parsing ? (
                   <>
                     <LoaderCircle className="animate-spin" size={16} />
-                    Procesando...
+                    {t("Procesando...")}
                   </>
                 ) : (
                   <>
-                    Continuar a Pantalla
+                    {t("Continuar a Pantalla")}
                     <ArrowRight size={16} />
                   </>
                 )}
@@ -1165,7 +1235,8 @@ export function CollectionImportWizard({
                 disabled={!collectionName || !collectionLabel}
                 onClick={() => setStep("fields")}
               >
-                Revisar Campos ({columns.length})
+                {t("Revisar Campos (")}
+                {columns.length})
                 <ArrowRight size={16} />
               </Button>
             )}
@@ -1176,7 +1247,7 @@ export function CollectionImportWizard({
                 disabled={columns.filter((c) => c.included).length === 0}
                 onClick={() => setStep("confirm")}
               >
-                Confirmar e Importar
+                {t("Confirmar e Importar")}
                 <ArrowRight size={16} />
               </Button>
             )}
@@ -1190,14 +1261,16 @@ export function CollectionImportWizard({
                 {busy ? (
                   <>
                     <LoaderCircle className="animate-spin" size={16} />
-                    Creando...
+                    {t("Creando...")}
                   </>
                 ) : (
                   <>
                     <Sparkles size={16} />
                     {importRows
-                      ? `Crear e Importar ${spreadsheet?.totalRowsCount ?? 0} registros`
-                      : "Crear Colección y Pantalla"}
+                      ? t("Crear e Importar %{v1} registros", {
+                          v1: spreadsheet?.totalRowsCount ?? 0,
+                        })
+                      : t("Crear Colección y Pantalla")}
                   </>
                 )}
               </Button>

@@ -1,4 +1,5 @@
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, screen, fireEvent } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { RequestCatalogDialog } from "../request-catalog-dialog";

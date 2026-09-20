@@ -93,7 +93,7 @@ it.each(["Percentage", "Rating"])(
         onConditionChange={changed}
       />,
     );
-    const input = screen.getByLabelText("Valor del filtro 1");
+    const input = screen.getByLabelText("Filter 1 value");
     expect(input).toHaveAttribute("type", "number");
     fireEvent.change(input, { target: { value: "4" } });
     expect(changed).toHaveBeenCalledWith(0, { value: 4 });
@@ -134,7 +134,7 @@ it("saves percentage and rating as numbers through the dynamic form", async () =
     target: { value: "25.5" },
   });
   fireEvent.click(screen.getByRole("radio", { name: "4 of 5" }));
-  fireEvent.click(screen.getByRole("button", { name: "Guardar registro" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save record" }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({ rate: 25.5, score: 4 }),

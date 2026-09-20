@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useMemo, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import {
@@ -27,13 +29,16 @@ export function LookupIconPicker({
   value,
   onChange,
   libraries = ["lucide", "thesvg"],
-  "aria-label": ariaLabel = "Icono del botón",
+  "aria-label": suppliedAriaLabel,
 }: {
   value: LookupIcon;
   onChange: (icon: LookupIcon) => void;
   libraries?: readonly LookupIconLibrary[];
   "aria-label"?: string;
 }) {
+  const t = useMessages(recordsMessages);
+  const ariaLabel = suppliedAriaLabel ?? t("Icono del botón");
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const resolveLibrary = (icon: LookupIcon) => {
@@ -56,10 +61,17 @@ export function LookupIconPicker({
     trimmedQuery.length < LOOKUP_ICON_SEARCH_MIN_LENGTH;
   const resultLabel = isBrowseMode
     ? library === "thesvg"
-      ? `${catalogSize} marcas · desplázate para explorar · busca para filtrar`
-      : `${catalogSize} iconos · desplázate para explorar · busca para filtrar`
+      ? t("%{p0} marcas · desplázate para explorar · busca para filtrar", {
+          p0: catalogSize,
+        })
+      : t("%{p0} iconos · desplázate para explorar · busca para filtrar", {
+          p0: catalogSize,
+        })
     : isQueryTooShort
-      ? `Escribe al menos ${LOOKUP_ICON_SEARCH_MIN_LENGTH} caracteres para buscar entre ${catalogSize} iconos`
+      ? t("Escribe al menos %{p0} caracteres para buscar entre %{p1} iconos", {
+          p0: LOOKUP_ICON_SEARCH_MIN_LENGTH,
+          p1: catalogSize,
+        })
       : `${listedIcons.length} coincidencias de ${catalogSize}`;
 
   return (
@@ -98,18 +110,22 @@ export function LookupIconPicker({
       </DialogTrigger>
       <DialogContent className="lookup-icon-picker-dialog sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Elegir icono</DialogTitle>
+          <DialogTitle>{t("Elegir icono")}</DialogTitle>
           <DialogDescription>
             {libraries.length === 1
-              ? "Elige un icono de interfaz para identificar esta pantalla en el menú."
-              : "Iconos de interfaz (Lucide) y logotipos de marcas (@thesvg). El seleccionado aparece en el botón de consulta junto al campo."}
+              ? t(
+                  "Elige un icono de interfaz para identificar esta pantalla en el menú.",
+                )
+              : t(
+                  "Iconos de interfaz (Lucide) y logotipos de marcas (@thesvg). El seleccionado aparece en el botón de consulta junto al campo.",
+                )}
           </DialogDescription>
         </DialogHeader>
         {libraries.length > 1 ? (
           <div
             className="lookup-icon-picker-libraries"
             role="tablist"
-            aria-label="Biblioteca de iconos"
+            aria-label={t("Biblioteca de iconos")}
           >
             {libraries.map((entry) => (
               <button
@@ -136,11 +152,11 @@ export function LookupIconPicker({
         <label className="lookup-icon-picker-search">
           <Search size={16} aria-hidden="true" />
           <Input
-            aria-label="Buscar icono"
+            aria-label={t("Buscar icono")}
             placeholder={
               library === "thesvg"
-                ? "Buscar marca, por ejemplo HubSpot, Excel, Mercado Pago…"
-                : "Buscar icono, por ejemplo lupa, vehículo, guardar…"
+                ? t("Buscar marca, por ejemplo HubSpot, Excel, Mercado Pago…")
+                : t("Buscar icono, por ejemplo lupa, vehículo, guardar…")
             }
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -163,8 +179,10 @@ export function LookupIconPicker({
         ) : (
           <p className="lookup-icon-picker-empty">
             {isQueryTooShort
-              ? `Escribe al menos ${LOOKUP_ICON_SEARCH_MIN_LENGTH} caracteres para buscar.`
-              : `No hay iconos que coincidan con «${query}».`}
+              ? t("Escribe al menos %{p0} caracteres para buscar.", {
+                  p0: LOOKUP_ICON_SEARCH_MIN_LENGTH,
+                })
+              : t("No hay iconos que coincidan con «%{p0}».", { p0: query })}
           </p>
         )}
       </DialogContent>

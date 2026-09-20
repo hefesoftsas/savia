@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { accessMessages } from "@/i18n/locales/access";
 import { EffectivePermissions } from "./effective-permissions";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,7 @@ export function AssignmentEditor({
   roles: AccessRole[];
   onSaved: () => void;
 }) {
+  const t = useMessages(accessMessages);
   const [members, setMembers] = useState<
       Awaited<ReturnType<AccessControlClient["getMembers"]>>
     >([]),
@@ -65,30 +68,35 @@ export function AssignmentEditor({
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold">Members</h2>
+        <h2 className="text-lg font-semibold">{t("Members")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Assign several roles to the same user. Their existing tenant
-          membership and protected role remain in place.
+          {t(
+            "Assign several roles to the same user. Their existing tenant membership and protected role remain in place.",
+          )}
         </p>
       </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {Object.hasOwn(accessMessages, error)
+            ? t(error as keyof typeof accessMessages)
+            : error}
         </p>
       )}
       {message && (
         <p role="status" className="text-sm">
-          {message}
+          {Object.hasOwn(accessMessages, message)
+            ? t(message as keyof typeof accessMessages)
+            : message}
         </p>
       )}
       <label className="grid max-w-md gap-2 text-sm">
-        User
+        {t("User")}
         <select
           className="h-10 rounded-md border bg-background px-3"
           value={principal}
           onChange={(e) => setPrincipal(e.target.value)}
         >
-          <option value="">Select a user</option>
+          <option value="">{t("Select a user")}</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
               {m.displayName} — {m.email}
@@ -101,7 +109,9 @@ export function AssignmentEditor({
           disabled={!online || busy || revision === undefined}
           className="space-y-4"
         >
-          <legend className="mb-3 text-sm font-medium">Custom roles</legend>
+          <legend className="mb-3 text-sm font-medium">
+            {t("Custom roles")}
+          </legend>
           {roles
             .filter((r) => !r.protected)
             .map((r) => (
@@ -119,7 +129,7 @@ export function AssignmentEditor({
                   }
                 />
                 {r.label}
-                {!r.enabled && " (disabled)"}
+                {!r.enabled && t(" (disabled)")}
               </label>
             ))}
           <Button
@@ -139,14 +149,14 @@ export function AssignmentEditor({
                 onSaved();
               } catch (e) {
                 setError(
-                  e instanceof Error ? e.message : "Unable to assign roles",
+                  e instanceof Error ? e.message : t("Unable to assign roles"),
                 );
               } finally {
                 setBusy(false);
               }
             }}
           >
-            {busy ? "Saving…" : "Save assignments"}
+            {busy ? t("Saving…") : t("Save assignments")}
           </Button>
         </fieldset>
       )}

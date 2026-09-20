@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { uiMessages } from "@/i18n/locales/ui";
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import type { VariantProps } from "class-variance-authority";
@@ -49,10 +51,7 @@ function readStoredSidebarWidth() {
     return SIDEBAR_WIDTH_DEFAULT_PX;
   }
 
-  return Math.min(
-    SIDEBAR_WIDTH_MAX_PX,
-    Math.max(SIDEBAR_WIDTH_MIN_PX, parsed),
-  );
+  return Math.min(SIDEBAR_WIDTH_MAX_PX, Math.max(SIDEBAR_WIDTH_MIN_PX, parsed));
 }
 
 type SidebarContextProps = {
@@ -234,6 +233,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
 }) {
+  const t = useMessages(uiMessages);
   const { isMobile, state, openMobile, setOpenMobile, isResizing } =
     useSidebar();
 
@@ -268,8 +268,10 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{t("Sidebar")}</SheetTitle>
+            <SheetDescription>
+              {t("Displays the mobile sidebar.")}
+            </SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
@@ -303,7 +305,8 @@ function Sidebar({
         data-slot="sidebar-container"
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) md:flex",
-          !isResizing && "transition-[left,right,width] duration-200 ease-linear",
+          !isResizing &&
+            "transition-[left,right,width] duration-200 ease-linear",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -332,6 +335,7 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
+  const t = useMessages(uiMessages);
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -348,7 +352,7 @@ function SidebarTrigger({
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{t("Toggle Sidebar")}</span>
     </Button>
   );
 }
@@ -359,6 +363,7 @@ function SidebarResizeHandle({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const t = useMessages(uiMessages);
   const { state, isMobile, width, setWidth, setIsResizing } = useSidebar();
 
   if (isMobile || state === "collapsed") {
@@ -404,12 +409,12 @@ function SidebarResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Redimensionar menú lateral"
+      aria-label={t("Redimensionar menú lateral")}
       aria-valuemin={SIDEBAR_WIDTH_MIN_PX}
       aria-valuemax={SIDEBAR_WIDTH_MAX_PX}
       aria-valuenow={width}
       data-slot="sidebar-resize-handle"
-      title="Arrastra para cambiar el ancho"
+      title={t("Arrastra para cambiar el ancho")}
       onPointerDown={handlePointerDown}
       style={{
         left: width - SIDEBAR_RESIZE_HANDLE_WIDTH_PX / 2,
@@ -427,16 +432,17 @@ function SidebarResizeHandle({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
+  const t = useMessages(uiMessages);
   const { toggleSidebar } = useSidebar();
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label={t("Toggle Sidebar")}
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      title={t("Toggle Sidebar")}
       className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",

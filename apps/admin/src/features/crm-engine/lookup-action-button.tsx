@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { LoaderCircle } from "lucide-react";
 import {
   parseLookupIconRef,
@@ -32,11 +34,13 @@ export function LookupActionButtonContent({
   busy: boolean;
   label: string;
 }) {
+  const t = useMessages(recordsMessages);
+
   if (busy) {
     return (
       <>
         <LoaderCircle className="animate-spin" aria-hidden="true" />
-        <span className="sr-only">Consultando…</span>
+        <span className="sr-only">{t("Consultando…")}</span>
       </>
     );
   }

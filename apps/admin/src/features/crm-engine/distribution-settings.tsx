@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import type { RequestPageConfig } from "@savia/crm-shared/request-page";
@@ -60,23 +62,26 @@ export function DistributionSettings({
 }: {
   studio: StudioLayout;
   setStudio: (studio: StudioLayout) => void;
-  fields: Record<string, { type: string; label: string; config?: Record<string, unknown> }>;
+  fields: Record<
+    string,
+    { type: string; label: string; config?: Record<string, unknown> }
+  >;
   fieldOrder: string[];
   onClearSection: (sectionId: string) => void;
 }) {
+  const t = useMessages(studioMessages);
   const fieldCountsBySectionId = Object.fromEntries(
     studio.sections.map((section) => [
       section.id,
-      fieldOrder.filter(
-        (name) => fields[name]?.config?.section === section.id,
-      ).length,
+      fieldOrder.filter((name) => fields[name]?.config?.section === section.id)
+        .length,
     ]),
   );
 
   return (
     <div className="studio-distribution-settings">
       <fieldset className="studio-form-columns">
-        <legend>Columnas del formulario</legend>
+        <legend>{t("Columnas del formulario")}</legend>
         <FormColumnPicker
           name="studio-form-columns"
           value={studio.columns}
@@ -91,12 +96,12 @@ export function DistributionSettings({
         onClearSection={onClearSection}
       />
       <details className="studio-settings-nested">
-        <summary>Pipeline CRM (opcional)</summary>
+        <summary>{t("Pipeline CRM (opcional)")}</summary>
         <div className="studio-two">
-          <Control label="Campo de etapa del pipeline">
+          <Control label={t("Campo de etapa del pipeline")}>
             <Choice
               value={studio.pipeline?.field ?? ""}
-              label="Campo de etapa del pipeline"
+              label={t("Campo de etapa del pipeline")}
               onChange={(field) =>
                 setStudio({
                   ...studio,
@@ -104,7 +109,7 @@ export function DistributionSettings({
                 })
               }
             >
-              <option value="">Sin pipeline</option>
+              <option value="">{t("Sin pipeline")}</option>
               {fieldOrder
                 .filter(
                   (n) =>
@@ -121,10 +126,10 @@ export function DistributionSettings({
         </div>
         {studio.pipeline && (
           <div className="studio-two">
-            <Control label="Campo de importe">
+            <Control label={t("Campo de importe")}>
               <Choice
                 value={studio.pipeline.amountField ?? ""}
-                label="Campo de importe"
+                label={t("Campo de importe")}
                 onChange={(amountField) =>
                   setStudio({
                     ...studio,
@@ -135,7 +140,7 @@ export function DistributionSettings({
                   })
                 }
               >
-                <option value="">Sin importe</option>
+                <option value="">{t("Sin importe")}</option>
                 {fieldOrder
                   .filter((n) => fields[n]?.type === "Number")
                   .map((n) => (
@@ -145,10 +150,10 @@ export function DistributionSettings({
                   ))}
               </Choice>
             </Control>
-            <Control label="Campo de responsable">
+            <Control label={t("Campo de responsable")}>
               <Choice
                 value={studio.pipeline.ownerField ?? ""}
-                label="Campo de responsable"
+                label={t("Campo de responsable")}
                 onChange={(ownerField) =>
                   setStudio({
                     ...studio,
@@ -159,7 +164,7 @@ export function DistributionSettings({
                   })
                 }
               >
-                <option value="">Sin responsable</option>
+                <option value="">{t("Sin responsable")}</option>
                 {fieldOrder.map((n) => (
                   <option key={n} value={n}>
                     {fields[n].label}
@@ -167,7 +172,7 @@ export function DistributionSettings({
                 ))}
               </Choice>
             </Control>
-            <Control label="Etapas ganadas (separadas por coma)">
+            <Control label={t("Etapas ganadas (separadas por coma)")}>
               <Input
                 value={studio.pipeline.wonValues?.join(",") ?? ""}
                 onChange={(e) =>
@@ -181,7 +186,7 @@ export function DistributionSettings({
                 }
               />
             </Control>
-            <Control label="Etapas perdidas (separadas por coma)">
+            <Control label={t("Etapas perdidas (separadas por coma)")}>
               <Input
                 value={studio.pipeline.lostValues?.join(",") ?? ""}
                 onChange={(e) =>

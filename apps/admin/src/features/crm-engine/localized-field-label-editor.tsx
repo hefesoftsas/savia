@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { useEffect, useState } from "react";
 import { useLocaleState } from "ra-core";
 import { Input } from "@/components/ui/input";
@@ -37,6 +39,7 @@ export function LocalizedFieldLabelEditor({
   field,
   onChange,
 }: LocalizedFieldLabelEditorProps) {
+  const t = useMessages(studioMessages);
   const uiLocale = useFieldLabelLocale();
   const [activeLocale, setActiveLocale] = useState<FieldLabelLocale>(uiLocale);
 
@@ -53,7 +56,7 @@ export function LocalizedFieldLabelEditor({
         <div
           className="studio-localized-label-tabs"
           role="tablist"
-          aria-label="Idioma de la etiqueta"
+          aria-label={t("Idioma de la etiqueta")}
         >
           {fieldLabelLocales.map((locale) => (
             <button
@@ -73,19 +76,22 @@ export function LocalizedFieldLabelEditor({
           ))}
         </div>
         {activeLocale !== "es" ? (
-          <StudioHelpTooltip label="Traducción opcional">
-            Si falta la traducción, se mostrará «{field.label.trim() || "…"}».
+          <StudioHelpTooltip label={t("Traducción opcional")}>
+            {t("Si falta la traducción, se mostrará «")}
+            {field.label.trim() || "…"}».
           </StudioHelpTooltip>
         ) : null}
       </div>
       <Input
         role="tabpanel"
-        aria-label={`Etiqueta ${localeNames[activeLocale]}`}
+        aria-label={t("Etiqueta %{v1}", { v1: localeNames[activeLocale] })}
         value={localizedValue}
         placeholder={
           activeLocale === "es"
-            ? "Etiqueta principal"
-            : `Traducción ${localeNames[activeLocale]} (opcional)`
+            ? t("Etiqueta principal")
+            : t("Traducción %{v1} (opcional)", {
+                v1: localeNames[activeLocale],
+              })
         }
         onChange={(event) => {
           const value = event.target.value;

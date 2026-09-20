@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Designer from "../designer";
 import { designerPaletteDragType } from "../designer-field-dnd";
@@ -64,7 +65,9 @@ it("adds a field when dragging a palette item into the canvas", () => {
   );
 
   const paletteButton = screen.getByRole("button", { name: "Número" });
-  const dropZone = screen.getByRole("region", { name: /Sin sección \(1 campo\)/ });
+  const dropZone = screen.getByRole("region", {
+    name: /Sin sección \(1 campo\)/,
+  });
   const fieldList = dropZone.querySelector(".grouped-designer-zone-list");
   expect(fieldList).toBeTruthy();
 
@@ -97,5 +100,7 @@ it("adds a field when dragging a palette item into the canvas", () => {
   });
 
   expect(screen.getAllByText("Número").length).toBeGreaterThan(1);
-  expect(screen.getByRole("region", { name: /Sin sección \(2 campos\)/ })).toBeTruthy();
+  expect(
+    screen.getByRole("region", { name: /Sin sección \(2 campos\)/ }),
+  ).toBeTruthy();
 });

@@ -1,5 +1,6 @@
 import userEvent from "@testing-library/user-event";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import { makeConfig } from "@savia/crm-shared/metadata";
 import ScreenMenuReorder from "../screen-menu-reorder";

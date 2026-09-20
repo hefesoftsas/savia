@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import ScreenManager from "../screen-manager";
 import { makeConfig, type CrmObject } from "@savia/crm-shared/metadata";
 import { api } from "../api";

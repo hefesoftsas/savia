@@ -2,7 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Designer from "../designer";
 import { makeConfig, type CrmObject } from "@savia/crm-shared/metadata";
@@ -99,7 +100,14 @@ it("adds dedicated date-time and time fields from the palette", () => {
       <Designer object={object} onSaved={vi.fn()} />
     </QueryClientProvider>,
   );
-  for (const label of ["Date and time", "Time", "Multiple choice", "Rich text", "Percentage", "Rating"]) {
+  for (const label of [
+    "Fecha y hora",
+    "Hora",
+    "Selección múltiple",
+    "Texto enriquecido",
+    "Porcentaje",
+    "Calificación",
+  ]) {
     fireEvent.click(screen.getByRole("button", { name: label, exact: true }));
     expect(screen.getAllByText(label).length).toBeGreaterThan(1);
   }

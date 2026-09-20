@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { RequestMappingEditor } from "./request-mapping-editor";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDesigner } from "@form-eng/designer";
@@ -62,6 +64,7 @@ export default function StudioSettingsWizard({
   studio: StudioLayout;
   setStudio: (studio: StudioLayout) => void;
 }) {
+  const t = useMessages(studioMessages);
   const { state, updateField } = useDesigner();
   const [activeIndex, setActiveIndex] = useState(0);
   const [visitedStepIds, setVisitedStepIds] = useState<Set<string>>(
@@ -117,8 +120,8 @@ export default function StudioSettingsWizard({
         return;
       }
       const steps = [
-        { id: "step_1", title: "Datos principales", description: "" },
-        { id: "step_2", title: "Detalles", description: "" },
+        { id: "step_1", title: t("Datos principales"), description: "" },
+        { id: "step_2", title: t("Detalles"), description: "" },
       ];
       fields.forEach((name, index) =>
         updateField(name, {
@@ -130,7 +133,7 @@ export default function StudioSettingsWizard({
       );
       setWizard({ enabled, steps });
     },
-    [fields, setWizard, state.fields, updateField, wizard],
+    [fields, setWizard, state.fields, updateField, wizard, t],
   );
 
   const moveStep = useCallback(
@@ -159,7 +162,7 @@ export default function StudioSettingsWizard({
         );
       setWizard({ ...wizard, steps });
     },
-    [fields, setWizard, state.fields, updateField, wizard],
+    [fields, setWizard, state.fields, updateField, wizard, t],
   );
 
   function focusHeading() {
@@ -174,8 +177,11 @@ export default function StudioSettingsWizard({
 
   return (
     <div className="studio-setup-shell">
-      <aside className="studio-setup-rail" aria-label="Pasos de configuración">
-        <p className="studio-setup-rail-label">Configuración</p>
+      <aside
+        className="studio-setup-rail"
+        aria-label={t("Pasos de configuración")}
+      >
+        <p className="studio-setup-rail-label">{t("Configuración")}</p>
         <ol className="studio-setup-rail-list">
           {flow.map((step, index) => {
             const currentStep = index === activeIndex;
@@ -197,7 +203,9 @@ export default function StudioSettingsWizard({
                   <span className="studio-setup-rail-number" aria-hidden="true">
                     {visited ? <Check size={14} /> : index + 1}
                   </span>
-                  <span className="studio-setup-rail-text">{step.title}</span>
+                  <span className="studio-setup-rail-text">
+                    {t(step.title)}
+                  </span>
                 </button>
               </li>
             );
@@ -208,16 +216,18 @@ export default function StudioSettingsWizard({
       <div className="studio-setup-main">
         <header className="studio-setup-main-header">
           <p className="studio-setup-progress">
-            Paso {activeIndex + 1} de {flow.length}
+            {t("Paso")} {activeIndex + 1} {t("de")} {flow.length}
           </p>
           <div className="studio-setup-title-row">
             <h3 ref={headingRef} tabIndex={-1} className="studio-setup-title">
-              {current.title}
+              {t(current.title)}
             </h3>
             <StudioHelpTooltip
-              label={`Ayuda sobre ${current.title.toLowerCase()}`}
+              label={t("Ayuda sobre %{v1}", {
+                v1: t(current.title).toLowerCase(),
+              })}
             >
-              {current.lede}
+              {t(current.lede)}
             </StudioHelpTooltip>
           </div>
         </header>
@@ -236,17 +246,17 @@ export default function StudioSettingsWizard({
               <div className="studio-settings-toggle studio-setup-toggle">
                 <Switch
                   id="wizard-enabled"
-                  aria-label="Activar wizard"
+                  aria-label={t("Activar wizard")}
                   checked={wizard?.enabled ?? false}
                   onCheckedChange={(enabled) => enableWizard(enabled)}
                 />
                 <label htmlFor="wizard-enabled">
-                  Formulario por pasos (wizard)
+                  {t("Formulario por pasos (wizard)")}
                 </label>
               </div>
               {wizard?.enabled && (
                 <label className="studio-control studio-setup-experience">
-                  <span>Experiencia</span>
+                  <span>{t("Experiencia")}</span>
                   <select
                     value={wizard.presentation ?? "conversation"}
                     onChange={(e) =>
@@ -257,15 +267,20 @@ export default function StudioSettingsWizard({
                       })
                     }
                   >
-                    <option value="conversation">Una pregunta a la vez</option>
-                    <option value="steps">Campos agrupados por paso</option>
+                    <option value="conversation">
+                      {t("Una pregunta a la vez")}
+                    </option>
+                    <option value="steps">
+                      {t("Campos agrupados por paso")}
+                    </option>
                   </select>
                 </label>
               )}
               {!wizard?.enabled && (
                 <p className="studio-field-help studio-setup-mode-note">
-                  Sin wizard verás solo distribución y secciones en el siguiente
-                  paso.
+                  {t(
+                    "Sin wizard verás solo distribución y secciones en el siguiente paso.",
+                  )}
                 </p>
               )}
             </div>
@@ -276,14 +291,16 @@ export default function StudioSettingsWizard({
               {wizard.steps.map((step, index) => (
                 <article key={step.id} className="wizard-step-structure-card">
                   <div className="wizard-step-structure-heading">
-                    <strong>Paso {index + 1}</strong>
+                    <strong>
+                      {t("Paso")} {index + 1}
+                    </strong>
                     <div className="wizard-step-config-actions">
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
                         className="size-8"
-                        aria-label={`Subir paso ${index + 1}`}
+                        aria-label={t("Subir paso %{v1}", { v1: index + 1 })}
                         disabled={index === 0}
                         onClick={() => moveStep(index, -1)}
                       >
@@ -294,7 +311,7 @@ export default function StudioSettingsWizard({
                         size="icon"
                         variant="ghost"
                         className="size-8"
-                        aria-label={`Bajar paso ${index + 1}`}
+                        aria-label={t("Bajar paso %{v1}", { v1: index + 1 })}
                         disabled={index === wizard.steps.length - 1}
                         onClick={() => moveStep(index, 1)}
                       >
@@ -305,7 +322,7 @@ export default function StudioSettingsWizard({
                         size="icon"
                         variant="ghost"
                         className="size-8"
-                        aria-label={`Eliminar paso ${index + 1}`}
+                        aria-label={t("Eliminar paso %{v1}", { v1: index + 1 })}
                         disabled={wizard.steps.length <= 2}
                         onClick={() => removeStep(step.id)}
                       >
@@ -314,7 +331,7 @@ export default function StudioSettingsWizard({
                     </div>
                   </div>
                   <label className="studio-control">
-                    <span>Título</span>
+                    <span>{t("Título")}</span>
                     <Input
                       maxLength={80}
                       value={step.title}
@@ -331,7 +348,7 @@ export default function StudioSettingsWizard({
                     />
                   </label>
                   <label className="studio-control">
-                    <span>Descripción (opcional)</span>
+                    <span>{t("Descripción (opcional)")}</span>
                     <Textarea
                       rows={2}
                       maxLength={300}
@@ -362,7 +379,7 @@ export default function StudioSettingsWizard({
                       ...wizard.steps,
                       {
                         id: `step_${crypto.randomUUID().slice(0, 8)}`,
-                        title: `Paso ${wizard.steps.length + 1}`,
+                        title: t("Paso %{v1}", { v1: wizard.steps.length + 1 }),
                         description: "",
                       },
                     ],
@@ -370,7 +387,7 @@ export default function StudioSettingsWizard({
                 }
               >
                 <Plus size={15} />
-                Añadir paso
+                {t("Añadir paso")}
               </Button>
             </div>
           )}

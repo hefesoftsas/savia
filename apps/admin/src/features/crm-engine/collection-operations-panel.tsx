@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -26,7 +28,7 @@ const labels = {
   create: "Crear",
   update: "Editar",
   delete: "Eliminar",
-};
+} as const;
 type Settings = {
   version: number;
   kind: string;
@@ -44,6 +46,7 @@ export default function CollectionOperationsPanel({
   label: string;
   onClose: () => void;
 }) {
+  const t = useMessages(studioMessages);
   const runtime = getCrmRuntime();
   const query = useQuery({
     queryKey: [
@@ -72,15 +75,18 @@ export default function CollectionOperationsPanel({
         }}
       >
         <SheetHeader>
-          <SheetTitle>Operaciones · {label}</SheetTitle>
+          <SheetTitle>
+            {t("Operaciones ·")} {label}
+          </SheetTitle>
           <SheetDescription>
-            Elige el endpoint para cada acción. Una acción sin endpoint queda
-            deshabilitada en el CRM.
+            {t(
+              "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en el CRM.",
+            )}
           </SheetDescription>
         </SheetHeader>
         <div style={{ padding: "0 24px 24px" }}>
           {query.isPending ? (
-            <p>Cargando operaciones…</p>
+            <p>{t("Cargando operaciones…")}</p>
           ) : query.error ? (
             <p role="alert">{query.error.message}</p>
           ) : (
@@ -107,6 +113,7 @@ function OperationForm({
   settings: Settings;
   onSaved: () => void;
 }) {
+  const t = useMessages(studioMessages);
   const client = useQueryClient();
   const [map, setMap] = useState(settings.operations);
   const [advanced, setAdvanced] = useState<Record<string, string>>(
@@ -160,20 +167,21 @@ function OperationForm({
           await client.invalidateQueries();
           onSaved();
         } catch (e) {
-          setError(e instanceof Error ? e.message : "No se pudo guardar.");
+          setError(e instanceof Error ? e.message : t("No se pudo guardar."));
         } finally {
           setBusy(false);
         }
       }}
     >
       <details className="rounded-md border p-3">
-        <summary>Detectar endpoints desde OpenAPI</summary>
+        <summary>{t("Detectar endpoints desde OpenAPI")}</summary>
         <p className="text-sm text-muted-foreground">
-          Pega el documento OpenAPI 3 en JSON o YAML. Detectar candidatos no
-          ejecuta operaciones ni cambia la configuración guardada.
+          {t(
+            "Pega el documento OpenAPI 3 en JSON o YAML. Detectar candidatos no ejecuta operaciones ni cambia la configuración guardada.",
+          )}
         </p>
         <Textarea
-          aria-label="Documento OpenAPI"
+          aria-label={t("Documento OpenAPI")}
           value={document}
           onChange={(e) => setDocument(e.target.value)}
           rows={6}
@@ -193,26 +201,29 @@ function OperationForm({
               );
               setCandidates(result.data);
               setNotice(
-                `${result.data.length} endpoints disponibles. Selecciona cuál usar para cada acción.`,
+                t(
+                  "%{v1} endpoints disponibles. Selecciona cuál usar para cada acción.",
+                  { v1: result.data.length },
+                ),
               );
             } catch (e) {
               setError(
-                e instanceof Error ? e.message : "No se pudo leer OpenAPI.",
+                e instanceof Error ? e.message : t("No se pudo leer OpenAPI."),
               );
             } finally {
               setBusy(false);
             }
           }}
         >
-          Detectar endpoints
+          {t("Detectar endpoints")}
         </Button>
       </details>
       {notice && <p role="status">{notice}</p>}
       {settings.kind === "domain" && (
         <p className="text-sm text-muted-foreground">
-          Selecciona una operación compatible o escribe su ruta registrada en
-          Savia. Se conservan las validaciones y el formato de respuesta del
-          adaptador.
+          {t(
+            "Selecciona una operación compatible o escribe su ruta registrada en Savia. Se conservan las validaciones y el formato de respuesta del adaptador.",
+          )}
         </p>
       )}
       {operationNames.map((action) => {
@@ -220,7 +231,7 @@ function OperationForm({
         return (
           <section key={action} className="rounded-lg border p-3 space-y-3">
             <label className="font-medium" htmlFor={`operation-${action}`}>
-              {labels[action]}
+              {t(labels[action])}
             </label>
             <select
               id={`operation-${action}`}
@@ -255,11 +266,12 @@ function OperationForm({
                   choose(action, candidates[Number(e.target.value)].endpoint);
               }}
             >
-              <option value="">Sin configurar</option>
+              <option value="">{t("Sin configurar")}</option>
               {!endpoint && !candidates.some((c) => c.action === action) && (
                 <p className="text-sm text-muted-foreground">
-                  No se detectó un endpoint para esta acción. Puedes escribir
-                  una ruta compatible; debe existir en el API antes de guardar.
+                  {t(
+                    "No se detectó un endpoint para esta acción. Puedes escribir una ruta compatible; debe existir en el API antes de guardar.",
+                  )}
                 </p>
               )}
               {endpoint && (
@@ -277,15 +289,18 @@ function OperationForm({
                     value={candidates.indexOf(c)}
                   >
                     {c.endpoint.method} {c.endpoint.path}
-                    {c.action === action ? " · Sugerido" : ""}
+                    {c.action === action ? t("· Sugerido") : ""}
                   </option>
                 ))}
-              <option value="manual">Configurar endpoint manualmente</option>
+              <option value="manual">
+                {t("Configurar endpoint manualmente")}
+              </option>
             </select>
             {!endpoint && !candidates.some((c) => c.action === action) && (
               <p className="text-sm text-muted-foreground">
-                No se detectó un endpoint para esta acción. Puedes escribir una
-                ruta compatible; debe existir en el API antes de guardar.
+                {t(
+                  "No se detectó un endpoint para esta acción. Puedes escribir una ruta compatible; debe existir en el API antes de guardar.",
+                )}
               </p>
             )}
             {endpoint && (
@@ -295,9 +310,11 @@ function OperationForm({
                   style={{ gridTemplateColumns: "110px 1fr" }}
                 >
                   <label>
-                    Método
+                    {t("Método")}
                     <select
-                      aria-label={`Método · ${labels[action]}`}
+                      aria-label={t("Método · %{v1}", {
+                        v1: t(labels[action]),
+                      })}
                       className="h-9 w-full rounded-md border bg-background"
                       value={endpoint.method}
                       onChange={(e) =>
@@ -317,9 +334,9 @@ function OperationForm({
                     </select>
                   </label>
                   <label>
-                    Ruta
+                    {t("Ruta")}
                     <Input
-                      aria-label={`Ruta · ${labels[action]}`}
+                      aria-label={t("Ruta · %{v1}", { v1: t(labels[action]) })}
                       value={endpoint.path}
                       onChange={(e) =>
                         setMap((m) => ({
@@ -332,23 +349,27 @@ function OperationForm({
                 </div>
                 {settings.kind !== "domain" && (
                   <p className="text-sm text-muted-foreground">
-                    Ruta relativa a la URL de la fuente. Usa {"{id}"} para el
-                    identificador del registro.
+                    {t("Ruta relativa a la URL de la fuente. Usa")} {"{id}"}{" "}
+                    {t("para el identificador del registro.")}
                   </p>
                 )}
                 <details>
                   <summary>
                     {settings.kind === "domain"
-                      ? "Mapeo de campos"
-                      : "Campos, respuesta y paginación"}
+                      ? t("Mapeo de campos")
+                      : t("Campos, respuesta y paginación")}
                   </summary>
                   <p className="text-sm text-muted-foreground">
                     {settings.kind === "domain"
-                      ? "requestFields relaciona cada campo del CRM con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio."
-                      : "requestFields mapea campos del CRM a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta."}
+                      ? t(
+                          "requestFields relaciona cada campo del CRM con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.",
+                        )
+                      : t(
+                          "requestFields mapea campos del CRM a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.",
+                        )}
                   </p>
                   <Textarea
-                    aria-label={`Mapeo · ${labels[action]}`}
+                    aria-label={t("Mapeo · %{v1}", { v1: t(labels[action]) })}
                     value={advanced[action]}
                     onChange={(e) =>
                       setAdvanced((d) => ({ ...d, [action]: e.target.value }))
@@ -362,7 +383,7 @@ function OperationForm({
         );
       })}
       <details>
-        <summary>Campos disponibles</summary>
+        <summary>{t("Campos disponibles")}</summary>
         <ul>
           {settings.fields.map((f) => (
             <li key={f.key}>
@@ -373,7 +394,7 @@ function OperationForm({
       </details>
       {error && <p role="alert">{error}</p>}
       <Button disabled={busy}>
-        {busy ? "Guardando…" : "Guardar operaciones"}
+        {busy ? t("Guardando…") : t("Guardar operaciones")}
       </Button>
     </form>
   );

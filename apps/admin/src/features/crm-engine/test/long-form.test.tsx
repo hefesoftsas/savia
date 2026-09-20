@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { it, expect, vi, afterEach, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  cleanup,
-} from "@testing-library/react";
+import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Dialog,
@@ -64,7 +59,7 @@ it("submits all expanded fields within a dialog without dismissing it", async ()
     </QueryClientProvider>,
   );
   await screen.findByRole("textbox", { name: "Campo 0" });
-  fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+  fireEvent.click(screen.getByRole("button", { name: "Expandir" }));
   await screen.findByRole("textbox", { name: "Campo 25" });
   // Query the expanded controls once. Recomputing every accessible role across
   // this large dialog for each keystroke made the test CPU-bound in the suite.

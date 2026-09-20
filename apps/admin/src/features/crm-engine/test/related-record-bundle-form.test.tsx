@@ -5,11 +5,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { makeConfig } from "@savia/crm-shared/metadata";
 import CollectionRecordForm from "../collection-record-form";
@@ -127,21 +127,84 @@ it("bundles child data, strips virtual fields and retains changes after a reject
   expect(save.mock.calls[1][2]).toEqual(save.mock.calls[0][2]);
   expect(vi.mocked(api).mock.calls.every(([, method]) => !method)).toBe(true);
 });
-it("blocks parent save for an invalid inline child and includes edits without an apply step",async()=>{
- vi.mocked(api).mockImplementation(async path=>path==="/collection-relations" ? {data:[relation]} : path==="/objects/children" ? {data:{name:"children",label:"Hijos",description:"",config:makeConfig({name:{type:"Textbox",label:"Nombre del hijo",required:true}})}} : {data:[]});
- const save=vi.fn().mockResolvedValue({id:"p1",_version:1});
- const inline={...object,config:{...object.config,fields:{...object.config.fields,children:{...object.config.fields.children,config:{...object.config.fields.children.config,relationPresentation:"subform" as const}}}}};
- render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><CollectionRecordForm object={inline} onSave={save}/></QueryClientProvider>);
- fireEvent.change(await screen.findByLabelText(/Nombre principal/),{target:{value:"Principal"}});
- fireEvent.click(screen.getByRole("button",{name:/Mostrar registros/}));
- await waitFor(()=>expect(screen.getByRole("button",{name:"Crear relacionado"})).toBeEnabled());fireEvent.click(screen.getByRole("button",{name:"Crear relacionado"}));
- await screen.findByText("Nombre del hijo: obligatorio");
- fireEvent.click(screen.getByRole("button",{name:"Guardar registro"}));
- await screen.findByText("Revisa los campos del registro relacionado antes de guardar.");
- expect(save).not.toHaveBeenCalled();
- fireEvent.change(screen.getByLabelText(/Nombre del hijo/),{target:{value:"En línea"}});
- await waitFor(()=>expect(screen.queryByText("Nombre del hijo: obligatorio")).not.toBeInTheDocument());
- fireEvent.click(screen.getByRole("button",{name:"Guardar registro"}));
- await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
- expect(save.mock.calls[0][2]).toEqual([{relationId:"r1",previousIds:[],rows:[{data:{name:"En línea"}}]}]);
+it("blocks parent save for an invalid inline child and includes edits without an apply step", async () => {
+  vi.mocked(api).mockImplementation(async (path) =>
+    path === "/collection-relations"
+      ? { data: [relation] }
+      : path === "/objects/children"
+        ? {
+            data: {
+              name: "children",
+              label: "Hijos",
+              description: "",
+              config: makeConfig({
+                name: {
+                  type: "Textbox",
+                  label: "Nombre del hijo",
+                  required: true,
+                },
+              }),
+            },
+          }
+        : { data: [] },
+  );
+  const save = vi.fn().mockResolvedValue({ id: "p1", _version: 1 });
+  const inline = {
+    ...object,
+    config: {
+      ...object.config,
+      fields: {
+        ...object.config.fields,
+        children: {
+          ...object.config.fields.children,
+          config: {
+            ...object.config.fields.children.config,
+            relationPresentation: "subform" as const,
+          },
+        },
+      },
+    },
+  };
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <CollectionRecordForm object={inline} onSave={save} />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(await screen.findByLabelText(/Nombre principal/), {
+    target: { value: "Principal" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Mostrar registros/ }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Crear relacionado" }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Crear relacionado" }));
+  await screen.findByText("Nombre del hijo: obligatorio");
+  fireEvent.click(screen.getByRole("button", { name: "Guardar registro" }));
+  await screen.findByText(
+    "Revisa los campos del registro relacionado antes de guardar.",
+  );
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText(/Nombre del hijo/), {
+    target: { value: "En línea" },
+  });
+  await waitFor(() =>
+    expect(
+      screen.queryByText("Nombre del hijo: obligatorio"),
+    ).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Guardar registro" }));
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  expect(save.mock.calls[0][2]).toEqual([
+    {
+      relationId: "r1",
+      previousIds: [],
+      rows: [{ data: { name: "En línea" } }],
+    },
+  ]);
 });

@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { Image, MessageSquareText, Mic, Paperclip, Wrench } from "lucide-react";
 import type {
   AssistantModel,
@@ -23,6 +25,7 @@ export function ModelCapabilityBadges({
   className?: string;
   size?: "sm" | "xs";
 }) {
+  const t = useMessages(settingsMessages);
   const resolvedModalities = model?.modalities ?? modalities;
   const resolvedTools = model?.supportsTools ?? supportsTools ?? false;
 
@@ -51,15 +54,19 @@ export function ModelCapabilityBadges({
               "inline-flex items-center rounded-md border border-border/60 bg-muted/30 font-medium text-foreground/80 hover:bg-muted/60 transition-colors",
               containerClass,
             )}
-            aria-label="Modalidad Texto"
+            aria-label={t("Modalidad Texto")}
           >
-            <MessageSquareText className={cn(iconClass, "text-sky-600 dark:text-sky-400")} />
-            <span className="hidden sm:inline">Texto</span>
+            <MessageSquareText
+              className={cn(iconClass, "text-sky-600 dark:text-sky-400")}
+            />
+            <span className="hidden sm:inline">{t("Texto")}</span>
           </span>
         </TooltipTrigger>
         <TooltipContent side="top">
-          <p className="font-semibold">Texto</p>
-          <p className="text-xs text-muted-foreground">Admite preguntas y respuestas en texto</p>
+          <p className="font-semibold">{t("Texto")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("Admite preguntas y respuestas en texto")}
+          </p>
         </TooltipContent>
       </Tooltip>
 
@@ -71,15 +78,19 @@ export function ModelCapabilityBadges({
                 "inline-flex items-center rounded-md border border-emerald-500/30 bg-emerald-500/10 font-medium text-emerald-700 dark:text-emerald-300",
                 containerClass,
               )}
-              aria-label="Modalidad Visión / Imágenes"
+              aria-label={t("Modalidad Visión / Imágenes")}
             >
               <Image className={iconClass} />
-              <span className="hidden sm:inline">Visión</span>
+              <span className="hidden sm:inline">{t("Visión")}</span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">
-            <p className="font-semibold text-emerald-600 dark:text-emerald-400">Visión / Imágenes</p>
-            <p className="text-xs text-muted-foreground">Analiza e interpreta imágenes y capturas</p>
+            <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+              {t("Visión / Imágenes")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("Analiza e interpreta imágenes y capturas")}
+            </p>
           </TooltipContent>
         </Tooltip>
       ) : null}
@@ -92,15 +103,19 @@ export function ModelCapabilityBadges({
                 "inline-flex items-center rounded-md border border-indigo-500/30 bg-indigo-500/10 font-medium text-indigo-700 dark:text-indigo-300",
                 containerClass,
               )}
-              aria-label="Modalidad Archivos"
+              aria-label={t("Modalidad Archivos")}
             >
               <Paperclip className={iconClass} />
-              <span className="hidden sm:inline">Archivos</span>
+              <span className="hidden sm:inline">{t("Archivos")}</span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">
-            <p className="font-semibold text-indigo-600 dark:text-indigo-400">Archivos y Documentos</p>
-            <p className="text-xs text-muted-foreground">Admite documentos adjuntos (PDFs, CSV, datos)</p>
+            <p className="font-semibold text-indigo-600 dark:text-indigo-400">
+              {t("Archivos y Documentos")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("Admite documentos adjuntos (PDFs, CSV, datos)")}
+            </p>
           </TooltipContent>
         </Tooltip>
       ) : null}
@@ -113,15 +128,19 @@ export function ModelCapabilityBadges({
                 "inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300",
                 containerClass,
               )}
-              aria-label="Modalidad Voz / Audio"
+              aria-label={t("Modalidad Voz / Audio")}
             >
               <Mic className={iconClass} />
-              <span className="hidden sm:inline">Voz</span>
+              <span className="hidden sm:inline">{t("Voz")}</span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">
-            <p className="font-semibold text-amber-600 dark:text-amber-400">Voz y Audio Nativo</p>
-            <p className="text-xs text-muted-foreground">Soporte directo de entrada de audio/voz</p>
+            <p className="font-semibold text-amber-600 dark:text-amber-400">
+              {t("Voz y Audio Nativo")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("Soporte directo de entrada de audio/voz")}
+            </p>
           </TooltipContent>
         </Tooltip>
       ) : null}
@@ -134,15 +153,19 @@ export function ModelCapabilityBadges({
                 "inline-flex items-center rounded-md border border-purple-500/30 bg-purple-500/10 font-medium text-purple-700 dark:text-purple-300",
                 containerClass,
               )}
-              aria-label="Herramientas CRM"
+              aria-label={t("Herramientas CRM")}
             >
               <Wrench className={iconClass} />
-              <span className="hidden sm:inline">Herramientas</span>
+              <span className="hidden sm:inline">{t("Herramientas")}</span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">
-            <p className="font-semibold text-purple-600 dark:text-purple-400">Herramientas CRM</p>
-            <p className="text-xs text-muted-foreground">Ejecuta consultas al CRM y llamadas a funciones</p>
+            <p className="font-semibold text-purple-600 dark:text-purple-400">
+              {t("Herramientas CRM")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("Ejecuta consultas al CRM y llamadas a funciones")}
+            </p>
           </TooltipContent>
         </Tooltip>
       ) : null}

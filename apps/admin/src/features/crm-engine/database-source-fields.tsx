@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import type { RefObject } from "react";
 import {
   databaseKinds,
@@ -33,6 +35,7 @@ export function DatabaseSourceFields({
   removePassword: boolean;
   onRemovePassword: (value: boolean) => void;
 }) {
+  const t = useMessages(studioMessages);
   return (
     <div className="space-y-4">
       {!editing && (
@@ -40,10 +43,10 @@ export function DatabaseSourceFields({
           <div className="grid gap-4 sm:grid-cols-2">
             {(
               [
-                ["host", `Host ${databaseKinds[kind].label}`],
-                ["port", "Puerto"],
-                ["database", "Base de datos"],
-                ["username", "Usuario"],
+                ["host", t("Host %{v1}", { v1: databaseKinds[kind].label })],
+                ["port", t("Puerto")],
+                ["database", t("Base de datos")],
+                ["username", t("Usuario")],
               ] as const
             ).map(([key, label]) => (
               <div key={key} className="grid gap-1.5 text-sm">
@@ -62,7 +65,7 @@ export function DatabaseSourceFields({
           </div>
           {(kind === "postgres" || kind === "mssql") && (
             <div className="grid gap-1.5 text-sm">
-              <Label htmlFor="pg-schema-input">Esquema (opcional)</Label>
+              <Label htmlFor="pg-schema-input">{t("Esquema (opcional)")}</Label>
               <Input
                 id="pg-schema-input"
                 value={draft.schema}
@@ -73,7 +76,7 @@ export function DatabaseSourceFields({
           {kind === "mongodb" && (
             <div className="grid gap-1.5 text-sm">
               <Label htmlFor="database-auth-source">
-                Base de autenticación
+                {t("Base de autenticación")}
               </Label>
               <Input
                 id="database-auth-source"
@@ -81,7 +84,7 @@ export function DatabaseSourceFields({
                 onChange={(e) => onChange({ authSource: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                Conexión directa al servidor indicado.
+                {t("Conexión directa al servidor indicado.")}
               </p>
             </div>
           )}
@@ -91,7 +94,7 @@ export function DatabaseSourceFields({
               checked={draft.ssl}
               onChange={(e) => onChange({ ssl: e.target.checked })}
             />
-            {kind === "mssql" ? "Cifrar conexión" : "Exigir SSL"}
+            {kind === "mssql" ? t("Cifrar conexión") : t("Exigir SSL")}
           </label>
           {kind === "mssql" && (
             <label className="flex items-center gap-2 text-sm">
@@ -102,13 +105,15 @@ export function DatabaseSourceFields({
                   onChange({ trustServerCertificate: e.target.checked })
                 }
               />
-              Confiar en certificado del servidor
+              {t("Confiar en certificado del servidor")}
             </label>
           )}
         </>
       )}
       <div className="grid gap-1.5 text-sm">
-        <Label htmlFor="source-password-input">Contraseña (opcional)</Label>
+        <Label htmlFor="source-password-input">
+          {t("Contraseña (opcional)")}
+        </Label>
         <Input
           id="source-password-input"
           ref={passwordRef}
@@ -116,7 +121,7 @@ export function DatabaseSourceFields({
           autoComplete="new-password"
         />
         <p className="text-xs text-muted-foreground">
-          Se guarda cifrada en el servidor y nunca se devuelve.
+          {t("Se guarda cifrada en el servidor y nunca se devuelve.")}
         </p>
       </div>
       {editing && (
@@ -126,7 +131,7 @@ export function DatabaseSourceFields({
             checked={removePassword}
             onChange={(e) => onRemovePassword(e.target.checked)}
           />
-          Quitar contraseña
+          {t("Quitar contraseña")}
         </label>
       )}
       <label className="flex items-center gap-2 text-sm">
@@ -135,11 +140,12 @@ export function DatabaseSourceFields({
           checked={draft.writeEnabled}
           onChange={(e) => onChange({ writeEnabled: e.target.checked })}
         />
-        Permitir crear, editar y eliminar registros
+        {t("Permitir crear, editar y eliminar registros")}
       </label>
       <p className="text-xs text-muted-foreground">
-        Las operaciones disponibles también dependen de los permisos de la
-        cuenta y de un identificador único. Las vistas son de solo lectura.
+        {t(
+          "Las operaciones disponibles también dependen de los permisos de la cuenta y de un identificador único. Las vistas son de solo lectura.",
+        )}
       </p>
     </div>
   );

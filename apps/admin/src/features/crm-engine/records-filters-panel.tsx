@@ -1,3 +1,6 @@
+import { resolveFieldLabel } from "@savia/crm-shared/field-labels";
+import { useAppLocale, useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2 } from "lucide-react";
@@ -13,7 +16,7 @@ export type RecordsFilters = {
   conditions: RecordsFilterCondition[];
 };
 
-const FILTER_OPERATORS: Record<string, string> = {
+const FILTER_OPERATORS: Record<string, keyof typeof recordsMessages> = {
   eq: "Igual",
   ne: "Diferente",
   contains: "Contiene",
@@ -40,12 +43,15 @@ export function RecordsFiltersPanel({
     value: Partial<RecordsFilterCondition>,
   ) => void;
 }) {
+  const t = useMessages(recordsMessages);
+  const labelLocale = useAppLocale();
+
   const fields = fieldEntries(object);
   const firstField = fields[0]?.[0] ?? "";
   return (
     <div className="records-filters-panel">
       <select
-        aria-label="Combinar filtros"
+        aria-label={t("Combinar filtros")}
         className="select-input"
         value={filters.logic}
         onChange={(event) =>
@@ -55,13 +61,13 @@ export function RecordsFiltersPanel({
           })
         }
       >
-        <option value="and">Cumplir todos (Y)</option>
-        <option value="or">Cumplir cualquiera (O)</option>
+        <option value="and">{t("Cumplir todos (Y)")}</option>
+        <option value="or">{t("Cumplir cualquiera (O)")}</option>
       </select>
       {filters.conditions.map((condition, index) => (
         <div className="filter-row" key={`${condition.field}-${index}`}>
           <select
-            aria-label={`Campo del filtro ${index + 1}`}
+            aria-label={t("Campo del filtro %{p0}", { p0: index + 1 })}
             className="select-input"
             value={condition.field}
             onChange={(event) =>
@@ -70,12 +76,12 @@ export function RecordsFiltersPanel({
           >
             {fields.map(([key, field]) => (
               <option key={key} value={key}>
-                {field.label}
+                {resolveFieldLabel(field, labelLocale)}
               </option>
             ))}
           </select>
           <select
-            aria-label={`Operador del filtro ${index + 1}`}
+            aria-label={t("Operador del filtro %{p0}", { p0: index + 1 })}
             className="select-input"
             value={condition.op}
             onChange={(event) =>
@@ -84,14 +90,14 @@ export function RecordsFiltersPanel({
           >
             {Object.entries(FILTER_OPERATORS).map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
           {condition.op !== "empty" &&
             (object.config.fields[condition.field]?.type === "Toggle" ? (
               <select
-                aria-label={`Valor del filtro ${index + 1}`}
+                aria-label={t("Valor del filtro %{p0}", { p0: index + 1 })}
                 value={String(condition.value)}
                 onChange={(event) =>
                   onConditionChange(index, {
@@ -99,12 +105,12 @@ export function RecordsFiltersPanel({
                   })
                 }
               >
-                <option value="false">No</option>
-                <option value="true">Sí</option>
+                <option value="false">{t("No")}</option>
+                <option value="true">{t("Sí")}</option>
               </select>
             ) : (
               <Input
-                aria-label={`Valor del filtro ${index + 1}`}
+                aria-label={t("Valor del filtro %{p0}", { p0: index + 1 })}
                 type={
                   ["Number", "Currency", "Percentage", "Rating"].includes(
                     object.config.fields[condition.field]?.type ?? "",
@@ -128,7 +134,7 @@ export function RecordsFiltersPanel({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={`Quitar filtro ${index + 1}`}
+            aria-label={t("Quitar filtro %{p0}", { p0: index + 1 })}
             onClick={() =>
               onFiltersChange({
                 ...filters,
@@ -161,7 +167,7 @@ export function RecordsFiltersPanel({
         }
       >
         <Plus size={14} />
-        Añadir filtro
+        {t("Añadir filtro")}
       </Button>
     </div>
   );

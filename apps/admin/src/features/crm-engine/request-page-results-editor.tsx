@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { RESULT_REACT_EXAMPLE } from "./result-react-example";
 import { resultHtmlExample } from "./result-html-example";
 import {
@@ -48,27 +50,6 @@ const resultColumnsHelp =
 const submitActionsHelp =
   "Etiquetas visibles cuando el usuario elige qué operaciones ejecutar.";
 
-function formatPreviewValue(
-  value: unknown,
-  format: ResultColumnFormat,
-  currency?: string | null,
-) {
-  if (value === null || value === undefined || value === "") {
-    return "No informado";
-  }
-  if (format === "money" && Number.isFinite(Number(value))) {
-    try {
-      return new Intl.NumberFormat("es-CO", {
-        style: "currency",
-        currency: currency ?? "COP",
-      }).format(Number(value));
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value);
-}
-
 function jsonPointer(value: Record<string, unknown>, pointer: string): unknown {
   return pointer
     .slice(1)
@@ -89,19 +70,6 @@ function presetValue(column: ResultColumn) {
   return "__custom__";
 }
 
-function nextPresetColumn(columns: ResultColumn[]): ResultColumn {
-  const used = new Set(columns.map((column) => column.pointer));
-  const available = RESULT_COLUMN_PRESETS.find(
-    (preset) => !used.has(preset.pointer),
-  );
-  if (available) return { ...available };
-  return {
-    label: `Columna ${columns.length + 1}`,
-    pointer: "/reference",
-    format: "text",
-  };
-}
-
 export function RequestPageResultsEditor({
   config,
   onChange,
@@ -109,6 +77,46 @@ export function RequestPageResultsEditor({
   config: RequestPageConfig;
   onChange: (config: RequestPageConfig) => void;
 }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+  function nextPresetColumn(columns: ResultColumn[]): ResultColumn {
+    const used = new Set(columns.map((column) => column.pointer));
+    const available = RESULT_COLUMN_PRESETS.find(
+      (preset) => !used.has(preset.pointer),
+    );
+    if (available)
+      return {
+        ...available,
+        label: t(available.label as keyof typeof automationMessages),
+      };
+    return {
+      label: t("Columna %{value0}", { value0: columns.length + 1 }),
+      pointer: "/reference",
+      format: "text",
+    };
+  }
+
+  function formatPreviewValue(
+    value: unknown,
+    format: ResultColumnFormat,
+    currency?: string | null,
+  ) {
+    if (value === null || value === undefined || value === "") {
+      return t("No informado");
+    }
+    if (format === "money" && Number.isFinite(Number(value))) {
+      try {
+        return new Intl.NumberFormat(intlLocale(locale), {
+          style: "currency",
+          currency: currency ?? "COP",
+        }).format(Number(value));
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  }
+
   const labelLocale = useFieldLabelLocale();
   const [htmlOpen, setHtmlOpen] = useState(false);
   const [htmlDraft, setHtmlDraft] = useState("");
@@ -150,20 +158,22 @@ export function RequestPageResultsEditor({
 
   return (
     <Tabs defaultValue="configure" className="request-page-results-editor">
-      <TabsList aria-label="Editor de resultados">
-        <TabsTrigger value="configure">Configurar</TabsTrigger>
-        <TabsTrigger value="preview">Vista previa</TabsTrigger>
+      <TabsList aria-label={t("Editor de resultados")}>
+        <TabsTrigger value="configure">{t("Configurar")}</TabsTrigger>
+        <TabsTrigger value="preview">{t("Vista previa")}</TabsTrigger>
       </TabsList>
       <TabsContent value="configure" className="request-results-configure">
         <details className="request-results-group" open>
-          <summary>Presentación</summary>
+          <summary>{t("Presentación")}</summary>
           <label className="studio-control">
             <StudioControlLabel
-              label="Presentación de resultados"
-              help="Se guarda para esta pantalla. Las tarjetas y el comparador utilizan los campos configurados abajo."
+              label={t("Presentación de resultados")}
+              help={t(
+                "Se guarda para esta pantalla. Las tarjetas y el comparador utilizan los campos configurados abajo.",
+              )}
             />
             <select
-              aria-label="Presentación de resultados"
+              aria-label={t("Presentación de resultados")}
               value={config.resultLayout ?? "table"}
               onChange={(event) =>
                 onChange({
@@ -173,24 +183,24 @@ export function RequestPageResultsEditor({
                 })
               }
             >
-              <option value="table">Tabla e historial</option>
-              <option value="cards">Tarjetas</option>
-              <option value="comparison">Tarjetas y comparación</option>
-              <option value="html">HTML personalizado</option>
-              <option value="react">React personalizado</option>
+              <option value="table">{t("Tabla e historial")}</option>
+              <option value="cards">{t("Tarjetas")}</option>
+              <option value="comparison">{t("Tarjetas y comparación")}</option>
+              <option value="html">{t("HTML personalizado")}</option>
+              <option value="react">{t("React personalizado")}</option>
             </select>
           </label>
         </details>
         <details className="request-results-execution-settings request-results-group">
-          <summary>Botón y nombres de operaciones</summary>
+          <summary>{t("Botón y nombres de operaciones")}</summary>
           <section className="request-page-results-section">
             <label className="studio-control">
               <StudioControlLabel
-                label="Texto del botón principal"
-                help={submitLabelHelp}
+                label={t("Texto del botón principal")}
+                help={t(submitLabelHelp)}
               />
               <Input
-                aria-label="Texto del botón principal"
+                aria-label={t("Texto del botón principal")}
                 value={config.submitLabel}
                 maxLength={80}
                 onChange={(event) =>
@@ -203,12 +213,12 @@ export function RequestPageResultsEditor({
           {submitActions.length > 0 ? (
             <section className="request-page-results-section">
               <div className="request-page-results-section-heading">
-                <h4>Operaciones</h4>
-                <p className="studio-field-help">{submitActionsHelp}</p>
+                <h4>{t("Operaciones")}</h4>
+                <p className="studio-field-help">{t(submitActionsHelp)}</p>
               </div>
               <ol
                 className="request-results-action-list"
-                aria-label="Operaciones"
+                aria-label={t("Operaciones")}
               >
                 {submitActions.map((action) => (
                   <li key={action.id} className="request-results-action-item">
@@ -233,12 +243,15 @@ export function RequestPageResultsEditor({
           ) : null}
         </details>
         <details className="request-results-group" open>
-          <summary>Campos visibles ({config.resultColumns.length})</summary>
+          <summary>
+            {t("Campos visibles (")}
+            {config.resultColumns.length})
+          </summary>
           <section className="request-page-results-section">
             <div className="request-page-results-section-heading">
               <div>
-                <h4>Columnas de resultados</h4>
-                <p className="studio-field-help">{resultColumnsHelp}</p>
+                <h4>{t("Columnas de resultados")}</h4>
+                <p className="studio-field-help">{t(resultColumnsHelp)}</p>
               </div>
               <div className="request-results-column-actions">
                 <Button
@@ -250,11 +263,14 @@ export function RequestPageResultsEditor({
                       ...config,
                       resultColumns: DEFAULT_RESULT_COLUMNS.map((column) => ({
                         ...column,
+                        label: t(
+                          column.label as keyof typeof automationMessages,
+                        ),
                       })),
                     })
                   }
                 >
-                  Restablecer
+                  {t("Restablecer")}
                 </Button>
                 <Button
                   type="button"
@@ -272,19 +288,21 @@ export function RequestPageResultsEditor({
                   }
                 >
                   <Plus size={14} aria-hidden="true" />
-                  Añadir columna
+                  {t("Añadir columna")}
                 </Button>
               </div>
             </div>
 
             {config.resultColumns.length === 0 ? (
               <p className="studio-field-help">
-                Añade al menos una columna para mostrar datos de cada resultado.
+                {t(
+                  "Añade al menos una columna para mostrar datos de cada resultado.",
+                )}
               </p>
             ) : (
               <ol
                 className="request-results-column-list"
-                aria-label="Columnas de resultados"
+                aria-label={t("Columnas de resultados")}
               >
                 {config.resultColumns.map((column, index) => {
                   const preset = presetValue(column);
@@ -319,7 +337,9 @@ export function RequestPageResultsEditor({
                       <button
                         type="button"
                         className="request-results-column-grip"
-                        aria-label={`Reordenar columna ${column.label}`}
+                        aria-label={t("Reordenar columna %{value0}", {
+                          value0: column.label,
+                        })}
                         draggable
                         onDragStart={(event) => {
                           event.dataTransfer.setData(dragType, String(index));
@@ -334,9 +354,11 @@ export function RequestPageResultsEditor({
                         <GripVertical size={15} aria-hidden="true" />
                       </button>
                       <label className="studio-control request-results-column-field">
-                        <span>Etiqueta</span>
+                        <span>{t("Etiqueta")}</span>
                         <Input
-                          aria-label={`Etiqueta de columna ${index + 1}`}
+                          aria-label={t("Etiqueta de columna %{value0}", {
+                            value0: index + 1,
+                          })}
                           value={column.label}
                           maxLength={80}
                           onChange={(event) =>
@@ -346,17 +368,23 @@ export function RequestPageResultsEditor({
                       </label>
                       <details className="request-results-column-options">
                         <summary>
-                          Datos y formato{" "}
+                          {t("Datos y formato")}{" "}
                           <span>
                             {column.pointer} ·{" "}
-                            {RESULT_COLUMN_FORMAT_LABELS[column.format]}
+                            {t(
+                              RESULT_COLUMN_FORMAT_LABELS[
+                                column.format
+                              ] as keyof typeof automationMessages,
+                            )}
                           </span>
                         </summary>
                         <div className="request-results-column-options-body">
                           <label className="studio-control request-results-column-field">
-                            <span>Campo del resultado</span>
+                            <span>{t("Campo del resultado")}</span>
                             <select
-                              aria-label={`Campo del resultado ${index + 1}`}
+                              aria-label={t("Campo del resultado %{value0}", {
+                                value0: index + 1,
+                              })}
                               value={preset}
                               onChange={(event) => {
                                 const value = event.target.value;
@@ -364,7 +392,13 @@ export function RequestPageResultsEditor({
                                 const match = RESULT_COLUMN_PRESETS.find(
                                   (entry) => entry.pointer === value,
                                 );
-                                if (match) updateColumn(index, { ...match });
+                                if (match)
+                                  updateColumn(index, {
+                                    ...match,
+                                    label: t(
+                                      match.label as keyof typeof automationMessages,
+                                    ),
+                                  });
                               }}
                             >
                               {RESULT_COLUMN_PRESETS.map((entry) => (
@@ -372,19 +406,27 @@ export function RequestPageResultsEditor({
                                   key={entry.pointer}
                                   value={entry.pointer}
                                 >
-                                  {entry.label} ({entry.pointer})
+                                  {t(
+                                    entry.label as keyof typeof automationMessages,
+                                  )}{" "}
+                                  ({entry.pointer})
                                 </option>
                               ))}
-                              <option value="__custom__">Personalizado…</option>
+                              <option value="__custom__">
+                                {t("Personalizado…")}
+                              </option>
                             </select>
                           </label>
                           {preset === "__custom__" ? (
                             <label className="studio-control request-results-column-field">
-                              <span>Ruta JSON</span>
+                              <span>{t("Ruta JSON")}</span>
                               <Input
-                                aria-label={`Ruta JSON de columna ${index + 1}`}
+                                aria-label={t(
+                                  "Ruta JSON de columna %{value0}",
+                                  { value0: index + 1 },
+                                )}
                                 value={column.pointer}
-                                placeholder="/product/name"
+                                placeholder={t("/product/name")}
                                 aria-invalid={pointerValid ? undefined : true}
                                 onChange={(event) =>
                                   updateColumn(index, {
@@ -397,15 +439,17 @@ export function RequestPageResultsEditor({
                                   className="request-results-field-error"
                                   role="alert"
                                 >
-                                  Usa una ruta como /product/name
+                                  {t("Usa una ruta como /product/name")}
                                 </span>
                               ) : null}
                             </label>
                           ) : null}
                           <label className="studio-control request-results-column-field request-results-column-field--format">
-                            <span>Formato</span>
+                            <span>{t("Formato")}</span>
                             <select
-                              aria-label={`Formato de columna ${index + 1}`}
+                              aria-label={t("Formato de columna %{value0}", {
+                                value0: index + 1,
+                              })}
                               value={column.format}
                               onChange={(event) =>
                                 updateColumn(index, {
@@ -420,7 +464,11 @@ export function RequestPageResultsEditor({
                                 ) as ResultColumnFormat[]
                               ).map((format) => (
                                 <option key={format} value={format}>
-                                  {RESULT_COLUMN_FORMAT_LABELS[format]}
+                                  {t(
+                                    RESULT_COLUMN_FORMAT_LABELS[
+                                      format
+                                    ] as keyof typeof automationMessages,
+                                  )}
                                 </option>
                               ))}
                             </select>
@@ -432,7 +480,9 @@ export function RequestPageResultsEditor({
                         variant="ghost"
                         size="icon"
                         className="request-results-column-remove"
-                        aria-label={`Eliminar columna ${column.label}`}
+                        aria-label={t("Eliminar columna %{value0}", {
+                          value0: column.label,
+                        })}
                         onClick={() => removeColumn(index)}
                       >
                         <Trash2 size={15} aria-hidden="true" />
@@ -447,7 +497,7 @@ export function RequestPageResultsEditor({
         {(config.resultLayout === "html" ||
           config.resultLayout === "react") && (
           <section className="request-page-results-section">
-            <h4>Componente de resultados</h4>
+            <h4>{t("Componente de resultados")}</h4>
             <Button
               type="button"
               variant="outline"
@@ -462,16 +512,16 @@ export function RequestPageResultsEditor({
                 setHtmlOpen(true);
               }}
             >
-              Editar {config.resultLayout === "react" ? "React" : "HTML"}
+              {t("Editar")} {config.resultLayout === "react" ? "React" : "HTML"}
             </Button>
             <Dialog open={htmlOpen} onOpenChange={setHtmlOpen}>
               <DialogContent className="form-html-editor-dialog">
                 <DialogHeader>
-                  <DialogTitle>Componente de resultados</DialogTitle>
+                  <DialogTitle>{t("Componente de resultados")}</DialogTitle>
                   <DialogDescription>
-                    Edita toda el área de resultados con HTML, CSS y JavaScript.
-                    Aplica los cambios para revisarlos en Vista previa; Publicar
-                    los guarda en la pantalla.
+                    {t(
+                      "Edita toda el área de resultados con HTML, CSS y JavaScript. Aplica los cambios para revisarlos en Vista previa; Publicar los guarda en la pantalla.",
+                    )}
                   </DialogDescription>
                 </DialogHeader>
                 {htmlOpen && (
@@ -479,41 +529,49 @@ export function RequestPageResultsEditor({
                     language={
                       config.resultLayout === "react" ? "typescript" : "html"
                     }
-                    ariaLabel="HTML personalizado de resultados"
+                    ariaLabel={t("HTML personalizado de resultados")}
                     height={420}
                     value={htmlDraft}
                     onChange={setHtmlDraft}
                   />
                 )}
                 <details>
-                  <summary>Propiedades disponibles del componente</summary>
+                  <summary>
+                    {t("Propiedades disponibles del componente")}
+                  </summary>
                   <p className="studio-field-help">
-                    React recibe estas propiedades. En HTML están disponibles en
-                    window.savia.
+                    {t(
+                      "React recibe estas propiedades. En HTML están disponibles en window.savia.",
+                    )}
                   </p>
                   <ul className="text-sm space-y-1">
                     <li>
-                      <code>rows[]</code>: id, title, status, date, simulation,
-                      values[], errors[], response.
+                      <code>rows[]</code>
+                      {t(
+                        ": id, title, status, date, simulation, values[], errors[], response.",
+                      )}
                     </li>
                     <li>
-                      <code>columns[]</code>: label, pointer, format.
+                      <code>columns[]</code>
+                      {t(": label, pointer, format.")}
                     </li>
                     <li>
-                      <code>disabled</code>: indica si la acción de cargar está
-                      deshabilitada.
+                      <code>disabled</code>
+                      {t(": indica si la acción de cargar está deshabilitada.")}
                     </li>
                     <li>
-                      <code>load(id)</code>: carga los datos de un resultado en
-                      el formulario.
+                      <code>load(id)</code>
+                      {t(": carga los datos de un resultado en el formulario.")}
                     </li>
                     <li>
-                      <code>React</code>: disponible globalmente, incluidos sus
-                      hooks. Exporta el componente con{" "}
+                      <code>React</code>
+                      {t(
+                        ": disponible globalmente, incluidos sus hooks. Exporta el componente con",
+                      )}{" "}
                       <code>export default</code>.
                     </li>
                   </ul>
-                  <h4>Campos de esta pantalla</h4>
+                  <h4>{t("Campos de esta pantalla")}</h4>
                   <ul className="text-sm">
                     {config.resultColumns.map((column, i) => (
                       <li key={i}>
@@ -535,14 +593,14 @@ export function RequestPageResultsEditor({
                       )
                     }
                   >
-                    Cargar ejemplo completo
+                    {t("Cargar ejemplo completo")}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => setHtmlOpen(false)}
                   >
-                    Cancelar
+                    {t("Cancelar")}
                   </Button>
                   <Button
                     type="button"
@@ -555,7 +613,7 @@ export function RequestPageResultsEditor({
                       setHtmlOpen(false);
                     }}
                   >
-                    Aplicar cambios
+                    {t("Aplicar cambios")}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -568,10 +626,11 @@ export function RequestPageResultsEditor({
         config.resultLayout === "react" ||
         config.resultLayout === "html" ? (
           <details className="request-results-preview" open>
-            <summary>Vista previa de resultados</summary>
+            <summary>{t("Vista previa de resultados")}</summary>
             <p className="studio-field-help px-4">
-              Datos de ejemplo. La presentación se actualiza al cambiar los
-              ajustes.
+              {t(
+                "Datos de ejemplo. La presentación se actualiza al cambiar los ajustes.",
+              )}
             </p>
             {config.resultLayout && config.resultLayout !== "table" ? (
               <div className="request-results-preview-content">
@@ -596,8 +655,10 @@ export function RequestPageResultsEditor({
                   columns={config.resultColumns}
                   rows={[0, 1].map((index) => ({
                     id: `preview-${index}`,
-                    title: `Resultado de ejemplo ${index + 1}`,
-                    status: "Resultado disponible",
+                    title: t("Resultado de ejemplo %{value0}", {
+                      value0: index + 1,
+                    }),
+                    status: t("Resultado disponible"),
                     date: "2026-01-01T12:00:00Z",
                     simulation: true,
                     values: config.resultColumns.map((column) =>
@@ -618,14 +679,14 @@ export function RequestPageResultsEditor({
                 <table className="request-results-preview-table">
                   <thead>
                     <tr>
-                      <th>Operación / fecha</th>
-                      <th>Estado</th>
+                      <th>{t("Operación / fecha")}</th>
+                      <th>{t("Estado")}</th>
                       {config.resultColumns.map((column, index) => (
                         <th key={`${column.pointer}:${index}`}>
                           {column.label}
                         </th>
                       ))}
-                      <th>Detalle</th>
+                      <th>{t("Detalle")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -637,11 +698,11 @@ export function RequestPageResultsEditor({
                                 submitActions[0],
                                 labelLocale,
                               )
-                            : "Operación"}
+                            : t("Operación")}
                         </strong>
-                        <small>Ejemplo</small>
+                        <small>{t("Ejemplo")}</small>
                       </td>
-                      <td>Resultado disponible</td>
+                      <td>{t("Resultado disponible")}</td>
                       {config.resultColumns.map((column, index) => (
                         <td key={`${column.pointer}:${index}`}>
                           {formatPreviewValue(
@@ -651,7 +712,7 @@ export function RequestPageResultsEditor({
                           )}
                         </td>
                       ))}
-                      <td>Ver respuesta · Cargar datos</td>
+                      <td>{t("Ver respuesta · Cargar datos")}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -660,7 +721,7 @@ export function RequestPageResultsEditor({
           </details>
         ) : (
           <p className="studio-field-help">
-            Añade campos en Configurar para ver la presentación.
+            {t("Añade campos en Configurar para ver la presentación.")}
           </p>
         )}
       </TabsContent>

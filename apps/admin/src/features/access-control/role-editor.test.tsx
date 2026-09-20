@@ -52,7 +52,7 @@ it("does not save an incomplete OR condition as unrestricted access", async () =
   fireEvent.change(screen.getByLabelText("Display name"), {
     target: { value: "Reader" },
   });
-  fireEvent.click(screen.getByLabelText("read"));
+  fireEvent.click(screen.getByLabelText("Read"));
   fireEvent.change(screen.getByLabelText("Record scope"), {
     target: { value: "or" },
   });

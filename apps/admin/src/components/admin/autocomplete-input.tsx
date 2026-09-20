@@ -1,3 +1,6 @@
+import { uiMessages } from "@/i18n/locales/ui";
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import * as React from "react";
 import { useCallback, useId } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
@@ -88,6 +91,8 @@ export const AutocompleteInput = (
         React.ReactNode | ((option: any | undefined) => React.ReactNode);
     } & Pick<PopoverProps, "modal">,
 ) => {
+  const ui = useMessages(uiMessages);
+  const t = useMessages(settingsMessages);
   const {
     filterToQuery = DefaultFilterToQuery,
     inputText,
@@ -238,7 +243,7 @@ export const AutocompleteInput = (
               {/* We handle the filtering ourselves */}
               <Command shouldFilter={!isFromReference}>
                 <CommandInput
-                  placeholder="Search..."
+                  placeholder={ui("Search...")}
                   value={filterValue}
                   onValueChange={(filter) => {
                     setFilterValue(filter);
@@ -253,7 +258,7 @@ export const AutocompleteInput = (
                   }}
                 />
                 <CommandList ref={listRef}>
-                  <CommandEmpty>No matching item found.</CommandEmpty>
+                  <CommandEmpty>{t("No matching item found.")}</CommandEmpty>
                   <CommandGroup>
                     {finalChoices.map((choice) => {
                       const isCreateItem =

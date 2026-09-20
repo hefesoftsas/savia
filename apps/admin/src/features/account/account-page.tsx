@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import {
   useEffect,
   useRef,
@@ -17,11 +19,7 @@ import {
 } from "lucide-react";
 import { useTranslate } from "ra-core";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -137,6 +135,11 @@ function notifyIdentityChanged(): void {
 }
 
 export function AccountPage({ apiUrl }: AccountPageProps) {
+  const t = useMessages(settingsMessages);
+  const localError = (message: string) =>
+    Object.hasOwn(settingsMessages, message)
+      ? t(message as keyof typeof settingsMessages)
+      : message;
   const translate = useTranslate();
   const [activeTab, setActiveTab] = useState<AccountTab>("profile");
   const [account, setAccount] = useState<Account | null>(null);
@@ -396,7 +399,9 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                 <div className="space-y-3">
                   <Alert variant="destructive">
                     <CircleAlert />
-                    <AlertDescription>{accountError}</AlertDescription>
+                    <AlertDescription>
+                      {localError(accountError)}
+                    </AlertDescription>
                   </Alert>
                   <Button
                     type="button"
@@ -458,12 +463,18 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                           >
                             <Trash2 className="size-4" aria-hidden="true" />
                             {removingAvatar
-                              ? translate("savia.account.profile.removingAvatar", {
-                                  _: "Quitando…",
-                                })
-                              : translate("savia.account.profile.removeAvatar", {
-                                  _: "Quitar avatar",
-                                })}
+                              ? translate(
+                                  "savia.account.profile.removingAvatar",
+                                  {
+                                    _: "Quitando…",
+                                  },
+                                )
+                              : translate(
+                                  "savia.account.profile.removeAvatar",
+                                  {
+                                    _: "Quitar avatar",
+                                  },
+                                )}
                           </Button>
                         ) : null}
                       </div>
@@ -486,15 +497,21 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                           <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
                             <span className="inline-flex items-center gap-2">
                               <LoaderCircle className="size-4 animate-spin" />
-                              {translate("savia.account.profile.uploadingAvatar", {
-                                _: "Subiendo avatar…",
-                              })}
+                              {translate(
+                                "savia.account.profile.uploadingAvatar",
+                                {
+                                  _: "Subiendo avatar…",
+                                },
+                              )}
                             </span>
                             <span>
-                              {translate("savia.account.profile.uploadProgress", {
-                                progress: avatarProgress,
-                                _: `${avatarProgress}% cargado`,
-                              })}
+                              {translate(
+                                "savia.account.profile.uploadProgress",
+                                {
+                                  progress: avatarProgress,
+                                  _: `${avatarProgress}% cargado`,
+                                },
+                              )}
                             </span>
                           </div>
                           <div
@@ -518,7 +535,9 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                       {avatarError ? (
                         <Alert className="mt-4 max-w-xl" variant="destructive">
                           <CircleAlert />
-                          <AlertDescription>{avatarError}</AlertDescription>
+                          <AlertDescription>
+                            {localError(avatarError)}
+                          </AlertDescription>
                         </Alert>
                       ) : null}
                     </div>
@@ -581,10 +600,9 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                   />
                   <PasswordField
                     id="confirmed-password"
-                    label={translate(
-                      "savia.account.security.confirmPassword",
-                      { _: "Confirmar nueva contraseña" },
-                    )}
+                    label={translate("savia.account.security.confirmPassword", {
+                      _: "Confirmar nueva contraseña",
+                    })}
                     value={confirmedPassword}
                     onChange={setConfirmedPassword}
                     autoComplete="new-password"
@@ -594,7 +612,9 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                 {passwordError ? (
                   <Alert variant="destructive">
                     <CircleAlert />
-                    <AlertDescription>{passwordError}</AlertDescription>
+                    <AlertDescription>
+                      {localError(passwordError)}
+                    </AlertDescription>
                   </Alert>
                 ) : null}
                 {passwordSuccess ? (
@@ -702,7 +722,9 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
                   {mfaError ? (
                     <Alert className="mt-4" variant="destructive">
                       <CircleAlert />
-                      <AlertDescription>{mfaError}</AlertDescription>
+                      <AlertDescription>
+                        {localError(mfaError)}
+                      </AlertDescription>
                     </Alert>
                   ) : null}
                 </>

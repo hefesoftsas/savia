@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Ban,
@@ -66,7 +68,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const requiredField = required("Este campo es obligatorio.");
+const requiredField = required("ra.validation.required");
 
 const tenantRoleChoices: { id: AgencyAccessRole; name: string }[] = [
   { id: "tenant_admin", name: "Administrador de tenant" },
@@ -74,16 +76,20 @@ const tenantRoleChoices: { id: AgencyAccessRole; name: string }[] = [
   { id: "viewer", name: "Solo lectura" },
 ];
 
-const userFilters = [
-  <TextInput
-    key="q"
-    source="q"
-    label={false}
-    alwaysOn
-    placeholder="Buscar por usuario o correo…"
-    inputClassName="w-full sm:w-72"
-  />,
-];
+function userFilters(
+  t: ReturnType<typeof useMessages<typeof settingsMessages>>,
+) {
+  return [
+    <TextInput
+      key="q"
+      source="q"
+      label={false}
+      alwaysOn
+      placeholder={t("Buscar por usuario o correo…")}
+      inputClassName="w-full sm:w-72"
+    />,
+  ];
+}
 
 const userStoreKeys = {
   active: "users.active",
@@ -125,7 +131,9 @@ function asApiErrorLike(error: unknown): ApiErrorLike {
   return { code, status };
 }
 
-export function deleteUserErrorMessage(error: unknown): string {
+export function deleteUserErrorMessage(
+  error: unknown,
+): keyof typeof settingsMessages {
   if (isOfflineError(error)) {
     return "Sin conexión o servicio no disponible. Inténtalo de nuevo.";
   }
@@ -166,9 +174,9 @@ function UserDeleteButton({
   redirectTo?: "list" | false;
 }) {
   const translate = useTranslate();
+  const t = useMessages(settingsMessages);
   const displayLabel =
-    label ??
-    translate("savia.users.actions.delete", { _: "Eliminar usuario" });
+    label ?? translate("savia.users.actions.delete", { _: "Eliminar usuario" });
   const record = useRecordContext<UserRecord>();
   const resource = useResourceContext() ?? "users";
   const { canAccess } = useCanAccess({
@@ -202,7 +210,7 @@ function UserDeleteButton({
         },
         onError: (error: unknown) => {
           setConfirmOpen(false);
-          notify(deleteUserErrorMessage(error), { type: "error" });
+          notify(t(deleteUserErrorMessage(error)), { type: "error" });
         },
       },
     );
@@ -249,13 +257,14 @@ function UserDeleteButton({
 }
 
 export function UserList() {
+  const t = useMessages(settingsMessages);
   const translate = useTranslate();
   return (
     <List
       title={translate("savia.users.title", { _: "Usuarios" })}
       sort={{ field: "displayName", order: "ASC" }}
       filterDefaultValues={{ isActive: true }}
-      filters={userFilters}
+      filters={userFilters(t)}
       perPage={20}
       actions={<UserListActions />}
     >
@@ -266,6 +275,7 @@ export function UserList() {
 }
 
 function TenantUserScope() {
+  const t = useMessages(settingsMessages);
   const translate = useTranslate();
   const { filterValues, setFilters, displayedFilters } =
     useListContext<UserRecord>();
@@ -287,7 +297,9 @@ function TenantUserScope() {
           })}
         </p>
         <p className="text-sm text-muted-foreground">
-          Este listado muestra únicamente las personas asignadas a este tenant.
+          {t(
+            "Este listado muestra únicamente las personas asignadas a este tenant.",
+          )}
         </p>
       </div>
       <Button type="button" variant="outline" onClick={clearTenantScope}>
@@ -380,6 +392,7 @@ function UserTabbedTable() {
 }
 
 function UserTable({ storeKey }: { storeKey: string }) {
+  const t = useMessages(settingsMessages);
   const translate = useTranslate();
   return (
     <DataTable<UserRecord>
@@ -400,7 +413,7 @@ function UserTable({ storeKey }: { storeKey: string }) {
       />
       <DataTable.Col
         source="platformAdmin"
-        label="Acceso"
+        label={t("Acceso")}
         className="hidden lg:table-cell"
         headerClassName="hidden lg:table-cell"
         render={(record) => <UserAccessSummary record={record as UserRecord} />}
@@ -464,19 +477,43 @@ export function UserEdit() {
       <SimpleForm className="max-w-5xl gap-6">
         <Tabs defaultValue="identity" className="w-full gap-6">
           <div className="max-w-full overflow-x-auto">
-            <TabsList aria-label={translate("savia.users.tabs.ariaLabel", { _: "Configuración del usuario" })}>
-              <TabsTrigger value="identity">{translate("savia.users.tabs.identity", { _: "Identidad" })}</TabsTrigger>
-              <TabsTrigger value="access">{translate("savia.users.tabs.access", { _: "Acceso de plataforma" })}</TabsTrigger>
-              <TabsTrigger value="tenant">{translate("savia.users.tabs.tenant", { _: "Tenant asignado" })}</TabsTrigger>
+            <TabsList
+              aria-label={translate("savia.users.tabs.ariaLabel", {
+                _: "Configuración del usuario",
+              })}
+            >
+              <TabsTrigger value="identity">
+                {translate("savia.users.tabs.identity", { _: "Identidad" })}
+              </TabsTrigger>
+              <TabsTrigger value="access">
+                {translate("savia.users.tabs.access", {
+                  _: "Acceso de plataforma",
+                })}
+              </TabsTrigger>
+              <TabsTrigger value="tenant">
+                {translate("savia.users.tabs.tenant", { _: "Tenant asignado" })}
+              </TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value="identity" forceMount className="data-[state=inactive]:hidden">
+          <TabsContent
+            value="identity"
+            forceMount
+            className="data-[state=inactive]:hidden"
+          >
             <UserIdentityFields edit />
           </TabsContent>
-          <TabsContent value="access" forceMount className="data-[state=inactive]:hidden">
+          <TabsContent
+            value="access"
+            forceMount
+            className="data-[state=inactive]:hidden"
+          >
             <UserPlatformAccessFields />
           </TabsContent>
-          <TabsContent value="tenant" forceMount className="data-[state=inactive]:hidden">
+          <TabsContent
+            value="tenant"
+            forceMount
+            className="data-[state=inactive]:hidden"
+          >
             <UserMembershipEditor />
           </TabsContent>
         </Tabs>
@@ -502,8 +539,16 @@ function UserEditActions() {
   const translate = useTranslate();
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <ShowButton iconOnly label={translate("savia.users.actions.showCard", { _: "Ver ficha" })} />
-      <UserDeleteButton iconOnly label={translate("savia.users.actions.delete", { _: "Eliminar usuario" })} />
+      <ShowButton
+        iconOnly
+        label={translate("savia.users.actions.showCard", { _: "Ver ficha" })}
+      />
+      <UserDeleteButton
+        iconOnly
+        label={translate("savia.users.actions.delete", {
+          _: "Eliminar usuario",
+        })}
+      />
     </div>
   );
 }
@@ -533,13 +578,22 @@ function UserShowActions() {
   const translate = useTranslate();
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <EditButton iconOnly label={translate("savia.users.editUser", { _: "Editar usuario" })} />
-      <UserDeleteButton iconOnly label={translate("savia.users.actions.delete", { _: "Eliminar usuario" })} />
+      <EditButton
+        iconOnly
+        label={translate("savia.users.editUser", { _: "Editar usuario" })}
+      />
+      <UserDeleteButton
+        iconOnly
+        label={translate("savia.users.actions.delete", {
+          _: "Eliminar usuario",
+        })}
+      />
     </div>
   );
 }
 
 function UserShowContent() {
+  const t = useMessages(settingsMessages);
   const { record } = useShowContext<UserRecord>();
   const translate = useTranslate();
   if (!record) return null;
@@ -548,16 +602,30 @@ function UserShowContent() {
     <div className="max-w-5xl space-y-5">
       <UserSection
         title={translate("savia.users.sections.identity", { _: "Identidad" })}
-        description={translate("savia.users.sections.identityDetailsDesc", { _: "Datos que identifican la cuenta y su acceso a Savia." })}
+        description={translate("savia.users.sections.identityDetailsDesc", {
+          _: "Datos que identifican la cuenta y su acceso a Savia.",
+        })}
       >
-        <UserReadOnlyField label={translate("savia.users.fields.name", { _: "Nombre" })} value={record.displayName} />
-        <UserReadOnlyField label={translate("savia.users.fields.email", { _: "Correo" })} value={record.email} />
         <UserReadOnlyField
-          label={translate("savia.users.fields.platformRole", { _: "Rol de plataforma" })}
+          label={translate("savia.users.fields.name", { _: "Nombre" })}
+          value={record.displayName}
+        />
+        <UserReadOnlyField
+          label={translate("savia.users.fields.email", { _: "Correo" })}
+          value={record.email}
+        />
+        <UserReadOnlyField
+          label={translate("savia.users.fields.platformRole", {
+            _: "Rol de plataforma",
+          })}
           value={
             record.platformAdmin
-              ? translate("savia.users.fields.platformAdmin", { _: "Administrador de plataforma" })
-              : translate("savia.users.fields.noGlobalAccess", { _: "Sin acceso global" })
+              ? translate("savia.users.fields.platformAdmin", {
+                  _: "Administrador de plataforma",
+                })
+              : translate("savia.users.fields.noGlobalAccess", {
+                  _: "Sin acceso global",
+                })
           }
         />
         <UserReadOnlyField
@@ -566,34 +634,48 @@ function UserShowContent() {
         />
       </UserSection>
       <UserSection
-        title={translate("savia.users.sections.assignedTenant", { _: "Tenant asignado" })}
-        description={translate("savia.users.sections.assignedRoleDesc", { _: "El rol se aplica dentro del tenant asignado." })}
+        title={translate("savia.users.sections.assignedTenant", {
+          _: "Tenant asignado",
+        })}
+        description={translate("savia.users.sections.assignedRoleDesc", {
+          _: "El rol se aplica dentro del tenant asignado.",
+        })}
       >
         {record.memberships.length === 0 ? (
           <p className="text-sm text-muted-foreground md:col-span-2">
-            {translate("savia.users.noTenantAssigned", { _: "No tiene tenant asignado." })}
+            {translate("savia.users.noTenantAssigned", {
+              _: "No tiene tenant asignado.",
+            })}
           </p>
         ) : (
-          record.memberships.slice(0, 1).map((membership) => (
-            <UserReadOnlyField
-              key={membership.id}
-              label={`Tenant #${membership.tenantId}`}
-              value={tenantRoleName(membership.role, translate)}
-            />
-          ))
+          record.memberships
+            .slice(0, 1)
+            .map((membership) => (
+              <UserReadOnlyField
+                key={membership.id}
+                label={t("Tenant #%{value}", { value: membership.tenantId })}
+                value={tenantRoleName(membership.role, translate)}
+              />
+            ))
         )}
       </UserSection>
       <UserSection
         title={translate("savia.users.sections.security", { _: "Seguridad" })}
-        description={translate("savia.users.sections.securityDesc", { _: "La MFA se gestiona desde la cuenta del usuario; el administrador puede ver su estado." })}
+        description={translate("savia.users.sections.securityDesc", {
+          _: "La MFA se gestiona desde la cuenta del usuario; el administrador puede ver su estado.",
+        })}
       >
         <UserReadOnlyField
-          label={translate("savia.users.fields.mfa", { _: "Autenticación multifactor" })}
+          label={translate("savia.users.fields.mfa", {
+            _: "Autenticación multifactor",
+          })}
           value={<MfaStatus enabled={record.twoFactorEnabled} />}
         />
         <UserReadOnlyField
           label={translate("savia.users.fields.sessions", { _: "Sesiones" })}
-          value={translate("savia.users.fields.sessionsHelper", { _: "Puedes cerrarlas desde las acciones de cuenta." })}
+          value={translate("savia.users.fields.sessionsHelper", {
+            _: "Puedes cerrarlas desde las acciones de cuenta.",
+          })}
         />
       </UserSection>
       <UserAccountActions record={record} />
@@ -608,12 +690,24 @@ function UserIdentityFields({ edit = false }: { edit?: boolean }) {
       title={translate("savia.users.sections.identity", { _: "Identidad" })}
       description={
         edit
-          ? translate("savia.users.sections.identityEditDesc", { _: "Actualiza el nombre de la persona. El correo se conserva como identificador de acceso." })
-          : translate("savia.users.sections.identityCreateDesc", { _: "Puedes enviar un enlace seguro o definir una contraseña temporal para el primer ingreso." })
+          ? translate("savia.users.sections.identityEditDesc", {
+              _: "Actualiza el nombre de la persona. El correo se conserva como identificador de acceso.",
+            })
+          : translate("savia.users.sections.identityCreateDesc", {
+              _: "Puedes enviar un enlace seguro o definir una contraseña temporal para el primer ingreso.",
+            })
       }
     >
-      <TextInput source="firstName" label={translate("savia.users.fields.firstName", { _: "Nombres" })} validate={requiredField} />
-      <TextInput source="lastName" label={translate("savia.users.fields.lastName", { _: "Apellidos" })} validate={requiredField} />
+      <TextInput
+        source="firstName"
+        label={translate("savia.users.fields.firstName", { _: "Nombres" })}
+        validate={requiredField}
+      />
+      <TextInput
+        source="lastName"
+        label={translate("savia.users.fields.lastName", { _: "Apellidos" })}
+        validate={requiredField}
+      />
       <TextInput
         source="email"
         label={translate("savia.users.fields.email", { _: "Correo" })}
@@ -630,21 +724,33 @@ function UserInitialAccessFields() {
   const translate = useTranslate();
   return (
     <UserSection
-      title={translate("savia.users.sections.initialAccess", { _: "Acceso inicial" })}
-      description={translate("savia.users.sections.initialAccessDesc", { _: "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma." })}
+      title={translate("savia.users.sections.initialAccess", {
+        _: "Acceso inicial",
+      })}
+      description={translate("savia.users.sections.initialAccessDesc", {
+        _: "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma.",
+      })}
     >
       <TextInput
         source="temporaryPassword"
-        label={translate("savia.users.fields.temporaryPassword", { _: "Contraseña temporal" })}
+        label={translate("savia.users.fields.temporaryPassword", {
+          _: "Contraseña temporal",
+        })}
         type="password"
         autoComplete="new-password"
-        helperText={translate("savia.tenants.fields.temporaryPasswordHelper", { _: "Opcional. Si se deja vacía, se enviará un enlace para definirla." })}
+        helperText={translate("savia.tenants.fields.temporaryPasswordHelper", {
+          _: "Opcional. Si se deja vacía, se enviará un enlace para definirla.",
+        })}
         className="md:col-span-2"
       />
       <BooleanInput
         source="platformAdmin"
-        label={translate("savia.users.fields.platformAdmin", { _: "Administrador de plataforma" })}
-        helperText={translate("savia.users.fields.platformAdminHelper", { _: "Puede administrar usuarios, roles y toda la operación." })}
+        label={translate("savia.users.fields.platformAdmin", {
+          _: "Administrador de plataforma",
+        })}
+        helperText={translate("savia.users.fields.platformAdminHelper", {
+          _: "Puede administrar usuarios, roles y toda la operación.",
+        })}
         className="md:col-span-2"
       />
       <ReferenceInput
@@ -653,11 +759,17 @@ function UserInitialAccessFields() {
         perPage={100}
         filter={{ kind: "commercial" }}
       >
-        <SelectInput label={translate("savia.users.fields.commercialTenant", { _: "Tenant comercial" })} />
+        <SelectInput
+          label={translate("savia.users.fields.commercialTenant", {
+            _: "Tenant comercial",
+          })}
+        />
       </ReferenceInput>
       <SelectInput
         source="agencyRole"
-        label={translate("savia.users.fields.tenantRole", { _: "Rol en el tenant" })}
+        label={translate("savia.users.fields.tenantRole", {
+          _: "Rol en el tenant",
+        })}
         choices={getTenantRoleChoices(translate)}
       />
     </UserSection>
@@ -668,13 +780,21 @@ function UserPlatformAccessFields() {
   const translate = useTranslate();
   return (
     <UserSection
-      title={translate("savia.users.sections.platformAccess", { _: "Acceso de plataforma" })}
-      description={translate("savia.users.sections.platformAccessDesc", { _: "Los administradores de plataforma pueden gestionar toda Savia." })}
+      title={translate("savia.users.sections.platformAccess", {
+        _: "Acceso de plataforma",
+      })}
+      description={translate("savia.users.sections.platformAccessDesc", {
+        _: "Los administradores de plataforma pueden gestionar toda Savia.",
+      })}
     >
       <BooleanInput
         source="platformAdmin"
-        label={translate("savia.users.fields.platformAdmin", { _: "Administrador de plataforma" })}
-        helperText={translate("savia.users.fields.platformAdminRemoveHelper", { _: "Al retirarlo, selecciona abajo el tenant comercial y el rol que conservará el usuario." })}
+        label={translate("savia.users.fields.platformAdmin", {
+          _: "Administrador de plataforma",
+        })}
+        helperText={translate("savia.users.fields.platformAdminRemoveHelper", {
+          _: "Al retirarlo, selecciona abajo el tenant comercial y el rol que conservará el usuario.",
+        })}
         className="md:col-span-2"
       />
       <ReferenceInput
@@ -683,11 +803,17 @@ function UserPlatformAccessFields() {
         perPage={100}
         filter={{ kind: "commercial" }}
       >
-        <SelectInput label={translate("savia.users.fields.commercialTenantRemove", { _: "Tenant comercial al retirar acceso global" })} />
+        <SelectInput
+          label={translate("savia.users.fields.commercialTenantRemove", {
+            _: "Tenant comercial al retirar acceso global",
+          })}
+        />
       </ReferenceInput>
       <SelectInput
         source="agencyRole"
-        label={translate("savia.users.fields.tenantRoleRemove", { _: "Rol al retirar acceso global" })}
+        label={translate("savia.users.fields.tenantRoleRemove", {
+          _: "Rol al retirar acceso global",
+        })}
         choices={getTenantRoleChoices(translate)}
       />
     </UserSection>
@@ -695,6 +821,7 @@ function UserPlatformAccessFields() {
 }
 
 function UserMembershipEditor() {
+  const t = useMessages(settingsMessages);
   const { record } = useEditContext<UserRecord>();
   const dataProvider = useDataProvider() as IdentityUserDataProvider;
   const notify = useNotify();
@@ -711,8 +838,12 @@ function UserMembershipEditor() {
 
   useEffect(() => {
     const savedRole = record?.memberships[0]?.role;
-    setRole(savedRole === "agency_admin" ? "tenant_admin" : savedRole ?? "viewer");
-    setTenantId(record?.memberships[0] ? String(record.memberships[0].tenantId) : "");
+    setRole(
+      savedRole === "agency_admin" ? "tenant_admin" : (savedRole ?? "viewer"),
+    );
+    setTenantId(
+      record?.memberships[0] ? String(record.memberships[0].tenantId) : "",
+    );
   }, [record?.id, record?.memberships[0]?.role]);
 
   if (!record) return null;
@@ -720,7 +851,12 @@ function UserMembershipEditor() {
   const transferMembership = async () => {
     const selectedTenantId = Number(tenantId);
     if (!Number.isSafeInteger(selectedTenantId) || selectedTenantId < 1) {
-      notify(translate("savia.users.notifications.selectTenant", { _: "Selecciona un tenant." }), { type: "warning" });
+      notify(
+        translate("savia.users.notifications.selectTenant", {
+          _: "Selecciona un tenant.",
+        }),
+        { type: "warning" },
+      );
       return;
     }
     setPending(true);
@@ -730,13 +866,20 @@ function UserMembershipEditor() {
         role,
       });
       setTenantId("");
-      notify(translate("savia.users.notifications.tenantUpdated", { _: "Asignación de tenant actualizada." }), { type: "success" });
+      notify(
+        translate("savia.users.notifications.tenantUpdated", {
+          _: "Asignación de tenant actualizada.",
+        }),
+        { type: "success" },
+      );
       refresh();
     } catch (error) {
       notify(
         error instanceof Error
           ? error.message
-          : translate("savia.users.notifications.updateAccessError", { _: "No fue posible actualizar el acceso." }),
+          : translate("savia.users.notifications.updateAccessError", {
+              _: "No fue posible actualizar el acceso.",
+            }),
         {
           type: "error",
         },
@@ -750,8 +893,12 @@ function UserMembershipEditor() {
 
   return (
     <UserSection
-      title={translate("savia.users.sections.assignedTenant", { _: "Tenant asignado" })}
-      description={translate("savia.users.sections.assignedTenantDesc", { _: "Cada usuario pertenece a un tenant. Usa la transferencia para cambiarlo sin dejarlo sin acceso." })}
+      title={translate("savia.users.sections.assignedTenant", {
+        _: "Tenant asignado",
+      })}
+      description={translate("savia.users.sections.assignedTenantDesc", {
+        _: "Cada usuario pertenece a un tenant. Usa la transferencia para cambiarlo sin dejarlo sin acceso.",
+      })}
     >
       <div className="space-y-3 md:col-span-2">
         {record.memberships.slice(0, 1).map((membership) => (
@@ -760,7 +907,9 @@ function UserMembershipEditor() {
             className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2"
           >
             <div className="text-sm">
-              <span className="font-medium">Tenant #{membership.tenantId}</span>
+              <span className="font-medium">
+                {t("Tenant #%{value}", { value: membership.tenantId })}
+              </span>
               <span className="ml-2 text-muted-foreground">
                 {tenantRoleName(membership.role, translate)}
               </span>
@@ -771,9 +920,18 @@ function UserMembershipEditor() {
       <div className="grid gap-3 rounded-lg border p-3 md:col-span-2 md:grid-cols-[1fr_220px_auto] md:items-end">
         <label className="grid gap-2 text-sm font-medium">
           {translate("savia.users.fields.tenant", { _: "Tenant" })}
-          <Select value={tenantId} onValueChange={setTenantId} disabled={pending}>
+          <Select
+            value={tenantId}
+            onValueChange={setTenantId}
+            disabled={pending}
+          >
             <SelectTrigger>
-              <SelectValue placeholder={translate("savia.users.fields.selectTenantPlaceholder", { _: "Selecciona un tenant" })} />
+              <SelectValue
+                placeholder={translate(
+                  "savia.users.fields.selectTenantPlaceholder",
+                  { _: "Selecciona un tenant" },
+                )}
+              />
             </SelectTrigger>
             <SelectContent>
               {tenants.map((tenant) => (
@@ -789,7 +947,9 @@ function UserMembershipEditor() {
           <Select
             value={role}
             onValueChange={(value) => {
-              const choice = roleChoices.find((candidate) => candidate.id === value);
+              const choice = roleChoices.find(
+                (candidate) => candidate.id === value,
+              );
               if (choice) setRole(choice.id);
             }}
           >
@@ -812,8 +972,12 @@ function UserMembershipEditor() {
         >
           <Plus className="size-4" />
           {record.memberships.length
-            ? translate("savia.users.actions.transfer", { _: "Transferir usuario" })
-            : translate("savia.users.actions.assignTenant", { _: "Asignar tenant" })}
+            ? translate("savia.users.actions.transfer", {
+                _: "Transferir usuario",
+              })
+            : translate("savia.users.actions.assignTenant", {
+                _: "Asignar tenant",
+              })}
         </Button>
       </div>
     </UserSection>
@@ -841,7 +1005,9 @@ function UserAccountActions({ record }: { record: UserRecord }) {
       notify(
         error instanceof Error
           ? error.message
-          : translate("savia.users.notifications.actionError", { _: "No fue posible completar la acción." }),
+          : translate("savia.users.notifications.actionError", {
+              _: "No fue posible completar la acción.",
+            }),
         {
           type: "error",
         },
@@ -854,8 +1020,12 @@ function UserAccountActions({ record }: { record: UserRecord }) {
   const suspended = !record.isActive || record.isBanned;
   return (
     <UserSection
-      title={translate("savia.users.sections.accountActions", { _: "Acciones de cuenta" })}
-      description={translate("savia.users.sections.accountActionsDesc", { _: "Estas acciones no modifican la contraseña ni desactivan MFA de otra persona." })}
+      title={translate("savia.users.sections.accountActions", {
+        _: "Acciones de cuenta",
+      })}
+      description={translate("savia.users.sections.accountActionsDesc", {
+        _: "Estas acciones no modifican la contraseña ni desactivan MFA de otra persona.",
+      })}
     >
       <div className="flex flex-wrap gap-2 md:col-span-2">
         <Button
@@ -866,12 +1036,16 @@ function UserAccountActions({ record }: { record: UserRecord }) {
             void run(
               "reset",
               () => dataProvider.sendPasswordReset(record.id),
-              translate("savia.users.notifications.passwordResetSent", { _: "Enlace de restablecimiento enviado." }),
+              translate("savia.users.notifications.passwordResetSent", {
+                _: "Enlace de restablecimiento enviado.",
+              }),
             )
           }
         >
           <KeyRound className="size-4" />
-          {translate("savia.users.actions.resendPassword", { _: "Reenviar contraseña" })}
+          {translate("savia.users.actions.resendPassword", {
+            _: "Reenviar contraseña",
+          })}
         </Button>
         <Button
           type="button"
@@ -881,12 +1055,16 @@ function UserAccountActions({ record }: { record: UserRecord }) {
             void run(
               "sessions",
               () => dataProvider.revokeSessions(record.id),
-              translate("savia.users.notifications.sessionsRevoked", { _: "Sesiones cerradas." }),
+              translate("savia.users.notifications.sessionsRevoked", {
+                _: "Sesiones cerradas.",
+              }),
             )
           }
         >
           <LogOut className="size-4" />
-          {translate("savia.users.actions.revokeSessions", { _: "Cerrar sesiones" })}
+          {translate("savia.users.actions.revokeSessions", {
+            _: "Cerrar sesiones",
+          })}
         </Button>
         <Button
           type="button"
@@ -900,8 +1078,12 @@ function UserAccountActions({ record }: { record: UserRecord }) {
                   ? dataProvider.reactivate(record.id)
                   : dataProvider.suspend(record.id),
               suspended
-                ? translate("savia.users.notifications.userReactivated", { _: "Usuario reactivado." })
-                : translate("savia.users.notifications.userSuspended", { _: "Usuario suspendido." }),
+                ? translate("savia.users.notifications.userReactivated", {
+                    _: "Usuario reactivado.",
+                  })
+                : translate("savia.users.notifications.userSuspended", {
+                    _: "Usuario suspendido.",
+                  }),
             )
           }
         >
@@ -911,8 +1093,12 @@ function UserAccountActions({ record }: { record: UserRecord }) {
             <Ban className="size-4" />
           )}
           {suspended
-            ? translate("savia.users.actions.reactivate", { _: "Reactivar usuario" })
-            : translate("savia.users.actions.suspend", { _: "Suspender usuario" })}
+            ? translate("savia.users.actions.reactivate", {
+                _: "Reactivar usuario",
+              })
+            : translate("savia.users.actions.suspend", {
+                _: "Suspender usuario",
+              })}
         </Button>
       </div>
     </UserSection>
@@ -953,13 +1139,23 @@ function UserReadOnlyField({
 }
 
 function UserAccessSummary({ record }: { record: UserRecord }) {
+  const t = useMessages(settingsMessages);
   const translate = useTranslate();
-  if (record.platformAdmin) return <Badge>{translate("savia.users.badges.platform", { _: "Plataforma" })}</Badge>;
+  if (record.platformAdmin)
+    return (
+      <Badge>
+        {translate("savia.users.badges.platform", { _: "Plataforma" })}
+      </Badge>
+    );
   if (record.memberships.length === 0)
-    return <span className="text-muted-foreground">{translate("savia.users.badges.noAccess", { _: "Sin acceso" })}</span>;
+    return (
+      <span className="text-muted-foreground">
+        {translate("savia.users.badges.noAccess", { _: "Sin acceso" })}
+      </span>
+    );
   return (
     <span>
-      Tenant #{record.memberships[0]?.tenantId}
+      {t("Tenant #%{value}", { value: record.memberships[0]!.tenantId })}
     </span>
   );
 }
@@ -969,7 +1165,9 @@ function UserStatus({ active }: { active: boolean }) {
   return active ? (
     <Badge>{translate("savia.users.status.active", { _: "Activo" })}</Badge>
   ) : (
-    <Badge variant="secondary">{translate("savia.users.status.suspended", { _: "Suspendido" })}</Badge>
+    <Badge variant="secondary">
+      {translate("savia.users.status.suspended", { _: "Suspendido" })}
+    </Badge>
   );
 }
 
@@ -977,29 +1175,52 @@ function MfaStatus({ enabled }: { enabled: boolean }) {
   const translate = useTranslate();
   return enabled ? (
     <span className="inline-flex items-center gap-1.5 text-sm text-primary">
-      <ShieldCheck className="size-4" /> {translate("savia.users.mfa.active", { _: "Activa" })}
+      <ShieldCheck className="size-4" />{" "}
+      {translate("savia.users.mfa.active", { _: "Activa" })}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-      <ShieldOff className="size-4" /> {translate("savia.users.mfa.inactive", { _: "No activa" })}
+      <ShieldOff className="size-4" />{" "}
+      {translate("savia.users.mfa.inactive", { _: "No activa" })}
     </span>
   );
 }
 
-function getTenantRoleChoices(translate: (key: string, options?: any) => string): { id: AgencyAccessRole; name: string }[] {
+function getTenantRoleChoices(
+  translate: (key: string, options?: any) => string,
+): { id: AgencyAccessRole; name: string }[] {
   return [
-    { id: "tenant_admin", name: translate("savia.users.roles.tenant_admin", { _: "Administrador de tenant" }) },
-    { id: "operator", name: translate("savia.users.roles.operator", { _: "Operador" }) },
-    { id: "viewer", name: translate("savia.users.roles.viewer", { _: "Solo lectura" }) },
+    {
+      id: "tenant_admin",
+      name: translate("savia.users.roles.tenant_admin", {
+        _: "Administrador de tenant",
+      }),
+    },
+    {
+      id: "operator",
+      name: translate("savia.users.roles.operator", { _: "Operador" }),
+    },
+    {
+      id: "viewer",
+      name: translate("savia.users.roles.viewer", { _: "Solo lectura" }),
+    },
   ];
 }
 
-function tenantRoleName(role: AgencyAccessRole, translate?: (key: string, options?: any) => string): string {
+function tenantRoleName(
+  role: AgencyAccessRole,
+  translate?: (key: string, options?: any) => string,
+): string {
   const normalizedRole = role === "agency_admin" ? "tenant_admin" : role;
   if (translate) {
     const key = `savia.users.roles.${normalizedRole}`;
-    const fallback = tenantRoleChoices.find((choice) => choice.id === normalizedRole)?.name ?? role;
+    const fallback =
+      tenantRoleChoices.find((choice) => choice.id === normalizedRole)?.name ??
+      role;
     return translate(key, { _: fallback });
   }
-  return tenantRoleChoices.find((choice) => choice.id === normalizedRole)?.name ?? role;
+  return (
+    tenantRoleChoices.find((choice) => choice.id === normalizedRole)?.name ??
+    role
+  );
 }

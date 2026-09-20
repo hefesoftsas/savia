@@ -1,3 +1,5 @@
+import { useAppLocale, useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
@@ -42,6 +44,9 @@ type GeoMessage = {
 };
 
 export function MapLocationField(p: IFieldProps) {
+  const t = useMessages(recordsMessages);
+  const locale = useAppLocale();
+
   const settings = resolveMapPicker(p.config);
   const location = parseMapLocation(p.value);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -74,7 +79,8 @@ export function MapLocationField(p: IFieldProps) {
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!searchRef.current?.contains(event.target as Node)) setSearchOpen(false);
+      if (!searchRef.current?.contains(event.target as Node))
+        setSearchOpen(false);
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
@@ -99,7 +105,7 @@ export function MapLocationField(p: IFieldProps) {
         lat: String(lat),
         lng: String(lng),
         provider: settings.provider ?? "photon",
-        language: settings.language ?? "es",
+        language: settings.language ?? locale,
       });
       if (settings.country) params.set("country", settings.country);
       const response = await api<{ data: { label: string; address?: string } }>(
@@ -107,7 +113,7 @@ export function MapLocationField(p: IFieldProps) {
       );
       return response.data;
     },
-    [settings],
+    [settings, locale],
   );
 
   const setMapLocation = useCallback(
@@ -116,7 +122,9 @@ export function MapLocationField(p: IFieldProps) {
         lat,
         lng,
         ...(keepLabel && location?.label ? { label: location.label } : {}),
-        ...(keepLabel && location?.address ? { address: location.address } : {}),
+        ...(keepLabel && location?.address
+          ? { address: location.address }
+          : {}),
       };
       applyLocation(base);
       if (!settings.reverseGeocode) return;
@@ -166,7 +174,7 @@ export function MapLocationField(p: IFieldProps) {
         },
       )
         .addTo(map)
-        .bindPopup(settings.reference.label ?? "Punto de referencia");
+        .bindPopup(settings.reference.label ?? t("Punto de referencia"));
     }
 
     markerRef.current = L.marker([center.lat, center.lng], {
@@ -241,21 +249,20 @@ export function MapLocationField(p: IFieldProps) {
       debouncedSearch,
       settings.provider,
       settings.country,
-      settings.language,
+      settings.language ?? locale,
     ],
     queryFn: () => {
       const params = new URLSearchParams({
         q: debouncedSearch.trim(),
         provider: settings.provider ?? "photon",
-        language: settings.language ?? "es",
+        language: settings.language ?? locale,
       });
       if (settings.country) params.set("country", settings.country);
-      return api<{ data: { label: string; value: string; lat?: number; lng?: number }[] }>(
-        `/geocoding/search?${params}`,
-      ).then((response) => response.data);
+      return api<{
+        data: { label: string; value: string; lat?: number; lng?: number }[];
+      }>(`/geocoding/search?${params}`).then((response) => response.data);
     },
-    enabled:
-      !readOnly && searchOpen && debouncedSearch.trim().length >= 3,
+    enabled: !readOnly && searchOpen && debouncedSearch.trim().length >= 3,
     staleTime: 60_000,
   });
 
@@ -284,14 +291,18 @@ export function MapLocationField(p: IFieldProps) {
       setGeoMessage(
         approximate
           ? {
-              title: "Ubicación aproximada detectada",
+              title: t("Ubicación aproximada detectada"),
               description:
                 label ??
-                "Centramos el mapa según tu red. Ajusta el marcador si hace falta.",
+                t(
+                  "Centramos el mapa según tu red. Ajusta el marcador si hace falta.",
+                ),
             }
           : {
-              title: "Ubicación detectada",
-              description: "Ajusta el marcador si necesitas corregir la dirección.",
+              title: t("Ubicación detectada"),
+              description: t(
+                "Ajusta el marcador si necesitas corregir la dirección.",
+              ),
             },
       );
       if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
@@ -304,7 +315,9 @@ export function MapLocationField(p: IFieldProps) {
     try {
       const browser = await Promise.race([
         requestCurrentLocation(),
-        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 8000)),
+        new Promise<null>((resolve) =>
+          window.setTimeout(() => resolve(null), 8000),
+        ),
       ]);
 
       if (browser) {
@@ -322,7 +335,9 @@ export function MapLocationField(p: IFieldProps) {
 
       const retry = await requestCurrentLocation({
         approximate: async () => {
-          throw Object.assign(new Error("Approximate unavailable"), { code: 2 });
+          throw Object.assign(new Error("Approximate unavailable"), {
+            code: 2,
+          });
         },
       });
       await setMapLocation(retry.coords.latitude, retry.coords.longitude);
@@ -353,8 +368,8 @@ export function MapLocationField(p: IFieldProps) {
         return;
       }
       setGeoMessage({
-        title: "Geolocalización no disponible",
-        description: "Marca el punto en el mapa o busca una dirección.",
+        title: t("Geolocalización no disponible"),
+        description: t("Marca el punto en el mapa o busca una dirección."),
       });
     }
   }
@@ -385,8 +400,8 @@ export function MapLocationField(p: IFieldProps) {
     geoMessage ??
     (geoStatus === "locating"
       ? {
-          title: "Detectando tu ubicación",
-          description: "Esto puede tardar unos segundos.",
+          title: t("Detectando tu ubicación"),
+          description: t("Esto puede tardar unos segundos."),
         }
       : null);
   const showGeoBanner =
@@ -402,14 +417,18 @@ export function MapLocationField(p: IFieldProps) {
       {!readOnly ? (
         <div ref={searchRef} className="map-location-search">
           <div className="map-location-search-field">
-            <Search className="map-location-search-icon" size={16} aria-hidden="true" />
+            <Search
+              className="map-location-search-icon"
+              size={16}
+              aria-hidden="true"
+            />
             <Input
               className="map-location-search-input"
               role="combobox"
               aria-autocomplete="list"
               aria-expanded={showSearchResults}
               aria-controls={showSearchResults ? listId : undefined}
-              placeholder="Buscar dirección…"
+              placeholder={t("Buscar dirección…")}
               value={search}
               onFocus={() => setSearchOpen(true)}
               onChange={(event) => {
@@ -422,20 +441,27 @@ export function MapLocationField(p: IFieldProps) {
             />
           </div>
           {suggestions.isFetching ? (
-            <p className="map-location-search-hint">Buscando direcciones…</p>
-          ) : searchOpen && search.trim().length > 0 && search.trim().length < 3 ? (
             <p className="map-location-search-hint">
-              Escribe al menos 3 caracteres para buscar direcciones.
+              {t("Buscando direcciones…")}
+            </p>
+          ) : searchOpen &&
+            search.trim().length > 0 &&
+            search.trim().length < 3 ? (
+            <p className="map-location-search-hint">
+              {t("Escribe al menos 3 caracteres para buscar direcciones.")}
             </p>
           ) : suggestions.isError ? (
             <p className="map-location-search-hint" role="alert">
-              No se pudieron cargar sugerencias de dirección.
+              {t("No se pudieron cargar sugerencias de dirección.")}
             </p>
           ) : null}
           {showSearchResults ? (
             <ul id={listId} role="listbox" className="map-location-search-list">
               {searchResults.map((option) => (
-                <li key={`${option.label}-${option.lat ?? option.value}`} role="presentation">
+                <li
+                  key={`${option.label}-${option.lat ?? option.value}`}
+                  role="presentation"
+                >
                   <button
                     type="button"
                     role="option"
@@ -484,7 +510,9 @@ export function MapLocationField(p: IFieldProps) {
             )}
             <div className="map-location-status-copy">
               <p className="map-location-status-title">{bannerCopy.title}</p>
-              <p className="map-location-status-text">{bannerCopy.description}</p>
+              <p className="map-location-status-text">
+                {bannerCopy.description}
+              </p>
             </div>
             {geoStatus === "error" ? (
               <button
@@ -492,7 +520,7 @@ export function MapLocationField(p: IFieldProps) {
                 className="map-location-status-action"
                 onClick={() => void useCurrentLocation()}
               >
-                Reintentar
+                {t("Reintentar")}
               </button>
             ) : null}
           </div>
@@ -500,7 +528,10 @@ export function MapLocationField(p: IFieldProps) {
 
         <div
           ref={mapRef}
-          className={cn("map-location-map", readOnly && "map-location-map--readonly")}
+          className={cn(
+            "map-location-map",
+            readOnly && "map-location-map--readonly",
+          )}
           role="presentation"
         />
 
@@ -516,8 +547,8 @@ export function MapLocationField(p: IFieldProps) {
                   )}
                   aria-label={
                     geoStatus === "locating"
-                      ? "Detectando tu ubicación"
-                      : "Centrar en mi ubicación"
+                      ? t("Detectando tu ubicación")
+                      : t("Centrar en mi ubicación")
                   }
                   aria-busy={geoStatus === "locating"}
                   disabled={geoStatus === "locating"}
@@ -525,7 +556,10 @@ export function MapLocationField(p: IFieldProps) {
                 >
                   {geoStatus === "locating" ? (
                     <>
-                      <span className="map-location-locate-ring" aria-hidden="true" />
+                      <span
+                        className="map-location-locate-ring"
+                        aria-hidden="true"
+                      />
                       <LoaderCircle className="animate-spin" size={18} />
                     </>
                   ) : (
@@ -535,8 +569,8 @@ export function MapLocationField(p: IFieldProps) {
               </TooltipTrigger>
               <TooltipContent side="left">
                 {geoStatus === "locating"
-                  ? "Detectando ubicación…"
-                  : "Usar mi ubicación actual"}
+                  ? t("Detectando ubicación…")
+                  : t("Usar mi ubicación actual")}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -545,8 +579,10 @@ export function MapLocationField(p: IFieldProps) {
 
       {settings.reference ? (
         <p className="map-location-summary">
-          Referencia: {settings.reference.label ?? "Punto configurado"} (
-          {settings.reference.lat.toFixed(5)}, {settings.reference.lng.toFixed(5)})
+          {t("Referencia:")}{" "}
+          {settings.reference.label ?? t("Punto configurado")} (
+          {settings.reference.lat.toFixed(5)},{" "}
+          {settings.reference.lng.toFixed(5)})
         </p>
       ) : null}
     </div>

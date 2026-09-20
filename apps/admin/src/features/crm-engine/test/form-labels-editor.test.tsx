@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React, { useState } from "react";
 import { expect, it } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { FormLabelsEditor } from "../form-labels-editor";
 it("allows renaming switches and read-only fields without changing their contract", () => {
   const original: any = {

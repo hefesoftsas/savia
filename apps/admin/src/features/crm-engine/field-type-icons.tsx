@@ -1,3 +1,6 @@
+import { translateMessage } from "@/i18n/core";
+import type { AppLocale } from "@/i18n/app-locale";
+import { studioMessages } from "@/i18n/locales/studio";
 import {
   Type,
   Hash,
@@ -30,7 +33,7 @@ import {
 
 export const fieldTypePalette: {
   type: string;
-  label: string;
+  label: keyof typeof studioMessages;
   icon: LucideIcon;
   searchTerms?: string;
 }[] = [
@@ -101,8 +104,18 @@ export function fieldTypeIcon(type: string): LucideIcon {
   return icons[type] ?? HelpCircle;
 }
 
-export function fieldTypeLabel(type: string) {
-  return fieldTypePalette.find((entry) => entry.type === type)?.label ?? type;
+export function getLocalizedFieldTypePalette(locale: AppLocale) {
+  return fieldTypePalette.map((entry) => ({
+    ...entry,
+    label: translateMessage(studioMessages, entry.label, locale),
+  }));
+}
+
+export function fieldTypeLabel(type: string, locale: AppLocale = "es") {
+  return (
+    getLocalizedFieldTypePalette(locale).find((entry) => entry.type === type)
+      ?.label ?? type
+  );
 }
 
 export function normalizePaletteTypeSearch(value: string): string {

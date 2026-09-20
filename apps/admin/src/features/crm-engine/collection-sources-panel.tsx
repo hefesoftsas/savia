@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import {
   databaseKinds,
   isDatabaseKind,
@@ -124,6 +126,7 @@ function suggestScreenIdentifier(value: string, usedNames: string[]) {
   }
 }
 function useScopedRequest() {
+  const t = useMessages(studioMessages);
   const [runtime] = useState(getCrmRuntime);
   return {
     scope: runtime.domainId ?? runtime.apiBasePath,
@@ -133,7 +136,7 @@ function useScopedRequest() {
       body?: unknown,
     ): Promise<T> => {
       if (runtime.embedded && !runtime.transport)
-        throw new Error("Abre el estudio desde Savia.");
+        throw new Error(t("Abre el estudio desde Savia."));
       const response = await (runtime.transport ?? fetch)(`/api${path}`, {
         method,
         ...(body === undefined
@@ -152,16 +155,11 @@ function useScopedRequest() {
         throw new Error(
           result.error ??
             result.message ??
-            "No se pudo completar la operación.",
+            t("No se pudo completar la operación."),
         );
       return result.data;
     },
   };
-}
-function errorText(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "No se pudo completar la operación.";
 }
 
 export default function CollectionSourcesPanel({
@@ -169,6 +167,11 @@ export default function CollectionSourcesPanel({
 }: {
   onBound: (object: Pick<CrmObject, "name" | "label">) => void | Promise<void>;
 }) {
+  const t = useMessages(studioMessages);
+  const errorText = (error: unknown) =>
+    error instanceof Error
+      ? error.message
+      : t("No se pudo completar la operación.");
   const { scope, request } = useScopedRequest();
   const client = useQueryClient();
   const sources = useQuery({
@@ -307,7 +310,7 @@ export default function CollectionSourcesPanel({
       } else if (isDatabaseKind(sourceKind)) {
         const port = Number.parseInt(pgPort, 10);
         if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
-          throw new Error("El puerto debe estar entre 1 y 65535.");
+          throw new Error(t("El puerto debe estar entre 1 y 65535."));
         await request<Source>("/sources", "POST", {
           id: sourceId,
           label: sourceLabel,
@@ -345,7 +348,7 @@ export default function CollectionSourcesPanel({
       });
       setRemoteSource(sourceId);
       resetSourceForm();
-      setNotice("Fuente guardada. Ya puedes vincular una colección.");
+      setNotice(t("Fuente guardada. Ya puedes vincular una colección."));
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -365,8 +368,8 @@ export default function CollectionSourcesPanel({
       await client.invalidateQueries();
       setNotice(
         path.startsWith("/collection-bindings")
-          ? "Pantalla desvinculada. Los registros de la fuente se conservan."
-          : "Fuente eliminada.",
+          ? t("Pantalla desvinculada. Los registros de la fuente se conservan.")
+          : t("Fuente eliminada."),
       );
     } catch (cause) {
       setError(errorText(cause));
@@ -400,18 +403,22 @@ export default function CollectionSourcesPanel({
       if (inspection.tables) {
         setNotice(
           inspection.tables.length
-            ? `Tablas disponibles: ${inspection.tables
-                .slice(0, 20)
-                .map((entry) => entry.table)
-                .join(
-                  ", ",
-                )}${inspection.tables.length > 20 ? "…" : ""}. Escribe una tabla y vuelve a analizar.`
-            : "El esquema no tiene tablas visibles para este usuario.",
+            ? t(
+                "Tablas disponibles: %{v1}%{v2}. Escribe una tabla y vuelve a analizar.",
+                {
+                  v1: inspection.tables
+                    .slice(0, 20)
+                    .map((entry) => entry.table)
+                    .join(", "),
+                  v2: inspection.tables.length > 20 ? "…" : "",
+                },
+              )
+            : t("El esquema no tiene tablas visibles para este usuario."),
         );
         return;
       }
       if (!inspection.fields)
-        throw new Error("La fuente no devolvió columnas.");
+        throw new Error(t("La fuente no devolvió columnas."));
       setFields(JSON.stringify(inspection.fields, null, 2));
       setRelationships(JSON.stringify(inspection.relationships ?? {}, null, 2));
       if (inspection.resourceType) setResourceType(inspection.resourceType);
@@ -419,16 +426,26 @@ export default function CollectionSourcesPanel({
       if (inspection.primaryKey)
         setNotice(
           inspection.primaryKey.length
-            ? `Columnas inferidas. Identificador: ${inspection.primaryKey.join(", ")}. Las operaciones respetan los permisos de la fuente.`
-            : "Columnas inferidas. Selecciona una clave única para operar por registro; sin ella solo podrás listar.",
+            ? t(
+                "Columnas inferidas. Identificador: %{v1}. Las operaciones respetan los permisos de la fuente.",
+                { v1: inspection.primaryKey.join(", ") },
+              )
+            : t(
+                "Columnas inferidas. Selecciona una clave única para operar por registro; sin ella solo podrás listar.",
+              ),
         );
       else
         setNotice(
           inspection.total !== undefined
-            ? `Esquema inferido de 1 registro; la fuente informa ${inspection.total} en total.`
+            ? t(
+                "Esquema inferido de 1 registro; la fuente informa %{v1} en total.",
+                { v1: inspection.total },
+              )
             : inspection.hasNext
-              ? "Esquema inferido de 1 registro; la fuente tiene más páginas."
-              : "Esquema inferido de 1 registro.",
+              ? t(
+                  "Esquema inferido de 1 registro; la fuente tiene más páginas.",
+                )
+              : t("Esquema inferido de 1 registro."),
         );
     } catch (cause) {
       setError(errorText(cause));
@@ -450,7 +467,7 @@ export default function CollectionSourcesPanel({
       );
       let payload: Record<string, unknown>;
       if (mode === "domain") {
-        if (!entry) throw new Error("Selecciona una colección del dominio.");
+        if (!entry) throw new Error(t("Selecciona una colección del dominio."));
         payload = {
           name,
           label,
@@ -465,9 +482,10 @@ export default function CollectionSourcesPanel({
           Array.isArray(parsed) ||
           !Object.keys(parsed).length
         )
-          throw new Error("Analiza la tabla para obtener sus columnas.");
-        if (!remoteSource) throw new Error("Selecciona una fuente Postgres.");
-        if (!resource.trim()) throw new Error("Indica la tabla a vincular.");
+          throw new Error(t("Analiza la tabla para obtener sus columnas."));
+        if (!remoteSource)
+          throw new Error(t("Selecciona una fuente Postgres."));
+        if (!resource.trim()) throw new Error(t("Indica la tabla a vincular."));
         payload = {
           name,
           label,
@@ -485,7 +503,7 @@ export default function CollectionSourcesPanel({
           Array.isArray(parsed) ||
           !Object.keys(parsed).length
         )
-          throw new Error("Define al menos un campo en el objeto JSON.");
+          throw new Error(t("Define al menos un campo en el objeto JSON."));
         const relationshipMap: unknown = relationships.trim()
           ? JSON.parse(relationships)
           : {};
@@ -494,7 +512,7 @@ export default function CollectionSourcesPanel({
           typeof relationshipMap !== "object" ||
           Array.isArray(relationshipMap)
         )
-          throw new Error("Las relaciones deben ser un objeto JSON.");
+          throw new Error(t("Las relaciones deben ser un objeto JSON."));
         payload = {
           name,
           label,
@@ -516,7 +534,7 @@ export default function CollectionSourcesPanel({
       await client.invalidateQueries({
         queryKey: ["collection-bindings", scope],
       });
-      setNotice(`Colección ${object.label} vinculada.`);
+      setNotice(t("Colección %{v1} vinculada.", { v1: object.label }));
       onBound(object);
     } catch (cause) {
       setError(errorText(cause));
@@ -536,15 +554,16 @@ export default function CollectionSourcesPanel({
       <header className="flex flex-col gap-1 pb-2 border-b border-border/60">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs font-normal">
-            Dominio · {scope ?? "Plataforma"}
+            {t("Dominio ·")} {scope ?? t("Plataforma")}
           </Badge>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Fuentes y colecciones
+          {t("Fuentes y colecciones")}
         </h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Conecta una fuente, elige sus datos y crea una pantalla para trabajar
-          con ellos.
+          {t(
+            "Conecta una fuente, elige sus datos y crea una pantalla para trabajar con ellos.",
+          )}
         </p>
       </header>
 
@@ -593,20 +612,20 @@ export default function CollectionSourcesPanel({
       >
         <TabsList
           variant="line"
-          aria-label="Secciones de fuentes y colecciones"
+          aria-label={t("Secciones de fuentes y colecciones")}
           className="border-b border-border/80 w-full justify-start rounded-none px-0 pb-px"
         >
           <TabsTrigger
             value="collections"
             onClick={() => setActiveSection("collections")}
           >
-            Colecciones
+            {t("Colecciones")}
           </TabsTrigger>
           <TabsTrigger
             value="sources"
             onClick={() => setActiveSection("sources")}
           >
-            Fuentes externas
+            {t("Fuentes externas")}
           </TabsTrigger>
         </TabsList>
 
@@ -616,11 +635,12 @@ export default function CollectionSourcesPanel({
             <CardHeader className="flex flex-row items-center justify-between gap-4 pb-4">
               <div className="space-y-1">
                 <h2 className="text-base font-semibold text-foreground">
-                  Fuentes configuradas
+                  {t("Fuentes configuradas")}
                 </h2>
                 <CardDescription className="text-xs leading-relaxed">
-                  Conexiones a servicios web JSON:API y a bases de datos
-                  externas con permisos de lectura y escritura.
+                  {t(
+                    "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
+                  )}
                 </CardDescription>
               </div>
               <Tooltip>
@@ -630,7 +650,7 @@ export default function CollectionSourcesPanel({
                     variant="outline"
                     size="icon"
                     className="size-8"
-                    aria-label="Nueva fuente externa"
+                    aria-label={t("Nueva fuente externa")}
                     onClick={() => {
                       setEditingSource(false);
                       setRemoveToken(false);
@@ -655,7 +675,7 @@ export default function CollectionSourcesPanel({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  Nueva fuente externa
+                  {t("Nueva fuente externa")}
                 </TooltipContent>
               </Tooltip>
             </CardHeader>
@@ -666,22 +686,24 @@ export default function CollectionSourcesPanel({
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-foreground">
                       {editingSource
-                        ? "Actualizar acceso a fuente"
+                        ? t("Actualizar acceso a fuente")
                         : isDatabaseKind(sourceKind)
-                          ? "Conexión de base de datos"
-                          : "Conexión JSON:API"}
+                          ? t("Conexión de base de datos")
+                          : t("Conexión JSON:API")}
                     </h3>
                     <Badge variant="outline" className="text-xs">
-                      {editingSource ? "Edición" : "Nueva"}
+                      {editingSource ? t("Edición") : t("Nueva")}
                     </Badge>
                   </div>
 
                   {!editingSource && (
                     <div className="grid gap-1.5 text-sm">
-                      <Label htmlFor="source-kind-select">Tipo de fuente</Label>
+                      <Label htmlFor="source-kind-select">
+                        {t("Tipo de fuente")}
+                      </Label>
                       <select
                         id="source-kind-select"
-                        aria-label="Tipo de fuente"
+                        aria-label={t("Tipo de fuente")}
                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
                         value={sourceKind}
                         onChange={(e) => {
@@ -694,10 +716,10 @@ export default function CollectionSourcesPanel({
                           }
                         }}
                       >
-                        <option value="jsonapi">Recurso JSON:API</option>
+                        <option value="jsonapi">{t("Recurso JSON:API")}</option>
                         {Object.entries(databaseKinds).map(([kind, info]) => (
                           <option key={kind} value={kind}>
-                            Base {info.label}
+                            {t("Base")} {info.label}
                           </option>
                         ))}
                       </select>
@@ -707,7 +729,7 @@ export default function CollectionSourcesPanel({
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-1.5 text-sm">
                       <Label htmlFor="source-id-input">
-                        Identificador de la fuente
+                        {t("Identificador de la fuente")}
                       </Label>
                       <Input
                         id="source-id-input"
@@ -721,14 +743,14 @@ export default function CollectionSourcesPanel({
                     </div>
                     <div className="grid gap-1.5 text-sm">
                       <Label htmlFor="source-label-input">
-                        Nombre de la fuente
+                        {t("Nombre de la fuente")}
                       </Label>
                       <Input
                         id="source-label-input"
                         required
                         value={sourceLabel}
                         onChange={(e) => setSourceLabel(e.target.value)}
-                        placeholder="CRM externo"
+                        placeholder={t("CRM externo")}
                       />
                     </div>
                   </div>
@@ -736,7 +758,9 @@ export default function CollectionSourcesPanel({
                   {!showPostgresFields && (
                     <>
                       <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="source-url-input">URL base HTTPS</Label>
+                        <Label htmlFor="source-url-input">
+                          {t("URL base HTTPS")}
+                        </Label>
                         <Input
                           id="source-url-input"
                           required
@@ -751,7 +775,7 @@ export default function CollectionSourcesPanel({
 
                       <div className="grid gap-1.5 text-sm">
                         <Label htmlFor="source-token-input">
-                          Token de acceso (opcional)
+                          {t("Token de acceso (opcional)")}
                         </Label>
                         <Input
                           id="source-token-input"
@@ -761,8 +785,9 @@ export default function CollectionSourcesPanel({
                           placeholder="••••••••••••"
                         />
                         <p className="text-xs text-muted-foreground">
-                          El token se guarda cifrado en el servidor y no se
-                          devuelve en el catálogo.
+                          {t(
+                            "El token se guarda cifrado en el servidor y no se devuelve en el catálogo.",
+                          )}
                         </p>
                       </div>
 
@@ -776,7 +801,7 @@ export default function CollectionSourcesPanel({
                               setRemoveToken(event.target.checked)
                             }
                           />
-                          <span>Quitar token de acceso</span>
+                          <span>{t("Quitar token de acceso")}</span>
                         </label>
                       )}
 
@@ -789,7 +814,9 @@ export default function CollectionSourcesPanel({
                             checked={allowFilters}
                             onChange={(e) => setAllowFilters(e.target.checked)}
                           />
-                          <span>La fuente admite filtros de igualdad</span>
+                          <span>
+                            {t("La fuente admite filtros de igualdad")}
+                          </span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -799,13 +826,13 @@ export default function CollectionSourcesPanel({
                             checked={allowSort}
                             onChange={(e) => setAllowSort(e.target.checked)}
                           />
-                          <span>La fuente admite ordenación</span>
+                          <span>{t("La fuente admite ordenación")}</span>
                         </label>
                       </div>
 
                       <div className="grid gap-1.5 text-sm">
                         <Label htmlFor="source-pointer-input">
-                          Ruta JSON del total (opcional)
+                          {t("Ruta JSON del total (opcional)")}
                         </Label>
                         <Input
                           id="source-pointer-input"
@@ -863,10 +890,10 @@ export default function CollectionSourcesPanel({
                       size="sm"
                       onClick={() => setSourceOpen(false)}
                     >
-                      Cancelar
+                      {t("Cancelar")}
                     </Button>
                     <Button type="submit" size="sm" disabled={busy}>
-                      {busy ? "Guardando…" : "Guardar fuente"}
+                      {busy ? t("Guardando…") : t("Guardar fuente")}
                     </Button>
                   </div>
                 </form>
@@ -879,9 +906,9 @@ export default function CollectionSourcesPanel({
                   className="space-y-3"
                   role="status"
                   aria-live="polite"
-                  aria-label="Cargando fuentes…"
+                  aria-label={t("Cargando fuentes…")}
                 >
-                  <p className="sr-only">Cargando fuentes…</p>
+                  <p className="sr-only">{t("Cargando fuentes…")}</p>
                   <div className="divide-y rounded-lg border bg-card">
                     {Array.from({ length: 2 }, (_, i) => (
                       <div
@@ -931,11 +958,11 @@ export default function CollectionSourcesPanel({
                           >
                             {source.kind !== "jsonapi"
                               ? source.hasPassword
-                                ? "Con contraseña"
-                                : "Sin contraseña"
+                                ? t("Con contraseña")
+                                : t("Sin contraseña")
                               : source.hasToken
-                                ? "Con autenticación"
-                                : "Sin token"}
+                                ? t("Con autenticación")
+                                : t("Sin token")}
                           </Badge>
                         </div>
                         <p className="break-all text-xs text-muted-foreground font-mono">
@@ -960,7 +987,7 @@ export default function CollectionSourcesPanel({
                                   "POST",
                                   {},
                                 );
-                                setNotice("Conexión verificada.");
+                                setNotice(t("Conexión verificada."));
                               } catch (e) {
                                 setError(errorText(e));
                               } finally {
@@ -968,7 +995,7 @@ export default function CollectionSourcesPanel({
                               }
                             }}
                           >
-                            Probar conexión
+                            {t("Probar conexión")}
                           </Button>
                         )}
                         <Button
@@ -1008,7 +1035,7 @@ export default function CollectionSourcesPanel({
                             setSourceOpen(true);
                           }}
                         >
-                          Actualizar acceso
+                          {t("Actualizar acceso")}
                         </Button>
                         {!bindings.data?.some(
                           (binding) => binding.sourceId === source.id,
@@ -1031,8 +1058,8 @@ export default function CollectionSourcesPanel({
                             }
                           >
                             {confirmRemoval === `source:${source.id}`
-                              ? "Confirmar eliminación de fuente"
-                              : "Eliminar fuente"}
+                              ? t("Confirmar eliminación de fuente")
+                              : t("Eliminar fuente")}
                           </Button>
                         )}
                       </div>
@@ -1043,11 +1070,12 @@ export default function CollectionSourcesPanel({
                 <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 p-8 text-center">
                   <Database className="size-8 text-muted-foreground/60 mb-2" />
                   <p className="text-sm font-medium text-foreground">
-                    Sin fuentes externas
+                    {t("Sin fuentes externas")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                    Las colecciones existentes están disponibles sin configurar
-                    una fuente externa.
+                    {t(
+                      "Las colecciones existentes están disponibles sin configurar una fuente externa.",
+                    )}
                   </p>
                 </div>
               )}
@@ -1060,22 +1088,22 @@ export default function CollectionSourcesPanel({
           <Card className="shadow-xs overflow-hidden">
             <CardHeader className="pb-4 border-b">
               <CardTitle className="text-base font-semibold">
-                Vincular colección a una pantalla
+                {t("Vincular colección a una pantalla")}
               </CardTitle>
               <CardDescription className="text-xs leading-relaxed">
-                Asocia una colección del catálogo de dominio, un recurso
-                JSON:API o una tabla o colección de base de datos para generar
-                vistas de CRM.
+                {t(
+                  "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
+                )}
               </CardDescription>
             </CardHeader>
 
             <form onSubmit={bind}>
               <CardContent className="space-y-4 pt-5">
                 <div className="grid gap-1.5 text-sm">
-                  <Label htmlFor="binding-mode-select">Origen</Label>
+                  <Label htmlFor="binding-mode-select">{t("Origen")}</Label>
                   <select
                     id="binding-mode-select"
-                    aria-label="Origen"
+                    aria-label={t("Origen")}
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
                     value={mode}
                     onChange={(e) =>
@@ -1085,12 +1113,14 @@ export default function CollectionSourcesPanel({
                     }
                   >
                     <option value="domain">
-                      Colección existente del dominio
+                      {t("Colección existente del dominio")}
                     </option>
-                    <option value="jsonapi">Recurso JSON:API externo</option>
+                    <option value="jsonapi">
+                      {t("Recurso JSON:API externo")}
+                    </option>
                     {Object.entries(databaseKinds).map(([kind, info]) => (
                       <option key={kind} value={kind}>
-                        Base {info.label}
+                        {t("Base")} {info.label}
                       </option>
                     ))}
                   </select>
@@ -1098,12 +1128,14 @@ export default function CollectionSourcesPanel({
 
                 {mode === "domain" ? (
                   <div className="grid gap-1.5 text-sm">
-                    <Label htmlFor="collection-catalog-select">Colección</Label>
+                    <Label htmlFor="collection-catalog-select">
+                      {t("Colección")}
+                    </Label>
                     <select
                       id="collection-catalog-select"
                       required
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-                      aria-label="Colección"
+                      aria-label={t("Colección")}
                       value={selected}
                       onChange={(e) => {
                         setSelected(e.target.value);
@@ -1118,7 +1150,7 @@ export default function CollectionSourcesPanel({
                         }
                       }}
                     >
-                      <option value="">Selecciona una colección</option>
+                      <option value="">{t("Selecciona una colección")}</option>
                       {catalog.data?.map((entry) => (
                         <option
                           key={`${entry.domain}/${entry.collection}`}
@@ -1129,23 +1161,26 @@ export default function CollectionSourcesPanel({
                       ))}
                     </select>
                     <span className="text-xs text-muted-foreground">
-                      La pantalla respetará las operaciones disponibles en esta
-                      colección.
+                      {t(
+                        "La pantalla respetará las operaciones disponibles en esta colección.",
+                      )}
                     </span>
                   </div>
                 ) : (
                   <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
                     <div className="grid gap-1.5 text-sm">
-                      <Label htmlFor="jsonapi-source-select">Fuente</Label>
+                      <Label htmlFor="jsonapi-source-select">
+                        {t("Fuente")}
+                      </Label>
                       <select
                         id="jsonapi-source-select"
                         required
-                        aria-label="Fuente"
+                        aria-label={t("Fuente")}
                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
                         value={remoteSource}
                         onChange={(e) => setRemoteSource(e.target.value)}
                       >
-                        <option value="">Selecciona una fuente</option>
+                        <option value="">{t("Selecciona una fuente")}</option>
                         {sources.data
                           ?.filter((source) =>
                             isDatabaseKind(mode)
@@ -1164,15 +1199,15 @@ export default function CollectionSourcesPanel({
                       <div className="grid gap-1.5 text-sm">
                         <Label htmlFor="remote-resource-input">
                           {isDatabaseKind(mode)
-                            ? "Tabla (vacío para listar)"
-                            : "Recurso remoto"}
+                            ? t("Tabla (vacío para listar)")
+                            : t("Recurso remoto")}
                         </Label>
                         <Input
                           id="remote-resource-input"
                           aria-label={
                             isDatabaseKind(mode)
-                              ? "Tabla (vacío para listar)"
-                              : "Recurso remoto"
+                              ? t("Tabla (vacío para listar)")
+                              : t("Recurso remoto")
                           }
                           required={!isDatabaseKind(mode)}
                           value={resource}
@@ -1197,21 +1232,21 @@ export default function CollectionSourcesPanel({
                       >
                         <Search className="size-3.5 mr-1.5" />
                         {busy
-                          ? "Analizando…"
+                          ? t("Analizando…")
                           : isDatabaseKind(mode)
-                            ? "Analizar tabla"
-                            : "Analizar recurso"}
+                            ? t("Analizar tabla")
+                            : t("Analizar recurso")}
                       </Button>
                     </div>
 
                     {mode === "jsonapi" && (
                       <div className="grid gap-1.5 text-sm">
                         <Label htmlFor="resource-type-input">
-                          Tipo de recurso JSON:API (opcional)
+                          {t("Tipo de recurso JSON:API (opcional)")}
                         </Label>
                         <Input
                           id="resource-type-input"
-                          aria-label="Tipo de recurso JSON:API (opcional)"
+                          aria-label={t("Tipo de recurso JSON:API (opcional)")}
                           value={resourceType}
                           onChange={(event) =>
                             setResourceType(event.target.value)
@@ -1223,11 +1258,11 @@ export default function CollectionSourcesPanel({
 
                     <div className="grid gap-1.5 text-sm">
                       <Label htmlFor="fields-textarea">
-                        Campos de la colección (JSON)
+                        {t("Campos de la colección (JSON)")}
                       </Label>
                       <Textarea
                         id="fields-textarea"
-                        aria-label="Campos de la colección (JSON)"
+                        aria-label={t("Campos de la colección (JSON)")}
                         required
                         rows={6}
                         className="font-mono text-xs bg-background"
@@ -1240,7 +1275,7 @@ export default function CollectionSourcesPanel({
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="grid gap-1.5">
                           <Label htmlFor="database-id-column">
-                            Identificador único (opcional)
+                            {t("Identificador único (opcional)")}
                           </Label>
                           <Input
                             id="database-id-column"
@@ -1249,14 +1284,14 @@ export default function CollectionSourcesPanel({
                               setDatabaseIdColumn(e.target.value)
                             }
                             placeholder={
-                              mode === "mongodb" ? "_id" : "Clave primaria"
+                              mode === "mongodb" ? "_id" : t("Clave primaria")
                             }
                           />
                         </div>
                         {mode === "mongodb" && (
                           <div className="grid gap-1.5">
                             <Label htmlFor="mongodb-id-type">
-                              Tipo de identificador
+                              {t("Tipo de identificador")}
                             </Label>
                             <select
                               id="mongodb-id-type"
@@ -1269,7 +1304,7 @@ export default function CollectionSourcesPanel({
                               }
                             >
                               <option value="objectId">ObjectId</option>
-                              <option value="string">Texto</option>
+                              <option value="string">{t("Texto")}</option>
                             </select>
                           </div>
                         )}
@@ -1277,18 +1312,18 @@ export default function CollectionSourcesPanel({
                     )}
                     {isDatabaseKind(mode) ? (
                       <p className="text-xs text-muted-foreground">
-                        Las operaciones dependen del identificador único y de
-                        los permisos de escritura de la fuente. Las vistas son
-                        de solo lectura.
+                        {t(
+                          "Las operaciones dependen del identificador único y de los permisos de escritura de la fuente. Las vistas son de solo lectura.",
+                        )}
                       </p>
                     ) : (
                       <div className="grid gap-1.5 text-sm">
                         <Label htmlFor="relationships-textarea">
-                          Relaciones JSON:API (JSON)
+                          {t("Relaciones JSON:API (JSON)")}
                         </Label>
                         <Textarea
                           id="relationships-textarea"
-                          aria-label="Relaciones JSON:API (JSON)"
+                          aria-label={t("Relaciones JSON:API (JSON)")}
                           rows={3}
                           className="font-mono text-xs bg-background"
                           value={relationships}
@@ -1297,10 +1332,13 @@ export default function CollectionSourcesPanel({
                           }
                         />
                         <p className="text-xs text-muted-foreground">
-                          Relaciona un campo de identificadores con su tipo
-                          remoto; por ejemplo:{" "}
-                          <code>{`{"company_id":{"type":"companies"}}`}</code>.
-                          Usa multiple: true para varios identificadores.
+                          {t(
+                            "Relaciona un campo de identificadores con su tipo remoto; por ejemplo:",
+                          )}{" "}
+                          <code>{`{"company_id":{"type":"companies"}}`}</code>
+                          {t(
+                            ". Usa multiple: true para varios identificadores.",
+                          )}
                         </p>
                       </div>
                     )}
@@ -1308,18 +1346,21 @@ export default function CollectionSourcesPanel({
                     {mode === "jsonapi" && (
                       <fieldset className="grid gap-2 border-t pt-3">
                         <legend className="text-xs font-medium text-foreground">
-                          Operaciones de escritura admitidas por la fuente
+                          {t(
+                            "Operaciones de escritura admitidas por la fuente",
+                          )}
                         </legend>
                         <p className="text-xs text-muted-foreground">
-                          Lectura habilitada. Activa únicamente las operaciones
-                          que soporte el recurso remoto.
+                          {t(
+                            "Lectura habilitada. Activa únicamente las operaciones que soporte el recurso remoto.",
+                          )}
                         </p>
                         <div className="flex flex-wrap gap-4 text-xs font-medium pt-1">
                           {(
                             [
-                              ["create", "Crear"],
-                              ["update", "Editar"],
-                              ["delete", "Eliminar"],
+                              ["create", t("Crear")],
+                              ["update", t("Editar")],
+                              ["delete", t("Eliminar")],
                             ] as const
                           ).map(([key, title]) => (
                             <label
@@ -1350,11 +1391,11 @@ export default function CollectionSourcesPanel({
                 <div className="grid gap-4 sm:grid-cols-2 pt-2">
                   <div className="grid gap-1.5 text-sm">
                     <Label htmlFor="screen-name-input">
-                      Identificador de la pantalla
+                      {t("Identificador de la pantalla")}
                     </Label>
                     <Input
                       id="screen-name-input"
-                      aria-label="Identificador de la pantalla"
+                      aria-label={t("Identificador de la pantalla")}
                       required
                       pattern="[a-z][a-z0-9_]*"
                       value={name}
@@ -1366,22 +1407,22 @@ export default function CollectionSourcesPanel({
                     />
                     <span className="text-xs text-muted-foreground">
                       {nameIsManual
-                        ? "Identificador personalizado."
-                        : "Se propone automáticamente y puedes editarlo."}
+                        ? t("Identificador personalizado.")
+                        : t("Se propone automáticamente y puedes editarlo.")}
                     </span>
                   </div>
 
                   <div className="grid gap-1.5 text-sm">
                     <Label htmlFor="screen-label-input">
-                      Nombre de la pantalla
+                      {t("Nombre de la pantalla")}
                     </Label>
                     <Input
                       id="screen-label-input"
-                      aria-label="Nombre de la pantalla"
+                      aria-label={t("Nombre de la pantalla")}
                       required
                       value={label}
                       onChange={(e) => setLabel(e.target.value)}
-                      placeholder="Contactos"
+                      placeholder={t("Contactos")}
                     />
                   </div>
                 </div>
@@ -1390,7 +1431,7 @@ export default function CollectionSourcesPanel({
               <CardFooter className="border-t bg-muted/20 py-3 flex justify-end">
                 <Button type="submit" disabled={busy}>
                   <Link2 className="size-3.5 mr-1.5" />
-                  {busy ? "Vinculando…" : "Vincular colección"}
+                  {busy ? t("Vinculando…") : t("Vincular colección")}
                 </Button>
               </CardFooter>
             </form>
@@ -1400,10 +1441,12 @@ export default function CollectionSourcesPanel({
           <Card className="shadow-xs overflow-hidden">
             <CardHeader className="pb-4">
               <CardTitle className="text-base font-semibold">
-                Colecciones vinculadas
+                {t("Colecciones vinculadas")}
               </CardTitle>
               <CardDescription className="text-xs leading-relaxed">
-                Pantallas disponibles en este dominio con su origen de datos.
+                {t(
+                  "Pantallas disponibles en este dominio con su origen de datos.",
+                )}
               </CardDescription>
             </CardHeader>
 
@@ -1413,9 +1456,9 @@ export default function CollectionSourcesPanel({
                   className="space-y-3"
                   role="status"
                   aria-live="polite"
-                  aria-label="Cargando colecciones…"
+                  aria-label={t("Cargando colecciones…")}
                 >
-                  <p className="sr-only">Cargando colecciones…</p>
+                  <p className="sr-only">{t("Cargando colecciones…")}</p>
                   <div className="divide-y rounded-lg border bg-card">
                     {Array.from({ length: 3 }, (_, i) => (
                       <div
@@ -1452,7 +1495,7 @@ export default function CollectionSourcesPanel({
                             className="text-xs font-normal"
                           >
                             {binding.kind === "domain"
-                              ? "Dominio"
+                              ? t("Dominio")
                               : binding.kind === "crm"
                                 ? "HubSpot"
                                 : isDatabaseKind(binding.kind)
@@ -1462,7 +1505,7 @@ export default function CollectionSourcesPanel({
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {binding.kind === "domain"
-                            ? "Colección del dominio"
+                            ? t("Colección del dominio")
                             : binding.kind === "crm"
                               ? "HubSpot"
                               : isDatabaseKind(binding.kind)
@@ -1498,7 +1541,7 @@ export default function CollectionSourcesPanel({
                                     ? next.config.studio.collection.schemaIssues.join(
                                         "; ",
                                       )
-                                    : "Campos sincronizados.",
+                                    : t("Campos sincronizados."),
                                 );
                               } catch (e) {
                                 setError(errorText(e));
@@ -1507,7 +1550,7 @@ export default function CollectionSourcesPanel({
                               }
                             }}
                           >
-                            Sincronizar campos
+                            {t("Sincronizar campos")}
                           </Button>
                         )}
                         {binding.kind !== "crm" &&
@@ -1519,7 +1562,7 @@ export default function CollectionSourcesPanel({
                               onClick={() => setOperationBinding(binding)}
                             >
                               <SlidersHorizontal className="size-3.5 mr-1.5" />
-                              Operaciones
+                              {t("Operaciones")}
                             </Button>
                           )}
                         <Button
@@ -1541,8 +1584,8 @@ export default function CollectionSourcesPanel({
                         >
                           <Unlink className="size-3.5 mr-1.5" />
                           {confirmRemoval === `binding:${binding.name}`
-                            ? "Confirmar desvinculación"
-                            : "Desvincular pantalla"}
+                            ? t("Confirmar desvinculación")
+                            : t("Desvincular pantalla")}
                         </Button>
                       </div>
                     </li>
@@ -1552,11 +1595,12 @@ export default function CollectionSourcesPanel({
                 <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 p-8 text-center">
                   <Layers className="size-8 text-muted-foreground/60 mb-2" />
                   <p className="text-sm font-medium text-foreground">
-                    Aún no hay colecciones vinculadas en este dominio.
+                    {t("Aún no hay colecciones vinculadas en este dominio.")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                    Selecciona una colección arriba para asociarla y habilitar
-                    pantallas interactivas en tu espacio de trabajo.
+                    {t(
+                      "Selecciona una colección arriba para asociarla y habilitar pantallas interactivas en tu espacio de trabajo.",
+                    )}
                   </p>
                 </div>
               )}
@@ -1583,6 +1627,11 @@ export function CollectionLayoutDesigner({
   object: CrmObject;
   onSaved: () => void;
 }) {
+  const t = useMessages(studioMessages);
+  const errorText = (error: unknown) =>
+    error instanceof Error
+      ? error.message
+      : t("No se pudo completar la operación.");
   const { request } = useScopedRequest();
   const [draft, setDraft] = useState(() => structuredClone(object));
   const [busy, setBusy] = useState(false);
@@ -1610,20 +1659,23 @@ export function CollectionLayoutDesigner({
     <Card className="shadow-xs overflow-hidden">
       <CardHeader className="pb-4 border-b">
         <CardTitle className="text-base font-semibold">
-          Diseño de {object.label}
+          {t("Diseño de")} {object.label}
         </CardTitle>
         <CardDescription className="text-xs leading-relaxed">
-          Define los nombres que verán los usuarios en tablas y formularios. El
-          nombre visible no cambia el campo de origen ni la API.
+          {t(
+            "Define los nombres que verán los usuarios en tablas y formularios. El nombre visible no cambia el campo de origen ni la API.",
+          )}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4 pt-5">
         <div className="grid gap-1.5 text-sm">
-          <Label htmlFor="form-columns-select">Columnas del formulario</Label>
+          <Label htmlFor="form-columns-select">
+            {t("Columnas del formulario")}
+          </Label>
           <select
             id="form-columns-select"
-            aria-label="Columnas del formulario"
+            aria-label={t("Columnas del formulario")}
             className="h-9 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
             value={draft.config.studio?.columns ?? 1}
             onChange={(e) =>
@@ -1639,8 +1691,8 @@ export function CollectionLayoutDesigner({
               }))
             }
           >
-            <option value="1">Una columna</option>
-            <option value="2">Dos columnas</option>
+            <option value="1">{t("Una columna")}</option>
+            <option value="2">{t("Dos columnas")}</option>
           </select>
         </div>
 
@@ -1655,12 +1707,12 @@ export function CollectionLayoutDesigner({
                   htmlFor={`field-label-${fieldName}`}
                   className="text-xs font-medium"
                 >
-                  Nombre visible
+                  {t("Nombre visible")}
                 </Label>
                 <input
                   id={`field-label-${fieldName}`}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-                  aria-label={`Nombre visible de ${fieldName}`}
+                  aria-label={t("Nombre visible de %{v1}", { v1: fieldName })}
                   value={draft.config.fields[fieldName].label}
                   maxLength={100}
                   onChange={(e) =>
@@ -1680,7 +1732,7 @@ export function CollectionLayoutDesigner({
                   }
                 />
                 <span className="text-xs text-muted-foreground">
-                  Campo de origen: {fieldName}
+                  {t("Campo de origen:")} {fieldName}
                 </span>
               </div>
 
@@ -1706,7 +1758,7 @@ export function CollectionLayoutDesigner({
                       }))
                     }
                   />
-                  <span>Visible</span>
+                  <span>{t("Visible")}</span>
                 </label>
 
                 <Button
@@ -1714,7 +1766,9 @@ export function CollectionLayoutDesigner({
                   size="sm"
                   variant="outline"
                   disabled={index === 0}
-                  aria-label={`Subir ${draft.config.fields[fieldName].label}`}
+                  aria-label={t("Subir %{v1}", {
+                    v1: draft.config.fields[fieldName].label,
+                  })}
                   onClick={() => {
                     const next = [...order];
                     [next[index - 1], next[index]] = [
@@ -1728,7 +1782,7 @@ export function CollectionLayoutDesigner({
                   }}
                 >
                   <ArrowUp className="size-3.5 mr-1" />
-                  Subir
+                  {t("Subir")}
                 </Button>
               </div>
             </li>
@@ -1745,7 +1799,7 @@ export function CollectionLayoutDesigner({
 
       <CardFooter className="border-t bg-muted/20 py-3 flex justify-end">
         <Button type="button" disabled={busy} onClick={() => void save()}>
-          {busy ? "Guardando…" : "Guardar diseño"}
+          {busy ? t("Guardando…") : t("Guardar diseño")}
         </Button>
       </CardFooter>
     </Card>

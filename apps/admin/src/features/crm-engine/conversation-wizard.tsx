@@ -1,3 +1,7 @@
+import { configureFormEngineLocale } from "@/i18n/form-engine-locale";
+import { useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { FieldValueDisplay } from "./field-value-display";
 import {
   cloneElement,
@@ -176,6 +180,9 @@ function SummaryValue({
   field: CrmObject["config"]["fields"][string];
   value: unknown;
 }) {
+  const t = useMessages(recordsMessages);
+  const validationLocale = useAppLocale();
+
   const ids = field.config?.relation
     ? (Array.isArray(value) ? value : blank(value) ? [] : [value]).map(String)
     : [];
@@ -187,17 +194,21 @@ function SummaryValue({
         ids.map((id) =>
           api(`/records/${relation}/${encodeURIComponent(id)}`)
             .then((r) => String(r.data.name ?? r.data.title ?? id))
-            .catch(() => "Registro no disponible"),
+            .catch(() => t("Registro no disponible")),
         ),
       ),
     enabled: !!ids.length,
   });
   if (field.type === FORM_HTML_TYPE || field.type === DISPLAY_TEXT_TYPE)
-    return <span className="conversation-empty-value">Bloque visual</span>;
+    return (
+      <span className="conversation-empty-value">{t("Bloque visual")}</span>
+    );
   if (blank(value))
-    return <span className="conversation-empty-value">Sin completar</span>;
-  if (ids.length) return <>{names.data?.join(", ") ?? "Cargando…"}</>;
-  return <FieldValueDisplay value={value} field={field}/>;
+    return (
+      <span className="conversation-empty-value">{t("Sin completar")}</span>
+    );
+  if (ids.length) return <>{names.data?.join(", ") ?? t("Cargando…")}</>;
+  return <FieldValueDisplay value={value} field={field} />;
 }
 export default function ConversationWizard({
   object,
@@ -208,7 +219,7 @@ export default function ConversationWizard({
   onPersistTemporaryAttachments,
   onDiscardTemporaryAttachments,
   onSaved,
-  submitLabel = "Guardar registro",
+  submitLabel: suppliedSubmitLabel,
   renderFieldActions,
 }: {
   object: CrmObject;
@@ -237,6 +248,14 @@ export default function ConversationWizard({
   submitLabel?: string;
   renderFieldActions?: (field: string) => ReactNode;
 }) {
+  const t = useMessages(recordsMessages);
+  const validationLocale = useAppLocale();
+  const submitLabel = suppliedSubmitLabel ?? t("Guardar registro");
+  useMemo(
+    () => configureFormEngineLocale(validationLocale),
+    [validationLocale],
+  );
+
   const labelLocale = useFieldLabelLocale();
   const defaults = useMemo(
     () =>
@@ -466,7 +485,11 @@ export default function ConversationWizard({
           key,
           {
             ...f,
-            type: f.config?.collectionRelationTarget ? "CrmCollectionRelation" : f.config?.relation ? "CrmRelation" : f.type,
+            type: f.config?.collectionRelationTarget
+              ? "CrmCollectionRelation"
+              : f.config?.relation
+                ? "CrmRelation"
+                : f.type,
             required: false,
             readOnly: f.readOnly || !!f.config?.formula,
             config: {
@@ -524,7 +547,7 @@ export default function ConversationWizard({
     if (saving.current || saved) return;
     setError("");
     setErrors({});
-    const validated = validateRecord(object, data);
+    const validated = validateRecord(object, data, validationLocale);
     const applicable = isReview
       ? validated.errors
       : Object.fromEntries(
@@ -541,7 +564,7 @@ export default function ConversationWizard({
           setReview(false);
           setEditingReview(true);
         }
-        setError("Hay una respuesta que necesita tu atención.");
+        setError(t("Hay una respuesta que necesita tu atención."));
       } else if (applicable._form) setError(applicable._form);
       setFocusRequest((n) => n + 1);
       return;
@@ -554,7 +577,7 @@ export default function ConversationWizard({
       return;
     }
     if (hasPendingAttachmentUpload) {
-      setError("Espera a que termine la carga de los archivos.");
+      setError(t("Espera a que termine la carga de los archivos."));
       return;
     }
     const temporary = temporaryAttachmentsRef.current.map(
@@ -566,7 +589,9 @@ export default function ConversationWizard({
     );
     if (onUploadTemporaryAttachment && queuedCount !== temporary.length) {
       setError(
-        "Revisa los archivos antes de guardar. Uno o más no se pudieron cargar.",
+        t(
+          "Revisa los archivos antes de guardar. Uno o más no se pudieron cargar.",
+        ),
       );
       return;
     }
@@ -589,7 +614,9 @@ export default function ConversationWizard({
       if (temporary.length) {
         if (!savedResult || !onPersistTemporaryAttachments)
           throw new Error(
-            "No se pudieron asociar los archivos al registro. Inténtalo de nuevo.",
+            t(
+              "No se pudieron asociar los archivos al registro. Inténtalo de nuevo.",
+            ),
           );
         await onPersistTemporaryAttachments(savedResult, temporary);
         queuedAttachmentsRef.current = {};
@@ -599,7 +626,9 @@ export default function ConversationWizard({
       } else if (attachments.length) {
         if (!savedResult || !onPersistAttachments)
           throw new Error(
-            "No se pudieron preparar los archivos para R2. Guarda el registro e inténtalo de nuevo.",
+            t(
+              "No se pudieron preparar los archivos para R2. Guarda el registro e inténtalo de nuevo.",
+            ),
           );
         await onPersistAttachments(
           savedResult,
@@ -621,8 +650,8 @@ export default function ConversationWizard({
     return (
       <div className="conversation-success" role="status">
         <CheckCheck size={36} />
-        <h3>Listo, tus respuestas se guardaron.</h3>
-        <p>Puedes continuar con tu trabajo.</p>
+        <h3>{t("Listo, tus respuestas se guardaron.")}</h3>
+        <p>{t("Puedes continuar con tu trabajo.")}</p>
       </div>
     );
   const answerCount = questions.filter(([key]) => !blank(prepared[key])).length;
@@ -632,14 +661,17 @@ export default function ConversationWizard({
         <span className="conversation-object">{object.label}</span>
         <span className="conversation-counter" role="status">
           {isReview
-            ? "Revisión final"
-            : `Pregunta ${index + 1} de ${questions.length}`}
+            ? t("Revisión final")
+            : t("Pregunta %{p0} de %{p1}", {
+                p0: index + 1,
+                p1: questions.length,
+              })}
         </span>
       </header>
       <div
         className="conversation-progress"
         role="progressbar"
-        aria-label="Progreso del formulario"
+        aria-label={t("Progreso del formulario")}
         aria-valuemin={0}
         aria-valuemax={questions.length || 1}
         aria-valuenow={isReview ? questions.length || 1 : index}
@@ -677,28 +709,34 @@ export default function ConversationWizard({
                   <div className="conversation-section">
                     <span>
                       {isReview
-                        ? "Antes de terminar"
+                        ? t("Antes de terminar")
                         : `${stepIndex + 1} / ${steps.length} · ${step?.title}`}
                     </span>
                     {!isReview && !required && (
-                      <span className="conversation-optional">Opcional</span>
+                      <span className="conversation-optional">
+                        {t("Opcional")}
+                      </span>
                     )}
                   </div>
                   <h3 ref={heading} tabIndex={-1}>
                     {isReview
-                      ? "¿Todo está bien?"
+                      ? t("¿Todo está bien?")
                       : field
                         ? resolveFieldLabel(field, labelLocale)
                         : null}
                   </h3>
                   <p>
                     {isReview
-                      ? "Revisa tus respuestas. Puedes cambiar cualquiera antes de guardar."
+                      ? t(
+                          "Revisa tus respuestas. Puedes cambiar cualquiera antes de guardar.",
+                        )
                       : field?.description ||
                         step?.description ||
                         (required
-                          ? "Completa esta respuesta para continuar."
-                          : "Puedes responder ahora o continuar sin este dato.")}
+                          ? t("Completa esta respuesta para continuar.")
+                          : t(
+                              "Puedes responder ahora o continuar sin este dato.",
+                            ))}
                   </p>
                 </div>
                 {isReview && (
@@ -732,7 +770,9 @@ export default function ConversationWizard({
                                       type="button"
                                       size="icon"
                                       variant="ghost"
-                                      aria-label={`Cambiar ${fieldLabel}`}
+                                      aria-label={t("Cambiar %{p0}", {
+                                        p0: fieldLabel,
+                                      })}
                                       disabled={busy}
                                       onClick={() => {
                                         goTo(
@@ -814,7 +854,7 @@ export default function ConversationWizard({
                                   size={18}
                                   className="animate-spin"
                                 />
-                                Guardando…
+                                {t("Guardando…")}
                               </>
                             ) : isReview ? (
                               <>
@@ -822,12 +862,12 @@ export default function ConversationWizard({
                                 {submitLabel}
                               </>
                             ) : editingReview ? (
-                              "Volver a la revisión"
+                              t("Volver a la revisión")
                             ) : index === questions.length - 1 ? (
-                              "Revisar respuestas"
+                              t("Revisar respuestas")
                             ) : (
                               <>
-                                Continuar
+                                {t("Continuar")}
                                 <ArrowRight size={18} />
                               </>
                             )}
@@ -837,12 +877,12 @@ export default function ConversationWizard({
                               {field?.type === "Textarea"
                                 ? "Ctrl / ⌘ + Enter"
                                 : field?.config?.relation
-                                  ? "Selecciona y continúa"
+                                  ? t("Selecciona y continúa")
                                   : field?.type === "Dropdown"
-                                    ? "Usa ↑ ↓ para elegir"
+                                    ? t("Usa ↑ ↓ para elegir")
                                     : field?.type === "Toggle"
-                                      ? "Espacio para cambiar"
-                                      : "Pulsa Enter"}
+                                      ? t("Espacio para cambiar")
+                                      : t("Pulsa Enter")}
                               {field?.type !== "Dropdown" &&
                                 field?.type !== "Toggle" &&
                                 !field?.config?.relation && (
@@ -867,12 +907,15 @@ export default function ConversationWizard({
                           }}
                         >
                           <ArrowLeft size={16} />
-                          Atrás
+                          {t("Atrás")}
                         </Button>
                         <p className="conversation-footnote">
                           {isReview
-                            ? `${answerCount} de ${questions.length} respuestas completadas. Se guardarán juntas.`
-                            : "Puedes volver atrás en cualquier momento."}
+                            ? t(
+                                "%{p0} de %{p1} respuestas completadas. Se guardarán juntas.",
+                                { p0: answerCount, p1: questions.length },
+                              )
+                            : t("Puedes volver atrás en cualquier momento.")}
                         </p>
                       </footer>
                     </>

@@ -3,8 +3,13 @@ import type {
   CoreAdminContextProps,
   CoreAdminProps,
 } from "ra-core";
-import { CoreAdminUI, CoreAdminContext, memoryStore } from "ra-core";
-import { i18nProvider as defaultI18nProvider } from "@/lib/i18nProvider";
+import {
+  CoreAdminUI,
+  CoreAdminContext,
+  memoryStore,
+  StoreContextProvider,
+} from "ra-core";
+import { useAppI18nProvider } from "@/i18n/app-locale-provider";
 import { Layout } from "@/components/admin/layout";
 import { LoginPage } from "@/components/admin/login-page";
 import { NotFound } from "@/components/admin/not-found";
@@ -99,7 +104,14 @@ const AdminUI = (props: CoreAdminUIProps) => {
  *   <Resource name="posts" list={PostList} edit={PostEdit} />
  * </Admin>
  */
-export const Admin = (props: CoreAdminProps) => {
+export const Admin = (props: CoreAdminProps) => (
+  <StoreContextProvider value={props.store ?? defaultStore}>
+    <LocalizedAdmin {...props} />
+  </StoreContextProvider>
+);
+
+const LocalizedAdmin = (props: CoreAdminProps) => {
+  const defaultI18nProvider = useAppI18nProvider();
   const {
     accessDenied,
     authCallbackPage = AuthCallback,

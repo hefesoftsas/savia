@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { WorkflowWebhookSettings } from "./workflow-webhooks";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,24 +49,7 @@ type Run = {
   }[];
   jobs?: { node_id: string; type: string; output: unknown; attempts: number }[];
 };
-const fresh = (): Draft => ({
-  name: "Nuevo flujo",
-  revision: 0,
-  enabled: 0,
-  definition: {
-    trigger: { type: "manual" },
-    nodes: [newStep("transform", "step_1", "")],
-  },
-});
-const statuses: Record<string, string> = {
-  queued: "En cola",
-  running: "En ejecución",
-  waiting: "En espera",
-  completed: "Completado",
-  failed: "Fallido",
-  blocked: "Sin permiso",
-  cancelled: "Cancelado",
-};
+
 export default function Workflows({ objects }: { objects: CrmObject[] }) {
   const runtime = getCrmRuntime();
   const scope = JSON.stringify([
@@ -81,6 +66,28 @@ function WorkspaceWorkflows({
   objects: CrmObject[];
   scope: string;
 }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+  const statuses: Record<string, string> = {
+    queued: t("En cola"),
+    running: t("En ejecución"),
+    waiting: t("En espera"),
+    completed: t("Completado"),
+    failed: t("Fallido"),
+    blocked: t("Sin permiso"),
+    cancelled: t("Cancelado"),
+  };
+
+  const fresh = (): Draft => ({
+    name: t("Nuevo flujo"),
+    revision: 0,
+    enabled: 0,
+    definition: {
+      trigger: { type: "manual" },
+      nodes: [newStep("transform", "step_1", "")],
+    },
+  });
+
   const manualAttempt = useRef<{ fingerprint: string; key: string } | null>(
     null,
   );
@@ -166,7 +173,9 @@ function WorkspaceWorkflows({
       });
       if (!parsed.success)
         throw new Error(
-          `Revisa la configuración: ${parsed.error.issues.map((i) => i.message).join(". ")}`,
+          t("Revisa la configuración: %{value0}", {
+            value0: parsed.error.issues.map((i) => i.message).join(". "),
+          }),
         );
       const response = await api<{ data: Draft }>(
         draft!.id ? `/workflows/${draft!.id}` : "/workflows",
@@ -175,7 +184,7 @@ function WorkspaceWorkflows({
       );
       setDraft(response.data);
       setDirty(false);
-      setNotice("Borrador guardado. Publica cuando esté listo.");
+      setNotice(t("Borrador guardado. Publica cuando esté listo."));
     });
   const choose = (next: Draft) => {
     manualAttempt.current = null;
@@ -194,17 +203,17 @@ function WorkspaceWorkflows({
       ? objects.find((o) => o.name === trigger.collection)
       : undefined;
   return (
-    <section className="wf-root" aria-label="Flujos de trabajo">
+    <section className="wf-root" aria-label={t("Flujos de trabajo")}>
       <header className="wf-toolbar">
         <div>
-          <h2>Flujos de trabajo</h2>
+          <h2>{t("Flujos de trabajo")}</h2>
           <p className="wf-muted">
-            Conecta eventos, decisiones y acciones sobre tus colecciones.
+            {t("Conecta eventos, decisiones y acciones sobre tus colecciones.")}
           </p>
         </div>
         <Button disabled={busy || dirty} onClick={() => choose(fresh())}>
           <Plus size={16} />
-          Nuevo flujo
+          {t("Nuevo flujo")}
         </Button>
       </header>
       {error || list.error ? (
@@ -213,20 +222,23 @@ function WorkspaceWorkflows({
         </p>
       ) : null}
       {notice ? <p role="status">{notice}</p> : null}
-      {list.isPending ? <p role="status">Cargando flujos…</p> : null}
+      {list.isPending ? <p role="status">{t("Cargando flujos…")}</p> : null}
       {bundles.data?.data.length ? (
         <details className="wf-bundles">
-          <summary>Conectar colecciones con plantillas</summary>
+          <summary>{t("Conectar colecciones con plantillas")}</summary>
           <p>
-            Preparar añade relaciones y borradores. Revisa y publica cada flujo
-            para activarlo. Los flujos existentes se conservan.
+            {t(
+              "Preparar añade relaciones y borradores. Revisa y publica cada flujo para activarlo. Los flujos existentes se conservan.",
+            )}
           </p>
           {bundles.data.data.map((bundle) => (
             <article key={bundle.id}>
               <h3>{bundle.label}</h3>
               <p>{bundle.description}</p>
               {bundle.missing.length ? (
-                <p>Faltan colecciones: {bundle.missing.join(", ")}</p>
+                <p>
+                  {t("Faltan colecciones:")} {bundle.missing.join(", ")}
+                </p>
               ) : null}
               <Button
                 variant="outline"
@@ -243,13 +255,17 @@ function WorkspaceWorkflows({
                     ]);
                     setNotice(
                       result.data.workflows.length
-                        ? "Relaciones preparadas. Revisa los borradores y publica los que quieras activar."
-                        : "Relaciones preparadas. Este paquete no añade flujos.",
+                        ? t(
+                            "Relaciones preparadas. Revisa los borradores y publica los que quieras activar.",
+                          )
+                        : t(
+                            "Relaciones preparadas. Este paquete no añade flujos.",
+                          ),
                     );
                   })
                 }
               >
-                Preparar {bundle.label}
+                {t("Preparar")} {bundle.label}
               </Button>
             </article>
           ))}
@@ -257,16 +273,17 @@ function WorkspaceWorkflows({
       ) : null}
       {bundles.error ? (
         <p role="alert">
-          No se pudieron cargar las plantillas.{" "}
-          <button onClick={() => bundles.refetch()}>Reintentar</button>
+          {t("No se pudieron cargar las plantillas.")}{" "}
+          <button onClick={() => bundles.refetch()}>{t("Reintentar")}</button>
         </p>
       ) : null}
       <div className="wf-workspace">
-        <aside className="wf-list" aria-label="Flujos guardados">
+        <aside className="wf-list" aria-label={t("Flujos guardados")}>
           {list.data?.data.length === 0 ? (
             <p className="wf-muted">
-              Aún no hay flujos. Crea uno para definir cuándo se inicia y qué
-              pasos ejecuta.
+              {t(
+                "Aún no hay flujos. Crea uno para definir cuándo se inicia y qué pasos ejecuta.",
+              )}
             </p>
           ) : null}
           {list.data?.data.map((flow) => (
@@ -278,7 +295,7 @@ function WorkspaceWorkflows({
             >
               <span>{flow.name}</span>
               <small>
-                {flow.enabled ? "Activo" : "Inactivo"} · borrador{" "}
+                {flow.enabled ? t("Activo") : t("Inactivo")} {t("· borrador")}{" "}
                 {flow.revision}
               </small>
             </button>
@@ -288,7 +305,7 @@ function WorkspaceWorkflows({
           <div className="wf-detail">
             <div className="wf-toolbar">
               <label className="wf-name">
-                Nombre del flujo
+                {t("Nombre del flujo")}
                 <Input
                   value={draft.name}
                   onChange={(e) => change({ ...draft, name: e.target.value })}
@@ -297,7 +314,7 @@ function WorkspaceWorkflows({
               <div className="wf-actions">
                 <Button disabled={busy || !dirty} onClick={save}>
                   <Save size={16} />
-                  Guardar borrador
+                  {t("Guardar borrador")}
                 </Button>
                 {dirty ? (
                   <Button
@@ -314,7 +331,7 @@ function WorkspaceWorkflows({
                       }
                     }}
                   >
-                    Descartar cambios
+                    {t("Descartar cambios")}
                   </Button>
                 ) : null}
                 <Button
@@ -328,11 +345,11 @@ function WorkspaceWorkflows({
                         { revision: draft.revision },
                       );
                       setDraft(result.data);
-                      setNotice("Versión publicada y activa.");
+                      setNotice(t("Versión publicada y activa."));
                     })
                   }
                 >
-                  Publicar
+                  {t("Publicar")}
                 </Button>
                 {draft.published_version ? (
                   <Button
@@ -349,15 +366,15 @@ function WorkspaceWorkflows({
                       })
                     }
                   >
-                    {draft.enabled ? "Desactivar" : "Activar"}
+                    {draft.enabled ? t("Desactivar") : t("Activar")}
                   </Button>
                 ) : null}
               </div>
             </div>
             <p className="wf-muted">
-              {dirty ? "Cambios sin guardar" : "Borrador guardado"} ·{" "}
-              {draft.enabled ? "Versión publicada activa" : "Inactivo"}.
-              Publicar no modifica las ejecuciones anteriores.
+              {dirty ? t("Cambios sin guardar") : t("Borrador guardado")} ·{" "}
+              {draft.enabled ? t("Versión publicada activa") : t("Inactivo")}
+              {t(". Publicar no modifica las ejecuciones anteriores.")}
             </p>
             <TriggerEditor
               definition={draft.definition}
@@ -369,17 +386,17 @@ function WorkspaceWorkflows({
                 <WorkflowWebhookSettings key={draft.id} workflowId={draft.id} />
               ) : (
                 <p className="wf-muted">
-                  Guarda el borrador para crear la URL del webhook.
+                  {t("Guarda el borrador para crear la URL del webhook.")}
                 </p>
               )
             ) : null}
             {native.length < objects.length ? (
               <p className="wf-muted">
-                Las fuentes externas aún no admiten pasos de workflow.
+                {t("Las fuentes externas aún no admiten pasos de workflow.")}
               </p>
             ) : null}
             <div className="wf-editor">
-              <div className="wf-canvas" aria-label="Secuencia de pasos">
+              <div className="wf-canvas" aria-label={t("Secuencia de pasos")}>
                 <ol>
                   {draft.definition.nodes.map((step, index) => (
                     <li key={step.id}>
@@ -390,11 +407,18 @@ function WorkspaceWorkflows({
                       >
                         <span className="wf-step-number">{index + 1}</span>
                         <span>
-                          <strong>{step.label || stepLabels[step.type]}</strong>
+                          <strong>
+                            {step.label || t(stepLabels[step.type])}
+                          </strong>
                           <small>
                             {step.type === "condition"
-                              ? `Sí → ${step.next ?? "Fin"} · No → ${step.otherwise ?? "Fin"}`
-                              : `Siguiente → ${step.next ?? "Fin"}`}
+                              ? t("Sí → %{value0} · No → %{value1}", {
+                                  value0: step.next ?? t("Fin"),
+                                  value1: step.otherwise ?? t("Fin"),
+                                })
+                              : t("Siguiente → %{value0}", {
+                                  value0: step.next ?? t("Fin"),
+                                })}
                           </small>
                         </span>
                         {step.type === "condition" ? (
@@ -413,7 +437,7 @@ function WorkspaceWorkflows({
                 </ol>
                 <div className="wf-add">
                   <label>
-                    Tipo de paso
+                    {t("Tipo de paso")}
                     <select
                       value={kind}
                       onChange={(e) =>
@@ -422,7 +446,7 @@ function WorkspaceWorkflows({
                     >
                       {Object.entries(stepLabels).map(([value, label]) => (
                         <option key={value} value={value}>
-                          {label}
+                          {t(label)}
                         </option>
                       ))}
                     </select>
@@ -457,7 +481,7 @@ function WorkspaceWorkflows({
                     }}
                   >
                     <Plus size={16} />
-                    Añadir paso
+                    {t("Añadir paso")}
                   </Button>
                 </div>
               </div>
@@ -501,7 +525,7 @@ function WorkspaceWorkflows({
                         setSelected(nodes[0].id);
                       }}
                     >
-                      Quitar paso
+                      {t("Quitar paso")}
                     </Button>
                   </>
                 ) : null}
@@ -509,9 +533,11 @@ function WorkspaceWorkflows({
             </div>
             {draft.definition.trigger.type === "manual" ? (
               <section className="wf-manual">
-                <h3>Ejecución manual</h3>
+                <h3>{t("Ejecución manual")}</h3>
                 <p className="wf-muted">
-                  Ejecuta la versión publicada con estos datos de entrada.
+                  {t(
+                    "Ejecuta la versión publicada con estos datos de entrada.",
+                  )}
                 </p>
                 {manualObject
                   ? fieldEntries(manualObject).map(([key, field]) => (
@@ -548,24 +574,26 @@ function WorkspaceWorkflows({
                       manualAttempt.current = null;
                       setRunId(result.data.id);
                       setNotice(
-                        "Ejecución enviada. Consulta su estado en el historial.",
+                        t(
+                          "Ejecución enviada. Consulta su estado en el historial.",
+                        ),
                       );
                     })
                   }
                 >
                   <Play size={16} />
-                  Ejecutar versión publicada
+                  {t("Ejecutar versión publicada")}
                 </Button>
               </section>
             ) : null}
             {draft.id ? (
               <section className="wf-history">
-                <h3>Historial de ejecuciones</h3>
+                <h3>{t("Historial de ejecuciones")}</h3>
                 {history.error ? (
                   <p role="alert">{String(history.error)}</p>
                 ) : null}
                 {history.data?.data.length === 0 ? (
-                  <p className="wf-muted">No hay ejecuciones todavía.</p>
+                  <p className="wf-muted">{t("No hay ejecuciones todavía.")}</p>
                 ) : null}
                 <ul>
                   {history.data?.data.map((run) => (
@@ -589,14 +617,16 @@ function WorkspaceWorkflows({
                   <article className="wf-run">
                     <h4>{statuses[detail.data.data.status]}</h4>
                     <p className="wf-muted">
-                      Versión {detail.data.data.version_id} · Paso{" "}
-                      {detail.data.data.node_id ?? "finalizado"}
+                      {t("Versión")} {detail.data.data.version_id} {t("· Paso")}{" "}
+                      {detail.data.data.node_id ?? t("finalizado")}
                     </p>
                     {detail.data.data.status === "waiting" &&
                     !!detail.data.data.wake_at ? (
                       <p className="wf-muted">
-                        Próximo intento o reanudación:{" "}
-                        {new Date(detail.data.data.wake_at).toLocaleString()}
+                        {t("Próximo intento o reanudación:")}{" "}
+                        {new Date(detail.data.data.wake_at).toLocaleString(
+                          intlLocale(locale),
+                        )}
                       </p>
                     ) : null}
                     {detail.data.data.error ? (
@@ -604,12 +634,12 @@ function WorkspaceWorkflows({
                     ) : null}
                     {detail.data.data.deliveries?.map((attempt) => (
                       <p key={`${attempt.node_id}:${attempt.sequence}`}>
-                        {attempt.node_id} · Intento {attempt.sequence} ·{" "}
+                        {attempt.node_id} {t("· Intento")} {attempt.sequence} ·{" "}
                         {attempt.status
-                          ? `HTTP ${attempt.status}`
+                          ? t("HTTP %{value0}", { value0: attempt.status })
                           : attempt.finished_at
-                            ? "Sin respuesta"
-                            : "Envío en curso o resultado pendiente"}
+                            ? t("Sin respuesta")
+                            : t("Envío en curso o resultado pendiente")}
                         {attempt.error ? ` · ${attempt.error}` : ""}
                       </p>
                     ))}
@@ -617,8 +647,8 @@ function WorkspaceWorkflows({
                       <details key={job.node_id}>
                         <summary>
                           {job.node_id} ·{" "}
-                          {stepLabels[job.type as WorkflowNode["type"]]} ·
-                          intentos {job.attempts}
+                          {t(stepLabels[job.type as WorkflowNode["type"]])}{" "}
+                          {t("· intentos")} {job.attempts}
                         </summary>
                         <pre>{JSON.stringify(job.output, null, 2)}</pre>
                       </details>
@@ -636,7 +666,7 @@ function WorkspaceWorkflows({
                           })
                         }
                       >
-                        Reintentar ejecución
+                        {t("Reintentar ejecución")}
                       </Button>
                     ) : null}
                     {["queued", "running", "waiting"].includes(
@@ -654,7 +684,7 @@ function WorkspaceWorkflows({
                           })
                         }
                       >
-                        Cancelar ejecución
+                        {t("Cancelar ejecución")}
                       </Button>
                     ) : null}
                   </article>
@@ -665,21 +695,21 @@ function WorkspaceWorkflows({
         ) : (
           <div className="wf-empty">
             <GitBranch size={32} />
-            <h3>Un evento, una secuencia de pasos</h3>
+            <h3>{t("Un evento, una secuencia de pasos")}</h3>
             <p>
-              Selecciona un flujo o crea uno. Puedes consultar y cambiar
-              registros, evaluar condiciones, crear tareas o enviar
-              notificaciones internas.
+              {t(
+                "Selecciona un flujo o crea uno. Puedes consultar y cambiar registros, evaluar condiciones, crear tareas o enviar notificaciones internas.",
+              )}
             </p>
           </div>
         )}
       </div>
       <section className="wf-inbox">
-        <h3>Mis tareas y notificaciones</h3>
+        <h3>{t("Mis tareas y notificaciones")}</h3>
         {inbox.error ? <p role="alert">{String(inbox.error)}</p> : null}
         {inbox.data?.data.length === 0 ? (
           <p className="wf-muted">
-            No tienes elementos asignados por los flujos.
+            {t("No tienes elementos asignados por los flujos.")}
           </p>
         ) : null}
         <ul>
@@ -688,8 +718,8 @@ function WorkspaceWorkflows({
               <span>
                 {item.title}
                 <small>
-                  {item.kind === "task" ? "Tarea" : "Notificación"} ·{" "}
-                  {item.status === "done" ? "Resuelta" : "Pendiente"}
+                  {item.kind === "task" ? t("Tarea") : t("Notificación")} ·{" "}
+                  {item.status === "done" ? t("Resuelta") : t("Pendiente")}
                 </small>
               </span>
               {item.status !== "done" ? (
@@ -702,7 +732,7 @@ function WorkspaceWorkflows({
                     })
                   }
                 >
-                  Resolver
+                  {t("Resolver")}
                 </Button>
               ) : null}
             </li>

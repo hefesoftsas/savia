@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
 import {
   lazy,
@@ -317,6 +319,7 @@ function normalizeNavigationText(value: string) {
  * Account and appearance controls intentionally remain outside the reorderable area.
  */
 export function AppSidebar() {
+  const t = useMessages(settingsMessages);
   const translate = useTranslate();
   const currentTenant = useCurrentTenant();
   const { branding } = useTenantBranding();
@@ -779,7 +782,7 @@ export function AppSidebar() {
                         {branding?.displayName ?? currentTenant.name}
                       </span>
                       <span className="text-[10px] text-muted-foreground tracking-tight">
-                        Espacio de trabajo · Savia
+                        {t("Espacio de trabajo · Savia")}
                       </span>
                     </div>
                     <span className="sr-only">

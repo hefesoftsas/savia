@@ -1,11 +1,6 @@
 import userEvent from "@testing-library/user-event";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import { RequestLookupSettings } from "../request-lookup-settings";
 import { requestActionSchema } from "@savia/crm-shared/request-page";

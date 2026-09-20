@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,19 +24,22 @@ function SectionLayoutPreview({
   label: string;
   fieldCount: number;
 }) {
+  const t = useMessages(studioMessages);
   const slots = Math.max(2, Math.min(fieldCount || 2, 3));
 
   return (
     <div aria-hidden="true" className="section-layout-preview">
       <div className="section-layout-preview-title">
-        {label.trim() || "Nombre de sección"}
+        {label.trim() || t("Nombre de sección")}
       </div>
       <div className="section-layout-preview-fields">
         {Array.from({ length: slots }, (_, index) => (
           <span
             key={index}
             className={
-              fieldCount === 0 || index >= fieldCount ? "is-placeholder" : undefined
+              fieldCount === 0 || index >= fieldCount
+                ? "is-placeholder"
+                : undefined
             }
           />
         ))}
@@ -76,6 +81,7 @@ export function FormSectionsEditor({
   onClearSection: (sectionId: string) => void;
   fields: Record<string, { type: string; label: string }>;
 }) {
+  const t = useMessages(studioMessages);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -97,7 +103,7 @@ export function FormSectionsEditor({
       ...sections,
       {
         id: `section_${Date.now()}`,
-        label: `Sección ${sections.length + 1}`,
+        label: t("Sección %{v1}", { v1: sections.length + 1 }),
       },
     ]);
   }
@@ -119,32 +125,42 @@ export function FormSectionsEditor({
   return (
     <fieldset className="form-sections-editor">
       <legend className="studio-fieldset-legend-with-help">
-        Secciones visuales del formulario
-        <StudioHelpTooltip label="Ayuda sobre secciones visuales">
-          Crea títulos que agrupan campos en el formulario. Puedes mostrar cada
-          sección solo cuando se cumpla una condición. Arrastra para reordenar;
-          asigna campos desde la pestaña Diseñar.
+        {t("Secciones visuales del formulario")}
+        <StudioHelpTooltip label={t("Ayuda sobre secciones visuales")}>
+          {t(
+            "Crea títulos que agrupan campos en el formulario. Puedes mostrar cada sección solo cuando se cumpla una condición. Arrastra para reordenar; asigna campos desde la pestaña Diseñar.",
+          )}
         </StudioHelpTooltip>
       </legend>
 
       {sections.length === 0 ? (
         <div className="form-sections-empty">
           <SectionLayoutPreview label="" fieldCount={0} />
-          <p>Sin secciones todavía. El formulario mostrará los campos sin agrupar.</p>
-          <Button size="sm" variant="outline" type="button" onClick={addSection}>
+          <p>
+            {t(
+              "Sin secciones todavía. El formulario mostrará los campos sin agrupar.",
+            )}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={addSection}
+          >
             <Plus size={14} />
-            Agregar sección
+            {t("Agregar sección")}
           </Button>
         </div>
       ) : (
         <ul
           className="form-sections-list"
-          aria-label="Secciones del formulario"
+          aria-label={t("Secciones del formulario")}
         >
           {sections.map((section, index) => {
             const fieldCount = fieldCountsBySectionId[section.id] ?? 0;
             const isDragging = draggingId === section.id;
-            const isDropTarget = dropTargetId === section.id && draggingId !== section.id;
+            const isDropTarget =
+              dropTargetId === section.id && draggingId !== section.id;
 
             return (
               <li
@@ -162,7 +178,8 @@ export function FormSectionsEditor({
                   setDropTargetId(section.id);
                 }}
                 onDragLeave={(event) => {
-                  if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+                  if (event.currentTarget.contains(event.relatedTarget as Node))
+                    return;
                   setDropTargetId((current) =>
                     current === section.id ? null : current,
                   );
@@ -180,7 +197,9 @@ export function FormSectionsEditor({
                     type="button"
                     className="form-section-drag-handle"
                     draggable
-                    aria-label={`Reordenar sección ${section.label}`}
+                    aria-label={t("Reordenar sección %{v1}", {
+                      v1: section.label,
+                    })}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(dragType, section.id);
                       event.dataTransfer.effectAllowed = "move";
@@ -193,16 +212,18 @@ export function FormSectionsEditor({
                   <span className="form-section-card-index">{index + 1}</span>
                   <span className="form-section-card-count">
                     {fieldCount === 1
-                      ? "1 campo"
-                      : `${fieldCount} campos`}
-                    {section.visibleWhen ? " · Condicional" : ""}
+                      ? t("1 campo")
+                      : t("%{v1} campos", { v1: fieldCount })}
+                    {section.visibleWhen ? t("· Condicional") : ""}
                   </span>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="form-section-card-remove size-8 shrink-0"
                     type="button"
-                    aria-label={`Quitar sección ${section.label}`}
+                    aria-label={t("Quitar sección %{v1}", {
+                      v1: section.label,
+                    })}
                     onClick={() => removeSection(section.id)}
                   >
                     <Trash2 size={14} />
@@ -210,7 +231,7 @@ export function FormSectionsEditor({
                 </div>
 
                 <Input
-                  aria-label={`Nombre de sección ${index + 1}`}
+                  aria-label={t("Nombre de sección %{v1}", { v1: index + 1 })}
                   value={section.label}
                   onChange={(event) =>
                     updateSection(section.id, { label: event.target.value })
@@ -218,7 +239,7 @@ export function FormSectionsEditor({
                 />
 
                 <RuleEditor
-                  label="Mostrar sección cuando"
+                  label={t("Mostrar sección cuando")}
                   value={section.visibleWhen}
                   fields={fields}
                   onChange={(visibleWhen) =>
@@ -237,7 +258,9 @@ export function FormSectionsEditor({
             <li
               className={[
                 "form-sections-drop-end",
-                dropTargetId === "__end__" ? "form-sections-drop-end--active" : "",
+                dropTargetId === "__end__"
+                  ? "form-sections-drop-end--active"
+                  : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -247,7 +270,8 @@ export function FormSectionsEditor({
                 setDropTargetId("__end__");
               }}
               onDragLeave={(event) => {
-                if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+                if (event.currentTarget.contains(event.relatedTarget as Node))
+                  return;
                 setDropTargetId((current) =>
                   current === "__end__" ? null : current,
                 );
@@ -259,7 +283,7 @@ export function FormSectionsEditor({
                 handleDrop(sourceId);
               }}
             >
-              Suelta aquí para mover al final
+              {t("Suelta aquí para mover al final")}
             </li>
           )}
         </ul>
@@ -268,7 +292,7 @@ export function FormSectionsEditor({
       {sections.length > 0 && (
         <Button size="sm" variant="outline" type="button" onClick={addSection}>
           <Plus size={14} />
-          Agregar sección
+          {t("Agregar sección")}
         </Button>
       )}
     </fieldset>

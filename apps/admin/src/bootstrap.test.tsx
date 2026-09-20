@@ -1,4 +1,10 @@
-import { render, screen, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   admin: vi.fn(),
@@ -43,4 +49,29 @@ it("registers update recovery before importing the private application", async (
   expect(calls.worker.mock.invocationCallOrder[0]).toBeLessThan(
     calls.admin.mock.invocationCallOrder[0],
   );
+});
+
+it("lets anonymous visitors switch ES/EN/PT and updates document language without private services", async () => {
+  render(<ApplicationRoot pathname="/public/forms/invalid/nested" />);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "El enlace público no es válido.",
+  );
+  fireEvent.change(screen.getByLabelText("Idioma"), {
+    target: { value: "en" },
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The public link is invalid.",
+    ),
+  );
+  expect(document.documentElement.lang).toBe("en");
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "pt" },
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "O link público é inválido.",
+    ),
+  );
+  expect(document.documentElement.lang).toBe("pt-BR");
 });

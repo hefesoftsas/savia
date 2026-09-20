@@ -1,6 +1,12 @@
+import { resolveOptionLabel } from "@savia/crm-shared/field-labels";
+import { useAppLocale, useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import type { IFieldProps } from "@form-eng/core";
 import { Checkbox } from "@/components/ui/checkbox";
 export function MultiSelectField(props: IFieldProps) {
+  const t = useMessages(recordsMessages);
+  const locale = useAppLocale();
+
   const selected = Array.isArray(props.value) ? props.value.map(String) : [];
   const id = String(props.config?.inputId ?? props.fieldName);
   return (
@@ -32,11 +38,13 @@ export function MultiSelectField(props: IFieldProps) {
                 );
             }}
           />
-          <span>{String(option.label)}</span>
+          <span>{resolveOptionLabel(option, locale)}</span>
         </label>
       ))}
       {!props.options?.length && (
-        <p className="text-sm text-muted-foreground">No options configured.</p>
+        <p className="text-sm text-muted-foreground">
+          {t("No options configured.")}
+        </p>
       )}
     </div>
   );

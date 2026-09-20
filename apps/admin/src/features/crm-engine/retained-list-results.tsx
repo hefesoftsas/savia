@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useReducer, type ReactNode } from "react";
 import { ListContextProvider, useListContext, type RaRecord } from "ra-core";
@@ -11,6 +13,8 @@ export function RetainedListResults({
   scope: string;
   children: ReactNode;
 }) {
+  const t = useMessages(recordsMessages);
+
   const context = useListContext();
   const saved = useRef<
     { scope: string; data: RaRecord[]; total: number | undefined } | undefined
@@ -97,9 +101,9 @@ export function RetainedListResults({
         className="min-h-6 text-xs text-muted-foreground"
       >
         {updating
-          ? "Actualizando resultados…"
+          ? t("Actualizando resultados…")
           : readOnly
-            ? "Mostrando los últimos resultados disponibles."
+            ? t("Mostrando los últimos resultados disponibles.")
             : ""}
       </div>
       {context.error && (
@@ -113,7 +117,7 @@ export function RetainedListResults({
             size="sm"
             onClick={() => void context.refetch()}
           >
-            Reintentar
+            {t("Reintentar")}
           </Button>
         </div>
       )}

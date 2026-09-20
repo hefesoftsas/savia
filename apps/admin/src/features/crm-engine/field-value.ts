@@ -20,7 +20,28 @@ export function formatFieldValue(
     return "—";
   const location = parseMapLocation(value);
   if (location) return formatMapLocationSummary(location);
-  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "boolean") {
+    const language = locale.split("-")[0];
+    return language === "pt"
+      ? value
+        ? "Sim"
+        : "Não"
+      : language === "en"
+        ? value
+          ? "Yes"
+          : "No"
+        : value
+          ? "Sí"
+          : "No";
+  }
+  if (
+    field.type === "Number" &&
+    field.config?.format !== "currency" &&
+    typeof value === "number"
+  )
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 20 }).format(
+      value,
+    );
   if (field.type === "Percentage" && typeof value === "number")
     return new Intl.NumberFormat(locale, {
       style: "percent",
@@ -64,7 +85,11 @@ export function formatFieldValue(
       ? new Intl.DateTimeFormat(locale, { timeZone: "UTC" }).format(date)
       : String(value);
   }
-  const label = recordOptionLabel(value, field.options);
+  const label = recordOptionLabel(
+    value,
+    field.options,
+    locale.startsWith("pt") ? "pt" : locale.startsWith("en") ? "en" : "es",
+  );
   return Array.isArray(label)
     ? label.join(", ")
     : typeof label === "object"

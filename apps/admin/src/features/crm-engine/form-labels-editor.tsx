@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import React, { useState } from "react";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { Input } from "@/components/ui/input";
@@ -9,6 +11,7 @@ export function FormLabelsEditor({
   fields: CrmObject["config"]["fields"];
   onChange: (fields: CrmObject["config"]["fields"]) => void;
 }) {
+  const t = useMessages(studioMessages);
   const [search, setSearch] = useState("");
   // Filter by persisted field key as well as label so technical names remain discoverable.
   const entries = Object.entries(fields).filter(([key, field]) =>
@@ -17,17 +20,18 @@ export function FormLabelsEditor({
       .includes(search.toLocaleLowerCase()),
   );
   return (
-    <section className="grid gap-3" aria-label="Etiquetas del formulario">
+    <section className="grid gap-3" aria-label={t("Etiquetas del formulario")}>
       <div>
-        <h3>Etiquetas del formulario</h3>
+        <h3>{t("Etiquetas del formulario")}</h3>
         <p className="text-sm text-muted-foreground">
-          Cambia el nombre visible de cualquier campo, incluidos los
-          interruptores y los campos de solo lectura.
+          {t(
+            "Cambia el nombre visible de cualquier campo, incluidos los interruptores y los campos de solo lectura.",
+          )}
         </p>
       </div>
       <Input
-        aria-label="Buscar etiqueta"
-        placeholder="Buscar por nombre o campo…"
+        aria-label={t("Buscar etiqueta")}
+        placeholder={t("Buscar por nombre o campo…")}
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
@@ -41,7 +45,7 @@ export function FormLabelsEditor({
             <span className="text-muted-foreground">{key}</span>
             <Input
               id={`form-label-${key}`}
-              aria-label={`Etiqueta de ${key}`}
+              aria-label={t("Etiqueta de %{v1}", { v1: key })}
               maxLength={100}
               value={field.label}
               onChange={(event) =>
@@ -55,7 +59,7 @@ export function FormLabelsEditor({
         ))}
         {!entries.length && (
           <p className="text-sm text-muted-foreground">
-            No se encontraron campos.
+            {t("No se encontraron campos.")}
           </p>
         )}
       </div>

@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import type { IFieldProps } from "@form-eng/core";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,8 @@ export function PercentageField(props: IFieldProps) {
   );
 }
 export function RatingField(props: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   if (props.config?.ratingStyle === "number")
     return <NumericInput props={props} rating />;
   const id = String(props.config?.inputId ?? props.fieldName);
@@ -61,7 +65,7 @@ export function RatingField(props: IFieldProps) {
               type="radio"
               className="peer sr-only"
               name={id}
-              aria-label={`${score} of ${max}`}
+              aria-label={t("%{p0} of %{p1}", { p0: score, p1: max })}
               checked={props.value === score}
               disabled={props.readOnly}
               onChange={() => {
@@ -90,7 +94,7 @@ export function RatingField(props: IFieldProps) {
         disabled={props.readOnly || props.value == null}
         onClick={() => props.setFieldValue?.(props.fieldName!, null)}
       >
-        Clear rating
+        {t("Clear rating")}
       </Button>
     </div>
   );

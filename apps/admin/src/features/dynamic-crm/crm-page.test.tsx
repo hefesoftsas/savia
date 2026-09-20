@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "../crm-engine/test/locale-test-render";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +11,8 @@ import { getCrmRuntime } from "@/features/crm-engine/runtime";
 import { CrmPage } from "./crm-page";
 const workspaceRendered = vi.hoisted(() => vi.fn());
 
-vi.mock("ra-core", () => ({
+vi.mock("ra-core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ra-core")>()),
   useCanAccess: () => ({ canAccess: true, isPending: false }),
 }));
 vi.mock("@/features/crm-engine/app", () => ({

@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { ResultReactSurface } from "./result-react-surface";
 import { ResultHtmlSurface } from "./result-html-surface";
 import { useState } from "react";
@@ -33,6 +35,9 @@ export function ResultCards({
   customHtml?: string;
   customReact?: string;
 }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const visible = rows.filter((row) =>
@@ -65,41 +70,45 @@ export function ResultCards({
     <div className="result-presentation">
       <header className="result-presentation-toolbar">
         <div>
-          <h3>Explorar resultados</h3>
+          <h3>{t("Explorar resultados")}</h3>
           <p>
-            {visible.length} resultados ·{" "}
-            {rows.filter((row) => row.simulation).length} de simulación
+            {visible.length} {t("resultados ·")}{" "}
+            {rows.filter((row) => row.simulation).length} {t("de simulación")}
           </p>
         </div>
         <label>
-          Buscar resultados
+          {t("Buscar resultados")}
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Operación, estado o valor…"
+            placeholder={t("Operación, estado o valor…")}
           />
         </label>
       </header>
       {comparison && (
         <p className="text-sm text-muted-foreground">
-          Selecciona hasta cuatro resultados para compararlos lado a lado.
+          {t(
+            "Selecciona hasta cuatro resultados para compararlos lado a lado.",
+          )}
         </p>
       )}
       {!visible.length && (
-        <p role="status">No hay resultados que coincidan con la búsqueda.</p>
+        <p role="status">
+          {t("No hay resultados que coincidan con la búsqueda.")}
+        </p>
       )}
       <div className="result-presentation-grid">
         {visible.map((row) => (
           <article key={row.id} className="result-presentation-card">
             <header>
               <span className="text-sm text-muted-foreground">
-                {row.simulation ? "Simulación" : "Ejecución real"} ·{" "}
+                {row.simulation ? t("Simulación") : t("Ejecución real")} ·{" "}
                 {row.status}
               </span>
               <h4>{row.title}</h4>
               <time dateTime={row.date}>
-                {new Date(row.date).toLocaleString("es-CO")}
+                {new Date(row.date).toLocaleString(intlLocale(locale))}
               </time>
             </header>
 
@@ -146,7 +155,7 @@ export function ResultCards({
                       )
                     }
                   />
-                  Comparar {row.title}
+                  {t("Comparar")} {row.title}
                 </label>
               )}
               <Button
@@ -154,10 +163,10 @@ export function ResultCards({
                 disabled={disabled}
                 onClick={row.onLoad}
               >
-                Cargar datos
+                {t("Cargar datos")}
               </Button>
               <details>
-                <summary>Ver respuesta</summary>
+                <summary>{t("Ver respuesta")}</summary>
                 <pre>{JSON.stringify(row.response, null, 2)}</pre>
               </details>
             </footer>
@@ -167,24 +176,26 @@ export function ResultCards({
       {comparison && (
         <section
           className="result-presentation-comparison"
-          aria-label="Comparación de resultados"
+          aria-label={t("Comparación de resultados")}
         >
-          <h3>Comparación de resultados</h3>
+          <h3>{t("Comparación de resultados")}</h3>
           {compared.length < 2 ? (
             <p className="text-muted-foreground text-sm">
-              Selecciona al menos dos resultados para ver sus diferencias.
+              {t(
+                "Selecciona al menos dos resultados para ver sus diferencias.",
+              )}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table>
                 <thead>
                   <tr>
-                    <th scope="col">Detalle</th>
+                    <th scope="col">{t("Detalle")}</th>
                     {compared.map((row) => (
                       <th scope="col" key={row.id}>
                         {row.title}
                         {row.simulation && (
-                          <small className="block">Simulación</small>
+                          <small className="block">{t("Simulación")}</small>
                         )}
                       </th>
                     ))}

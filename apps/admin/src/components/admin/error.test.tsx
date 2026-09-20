@@ -1,7 +1,8 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Error as LayoutError } from "./error";
-vi.mock("ra-core", () => ({
+vi.mock("ra-core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ra-core")>()),
   useResetErrorBoundaryOnLocationChange: vi.fn(),
   Translate: ({ i18nKey }: { i18nKey: string }) => <span>{i18nKey}</span>,
 }));

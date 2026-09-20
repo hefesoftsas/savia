@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { useQuery } from "@tanstack/react-query";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import type { RelationDefinition } from "@savia/crm-shared/relations";
@@ -17,6 +19,7 @@ export function RelatedPresentationSettings({
   objects: CrmObject[];
   onChange: (next: Record<string, unknown>) => void;
 }) {
+  const t = useMessages(studioMessages);
   const runtime = getCrmRuntime();
   const relations = useQuery({
     queryKey: ["collection-relations", runtime.apiBasePath, runtime.domainId],
@@ -55,23 +58,25 @@ export function RelatedPresentationSettings({
     onChange({ ...config, [key]: value });
   return (
     <PropertySection
-      title="Registros relacionados"
+      title={t("Registros relacionados")}
       searchTerms="relación subformulario tabla columnas permisos"
-      help="Edita registros relacionados junto con el formulario principal. Solo disponible para colecciones locales."
+      help={t(
+        "Edita registros relacionados junto con el formulario principal. Solo disponible para colecciones locales.",
+      )}
     >
-      {relations.isPending && <p role="status">Cargando relación…</p>}
+      {relations.isPending && <p role="status">{t("Cargando relación…")}</p>}
       {relations.error && (
         <p role="alert">
-          No se pudo cargar la relación.{" "}
+          {t("No se pudo cargar la relación.")}{" "}
           <button type="button" onClick={() => void relations.refetch()}>
-            Reintentar
+            {t("Reintentar")}
           </button>
         </p>
       )}
       <label className="studio-control">
-        Presentación
+        {t("Presentación")}
         <select
-          aria-label="Presentación de registros relacionados"
+          aria-label={t("Presentación de registros relacionados")}
           value={presentation}
           disabled={!supported}
           onChange={(event) =>
@@ -82,21 +87,22 @@ export function RelatedPresentationSettings({
             })
           }
         >
-          <option value="selector">Selector de registros</option>
-          <option value="subform">Subformulario</option>
-          {multiple && <option value="table">Tabla editable</option>}
+          <option value="selector">{t("Selector de registros")}</option>
+          <option value="subform">{t("Subformulario")}</option>
+          {multiple && <option value="table">{t("Tabla editable")}</option>}
         </select>
       </label>
       {!supported && !relations.isPending && (
         <p className="studio-field-help">
-          Los subformularios y tablas requieren una relación entre colecciones
-          locales. Las fuentes externas conservan su selector.
+          {t(
+            "Los subformularios y tablas requieren una relación entre colecciones locales. Las fuentes externas conservan su selector.",
+          )}
         </p>
       )}
       {supported && presentation !== "selector" && (
         <>
           <fieldset>
-            <legend>Campos visibles</legend>
+            <legend>{t("Campos visibles")}</legend>
             {eligible.map(([key, field]) => (
               <label className="studio-flag" key={key}>
                 <input
@@ -118,24 +124,24 @@ export function RelatedPresentationSettings({
                 />
                 {field.label}
                 {field.required || field.config?.requiredWhen
-                  ? " (obligatorio)"
+                  ? ` ${t("(obligatorio)")}`
                   : ""}
               </label>
             ))}
           </fieldset>
           <p className="studio-field-help">
-            El orden sigue el formulario de la colección relacionada. Los campos
-            obligatorios siempre se incluyen. Sus validaciones se configuran en
-            esa colección.
+            {t(
+              "El orden sigue el formulario de la colección relacionada. Los campos obligatorios siempre se incluyen. Sus validaciones se configuran en esa colección.",
+            )}
           </p>
           <fieldset>
-            <legend>Acciones permitidas</legend>
+            <legend>{t("Acciones permitidas")}</legend>
             {(
               [
-                ["relationAllowCreate", "Crear registros"],
-                ["relationAllowEdit", "Editar registros"],
-                ["relationAllowLink", "Vincular existentes"],
-                ["relationAllowUnlink", "Desvincular registros"],
+                ["relationAllowCreate", t("Crear registros")],
+                ["relationAllowEdit", t("Editar registros")],
+                ["relationAllowLink", t("Vincular existentes")],
+                ["relationAllowUnlink", t("Desvincular registros")],
               ] as const
             ).map(([key, label]) => (
               <label className="studio-flag" key={key}>
@@ -149,9 +155,9 @@ export function RelatedPresentationSettings({
             ))}
           </fieldset>
           <p className="studio-field-help">
-            Desvincular conserva el registro original. Los permisos de acceso
-            siguen aplicándose. Se admite un nivel de detalle; los archivos se
-            gestionan desde el registro relacionado.
+            {t(
+              "Desvincular conserva el registro original. Los permisos de acceso siguen aplicándose. Se admite un nivel de detalle; los archivos se gestionan desde el registro relacionado.",
+            )}
           </p>
         </>
       )}

@@ -1,3 +1,6 @@
+import { uiMessages } from "@/i18n/locales/ui";
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import type { ComponentProps, ReactNode } from "react";
 import { useState, useEffect, Children } from "react";
 import { createPortal } from "react-dom";
@@ -117,6 +120,8 @@ export interface ColumnsButtonProps extends ComponentProps<typeof Button> {
  * @see ColumnsButton
  */
 export const ColumnsSelector = ({ children }: ColumnsSelectorProps) => {
+  const ui = useMessages(uiMessages);
+  const t = useMessages(settingsMessages);
   const translate = useTranslate();
   const { storeKey, defaultHiddenColumns } = useDataTableStoreContext();
   const [columnRanks, setColumnRanks] = useStore<number[] | undefined>(
@@ -180,7 +185,7 @@ export const ColumnsSelector = ({ children }: ColumnsSelectorProps) => {
             <button
               onClick={() => setColumnFilter("")}
               className="absolute right-8 top-2 h-4 w-4 text-muted-foreground"
-              aria-label="Clear"
+              aria-label={ui("Clear")}
             >
               ×
             </button>
@@ -208,7 +213,7 @@ export const ColumnsSelector = ({ children }: ColumnsSelectorProps) => {
             setHiddenColumns(defaultHiddenColumns);
           }}
         >
-          Reset
+          {t("Reset")}
         </Button>
       </div>
     </div>,

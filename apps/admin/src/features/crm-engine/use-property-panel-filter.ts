@@ -1,3 +1,4 @@
+import { useAppLocale } from "@/i18n/core";
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { applyPropertyPanelFilter } from "@savia/crm-shared/property-panel-search";
 
@@ -6,6 +7,7 @@ export function usePropertyPanelFilter(
   containerRef: RefObject<HTMLElement | null>,
   resetKey: string,
 ) {
+  const locale = useAppLocale();
   const [empty, setEmpty] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
 
@@ -16,7 +18,7 @@ export function usePropertyPanelFilter(
     const filtering = query.trim().length > 0;
     setMatchCount(visibleCount);
     setEmpty(filtering && visibleCount === 0);
-  }, [containerRef, query, resetKey]);
+  }, [containerRef, query, resetKey, locale]);
 
   return {
     empty,

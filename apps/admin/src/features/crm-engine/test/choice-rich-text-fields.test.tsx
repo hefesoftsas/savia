@@ -105,7 +105,7 @@ it("saves a dynamic form with multiple choices and rich text", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: /Notes/ }), {
     target: { value: "**Important**" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Guardar registro" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save record" }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({ tags: ["a", "b"], notes: "**Important**" }),

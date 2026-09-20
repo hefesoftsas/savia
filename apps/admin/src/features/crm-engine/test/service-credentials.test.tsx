@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ServiceCredentials from "../service-credentials";
 
@@ -63,9 +64,15 @@ it("lists credential sections for maps and integrations", async () => {
     </QueryClientProvider>,
   );
 
-  expect(screen.getByRole("heading", { name: "Claves y servicios" })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Mapas y direcciones" })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Integraciones OpenAPI" })).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "Claves y servicios" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "Mapas y direcciones" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "Integraciones OpenAPI" }),
+  ).toBeTruthy();
   expect(screen.getByRole("button", { name: /Guardar clave/i })).toBeTruthy();
   expect(await screen.findByText("Proveedor demo")).toBeTruthy();
 });

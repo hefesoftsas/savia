@@ -1,3 +1,6 @@
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { FieldValueDisplay } from "./field-value-display";
 const RecordHistory = lazy(() => import("./record-history"));
 import { supportsRecordHistory } from "./record-history-client";
@@ -89,23 +92,29 @@ const label = (record: CrmRecord) =>
       record.subject ??
       record.id,
   );
-const display = (value: unknown): string => {
+const display = (value: unknown, locale = "es-CO"): string => {
   const location = parseMapLocation(value);
   if (location) return formatMapLocationSummary(location);
   return value === null || value === undefined || value === ""
     ? "—"
     : typeof value === "boolean"
       ? value
-        ? "Sí"
-        : "No"
+        ? locale.startsWith("en")
+          ? "Yes"
+          : locale.startsWith("pt")
+            ? "Sim"
+            : "Sí"
+        : locale.startsWith("pt")
+          ? "Não"
+          : "No"
       : Array.isArray(value)
-        ? value.map(display).join(", ")
+        ? value.map((item) => display(item, locale)).join(", ")
         : typeof value === "object"
           ? JSON.stringify(value)
           : String(value);
 };
 
-const activityNames: Record<string, string> = {
+const activityNames: Record<string, keyof typeof recordsMessages> = {
   note: "Nota",
   call: "Llamada",
   meeting: "Reunión",
@@ -119,7 +128,10 @@ const activityNames: Record<string, string> = {
   "file.uploaded": "Archivo adjuntado",
   "file.deleted": "Archivo eliminado",
 };
-function activityBody(item: Activity) {
+function activityBody(
+  item: Activity,
+  t: ReturnType<typeof useMessages<typeof recordsMessages>>,
+) {
   if (item.version) return item.body;
   try {
     const parsed = JSON.parse(item.body);
@@ -133,10 +145,10 @@ function activityBody(item: Activity) {
           JSON.stringify(parsed.before[key]),
       );
       return changed.length
-        ? `Campos modificados: ${changed.join(", ")}`
-        : "Datos actualizados";
+        ? t("Campos modificados: %{p0}", { p0: changed.join(", ") })
+        : t("Datos actualizados");
     }
-    return "Cambio guardado en el historial del registro.";
+    return t("Cambio guardado en el historial del registro.");
   } catch {
     return item.body;
   }
@@ -161,6 +173,10 @@ export default function RecordDetail({
   onQuotation?: (record: CrmRecord) => void;
   onNavigate?: (object: string, id: string) => void;
 }) {
+  const uiLocale = intlLocale(useAppLocale());
+
+  const t = useMessages(recordsMessages);
+
   const labelLocale = useFieldLabelLocale();
   const [duplicating, setDuplicating] = useState(false);
   const [duplicateError, setDuplicateError] = useState("");
@@ -213,7 +229,7 @@ export default function RecordDetail({
       ? [...(relatedLinks.data?.data ?? [])].sort(
           (a, b) =>
             Number(b.total > 0) - Number(a.total > 0) ||
-            a.label.localeCompare(b.label, "es"),
+            a.label.localeCompare(b.label, uiLocale),
         )
       : relatedLinks.data?.data;
   const usesCollectionRelationGroups =
@@ -247,7 +263,7 @@ export default function RecordDetail({
           .trim() || current[object.config.fieldOrder?.[0] ?? ""]
       : undefined;
   const detailTabs = [
-    { id: "summary", label: "Información" },
+    { id: "summary", label: t("Información") },
     ...(usesCollectionRelationGroups
       ? (relationGroups ?? []).map((group) => ({
           id: `relation:${relationTabKey(group)}`,
@@ -263,15 +279,17 @@ export default function RecordDetail({
                 : relation.fieldLabel,
             count: relation.total,
           }))
-        : [{ id: "relations", label: "Relaciones" }]),
+        : [{ id: "relations", label: t("Relaciones") }]),
     ...(supportsRecordHistory(object) && capabilities.read
-      ? [{ id: "history", label: "Historial" }]
+      ? [{ id: "history", label: t("Historial") }]
       : []),
-    { id: "activity", label: "Actividad" },
-    { id: "tasks", label: "Tareas" },
+    { id: "activity", label: t("Actividad") },
+    { id: "tasks", label: t("Tareas") },
     {
       id: "files",
-      label: `Archivos${files.data ? ` (${files.data.data.length})` : ""}`,
+      label: t("Archivos%{p0}", {
+        p0: files.data ? ` (${files.data.data.length})` : "",
+      }),
     },
   ].filter(
     (item) =>
@@ -305,7 +323,7 @@ export default function RecordDetail({
     onRefresh();
   }
   function attachmentValue(field: string) {
-    if (files.isPending) return "Cargando archivos…";
+    if (files.isPending) return t("Cargando archivos…");
     if (files.error)
       return (
         <OperationError error={files.error} retry={() => files.refetch()} />
@@ -324,10 +342,10 @@ export default function RecordDetail({
             <div className="min-w-0 flex-1">
               <span className="block break-all font-medium">{file.name}</span>
               <span className="block break-all text-xs text-muted-foreground">
-                {(file.size / 1024).toLocaleString("es-CO", {
+                {(file.size / 1024).toLocaleString(uiLocale, {
                   maximumFractionDigits: 1,
                 })}{" "}
-                KB · {file.mime}
+                {t("KB ·")} {file.mime}
               </span>
             </div>
             <OfficeEditButton
@@ -338,7 +356,7 @@ export default function RecordDetail({
               type="button"
               size="icon"
               variant="ghost"
-              aria-label={`Descargar ${file.name}`}
+              aria-label={t("Descargar %{p0}", { p0: file.name })}
               onClick={() =>
                 void downloadCrm(
                   `/api/file/${file.id}/download`,
@@ -360,7 +378,7 @@ export default function RecordDetail({
       setBody("");
       setActivityPage(1);
       refresh();
-      toast.success("Actividad registrada");
+      toast.success(t("Actividad registrada"));
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -371,7 +389,7 @@ export default function RecordDetail({
     if (!file) return;
     setFileError("");
     if (!file.size || file.size > 5 * 1024 * 1024) {
-      setFileError("El archivo debe pesar entre 1 byte y 5 MB.");
+      setFileError(t("El archivo debe pesar entre 1 byte y 5 MB."));
       return;
     }
     setSaving(true);
@@ -384,9 +402,9 @@ export default function RecordDetail({
       });
       const data = (await response.json()) as { error?: string };
       if (!response.ok)
-        throw new Error(data.error ?? "No se pudo cargar el archivo.");
+        throw new Error(data.error ?? t("No se pudo cargar el archivo."));
       refresh();
-      toast.success("Archivo guardado");
+      toast.success(t("Archivo guardado"));
     } catch (error) {
       setFileError((error as Error).message);
     } finally {
@@ -416,7 +434,7 @@ export default function RecordDetail({
             <div>
               <span className="op-muted">{object.label}</span>
               <DialogTitle>
-                {crmTitle ? display(crmTitle) : label(current)}
+                {crmTitle ? display(crmTitle, uiLocale) : label(current)}
               </DialogTitle>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -434,7 +452,7 @@ export default function RecordDetail({
                       const source = result.data?.data.record;
                       if (!source?.id)
                         throw new Error(
-                          "No se pudo cargar el registro. Reintenta.",
+                          t("No se pudo cargar el registro. Reintenta."),
                         );
                       if (mounted.current) onDuplicate(source);
                     } catch (error) {
@@ -442,7 +460,7 @@ export default function RecordDetail({
                         setDuplicateError(
                           error instanceof Error
                             ? error.message
-                            : "No se pudo cargar el registro. Reintenta.",
+                            : t("No se pudo cargar el registro. Reintenta."),
                         );
                     } finally {
                       if (mounted.current) setDuplicating(false);
@@ -450,7 +468,7 @@ export default function RecordDetail({
                   }}
                 >
                   <Copy size={15} />{" "}
-                  {duplicating ? "Cargando copia…" : "Duplicar"}
+                  {duplicating ? t("Cargando copia…") : t("Duplicar")}
                 </Button>
               )}
               {capabilities.update && (
@@ -459,7 +477,7 @@ export default function RecordDetail({
                   size="sm"
                   onClick={() => onEdit(current)}
                 >
-                  <Pencil size={15} /> Editar
+                  <Pencil size={15} /> {t("Editar")}
                 </Button>
               )}
             </div>
@@ -471,7 +489,7 @@ export default function RecordDetail({
         </DialogHeader>
         <nav
           className="op-tabs record-detail-tabs"
-          aria-label="Ficha del registro"
+          aria-label={t("Ficha del registro")}
         >
           <div className="op-tabs-scroll-shell">
             <div ref={detailTabScroll.viewportRef} className="op-tabs-scroll">
@@ -517,28 +535,30 @@ export default function RecordDetail({
                   <div key={name}>
                     <dt>{resolveFieldLabel(field, labelLocale)}</dt>
                     <dd>
-                      {field.type === R2_ATTACHMENT_TYPE
-                        ? attachmentValue(name)
-                        : field.config?.relation
-                          ? (() => {
-                              const related = detail.data?.data.relations.find(
-                                (r) =>
-                                  r.direction === "outgoing" &&
-                                  r.field === name,
+                      {field.type === R2_ATTACHMENT_TYPE ? (
+                        attachmentValue(name)
+                      ) : field.config?.relation ? (
+                        (() => {
+                          const related = detail.data?.data.relations.find(
+                            (r) =>
+                              r.direction === "outgoing" && r.field === name,
+                          );
+                          return related?.records.length
+                            ? related.records.map(label).join(", ") +
+                                (related.total > related.records.length
+                                  ? ` (+${related.total - related.records.length})`
+                                  : "")
+                            : display(
+                                recordOptionLabel(current[name], field.options),
+                                uiLocale,
                               );
-                              return related?.records.length
-                                ? related.records.map(label).join(", ") +
-                                    (related.total > related.records.length
-                                      ? ` (+${related.total - related.records.length})`
-                                      : "")
-                                : display(
-                                    recordOptionLabel(
-                                      current[name],
-                                      field.options,
-                                    ),
-                                  );
-                            })()
-                          : <FieldValueDisplay value={current[name]} field={field}/>}
+                        })()
+                      ) : (
+                        <FieldValueDisplay
+                          value={current[name]}
+                          field={field}
+                        />
+                      )}
                     </dd>
                   </div>
                 ))}
@@ -547,18 +567,20 @@ export default function RecordDetail({
                 {current.created_at &&
                   Number.isFinite(Date.parse(current.created_at)) && (
                     <span>
-                      Creado:{" "}
-                      {new Date(current.created_at).toLocaleString("es-CO")}
+                      {t("Creado:")}{" "}
+                      {new Date(current.created_at).toLocaleString(uiLocale)}
                     </span>
                   )}
                 {current.updated_at &&
                   Number.isFinite(Date.parse(current.updated_at)) && (
                     <span>
-                      Actualizado:{" "}
-                      {new Date(current.updated_at).toLocaleString("es-CO")}
+                      {t("Actualizado:")}{" "}
+                      {new Date(current.updated_at).toLocaleString(uiLocale)}
                     </span>
                   )}
-                <small>ID: {current.id}</small>
+                <small>
+                  {t("ID:")} {current.id}
+                </small>
               </div>
             </>
           )}
@@ -579,20 +601,22 @@ export default function RecordDetail({
                   <div>
                     <h3>
                       {selectedLegacyRelation?.label ??
-                        "Registros relacionados"}
+                        t("Registros relacionados")}
                     </h3>
                     <p>
                       {selectedLegacyRelation
-                        ? "Registros vinculados a esta cotización."
-                        : "Referencias de este registro y objetos que apuntan a él."}
+                        ? t("Registros vinculados a esta cotización.")
+                        : t(
+                            "Referencias de este registro y objetos que apuntan a él.",
+                          )}
                     </p>
                   </div>
                 </div>
                 {detail.isPending ? (
-                  <p>Cargando relaciones…</p>
+                  <p>{t("Cargando relaciones…")}</p>
                 ) : !legacyRelations.length ? (
                   <div className="op-empty">
-                    Este objeto no tiene relaciones configuradas.
+                    {t("Este objeto no tiene relaciones configuradas.")}
                   </div>
                 ) : (
                   displayedLegacyRelations.map((relation, i) => (
@@ -608,14 +632,14 @@ export default function RecordDetail({
                       </h4>
                       <p className="op-muted">
                         {relation.direction === "incoming"
-                          ? "Relacionados con este registro"
-                          : "Referencias de este registro"}
+                          ? t("Relacionados con este registro")
+                          : t("Referencias de este registro")}
                       </p>
                       {!relation.records.length ? (
                         <p className="op-muted">
                           {relation.total
-                            ? "No hay registros en esta página."
-                            : "Sin registros relacionados."}
+                            ? t("No hay registros en esta página.")
+                            : t("Sin registros relacionados.")}
                         </p>
                       ) : (
                         relation.records.map((related) => (
@@ -639,7 +663,7 @@ export default function RecordDetail({
                                   .map(([key, value]) => (
                                     <div key={key}>
                                       <dt>{key}</dt>
-                                      <dd>{display(value)}</dd>
+                                      <dd>{display(value, uiLocale)}</dd>
                                     </div>
                                   ))}
                               </dl>
@@ -654,7 +678,7 @@ export default function RecordDetail({
                                 type="button"
                                 variant="outline"
                               >
-                                Abrir {label(related)}
+                                {t("Abrir")} {label(related)}
                               </Button>
                             ) : null}
                           </div>
@@ -687,20 +711,24 @@ export default function RecordDetail({
                 }}
               >
                 <div className="op-toolbar">
-                  <Label htmlFor="activity-kind">Registrar</Label>
+                  <Label htmlFor="activity-kind">{t("Registrar")}</Label>
                   <select
                     id="activity-kind"
                     className="op-select"
                     value={kind}
                     onChange={(e) => setKind(e.target.value)}
                   >
-                    <option value="note">Nota</option>
-                    <option value="call">Llamada</option>
-                    <option value="meeting">Reunión</option>
-                    <option value="email">Correo recibido o enviado</option>
+                    <option value="note">{t("Nota")}</option>
+                    <option value="call">{t("Llamada")}</option>
+                    <option value="meeting">{t("Reunión")}</option>
+                    <option value="email">
+                      {t("Correo recibido o enviado")}
+                    </option>
                   </select>
                 </div>
-                <Label htmlFor="activity-note">Detalle de la actividad</Label>
+                <Label htmlFor="activity-note">
+                  {t("Detalle de la actividad")}
+                </Label>
                 <textarea
                   id="activity-note"
                   className="op-textarea"
@@ -709,20 +737,20 @@ export default function RecordDetail({
                   rows={3}
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  placeholder="Acuerdos, contexto y próximos pasos…"
+                  placeholder={t("Acuerdos, contexto y próximos pasos…")}
                 />
                 <div className="op-actions">
                   <Button type="submit" disabled={saving || !body.trim()}>
-                    {saving ? "Guardando…" : "Guardar actividad"}
+                    {saving ? t("Guardando…") : t("Guardar actividad")}
                   </Button>
                 </div>
               </form>
               <div className="op-section-title">
-                <h3>Historial</h3>
+                <h3>{t("Historial")}</h3>
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label="Actualizar actividad"
+                  aria-label={t("Actualizar actividad")}
                   onClick={() => activity.refetch()}
                 >
                   <RefreshCw size={15} />
@@ -733,20 +761,26 @@ export default function RecordDetail({
                 retry={() => activity.refetch()}
               />
               {activity.isPending ? (
-                <p>Cargando historial…</p>
+                <p>{t("Cargando historial…")}</p>
               ) : !activity.data?.data.length ? (
-                <div className="op-empty">Aún no hay actividad registrada.</div>
+                <div className="op-empty">
+                  {t("Aún no hay actividad registrada.")}
+                </div>
               ) : (
                 <ol className="op-timeline">
                   {activity.data.data.map((item) => (
                     <li key={item.id}>
                       <div>
-                        <strong>{activityNames[item.kind] ?? item.kind}</strong>
+                        <strong>
+                          {activityNames[item.kind]
+                            ? t(activityNames[item.kind])
+                            : item.kind}
+                        </strong>
                         <time>
-                          {new Date(item.created_at).toLocaleString("es-CO")}
+                          {new Date(item.created_at).toLocaleString(uiLocale)}
                         </time>
                       </div>
-                      <p>{activityBody(item)}</p>
+                      <p>{activityBody(item, t)}</p>
                       {item.version > 0 && (
                         <Button
                           variant="ghost"
@@ -766,7 +800,7 @@ export default function RecordDetail({
                             }
                           }}
                         >
-                          <Trash2 size={13} /> Eliminar actividad
+                          <Trash2 size={13} /> {t("Eliminar actividad")}
                         </Button>
                       )}
                     </li>
@@ -785,7 +819,9 @@ export default function RecordDetail({
           {tab === "history" &&
             supportsRecordHistory(object) &&
             capabilities.read && (
-              <Suspense fallback={<p role="status">Cargando historial…</p>}>
+              <Suspense
+                fallback={<p role="status">{t("Cargando historial…")}</p>}
+              >
                 <RecordHistory
                   object={object}
                   recordId={record.id}
@@ -807,8 +843,10 @@ export default function RecordDetail({
               <div className="op-upload">
                 <Paperclip size={24} />
                 <div>
-                  <Label htmlFor="record-file">Adjuntar archivo</Label>
-                  <p>Hasta 5 MB por archivo y 50 adjuntos por registro.</p>
+                  <Label htmlFor="record-file">{t("Adjuntar archivo")}</Label>
+                  <p>
+                    {t("Hasta 5 MB por archivo y 50 adjuntos por registro.")}
+                  </p>
                   <Input
                     id="record-file"
                     type="file"
@@ -822,7 +860,7 @@ export default function RecordDetail({
               </div>
               {saving && (
                 <p className="op-muted" role="status">
-                  Guardando cambios…
+                  {t("Guardando cambios…")}
                 </p>
               )}
               <OperationError
@@ -831,7 +869,7 @@ export default function RecordDetail({
               />
               {!files.data?.data.length ? (
                 <div className="op-empty">
-                  Todavía no hay archivos adjuntos.
+                  {t("Todavía no hay archivos adjuntos.")}
                 </div>
               ) : (
                 <div className="op-task-list">
@@ -841,12 +879,12 @@ export default function RecordDetail({
                       <div className="op-grow">
                         <strong className="op-break">{file.name}</strong>
                         <p>
-                          {(file.size / 1024).toLocaleString("es-CO", {
+                          {(file.size / 1024).toLocaleString(uiLocale, {
                             maximumFractionDigits: 1,
                           })}{" "}
-                          KB ·{" "}
+                          {t("KB ·")}{" "}
                           {new Date(file.created_at).toLocaleDateString(
-                            "es-CO",
+                            uiLocale,
                           )}
                         </p>
                       </div>
@@ -862,7 +900,7 @@ export default function RecordDetail({
                       />
                       <Button variant="ghost" size="icon" asChild>
                         <a
-                          aria-label={`Descargar ${file.name}`}
+                          aria-label={t("Descargar %{p0}", { p0: file.name })}
                           href={`/api/file/${file.id}/download`}
                           download
                           onClick={(e) => {
@@ -880,7 +918,7 @@ export default function RecordDetail({
                         variant="ghost"
                         size="icon"
                         disabled={saving}
-                        aria-label={`Eliminar ${file.name}`}
+                        aria-label={t("Eliminar %{p0}", { p0: file.name })}
                         onClick={() => removeFile(file)}
                       >
                         <Trash2 size={16} />

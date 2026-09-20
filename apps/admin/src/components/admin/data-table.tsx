@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { useVirtualizer, defaultRangeExtractor } from "@tanstack/react-virtual";
 import type { ReactNode, Ref, ComponentProps } from "react";
 import {
@@ -493,57 +495,60 @@ export const DataTableLoading = ({
 }: {
   hasBulkActions?: boolean;
   className?: string;
-}) => (
-  <div
-    className={cn("rounded-md border bg-card overflow-hidden", className)}
-    role="status"
-    aria-label="Cargando datos…"
-  >
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {hasBulkActions ? (
-            <TableHead className="w-8">
-              <Skeleton className="size-4" />
-            </TableHead>
-          ) : null}
-          {Array.from({ length: 4 }, (_, i) => (
-            <TableHead key={i}>
-              <Skeleton className="h-4 w-24 my-2" />
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {Array.from({ length: 5 }, (_, rowIndex) => (
-          <TableRow key={rowIndex}>
+}) => {
+  const t = useMessages(settingsMessages);
+  return (
+    <div
+      className={cn("rounded-md border bg-card overflow-hidden", className)}
+      role="status"
+      aria-label={t("Cargando datos…")}
+    >
+      <Table>
+        <TableHeader>
+          <TableRow>
             {hasBulkActions ? (
-              <TableCell className="w-8">
+              <TableHead className="w-8">
                 <Skeleton className="size-4" />
-              </TableCell>
+              </TableHead>
             ) : null}
-            {Array.from({ length: 4 }, (_, colIndex) => (
-              <TableCell key={colIndex} className="py-3.5">
-                <Skeleton
-                  className={cn(
-                    "h-4",
-                    colIndex === 0
-                      ? "w-20"
-                      : colIndex === 1
-                        ? "w-40"
-                        : colIndex === 2
-                          ? "w-28"
-                          : "w-24",
-                  )}
-                />
-              </TableCell>
+            {Array.from({ length: 4 }, (_, i) => (
+              <TableHead key={i}>
+                <Skeleton className="h-4 w-24 my-2" />
+              </TableHead>
             ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </div>
-);
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }, (_, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {hasBulkActions ? (
+                <TableCell className="w-8">
+                  <Skeleton className="size-4" />
+                </TableCell>
+              ) : null}
+              {Array.from({ length: 4 }, (_, colIndex) => (
+                <TableCell key={colIndex} className="py-3.5">
+                  <Skeleton
+                    className={cn(
+                      "h-4",
+                      colIndex === 0
+                        ? "w-20"
+                        : colIndex === 1
+                          ? "w-40"
+                          : colIndex === 2
+                            ? "w-28"
+                            : "w-24",
+                    )}
+                  />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
 
 export interface DataTableProps<
   RecordType extends RaRecord = RaRecord,

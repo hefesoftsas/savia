@@ -2,7 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { screen, waitFor, cleanup } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import userEvent from "@testing-library/user-event";
 import { CollectionImportWizard } from "../collection-import-wizard";
 import { parseSpreadsheetFile } from "../spreadsheet-parser";

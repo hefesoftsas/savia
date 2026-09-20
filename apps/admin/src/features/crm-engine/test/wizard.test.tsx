@@ -2,25 +2,27 @@
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { it, expect, vi, afterEach, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  cleanup,
-} from "@testing-library/react";
+import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DynamicForm from "../dynamic-form";
 import WizardDesigner from "../wizard-designer";
-import { WizardStepAssignmentCanvas, buildWizardStepFieldOrder } from "../wizard-step-assignment-canvas";
+import {
+  WizardStepAssignmentCanvas,
+  buildWizardStepFieldOrder,
+} from "../wizard-step-assignment-canvas";
 import { reorderSections } from "../form-sections-editor";
 import { buildGroupedFieldOrder } from "../designer-field-dnd";
 import {
   DesignerProvider,
   createInitialDesignerState,
 } from "@form-eng/designer";
-import { makeConfig, objectSchema, type CrmObject } from "@savia/crm-shared/metadata";
+import {
+  makeConfig,
+  objectSchema,
+  type CrmObject,
+} from "@savia/crm-shared/metadata";
 beforeEach(() =>
   vi.stubGlobal(
     "ResizeObserver",

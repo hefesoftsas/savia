@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, cleanup } from "@testing-library/react";
+import { fireEvent, screen, cleanup } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { makeConfig, type CrmObject } from "@savia/crm-shared/metadata";

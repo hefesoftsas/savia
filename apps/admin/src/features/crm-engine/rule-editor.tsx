@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { propertySearchTerms } from "@savia/crm-shared/property-panel-search";
@@ -45,6 +47,7 @@ export function RuleEditor({
   fields: Record<string, { type: string; label: string }>;
   excludeField?: string;
 }) {
+  const t = useMessages(studioMessages);
   const chosen = value?.field;
   return (
     <fieldset
@@ -53,7 +56,7 @@ export function RuleEditor({
     >
       <legend>{label}</legend>
       <Choice
-        label={`${label}: campo`}
+        label={t("%{v1}: campo", { v1: label })}
         value={chosen ?? ""}
         onChange={(field) =>
           onChange(
@@ -67,7 +70,7 @@ export function RuleEditor({
           )
         }
       >
-        <option value="">Siempre</option>
+        <option value="">{t("Siempre")}</option>
         {Object.entries(fields)
           .filter(([name]) => name !== excludeField)
           .map(([name, field]) => (
@@ -79,32 +82,32 @@ export function RuleEditor({
       {value && (
         <>
           <Choice
-            label={`${label}: condición`}
+            label={t("%{v1}: condición", { v1: label })}
             value={value.op}
             onChange={(op) => onChange({ ...value, op: op as Condition["op"] })}
           >
-            <option value="eq">Es igual a</option>
-            <option value="ne">Es diferente de</option>
-            <option value="gt">Es mayor que</option>
-            <option value="gte">Es mayor o igual</option>
-            <option value="lt">Es menor que</option>
-            <option value="lte">Es menor o igual</option>
-            <option value="contains">Contiene</option>
-            <option value="empty">Está vacío</option>
+            <option value="eq">{t("Es igual a")}</option>
+            <option value="ne">{t("Es diferente de")}</option>
+            <option value="gt">{t("Es mayor que")}</option>
+            <option value="gte">{t("Es mayor o igual")}</option>
+            <option value="lt">{t("Es menor que")}</option>
+            <option value="lte">{t("Es menor o igual")}</option>
+            <option value="contains">{t("Contiene")}</option>
+            <option value="empty">{t("Está vacío")}</option>
           </Choice>
           {value.op !== "empty" &&
             (fields[value.field]?.type === "Toggle" ? (
               <Choice
-                label={`${label}: valor`}
+                label={t("%{v1}: valor", { v1: label })}
                 value={String(value.value)}
                 onChange={(v) => onChange({ ...value, value: v === "true" })}
               >
-                <option value="true">Sí</option>
-                <option value="false">No</option>
+                <option value="true">{t("Sí")}</option>
+                <option value="false">{t("No")}</option>
               </Choice>
             ) : (
               <Input
-                aria-label={`${label}: valor`}
+                aria-label={t("%{v1}: valor", { v1: label })}
                 value={String(value.value ?? "")}
                 type={
                   ["Number", "Currency", "Percentage", "Rating"].includes(

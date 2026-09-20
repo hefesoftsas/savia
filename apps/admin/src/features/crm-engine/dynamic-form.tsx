@@ -1,3 +1,7 @@
+import { configureFormEngineLocale } from "@/i18n/form-engine-locale";
+import { useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { RelatedRecordEditor } from "./related-record-editor";
 import type { RelatedRecordChanges } from "@savia/crm-shared/related-records";
 import { DateTimeField } from "./date-time-field";
@@ -17,7 +21,6 @@ import {
   FormEngine,
   InjectedFieldProvider,
   RulesEngineProvider,
-  registerLocale,
   type IEntityData,
   type IFieldProps,
 } from "@form-eng/core";
@@ -38,17 +41,15 @@ import {
   type CrmObject,
 } from "@savia/crm-shared/metadata";
 import { useFieldLabelLocale } from "./localized-field-label-editor";
-import { evaluateCondition, isSectionVisible, prepareRecord } from "@savia/crm-shared/rules";
+import {
+  evaluateCondition,
+  isSectionVisible,
+  prepareRecord,
+} from "@savia/crm-shared/rules";
 import type { TemporaryR2Attachment } from "./r2-attachment-upload";
 import "./designer-enhancements.css";
 import "./wizard.css";
 const EMPTY_VALUES: Record<string, unknown> = {};
-registerLocale({
-  save: "Guardar",
-  create: "Crear",
-  cancel: "Cancelar",
-  saving: "Guardando…",
-});
 
 const WizardContext = createContext<{
   active: string;
@@ -63,7 +64,9 @@ function WizardField({
   const wizard = useContext(WizardContext);
   const values = useWatch();
   const section = props.config?.section
-    ? object.config.studio?.sections?.find((s) => s.id === props.config?.section)
+    ? object.config.studio?.sections?.find(
+        (s) => s.id === props.config?.section,
+      )
     : undefined;
   const hidden =
     (!!wizard && (props.config?.step ?? wizard.first) !== wizard.active) ||
@@ -77,7 +80,25 @@ function WizardField({
       hidden={hidden}
       {...(hidden ? { inert: true, "aria-hidden": true } : {})}
     >
-      {props.config?.collectionRelationTarget && ["subform", "table"].includes(String(props.config?.relationPresentation)) ? <RelatedRecordEditor {...props} /> : props.config?.dateTime === true ? <DateTimeField {...props} /> : props.config?.collectionOptions ? <CollectionOptionField {...props} objectName={object.name} numeric={object.config.fields[props.fieldName!]?.type === "Number" || object.config.fields[props.fieldName!]?.type === "Currency"} /> : cloneElement(element, props)}
+      {props.config?.collectionRelationTarget &&
+      ["subform", "table"].includes(
+        String(props.config?.relationPresentation),
+      ) ? (
+        <RelatedRecordEditor {...props} />
+      ) : props.config?.dateTime === true ? (
+        <DateTimeField {...props} />
+      ) : props.config?.collectionOptions ? (
+        <CollectionOptionField
+          {...props}
+          objectName={object.name}
+          numeric={
+            object.config.fields[props.fieldName!]?.type === "Number" ||
+            object.config.fields[props.fieldName!]?.type === "Currency"
+          }
+        />
+      ) : (
+        cloneElement(element, props)
+      )}
     </div>
   );
 }
@@ -108,6 +129,9 @@ function FormValuesObserver({
 }
 
 function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
+  const t = useMessages(recordsMessages);
+  const validationLocale = useAppLocale();
+
   const values = useWatch();
   const wizard = useContext(WizardContext);
   const locale = useFieldLabelLocale();
@@ -140,27 +164,25 @@ function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
   const firstInSection =
     cfg.section &&
     sectionVisible &&
-    entries.find(
-      ([, f]) => {
-        const fCfg = f.config ?? {};
-        const fSection = fCfg.section
-          ? studio?.sections?.find((s: { id: string }) => s.id === fCfg.section)
-          : undefined;
-        return (
-          fCfg.section === cfg.section &&
-          (!fCfg.section || isSectionVisible(fSection, values)) &&
-          !f.hidden &&
-          (!wizard || (fCfg.step ?? wizard.first) === wizard.active) &&
-          (!fCfg.visibleWhen ||
-            evaluateCondition(fCfg.visibleWhen as any, values))
-        );
-      },
-    )?.[0] === name;
+    entries.find(([, f]) => {
+      const fCfg = f.config ?? {};
+      const fSection = fCfg.section
+        ? studio?.sections?.find((s: { id: string }) => s.id === fCfg.section)
+        : undefined;
+      return (
+        fCfg.section === cfg.section &&
+        (!fCfg.section || isSectionVisible(fSection, values)) &&
+        !f.hidden &&
+        (!wizard || (fCfg.step ?? wizard.first) === wizard.active) &&
+        (!fCfg.visibleWhen ||
+          evaluateCondition(fCfg.visibleWhen as any, values))
+      );
+    })?.[0] === name;
   const section = sectionDef;
   const resolvedLabel = resolveFieldLabel(field, locale);
   const label =
     field.type === R2_ATTACHMENT_TYPE && resolvedLabel === "Archivo R2"
-      ? "Archivo adjunto"
+      ? t("Archivo adjunto")
       : resolvedLabel;
   return (
     <div
@@ -174,9 +196,12 @@ function FieldLabel({ object, name }: { object: CrmObject; name: string }) {
       {firstInSection &&
         section &&
         !(wizard?.activeTitle && section.label === wizard.activeTitle) && (
-        <h3 className="studio-section-title">{section.label}</h3>
-      )}
-      <Label htmlFor={String(cfg.inputId ?? name)} id={`${cfg.inputId ?? name}_label`}>
+          <h3 className="studio-section-title">{section.label}</h3>
+        )}
+      <Label
+        htmlFor={String(cfg.inputId ?? name)}
+        id={`${cfg.inputId ?? name}_label`}
+      >
         {label}
         {required ? (
           <span className="required" aria-hidden="true">
@@ -234,7 +259,13 @@ export type AttachmentUploadStatus = {
 };
 export default function DynamicForm(props: DynamicFormProps) {
   if (
-    !Object.values(props.object.config.fields).some(field => field.config?.collectionRelationTarget && ["subform", "table"].includes(String(field.config?.relationPresentation))) &&
+    !Object.values(props.object.config.fields).some(
+      (field) =>
+        field.config?.collectionRelationTarget &&
+        ["subform", "table"].includes(
+          String(field.config?.relationPresentation),
+        ),
+    ) &&
     props.object.config.studio?.wizard?.enabled &&
     props.object.config.studio.wizard.presentation !== "steps"
   )
@@ -251,7 +282,7 @@ function StepForm({
   onDiscardTemporaryAttachments,
   onCancel,
   onSaved,
-  submitLabel = "Guardar registro",
+  submitLabel: suppliedSubmitLabel,
   formActions,
   renderFieldActions,
   onValuesChange,
@@ -287,10 +318,20 @@ function StepForm({
   renderFieldActions?: (field: string) => React.ReactNode;
   onValuesChange?: (values: Record<string, unknown>) => void;
 }) {
+  const t = useMessages(recordsMessages);
+  const validationLocale = useAppLocale();
+  const submitLabel = suppliedSubmitLabel ?? t("Guardar registro");
+  useMemo(
+    () => configureFormEngineLocale(validationLocale),
+    [validationLocale],
+  );
+
   const managedObject = ["managed-customer", "managed-agency"].includes(
     object.config.studio?.business ?? "",
   );
-  const managedEdit = (managedObject || Boolean(object.config.studio?.collection)) && Boolean(values.id);
+  const managedEdit =
+    (managedObject || Boolean(object.config.studio?.collection)) &&
+    Boolean(values.id);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -304,8 +345,8 @@ function StepForm({
     { field: string; file: File; attachment: TemporaryR2Attachment }[]
   >([]);
   const [attachmentVersion, setAttachmentVersion] = useState(0);
-  const [savedRecordId, setSavedRecordId] = useState(
-    () => String(values.id ?? ""),
+  const [savedRecordId, setSavedRecordId] = useState(() =>
+    String(values.id ?? ""),
   );
   const [savedRecord, setSavedRecord] = useState<CrmRecord | undefined>();
   const steps = object.config.studio?.wizard?.enabled
@@ -323,9 +364,7 @@ function StepForm({
   >([]);
   const handledAttachmentsRef = useRef(new Set<File>());
   const cancelledRef = useRef(false);
-  const discardTemporaryAttachmentsRef = useRef(
-    onDiscardTemporaryAttachments,
-  );
+  const discardTemporaryAttachmentsRef = useRef(onDiscardTemporaryAttachments);
   useEffect(() => {
     discardTemporaryAttachmentsRef.current = onDiscardTemporaryAttachments;
   }, [onDiscardTemporaryAttachments]);
@@ -377,9 +416,9 @@ function StepForm({
         ),
       );
       if (onDiscardTemporaryAttachments)
-        void onDiscardTemporaryAttachments(removed.map(({ attachment }) => attachment)).catch(
-          (cause: Error) => setError(cause.message),
-        );
+        void onDiscardTemporaryAttachments(
+          removed.map(({ attachment }) => attachment),
+        ).catch((cause: Error) => setError(cause.message));
     }
     for (const [field, files] of Object.entries(queuedAttachments))
       for (const file of files) {
@@ -422,9 +461,8 @@ function StepForm({
       }, {}),
     [temporaryAttachments],
   );
-  const hasPendingAttachmentUpload = Object.values(uploadingAttachments).some(
-    Boolean,
-  );
+  const hasPendingAttachmentUpload =
+    Object.values(uploadingAttachments).some(Boolean);
   const markAttachmentUploaded = (field: string, file: File) =>
     setQueuedAttachments((previous) => ({
       ...previous,
@@ -443,7 +481,10 @@ function StepForm({
       setUploadingAttachments((previous) => ({ ...previous, [field]: file }));
       return;
     }
-    setUploadingAttachments((previous) => ({ ...previous, [field]: undefined }));
+    setUploadingAttachments((previous) => ({
+      ...previous,
+      [field]: undefined,
+    }));
     refreshAttachments(field, file);
   };
   useEffect(() => {
@@ -480,18 +521,25 @@ function StepForm({
   // Shared validation owns required/conditional checks; form-engine remains the live form runtime.
   // Remote relations use their own runtime type: Dropdown clears IDs absent from its
   // local options catalog, which is incomplete by definition for paginated relations.
-  const orderedFields = useMemo(() => [...fieldEntries(object)].sort((a, b) => {
-    const sections = object.config.studio?.sections ?? [];
-    const rank = (section: unknown) => section ? sections.findIndex(s => s.id === section) + 1 : 0;
-    return rank(a[1].config?.section) - rank(b[1].config?.section);
-  }), [object]);
+  const orderedFields = useMemo(
+    () =>
+      [...fieldEntries(object)].sort((a, b) => {
+        const sections = object.config.studio?.sections ?? [];
+        const rank = (section: unknown) =>
+          section ? sections.findIndex((s) => s.id === section) + 1 : 0;
+        return rank(a[1].config?.section) - rank(b[1].config?.section);
+      }),
+    [object],
+  );
   const config = useMemo(
     () => ({
       ...object.config,
       settings: {
         ...object.config.settings,
         manualSave: true,
-        ...((managedObject || object.config.studio?.collection || object.config.studio?.requestPage)
+        ...(managedObject ||
+        object.config.studio?.collection ||
+        object.config.studio?.requestPage
           ? { expandCutoffCount: Object.keys(object.config.fields).length + 1 }
           : {}),
       },
@@ -501,7 +549,11 @@ function StepForm({
           name,
           {
             ...field,
-            type: field.config?.collectionRelationTarget ? "CrmCollectionRelation" : field.config?.relation ? "CrmRelation" : field.type,
+            type: field.config?.collectionRelationTarget
+              ? "CrmCollectionRelation"
+              : field.config?.relation
+                ? "CrmRelation"
+                : field.type,
             required: false,
             readOnly:
               field.readOnly ||
@@ -518,7 +570,14 @@ function StepForm({
         ]),
       ),
     }),
-    [object, managedEdit, managedObject, savedRecordId, values.id, orderedFields],
+    [
+      object,
+      managedEdit,
+      managedObject,
+      savedRecordId,
+      values.id,
+      orderedFields,
+    ],
   );
   const defaults = useMemo(() => {
     const initial = Object.fromEntries(
@@ -526,7 +585,9 @@ function StepForm({
         name,
         values[name] ??
           field.defaultValue ??
-          (field.config?.multiple || field.type === "MultiSelect" || field.type === R2_ATTACHMENT_TYPE
+          (field.config?.multiple ||
+          field.type === "MultiSelect" ||
+          field.type === R2_ATTACHMENT_TYPE
             ? []
             : field.type === "Toggle"
               ? false
@@ -547,7 +608,7 @@ function StepForm({
     >
       {activeStep && (
         <div className="wizard-header">
-          <nav aria-label="Pasos del formulario">
+          <nav aria-label={t("Pasos del formulario")}>
             <ol className="wizard-steps">
               {steps.map((step, index) => {
                 const label = (
@@ -590,7 +651,8 @@ function StepForm({
             </ol>
           </nav>
           <h3 ref={heading} tabIndex={-1} className="sr-only">
-            Paso {activeIndex + 1} de {steps.length}: {activeStep.title}
+            {t("Paso")} {activeIndex + 1} {t("de")} {steps.length}:{" "}
+            {activeStep.title}
           </h3>
           {activeStep.description && (
             <p className="studio-field-help wizard-step-description">
@@ -621,247 +683,275 @@ function StepForm({
         >
           <RulesEngineProvider>
             <InjectedFieldProvider injectedFields={wizardRegistry(object)}>
-            <FormEngine
-              configName={`${object.name}-${values.id ?? "new"}`}
-              programName="savia-crm"
-              formConfig={config}
-              defaultValues={defaults as IEntityData}
-              entityType={object.name}
-              entityId={String(values.id ?? "new")}
-              isCreate={!values.id}
-              isManualSave
-              renderSaveButton={() => null}
-              renderLabel={({ id }) => <><FieldLabel object={object} name={id} />{renderFieldActions?.(id)}</>}
-              renderStatus={() => <FormValuesObserver onChange={onValuesChange} />}
-              renderError={({ id, error: runtimeError }) =>
-                fieldErrors[id] || runtimeError ? (
-                  <p
-                    hidden={
-                      !!activeStep &&
-                      (object.config.fields[id]?.config?.step ??
-                        steps[0].id) !== activeStep.id
-                    }
-                    id={`${id}_error`}
-                    role="alert"
-                  >
-                    {fieldErrors[id] ??
-                      runtimeError?.message ??
-                      "Revisa este campo"}
-                  </p>
-                ) : null
-              }
-              onSubmit={async (data) => {
-                setError("");
-                setFieldErrors({});
-                try {
-                  const related = Object.entries(object.config.fields).filter(
-                    ([, field]) =>
-                      field.config?.collectionRelationTarget &&
-                      ["subform", "table"].includes(
-                        String(field.config?.relationPresentation),
-                      ),
-                  );
-                  // Validate required relation selections as IDs, then preserve staged rows.
-                  const validationData = { ...data };
-                  for (const [name, field] of related) {
-                    const rows = Array.isArray(data[name])
-                      ? (data[name] as unknown[])
-                      : [];
-                    validationData[name] = field.config?.multiple
-                      ? rows.map((_, index) => String(index))
-                      : rows.length
-                        ? "selected"
-                        : "";
-                  }
-                  const result = validateRecord(object, validationData);
-                  for (const [name] of related)
-                    result.data[name] = data[name];
-                  for (const [name] of related) {
-                    const invalid = Array.isArray(data[name]) && (data[name] as Array<{__errors?:string[]}>).some(row=>row.__errors?.length);
-                    if(invalid) result.errors[name] = "Revisa los campos del registro relacionado antes de guardar.";
-                  }
-                  const changedFields = managedEdit
-                    ? new Set(
-                        Object.keys(object.config.fields).filter(
-                          (name) =>
-                            JSON.stringify(data[name]) !==
-                            JSON.stringify(defaults[name]),
-                        ),
-                      )
-                    : undefined;
-                  const relevantErrors = Object.fromEntries(
-                    Object.entries(result.errors).filter(
-                      ([name]) =>
-                        (!changedFields ||
-                          name === "_form" ||
-                          changedFields.has(name)) &&
-                        (lastStep ||
-                          name === "_form" ||
-                          (object.config.fields[name]?.config?.step ??
-                            steps[0]?.id) === activeStep?.id),
-                    ),
-                  );
-                  if (Object.keys(relevantErrors).length) {
-                    setFieldErrors(relevantErrors);
-                    setError(
-                      activeStep
-                        ? "Revisa los campos señalados antes de continuar."
-                        : "Revisa los campos señalados antes de guardar.",
-                    );
-                    const firstError = fieldEntries(object).find(
-                      ([name]) => relevantErrors[name],
-                    )?.[0];
-                    if (firstError) {
-                      if (activeStep && lastStep) {
-                        const destination = steps.findIndex(
-                          (step) =>
-                            step.id ===
-                            object.config.fields[firstError]?.config?.step,
-                        );
-                        if (destination >= 0) setStepIndex(destination);
+              <FormEngine
+                configName={`${object.name}-${values.id ?? "new"}`}
+                programName="savia-crm"
+                formConfig={config}
+                defaultValues={defaults as IEntityData}
+                entityType={object.name}
+                entityId={String(values.id ?? "new")}
+                isCreate={!values.id}
+                isManualSave
+                renderSaveButton={() => null}
+                renderLabel={({ id }) => (
+                  <>
+                    <FieldLabel object={object} name={id} />
+                    {renderFieldActions?.(id)}
+                  </>
+                )}
+                renderStatus={() => (
+                  <FormValuesObserver onChange={onValuesChange} />
+                )}
+                renderError={({ id, error: runtimeError }) =>
+                  fieldErrors[id] || runtimeError ? (
+                    <p
+                      hidden={
+                        !!activeStep &&
+                        (object.config.fields[id]?.config?.step ??
+                          steps[0].id) !== activeStep.id
                       }
-                      setFocusField(firstError);
-                    }
-                    return;
-                  }
-                  if (activeStep && !lastStep) {
-                    setStepIndex(activeIndex + 1);
-                    setFocusField("");
-                    return;
-                  }
-                  if (hasPendingAttachmentUpload) {
-                    setError("Espera a que termine la carga de los archivos.");
-                    return;
-                  }
-                  const temporary = temporaryAttachmentsRef.current.map(
-                    ({ attachment }) => attachment,
-                  );
-                  const queuedCount = Object.values(queuedAttachments).reduce(
-                    (total, files) => total + files.length,
-                    0,
-                  );
-                  if (
-                    onUploadTemporaryAttachment &&
-                    queuedCount !== temporary.length
-                  ) {
-                    setError(
-                      "Revisa los archivos antes de guardar. Uno o más no se pudieron cargar.",
-                    );
-                    return;
-                  }
-                  setBusy(true);
-                  const attachments = fieldEntries(object).flatMap(
-                    ([field, definition]) =>
-                      definition.type === R2_ATTACHMENT_TYPE &&
-                      queuedAttachments[field]?.length
-                        ? [{ field, files: queuedAttachments[field] }]
-                        : [],
-                  );
-                  const recordData = changedFields
-                    ? Object.fromEntries(
-                        Object.entries(result.data).filter(([name]) =>
-                          changedFields.has(name),
-                        ),
-                      )
-                    : result.data;
-                  const saved = savedRecord
-                    ? await onSave(recordData, savedRecord)
-                    : await onSave(recordData);
-                  if (saved) {
-                    setSavedRecord(saved);
-                    setSavedRecordId(saved.id);
-                  }
-                  if (temporary.length) {
-                    if (!saved || !onPersistTemporaryAttachments)
-                      throw new Error(
-                        "No se pudieron asociar los archivos al registro. Inténtalo de nuevo.",
-                      );
-                    await onPersistTemporaryAttachments(saved, temporary);
-                    queuedAttachmentsRef.current = {};
-                    setQueuedAttachments({});
-                    replaceTemporaryAttachments([]);
-                    setAttachmentVersion((version) => version + 1);
-                  } else if (attachments.length) {
-                    if (!saved || !onPersistAttachments)
-                      throw new Error(
-                        "No se pudieron preparar los archivos para R2. Guarda el registro e inténtalo de nuevo.",
-                      );
-                    await onPersistAttachments(
-                      saved,
-                      attachments,
-                      updateAttachmentStatus,
-                    );
-                  }
-                  onSaved?.(saved);
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setBusy(false);
-                  setUploadingAttachments({});
-                }
-              }}
-              renderSubmitButton={({ onSubmit, isSubmitting }) => (
-                <div
-                  className={
-                    "wizard-actions" +
-                    (!activeStep ? " standard-form-actions" : "")
-                  }
-                >
-                  {formActions}
-                  {!activeStep && onCancel && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy || isSubmitting}
-                      onClick={() => void cancel()}
+                      id={`${id}_error`}
+                      role="alert"
                     >
-                      Cancelar
-                    </Button>
-                  )}
-                  {activeStep && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy || isSubmitting || activeIndex === 0}
-                      onClick={() => goBack(activeIndex - 1)}
-                    >
-                      <ArrowLeft size={14} aria-hidden="true" />
-                      Anterior
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={onSubmit}
-                    disabled={busy || isSubmitting || hasPendingAttachmentUpload}
-                    className="form-submit"
-                  >
-                    {busy ? (
-                      <LoaderCircle
-                        className="animate-spin"
-                        size={14}
-                        aria-hidden="true"
-                      />
-                    ) : lastStep ? (
-                      <Save size={14} aria-hidden="true" />
-                    ) : (
-                      <ArrowRight size={14} aria-hidden="true" />
-                    )}
-                    {busy
-                      ? "Guardando…"
-                      : lastStep
-                        ? submitLabel
-                        : "Siguiente paso"}
-                  </Button>
-                  {activeStep && (
-                    <p className="wizard-save-note">
-                      Se guardará al completar el último paso.
+                      {fieldErrors[id] ??
+                        runtimeError?.message ??
+                        t("Revisa este campo")}
                     </p>
-                  )}
-                </div>
-              )}
+                  ) : null
+                }
+                onSubmit={async (data) => {
+                  setError("");
+                  setFieldErrors({});
+                  try {
+                    const related = Object.entries(object.config.fields).filter(
+                      ([, field]) =>
+                        field.config?.collectionRelationTarget &&
+                        ["subform", "table"].includes(
+                          String(field.config?.relationPresentation),
+                        ),
+                    );
+                    // Validate required relation selections as IDs, then preserve staged rows.
+                    const validationData = { ...data };
+                    for (const [name, field] of related) {
+                      const rows = Array.isArray(data[name])
+                        ? (data[name] as unknown[])
+                        : [];
+                      validationData[name] = field.config?.multiple
+                        ? rows.map((_, index) => String(index))
+                        : rows.length
+                          ? "selected"
+                          : "";
+                    }
+                    const result = validateRecord(
+                      object,
+                      validationData,
+                      validationLocale,
+                    );
+                    for (const [name] of related)
+                      result.data[name] = data[name];
+                    for (const [name] of related) {
+                      const invalid =
+                        Array.isArray(data[name]) &&
+                        (data[name] as Array<{ __errors?: string[] }>).some(
+                          (row) => row.__errors?.length,
+                        );
+                      if (invalid)
+                        result.errors[name] = t(
+                          "Revisa los campos del registro relacionado antes de guardar.",
+                        );
+                    }
+                    const changedFields = managedEdit
+                      ? new Set(
+                          Object.keys(object.config.fields).filter(
+                            (name) =>
+                              JSON.stringify(data[name]) !==
+                              JSON.stringify(defaults[name]),
+                          ),
+                        )
+                      : undefined;
+                    const relevantErrors = Object.fromEntries(
+                      Object.entries(result.errors).filter(
+                        ([name]) =>
+                          (!changedFields ||
+                            name === "_form" ||
+                            changedFields.has(name)) &&
+                          (lastStep ||
+                            name === "_form" ||
+                            (object.config.fields[name]?.config?.step ??
+                              steps[0]?.id) === activeStep?.id),
+                      ),
+                    );
+                    if (Object.keys(relevantErrors).length) {
+                      setFieldErrors(relevantErrors);
+                      setError(
+                        activeStep
+                          ? t("Revisa los campos señalados antes de continuar.")
+                          : t("Revisa los campos señalados antes de guardar."),
+                      );
+                      const firstError = fieldEntries(object).find(
+                        ([name]) => relevantErrors[name],
+                      )?.[0];
+                      if (firstError) {
+                        if (activeStep && lastStep) {
+                          const destination = steps.findIndex(
+                            (step) =>
+                              step.id ===
+                              object.config.fields[firstError]?.config?.step,
+                          );
+                          if (destination >= 0) setStepIndex(destination);
+                        }
+                        setFocusField(firstError);
+                      }
+                      return;
+                    }
+                    if (activeStep && !lastStep) {
+                      setStepIndex(activeIndex + 1);
+                      setFocusField("");
+                      return;
+                    }
+                    if (hasPendingAttachmentUpload) {
+                      setError(
+                        t("Espera a que termine la carga de los archivos."),
+                      );
+                      return;
+                    }
+                    const temporary = temporaryAttachmentsRef.current.map(
+                      ({ attachment }) => attachment,
+                    );
+                    const queuedCount = Object.values(queuedAttachments).reduce(
+                      (total, files) => total + files.length,
+                      0,
+                    );
+                    if (
+                      onUploadTemporaryAttachment &&
+                      queuedCount !== temporary.length
+                    ) {
+                      setError(
+                        t(
+                          "Revisa los archivos antes de guardar. Uno o más no se pudieron cargar.",
+                        ),
+                      );
+                      return;
+                    }
+                    setBusy(true);
+                    const attachments = fieldEntries(object).flatMap(
+                      ([field, definition]) =>
+                        definition.type === R2_ATTACHMENT_TYPE &&
+                        queuedAttachments[field]?.length
+                          ? [{ field, files: queuedAttachments[field] }]
+                          : [],
+                    );
+                    const recordData = changedFields
+                      ? Object.fromEntries(
+                          Object.entries(result.data).filter(([name]) =>
+                            changedFields.has(name),
+                          ),
+                        )
+                      : result.data;
+                    const saved = savedRecord
+                      ? await onSave(recordData, savedRecord)
+                      : await onSave(recordData);
+                    if (saved) {
+                      setSavedRecord(saved);
+                      setSavedRecordId(saved.id);
+                    }
+                    if (temporary.length) {
+                      if (!saved || !onPersistTemporaryAttachments)
+                        throw new Error(
+                          t(
+                            "No se pudieron asociar los archivos al registro. Inténtalo de nuevo.",
+                          ),
+                        );
+                      await onPersistTemporaryAttachments(saved, temporary);
+                      queuedAttachmentsRef.current = {};
+                      setQueuedAttachments({});
+                      replaceTemporaryAttachments([]);
+                      setAttachmentVersion((version) => version + 1);
+                    } else if (attachments.length) {
+                      if (!saved || !onPersistAttachments)
+                        throw new Error(
+                          t(
+                            "No se pudieron preparar los archivos para R2. Guarda el registro e inténtalo de nuevo.",
+                          ),
+                        );
+                      await onPersistAttachments(
+                        saved,
+                        attachments,
+                        updateAttachmentStatus,
+                      );
+                    }
+                    onSaved?.(saved);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  } finally {
+                    setBusy(false);
+                    setUploadingAttachments({});
+                  }
+                }}
+                renderSubmitButton={({ onSubmit, isSubmitting }) => (
+                  <div
+                    className={
+                      "wizard-actions" +
+                      (!activeStep ? " standard-form-actions" : "")
+                    }
+                  >
+                    {formActions}
+                    {!activeStep && onCancel && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || isSubmitting}
+                        onClick={() => void cancel()}
+                      >
+                        {t("Cancelar")}
+                      </Button>
+                    )}
+                    {activeStep && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || isSubmitting || activeIndex === 0}
+                        onClick={() => goBack(activeIndex - 1)}
+                      >
+                        <ArrowLeft size={14} aria-hidden="true" />
+                        {t("Anterior")}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={onSubmit}
+                      disabled={
+                        busy || isSubmitting || hasPendingAttachmentUpload
+                      }
+                      className="form-submit"
+                    >
+                      {busy ? (
+                        <LoaderCircle
+                          className="animate-spin"
+                          size={14}
+                          aria-hidden="true"
+                        />
+                      ) : lastStep ? (
+                        <Save size={14} aria-hidden="true" />
+                      ) : (
+                        <ArrowRight size={14} aria-hidden="true" />
+                      )}
+                      {busy
+                        ? t("Guardando…")
+                        : lastStep
+                          ? submitLabel
+                          : t("Siguiente paso")}
+                    </Button>
+                    {activeStep && (
+                      <p className="wizard-save-note">
+                        {t("Se guardará al completar el último paso.")}
+                      </p>
+                    )}
+                  </div>
+                )}
               />
             </InjectedFieldProvider>
           </RulesEngineProvider>

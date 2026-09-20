@@ -1,3 +1,10 @@
+import { resolveOptionLabel } from "@savia/crm-shared/field-labels";
+import {
+  StaticOptionLabelsEditor,
+  parseStaticOptions,
+} from "./designer-option-labels";
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { localDateTime } from "./date-time-field";
 import { RelatedPresentationSettings } from "./related-presentation-settings";
 import { MonacoCodeEditor } from "./monaco-code-editor";
@@ -40,7 +47,7 @@ import {
 } from "lucide-react";
 import {
   fieldTypeLabel,
-  fieldTypePalette,
+  getLocalizedFieldTypePalette,
   filterPaletteFieldTypes,
 } from "./field-type-icons";
 import { toast } from "sonner";
@@ -99,7 +106,7 @@ type Studio = {
   };
 };
 type EditorMode = "design" | "preview" | "settings" | "versions" | "json";
-const palette = fieldTypePalette;
+
 const editorViews: {
   id: EditorMode;
   label: string;
@@ -123,9 +130,6 @@ const editorViews: {
   },
   { id: "json", label: "JSON", icon: <Braces size={14} aria-hidden="true" /> },
 ];
-function paletteLabel(type: string) {
-  return fieldTypeLabel(type);
-}
 function Control({
   label,
   children,
@@ -208,6 +212,8 @@ function Properties({
   studio: Studio;
   setStudio: (studio: Studio) => void;
 }) {
+  const t = useMessages(studioMessages);
+  const locale = useAppLocale();
   const { state, selectedField, updateField, removeField } = useDesigner();
   const [formHtmlEditorOpen, setFormHtmlEditorOpen] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
@@ -228,10 +234,11 @@ function Properties({
   if (!selectedField || !id)
     return (
       <aside className="studio-properties studio-properties--empty">
-        <h3>Propiedades</h3>
+        <h3>{t("Propiedades")}</h3>
         <p className="studio-field-help">
-          Selecciona un campo del formulario para configurar sus datos y
-          comportamiento.
+          {t(
+            "Selecciona un campo del formulario para configurar sus datos y comportamiento.",
+          )}
         </p>
       </aside>
     );
@@ -264,8 +271,7 @@ function Properties({
   };
   const patchConfig = (partial: Record<string, unknown>) =>
     updateField(id, { config: { ...config, ...partial } });
-  const patch = (key: string, value: unknown) =>
-    patchConfig({ [key]: value });
+  const patch = (key: string, value: unknown) => patchConfig({ [key]: value });
   const numeric = (key: string, label: string) => (
     <Control label={label}>
       <Input
@@ -282,19 +288,23 @@ function Properties({
     isFormHtml ||
     isDisplayText ||
     field.type === "Number" ||
-    field.type === "Currency" || field.type === "Percentage" || field.type === "Rating" ||
+    field.type === "Currency" ||
+    field.type === "Percentage" ||
+    field.type === "Rating" ||
     (field.type === "MapLocation" && !!mapPicker) ||
     field.type === "Address" ||
     ["Email", "Phone", "Url", "Textbox", "Textarea"].includes(field.type) ||
     field.type === "Dropdown" ||
-    field.type === "Autocomplete" || field.type === "MultiSelect" || field.type === "RichText";
+    field.type === "Autocomplete" ||
+    field.type === "MultiSelect" ||
+    field.type === "RichText";
   return (
     <aside className="studio-properties" key={id}>
       <div className="studio-properties-header">
         <div className="studio-properties-heading">
-          <h3>Propiedades del campo</h3>
+          <h3>{t("Propiedades del campo")}</h3>
           <span className="studio-properties-field-badge">
-            {fieldTypeLabel(field.type)}
+            {fieldTypeLabel(field.type, locale)}
           </span>
         </div>
         <PropertyPanelSearch
@@ -306,7 +316,8 @@ function Properties({
       </div>
       {propertyFilterEmpty ? (
         <p className="studio-property-filter-empty" role="status">
-          No hay propiedades que coincidan con «{propertySearch.trim()}».
+          {t("No hay propiedades que coincidan con «")}
+          {propertySearch.trim()}».
         </p>
       ) : null}
       <div
@@ -314,12 +325,21 @@ function Properties({
         className="studio-properties-body"
         data-filtering={filtering ? "true" : "false"}
       >
-        {config.collectionRelation ? <RelatedPresentationSettings objectName={objectName} config={config} objects={objects.data?.data ?? []} onChange={next => updateField(id, {config: next})} /> : null}
+        {config.collectionRelation ? (
+          <RelatedPresentationSettings
+            objectName={objectName}
+            config={config}
+            objects={objects.data?.data ?? []}
+            onChange={(next) => updateField(id, { config: next })}
+          />
+        ) : null}
         {studio.requestPage ? (
           <PropertySection
-            title="Eventos y acciones"
+            title={t("Eventos y acciones")}
             searchTerms="consulta lookup botón acciones debounce icono request"
-            help="Configura el botón de consulta y, si lo necesitas, uno o varios eventos HTML del campo que ejecuten la misma acción. Se requiere una entrada con valor."
+            help={t(
+              "Configura el botón de consulta y, si lo necesitas, uno o varios eventos HTML del campo que ejecuten la misma acción. Se requiere una entrada con valor.",
+            )}
           >
             <RequestActionsEditor
               fieldId={id}
@@ -330,20 +350,21 @@ function Properties({
           </PropertySection>
         ) : null}
         <PropertySection
-          title="Datos básicos"
+          title={t("Datos básicos")}
           searchTerms="etiqueta tipo ayuda identificador label id"
         >
           <p
             className="studio-field-id"
             data-property-search={propertySearchTerms(
-              "Identificador",
+              t("Identificador"),
               "id campo name",
             )}
           >
-            Identificador: <code>{id}</code>
+            {t("Identificador:")}
+            <code>{id}</code>
           </p>
           <Control
-            label="Etiqueta"
+            label={t("Etiqueta")}
             searchTerms="label traducción idioma es en pt"
           >
             <LocalizedFieldLabelEditor
@@ -353,7 +374,7 @@ function Properties({
               }
             />
           </Control>
-          <Control label="Tipo" searchTerms="type campo textbox número">
+          <Control label={t("Tipo")} searchTerms="type campo textbox número">
             <Choice
               value={field.type}
               onChange={(type) => {
@@ -377,7 +398,7 @@ function Properties({
                       config: attachmentConfig,
                       options: field.options?.length
                         ? field.options
-                        : [{ value: "opcion_1", label: "Opción 1" }],
+                        : [{ value: "opcion_1", label: t("Opción 1") }],
                     });
                     return;
                   }
@@ -467,7 +488,9 @@ function Properties({
                         ...rest,
                         displayText: {
                           variant: "span",
-                          content: `Hola {{values.${sampleField}}}`,
+                          content: t("Hola {{values.%{v1}}}", {
+                            v1: sampleField,
+                          }),
                         },
                       },
                     });
@@ -518,26 +541,61 @@ function Properties({
                     return;
                   }
                   if (type === "Percentage" || type === "Rating") {
-                    updateField(id, {type, defaultValue: undefined, options: undefined, config: {
-                      ...config, dateTime: undefined, format: undefined, formula: undefined, multiple: undefined,
-                      relation: undefined, collectionRelation: undefined, collectionOptions: undefined, optionsWhen: undefined,
-                      onDelete: undefined, addressAutocomplete: undefined, mapPicker: undefined, formHtml: undefined, displayText: undefined,
-                      minimum: type === "Rating" ? 1 : 0, maximum: type === "Rating" ? 5 : 100,
-                      decimals: type === "Percentage" ? 2 : undefined, ratingStyle: type === "Rating" ? "stars" : undefined,
-                    }});
+                    updateField(id, {
+                      type,
+                      defaultValue: undefined,
+                      options: undefined,
+                      config: {
+                        ...config,
+                        dateTime: undefined,
+                        format: undefined,
+                        formula: undefined,
+                        multiple: undefined,
+                        relation: undefined,
+                        collectionRelation: undefined,
+                        collectionOptions: undefined,
+                        optionsWhen: undefined,
+                        onDelete: undefined,
+                        addressAutocomplete: undefined,
+                        mapPicker: undefined,
+                        formHtml: undefined,
+                        displayText: undefined,
+                        minimum: type === "Rating" ? 1 : 0,
+                        maximum: type === "Rating" ? 5 : 100,
+                        decimals: type === "Percentage" ? 2 : undefined,
+                        ratingStyle: type === "Rating" ? "stars" : undefined,
+                      },
+                    });
                     return;
                   }
                   if (type === "MultiSelect" || type === "RichText") {
                     updateField(id, {
-                      type, defaultValue: undefined,
-                      options: type === "MultiSelect" ? field.options?.length ? field.options : [{value: "option_1", label: "Option 1"}] : undefined,
-                      config: {section: config.section, minLength: type === "RichText" ? config.minLength : undefined, maxLength: type === "RichText" ? config.maxLength : undefined},
+                      type,
+                      defaultValue: undefined,
+                      options:
+                        type === "MultiSelect"
+                          ? field.options?.length
+                            ? field.options
+                            : [{ value: "option_1", label: t("Opción 1") }]
+                          : undefined,
+                      config: {
+                        section: config.section,
+                        minLength:
+                          type === "RichText" ? config.minLength : undefined,
+                        maxLength:
+                          type === "RichText" ? config.maxLength : undefined,
+                      },
                     });
                     return;
                   }
                   if (type === "Currency") {
-                    const { addressAutocomplete, mapPicker, formHtml, displayText, ...rest } =
-                      config;
+                    const {
+                      addressAutocomplete,
+                      mapPicker,
+                      formHtml,
+                      displayText,
+                      ...rest
+                    } = config;
                     void addressAutocomplete;
                     void mapPicker;
                     void formHtml;
@@ -595,14 +653,14 @@ function Properties({
                 });
               }}
             >
-              {palette.map(({ type, label }) => (
+              {getLocalizedFieldTypePalette(locale).map(({ type, label }) => (
                 <option key={type} value={type}>
                   {label}
                 </option>
               ))}
             </Choice>
           </Control>
-          <Control label="Ayuda" searchTerms="descripción hint tooltip">
+          <Control label={t("Ayuda")} searchTerms="descripción hint tooltip">
             <Textarea
               value={field.description ?? ""}
               onChange={(e) => updateField(id, { description: e.target.value })}
@@ -610,19 +668,19 @@ function Properties({
           </Control>
         </PropertySection>
         <PropertySection
-          title="Comportamiento"
+          title={t("Comportamiento")}
           searchTerms="obligatorio lectura oculto único predeterminado required readonly hidden default"
         >
           {!isR2Attachment && !isFormHtml && !isDisplayText && (
             <>
               <Flag
-                label="Obligatorio"
+                label={t("Obligatorio")}
                 searchTerms="required requerido"
                 value={field.required}
                 onChange={(required) => updateField(id, { required })}
               />
               <Flag
-                label="Valor único"
+                label={t("Valor único")}
                 searchTerms="unique"
                 value={config.unique}
                 onChange={(v) => patch("unique", v)}
@@ -630,13 +688,13 @@ function Properties({
             </>
           )}
           <Flag
-            label="Solo lectura"
+            label={t("Solo lectura")}
             searchTerms="readonly read only"
             value={field.readOnly}
             onChange={(readOnly) => updateField(id, { readOnly })}
           />
           <Flag
-            label="Oculto"
+            label={t("Oculto")}
             searchTerms="hidden invisible"
             value={field.hidden}
             onChange={(hidden) => updateField(id, { hidden })}
@@ -646,7 +704,7 @@ function Properties({
             !isFormHtml &&
             !isDisplayText && (
               <Control
-                label="Valor predeterminado"
+                label={t("Valor predeterminado")}
                 searchTerms="default inicial"
               >
                 {field.type === "Toggle" ? (
@@ -656,18 +714,43 @@ function Properties({
                       updateField(id, { defaultValue: v === "true" })
                     }
                   >
-                    <option value="false">No</option>
-                    <option value="true">Sí</option>
+                    <option value="false">{t("No")}</option>
+                    <option value="true">{t("Sí")}</option>
                   </Choice>
                 ) : field.type === "MultiSelect" ? (
-                  <select multiple aria-label="Default choices" className="w-full rounded-md border p-2" value={Array.isArray(field.defaultValue) ? field.defaultValue.map(String) : []}
-                    onChange={event => updateField(id, {defaultValue: Array.from(event.currentTarget.selectedOptions, option => option.value)})}>
-                    {(field.options ?? []).map(option => <option key={String(option.value)} value={String(option.value)}>{String(option.label)}</option>)}
+                  <select
+                    multiple
+                    aria-label={t("Default choices")}
+                    className="w-full rounded-md border p-2"
+                    value={
+                      Array.isArray(field.defaultValue)
+                        ? field.defaultValue.map(String)
+                        : []
+                    }
+                    onChange={(event) =>
+                      updateField(id, {
+                        defaultValue: Array.from(
+                          event.currentTarget.selectedOptions,
+                          (option) => option.value,
+                        ),
+                      })
+                    }
+                  >
+                    {(field.options ?? []).map((option) => (
+                      <option
+                        key={String(option.value)}
+                        value={String(option.value)}
+                      >
+                        {resolveOptionLabel(option, locale)}
+                      </option>
+                    ))}
                   </select>
                 ) : (
                   <Input
                     type={
-                      ["Number", "Currency", "Percentage", "Rating"].includes(field.type)
+                      ["Number", "Currency", "Percentage", "Rating"].includes(
+                        field.type,
+                      )
                         ? "number"
                         : field.type === "DateTime" || config.dateTime === true
                           ? "datetime-local"
@@ -685,7 +768,9 @@ function Properties({
                     onChange={(e) =>
                       updateField(id, {
                         defaultValue:
-                          (field.type === "DateTime" || config.dateTime === true) && e.target.value
+                          (field.type === "DateTime" ||
+                            config.dateTime === true) &&
+                          e.target.value
                             ? new Date(e.target.value).toISOString()
                             : parseValue(e.target.value, field.type),
                       })
@@ -697,20 +782,20 @@ function Properties({
         </PropertySection>
         {hasAdvancedConfig ? (
           <PropertySection
-            title="Configuración del tipo"
+            title={t("Configuración del tipo")}
             searchTerms="validación patrón opciones mapa html archivos relación formato número"
           >
             {isR2Attachment && (
               <fieldset
                 className="studio-rule"
                 data-property-search={propertySearchTerms(
-                  "Archivos en R2",
+                  t("Archivos en R2"),
                   "adjunto attachment mime tamaño maximo",
                 )}
               >
-                <legend>Archivos en R2</legend>
+                <legend>{t("Archivos en R2")}</legend>
                 <div className="studio-two">
-                  <Control label="Máximo de archivos">
+                  <Control label={t("Máximo de archivos")}>
                     <Input
                       max={50}
                       min={1}
@@ -727,7 +812,7 @@ function Properties({
                       }
                     />
                   </Control>
-                  <Control label="Tamaño máximo (MiB)">
+                  <Control label={t("Tamaño máximo (MiB)")}>
                     <Input
                       max={5}
                       min={1}
@@ -754,8 +839,10 @@ function Properties({
                   </Control>
                 </div>
                 <Control
-                  label="Tipos MIME permitidos"
-                  help="Déjalo vacío para aceptar cualquier tipo de archivo."
+                  label={t("Tipos MIME permitidos")}
+                  help={t(
+                    "Déjalo vacío para aceptar cualquier tipo de archivo.",
+                  )}
                 >
                   <Input
                     placeholder="application/pdf, image/png"
@@ -781,28 +868,28 @@ function Properties({
               <fieldset
                 className="studio-fieldset form-html-designer"
                 data-property-search={propertySearchTerms(
-                  "HTML y JavaScript",
+                  t("HTML y JavaScript"),
                   "script editor formulario botón",
                 )}
               >
                 <legend className="studio-fieldset-legend-with-help">
-                  HTML y JavaScript
-                  <StudioHelpTooltip label="Ayuda sobre HTML y JavaScript">
+                  {t("HTML y JavaScript")}
+                  <StudioHelpTooltip label={t("Ayuda sobre HTML y JavaScript")}>
                     <>
-                      <strong>Solo para administradores.</strong> HTML y
-                      JavaScript personalizado pueden ejecutar lógica sensible,
-                      modificar valores del formulario y renderizar contenido no
-                      confiable. Úsalo únicamente con contenido de confianza.
+                      <strong>{t("Solo para administradores.")}</strong>{" "}
+                      {t(
+                        "HTML y JavaScript personalizado pueden ejecutar lógica sensible, modificar valores del formulario y renderizar contenido no confiable. Úsalo únicamente con contenido de confianza.",
+                      )}
                       <br />
                       <br />
-                      Botón sin script:{" "}
+                      {t("Botón sin script:")}{" "}
                       <code>
                         {
                           '<button type="button" data-savia-set-value="nombre" data-savia-value="Ejemplo">'
                         }
                       </code>
                       <br />
-                      Script avanzado:{" "}
+                      {t("Script avanzado:")}{" "}
                       <code>
                         getValue(name), setValue(name, value), container
                       </code>
@@ -816,25 +903,25 @@ function Properties({
                     size="sm"
                     onClick={() => setFormHtmlEditorOpen(true)}
                   >
-                    Abrir editor
+                    {t("Abrir editor")}
                   </Button>
                 </div>
-                <Control label="Vista previa HTML">
+                <Control label={t("Vista previa HTML")}>
                   <Textarea
                     className="form-html-designer-code form-html-designer-code--preview"
                     rows={4}
                     spellCheck={false}
                     readOnly
-                    value={formHtml.html || "Sin HTML configurado."}
+                    value={formHtml.html || t("Sin HTML configurado.")}
                   />
                 </Control>
-                <Control label="Vista previa JavaScript">
+                <Control label={t("Vista previa JavaScript")}>
                   <Textarea
                     className="form-html-designer-code form-html-designer-code--preview"
                     rows={3}
                     spellCheck={false}
                     readOnly
-                    value={formHtml.script?.trim() || "Sin JavaScript."}
+                    value={formHtml.script?.trim() || t("Sin JavaScript.")}
                   />
                 </Control>
                 <FormHtmlEditorModal
@@ -848,19 +935,19 @@ function Properties({
               <fieldset
                 className="studio-fieldset display-text-designer"
                 data-property-search={propertySearchTerms(
-                  "Texto fijo",
+                  t("Texto fijo"),
                   "plantilla contenido heading display",
                 )}
               >
                 <legend className="studio-fieldset-legend-with-help">
-                  Texto fijo
-                  <StudioHelpTooltip label="Plantillas disponibles">
+                  {t("Texto fijo")}
+                  <StudioHelpTooltip label={t("Plantillas disponibles")}>
                     <code>
                       {"{{values.campo}} · {{record.id}} · {{object.label}}"}
                     </code>
                   </StudioHelpTooltip>
                 </legend>
-                <Control label="Estilo">
+                <Control label={t("Estilo")}>
                   <Choice
                     value={displayText.variant}
                     onChange={(value) =>
@@ -876,7 +963,7 @@ function Properties({
                     ))}
                   </Choice>
                 </Control>
-                <Control label="Alineación">
+                <Control label={t("Alineación")}>
                   <Choice
                     value={displayText.align ?? "left"}
                     onChange={(value) =>
@@ -890,12 +977,12 @@ function Properties({
                       })
                     }
                   >
-                    <option value="left">Izquierda</option>
-                    <option value="center">Centro</option>
-                    <option value="right">Derecha</option>
+                    <option value="left">{t("Izquierda")}</option>
+                    <option value="center">{t("Centro")}</option>
+                    <option value="right">{t("Derecha")}</option>
                   </Choice>
                 </Control>
-                <Control label="Contenido">
+                <Control label={t("Contenido")}>
                   <Textarea
                     className="form-html-designer-code"
                     rows={5}
@@ -904,31 +991,68 @@ function Properties({
                     onChange={(event) =>
                       patchDisplayText({ content: event.target.value })
                     }
-                    placeholder="Hola {{values.nombre}}"
+                    placeholder={t("Hola {{values.nombre}}")}
                   />
                 </Control>
               </fieldset>
             ) : field.type === "Percentage" ? (
               <>
-                <div className="studio-two">{numeric("minimum", "Minimum percentage")}{numeric("maximum", "Maximum percentage")}</div>
-                <Control label="Decimal places"><Choice value={String(config.decimals ?? 2)} onChange={value => patch("decimals", Number(value))}>{[0,1,2,3,4,5,6].map(value => <option key={value} value={value}>{value}</option>)}</Choice></Control>
-                <p className="text-sm text-muted-foreground">25 is stored as 25 and displayed as 25%.</p>
+                <div className="studio-two">
+                  {numeric("minimum", t("Minimum percentage"))}
+                  {numeric("maximum", t("Maximum percentage"))}
+                </div>
+                <Control label={t("Decimal places")}>
+                  <Choice
+                    value={String(config.decimals ?? 2)}
+                    onChange={(value) => patch("decimals", Number(value))}
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </Choice>
+                </Control>
+                <p className="text-sm text-muted-foreground">
+                  {t("25 is stored as 25 and displayed as 25%.")}
+                </p>
               </>
             ) : field.type === "Rating" ? (
               <>
-                <Control label="Maximum rating"><Choice value={String(config.maximum ?? 5)} onChange={value => patch("maximum",Number(value))}>{Array.from({length:10},(_,index)=>index+1).map(value => <option key={value} value={value}>{value}</option>)}</Choice></Control>
-                <Control label="Rating display"><Choice value={String(config.ratingStyle ?? "stars")} onChange={value=>patch("ratingStyle",value)}><option value="stars">Stars</option><option value="number">Number</option></Choice></Control>
+                <Control label={t("Maximum rating")}>
+                  <Choice
+                    value={String(config.maximum ?? 5)}
+                    onChange={(value) => patch("maximum", Number(value))}
+                  >
+                    {Array.from({ length: 10 }, (_, index) => index + 1).map(
+                      (value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ),
+                    )}
+                  </Choice>
+                </Control>
+                <Control label={t("Rating display")}>
+                  <Choice
+                    value={String(config.ratingStyle ?? "stars")}
+                    onChange={(value) => patch("ratingStyle", value)}
+                  >
+                    <option value="stars">{t("Stars")}</option>
+                    <option value="number">{t("Number")}</option>
+                  </Choice>
+                </Control>
               </>
             ) : field.type === "Number" || field.type === "Currency" ? (
               <>
                 <div className="studio-two">
-                  {numeric("minimum", "Mínimo")}
-                  {numeric("maximum", "Máximo")}
+                  {numeric("minimum", t("Mínimo"))}
+                  {numeric("maximum", t("Máximo"))}
                 </div>
                 {field.type === "Currency" ? (
                   <div className="studio-two">
                     <Control
-                      label="Moneda"
+                      label={t("Moneda")}
                       searchTerms="moneda divisa cop usd eur mxn currency dinero"
                     >
                       <Choice
@@ -942,7 +1066,7 @@ function Properties({
                       </Choice>
                     </Control>
                     <Control
-                      label="Decimales"
+                      label={t("Decimales")}
                       searchTerms="decimales decimal precisión precision centavos"
                     >
                       <Choice
@@ -958,17 +1082,17 @@ function Properties({
                           patchConfig({ decimals: dec, integer: dec === 0 });
                         }}
                       >
-                        <option value="2">2 decimales (.00)</option>
-                        <option value="0">0 decimales (enteros)</option>
-                        <option value="1">1 decimal (.0)</option>
-                        <option value="3">3 decimales (.000)</option>
-                        <option value="4">4 decimales (.0000)</option>
+                        <option value="2">{t("2 decimales (.00)")}</option>
+                        <option value="0">{t("0 decimales (enteros)")}</option>
+                        <option value="1">{t("1 decimal (.0)")}</option>
+                        <option value="3">{t("3 decimales (.000)")}</option>
+                        <option value="4">{t("4 decimales (.0000)")}</option>
                       </Choice>
                     </Control>
                   </div>
                 ) : (
                   <Flag
-                    label="Solo enteros"
+                    label={t("Solo enteros")}
                     searchTerms="integer entero decimal"
                     value={config.integer}
                     onChange={(v) => patch("integer", v)}
@@ -978,20 +1102,20 @@ function Properties({
             ) : field.type === "MapLocation" && mapPicker ? (
               <>
                 <Flag
-                  label="Detectar ubicación del usuario"
+                  label={t("Detectar ubicación del usuario")}
                   value={mapPicker.geolocation !== false}
                   onChange={(enabled) =>
                     patchMapPicker({ geolocation: enabled })
                   }
                 />
                 <Flag
-                  label="Obtener dirección al seleccionar"
+                  label={t("Obtener dirección al seleccionar")}
                   value={mapPicker.reverseGeocode !== false}
                   onChange={(enabled) =>
                     patchMapPicker({ reverseGeocode: enabled })
                   }
                 />
-                <Control label="Zoom inicial">
+                <Control label={t("Zoom inicial")}>
                   <Input
                     type="number"
                     min={3}
@@ -1008,21 +1132,24 @@ function Properties({
                 <fieldset
                   className="studio-fieldset"
                   data-property-search={propertySearchTerms(
-                    "Punto de referencia",
+                    t("Punto de referencia"),
                     "mapa latitud longitud centro zoom",
                   )}
                 >
                   <legend className="studio-fieldset-legend-with-help">
-                    Punto de referencia (opcional)
-                    <StudioHelpTooltip label="Punto de referencia del mapa">
-                      Centra el mapa en un lugar fijo, por ejemplo un centro de
-                      ventas.
+                    {t("Punto de referencia (opcional)")}
+                    <StudioHelpTooltip
+                      label={t("Punto de referencia del mapa")}
+                    >
+                      {t(
+                        "Centra el mapa en un lugar fijo, por ejemplo un centro de ventas.",
+                      )}
                     </StudioHelpTooltip>
                   </legend>
-                  <Control label="Etiqueta">
+                  <Control label={t("Etiqueta")}>
                     <Input
                       value={String(mapPicker.reference?.label ?? "")}
-                      placeholder="Centro de ventas Norte"
+                      placeholder={t("Centro de ventas Norte")}
                       onChange={(event) =>
                         patchMapPicker({
                           reference: {
@@ -1034,7 +1161,7 @@ function Properties({
                     />
                   </Control>
                   <div className="studio-two">
-                    <Control label="Latitud">
+                    <Control label={t("Latitud")}>
                       <Input
                         type="number"
                         step="any"
@@ -1055,7 +1182,7 @@ function Properties({
                         }}
                       />
                     </Control>
-                    <Control label="Longitud">
+                    <Control label={t("Longitud")}>
                       <Input
                         type="number"
                         step="any"
@@ -1082,16 +1209,20 @@ function Properties({
                     variant="outline"
                     onClick={() => patchMapPicker({ reference: undefined })}
                   >
-                    Quitar referencia
+                    {t("Quitar referencia")}
                   </Button>
                 </fieldset>
                 <Control
-                  label="Proveedor de mapas"
+                  label={t("Proveedor de mapas")}
                   help={
                     <>
-                      Photon y Nominatim son gratuitos y no requieren clave.
-                      Geoapify requiere API key en{" "}
-                      <a href={serviceCredentialsHref()}>Claves y servicios</a>.
+                      {t(
+                        "Photon y Nominatim son gratuitos y no requieren clave. Geoapify requiere API key en",
+                      )}{" "}
+                      <a href={serviceCredentialsHref()}>
+                        {t("Claves y servicios")}
+                      </a>
+                      .
                     </>
                   }
                 >
@@ -1104,17 +1235,17 @@ function Properties({
                     }
                   >
                     <option value="photon">
-                      Photon (OpenStreetMap, gratis)
+                      {t("Photon (OpenStreetMap, gratis)")}
                     </option>
                     <option value="nominatim">
-                      Nominatim (OpenStreetMap, gratis)
+                      {t("Nominatim (OpenStreetMap, gratis)")}
                     </option>
                     <option value="geoapify">
-                      Geoapify (requiere API key)
+                      {t("Geoapify (requiere API key)")}
                     </option>
                   </Choice>
                 </Control>
-                <Control label="País (opcional)">
+                <Control label={t("País (opcional)")}>
                   <Input
                     value={String(mapPicker.country ?? "")}
                     placeholder="co"
@@ -1129,7 +1260,7 @@ function Properties({
             ) : field.type === "Address" ? (
               <>
                 <Flag
-                  label="Autocompletar con mapas"
+                  label={t("Autocompletar con mapas")}
                   value={!!config.addressAutocomplete}
                   onChange={(enabled) =>
                     patch(
@@ -1149,13 +1280,14 @@ function Properties({
                 {config.addressAutocomplete ? (
                   <>
                     <Control
-                      label="Proveedor"
+                      label={t("Proveedor")}
                       help={
                         <>
-                          Photon y Nominatim son gratuitos y no requieren clave.
-                          Geoapify requiere API key en{" "}
+                          {t(
+                            "Photon y Nominatim son gratuitos y no requieren clave. Geoapify requiere API key en",
+                          )}{" "}
                           <a href={serviceCredentialsHref()}>
-                            Claves y servicios
+                            {t("Claves y servicios")}
                           </a>
                           .
                         </>
@@ -1175,17 +1307,17 @@ function Properties({
                         }
                       >
                         <option value="photon">
-                          Photon (OpenStreetMap, gratis)
+                          {t("Photon (OpenStreetMap, gratis)")}
                         </option>
                         <option value="nominatim">
-                          Nominatim (OpenStreetMap, gratis)
+                          {t("Nominatim (OpenStreetMap, gratis)")}
                         </option>
                         <option value="geoapify">
-                          Geoapify (requiere API key)
+                          {t("Geoapify (requiere API key)")}
                         </option>
                       </Choice>
                     </Control>
-                    <Control label="País (opcional)">
+                    <Control label={t("País (opcional)")}>
                       <Input
                         value={String(addressAutocomplete?.country ?? "")}
                         placeholder="co"
@@ -1206,13 +1338,13 @@ function Properties({
                   </>
                 ) : null}
                 <div className="studio-two">
-                  {numeric("minLength", "Largo mínimo")}
-                  {numeric("maxLength", "Largo máximo")}
+                  {numeric("minLength", t("Largo mínimo"))}
+                  {numeric("maxLength", t("Largo máximo"))}
                 </div>
-                <Control label="Patrón de validación">
+                <Control label={t("Patrón de validación")}>
                   <Input
                     value={String(config.pattern ?? "")}
-                    placeholder="Expresión regular"
+                    placeholder={t("Expresión regular")}
                     onChange={(e) =>
                       patch("pattern", e.target.value || undefined)
                     }
@@ -1222,13 +1354,13 @@ function Properties({
             ) : ["Email", "Phone", "Url"].includes(field.type) ? (
               <>
                 <div className="studio-two">
-                  {numeric("minLength", "Largo mínimo")}
-                  {numeric("maxLength", "Largo máximo")}
+                  {numeric("minLength", t("Largo mínimo"))}
+                  {numeric("maxLength", t("Largo máximo"))}
                 </div>
-                <Control label="Patrón de validación">
+                <Control label={t("Patrón de validación")}>
                   <Input
                     value={String(config.pattern ?? "")}
-                    placeholder="Expresión regular"
+                    placeholder={t("Expresión regular")}
                     onChange={(e) =>
                       patch("pattern", e.target.value || undefined)
                     }
@@ -1236,28 +1368,31 @@ function Properties({
                 </Control>
               </>
             ) : field.type === "RichText" ? (
-              <div className="studio-two">{numeric("minLength", "Minimum length")}{numeric("maxLength", "Maximum length")}</div>
+              <div className="studio-two">
+                {numeric("minLength", t("Minimum length"))}
+                {numeric("maxLength", t("Maximum length"))}
+              </div>
             ) : ["Textbox", "Textarea"].includes(field.type) ? (
               <>
-                <Control label="Formato">
+                <Control label={t("Formato")}>
                   <Choice
                     value={String(config.format ?? "")}
                     onChange={(v) => patch("format", v || undefined)}
                   >
-                    <option value="">Texto libre</option>
-                    <option value="email">Correo</option>
+                    <option value="">{t("Texto libre")}</option>
+                    <option value="email">{t("Correo")}</option>
                     <option value="url">URL</option>
-                    <option value="phone">Teléfono</option>
+                    <option value="phone">{t("Teléfono")}</option>
                   </Choice>
                 </Control>
                 <div className="studio-two">
-                  {numeric("minLength", "Largo mínimo")}
-                  {numeric("maxLength", "Largo máximo")}
+                  {numeric("minLength", t("Largo mínimo"))}
+                  {numeric("maxLength", t("Largo máximo"))}
                 </div>
-                <Control label="Patrón de validación">
+                <Control label={t("Patrón de validación")}>
                   <Input
                     value={String(config.pattern ?? "")}
-                    placeholder="Expresión regular"
+                    placeholder={t("Expresión regular")}
                     onChange={(e) =>
                       patch("pattern", e.target.value || undefined)
                     }
@@ -1267,7 +1402,7 @@ function Properties({
             ) : null}
             {field.type === "Dropdown" && (
               <>
-                <Control label="Relacionar con">
+                <Control label={t("Relacionar con")}>
                   <Choice
                     value={String(config.relation ?? "")}
                     onChange={(v) =>
@@ -1283,7 +1418,7 @@ function Properties({
                       })
                     }
                   >
-                    <option value="">Opciones de selección</option>
+                    <option value="">{t("Opciones de selección")}</option>
                     {objects.data?.data.map((o: CrmObject) => (
                       <option key={o.name} value={o.name}>
                         {o.label}
@@ -1295,41 +1430,50 @@ function Properties({
                 {config.relation ? (
                   <>
                     <Flag
-                      label="Permitir varios registros"
+                      label={t("Permitir varios registros")}
                       value={config.multiple}
                       onChange={(v) => patch("multiple", v)}
                     />
-                    <Control label="Al eliminar un registro relacionado">
+                    <Control label={t("Al eliminar un registro relacionado")}>
                       <Choice
                         value={String(config.onDelete ?? "restrict")}
                         onChange={(v) => patch("onDelete", v)}
                       >
-                        <option value="restrict">Impedir eliminación</option>
-                        <option value="clear">Quitar la referencia</option>
+                        <option value="restrict">
+                          {t("Impedir eliminación")}
+                        </option>
+                        <option value="clear">
+                          {t("Quitar la referencia")}
+                        </option>
                       </Choice>
                     </Control>
                   </>
                 ) : (
-                  <Control label="Opciones (valor | etiqueta, una por línea)">
-                    <Textarea
-                      value={
-                        field.options
-                          ?.map((o) => `${o.value} | ${o.label}`)
-                          .join("\n") ?? ""
-                      }
-                      onChange={(e) =>
-                        updateField(id, {
-                          options: e.target.value.split("\n").map((line) => {
-                            const [value, ...label] = line.split("|");
-                            return {
-                              value: value.trim(),
-                              label: label.join("|").trim() || value.trim(),
-                            };
-                          }),
-                        })
-                      }
+                  <>
+                    <Control
+                      label={t("Opciones (valor | etiqueta, una por línea)")}
+                    >
+                      <Textarea
+                        value={
+                          field.options
+                            ?.map((o) => `${o.value} | ${o.label}`)
+                            .join("\n") ?? ""
+                        }
+                        onChange={(e) =>
+                          updateField(id, {
+                            options: parseStaticOptions(
+                              e.target.value,
+                              field.options ?? [],
+                            ),
+                          })
+                        }
+                      />
+                    </Control>
+                    <StaticOptionLabelsEditor
+                      options={field.options ?? []}
+                      onChange={(options) => updateField(id, { options })}
                     />
-                  </Control>
+                  </>
                 )}
                 {!config.relation && (
                   <DependentOptionsEditor
@@ -1341,49 +1485,57 @@ function Properties({
                 )}
               </>
             )}
-            {(field.type === "Autocomplete" || field.type === "MultiSelect") && (
+            {(field.type === "Autocomplete" ||
+              field.type === "MultiSelect") && (
               <>
-                <Control label="Opciones (valor | etiqueta, una por línea)">
-                  <Textarea
-                    value={
-                      field.options
-                        ?.map((o) => `${o.value} | ${o.label}`)
-                        .join("\n") ?? ""
-                    }
-                    onChange={(e) =>
-                      updateField(id, {
-                        options: e.target.value.split("\n").map((line) => {
-                          const [value, ...label] = line.split("|");
-                          return {
-                            value: value.trim(),
-                            label: label.join("|").trim() || value.trim(),
-                          };
-                        }),
-                      })
-                    }
+                <>
+                  <Control
+                    label={t("Opciones (valor | etiqueta, una por línea)")}
+                  >
+                    <Textarea
+                      value={
+                        field.options
+                          ?.map((o) => `${o.value} | ${o.label}`)
+                          .join("\n") ?? ""
+                      }
+                      onChange={(e) =>
+                        updateField(id, {
+                          options: parseStaticOptions(
+                            e.target.value,
+                            field.options ?? [],
+                          ),
+                        })
+                      }
+                    />
+                  </Control>
+                  <StaticOptionLabelsEditor
+                    options={field.options ?? []}
+                    onChange={(options) => updateField(id, { options })}
                   />
-                </Control>
-                {field.type !== "MultiSelect" && <DependentOptionsEditor
-                  name={id}
-                  fields={state.fields}
-                  value={config.optionsWhen as any}
-                  onChange={(v) => patch("optionsWhen", v)}
-                />}
+                </>
+                {field.type !== "MultiSelect" && (
+                  <DependentOptionsEditor
+                    name={id}
+                    fields={state.fields}
+                    value={config.optionsWhen as any}
+                    onChange={(v) => patch("optionsWhen", v)}
+                  />
+                )}
               </>
             )}
           </PropertySection>
         ) : null}
         <PropertySection
-          title="Distribución"
+          title={t("Distribución")}
           searchTerms="sección ancho paso wizard layout columna"
         >
           {studio.wizard?.enabled && (
-            <Control label="Paso del wizard">
+            <Control label={t("Paso del wizard")}>
               <Choice
                 value={String(config.step ?? "")}
                 onChange={(value) => patch("step", value || undefined)}
               >
-                <option value="">Seleccionar paso</option>
+                <option value="">{t("Seleccionar paso")}</option>
                 {studio.wizard.steps.map((step, index) => (
                   <option key={step.id} value={step.id}>
                     {index + 1}. {step.title}
@@ -1392,12 +1544,12 @@ function Properties({
               </Choice>
             </Control>
           )}
-          <Control label="Sección">
+          <Control label={t("Sección")}>
             <Choice
               value={String(config.section ?? "")}
               onChange={(v) => patch("section", v || undefined)}
             >
-              <option value="">General</option>
+              <option value="">{t("General")}</option>
               {studio.sections.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
@@ -1405,29 +1557,29 @@ function Properties({
               ))}
             </Choice>
           </Control>
-          <Control label="Ancho">
+          <Control label={t("Ancho")}>
             <Choice
               value={String(config.width ?? 1)}
               onChange={(v) => patch("width", Number(v))}
             >
-              <option value="1">Una columna</option>
-              <option value="2">Ancho completo</option>
+              <option value="1">{t("Una columna")}</option>
+              <option value="2">{t("Ancho completo")}</option>
             </Choice>
           </Control>
         </PropertySection>
         <PropertySection
-          title="Condiciones"
+          title={t("Condiciones")}
           searchTerms="reglas mostrar obligatorio visible required when"
         >
           <RuleEditor
-            label="Mostrar cuando"
+            label={t("Mostrar cuando")}
             value={config.visibleWhen as Condition | undefined}
             onChange={(v) => patch("visibleWhen", v)}
             fields={state.fields}
             excludeField={id}
           />
           <RuleEditor
-            label="Obligatorio cuando"
+            label={t("Obligatorio cuando")}
             value={config.requiredWhen as Condition | undefined}
             onChange={(v) => patch("requiredWhen", v)}
             fields={state.fields}
@@ -1436,12 +1588,14 @@ function Properties({
         </PropertySection>
         {field.type === "Number" ? (
           <PropertySection
-            title="Cálculo automático"
+            title={t("Cálculo automático")}
             searchTerms="formula operación suma resta producto división"
           >
             <Control
-              label="Operación"
-              help="Selecciona los operandos numéricos en el orden deseado."
+              label={t("Operación")}
+              help={t(
+                "Selecciona los operandos numéricos en el orden deseado.",
+              )}
             >
               <Choice
                 value={(config.formula as any)?.op ?? ""}
@@ -1449,11 +1603,11 @@ function Properties({
                   patch("formula", op ? { op, fields: [] } : undefined)
                 }
               >
-                <option value="">Sin cálculo</option>
-                <option value="sum">Suma</option>
-                <option value="difference">Resta (en orden)</option>
-                <option value="product">Producto</option>
-                <option value="ratio">División (en orden)</option>
+                <option value="">{t("Sin cálculo")}</option>
+                <option value="sum">{t("Suma")}</option>
+                <option value="difference">{t("Resta (en orden)")}</option>
+                <option value="product">{t("Producto")}</option>
+                <option value="ratio">{t("División (en orden)")}</option>
               </Choice>
             </Control>
             {!!config.formula && (
@@ -1490,12 +1644,12 @@ function Properties({
           variant="outline"
           size="sm"
           data-property-search={propertySearchTerms(
-            "Quitar campo",
+            t("Quitar campo"),
             "eliminar borrar delete",
           )}
           onClick={() => removeField(id)}
         >
-          <Trash2 size={14} /> Quitar campo
+          <Trash2 size={14} /> {t("Quitar campo")}
         </Button>
       </div>
     </aside>
@@ -1509,6 +1663,8 @@ function Editor({
   object: CrmObject;
   onSaved: () => void;
 }) {
+  const t = useMessages(studioMessages);
+  const locale = useAppLocale();
   const { state, addField, updateField, undo, redo } = useDesigner();
   const [studio, setStudio] = useState<Studio>({
     columns: 1,
@@ -1549,9 +1705,10 @@ function Editor({
   );
   const candidateKey = JSON.stringify({ draft, migration });
   const checked = impact?.key === candidateKey ? impact.result : null;
+  const palette = getLocalizedFieldTypePalette(locale);
   const filteredPalette = useMemo(
     () => filterPaletteFieldTypes(palette, paletteSearch),
-    [paletteSearch],
+    [paletteSearch, locale],
   );
   function addPaletteType(type: string) {
     const resolved = resolvePaletteFieldId(
@@ -1561,7 +1718,9 @@ function Editor({
       { strictCustom: true },
     );
     if (resolved.abort) {
-      setError(resolved.error ?? "");
+      setError(
+        resolved.error ? t(resolved.error as keyof typeof studioMessages) : "",
+      );
       return;
     }
     addField(resolved.id, paletteFieldDefinition(type));
@@ -1608,21 +1767,30 @@ function Editor({
         content: `{{values.${sampleField}}}`,
       };
     }
-    if (type === "Percentage") { config.minimum = 0; config.maximum = 100; config.decimals = 2; }
-    if (type === "Rating") { config.maximum = 5; config.ratingStyle = "stars"; }
+    if (type === "Percentage") {
+      config.minimum = 0;
+      config.maximum = 100;
+      config.decimals = 2;
+    }
+    if (type === "Rating") {
+      config.maximum = 5;
+      config.ratingStyle = "stars";
+    }
     if (type === "Currency") {
       config.currency = "COP";
       config.decimals = 2;
     }
     return {
       type,
-      label: paletteLabel(type),
+      label: fieldTypeLabel(type, locale),
       ...(type === FORM_HTML_TYPE || type === DISPLAY_TEXT_TYPE
         ? { readOnly: true, required: false }
         : {}),
       ...(Object.keys(config).length ? { config } : {}),
-      ...(type === "Dropdown" || type === "Autocomplete" || type === "MultiSelect"
-        ? { options: [{ value: "opcion_1", label: "Opción 1" }] }
+      ...(type === "Dropdown" ||
+      type === "Autocomplete" ||
+      type === "MultiSelect"
+        ? { options: [{ value: "opcion_1", label: t("Opción 1") }] }
         : {}),
     };
   }
@@ -1634,7 +1802,8 @@ function Editor({
     const resolved = resolvePaletteFieldId(newFieldId, state.fields, () =>
       nextId(type),
     );
-    if (resolved.error) setError(resolved.error);
+    if (resolved.error)
+      setError(t(resolved.error as keyof typeof studioMessages));
     else setError("");
 
     const sectionIds = new Set(studio.sections.map((section) => section.id));
@@ -1672,7 +1841,7 @@ function Editor({
       nextId(field.type),
       {
         ...structuredClone(field),
-        label: `${field.label} (copia)`,
+        label: t("%{v1} (copia)", { v1: field.label }),
         labels: field.labels ? structuredClone(field.labels) : undefined,
       },
       index + 1,
@@ -1683,7 +1852,7 @@ function Editor({
     const parsed = requestPageSchema.safeParse(studio.requestPage);
     if (!parsed.success)
       throw new Error(
-        "Revisa Eventos y acciones: " +
+        t("Revisa Eventos y acciones:") +
           parsed.error.issues.map((issue) => issue.message).join(" "),
       );
     for (const action of parsed.data.actions) {
@@ -1693,7 +1862,10 @@ function Editor({
       ]) {
         if (!state.fields[field])
           throw new Error(
-            `La acción «${action.label}» referencia el campo eliminado «${field}». Corrige sus asignaciones.`,
+            t(
+              "La acción «%{v1}» referencia el campo eliminado «%{v2}». Corrige sus asignaciones.",
+              { v1: action.label, v2: field },
+            ),
           );
       }
     }
@@ -1726,7 +1898,9 @@ function Editor({
       });
       setImpact({ key: candidateKey, result: result.data });
       if (!result.data.valid) {
-        setError("La configuración necesita correcciones antes de publicarse.");
+        setError(
+          t("La configuración necesita correcciones antes de publicarse."),
+        );
         return;
       }
       await api(`/objects/${object.name}`, "PUT", {
@@ -1734,7 +1908,7 @@ function Editor({
         version: object.version ?? 1,
         migration,
       });
-      toast.success("Formulario publicado");
+      toast.success(t("Formulario publicado"));
       onSaved();
     } catch (e) {
       setError((e as Error).message);
@@ -1756,8 +1930,8 @@ function Editor({
             variant="outline"
             size="icon"
             className="size-8"
-            aria-label="Deshacer"
-            title="Deshacer"
+            aria-label={t("Deshacer")}
+            title={t("Deshacer")}
             onClick={undo}
             disabled={!state.undoStack.length}
           >
@@ -1767,8 +1941,8 @@ function Editor({
             variant="outline"
             size="icon"
             className="size-8"
-            aria-label="Rehacer"
-            title="Rehacer"
+            aria-label={t("Rehacer")}
+            title={t("Rehacer")}
             onClick={redo}
             disabled={!state.redoStack.length}
           >
@@ -1777,7 +1951,7 @@ function Editor({
         </div>
         <nav
           className="designer-toolbar-views"
-          aria-label="Vista del diseñador"
+          aria-label={t("Vista del diseñador")}
         >
           {editorViews.map((view) => (
             <button
@@ -1792,25 +1966,25 @@ function Editor({
               onClick={() => setMode(view.id)}
             >
               {view.icon}
-              {view.label}
+              {t(view.label as keyof typeof studioMessages)}
             </button>
           ))}
         </nav>
         <div className="designer-toolbar-actions">
           <p className="designer-toolbar-meta">
-            {state.fieldOrder.length} campos · v{object.version ?? 1}
+            {state.fieldOrder.length} {t("campos · v")} {object.version ?? 1}
           </p>
           <Button
             type="button"
             size="sm"
             className="designer-toolbar-publish"
             disabled={busy}
-            aria-label="Publicar formulario"
-            title="Publicar formulario"
+            aria-label={t("Publicar formulario")}
+            title={t("Publicar formulario")}
             onClick={publish}
           >
             <Save size={14} aria-hidden="true" />
-            {busy ? "Publicando…" : "Publicar"}
+            {busy ? t("Publicando…") : t("Publicar")}
           </Button>
         </div>
       </div>
@@ -1820,7 +1994,11 @@ function Editor({
         </p>
       )}
       {mode === "settings" && (
-        <WizardDesigner studio={studio} setStudio={setStudio} pageName={object.name} />
+        <WizardDesigner
+          studio={studio}
+          setStudio={setStudio}
+          pageName={object.name}
+        />
       )}
       {mode === "design" && (
         <div className="studio-design-shell">
@@ -1832,20 +2010,20 @@ function Editor({
             aria-label={
               studio.requestPage
                 ? studio.wizard?.enabled
-                  ? "Ajustes: pasos, columnas, secciones y resultados"
-                  : "Ajustes: columnas, secciones y resultados"
+                  ? t("Ajustes: pasos, columnas, secciones y resultados")
+                  : t("Ajustes: columnas, secciones y resultados")
                 : studio.wizard?.enabled
-                  ? "Ajustes: pasos, columnas y secciones del formulario"
-                  : "Ajustes: columnas y secciones del formulario"
+                  ? t("Ajustes: pasos, columnas y secciones del formulario")
+                  : t("Ajustes: columnas y secciones del formulario")
             }
             title={
               studio.requestPage
                 ? studio.wizard?.enabled
-                  ? "Pasos, columnas, secciones y resultados"
-                  : "Columnas, secciones y resultados"
+                  ? t("Pasos, columnas, secciones y resultados")
+                  : t("Columnas, secciones y resultados")
                 : studio.wizard?.enabled
-                  ? "Pasos, columnas y secciones"
-                  : "Columnas y secciones"
+                  ? t("Pasos, columnas y secciones")
+                  : t("Columnas y secciones")
             }
             onClick={() => setMode("settings")}
           >
@@ -1854,22 +2032,23 @@ function Editor({
           <div className="dfd-root crm-designer" onClickCapture={canvasCopy}>
             <div className="dfd-body">
               <div className="dfd-palette">
-                <h3 className="dfd-palette-title">Agregar campo</h3>
+                <h3 className="dfd-palette-title">{t("Agregar campo")}</h3>
                 <PaletteTypeSearch
                   query={paletteSearch}
                   onQueryChange={setPaletteSearch}
                 />
                 <details className="palette-new-field-id">
                   <summary className="palette-new-field-id-summary">
-                    <span>Identificador</span>
-                    <StudioHelpTooltip label="Identificador al agregar">
-                      Opcional. Déjalo vacío para generar uno automático al
-                      agregar el campo.
+                    <span>{t("Identificador")}</span>
+                    <StudioHelpTooltip label={t("Identificador al agregar")}>
+                      {t(
+                        "Opcional. Déjalo vacío para generar uno automático al agregar el campo.",
+                      )}
                     </StudioHelpTooltip>
                   </summary>
                   <Control
-                    label="Identificador personalizado"
-                    help="Vacío = automático. Minúsculas, números y _."
+                    label={t("Identificador personalizado")}
+                    help={t("Vacío = automático. Minúsculas, números y _.")}
                   >
                     <Input
                       value={newFieldId}
@@ -1883,7 +2062,8 @@ function Editor({
                 </details>
                 {!filteredPalette.length ? (
                   <p className="palette-type-search-empty" role="status">
-                    Sin tipos coincidentes para «{paletteSearch.trim()}».
+                    {t("Sin tipos coincidentes para «")}
+                    {paletteSearch.trim()}».
                   </p>
                 ) : null}
                 {filteredPalette.map(({ type, label, icon: Icon }) => (
@@ -1911,7 +2091,11 @@ function Editor({
                 requestPage={studio.requestPage}
                 onPaletteDrop={addPaletteField}
               />
-              <Properties objectName={object.name} studio={studio} setStudio={setStudio} />
+              <Properties
+                objectName={object.name}
+                studio={studio}
+                setStudio={setStudio}
+              />
             </div>
           </div>
         </div>
@@ -1919,16 +2103,16 @@ function Editor({
       {mode === "preview" && (
         <section className="studio-live-preview studio-form-preview">
           <p className="studio-preview-lede">
-            Vista previa en simulación. Validar no crea registros.
+            {t("Vista previa en simulación. Validar no crea registros.")}
           </p>
           <div className="request-capture">
             <DynamicForm
               key={candidateKey}
               object={draft}
               onSave={async () => {
-                toast.success("Datos válidos para este formulario");
+                toast.success(t("Datos válidos para este formulario"));
               }}
-              submitLabel="Validar ejemplo"
+              submitLabel={t("Validar ejemplo")}
               renderFieldActions={(field) => {
                 const actions =
                   studio.requestPage?.actions.filter(
@@ -1957,10 +2141,14 @@ function Editor({
         </section>
       )}
       {mode === "json" && (
-        <section className="min-w-0 space-y-3" aria-label="Configuración JSON">
+        <section
+          className="min-w-0 space-y-3"
+          aria-label={t("Configuración JSON")}
+        >
           <p className="text-sm text-muted-foreground">
-            Configuración del borrador · Solo lectura. Usa los ajustes del
-            diseñador para modificarla.
+            {t(
+              "Configuración del borrador · Solo lectura. Usa los ajustes del diseñador para modificarla.",
+            )}
           </p>
           <MonacoCodeEditor
             language="json"
@@ -1974,18 +2162,18 @@ function Editor({
       )}
       {mode === "versions" && (
         <section className="studio-versions">
-          <h3>Historial de configuración</h3>
-          {versions.isPending && <p>Cargando versiones…</p>}
+          <h3>{t("Historial de configuración")}</h3>
+          {versions.isPending && <p>{t("Cargando versiones…")}</p>}
           {versions.error && <p role="alert">{versions.error.message}</p>}
           {versions.data?.data.map((v: any) => (
             <article key={v.version}>
               <div>
                 <strong>
-                  Versión {v.version} · {v.label}
+                  {t("Versión")} {v.version} · {v.label}
                 </strong>
                 <p>
-                  {new Date(v.created_at).toLocaleString("es-CO")} ·{" "}
-                  {Object.keys(v.config.fields).length} campos
+                  {new Date(v.created_at).toLocaleString(intlLocale(locale))} ·{" "}
+                  {Object.keys(v.config.fields).length} {t("campos")}
                 </p>
               </div>
               <Button
@@ -2001,7 +2189,7 @@ function Editor({
                       version: object.version ?? 1,
                     });
                     toast.success(
-                      "Configuración restaurada como nueva versión",
+                      t("Configuración restaurada como nueva versión"),
                     );
                     onSaved();
                   } catch (e) {
@@ -2011,7 +2199,7 @@ function Editor({
                   }
                 }}
               >
-                Restaurar
+                {t("Restaurar")}
               </Button>
             </article>
           ))}
@@ -2019,25 +2207,26 @@ function Editor({
       )}
       {mode !== "preview" && mode !== "settings" && (
         <section className="studio-impact">
-          <h3>Impacto en los registros</h3>
+          <h3>{t("Impacto en los registros")}</h3>
           {removed.length > 0 && (
             <>
               <p>
-                Indica dónde conservar los datos de los campos quitados o marca
-                su eliminación.
+                {t(
+                  "Indica dónde conservar los datos de los campos quitados o marca su eliminación.",
+                )}
               </p>
               {removed.map((old) => (
                 <div className="studio-migration" key={old}>
                   <code>{old}</code>
                   <Choice
-                    label={`Migrar ${old} a`}
+                    label={t("Migrar %{v1} a", { v1: old })}
                     value={renames[old] ?? ""}
                     onChange={(v) => {
                       setRenames({ ...renames, [old]: v });
                       setDrop(drop.filter((n) => n !== old));
                     }}
                   >
-                    <option value="">Seleccionar destino</option>
+                    <option value="">{t("Seleccionar destino")}</option>
                     {state.fieldOrder.map((n) => (
                       <option key={n} value={n}>
                         {state.fields[n].label} ({n})
@@ -2045,7 +2234,7 @@ function Editor({
                     ))}
                   </Choice>
                   <Flag
-                    label="Eliminar sus datos"
+                    label={t("Eliminar sus datos")}
                     value={drop.includes(old)}
                     onChange={(v) => {
                       setDrop(
@@ -2059,15 +2248,15 @@ function Editor({
             </>
           )}
           <Button variant="outline" size="sm" disabled={busy} onClick={inspect}>
-            Revisar impacto
+            {t("Revisar impacto")}
           </Button>
           {checked && (
             <div aria-live="polite">
               <p>
                 {checked.valid
-                  ? "Configuración válida"
-                  : "Se encontraron incompatibilidades"}{" "}
-                · {checked.changed} registros cambiarán
+                  ? t("Configuración válida")
+                  : t("Se encontraron incompatibilidades")}{" "}
+                · {checked.changed} {t("registros cambiarán")}
               </p>
               {checked.errors?.map((e: any, index: number) => (
                 <p role="alert" key={index}>

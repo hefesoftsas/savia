@@ -1,6 +1,14 @@
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import {
+  StoreContextProvider,
+  memoryStore,
+  useSetLocale,
+  I18nContextProvider,
+} from "ra-core";
+import type { ReactElement, ReactNode } from "react";
 import {
   cleanup,
-  render,
+  render as testingRender,
   screen,
   waitFor,
   within,
@@ -276,10 +284,60 @@ describe("AssistantConfigurationPage", () => {
     await user.type(model, "gpt");
 
     const option = await screen.findByRole("option", { name: /GPT-5/i });
-    expect(option).toHaveTextContent("Entrada US$2.50 / 1M");
-    expect(option).toHaveTextContent("Salida US$10 / 1M");
+    expect(option).toHaveTextContent("Entrada US$ 2,50 / 1M");
+    expect(option).toHaveTextContent("Salida US$ 10 / 1M");
 
     await user.click(option);
     expect(model).toHaveValue("openai/gpt-5");
   });
+});
+
+function render(ui: ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <I18nContextProvider
+        value={{
+          translate: (key: string) => key,
+          changeLocale: async () => {},
+          getLocale: () => "es",
+        }}
+      >
+        {children}
+      </I18nContextProvider>
+    ),
+  });
+}
+
+function LocaleSwitcher() {
+  const setLocale = useSetLocale();
+  return (
+    <>
+      <button onClick={() => setLocale("es")}>ES</button>
+      <button onClick={() => setLocale("pt")}>PT</button>
+    </>
+  );
+}
+it("switches assistant settings without losing an unsaved key or model identifier", async () => {
+  const user = userEvent.setup();
+  const services = servicesWithSummary();
+  testingRender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <LocaleSwitcher />
+        <AssistantConfigurationPage services={services} />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+  const input = await screen.findByLabelText("OpenRouter key");
+  await user.type(input, "sk-unsaved-example");
+  await user.click(screen.getByText("ES"));
+  expect(await screen.findByLabelText("Clave OpenRouter")).toHaveValue(
+    "sk-unsaved-example",
+  );
+  await user.click(screen.getByText("PT"));
+  expect(await screen.findByLabelText("Chave OpenRouter")).toHaveValue(
+    "sk-unsaved-example",
+  );
+  expect(services.assistantConfiguration.summary).toHaveBeenCalledTimes(1);
+  expect(services.assistantConfiguration.saveGlobal).not.toHaveBeenCalled();
 });

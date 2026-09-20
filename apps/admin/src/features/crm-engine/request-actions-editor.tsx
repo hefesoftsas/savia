@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useQuery } from "@tanstack/react-query";
 import {
   requestOperations,
@@ -54,6 +56,8 @@ export function RequestActionsEditor({
   config: RequestPageConfig;
   onChange: (config: RequestPageConfig) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const catalog = useQuery({
     queryKey: ["request-page-action-catalog"],
     queryFn: async () =>
@@ -85,16 +89,16 @@ export function RequestActionsEditor({
             <label
               className="studio-control"
               data-property-search={propertySearchTerms(
-                "Estilo del botón",
-                "texto icono solo",
+                t("Estilo del botón"),
+                t("texto icono solo"),
               )}
             >
               <StudioControlLabel
-                label="Estilo del botón"
-                help={lookupButtonStyleHelp}
+                label={t("Estilo del botón")}
+                help={t(lookupButtonStyleHelp)}
               />
               <select
-                aria-label="Estilo del botón"
+                aria-label={t("Estilo del botón")}
                 value={action.buttonStyle ?? DEFAULT_LOOKUP_BUTTON_STYLE}
                 onChange={(e) => {
                   const buttonStyle = lookupButtonStyleSchema.parse(
@@ -114,7 +118,11 @@ export function RequestActionsEditor({
                   Object.keys(LOOKUP_BUTTON_STYLE_LABELS) as LookupButtonStyle[]
                 ).map((value) => (
                   <option key={value} value={value}>
-                    {LOOKUP_BUTTON_STYLE_LABELS[value]}
+                    {t(
+                      LOOKUP_BUTTON_STYLE_LABELS[
+                        value
+                      ] as keyof typeof automationMessages,
+                    )}
                   </option>
                 ))}
               </select>
@@ -124,13 +132,13 @@ export function RequestActionsEditor({
                 <label
                   className="studio-control"
                   data-property-search={propertySearchTerms(
-                    "Icono",
-                    "lupa lookup",
+                    t("Icono"),
+                    t("lupa lookup"),
                   )}
                 >
-                  Icono
+                  {t("Icono")}
                   <LookupIconPicker
-                    aria-label="Icono del botón"
+                    aria-label={t("Icono del botón")}
                     value={action.icon ?? DEFAULT_LOOKUP_ICON}
                     onChange={(icon) =>
                       update({
@@ -143,13 +151,13 @@ export function RequestActionsEditor({
                 <label
                   className="studio-control"
                   data-property-search={propertySearchTerms(
-                    "Etiqueta accesible",
-                    "label traducción aria title",
+                    t("Etiqueta accesible"),
+                    t("label traducción aria title"),
                   )}
                 >
                   <StudioControlLabel
-                    label="Etiqueta accesible"
-                    help={accessibleLabelHelp}
+                    label={t("Etiqueta accesible")}
+                    help={t(accessibleLabelHelp)}
                   />
                   <LocalizedFieldLabelEditor
                     field={action}
@@ -161,11 +169,13 @@ export function RequestActionsEditor({
                 <div
                   className="studio-lookup-preview"
                   data-property-search={propertySearchTerms(
-                    "Vista previa",
-                    "botón preview",
+                    t("Vista previa"),
+                    t("botón preview"),
                   )}
                 >
-                  <span className="studio-lookup-preview-label">Vista previa</span>
+                  <span className="studio-lookup-preview-label">
+                    {t("Vista previa")}
+                  </span>
                   <Button
                     type="button"
                     variant="default"
@@ -187,11 +197,11 @@ export function RequestActionsEditor({
               <label
                 className="studio-control"
                 data-property-search={propertySearchTerms(
-                  "Texto del botón",
-                  "label traducción",
+                  t("Texto del botón"),
+                  t("label traducción"),
                 )}
               >
-                Texto del botón
+                {t("Texto del botón")}
                 <LocalizedFieldLabelEditor
                   field={action}
                   onChange={({ label, labels }) =>
@@ -203,16 +213,16 @@ export function RequestActionsEditor({
             <label
               className="studio-control"
               data-property-search={propertySearchTerms(
-                "Posición del botón",
-                "inline debajo campo placement",
+                t("Posición del botón"),
+                t("inline debajo campo placement"),
               )}
             >
               <StudioControlLabel
-                label="Posición del botón"
-                help={placementHelp}
+                label={t("Posición del botón")}
+                help={t(placementHelp)}
               />
               <select
-                aria-label="Posición del botón"
+                aria-label={t("Posición del botón")}
                 value={action.placement ?? DEFAULT_LOOKUP_PLACEMENT}
                 onChange={(e) =>
                   update({
@@ -225,7 +235,11 @@ export function RequestActionsEditor({
                   Object.keys(LOOKUP_PLACEMENT_LABELS) as LookupPlacement[]
                 ).map((value) => (
                   <option key={value} value={value}>
-                    {LOOKUP_PLACEMENT_LABELS[value]}
+                    {t(
+                      LOOKUP_PLACEMENT_LABELS[
+                        value
+                      ] as keyof typeof automationMessages,
+                    )}
                   </option>
                 ))}
               </select>
@@ -263,17 +277,17 @@ export function RequestActionsEditor({
                       })
                     }
                   />
-                  <span>Debounce</span>
+                  <span>{t("Debounce")}</span>
                 </label>
                 {action.eventDebounce ? (
                   <label className="studio-control lookup-trigger-debounce-ms">
-                    <span>Espera (ms)</span>
+                    <span>{t("Espera (ms)")}</span>
                     <Input
                       type="number"
                       min={0}
                       max={10000}
                       step={50}
-                      aria-label="Espera del debounce en milisegundos"
+                      aria-label={t("Espera del debounce en milisegundos")}
                       value={
                         action.eventDebounceMs ??
                         DEFAULT_LOOKUP_EVENT_DEBOUNCE_MS
@@ -297,27 +311,29 @@ export function RequestActionsEditor({
             <details
               className="studio-property-subsection"
               data-property-search={propertySearchTerms(
-                "Mapeo del request",
-                "entradas respuesta asignación pointer output input",
+                t("Mapeo del request"),
+                t("entradas respuesta asignación pointer output input"),
               )}
             >
               <summary>
                 <StudioControlLabel
-                  label="Mapeo del request"
-                  help={requestMappingHelp}
+                  label={t("Mapeo del request")}
+                  help={t(requestMappingHelp)}
                 />
               </summary>
               <div className="studio-property-subsection-body">
                 <p className="studio-request-meta">
-                  Request: <strong>{requestLabel}</strong>
+                  {t("Request:")} <strong>{requestLabel}</strong>
                 </p>
-                <p className="studio-request-section-label">Entradas</p>
+                <p className="studio-request-section-label">{t("Entradas")}</p>
                 {Object.entries(action.input).map(
                   ([parameter, target], index) => (
                     <label className="studio-control" key={parameter}>
                       {parameter}
                       <select
-                        aria-label={`Entrada ${parameter}`}
+                        aria-label={t("Entrada %{parameter}", {
+                          parameter: parameter,
+                        })}
                         value={target}
                         disabled={index === 0}
                         onChange={(e) =>
@@ -335,11 +351,11 @@ export function RequestActionsEditor({
                     </label>
                   ),
                 )}
-                <p className="studio-request-section-label">Respuesta</p>
+                <p className="studio-request-section-label">{t("Respuesta")}</p>
                 {Object.entries(action.output).map(([target, pointer]) => (
                   <div key={target} className="studio-request-output-row">
                     <label className="studio-control">
-                      Campo de destino
+                      {t("Campo de destino")}
                       <select
                         value={target}
                         onChange={(e) => {
@@ -357,9 +373,9 @@ export function RequestActionsEditor({
                       </select>
                     </label>
                     <label className="studio-control">
-                      Ruta en la respuesta
+                      {t("Ruta en la respuesta")}
                       <Input
-                        placeholder="/data/vehicle/year"
+                        placeholder={t("/data/vehicle/year")}
                         value={pointer}
                         onChange={(e) =>
                           update({
@@ -382,7 +398,7 @@ export function RequestActionsEditor({
                         update({ ...action, output });
                       }}
                     >
-                      Quitar asignación
+                      {t("Quitar asignación")}
                     </Button>
                   </div>
                 ))}
@@ -404,12 +420,12 @@ export function RequestActionsEditor({
                           ...action,
                           output: {
                             ...action.output,
-                            [target]: "/data/vehicle/year",
+                            [target]: t("/data/vehicle/year"),
                           },
                         });
                     }}
                   >
-                    Añadir asignación
+                    {t("Añadir asignación")}
                   </Button>
                   <Button
                     type="button"
@@ -418,11 +434,13 @@ export function RequestActionsEditor({
                     onClick={() =>
                       onChange({
                         ...config,
-                        actions: config.actions.filter((a) => a.id !== action.id),
+                        actions: config.actions.filter(
+                          (a) => a.id !== action.id,
+                        ),
                       })
                     }
                   >
-                    Eliminar consulta
+                    {t("Eliminar consulta")}
                   </Button>
                 </div>
               </div>
@@ -433,11 +451,11 @@ export function RequestActionsEditor({
       <div
         className="studio-control"
         data-property-search={propertySearchTerms(
-          "Añadir consulta",
-          "buscar request lookup",
+          t("Añadir consulta"),
+          t("buscar request lookup"),
         )}
       >
-        Añadir consulta
+        {t("Añadir consulta")}
         <LookupOperationPicker
           operations={catalog.data ?? []}
           excludedIds={config.actions.map((action) => action.id)}
@@ -458,7 +476,8 @@ export function RequestActionsEditor({
         .filter((a) => Object.hasOwn(a.output, fieldId))
         .map((a) => (
           <p className="studio-request-meta" key={a.id}>
-            Recibe datos de «{resolveRequestActionLabel(a, labelLocale)}»:{" "}
+            {t("Recibe datos de «")}
+            {resolveRequestActionLabel(a, labelLocale)}»:{" "}
             <code>{a.output[fieldId]}</code>
           </p>
         ))}

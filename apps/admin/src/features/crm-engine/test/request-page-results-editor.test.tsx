@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
 import { RequestPageResultsEditor } from "../request-page-results-editor";

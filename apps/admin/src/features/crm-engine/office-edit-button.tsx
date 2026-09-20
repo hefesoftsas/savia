@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { FilePenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { officeFormat, OFFICE_MAX_SIZE } from "@savia/crm-shared/office";
@@ -10,6 +12,8 @@ export function OfficeEditButton({
   file: { id: string; name: string; mime: string; size: number };
   disabled?: boolean;
 }) {
+  const t = useMessages(recordsMessages);
+
   const url = officeEditorUrl(getCrmRuntime().apiBasePath, file.id);
   if (
     !url ||
@@ -24,8 +28,8 @@ export function OfficeEditButton({
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={"Editar " + file.name}
-        title="Editar documento"
+        aria-label={t("Editar ") + file.name}
+        title={t("Editar documento")}
       >
         <FilePenLine size={16} aria-hidden="true" />
       </a>

@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -31,8 +33,10 @@ export function TableSkeleton({
   hasCheckbox = false,
   showHeader = true,
   className,
-  ariaLabel = "Cargando datos…",
+  ariaLabel: configuredAriaLabel,
 }: TableSkeletonProps) {
+  const t = useMessages(settingsMessages);
+  const ariaLabel = configuredAriaLabel ?? t("Cargando datos…");
   const columnDefs: TableSkeletonColumn[] =
     typeof columns === "number"
       ? Array.from({ length: columns }, (_, i) => ({
@@ -73,11 +77,15 @@ export function TableSkeleton({
                 </TableCell>
               ) : null}
               {columnDefs.map((col, colIndex) => (
-                <TableCell key={colIndex} className={cn("py-3.5", col.className)}>
+                <TableCell
+                  key={colIndex}
+                  className={cn("py-3.5", col.className)}
+                >
                   <Skeleton
                     className={cn(
                       "h-4",
-                      col.width ?? DEFAULT_WIDTHS[colIndex % DEFAULT_WIDTHS.length],
+                      col.width ??
+                        DEFAULT_WIDTHS[colIndex % DEFAULT_WIDTHS.length],
                     )}
                   />
                 </TableCell>

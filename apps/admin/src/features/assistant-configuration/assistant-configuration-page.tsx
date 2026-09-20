@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
@@ -65,14 +67,17 @@ function failureMessage(error: unknown, fallback: string): string {
 function agencyName(
   agencyId: number,
   agencies: Array<{ id: number; name: string }>,
+  t: ReturnType<typeof useMessages<typeof settingsMessages>>,
 ): string {
   return (
     agencies.find((agency) => agency.id === agencyId)?.name ??
-    `Agencia #${agencyId}`
+    t("Agencia #%{id}", { id: agencyId })
   );
 }
 
-function keyState(state: AssistantConfigurationKeyState | undefined): string {
+function keyState(
+  state: AssistantConfigurationKeyState | undefined,
+): keyof typeof settingsMessages {
   switch (state) {
     case "configured":
       return "Configurada";
@@ -99,6 +104,8 @@ export function AssistantConfigurationPanel({
   embedded?: boolean;
   globalOnly?: boolean;
 }) {
+  const t = useMessages(settingsMessages);
+  const locale = intlLocale(useAppLocale());
   const client = services.assistantConfiguration;
   const [summary, setSummary] = useState<AssistantConfigurationSummary | null>(
     null,
@@ -157,7 +164,10 @@ export function AssistantConfigurationPanel({
         setAccessDenied(true);
       } else {
         setError(
-          failureMessage(exception, "No fue posible cargar la configuración."),
+          failureMessage(
+            exception,
+            t("No fue posible cargar la configuración."),
+          ),
         );
       }
     } finally {
@@ -212,7 +222,7 @@ export function AssistantConfigurationPanel({
       setError(
         failureMessage(
           exception,
-          "No fue posible guardar la configuración global.",
+          t("No fue posible guardar la configuración global."),
         ),
       );
     } finally {
@@ -235,7 +245,10 @@ export function AssistantConfigurationPanel({
       setNotice("Clave global eliminada.");
     } catch (exception) {
       setError(
-        failureMessage(exception, "No fue posible eliminar la clave global."),
+        failureMessage(
+          exception,
+          t("No fue posible eliminar la clave global."),
+        ),
       );
     } finally {
       setSavingGlobal(false);
@@ -261,11 +274,13 @@ export function AssistantConfigurationPanel({
       setAgencyKey("");
       setClearAgencyKey(false);
       setNotice(
-        `Override guardado para ${agencyName(selectedAgencyId, agencies)}.`,
+        t("Configuración de %{agency} guardada.", {
+          agency: agencyName(selectedAgencyId, agencies, t),
+        }),
       );
     } catch (exception) {
       setError(
-        failureMessage(exception, "No fue posible guardar el override."),
+        failureMessage(exception, t("No fue posible guardar el override.")),
       );
     } finally {
       setSavingAgency(false);
@@ -284,11 +299,15 @@ export function AssistantConfigurationPanel({
       setClearAgencyKey(false);
       setAgencyModel("");
       setNotice(
-        `${agencyName(pendingDeletion, agencies)} hereda la configuración global.`,
+        t("%{agency} vuelve a heredar la configuración global.", {
+          agency: agencyName(pendingDeletion, agencies, t),
+        }),
       );
       setPendingDeletion(null);
     } catch (exception) {
-      setError(failureMessage(exception, "No fue posible borrar el override."));
+      setError(
+        failureMessage(exception, t("No fue posible borrar el override.")),
+      );
     } finally {
       setDeleting(false);
     }
@@ -310,8 +329,9 @@ export function AssistantConfigurationPanel({
       <Alert variant="destructive">
         <CircleAlert />
         <AlertDescription>
-          Solo administradores de plataforma pueden acceder a esta
-          configuración.
+          {t(
+            "Solo administradores de plataforma pueden acceder a esta configuración.",
+          )}
         </AlertDescription>
       </Alert>
     );
@@ -328,10 +348,11 @@ export function AssistantConfigurationPanel({
     <form className="grid max-w-3xl gap-4" onSubmit={saveGlobal}>
       <div className="grid gap-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="assistant-global-key">Clave OpenRouter</Label>
+          <Label htmlFor="assistant-global-key">{t("Clave OpenRouter")}</Label>
           {isCustomGlobalKeyConfigured && summary?.global?.updatedAt ? (
             <span className="text-xs text-muted-foreground">
-              Configurada el {formatConfiguredDate(summary.global.updatedAt)}
+              {t("Configurada el")}{" "}
+              {formatConfiguredDate(summary.global.updatedAt, locale)}
             </span>
           ) : null}
         </div>
@@ -345,15 +366,15 @@ export function AssistantConfigurationPanel({
             className="pr-10"
             placeholder={
               isCustomGlobalKeyConfigured
-                ? "•••••••••••••••• (dejar en blanco para conservar)"
-                : "Ingresa tu clave de OpenRouter (sk-or-v1-...)"
+                ? t("•••••••••••••••• (dejar en blanco para conservar)")
+                : t("Ingresa tu clave de OpenRouter (sk-or-v1-...)")
             }
           />
           <button
             type="button"
             onClick={() => setShowGlobalKey(!showGlobalKey)}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            aria-label={showGlobalKey ? "Ocultar clave" : "Mostrar clave"}
+            aria-label={showGlobalKey ? t("Ocultar clave") : t("Mostrar clave")}
           >
             {showGlobalKey ? (
               <EyeOff className="size-4" />
@@ -366,12 +387,12 @@ export function AssistantConfigurationPanel({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200">
             <span className="flex items-center gap-1.5 font-medium">
               <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              Clave personalizada guardada y cifrada
+              {t("Clave personalizada guardada y cifrada")}
             </span>
             {summary?.global?.updatedAt ? (
               <span className="text-emerald-700 dark:text-emerald-400">
-                • Configurada el{" "}
-                {formatConfiguredDate(summary.global.updatedAt)}
+                {t("• Configurada el")}{" "}
+                {formatConfiguredDate(summary.global.updatedAt, locale)}
               </span>
             ) : null}
           </div>
@@ -379,30 +400,40 @@ export function AssistantConfigurationPanel({
           <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
             <CircleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
             <span>
-              <strong>Clave obligatoria requerida:</strong> Debes ingresar tu
-              clave de OpenRouter para habilitar el asistente de IA.
+              <strong>{t("Clave obligatoria requerida:")}</strong>{" "}
+              {t(
+                "Debes ingresar tu clave de OpenRouter para habilitar el asistente de IA.",
+              )}
             </span>
           </div>
         )}
       </div>
       <ModelInput
         id="assistant-global-model"
-        label="Modelo global"
+        label={t("Modelo global")}
         value={globalModel}
         onChange={setGlobalModel}
         models={models}
         fallbackModel={
           summary?.deployment?.model || "deepseek/deepseek-v4-flash"
         }
-        fallbackLabel="Modelo predeterminado"
+        fallbackLabel={t("Modelo predeterminado")}
       />
       {catalogError ? (
-        <p className="text-sm text-muted-foreground">{catalogError}</p>
+        <p className="text-sm text-muted-foreground">
+          {Object.hasOwn(settingsMessages, catalogError)
+            ? t(catalogError as keyof typeof settingsMessages)
+            : catalogError}
+        </p>
       ) : null}
       {error ? (
         <Alert variant="destructive">
           <CircleAlert />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {Object.hasOwn(settingsMessages, error)
+              ? t(error as keyof typeof settingsMessages)
+              : error}
+          </AlertDescription>
         </Alert>
       ) : null}
       {notice ? (
@@ -410,13 +441,16 @@ export function AssistantConfigurationPanel({
           className="flex items-center gap-2 text-sm text-primary"
           role="status"
         >
-          <CheckCircle2 className="size-4" /> {notice}
+          <CheckCircle2 className="size-4" />{" "}
+          {Object.hasOwn(settingsMessages, notice)
+            ? t(notice as keyof typeof settingsMessages)
+            : notice}
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={savingGlobal}>
           {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
-          Guardar
+          {t("Guardar")}
         </Button>
         {isCustomGlobalKeyConfigured ? (
           <Button
@@ -425,7 +459,7 @@ export function AssistantConfigurationPanel({
             disabled={savingGlobal}
             onClick={() => setConfirmGlobalKeyClear(true)}
           >
-            Eliminar clave
+            {t("Eliminar clave")}
           </Button>
         ) : null}
       </div>
@@ -437,12 +471,14 @@ export function AssistantConfigurationPanel({
       {embedded && globalOnly ? (
         <CredentialEntry
           title="OpenRouter"
-          description="Asistente de IA: clave y modelo predeterminado del espacio."
+          description={t(
+            "Asistente de IA: clave y modelo predeterminado del espacio.",
+          )}
           requirement="required"
           status={
             <CredentialStatusBadge
               configured={globalKeyState === "configured"}
-              label={keyState(globalKeyState)}
+              label={t(keyState(globalKeyState))}
             />
           }
         >
@@ -455,10 +491,10 @@ export function AssistantConfigurationPanel({
           value={activeTab}
         >
           <TabsList>
-            <TabsTrigger value="global">Global</TabsTrigger>
+            <TabsTrigger value="global">{t("Global")}</TabsTrigger>
             {showAgencyConfiguration ? (
               <TabsTrigger value="agency">
-                Por agencia
+                {t("Por agencia")}
                 {(summary?.agencies.length ?? 0) > 0 ? (
                   <Badge className="ml-1.5" variant="outline">
                     {summary?.agencies.length}
@@ -472,11 +508,11 @@ export function AssistantConfigurationPanel({
             <Card>
               <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
                 <div>
-                  <CardTitle>Global</CardTitle>
+                  <CardTitle>{t("Global")}</CardTitle>
                   {isCustomGlobalKeyConfigured && summary?.global?.updatedAt ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Configurada el{" "}
-                      {formatConfiguredDate(summary.global.updatedAt)}
+                      {t("Configurada el")}{" "}
+                      {formatConfiguredDate(summary.global.updatedAt, locale)}
                     </p>
                   ) : null}
                 </div>
@@ -487,7 +523,7 @@ export function AssistantConfigurationPanel({
                       : "outline"
                   }
                 >
-                  {keyState(globalKeyState)}
+                  {t(keyState(globalKeyState))}
                 </Badge>
               </CardHeader>
               <CardContent>{globalForm}</CardContent>
@@ -501,10 +537,12 @@ export function AssistantConfigurationPanel({
                   <Table>
                     <TableHeader className="bg-muted/40">
                       <TableRow>
-                        <TableHead>Agencia</TableHead>
-                        <TableHead>Clave</TableHead>
-                        <TableHead>Modelo</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
+                        <TableHead>{t("Agencia")}</TableHead>
+                        <TableHead>{t("Clave")}</TableHead>
+                        <TableHead>{t("Modelo")}</TableHead>
+                        <TableHead className="text-right">
+                          {t("Acciones")}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -513,22 +551,25 @@ export function AssistantConfigurationPanel({
                         return (
                           <TableRow key={agencyId}>
                             <TableCell className="font-medium">
-                              {agencyName(agencyId, agencies)}
+                              {agencyName(agencyId, agencies, t)}
                             </TableCell>
                             <TableCell>
                               <div>
-                                <span>{keyState(setting.keyState)}</span>
+                                <span>{t(keyState(setting.keyState))}</span>
                                 {setting.keyState === "configured" &&
                                 setting.updatedAt ? (
                                   <p className="text-[11px] text-muted-foreground">
-                                    Configurada el{" "}
-                                    {formatConfiguredDate(setting.updatedAt)}
+                                    {t("Configurada el")}{" "}
+                                    {formatConfiguredDate(
+                                      setting.updatedAt,
+                                      locale,
+                                    )}
                                   </p>
                                 ) : null}
                               </div>
                             </TableCell>
                             <TableCell className="max-w-56 truncate text-muted-foreground">
-                              {setting.model ?? "Hereda global"}
+                              {setting.model ?? t("Hereda global")}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
@@ -538,7 +579,7 @@ export function AssistantConfigurationPanel({
                                   variant="outline"
                                   onClick={() => selectAgency(agencyId)}
                                 >
-                                  Editar
+                                  {t("Editar")}
                                 </Button>
                                 <Button
                                   type="button"
@@ -549,7 +590,7 @@ export function AssistantConfigurationPanel({
                                     setPendingDeletion(agencyId);
                                   }}
                                 >
-                                  Volver a heredar
+                                  {t("Volver a heredar")}
                                 </Button>
                               </div>
                             </TableCell>
@@ -560,7 +601,9 @@ export function AssistantConfigurationPanel({
                   </Table>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Sin overrides.</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("Sin overrides.")}
+                </p>
               )}
 
               <form
@@ -568,7 +611,7 @@ export function AssistantConfigurationPanel({
                 onSubmit={saveAgency}
               >
                 <div className="grid gap-2">
-                  <Label htmlFor="assistant-agency">Agencia</Label>
+                  <Label htmlFor="assistant-agency">{t("Agencia")}</Label>
                   <select
                     id="assistant-agency"
                     className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
@@ -578,7 +621,7 @@ export function AssistantConfigurationPanel({
                     }
                   >
                     <option value="" disabled>
-                      Selecciona una agencia
+                      {t("Selecciona una agencia")}
                     </option>
                     {agencies.map((agency) => (
                       <option key={agency.id} value={agency.id}>
@@ -590,13 +633,16 @@ export function AssistantConfigurationPanel({
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="assistant-agency-key">
-                      Clave de agencia
+                      {t("Clave de agencia")}
                     </Label>
                     {selectedOverride?.keyState === "configured" &&
                     selectedOverride.updatedAt ? (
                       <span className="text-xs text-muted-foreground">
-                        Configurada el{" "}
-                        {formatConfiguredDate(selectedOverride.updatedAt)}
+                        {t("Configurada el")}{" "}
+                        {formatConfiguredDate(
+                          selectedOverride.updatedAt,
+                          locale,
+                        )}
                       </span>
                     ) : null}
                   </div>
@@ -608,8 +654,8 @@ export function AssistantConfigurationPanel({
                     onChange={(event) => setAgencyKey(event.target.value)}
                     placeholder={
                       selectedOverride?.keyState === "configured"
-                        ? "•••••••••••••••• (dejar en blanco para conservar)"
-                        : "Hereda global"
+                        ? t("•••••••••••••••• (dejar en blanco para conservar)")
+                        : t("Hereda global")
                     }
                     disabled={!selectedAgencyId || clearAgencyKey}
                   />
@@ -617,12 +663,15 @@ export function AssistantConfigurationPanel({
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200">
                       <span className="flex items-center gap-1.5 font-medium">
                         <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                        Clave de agencia guardada y cifrada
+                        {t("Clave de agencia guardada y cifrada")}
                       </span>
                       {selectedOverride.updatedAt ? (
                         <span className="text-emerald-700 dark:text-emerald-400">
-                          • Configurada el{" "}
-                          {formatConfiguredDate(selectedOverride.updatedAt)}
+                          {t("• Configurada el")}{" "}
+                          {formatConfiguredDate(
+                            selectedOverride.updatedAt,
+                            locale,
+                          )}
                         </span>
                       ) : null}
                     </div>
@@ -641,13 +690,13 @@ export function AssistantConfigurationPanel({
                           if (event.target.checked) setAgencyKey("");
                         }}
                       />
-                      Heredar clave global
+                      {t("Heredar clave global")}
                     </label>
                   ) : null}
                 </div>
                 <ModelInput
                   id="assistant-agency-model"
-                  label="Modelo de agencia"
+                  label={t("Modelo de agencia")}
                   value={agencyModel}
                   onChange={setAgencyModel}
                   models={models}
@@ -656,8 +705,8 @@ export function AssistantConfigurationPanel({
                   }
                   fallbackLabel={
                     summary?.global?.model
-                      ? "Hereda de global"
-                      : "Modelo predeterminado"
+                      ? t("Hereda de global")
+                      : t("Modelo predeterminado")
                   }
                   disabled={!selectedAgencyId}
                 />
@@ -669,7 +718,7 @@ export function AssistantConfigurationPanel({
                     {savingAgency ? (
                       <LoaderCircle className="animate-spin" />
                     ) : null}
-                    Guardar
+                    {t("Guardar")}
                   </Button>
                 </div>
               </form>
@@ -684,10 +733,12 @@ export function AssistantConfigurationPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Volver a heredar</DialogTitle>
+            <DialogTitle>{t("Volver a heredar")}</DialogTitle>
             <DialogDescription>
               {pendingDeletion
-                ? `${agencyName(pendingDeletion, agencies)} volverá a heredar la configuración global.`
+                ? t("%{agency} vuelve a heredar la configuración global.", {
+                    agency: agencyName(pendingDeletion, agencies, t),
+                  })
                 : ""}
             </DialogDescription>
           </DialogHeader>
@@ -698,7 +749,7 @@ export function AssistantConfigurationPanel({
               onClick={() => setPendingDeletion(null)}
               disabled={deleting}
             >
-              Cancelar
+              {t("Cancelar")}
             </Button>
             <Button
               type="button"
@@ -707,7 +758,7 @@ export function AssistantConfigurationPanel({
               disabled={deleting}
             >
               {deleting ? <LoaderCircle className="animate-spin" /> : null}
-              Confirmar
+              {t("Confirmar")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -719,10 +770,11 @@ export function AssistantConfigurationPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Eliminar clave global</DialogTitle>
+            <DialogTitle>{t("Eliminar clave global")}</DialogTitle>
             <DialogDescription>
-              Se eliminará la clave global guardada. El asistente de IA
-              requerirá que configures una nueva clave para poder operar.
+              {t(
+                "Se eliminará la clave global guardada. El asistente de IA requerirá que configures una nueva clave para poder operar.",
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -732,7 +784,7 @@ export function AssistantConfigurationPanel({
               onClick={() => setConfirmGlobalKeyClear(false)}
               disabled={savingGlobal}
             >
-              Cancelar
+              {t("Cancelar")}
             </Button>
             <Button
               type="button"
@@ -741,7 +793,7 @@ export function AssistantConfigurationPanel({
               disabled={savingGlobal}
             >
               {savingGlobal ? <LoaderCircle className="animate-spin" /> : null}
-              Confirmar eliminación
+              {t("Confirmar eliminación")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -755,10 +807,10 @@ export function AssistantConfigurationPanel({
     <main className="mx-auto w-full max-w-6xl pb-12">
       <header className="py-6">
         <div className="flex items-center gap-2 text-sm font-medium text-primary">
-          <Bot className="size-4" /> Administración
+          <Bot className="size-4" /> {t("Administración")}
         </div>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-          Configuración de IA
+          {t("Configuración de IA")}
         </h1>
       </header>
       {panel}
@@ -781,7 +833,7 @@ export function ModelInput({
   onChange,
   models,
   fallbackModel,
-  fallbackLabel = "Predeterminado del servidor",
+  fallbackLabel: configuredFallbackLabel,
   disabled = false,
 }: {
   id: string;
@@ -793,6 +845,10 @@ export function ModelInput({
   fallbackLabel?: string;
   disabled?: boolean;
 }) {
+  const t = useMessages(settingsMessages);
+  const locale = intlLocale(useAppLocale());
+  const fallbackLabel =
+    configuredFallbackLabel ?? t("Predeterminado del servidor");
   const [open, setOpen] = useState(false);
   const [activeOptionIndex, setActiveOptionIndex] = useState(-1);
   const listId = `${id}-options`;
@@ -863,7 +919,7 @@ export function ModelInput({
             placeholder={
               fallbackModel
                 ? `${fallbackLabel}: ${fallbackModel}`
-                : "Busca o escribe provider/model"
+                : t("Busca o escribe provider/model")
             }
             disabled={disabled}
           />
@@ -874,8 +930,9 @@ export function ModelInput({
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <div className="px-3 py-2 text-xs text-muted-foreground">
-            Modelos compatibles con herramientas · precios estimados en USD por
-            1M tokens
+            {t(
+              "Modelos compatibles con herramientas · precios estimados en USD por 1M tokens",
+            )}
           </div>
           <div
             id={listId}
@@ -901,7 +958,8 @@ export function ModelInput({
                       <span className="truncate font-medium">{model.name}</span>
                       {model.contextLength ? (
                         <span className="shrink-0 text-xs text-muted-foreground">
-                          {formatContextLength(model.contextLength)} contexto
+                          {formatContextLength(model.contextLength, locale)}{" "}
+                          {t("contexto")}
                         </span>
                       ) : null}
                     </div>
@@ -914,12 +972,20 @@ export function ModelInput({
                   </div>
                   <div className="shrink-0 text-right text-xs leading-5 text-muted-foreground">
                     <div>
-                      Entrada{" "}
-                      {formatPricePerMillion(model.inputPricePerMillion)}
+                      {t("Entrada")}{" "}
+                      {formatPricePerMillion(
+                        model.inputPricePerMillion,
+                        locale,
+                        t,
+                      )}
                     </div>
                     <div>
-                      Salida{" "}
-                      {formatPricePerMillion(model.outputPricePerMillion)}
+                      {t("Salida")}{" "}
+                      {formatPricePerMillion(
+                        model.outputPricePerMillion,
+                        locale,
+                        t,
+                      )}
                     </div>
                   </div>
                   {selected?.id === model.id ? (
@@ -929,7 +995,9 @@ export function ModelInput({
               ))
             ) : (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                No hay coincidencias. Puedes guardar el ID que escribiste.
+                {t(
+                  "No hay coincidencias. Puedes guardar el ID que escribiste.",
+                )}
               </p>
             )}
           </div>
@@ -940,14 +1008,17 @@ export function ModelInput({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
               <Cpu className="size-3.5 shrink-0 text-primary" />
-              <span>{isCustom ? "Modelo seleccionado" : fallbackLabel}:</span>
+              <span>
+                {isCustom ? t("Modelo seleccionado") : fallbackLabel}:
+              </span>
               <span className="font-semibold text-primary">
                 {selected?.name ?? effectiveModelId}
               </span>
             </div>
             {selected?.contextLength ? (
               <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                {formatContextLength(selected.contextLength)} contexto
+                {formatContextLength(selected.contextLength, locale)}{" "}
+                {t("contexto")}
               </span>
             ) : null}
           </div>
@@ -958,27 +1029,40 @@ export function ModelInput({
             </div>
             {selected ? (
               <span>
-                Entrada {formatPricePerMillion(selected.inputPricePerMillion)} ·{" "}
-                Salida {formatPricePerMillion(selected.outputPricePerMillion)}
+                {t("Entrada")}{" "}
+                {formatPricePerMillion(
+                  selected.inputPricePerMillion,
+                  locale,
+                  t,
+                )}{" "}
+                · {t("Salida")}{" "}
+                {formatPricePerMillion(
+                  selected.outputPricePerMillion,
+                  locale,
+                  t,
+                )}
               </span>
             ) : null}
           </div>
           {!isCustom && fallbackModel ? (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Este espacio está usando el modelo predeterminado. Si deseas usar
-              otro, selecciónalo arriba y haz clic en Guardar.
+              {t(
+                "Este espacio está usando el modelo predeterminado. Si deseas usar otro, selecciónalo arriba y haz clic en Guardar.",
+              )}
             </p>
           ) : isCustom && fallbackModel ? (
             <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
               <span className="text-[11px] text-muted-foreground">
-                Sobreescribe el modelo predeterminado ({fallbackModel})
+                {t("Sobreescribe el modelo predeterminado (%{model})", {
+                  model: fallbackModel,
+                })}
               </span>
               <button
                 type="button"
                 className="text-[11px] font-medium text-primary hover:underline"
                 onClick={() => onChange("")}
               >
-                Volver al predeterminado
+                {t("Volver al predeterminado")}
               </button>
             </div>
           ) : null}
@@ -988,14 +1072,20 @@ export function ModelInput({
   );
 }
 
-function formatPricePerMillion(price: number | null): string {
-  if (price === null) return "No disponible";
-  if (price === 0) return "Gratis";
+function formatPricePerMillion(
+  price: number | null,
+  locale: string,
+  t: ReturnType<typeof useMessages<typeof settingsMessages>>,
+): string {
+  if (price === null) return t("No disponible");
+  if (price === 0) return t("Gratis");
   const digits = price >= 10 ? 0 : price >= 1 ? 2 : 3;
-  return `US$${price.toFixed(digits)} / 1M`;
+  return `${new Intl.NumberFormat(locale, { style: "currency", currency: "USD", minimumFractionDigits: digits, maximumFractionDigits: digits }).format(price)} / 1M`;
 }
 
-function formatContextLength(tokens: number): string {
-  if (tokens >= 1_000_000) return `${tokens / 1_000_000}M`;
-  return `${Math.round(tokens / 1_000)}K`;
+function formatContextLength(tokens: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(tokens);
 }

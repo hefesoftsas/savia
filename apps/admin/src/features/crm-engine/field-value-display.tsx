@@ -1,3 +1,7 @@
+import { recordOptionLabel } from "./record-option-label";
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { Star } from "lucide-react";
 import type { IFieldConfig } from "@form-eng/core";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +14,10 @@ export function FieldValueDisplay({
   value: unknown;
   field: IFieldConfig;
 }) {
+  const uiLocale = intlLocale(useAppLocale());
+
+  const t = useMessages(recordsMessages);
+
   if (
     field.type === "Rating" &&
     typeof value === "number" &&
@@ -19,7 +27,7 @@ export function FieldValueDisplay({
     return (
       <span
         role="img"
-        aria-label={`${value} of ${max}`}
+        aria-label={t("%{p0} of %{p1}", { p0: value, p1: max })}
         className="inline-flex flex-wrap gap-0.5"
       >
         {Array.from({ length: max }, (_, index) => (
@@ -49,12 +57,19 @@ export function FieldValueDisplay({
             className="max-w-full whitespace-normal break-words"
           >
             {String(
-              field.options?.find((option) => String(option.value) === item)
-                ?.label ?? item,
+              recordOptionLabel(
+                item,
+                field.options,
+                uiLocale.startsWith("pt")
+                  ? "pt"
+                  : uiLocale.startsWith("en")
+                    ? "en"
+                    : "es",
+              ),
             )}
           </Badge>
         ))}
       </div>
     );
-  return <>{formatFieldValue(value, field)}</>;
+  return <>{formatFieldValue(value, field, uiLocale)}</>;
 }

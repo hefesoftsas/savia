@@ -15,7 +15,8 @@ import { SaviaRequestProvider } from "./savia-request-provider";
 import { SaviaRequestSidebar } from "./savia-request-sidebar";
 import type { RequestFlow } from "./types";
 
-vi.mock("ra-core", () => ({
+vi.mock("ra-core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ra-core")>()),
   useCanAccess: () => ({ canAccess: true, isPending: false }),
 }));
 

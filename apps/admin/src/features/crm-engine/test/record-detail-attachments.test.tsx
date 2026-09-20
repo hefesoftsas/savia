@@ -2,13 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  render,
-  screen,
-  within,
-  fireEvent,
-} from "@testing-library/react";
+import { cleanup, screen, within, fireEvent } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RecordDetail from "../record-detail";
 import { api, downloadCrm } from "../api";

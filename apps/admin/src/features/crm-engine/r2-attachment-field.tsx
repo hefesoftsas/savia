@@ -1,3 +1,6 @@
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { OfficeEditButton } from "./office-edit-button";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,14 +34,19 @@ export type R2AttachmentFieldProps = {
   uploadingFile?: File;
 };
 
-function formatBytes(size: number) {
+function formatBytes(size: number, locale = "es-CO") {
   if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toLocaleString("es-CO", {
+  return `${(size / (1024 * 1024)).toLocaleString(locale, {
     maximumFractionDigits: 1,
   })} MB`;
 }
 
-async function filesFor(object: string, recordId: string, field: string) {
+async function filesFor(
+  object: string,
+  recordId: string,
+  field: string,
+  fallback: string,
+) {
   const response = await crmFetch(
     `/api/files/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}?field=${encodeURIComponent(field)}`,
   );
@@ -46,8 +54,7 @@ async function filesFor(object: string, recordId: string, field: string) {
     data?: CrmFileAttachment[];
     error?: string;
   };
-  if (!response.ok)
-    throw new Error(body.error ?? "No se pudieron cargar los archivos.");
+  if (!response.ok) throw new Error(body.error ?? fallback);
   return body.data ?? [];
 }
 
@@ -64,12 +71,22 @@ export function R2AttachmentField({
   uploadedFiles,
   uploadingFile,
 }: R2AttachmentFieldProps) {
+  const uiLocale = intlLocale(useAppLocale());
+
+  const t = useMessages(recordsMessages);
+
   const client = useQueryClient();
   const [error, setError] = useState("");
   const query = useQuery({
     enabled: Boolean(recordId),
     queryKey: ["r2-attachments", object, recordId, field, refreshVersion],
-    queryFn: () => filesFor(object, recordId!, field),
+    queryFn: () =>
+      filesFor(
+        object,
+        recordId!,
+        field,
+        t("No se pudieron cargar los archivos."),
+      ),
   });
   const persisted = query.data ?? [];
   const remaining = Math.max(0, policy.maxFiles - persisted.length);
@@ -86,7 +103,7 @@ export function R2AttachmentField({
     );
     const body = (await response.json()) as { error?: string };
     if (!response.ok) {
-      setError(body.error ?? "No se pudo eliminar el archivo.");
+      setError(body.error ?? t("No se pudo eliminar el archivo."));
       return;
     }
     await client.invalidateQueries({
@@ -97,7 +114,9 @@ export function R2AttachmentField({
   return (
     <div className="grid gap-3">
       {recordId && query.isFetching && (
-        <p className="text-sm text-muted-foreground">Cargando archivos…</p>
+        <p className="text-sm text-muted-foreground">
+          {t("Cargando archivos…")}
+        </p>
       )}
       {query.error && (
         <p className="text-sm text-destructive" role="alert">
@@ -105,7 +124,7 @@ export function R2AttachmentField({
         </p>
       )}
       {persisted.length > 0 && (
-        <ul className="grid gap-2" aria-label="Archivos guardados">
+        <ul className="grid gap-2" aria-label={t("Archivos guardados")}>
           {persisted.map((file) => (
             <li
               className="flex min-w-0 items-center gap-3 rounded-md border bg-background px-3 py-2"
@@ -120,11 +139,11 @@ export function R2AttachmentField({
                 {file.name}
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">
-                {formatBytes(file.size)}
+                {formatBytes(file.size, uiLocale)}
               </span>
               <OfficeEditButton file={file} disabled={disabled} />
               <Button
-                aria-label={`Descargar ${file.name}`}
+                aria-label={t("Descargar %{p0}", { p0: file.name })}
                 onClick={() =>
                   void downloadCrm(
                     `/api/file/${file.id}/download`,
@@ -138,7 +157,7 @@ export function R2AttachmentField({
                 <Download aria-hidden="true" size={16} />
               </Button>
               <Button
-                aria-label={`Eliminar ${file.name}`}
+                aria-label={t("Eliminar %{p0}", { p0: file.name })}
                 disabled={disabled}
                 onClick={() => void remove(file)}
                 size="icon"
@@ -153,7 +172,9 @@ export function R2AttachmentField({
       )}
       {!recordId && (
         <p className="text-sm text-muted-foreground">
-          El archivo se cargará ahora y se asociará al guardar el registro.
+          {t(
+            "El archivo se cargará ahora y se asociará al guardar el registro.",
+          )}
         </p>
       )}
       <FilePicker

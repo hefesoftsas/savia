@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { accessMessages } from "@/i18n/locales/access";
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,6 +10,7 @@ import { RoleEditor } from "./role-editor";
 import { AssignmentEditor } from "./assignment-editor";
 const AuditBrowser = lazy(() => import("./audit-browser"));
 export function RolePages({ services }: { services: AppServices }) {
+  const t = useMessages(accessMessages);
   const client = useMemo(
     () => createAccessControlClient(services.apiClient),
     [services.apiClient],
@@ -51,14 +54,17 @@ export function RolePages({ services }: { services: AppServices }) {
     <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Roles and permissions</h1>
+          <h1 className="text-2xl font-semibold">
+            {t("Roles and permissions")}
+          </h1>
           <p className="mt-2 max-w-prose text-sm text-muted-foreground">
-            Manage access within a workspace. Changes apply to the next
-            authorized server operation.
+            {t(
+              "Manage access within a workspace. Changes apply to the next authorized server operation.",
+            )}
           </p>
         </div>
         <label className="grid gap-2 text-sm">
-          Workspace
+          {t("Workspace")}
           <select
             className="h-10 min-w-48 rounded-md border bg-background px-3"
             value={scope}
@@ -90,30 +96,32 @@ export function RolePages({ services }: { services: AppServices }) {
               void catalog.refetch();
             }}
           >
-            Reload permissions
+            {t("Reload permissions")}
           </Button>
         </div>
       )}
       {message && (
         <p role="status" className="text-sm">
-          {message}
+          {Object.hasOwn(accessMessages, message)
+            ? t(message as keyof typeof accessMessages)
+            : message}
         </p>
       )}
       {!error && (!roles.data || !catalog.data) && (
-        <p role="status">Loading permissions…</p>
+        <p role="status">{t("Loading permissions…")}</p>
       )}
       {roles.data && catalog.data && !error && (
         <Tabs defaultValue="roles" key={scope}>
           <TabsList>
-            <TabsTrigger value="roles">Roles</TabsTrigger>
-            <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="audit">Audit</TabsTrigger>
+            <TabsTrigger value="roles">{t("Roles")}</TabsTrigger>
+            <TabsTrigger value="members">{t("Members")}</TabsTrigger>
+            <TabsTrigger value="audit">{t("Audit")}</TabsTrigger>
           </TabsList>
           <TabsContent
             value="roles"
             className="mt-6 grid gap-6 md:grid-cols-[14rem_minmax(0,1fr)]"
           >
-            <nav aria-label="Roles" className="space-y-2">
+            <nav aria-label={t("Roles")} className="space-y-2">
               <Button
                 variant="outline"
                 className="w-full"
@@ -122,7 +130,7 @@ export function RolePages({ services }: { services: AppServices }) {
                   setMessage("");
                 }}
               >
-                Create role
+                {t("Create role")}
               </Button>
               {roles.data.roles.map((r) => (
                 <button
@@ -138,12 +146,12 @@ export function RolePages({ services }: { services: AppServices }) {
                   <span className="block font-medium">{r.label}</span>
                   {r.protected && (
                     <span className="text-xs text-muted-foreground">
-                      Protected role
+                      {t("Protected role")}
                     </span>
                   )}
                   {!r.enabled && (
                     <span className="text-xs text-muted-foreground">
-                      Disabled
+                      {t("Disabled")}
                     </span>
                   )}
                 </button>
@@ -175,8 +183,9 @@ export function RolePages({ services }: { services: AppServices }) {
                 />
               ) : (
                 <p className="py-8 text-sm text-muted-foreground">
-                  Select a role to inspect its permissions, or create a role
-                  with no initial access.
+                  {t(
+                    "Select a role to inspect its permissions, or create a role with no initial access.",
+                  )}
                 </p>
               )}
             </div>
@@ -192,7 +201,7 @@ export function RolePages({ services }: { services: AppServices }) {
             />
           </TabsContent>
           <TabsContent value="audit" className="mt-6">
-            <Suspense fallback={<p role="status">Loading history…</p>}>
+            <Suspense fallback={<p role="status">{t("Loading history…")}</p>}>
               <AuditBrowser client={client} scope={scope} />
             </Suspense>
           </TabsContent>

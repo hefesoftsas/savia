@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
@@ -17,6 +19,7 @@ export function CollectionOptionsEditor({
   fields: CrmObject["config"]["fields"];
   onChange: (fields: CrmObject["config"]["fields"]) => void;
 }) {
+  const t = useMessages(studioMessages);
   const runtime = getCrmRuntime();
   const catalog = useQuery({
     queryKey: [
@@ -35,19 +38,23 @@ export function CollectionOptionsEditor({
     onChange({ ...fields, [key]: { ...fields[key], config } });
   }
   return (
-    <section className="grid gap-4" aria-label="Selectores desde colecciones">
+    <section
+      className="grid gap-4"
+      aria-label={t("Selectores desde colecciones")}
+    >
       <div>
-        <h3>Selectores desde colecciones</h3>
+        <h3>{t("Selectores desde colecciones")}</h3>
         <p className="text-sm text-muted-foreground">
-          Elige la colección y los campos del documento que proporcionan el
-          valor y su etiqueta.
+          {t(
+            "Elige la colección y los campos del documento que proporcionan el valor y su etiqueta.",
+          )}
         </p>
       </div>
       {catalog.error && (
         <p role="alert">
-          No se pudo cargar el catálogo.{" "}
+          {t("No se pudo cargar el catálogo.")}{" "}
           <button type="button" onClick={() => void catalog.refetch()}>
-            Reintentar
+            {t("Reintentar")}
           </button>
         </p>
       )}
@@ -103,8 +110,21 @@ export function CollectionOptionsEditor({
                   );
                 }}
               >
-                <option value="">{catalog.isPending ? "Cargando colecciones…" : "Sin colección · control original"}</option>
-                {source && !catalog.data?.data.some(entry => entry.domain === source.domain && entry.collection === source.collection) && <option value={`${source.domain}/${source.collection}`}>{source.collection}</option>}
+                <option value="">
+                  {catalog.isPending
+                    ? t("Cargando colecciones…")
+                    : t("Sin colección · control original")}
+                </option>
+                {source &&
+                  !catalog.data?.data.some(
+                    (entry) =>
+                      entry.domain === source.domain &&
+                      entry.collection === source.collection,
+                  ) && (
+                    <option value={`${source.domain}/${source.collection}`}>
+                      {source.collection}
+                    </option>
+                  )}
                 {catalog.data?.data.map((entry) => (
                   <option
                     key={`${entry.domain}/${entry.collection}`}
@@ -117,10 +137,12 @@ export function CollectionOptionsEditor({
               {source && (
                 <div className="grid gap-2">
                   <label className="text-sm">
-                    Valor guardado
+                    {t("Valor guardado")}
                     <input
                       className="mt-1 w-full rounded-md border p-2"
-                      aria-label={`Valor guardado · ${field.label}`}
+                      aria-label={t("Valor guardado · %{v1}", {
+                        v1: field.label,
+                      })}
                       value={source.valueField}
                       onChange={(event) =>
                         change(key, {
@@ -131,10 +153,12 @@ export function CollectionOptionsEditor({
                     />
                   </label>
                   <label className="text-sm">
-                    Etiqueta visible
+                    {t("Etiqueta visible")}
                     <input
                       className="mt-1 w-full rounded-md border p-2"
-                      aria-label={`Etiqueta visible · ${field.label}`}
+                      aria-label={t("Etiqueta visible · %{v1}", {
+                        v1: field.label,
+                      })}
                       value={source.labelField}
                       onChange={(event) =>
                         change(key, {

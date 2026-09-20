@@ -1,3 +1,5 @@
+import { useAppLocale, useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { IFieldProps } from "@form-eng/core";
@@ -35,6 +37,9 @@ function AddressAutocompleteField({
 }: IFieldProps & {
   settings: NonNullable<ReturnType<typeof resolveAddressAutocomplete>>;
 }) {
+  const t = useMessages(recordsMessages);
+  const locale = useAppLocale();
+
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -56,13 +61,13 @@ function AddressAutocompleteField({
       debouncedQuery,
       settings.provider,
       settings.country,
-      settings.language,
+      settings.language ?? locale,
     ],
     queryFn: () => {
       const params = new URLSearchParams({
         q: debouncedQuery.trim(),
         provider: settings.provider,
-        language: settings.language ?? "es",
+        language: settings.language ?? locale,
       });
       if (settings.country) params.set("country", settings.country);
       return api<{ data: { label: string; value: string }[] }>(
@@ -109,11 +114,11 @@ function AddressAutocompleteField({
         }}
       />
       {results.isFetching ? (
-        <p className="studio-field-help">Buscando direcciones…</p>
+        <p className="studio-field-help">{t("Buscando direcciones…")}</p>
       ) : null}
       {results.isError ? (
         <p className="studio-field-help" role="status">
-          No se pudieron cargar sugerencias de dirección.
+          {t("No se pudieron cargar sugerencias de dirección.")}
         </p>
       ) : null}
       {showSuggestions ? (
@@ -145,7 +150,7 @@ function AddressAutocompleteField({
         </ul>
       ) : null}
       <p className="studio-field-help">
-        Escribe al menos 3 caracteres para buscar direcciones.
+        {t("Escribe al menos 3 caracteres para buscar direcciones.")}
       </p>
     </div>
   );

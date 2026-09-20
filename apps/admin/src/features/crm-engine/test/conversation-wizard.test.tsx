@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  cleanup,
-} from "@testing-library/react";
+import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DynamicForm from "../dynamic-form";
 import { makeConfig, type CrmObject } from "@savia/crm-shared/metadata";

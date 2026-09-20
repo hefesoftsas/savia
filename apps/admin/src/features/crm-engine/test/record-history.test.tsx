@@ -2,13 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { makeConfig } from "@savia/crm-shared/metadata";
 import { api } from "../api";
 import RecordHistory from "../record-history";

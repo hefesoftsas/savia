@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import {
   useCallback,
   useEffect,
@@ -48,12 +50,14 @@ function fieldControlTargets(formField: Element | null, fieldName: string) {
 }
 
 async function applyLookupResult({
+  t,
   action,
   run,
   before,
   getValues,
   setValue,
 }: {
+  t: ReturnType<typeof useMessages<typeof recordsMessages>>;
   action: RequestAction;
   run: PageRun;
   before: Record<string, unknown>;
@@ -66,15 +70,17 @@ async function applyLookupResult({
       shouldValidate?: boolean;
     },
   ) => void;
-}): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+}): Promise<{ ok: boolean; message: string; staleInput?: boolean }> {
   if (
     JSON.stringify(Object.values(action.input).map((key) => before[key])) !==
     JSON.stringify(Object.values(action.input).map((key) => getValues(key)))
   ) {
     return {
       ok: false,
-      message:
+      staleInput: true,
+      message: t(
         "Cambió la entrada; consulta de nuevo para completar los campos.",
+      ),
     };
   }
   if (!run.result || !["success", "partial"].includes(run.result.status)) {
@@ -83,7 +89,7 @@ async function applyLookupResult({
       message:
         run.error ??
         run.result?.errors[0]?.message ??
-        "La consulta no devolvió datos utilizables.",
+        t("La consulta no devolvió datos utilizables."),
     };
   }
   for (const [field, pointer] of Object.entries(action.output)) {
@@ -95,7 +101,7 @@ async function applyLookupResult({
   }
   return {
     ok: true,
-    message: "Campos actualizados con la respuesta de la consulta.",
+    message: t("Campos actualizados con la respuesta de la consulta."),
   };
 }
 
@@ -105,9 +111,12 @@ function useLookupExecutor(
     values: Record<string, unknown>,
   ) => Promise<PageRun>,
 ) {
+  const t = useMessages(recordsMessages);
+
   const { getValues, setValue } = useFormContext();
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [staleInput, setStaleInput] = useState(false);
   const lock = useRef(false);
 
   const runAction = useCallback(
@@ -116,10 +125,12 @@ function useLookupExecutor(
       lock.current = true;
       setBusy(action.id);
       setMessage("");
+      setStaleInput(false);
       const before = getValues();
       try {
         const run = await execute(action, before);
         const result = await applyLookupResult({
+          t,
           action,
           run,
           before,
@@ -127,6 +138,7 @@ function useLookupExecutor(
           setValue,
         });
         setMessage(result.message);
+        setStaleInput(result.staleInput ?? false);
       } catch (e) {
         setMessage((e as Error).message);
       } finally {
@@ -134,16 +146,22 @@ function useLookupExecutor(
         setBusy("");
       }
     },
-    [execute, getValues, setValue],
+    [execute, getValues, setValue, t],
   );
 
   useEffect(() => {
-    if (!message || message.startsWith("Cambió") || busy) return;
+    if (!message || staleInput || busy) return;
     const timer = window.setTimeout(() => setMessage(""), 4000);
     return () => window.clearTimeout(timer);
-  }, [message, busy]);
+  }, [message, busy, staleInput]);
 
-  return { busy, message, runAction };
+  return {
+    busy,
+    message: staleInput
+      ? t("Cambió la entrada; consulta de nuevo para completar los campos.")
+      : message,
+    runAction,
+  };
 }
 
 function bindLookupFieldEvents({

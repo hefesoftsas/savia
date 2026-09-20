@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import {
   lazy,
   Suspense,
@@ -40,6 +42,8 @@ const BusinessPanel = lazy(async () => {
 });
 
 export function CrmPage({ services }: { services: AppServices }) {
+  const t = useMessages(automationMessages);
+
   const { canAccess, isPending } = useCanAccess({
     resource: "dynamic-crm",
     action: "list",
@@ -76,7 +80,7 @@ export function CrmPage({ services }: { services: AppServices }) {
             setError(
               cause instanceof Error
                 ? cause.message
-                : "No se pudieron cargar los dominios.",
+                : t("No se pudieron cargar los dominios."),
             );
         })
         .finally(
@@ -122,7 +126,9 @@ export function CrmPage({ services }: { services: AppServices }) {
       setLabel("");
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "No se pudo crear el dominio.",
+        cause instanceof Error
+          ? cause.message
+          : t("No se pudo crear el dominio."),
       );
     } finally {
       saveInFlight.current = false;
@@ -162,8 +168,8 @@ export function CrmPage({ services }: { services: AppServices }) {
             variant="ghost"
             size="sm"
             className="crm-domain-context-trigger h-8 min-w-0 max-w-[40vw] gap-1.5 px-2 sm:max-w-64"
-            aria-label={`Dominio: ${selected.label}`}
-            title={`Dominio: ${selected.label}`}
+            aria-label={t("Dominio: %{value0}", { value0: selected.label })}
+            title={t("Dominio: %{value0}", { value0: selected.label })}
           >
             <span className="truncate">{selected.label}</span>
             <ChevronDown aria-hidden="true" className="shrink-0" size={16} />
@@ -179,13 +185,16 @@ export function CrmPage({ services }: { services: AppServices }) {
               {selected.label}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              El dominio define qué formularios y registros ves en el CRM.
-              Cambia de entorno aquí sin salir de esta pantalla.
+              {t(
+                "El dominio define qué formularios y registros ves en el CRM. Cambia de entorno aquí sin salir de esta pantalla.",
+              )}
             </p>
           </div>
           <div className="grid gap-3 p-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="crm-context-domain">Dominio de datos</Label>
+              <Label htmlFor="crm-context-domain">
+                {t("Dominio de datos")}
+              </Label>
               <select
                 id="crm-context-domain"
                 className="h-9 w-full rounded-md border bg-background px-3 text-sm"
@@ -217,7 +226,7 @@ export function CrmPage({ services }: { services: AppServices }) {
                     size="sm"
                     onClick={() => setCreating(true)}
                   >
-                    Crear dominio
+                    {t("Crear dominio")}
                   </Button>
                 )}
               </div>
@@ -230,7 +239,7 @@ export function CrmPage({ services }: { services: AppServices }) {
             {contextOpen && (
               <Suspense
                 fallback={
-                  <RouteLoading compact label="Cargando integraciones…" />
+                  <RouteLoading compact label={t("Cargando integraciones…")} />
                 }
               >
                 <BusinessPanel
@@ -250,7 +259,9 @@ export function CrmPage({ services }: { services: AppServices }) {
   if (!canAccess)
     return (
       <p role="alert">
-        El CRM está disponible para administradores de agencia y plataforma.
+        {t(
+          "El CRM está disponible para administradores de agencia y plataforma.",
+        )}
       </p>
     );
   return (
@@ -262,16 +273,16 @@ export function CrmPage({ services }: { services: AppServices }) {
       ) : (
         <>
           <header className="mb-2 flex flex-col gap-3 @min-[36rem]:flex-row @min-[36rem]:items-center">
-            <h1 className="sr-only">CRM</h1>
+            <h1 className="sr-only">{t("CRM")}</h1>
             <div className="grid min-w-0 flex-1 gap-1.5">
-              <Label htmlFor="crm-domain">Dominio de datos</Label>
+              <Label htmlFor="crm-domain">{t("Dominio de datos")}</Label>
               <select
                 id="crm-domain"
                 className="h-9 w-full min-w-0 max-w-full rounded-md border bg-background px-3 text-sm @min-[36rem]:max-w-md"
                 value=""
                 onChange={(event) => changeDomain(event.target.value)}
               >
-                <option value="">Selecciona un dominio</option>
+                <option value="">{t("Selecciona un dominio")}</option>
                 {domains.map((domain) => (
                   <option value={domain.id} key={domain.id}>
                     {domain.label}
@@ -285,7 +296,7 @@ export function CrmPage({ services }: { services: AppServices }) {
                 variant="outline"
                 onClick={() => setCreating(!creating)}
               >
-                Crear dominio
+                {t("Crear dominio")}
               </Button>
             )}
           </header>
@@ -329,13 +340,15 @@ export function CrmPage({ services }: { services: AppServices }) {
           <h2 className="mb-2 text-lg font-semibold text-foreground">
             {requestedTool?.label ??
               (params.get("object") === "cotizaciones"
-                ? "Cotizaciones"
-                : "Clientes")}
+                ? t("Cotizaciones")
+                : t("Clientes"))}
           </h2>
           <p>
             {domains.length
-              ? "Selecciona un dominio de datos disponible para trabajar."
-              : "No tienes dominios de datos disponibles. Solicita acceso a un administrador."}
+              ? t("Selecciona un dominio de datos disponible para trabajar.")
+              : t(
+                  "No tienes dominios de datos disponibles. Solicita acceso a un administrador.",
+                )}
           </p>
         </div>
       )}
@@ -360,31 +373,33 @@ function DomainCreationForm({
   onNameChange: (value: string) => void;
   onSubmit: (event: React.FormEvent) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   return (
     <form onSubmit={onSubmit} className={className ?? "grid gap-3"}>
       <label className="grid gap-1 text-sm">
-        Nombre del dominio
+        {t("Nombre del dominio")}
         <input
           className="rounded-md border bg-background px-3 py-2"
           required
           value={label}
           onChange={(event) => onLabelChange(event.target.value)}
-          placeholder="Operaciones"
+          placeholder={t("Operaciones")}
         />
       </label>
       <label className="grid gap-1 text-sm">
-        Identificador
+        {t("Identificador")}
         <input
           className="rounded-md border bg-background px-3 py-2"
           required
           pattern="[a-z][a-z0-9-]*"
           value={name}
           onChange={(event) => onNameChange(event.target.value)}
-          placeholder="operaciones"
+          placeholder={t("operaciones")}
         />
       </label>
       <Button disabled={saving} type="submit">
-        {saving ? "Creando…" : "Guardar dominio"}
+        {saving ? t("Creando…") : t("Guardar dominio")}
       </Button>
     </form>
   );
@@ -401,6 +416,8 @@ function CrmWorkspace({
   query: string;
   onNavigate: (query: string, replace?: boolean) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const navigate = useRef(onNavigate);
   navigate.current = onNavigate;
   const transport = useMemo(
@@ -446,7 +463,7 @@ function CrmWorkspace({
             setStartupError(
               error instanceof Error
                 ? error.message
-                : "No se pudo abrir el espacio local.",
+                : t("No se pudo abrir el espacio local."),
             );
         });
     } else install();
@@ -459,13 +476,13 @@ function CrmWorkspace({
   if (startupError)
     return (
       <div role="alert" className="p-4 text-sm text-destructive">
-        {startupError} Recarga para reintentar. No se guardaron cambios
-        localmente.
+        {startupError}{" "}
+        {t("Recarga para reintentar. No se guardaron cambios localmente.")}
       </div>
     );
   if (readyTransport !== transport) return <RouteLoading variant="screens" />;
   return (
-    <div className="min-w-0 w-full" title="Estudio del dominio de datos">
+    <div className="min-w-0 w-full" title={t("Estudio del dominio de datos")}>
       {workspace && <LocalSyncStatus workspace={workspace} />}
       <Suspense fallback={<RouteLoading variant="screens" />}>
         <CrmRoot embedded search={query} />

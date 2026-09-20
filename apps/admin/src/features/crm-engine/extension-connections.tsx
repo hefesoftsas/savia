@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type {
@@ -24,11 +26,6 @@ type ExtensionConnectionsClient = Pick<
   "listConnections" | "replaceConnection" | "removeConnection"
 >;
 
-const message = (reason: unknown) =>
-  reason instanceof Error
-    ? reason.message
-    : "No se pudo actualizar la conexión. Intenta de nuevo.";
-
 export function ExtensionConnections({
   extensionId,
   label,
@@ -40,6 +37,13 @@ export function ExtensionConnections({
   connectors: readonly ExtensionConnectionConnector[];
   client: ExtensionConnectionsClient;
 }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+  const message = (reason: unknown) =>
+    reason instanceof Error
+      ? reason.message
+      : t("No se pudo actualizar la conexión. Intenta de nuevo.");
+
   const [connections, setConnections] = useState<ExtensionConnectionSummary[]>(
     [],
   );
@@ -83,7 +87,7 @@ export function ExtensionConnections({
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!connector || !connectionId.trim()) {
-      setError("Elige un conector y asigna un identificador a la conexión.");
+      setError(t("Elige un conector y asigna un identificador a la conexión."));
       return;
     }
     setBusy(true);
@@ -100,7 +104,11 @@ export function ExtensionConnections({
               throw new Error("invalid");
             return [field.name, parsed];
           } catch {
-            throw new Error(`${field.label} debe ser un objeto JSON válido.`);
+            throw new Error(
+              t("%{value0} debe ser un objeto JSON válido.", {
+                value0: field.label,
+              }),
+            );
           }
         }),
       );
@@ -110,7 +118,7 @@ export function ExtensionConnections({
       });
       setValues({});
       setNotice(
-        "Conexión guardada. Los valores secretos no se vuelven a mostrar.",
+        t("Conexión guardada. Los valores secretos no se vuelven a mostrar."),
       );
       await reload();
     } catch (reason) {
@@ -126,7 +134,7 @@ export function ExtensionConnections({
     setNotice("");
     try {
       await client.removeConnection(extensionId, id);
-      setNotice("Conexión eliminada.");
+      setNotice(t("Conexión eliminada."));
       await reload();
     } catch (reason) {
       setError(message(reason));
@@ -139,15 +147,18 @@ export function ExtensionConnections({
 
   return (
     <section
-      aria-label={`Conexiones de ${label ?? extensionId}`}
+      aria-label={t("Conexiones de %{value0}", {
+        value0: label ?? extensionId,
+      })}
       className="border-t bg-muted/20 px-6 py-5"
     >
       <div className="max-w-2xl space-y-4">
         <div>
-          <h4 className="text-sm font-semibold">Conexiones</h4>
+          <h4 className="text-sm font-semibold">{t("Conexiones")}</h4>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configura una conexión para este espacio. Las credenciales se cifran
-            y no se muestran de nuevo.
+            {t(
+              "Configura una conexión para este espacio. Las credenciales se cifran y no se muestran de nuevo.",
+            )}
           </p>
         </div>
         {error ? (
@@ -168,7 +179,7 @@ export function ExtensionConnections({
           onSubmit={(event) => void save(event)}
         >
           <label className="grid gap-1.5 text-sm font-medium">
-            Identificador
+            {t("Identificador")}
             <input
               className="h-9 rounded-md border bg-background px-3 text-sm"
               disabled={busy}
@@ -177,7 +188,7 @@ export function ExtensionConnections({
             />
           </label>
           <label className="grid gap-1.5 text-sm font-medium">
-            Conector
+            {t("Conector")}
             <select
               className="h-9 rounded-md border bg-background px-3 text-sm"
               disabled={busy}
@@ -231,13 +242,13 @@ export function ExtensionConnections({
           ))}
           <div className="sm:col-span-2">
             <Button disabled={busy} type="submit">
-              {busy ? "Guardando…" : "Guardar conexión"}
+              {busy ? t("Guardando…") : t("Guardar conexión")}
             </Button>
           </div>
         </form>
         {loading ? (
           <p className="text-sm text-muted-foreground" role="status">
-            Cargando conexiones…
+            {t("Cargando conexiones…")}
           </p>
         ) : null}
         {!loading && connections.length ? (
@@ -252,8 +263,10 @@ export function ExtensionConnections({
                     {connection.connectionId}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {connection.connectorId} · Actualizada{" "}
-                    {new Date(connection.updatedAt).toLocaleString("es-CO")}
+                    {connection.connectorId} {t("· Actualizada")}{" "}
+                    {new Date(connection.updatedAt).toLocaleString(
+                      intlLocale(locale),
+                    )}
                   </p>
                 </div>
                 <Button
@@ -263,7 +276,7 @@ export function ExtensionConnections({
                   type="button"
                   variant="outline"
                 >
-                  Eliminar conexión
+                  {t("Eliminar conexión")}
                 </Button>
               </li>
             ))}

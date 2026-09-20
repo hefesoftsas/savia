@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -10,6 +12,7 @@ export function PageHeaderSkeleton({
   hasActions?: boolean;
   className?: string;
 }) {
+  const t = useMessages(settingsMessages);
   return (
     <div
       className={cn(
@@ -17,7 +20,7 @@ export function PageHeaderSkeleton({
         className,
       )}
       role="status"
-      aria-label="Cargando cabecera…"
+      aria-label={t("Cargando cabecera…")}
     >
       <div className="space-y-2">
         {hasEyebrow ? <Skeleton className="h-3.5 w-28" /> : null}
@@ -41,14 +44,15 @@ export function ScreenListSkeleton({
   count?: number;
   className?: string;
 }) {
+  const t = useMessages(settingsMessages);
   return (
     <div
       className={cn("w-full space-y-5", className)}
       role="status"
-      aria-label="Cargando pantallas…"
+      aria-label={t("Cargando pantallas…")}
       aria-live="polite"
     >
-      <span className="sr-only">Cargando pantallas…</span>
+      <span className="sr-only">{t("Cargando pantallas…")}</span>
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -93,10 +97,7 @@ export function ScreenListSkeleton({
                   )}
                 />
                 <Skeleton
-                  className={cn(
-                    "h-3",
-                    index % 2 === 0 ? "w-48" : "w-56",
-                  )}
+                  className={cn("h-3", index % 2 === 0 ? "w-48" : "w-56")}
                 />
               </div>
             </div>
@@ -121,14 +122,15 @@ export function CardsGridSkeleton({
   itemsPerCard?: number;
   className?: string;
 }) {
+  const t = useMessages(settingsMessages);
   return (
     <div
       className={cn("w-full space-y-6", className)}
       role="status"
-      aria-label="Cargando contenido…"
+      aria-label={t("Cargando contenido…")}
       aria-live="polite"
     >
-      <span className="sr-only">Cargando contenido…</span>
+      <span className="sr-only">{t("Cargando contenido…")}</span>
       <div className="space-y-4">
         {Array.from({ length: cards }, (_, cardIndex) => (
           <div
@@ -163,13 +165,14 @@ export function CardsGridSkeleton({
 }
 
 export function SidebarFlowsSkeleton({ count = 3 }: { count?: number }) {
+  const t = useMessages(settingsMessages);
   return (
     <div
       className="space-y-1 px-2 py-1"
       role="status"
-      aria-label="Cargando flujos…"
+      aria-label={t("Cargando flujos…")}
     >
-      <span className="sr-only">Cargando flujos…</span>
+      <span className="sr-only">{t("Cargando flujos…")}</span>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="flex items-center gap-2 px-2 py-1.5">
           <Skeleton className="size-4 shrink-0 rounded" />
@@ -186,14 +189,15 @@ export function SidebarFlowsSkeleton({ count = 3 }: { count?: number }) {
 }
 
 export function SettingsPanelSkeleton({ className }: { className?: string }) {
+  const t = useMessages(settingsMessages);
   return (
     <div
       className={cn("w-full space-y-6", className)}
       role="status"
-      aria-label="Cargando configuración…"
+      aria-label={t("Cargando configuración…")}
       aria-live="polite"
     >
-      <span className="sr-only">Cargando configuración…</span>
+      <span className="sr-only">{t("Cargando configuración…")}</span>
 
       {/* Tabs list */}
       <div className="flex gap-2 border-b pb-2">

@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -31,6 +33,8 @@ export function RequestCatalogDialog({
   fields: Record<string, { label?: string }>;
   onAdd: (config: RequestPageConfig, id: string) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const [open, setOpen] = useState(false);
   const [catalog, setCatalog] = useState<RequestOperation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,7 +59,7 @@ export function RequestCatalogDialog({
           setError(
             error instanceof Error
               ? error.message
-              : "No se pudo cargar el catálogo.",
+              : t("No se pudo cargar el catálogo."),
           );
       })
       .finally(() => {
@@ -87,7 +91,7 @@ export function RequestCatalogDialog({
             variant="outline"
             size="icon"
             className="size-8"
-            aria-label="Agregar request"
+            aria-label={t("Agregar request")}
             disabled={config.actions.length >= 20}
             onClick={() => {
               setId("");
@@ -101,20 +105,21 @@ export function RequestCatalogDialog({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
-          Agregar request
+          {t("Agregar request")}
         </TooltipContent>
       </Tooltip>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Conectar un request</DialogTitle>
+            <DialogTitle>{t("Conectar un request")}</DialogTitle>
             <DialogDescription>
-              Selecciona una operación y conecta sus entradas con campos
-              existentes. Se guardará al publicar; no se ejecutará ahora.
+              {t(
+                "Selecciona una operación y conecta sus entradas con campos existentes. Se guardará al publicar; no se ejecutará ahora.",
+              )}
             </DialogDescription>
           </DialogHeader>
           {loading ? (
-            <p role="status">Cargando catálogo de Savia Request…</p>
+            <p role="status">{t("Cargando catálogo de Savia Request…")}</p>
           ) : error ? (
             <div>
               <p role="alert">{error}</p>
@@ -123,13 +128,13 @@ export function RequestCatalogDialog({
                 variant="outline"
                 onClick={() => setRetry((value) => value + 1)}
               >
-                Reintentar
+                {t("Reintentar")}
               </Button>
             </div>
           ) : (
             <>
               <label className="studio-control">
-                <span>Buscar request</span>
+                <span>{t("Buscar request")}</span>
                 <input
                   type="search"
                   value={query}
@@ -137,7 +142,7 @@ export function RequestCatalogDialog({
                 />
               </label>
               <label className="studio-control">
-                <span>Request disponible</span>
+                <span>{t("Request disponible")}</span>
                 <select
                   value={id}
                   onChange={(event) => {
@@ -157,7 +162,7 @@ export function RequestCatalogDialog({
                     );
                   }}
                 >
-                  <option value="">Selecciona un request</option>
+                  <option value="">{t("Selecciona un request")}</option>
                   {available
                     .filter(
                       (op) =>
@@ -175,39 +180,42 @@ export function RequestCatalogDialog({
               </label>
               {!available.length && (
                 <p>
-                  No hay requests adicionales con entradas disponibles para esta
-                  página.
+                  {t(
+                    "No hay requests adicionales con entradas disponibles para esta página.",
+                  )}
                 </p>
               )}
               {operation && (
                 <>
                   <label className="studio-control">
-                    <span>Cómo se ejecuta</span>
+                    <span>{t("Cómo se ejecuta")}</span>
                     <select
                       value={kind}
                       onChange={(event) =>
                         setKind(event.target.value as "submit" | "lookup")
                       }
                     >
-                      <option value="submit">Con el botón principal</option>
+                      <option value="submit">
+                        {t("Con el botón principal")}
+                      </option>
                       <option value="lookup">
-                        Como consulta junto a un campo
+                        {t("Como consulta junto a un campo")}
                       </option>
                     </select>
                   </label>
                   {kind === "lookup" && (
                     <p className="text-sm text-muted-foreground">
-                      El botón aparecerá junto al campo conectado a la primera
-                      entrada. Las salidas y eventos se configuran en las
-                      propiedades de ese campo.
+                      {t(
+                        "El botón aparecerá junto al campo conectado a la primera entrada. Las salidas y eventos se configuran en las propiedades de ese campo.",
+                      )}
                     </p>
                   )}
-                  <h4 className="font-semibold">Entradas del request</h4>
+                  <h4 className="font-semibold">{t("Entradas del request")}</h4>
                   {Object.keys(operation.input).map((key) => (
                     <label key={key} className="studio-control">
                       <span>{key}</span>
                       <select
-                        aria-label={`Conectar ${key}`}
+                        aria-label={t("Conectar %{key}", { key: key })}
                         value={input[key] ?? ""}
                         onChange={(event) =>
                           setInput((current) => ({
@@ -216,7 +224,7 @@ export function RequestCatalogDialog({
                           }))
                         }
                       >
-                        <option value="">Selecciona un campo</option>
+                        <option value="">{t("Selecciona un campo")}</option>
                         {Object.entries(fields).map(([name, field]) => (
                           <option key={name} value={name}>
                             {field.label ?? name} ({name})
@@ -227,8 +235,9 @@ export function RequestCatalogDialog({
                   ))}
                   {!valid && (
                     <p className="text-sm text-muted-foreground">
-                      Conecta todas las entradas. Si falta un campo, créalo en
-                      Diseñar antes de agregar este request.
+                      {t(
+                        "Conecta todas las entradas. Si falta un campo, créalo en Diseñar antes de agregar este request.",
+                      )}
                     </p>
                   )}
                 </>
@@ -241,7 +250,7 @@ export function RequestCatalogDialog({
               variant="outline"
               onClick={() => setOpen(false)}
             >
-              Cancelar
+              {t("Cancelar")}
             </Button>
             <Button
               type="button"
@@ -273,7 +282,7 @@ export function RequestCatalogDialog({
                 setOpen(false);
               }}
             >
-              Conectar request
+              {t("Conectar request")}
             </Button>
           </DialogFooter>
         </DialogContent>

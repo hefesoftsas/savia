@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,8 @@ function ScopedBusinessPanel({
   className?: string;
   onInstalled: () => unknown;
 }) {
+  const t = useMessages(automationMessages);
+
   const { api, scope } = useBusinessApi();
   const active = useRef(true);
   useEffect(() => {
@@ -87,14 +91,16 @@ function ScopedBusinessPanel({
   return (
     <details className={className ?? "mb-4 rounded-md border p-3"}>
       <summary className="cursor-pointer text-sm font-medium">
-        {businessEnabled ? "Clientes, cotizaciones y API" : "API del dominio"}
+        {businessEnabled
+          ? t("Clientes, cotizaciones y API")
+          : t("API del dominio")}
       </summary>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {!businessEnabled ? null : setup.isPending ? (
-          <p role="status">Consultando configuración…</p>
+          <p role="status">{t("Consultando configuración…")}</p>
         ) : setup.data?.data.installed ? (
           <p className="text-sm text-muted-foreground">
-            Clientes y Cotizaciones disponibles.
+            {t("Clientes y Cotizaciones disponibles.")}
           </p>
         ) : (
           <Button
@@ -109,7 +115,7 @@ function ScopedBusinessPanel({
               })
             }
           >
-            Instalar Clientes y Cotizaciones
+            {t("Instalar Clientes y Cotizaciones")}
           </Button>
         )}
         <Button
@@ -120,7 +126,7 @@ function ScopedBusinessPanel({
             window.open(apiDocsUrl(), "_blank", "noopener,noreferrer");
           }}
         >
-          Consultar API
+          {t("Consultar API")}
         </Button>
         <Button
           size="sm"
@@ -130,18 +136,19 @@ function ScopedBusinessPanel({
             run(() => downloadCrm("/api/openapi.json", "crm-openapi.json"))
           }
         >
-          Descargar OpenAPI
+          {t("Descargar OpenAPI")}
         </Button>
       </div>
       {businessEnabled && !setup.data?.data.installed && (
         <p className="mt-2 text-sm text-muted-foreground">
-          Agrega los objetos y su relación. Después podrás crear tus propios
-          registros.
+          {t(
+            "Agrega los objetos y su relación. Después podrás crear tus propios registros.",
+          )}
         </p>
       )}
       {busy && (
         <p role="status" className="mt-2 text-sm">
-          Procesando…
+          {t("Procesando…")}
         </p>
       )}
       {(error || setup.error) && (
@@ -149,7 +156,7 @@ function ScopedBusinessPanel({
           {error || setup.error?.message}{" "}
           {setup.error && (
             <Button size="sm" variant="ghost" onClick={() => setup.refetch()}>
-              Reintentar
+              {t("Reintentar")}
             </Button>
           )}
         </p>
@@ -159,13 +166,7 @@ function ScopedBusinessPanel({
 }
 
 type LinkState = { status: string; externalObjectId?: string; url?: string };
-const statuses: Record<string, string> = {
-  not_synced: "Sin sincronizar",
-  synced: "Sincronizado",
-  syncing: "Sincronización en curso",
-  uncertain: "Resultado pendiente de revisión",
-  connection_required: "Conecta HubSpot desde Integraciones",
-};
+
 export function CustomerActions(props: {
   objectName: string;
   recordId: string;
@@ -190,6 +191,15 @@ function ScopedCustomerActions({
   onQuotation: (record: CrmRecord) => void;
   onRefresh: () => void;
 }) {
+  const t = useMessages(automationMessages);
+  const statuses: Record<string, string> = {
+    not_synced: t("Sin sincronizar"),
+    synced: t("Sincronizado"),
+    syncing: t("Sincronización en curso"),
+    uncertain: t("Resultado pendiente de revisión"),
+    connection_required: t("Conecta HubSpot desde Integraciones"),
+  };
+
   const { api, scope } = useBusinessApi();
   const active = useRef(true);
   useEffect(() => {
@@ -237,10 +247,13 @@ function ScopedCustomerActions({
     }
   }
   return (
-    <section aria-label="Acciones comerciales" className="mb-4 border-b pb-4">
+    <section
+      aria-label={t("Acciones comerciales")}
+      className="mb-4 border-b pb-4"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" disabled={!!busy} onClick={() => act("quote")}>
-          {busy === "quote" ? "Creando cotización…" : "Crear cotización"}
+          {busy === "quote" ? t("Creando cotización…") : t("Crear cotización")}
         </Button>
         <Button
           size="sm"
@@ -253,14 +266,14 @@ function ScopedCustomerActions({
           }
           onClick={() => act("sync")}
         >
-          {busy === "sync" ? "Sincronizando…" : "Sincronizar con HubSpot"}
+          {busy === "sync" ? t("Sincronizando…") : t("Sincronizar con HubSpot")}
         </Button>
         <span className="text-sm text-muted-foreground" role="status">
-          HubSpot ·{" "}
+          {t("HubSpot ·")}{" "}
           {link.isPending
-            ? "Consultando…"
+            ? t("Consultando…")
             : (statuses[link.data?.data.status ?? ""] ??
-              "Estado no disponible")}
+              t("Estado no disponible"))}
           {link.data?.data.externalObjectId
             ? ` · ${link.data.data.externalObjectId}`
             : ""}
@@ -273,7 +286,7 @@ function ScopedCustomerActions({
       )}
       {link.error && (
         <Button size="sm" variant="ghost" onClick={() => link.refetch()}>
-          Consultar estado de nuevo
+          {t("Consultar estado de nuevo")}
         </Button>
       )}
     </section>

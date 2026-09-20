@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { releaseCatalog } from "@savia/release-catalog";
 afterEach(cleanup);

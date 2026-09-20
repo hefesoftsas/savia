@@ -1,8 +1,10 @@
+import { I18nContextProvider } from "ra-core";
+import type { ReactElement } from "react";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
+  render as testingRender,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -221,3 +223,17 @@ it("offers only active commercial tenants", async () => {
     expect.anything(),
   );
 });
+
+function render(ui: ReactElement) {
+  return testingRender(
+    <I18nContextProvider
+      value={{
+        translate: (key: string) => key,
+        changeLocale: async () => {},
+        getLocale: () => "es",
+      }}
+    >
+      {ui}
+    </I18nContextProvider>,
+  );
+}

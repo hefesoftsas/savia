@@ -35,7 +35,10 @@ export function withScreen(
   };
 }
 
-export function sortScreens(objects: CrmObject[]): CrmObject[] {
+export function sortScreens(
+  objects: CrmObject[],
+  locale: string = "es",
+): CrmObject[] {
   return [...objects].sort((left, right) => {
     const leftOrder = left.config.studio?.screen?.order;
     const rightOrder = right.config.studio?.screen?.order;
@@ -44,6 +47,6 @@ export function sortScreens(objects: CrmObject[]): CrmObject[] {
       if (rightOrder == null) return -1;
       if (leftOrder !== rightOrder) return leftOrder - rightOrder;
     }
-    return left.label.localeCompare(right.label, "es");
+    return left.label.localeCompare(right.label, locale);
   });
 }

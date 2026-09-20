@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useState } from "react";
 import { ResultHtmlSurface } from "./result-html-surface";
 import type { ResultCardRow } from "./result-cards";
@@ -11,6 +13,8 @@ export function ResultReactSurface({
   columns: ResultColumn[];
   disabled?: boolean;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [runtime, setRuntime] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -30,7 +34,7 @@ export function ResultReactSurface({
     };
   }, []);
   if (error) return <p role="alert">{error}</p>;
-  if (!runtime) return <p role="status">Preparando React…</p>;
+  if (!runtime) return <p role="status">{t("Preparando React…")}</p>;
   const html = `<body><script>window.saviaReactSource=${JSON.stringify(source).replace(/</g, "\\u003c")};</script><script>${runtime.replace(/<\/script/gi, "<\\/script")}</script></body>`;
   return <ResultHtmlSurface {...props} html={html} />;
 }

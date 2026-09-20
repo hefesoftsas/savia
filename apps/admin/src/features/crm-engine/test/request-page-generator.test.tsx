@@ -1,11 +1,11 @@
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { afterEach, expect, it, vi } from "vitest";
 import RequestPageGenerator from "../request-page-generator";
 

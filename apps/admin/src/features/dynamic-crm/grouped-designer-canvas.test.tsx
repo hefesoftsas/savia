@@ -1,4 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
+import { render } from "@/features/crm-engine/test/locale-test-render";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it } from "vitest";
 import {
@@ -63,7 +64,9 @@ it("groups fields in section order and identifies lookup outputs while allowing 
     </DesignerProvider>,
   );
   expect(
-    screen.getAllByRole("region").map((region) => region.getAttribute("aria-label")),
+    screen
+      .getAllByRole("region")
+      .map((region) => region.getAttribute("aria-label")),
   ).toEqual(["Vehículo (2 campos)", "Persona (1 campo)"]);
   expect(
     screen.getByText("Botón: Consultar placa · Junto al campo (derecha)"),

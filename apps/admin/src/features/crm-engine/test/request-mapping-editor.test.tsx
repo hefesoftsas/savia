@@ -1,11 +1,6 @@
 import userEvent from "@testing-library/user-event";
-import {
-  render,
-  screen,
-  fireEvent,
-  cleanup,
-  waitFor,
-} from "@testing-library/react";
+import { screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { expect, it, vi, afterEach } from "vitest";
 
 const requestPageApiMock = vi.hoisted(() => vi.fn());

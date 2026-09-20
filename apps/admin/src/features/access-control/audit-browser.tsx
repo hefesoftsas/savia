@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { accessMessages } from "@/i18n/locales/access";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -9,11 +11,11 @@ import type {
 } from "@/api/access-control-client";
 
 type Client = Pick<AccessControlClient, "listAudit" | "getAudit">;
-const actionLabels: Record<string, string> = {
+const actionLabels = {
   "role.saved": "Role saved",
   "role.deleted": "Role deleted",
   "assignments.saved": "Assignments changed",
-};
+} as const;
 const initialFilters = {
   action: "",
   actorId: "",
@@ -21,9 +23,9 @@ const initialFilters = {
   from: "",
   to: "",
 };
-const dateLabel = (value: string) => {
+const dateLabel = (value: string, locale: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString(locale);
 };
 const labelFor = (key: string) =>
   ({
@@ -51,9 +53,10 @@ function values(snapshot: unknown): Record<string, unknown> {
     : { value: snapshot };
 }
 function Value({ value }: { value: unknown }) {
+  const t = useMessages(accessMessages);
   const text =
     value === undefined
-      ? "Not recorded"
+      ? t("Not recorded")
       : typeof value === "string"
         ? value
         : JSON.stringify(value, null, 2);
@@ -64,6 +67,8 @@ function Value({ value }: { value: unknown }) {
   );
 }
 function AuditDetail({ entry }: { entry: AccessAuditDetail }) {
+  const t = useMessages(accessMessages);
+  const locale = intlLocale(useAppLocale());
   const before = values(entry.before),
     after = values(entry.after);
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
@@ -74,7 +79,7 @@ function AuditDetail({ entry }: { entry: AccessAuditDetail }) {
     <div className="space-y-5">
       <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-muted-foreground">Actor</dt>
+          <dt className="text-muted-foreground">{t("Actor")}</dt>
           <dd className="break-words">
             {entry.actor.displayName || entry.actor.id}
           </dd>
@@ -83,34 +88,50 @@ function AuditDetail({ entry }: { entry: AccessAuditDetail }) {
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Recorded at</dt>
-          <dd>{dateLabel(entry.createdAt)}</dd>
+          <dt className="text-muted-foreground">{t("Recorded at")}</dt>
+          <dd>{dateLabel(entry.createdAt, locale)}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Target</dt>
+          <dt className="text-muted-foreground">{t("Target")}</dt>
           <dd className="break-all">{entry.targetId}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Event ID</dt>
+          <dt className="text-muted-foreground">{t("Event ID")}</dt>
           <dd className="break-all">{entry.id}</dd>
         </div>
       </dl>
       <p className="text-sm text-muted-foreground">
-        Only captured values are shown. Unchanged values are omitted.
+        {t("Only captured values are shown. Unchanged values are omitted.")}
       </p>
       {changed.length === 0 ? (
-        <p>No captured value differences.</p>
+        <p>{t("No captured value differences.")}</p>
       ) : (
         changed.map((key) => (
-          <section key={key} className="space-y-2" aria-label={labelFor(key)}>
-            <h4 className="font-medium">{labelFor(key)}</h4>
+          <section
+            key={key}
+            className="space-y-2"
+            aria-label={
+              labelFor(key) in accessMessages
+                ? t(labelFor(key) as keyof typeof accessMessages)
+                : key
+            }
+          >
+            <h4 className="font-medium">
+              {labelFor(key) in accessMessages
+                ? t(labelFor(key) as keyof typeof accessMessages)
+                : key}
+            </h4>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="min-w-0">
-                <p className="mb-1 text-xs text-muted-foreground">Before</p>
+                <p className="mb-1 text-xs text-muted-foreground">
+                  {t("Before")}
+                </p>
                 <Value value={before[key]} />
               </div>
               <div className="min-w-0">
-                <p className="mb-1 text-xs text-muted-foreground">After</p>
+                <p className="mb-1 text-xs text-muted-foreground">
+                  {t("After")}
+                </p>
                 <Value value={after[key]} />
               </div>
             </div>
@@ -121,6 +142,8 @@ function AuditDetail({ entry }: { entry: AccessAuditDetail }) {
   );
 }
 function AuditView({ scope, client }: { scope: string; client: Client }) {
+  const t = useMessages(accessMessages);
+  const locale = intlLocale(useAppLocale());
   const [draft, setDraft] = useState(initialFilters),
     [filters, setFilters] = useState<AuditFilters>({ limit: 25 });
   const [pages, setPages] = useState<Array<string | undefined>>([undefined]);
@@ -188,17 +211,18 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
     else void query.refetch();
   };
   return (
-    <section className="min-w-0 space-y-5" aria-label="Permission history">
+    <section className="min-w-0 space-y-5" aria-label={t("Permission history")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Permission history</h2>
+          <h2 className="text-lg font-semibold">{t("Permission history")}</h2>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Review successful changes to roles and member access in this
-            workspace.
+            {t(
+              "Review successful changes to roles and member access in this workspace.",
+            )}
           </p>
         </div>
         <Button variant="outline" onClick={refresh} disabled={query.isFetching}>
-          Refresh history
+          {t("Refresh history")}
         </Button>
       </div>
       <form
@@ -206,7 +230,7 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
         className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
         <label className="grid gap-1.5 text-sm">
-          Action
+          {t("Action")}
           <select
             className="h-9 min-w-0 rounded-md border bg-background px-3"
             value={draft.action}
@@ -214,10 +238,10 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
               setDraft({ ...draft, action: event.target.value })
             }
           >
-            <option value="">All actions</option>
+            <option value="">{t("All actions")}</option>
             {Object.entries(actionLabels).map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
@@ -226,10 +250,10 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
           <label key={key} className="grid min-w-0 gap-1.5 text-sm">
             {
               {
-                actorId: "Actor ID",
-                targetId: "Target ID",
-                from: "From",
-                to: "To",
+                actorId: t("Actor ID"),
+                targetId: t("Target ID"),
+                from: t("From"),
+                to: t("To"),
               }[key]
             }
             <Input
@@ -243,7 +267,7 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
           </label>
         ))}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit">Apply filters</Button>
+          <Button type="submit">{t("Apply filters")}</Button>
           <Button
             type="button"
             variant="ghost"
@@ -255,51 +279,57 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
               setValidation("");
             }}
           >
-            Clear filters
+            {t("Clear filters")}
           </Button>
         </div>
       </form>
       {validation && (
         <p role="alert" className="text-sm text-destructive">
-          {validation}
+          {Object.hasOwn(accessMessages, validation)
+            ? t(validation as keyof typeof accessMessages)
+            : validation}
         </p>
       )}
       {historyError ? (
         <div role="alert" className="space-y-2">
           <p className="text-sm text-destructive">{historyError.message}</p>
           <Button variant="outline" onClick={refresh}>
-            Retry history
+            {t("Retry history")}
           </Button>
         </div>
       ) : query.isPending || query.isFetching || !query.data ? (
         <p role="status" className="py-8 text-sm text-muted-foreground">
-          Loading history…
+          {t("Loading history…")}
         </p>
       ) : (
         <>
           {query.data.data.length === 0 ? (
             <p className="py-8 text-sm text-muted-foreground">
-              No permission changes match these filters.
+              {t("No permission changes match these filters.")}
             </p>
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <table className="block w-full text-left text-sm sm:table">
                 <caption className="sr-only">
-                  Permission changes, newest first
+                  {t("Permission changes, newest first")}
                 </caption>
                 <thead className="hidden border-b bg-muted/40 sm:table-header-group">
                   <tr>
-                    {["Time", "Action", "Actor", "Target", "Details"].map(
-                      (label) => (
-                        <th
-                          key={label}
-                          scope="col"
-                          className="px-3 py-3 font-medium"
-                        >
-                          {label}
-                        </th>
-                      ),
-                    )}
+                    {[
+                      t("Time"),
+                      t("Action"),
+                      t("Actor"),
+                      t("Target"),
+                      t("Details"),
+                    ].map((label) => (
+                      <th
+                        key={label}
+                        scope="col"
+                        className="px-3 py-3 font-medium"
+                      >
+                        {label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="block sm:table-row-group">
@@ -310,18 +340,24 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                     >
                       <td className="col-span-2 whitespace-nowrap sm:px-3 sm:py-3">
                         <time dateTime={entry.createdAt}>
-                          {dateLabel(entry.createdAt)}
+                          {dateLabel(entry.createdAt, locale)}
                         </time>
                       </td>
                       <td className="sm:px-3 sm:py-3">
-                        {actionLabels[entry.action] ?? entry.action}
+                        {entry.action in actionLabels
+                          ? t(
+                              actionLabels[
+                                entry.action as keyof typeof actionLabels
+                              ],
+                            )
+                          : entry.action}
                       </td>
                       <td className="min-w-0 break-words sm:max-w-48 sm:px-3 sm:py-3">
                         {entry.actor.displayName || entry.actor.id}
                       </td>
                       <td className="col-span-2 min-w-0 break-all sm:max-w-52 sm:px-3 sm:py-3">
                         <span className="text-muted-foreground sm:hidden">
-                          Target:{" "}
+                          {t("Target:")}{" "}
                         </span>
                         {entry.targetId}
                       </td>
@@ -329,14 +365,16 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`View changes to ${entry.targetId}`}
+                          aria-label={t("View changes to %{target}", {
+                            target: entry.targetId,
+                          })}
                           aria-expanded={selected === entry.id}
                           onClick={(event) => {
                             sourceButton.current = event.currentTarget;
                             setSelected(entry.id);
                           }}
                         >
-                          View changes
+                          {t("View changes")}
                         </Button>
                       </td>
                     </tr>
@@ -346,11 +384,14 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
             </div>
           )}
           <nav
-            aria-label="History pages"
+            aria-label={t("History pages")}
             className="flex flex-wrap items-center justify-between gap-3"
           >
             <p className="text-sm text-muted-foreground">
-              Page {pages.length} · {query.data.data.length} entries
+              {t("Page %{page} · %{count} entries", {
+                page: pages.length,
+                count: query.data.data.length,
+              })}
             </p>
             <div className="flex gap-2">
               <Button
@@ -361,7 +402,7 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                   setPages(pages.slice(0, -1));
                 }}
               >
-                Previous page
+                {t("Previous page")}
               </Button>
               <Button
                 variant="outline"
@@ -371,14 +412,14 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                   setPages([...pages, query.data.nextCursor!]);
                 }}
               >
-                Next page
+                {t("Next page")}
               </Button>
             </div>
           </nav>
           {selected && (
             <section
               className="space-y-4 border-t pt-6"
-              aria-label="Change details"
+              aria-label={t("Change details")}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3
@@ -386,10 +427,10 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                   tabIndex={-1}
                   className="text-lg font-semibold outline-offset-4"
                 >
-                  Change details
+                  {t("Change details")}
                 </h3>
                 <Button variant="ghost" onClick={closeDetail}>
-                  Close details
+                  {t("Close details")}
                 </Button>
               </div>
               {detail.isError ? (
@@ -401,11 +442,11 @@ function AuditView({ scope, client }: { scope: string; client: Client }) {
                     variant="outline"
                     onClick={() => void detail.refetch()}
                   >
-                    Retry details
+                    {t("Retry details")}
                   </Button>
                 </div>
               ) : detail.isPending || detail.isFetching ? (
-                <p role="status">Loading changes…</p>
+                <p role="status">{t("Loading changes…")}</p>
               ) : detail.data ? (
                 <AuditDetail entry={detail.data} />
               ) : null}

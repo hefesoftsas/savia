@@ -14,7 +14,8 @@ import { SaviaRequestProvider } from "./savia-request-provider";
 import { SaviaRequestWorkspace } from "./savia-request-workspace";
 import type { RequestFlow, RequestRun } from "./types";
 
-vi.mock("ra-core", () => ({
+vi.mock("ra-core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ra-core")>()),
   useCanAccess: () => ({ canAccess: true, isPending: false }),
 }));
 
@@ -71,9 +72,11 @@ function renderWorkspace(flows: RequestFlow[] = [autos]) {
       return autos;
     }
     if (path.endsWith("/flows/autos/runs")) return [];
-    const matched=remainingFlows.find(flow=>path.endsWith(`/flows/${flow.id}`));
-    if(matched)return matched;
-    if(path.endsWith("/runs"))return [];
+    const matched = remainingFlows.find((flow) =>
+      path.endsWith(`/flows/${flow.id}`),
+    );
+    if (matched) return matched;
+    if (path.endsWith("/runs")) return [];
     throw new Error(`Ruta inesperada: ${path}`);
   });
   const put = vi.fn().mockResolvedValue({ ok: true });
@@ -89,7 +92,9 @@ function renderWorkspace(flows: RequestFlow[] = [autos]) {
     },
   } as unknown as AppServices;
   render(
-    <MemoryRouter initialEntries={[`/savia-request?flow=${flows[0]?.id ?? "autos"}&step=0`]}>
+    <MemoryRouter
+      initialEntries={[`/savia-request?flow=${flows[0]?.id ?? "autos"}&step=0`]}
+    >
       <AppServicesProvider services={services}>
         <SaviaRequestProvider>
           <SaviaRequestWorkspace />
@@ -187,9 +192,21 @@ describe("SaviaRequestWorkspace", () => {
   });
 });
 
-it("defaults the DANE reference service to live without a failing simulation",async()=>{
- const {post}=renderWorkspace([{...autos,id:'dane-city-lookup',name:'DANE',input:{city:'Bogotá',department:''}}]);
- await screen.findByLabelText('Nombre del flow');
- await userEvent.click(screen.getByRole('button',{name:'Ejecutar real'}));
- await waitFor(()=>expect(post).toHaveBeenCalledWith('/v1/savia-request/api/flows/dane-city-lookup/runs',{mode:'live',input:{city:'Bogotá',department:''}}));
+it("defaults the DANE reference service to live without a failing simulation", async () => {
+  const { post } = renderWorkspace([
+    {
+      ...autos,
+      id: "dane-city-lookup",
+      name: "DANE",
+      input: { city: "Bogotá", department: "" },
+    },
+  ]);
+  await screen.findByLabelText("Nombre del flow");
+  await userEvent.click(screen.getByRole("button", { name: "Ejecutar real" }));
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      "/v1/savia-request/api/flows/dane-city-lookup/runs",
+      { mode: "live", input: { city: "Bogotá", department: "" } },
+    ),
+  );
 });

@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { IFieldProps } from "@form-eng/core";
@@ -44,6 +46,8 @@ export function relatedRows(value: unknown, clean = true): Row[] {
 }
 /** All mutations here are form values; only the parent's save may persist them. */
 export function RelatedRecordEditor(props: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   const inputPrefix = useId();
   const runtime = getCrmRuntime();
   const target = String(props.config?.collectionRelationTarget ?? "");
@@ -171,8 +175,10 @@ export function RelatedRecordEditor(props: IFieldProps) {
     if (next.length > 100 || (!multiple && next.length > 1)) {
       setError(
         multiple
-          ? "Máximo 100 registros relacionados por formulario."
-          : "Esta relación admite un solo registro. Desvincula el actual para reemplazarlo.",
+          ? t("Máximo 100 registros relacionados por formulario.")
+          : t(
+              "Esta relación admite un solo registro. Desvincula el actual para reemplazarlo.",
+            ),
       );
       return;
     }
@@ -246,7 +252,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
       {
         ...details.data?.[row.id ?? ""],
         ...row.data,
-        id: row.id ?? `Nuevo ${index + 1}`,
+        id: row.id ?? t("Nuevo %{p0}", { p0: index + 1 }),
       },
       props.config?.relationDisplayField as string | undefined,
     );
@@ -274,16 +280,17 @@ export function RelatedRecordEditor(props: IFieldProps) {
         className="w-full justify-between"
         onClick={() => setExpanded(!expanded)}
       >
-        {expanded ? "Ocultar registros" : "Mostrar registros"}
+        {expanded ? t("Ocultar registros") : t("Mostrar registros")}
         <span>{rows.length}</span>
       </Button>
       {expanded && (
         <div id={`${props.fieldName}-related`} className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Los cambios se guardan con el formulario principal. Desvincular
-            conserva el registro original.
+            {t(
+              "Los cambios se guardan con el formulario principal. Desvincular conserva el registro original.",
+            )}
           </p>
-          {schema.isPending && <p role="status">Cargando campos…</p>}
+          {schema.isPending && <p role="status">{t("Cargando campos…")}</p>}
           {(schema.error || details.error || error) && (
             <p role="alert" className="text-sm text-destructive">
               {schema.error?.message ?? details.error?.message ?? error}{" "}
@@ -296,7 +303,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
                   setError("");
                 }}
               >
-                Reintentar
+                {t("Reintentar")}
               </Button>
             </p>
           )}
@@ -319,14 +326,14 @@ export function RelatedRecordEditor(props: IFieldProps) {
                 })
               }
             >
-              Crear relacionado
+              {t("Crear relacionado")}
             </Button>
           </div>
           <span
             id={`${props.fieldName}-link_label`}
             className="block text-sm font-medium"
           >
-            Vincular existente
+            {t("Vincular existente")}
           </span>
           <CollectionRelationPicker
             {...props}
@@ -347,17 +354,21 @@ export function RelatedRecordEditor(props: IFieldProps) {
           />
           {!rows.length && (
             <p className="py-3 text-sm text-muted-foreground">
-              Sin registros relacionados. Crea uno o vincula uno existente.
+              {t(
+                "Sin registros relacionados. Crea uno o vincula uno existente.",
+              )}
             </p>
           )}
           {!!rows.length && (
             <div className="max-w-full overflow-x-auto">
               <table className="w-full text-sm">
-                <caption className="sr-only">Registros relacionados</caption>
+                <caption className="sr-only">
+                  {t("Registros relacionados")}
+                </caption>
                 <thead>
                   <tr className="border-b">
                     <th scope="col" className="px-2 py-2 text-left">
-                      Registro
+                      {t("Registro")}
                     </th>
                     {props.config?.relationPresentation === "table" &&
                       columns.map((name) => (
@@ -370,7 +381,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
                         </th>
                       ))}
                     <th scope="col" className="px-2 py-2 text-right">
-                      Acciones
+                      {t("Acciones")}
                     </th>
                   </tr>
                 </thead>
@@ -392,8 +403,8 @@ export function RelatedRecordEditor(props: IFieldProps) {
                           {row.data && (
                             <span className="block text-xs text-muted-foreground">
                               {row.id
-                                ? "Editado · sin guardar"
-                                : "Nuevo · sin guardar"}
+                                ? t("Editado · sin guardar")
+                                : t("Nuevo · sin guardar")}
                             </span>
                           )}
                         </th>
@@ -417,17 +428,17 @@ export function RelatedRecordEditor(props: IFieldProps) {
                                 loading ||
                                 !childObject
                               }
-                              aria-label={`Editar ${name}`}
+                              aria-label={t("Editar %{p0}", { p0: name })}
                               onClick={() => void edit(index)}
                             >
-                              Editar
+                              {t("Editar")}
                             </Button>
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               disabled={!allowUnlink}
-                              aria-label={`Desvincular ${name}`}
+                              aria-label={t("Desvincular %{p0}", { p0: name })}
                               onClick={() => {
                                 setEditing(null);
                                 change(
@@ -437,7 +448,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
                                 );
                               }}
                             >
-                              Desvincular
+                              {t("Desvincular")}
                             </Button>
                           </div>
                         </td>
@@ -450,7 +461,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
           )}
           {rows.length > PAGE_SIZE && (
             <nav
-              aria-label="Páginas de registros relacionados"
+              aria-label={t("Páginas de registros relacionados")}
               className="flex items-center justify-between"
             >
               <Button
@@ -460,10 +471,11 @@ export function RelatedRecordEditor(props: IFieldProps) {
                 disabled={activePage === 1}
                 onClick={() => setPage(activePage - 1)}
               >
-                Anterior
+                {t("Anterior")}
               </Button>
               <span className="text-sm">
-                Página {activePage} de {Math.ceil(rows.length / PAGE_SIZE)}
+                {t("Página")} {activePage} {t("de")}{" "}
+                {Math.ceil(rows.length / PAGE_SIZE)}
               </span>
               <Button
                 type="button"
@@ -472,7 +484,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
                 disabled={activePage * PAGE_SIZE >= rows.length}
                 onClick={() => setPage(activePage + 1)}
               >
-                Siguiente
+                {t("Siguiente")}
               </Button>
             </nav>
           )}
@@ -506,13 +518,13 @@ export function RelatedRecordEditor(props: IFieldProps) {
           <DialogHeader>
             <DialogTitle>
               {editing?.index === -1
-                ? "Crear relacionado"
-                : "Editar relacionado"}
+                ? t("Crear relacionado")
+                : t("Editar relacionado")}
             </DialogTitle>
             <DialogDescription>
-              Aplica los cambios y guarda el formulario principal para
-              confirmarlos. Las relaciones anidadas y los archivos se editan
-              desde el registro original.
+              {t(
+                "Aplica los cambios y guarda el formulario principal para confirmarlos. Las relaciones anidadas y los archivos se editan desde el registro original.",
+              )}
             </DialogDescription>
           </DialogHeader>
           {editing && childObject && (

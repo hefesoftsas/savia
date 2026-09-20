@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { accessMessages } from "@/i18n/locales/access";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { AccessCatalog, RoleInput } from "@/api/access-control-client";
@@ -19,6 +21,7 @@ export function PredicateEditor({
   onChange: (p: AccessPredicate) => void;
   entry: AccessCatalog[number];
 }) {
+  const t = useMessages(accessMessages);
   const mode =
     "all" in value
       ? "all"
@@ -32,7 +35,7 @@ export function PredicateEditor({
   return (
     <div className="space-y-2">
       <select
-        aria-label="Record scope"
+        aria-label={t("Record scope")}
         className={selectClass}
         value={mode}
         onChange={(e) => {
@@ -58,13 +61,13 @@ export function PredicateEditor({
           );
         }}
       >
-        <option value="all">All records</option>
+        <option value="all">{t("All records")}</option>
         {entry.creatorSupported && (
-          <option value="own">Created by the user</option>
+          <option value="own">{t("Created by the user")}</option>
         )}
-        <option value="condition">Matching a condition</option>
-        <option value="and">All conditions match</option>
-        <option value="or">Any condition matches</option>
+        <option value="condition">{t("Matching a condition")}</option>
+        <option value="and">{t("All conditions match")}</option>
+        <option value="or">{t("Any condition matches")}</option>
       </select>
       {("and" in value || "or" in value) && (
         <div className="ml-3 space-y-3 border-l pl-3">
@@ -97,7 +100,7 @@ export function PredicateEditor({
                   );
                 }}
               >
-                Remove condition
+                {t("Remove condition")}
               </Button>
             </div>
           ))}
@@ -112,14 +115,14 @@ export function PredicateEditor({
               )
             }
           >
-            Add condition
+            {t("Add condition")}
           </Button>
         </div>
       )}
       {mode === "condition" && "field" in value && (
         <div className="flex flex-wrap gap-2">
           <select
-            aria-label="Condition field"
+            aria-label={t("Condition field")}
             className={selectClass}
             value={value.field}
             onChange={(e) =>
@@ -130,13 +133,13 @@ export function PredicateEditor({
               })
             }
           >
-            <option value="">Choose a field</option>
+            <option value="">{t("Choose a field")}</option>
             {entry.fields.map((f) => (
               <option key={f}>{f}</option>
             ))}
           </select>
           <select
-            aria-label="Comparison"
+            aria-label={t("Comparison")}
             className={selectClass}
             value={value.op}
             onChange={(e) =>
@@ -147,14 +150,14 @@ export function PredicateEditor({
               })
             }
           >
-            <option value="eq">equals</option>
-            <option value="lt">less than</option>
-            <option value="lte">at most</option>
-            <option value="gt">greater than</option>
-            <option value="gte">at least</option>
+            <option value="eq">{t("equals")}</option>
+            <option value="lt">{t("less than")}</option>
+            <option value="lte">{t("at most")}</option>
+            <option value="gt">{t("greater than")}</option>
+            <option value="gte">{t("at least")}</option>
           </select>
           <Input
-            aria-label="Condition value"
+            aria-label={t("Condition value")}
             className="w-40"
             value={
               "value" in value && "literal" in value.value
@@ -192,20 +195,29 @@ export function GrantEditor({
   grants: Grant[];
   onChange: (grants: Grant[]) => void;
 }) {
+  const t = useMessages(accessMessages);
   return (
     <section className="space-y-4 border-t py-5">
       <div>
         <h3 className="font-medium">{entry.label}</h3>
         {entry.restricted && (
           <p className="text-sm text-muted-foreground">
-            This source does not support configurable permissions. Its existing
-            access rules remain in effect.
+            {t(
+              "This source does not support configurable permissions. Its existing access rules remain in effect.",
+            )}
           </p>
         )}
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-3">
         {entry.actions.map((action) => (
-          <label key={action} className="flex items-center gap-2 text-sm">
+          <label
+            key={
+              action in accessMessages
+                ? t(action as keyof typeof accessMessages)
+                : action
+            }
+            className="flex items-center gap-2 text-sm"
+          >
             <input
               type="checkbox"
               checked={grants.some((g) => g.action === action)}
@@ -225,13 +237,19 @@ export function GrantEditor({
                 )
               }
             />
-            {action}
+            {action in accessMessages
+              ? t(action as keyof typeof accessMessages)
+              : action}
           </label>
         ))}
       </div>
       {grants.map((grant, index) => (
         <div key={index} className="space-y-3 rounded-md bg-muted/40 p-4">
-          <h4 className="text-sm font-medium">{grant.action}</h4>
+          <h4 className="text-sm font-medium">
+            {grant.action in accessMessages
+              ? t(grant.action as keyof typeof accessMessages)
+              : grant.action}
+          </h4>
           {entry.resource.startsWith("collection:") && (
             <PredicateEditor
               entry={entry}
@@ -249,7 +267,7 @@ export function GrantEditor({
           )}
           {entry.fields.length > 0 && (
             <fieldset>
-              <legend className="mb-2 text-sm">Allowed fields</legend>
+              <legend className="mb-2 text-sm">{t("Allowed fields")}</legend>
               <div className="flex flex-wrap gap-x-5 gap-y-2">
                 {entry.fields.map((field) => (
                   <label

@@ -79,3 +79,9 @@ Both types support numeric CSV import, numeric filter operands, field conversion
 and record history. Access-policy comparisons enforce numeric literals. General
 formula outputs and automatic monetary summary inference retain their existing
 Number/Currency scope. No database migration is required.
+
+## Localized labels
+
+Field and static option editors support ES/EN/PT label overrides. Empty overrides
+fall back to the default label; option values and saved records remain unchanged.
+See [Core localization](localization.md) for formatting and validation behavior.

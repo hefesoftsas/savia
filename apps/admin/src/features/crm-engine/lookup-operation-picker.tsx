@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useMemo, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import {
@@ -28,6 +30,8 @@ export function LookupOperationPicker({
   pending?: boolean;
   onSelect: (operation: RequestOperation) => void;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const availableCount = useMemo(
@@ -36,14 +40,13 @@ export function LookupOperationPicker({
     [excludedIds, operations],
   );
   const matches = useMemo(
-    () =>
-      listRequestOperations(operations, query, { excludeIds: excludedIds }),
+    () => listRequestOperations(operations, query, { excludeIds: excludedIds }),
     [excludedIds, operations, query],
   );
   const trimmedQuery = query.trim();
   const resultLabel = trimmedQuery
     ? `${matches.length} coincidencias`
-    : `${matches.length} consultas disponibles`;
+    : t("%{p0} consultas disponibles", { p0: matches.length });
 
   return (
     <Dialog
@@ -57,7 +60,7 @@ export function LookupOperationPicker({
         <button
           type="button"
           className="lookup-operation-picker-trigger"
-          aria-label="Añadir consulta"
+          aria-label={t("Añadir consulta")}
           disabled={disabled || pending || availableCount === 0}
         >
           <span
@@ -68,10 +71,10 @@ export function LookupOperationPicker({
           </span>
           <span className="lookup-operation-picker-trigger-label">
             {pending
-              ? "Cargando requests…"
+              ? t("Cargando requests…")
               : availableCount === 0
-                ? "No hay consultas disponibles"
-                : "Buscar y añadir consulta…"}
+                ? t("No hay consultas disponibles")
+                : t("Buscar y añadir consulta…")}
           </span>
           <ChevronDown
             size={16}
@@ -82,17 +85,18 @@ export function LookupOperationPicker({
       </DialogTrigger>
       <DialogContent className="lookup-operation-picker-dialog sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Buscar consulta</DialogTitle>
+          <DialogTitle>{t("Buscar consulta")}</DialogTitle>
           <DialogDescription>
-            Filtra por nombre o identificador del request y elige la operación
-            de lookup que quieres vincular a este campo.
+            {t(
+              "Filtra por nombre o identificador del request y elige la operación de lookup que quieres vincular a este campo.",
+            )}
           </DialogDescription>
         </DialogHeader>
         <label className="lookup-operation-picker-search">
           <Search size={16} aria-hidden="true" />
           <Input
-            aria-label="Buscar consulta"
-            placeholder="Buscar por nombre, id u operationId…"
+            aria-label={t("Buscar consulta")}
+            placeholder={t("Buscar por nombre, id u operationId…")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             autoFocus
@@ -125,8 +129,8 @@ export function LookupOperationPicker({
         ) : (
           <p className="lookup-operation-picker-empty">
             {trimmedQuery
-              ? `No hay consultas que coincidan con «${query}».`
-              : "No quedan consultas disponibles para este campo."}
+              ? t("No hay consultas que coincidan con «%{p0}».", { p0: query })
+              : t("No quedan consultas disponibles para este campo.")}
           </p>
         )}
       </DialogContent>

@@ -1,3 +1,7 @@
+import { resolveFieldLabel } from "@savia/crm-shared/field-labels";
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { FieldValueDisplay } from "./field-value-display";
 import RecordHistorySettingsButton from "./record-history-settings";
 import { useDebouncedSearch } from "./use-debounced-search";
@@ -106,15 +110,21 @@ function recordLabel(record: CrmRecord) {
   }
   return String(record.id);
 }
-const display = (v: unknown) => {
+const display = (v: unknown, locale = "es-CO") => {
   const location = parseMapLocation(v);
   if (location) return formatMapLocationSummary(location);
   return v === null || v === undefined || v === ""
     ? "—"
     : typeof v === "boolean"
       ? v
-        ? "Sí"
-        : "No"
+        ? locale.startsWith("en")
+          ? "Yes"
+          : locale.startsWith("pt")
+            ? "Sim"
+            : "Sí"
+        : locale.startsWith("pt")
+          ? "Não"
+          : "No"
       : Array.isArray(v)
         ? v.join(", ")
         : String(v);
@@ -134,10 +144,15 @@ function displayCustomerEmail(value: unknown) {
   }
   return display(value);
 }
-const money = (v: unknown, currency = "COP", decimals = 2) => {
+const money = (
+  v: unknown,
+  currency = "COP",
+  decimals = 2,
+  locale = "es-CO",
+) => {
   const code = currency || "COP";
   try {
-    return new Intl.NumberFormat("es-CO", {
+    return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: code,
       minimumFractionDigits: decimals,
@@ -397,6 +412,11 @@ export default function Records({
   onOpen: (record: CrmRecord) => void;
   initialConfigTab?: ConfigTab;
 }) {
+  const labelLocale = useAppLocale();
+  const uiLocale = intlLocale(labelLocale);
+
+  const t = useMessages(recordsMessages);
+
   const capabilities = collectionCapabilities(object);
   const canConfigureSourceForm =
     !capabilities.schema && !capabilities.customFields;
@@ -529,7 +549,7 @@ export default function Records({
       if (viewId === deleting.id) applyDefaultView();
       setPendingViewDeletion(null);
       await views.refetch();
-      toast.success("Vista eliminada");
+      toast.success(t("Vista eliminada"));
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -561,12 +581,12 @@ export default function Records({
   const visibleColumnKeys = orderedColumnKeys.filter((key) =>
     s.columns.includes(key),
   );
-  const normalizedColumnQuery = columnQuery.trim().toLocaleLowerCase("es-CO");
+  const normalizedColumnQuery = columnQuery.trim().toLocaleLowerCase(uiLocale);
   const showCrmIntegrationColumn =
     crmIntegrationColumnAvailable &&
     (!normalizedColumnQuery ||
       [CRM_INTEGRATION_COLUMN_LABEL, "HubSpot"].some((value) =>
-        value.toLocaleLowerCase("es-CO").includes(normalizedColumnQuery),
+        value.toLocaleLowerCase(uiLocale).includes(normalizedColumnQuery),
       ));
   const tableFields = orderedColumnKeys
     .map((key) => [key, object.config.fields[key]] as const)
@@ -575,8 +595,12 @@ export default function Records({
     )
     .filter(([key, field]) => {
       if (!normalizedColumnQuery) return true;
-      return [key, field.label, s.columnAliases[key] ?? ""].some((value) =>
-        value.toLocaleLowerCase("es-CO").includes(normalizedColumnQuery),
+      return [
+        key,
+        resolveFieldLabel(field, labelLocale),
+        s.columnAliases[key] ?? "",
+      ].some((value) =>
+        value.toLocaleLowerCase(uiLocale).includes(normalizedColumnQuery),
       );
     });
   const visibleColumnCount = s.columns.filter((key) =>
@@ -591,7 +615,10 @@ export default function Records({
   const columnLabel = (key: string) =>
     key === CRM_INTEGRATION_COLUMN_KEY
       ? CRM_INTEGRATION_COLUMN_LABEL
-      : s.columnAliases[key]?.trim() || object.config.fields[key]?.label || key;
+      : s.columnAliases[key]?.trim() ||
+        (object.config.fields[key]
+          ? resolveFieldLabel(object.config.fields[key], labelLocale)
+          : key);
   const reorderColumn = (source: string, target: string) =>
     patch({
       columnOrder: moveColumn(orderedColumnKeys, source, target),
@@ -606,7 +633,7 @@ export default function Records({
       (key) => key !== CRM_INTEGRATION_COLUMN_KEY,
     );
     if (!exportableColumnKeys.length) {
-      toast.error("Muestra al menos una columna antes de exportar.");
+      toast.error(t("Muestra al menos una columna antes de exportar."));
       return;
     }
     const query = new URLSearchParams({
@@ -625,7 +652,7 @@ export default function Records({
         `/api/export/${encodeURIComponent(object.name)}?${query}`,
         recordsCsvFilename(object.name),
       );
-      toast.success("CSV descargado");
+      toast.success(t("CSV descargado"));
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -650,7 +677,7 @@ export default function Records({
         ...(previous ?? { data: [] }),
         default: { config: saved },
       }));
-      toast.success("Cambios de tabla guardados");
+      toast.success(t("Cambios de tabla guardados"));
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -692,7 +719,7 @@ export default function Records({
               }
             : previous,
       );
-      toast.success("Distribución del formulario guardada");
+      toast.success(t("Distribución del formulario guardada"));
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -709,7 +736,7 @@ export default function Records({
               className={!viewId ? "selected" : ""}
               onClick={applyDefaultView}
             >
-              Todos los registros
+              {t("Todos los registros")}
             </button>
             {savedViews.map((view) => (
               <span className="view-tab" key={view.id}>
@@ -725,14 +752,14 @@ export default function Records({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label={`Eliminar vista ${view.name}`}
+                      aria-label={t("Eliminar vista %{p0}", { p0: view.name })}
                       onClick={() => setPendingViewDeletion(view)}
                     >
                       <Trash2 size={13} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    Eliminar vista
+                    {t("Eliminar vista")}
                   </TooltipContent>
                 </Tooltip>
               </span>
@@ -742,7 +769,7 @@ export default function Records({
                 <button
                   type="button"
                   className="save-view-trigger"
-                  aria-label="Configurar vista"
+                  aria-label={t("Configurar vista")}
                   aria-expanded={config}
                   onClick={() => {
                     setColumnQuery("");
@@ -754,7 +781,7 @@ export default function Records({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Configurar vista
+                {t("Configurar vista")}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -786,7 +813,12 @@ export default function Records({
             onStageChange={(stage) => patch({ stage })}
             pipelineFieldLabel={
               pipeline?.field
-                ? object.config.fields[pipeline.field]?.label
+                ? object.config.fields[pipeline.field]
+                  ? resolveFieldLabel(
+                      object.config.fields[pipeline.field],
+                      labelLocale,
+                    )
+                  : undefined
                 : undefined
             }
             stageOptions={
@@ -809,8 +841,10 @@ export default function Records({
             <div className="summary-strip">
               {summary.data.data.map((g: any) => (
                 <div key={String(g.value)}>
-                  <span>{display(g.value)}</span>
-                  <strong>{g.count} registros</strong>
+                  <span>{display(g.value, uiLocale)}</span>
+                  <strong>
+                    {g.count} {t("registros")}
+                  </strong>
                   {pipeline?.amountField && (
                     <small>
                       {money(
@@ -829,6 +863,7 @@ export default function Records({
                                 ?.integer
                             ? 0
                             : 2,
+                        uiLocale,
                       )}
                     </small>
                   )}
@@ -855,7 +890,7 @@ export default function Records({
                   object={object}
                   settings={querySettings}
                   stage=""
-                  label="Sin etapa"
+                  label={t("Sin etapa")}
                   onOpen={onOpen}
                 />
               )}
@@ -913,11 +948,15 @@ export default function Records({
             <DrawerHeader className="view-config-header">
               <div className="view-config-title-row">
                 <div>
-                  <DrawerTitle>Configurar vista</DrawerTitle>
+                  <DrawerTitle>{t("Configurar vista")}</DrawerTitle>
                   <DrawerDescription>
                     {configTab === "form"
-                      ? "Define cómo se distribuyen los campos al crear y editar."
-                      : "Ajusta los nombres, la visibilidad y el orden de esta tabla."}
+                      ? t(
+                          "Define cómo se distribuyen los campos al crear y editar.",
+                        )
+                      : t(
+                          "Ajusta los nombres, la visibilidad y el orden de esta tabla.",
+                        )}
                   </DrawerDescription>
                 </div>
                 <Tooltip>
@@ -926,28 +965,28 @@ export default function Records({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label="Cerrar configuración"
+                      aria-label={t("Cerrar configuración")}
                       onClick={() => setConfig(false)}
                     >
                       <X size={17} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    Cerrar configuración
+                    {t("Cerrar configuración")}
                   </TooltipContent>
                 </Tooltip>
               </div>
               {configTab === "table" && (
                 <p className="view-config-count" role="status">
-                  {visibleColumnCount} de {availableColumnKeys.length} columnas
-                  visibles
+                  {visibleColumnCount} {t("de")} {availableColumnKeys.length}{" "}
+                  {t("columnas visibles")}
                 </p>
               )}
               {canConfigureSourceForm && (
                 <div
                   className="view-config-tabs"
                   role="tablist"
-                  aria-label="Área a configurar"
+                  aria-label={t("Área a configurar")}
                 >
                   <button
                     type="button"
@@ -955,7 +994,7 @@ export default function Records({
                     aria-selected={configTab === "table"}
                     onClick={() => setConfigTab("table")}
                   >
-                    Tabla
+                    {t("Tabla")}
                   </button>
                   <button
                     type="button"
@@ -963,7 +1002,7 @@ export default function Records({
                     aria-selected={configTab === "form"}
                     onClick={() => setConfigTab("form")}
                   >
-                    Formulario
+                    {t("Formulario")}
                   </button>
                 </div>
               )}
@@ -971,10 +1010,13 @@ export default function Records({
             <div className="view-config">
               {canConfigureSourceForm && configTab === "form" && (
                 <Suspense
-                  fallback={<p role="status">Cargando configuración…</p>}
+                  fallback={<p role="status">{t("Cargando configuración…")}</p>}
                 >
-                  <section className="view-config-form" aria-label="Formulario">
-                    <h3>Distribución del formulario</h3>
+                  <section
+                    className="view-config-form"
+                    aria-label={t("Formulario")}
+                  >
+                    <h3>{t("Distribución del formulario")}</h3>
                     <FormColumnPicker
                       className="form-column-picker--compact"
                       name="view-form-columns"
@@ -995,7 +1037,7 @@ export default function Records({
               )}
               <section
                 className="view-config-columns"
-                aria-label="Columnas de la tabla"
+                aria-label={t("Columnas de la tabla")}
                 hidden={configTab !== "table"}
               >
                 <div className="view-config-search">
@@ -1004,13 +1046,13 @@ export default function Records({
                     className="view-config-sr-only"
                     htmlFor="column-search"
                   >
-                    Buscar columna
+                    {t("Buscar columna")}
                   </label>
                   <Input
                     id="column-search"
                     type="search"
-                    aria-label="Buscar columna"
-                    placeholder="Buscar columna"
+                    aria-label={t("Buscar columna")}
+                    placeholder={t("Buscar columna")}
                     value={columnQuery}
                     onChange={(event) => setColumnQuery(event.target.value)}
                   />
@@ -1020,25 +1062,25 @@ export default function Records({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    aria-label="Mostrar todas las columnas"
+                    aria-label={t("Mostrar todas las columnas")}
                     onClick={() => patch({ columns: availableColumnKeys })}
                   >
-                    Mostrar todas
+                    {t("Mostrar todas")}
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    aria-label="Ocultar todas las columnas"
+                    aria-label={t("Ocultar todas las columnas")}
                     onClick={() => patch({ columns: [] })}
                   >
-                    Ocultar todas
+                    {t("Ocultar todas")}
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    aria-label="Restablecer columnas"
+                    aria-label={t("Restablecer columnas")}
                     onClick={() =>
                       patch({
                         columns: defaults.columns,
@@ -1047,29 +1089,31 @@ export default function Records({
                       })
                     }
                   >
-                    Restablecer
+                    {t("Restablecer")}
                   </Button>
                 </div>
                 {columnQuery && (
                   <p className="view-config-search-hint">
-                    Borra la búsqueda para reordenar columnas.
+                    {t("Borra la búsqueda para reordenar columnas.")}
                   </p>
                 )}
                 {showCrmIntegrationColumn || tableFields.length ? (
                   <ol
                     className="view-column-list"
-                    aria-label="Columnas de la tabla"
+                    aria-label={t("Columnas de la tabla")}
                   >
                     {showCrmIntegrationColumn && (
                       <li
-                        aria-label={`Columna ${CRM_INTEGRATION_COLUMN_LABEL}`}
+                        aria-label={t("Columna %{p0}", {
+                          p0: CRM_INTEGRATION_COLUMN_LABEL,
+                        })}
                         className="view-column-item view-column-item--system"
                       >
                         <button
-                          aria-label="Reordenar CRM (columna fija)"
+                          aria-label={t("Reordenar CRM (columna fija)")}
                           className="view-column-grip"
                           disabled
-                          title="La columna CRM permanece al inicio"
+                          title={t("La columna CRM permanece al inicio")}
                           type="button"
                         >
                           <GripVertical aria-hidden="true" size={17} />
@@ -1079,12 +1123,14 @@ export default function Records({
                             {CRM_INTEGRATION_COLUMN_LABEL}
                           </strong>
                           <span className="view-column-source">
-                            Integración del registro
+                            {t("Integración del registro")}
                           </span>
                         </div>
                         <div className="view-column-visibility">
                           <Switch
-                            aria-label={`Visible ${CRM_INTEGRATION_COLUMN_LABEL}`}
+                            aria-label={t("Visible %{p0}", {
+                              p0: CRM_INTEGRATION_COLUMN_LABEL,
+                            })}
                             checked={s.columns.includes(
                               CRM_INTEGRATION_COLUMN_KEY,
                             )}
@@ -1107,15 +1153,17 @@ export default function Records({
                           />
                           <span>
                             {s.columns.includes(CRM_INTEGRATION_COLUMN_KEY)
-                              ? "Visible"
-                              : "Oculta"}
+                              ? t("Visible")
+                              : t("Oculta")}
                           </span>
                         </div>
                       </li>
                     )}
                     {tableFields.map(([key, field]) => (
                       <li
-                        aria-label={`Campo ${field.label}`}
+                        aria-label={t("Campo %{p0}", {
+                          p0: resolveFieldLabel(field, labelLocale),
+                        })}
                         className={`view-column-item${
                           draggedColumn === key ? " is-dragging" : ""
                         }${dropColumn === key ? " is-drop-target" : ""}`}
@@ -1134,7 +1182,10 @@ export default function Records({
                         }}
                       >
                         <button
-                          aria-label={`Reordenar ${columnLabel(key)} con Alt y las flechas`}
+                          aria-label={t(
+                            "Reordenar %{p0} con Alt y las flechas",
+                            { p0: columnLabel(key) },
+                          )}
                           className="view-column-grip"
                           disabled={Boolean(columnQuery)}
                           draggable={!columnQuery}
@@ -1160,7 +1211,7 @@ export default function Records({
                             }
                           }}
                           type="button"
-                          title="Arrastra para reordenar"
+                          title={t("Arrastra para reordenar")}
                         >
                           <GripVertical aria-hidden="true" size={17} />
                         </button>
@@ -1170,13 +1221,19 @@ export default function Records({
                             htmlFor={`column-alias-${key}`}
                           >
                             <span className="view-config-sr-only">
-                              Alias de {field.label}
+                              {t("Alias de")}{" "}
+                              {resolveFieldLabel(field, labelLocale)}
                             </span>
                             <Input
                               id={`column-alias-${key}`}
-                              aria-label={`Alias de ${field.label}`}
+                              aria-label={t("Alias de %{p0}", {
+                                p0: resolveFieldLabel(field, labelLocale),
+                              })}
                               maxLength={100}
-                              value={s.columnAliases[key] ?? field.label}
+                              value={
+                                s.columnAliases[key] ??
+                                resolveFieldLabel(field, labelLocale)
+                              }
                               onChange={(event) =>
                                 patch({
                                   columnAliases: {
@@ -1188,12 +1245,14 @@ export default function Records({
                             />
                           </label>
                           <span className="view-column-source">
-                            Campo de origen: {key}
+                            {t("Campo de origen:")} {key}
                           </span>
                         </div>
                         <div className="view-column-visibility">
                           <Switch
-                            aria-label={`Visible ${field.label}`}
+                            aria-label={t("Visible %{p0}", {
+                              p0: resolveFieldLabel(field, labelLocale),
+                            })}
                             checked={s.columns.includes(key)}
                             onCheckedChange={(checked) =>
                               patch({
@@ -1206,7 +1265,9 @@ export default function Records({
                             }
                           />
                           <span>
-                            {s.columns.includes(key) ? "Visible" : "Oculta"}
+                            {s.columns.includes(key)
+                              ? t("Visible")
+                              : t("Oculta")}
                           </span>
                         </div>
                       </li>
@@ -1214,7 +1275,7 @@ export default function Records({
                   </ol>
                 ) : (
                   <p className="view-config-empty">
-                    No encontramos columnas con ese nombre.
+                    {t("No encontramos columnas con ese nombre.")}
                   </p>
                 )}
               </section>
@@ -1222,14 +1283,14 @@ export default function Records({
                 supportsLocalRecordTools(object)) && (
                 <section
                   className="view-config-advanced"
-                  aria-label="Orden y agrupación"
+                  aria-label={t("Orden y agrupación")}
                   hidden={configTab !== "table"}
                 >
-                  <h3>Orden y agrupación</h3>
+                  <h3>{t("Orden y agrupación")}</h3>
                   {capabilities.sort !== false && (
                     <>
                       <label>
-                        Ordenar por
+                        {t("Ordenar por")}
                         <select
                           className="select-input"
                           value={s.sort.field}
@@ -1241,7 +1302,7 @@ export default function Records({
                         >
                           {supportsLocalRecordTools(object) && (
                             <option value="updated_at">
-                              Última actualización
+                              {t("Última actualización")}
                             </option>
                           )}
                           {availableFields.map(([key, f]) => (
@@ -1252,7 +1313,7 @@ export default function Records({
                         </select>
                       </label>
                       <select
-                        aria-label="Dirección del orden"
+                        aria-label={t("Dirección del orden")}
                         className="select-input"
                         value={s.sort.order}
                         onChange={(e) =>
@@ -1264,21 +1325,23 @@ export default function Records({
                           })
                         }
                       >
-                        <option value="ASC">Ascendente</option>
-                        <option value="DESC">Descendente</option>
+                        <option value="ASC">{t("Ascendente")}</option>
+                        <option value="DESC">{t("Descendente")}</option>
                       </select>
                     </>
                   )}
                   {supportsLocalRecordTools(object) && (
                     <label>
-                      Agrupar resumen por
+                      {t("Agrupar resumen por")}
                       <select
                         className="select-input"
                         value={s.group}
                         onChange={(e) => patch({ group: e.target.value })}
                       >
                         <option value="">
-                          {pipeline ? "Etapa del pipeline" : "Sin agrupación"}
+                          {pipeline
+                            ? t("Etapa del pipeline")
+                            : t("Sin agrupación")}
                         </option>
                         {availableFields
                           .filter(([, f]) => !f.config?.multiple)
@@ -1294,10 +1357,10 @@ export default function Records({
               )}
               <section
                 className="view-config-advanced view-config-saved"
-                aria-label="Guardar vista"
+                aria-label={t("Guardar vista")}
                 hidden={configTab !== "table"}
               >
-                <h3>Guardar vista</h3>
+                <h3>{t("Guardar vista")}</h3>
                 <form
                   className="save-view-row"
                   onSubmit={async (e) => {
@@ -1309,7 +1372,7 @@ export default function Records({
                       });
                       setName("");
                       await views.refetch();
-                      toast.success("Vista guardada");
+                      toast.success(t("Vista guardada"));
                     } catch (e) {
                       toast.error((e as Error).message);
                     }
@@ -1318,19 +1381,22 @@ export default function Records({
                   <Input
                     required
                     maxLength={80}
-                    aria-label="Nombre de vista"
-                    placeholder="Nombre de esta vista"
+                    aria-label={t("Nombre de vista")}
+                    placeholder={t("Nombre de esta vista")}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                   <Button type="submit">
                     <Save size={15} />
-                    Guardar vista
+                    {t("Guardar vista")}
                   </Button>
                 </form>
                 {savedViews.length > 0 && (
-                  <section className="view-saved-list" aria-label="Mis vistas">
-                    <h4>Mis vistas</h4>
+                  <section
+                    className="view-saved-list"
+                    aria-label={t("Mis vistas")}
+                  >
+                    <h4>{t("Mis vistas")}</h4>
                     <ul>
                       {savedViews.map((view) => (
                         <li key={view.id}>
@@ -1347,14 +1413,16 @@ export default function Records({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                aria-label={`Eliminar vista ${view.name}`}
+                                aria-label={t("Eliminar vista %{p0}", {
+                                  p0: view.name,
+                                })}
                                 onClick={() => setPendingViewDeletion(view)}
                               >
                                 <Trash2 size={14} />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" sideOffset={6}>
-                              Eliminar vista
+                              {t("Eliminar vista")}
                             </TooltipContent>
                           </Tooltip>
                         </li>
@@ -1369,10 +1437,10 @@ export default function Records({
                 <>
                   <p className="view-config-save-status" role="status">
                     {savingFormColumns
-                      ? "Guardando cambios…"
+                      ? t("Guardando cambios…")
                       : formColumnsDirty
-                        ? "Cambios sin guardar"
-                        : "Cambios guardados"}
+                        ? t("Cambios sin guardar")
+                        : t("Cambios guardados")}
                   </p>
                   <Button
                     type="button"
@@ -1380,17 +1448,17 @@ export default function Records({
                     onClick={() => void saveFormColumns()}
                   >
                     <Save size={15} />
-                    {savingFormColumns ? "Guardando…" : "Guardar cambios"}
+                    {savingFormColumns ? t("Guardando…") : t("Guardar cambios")}
                   </Button>
                 </>
               ) : (
                 <>
                   <p className="view-config-save-status" role="status">
                     {savingTablePreferences
-                      ? "Guardando cambios…"
+                      ? t("Guardando cambios…")
                       : tablePreferencesDirty
-                        ? "Cambios sin guardar"
-                        : "Cambios guardados"}
+                        ? t("Cambios sin guardar")
+                        : t("Cambios guardados")}
                   </p>
                   <Button
                     type="button"
@@ -1398,7 +1466,9 @@ export default function Records({
                     onClick={() => void saveTablePreferences()}
                   >
                     <Save size={15} />
-                    {savingTablePreferences ? "Guardando…" : "Guardar cambios"}
+                    {savingTablePreferences
+                      ? t("Guardando…")
+                      : t("Guardar cambios")}
                   </Button>
                 </>
               )}
@@ -1408,8 +1478,13 @@ export default function Records({
       )}
       <Confirm
         isOpen={Boolean(pendingViewDeletion)}
-        title={`Eliminar vista ${pendingViewDeletion?.name ?? ""}`}
-        content={`Se eliminará la vista “${pendingViewDeletion?.name ?? ""}”. Esta acción no se puede deshacer.`}
+        title={t("Eliminar vista %{p0}", {
+          p0: pendingViewDeletion?.name ?? "",
+        })}
+        content={t(
+          "Se eliminará la vista “%{p0}”. Esta acción no se puede deshacer.",
+          { p0: pendingViewDeletion?.name ?? "" },
+        )}
         confirm="Eliminar"
         confirmColor="warning"
         onClose={() => setPendingViewDeletion(null)}
@@ -1441,6 +1516,9 @@ function RecordTable({
   onPerPage: (n: number) => void;
   onConfigureColumns: () => void;
 }) {
+  const t = useMessages(recordsMessages);
+  const labelLocale = useAppLocale();
+
   const {
     data = EMPTY_RECORDS,
     total,
@@ -1486,17 +1564,20 @@ function RecordTable({
     <>
       {trash && (
         <p className="trash-note">
-          Papelera · Los registros conservan su historial y archivos. Puedes
-          restaurarlos si cumplen la estructura actual.
+          {t(
+            "Papelera · Los registros conservan su historial y archivos. Puedes restaurarlos si cumplen la estructura actual.",
+          )}
         </p>
       )}
       {!columns.length ? (
         <section className="records-empty-columns" aria-live="polite">
           <Columns3 aria-hidden="true" size={22} />
           <div>
-            <strong>No hay columnas visibles</strong>
+            <strong>{t("No hay columnas visibles")}</strong>
             <p>
-              Abre Configurar vista para mostrar las columnas que necesites.
+              {t(
+                "Abre Configurar vista para mostrar las columnas que necesites.",
+              )}
             </p>
             <Button
               size="sm"
@@ -1504,14 +1585,14 @@ function RecordTable({
               variant="outline"
               onClick={onConfigureColumns}
             >
-              Configurar columnas
+              {t("Configurar columnas")}
             </Button>
           </div>
         </section>
       ) : data.length ? (
         <section
           className="records-list"
-          aria-label={`Registros de ${object.label}`}
+          aria-label={t("Registros de %{p0}", { p0: object.label })}
         >
           <div
             ref={shellRef}
@@ -1561,7 +1642,7 @@ function RecordTable({
                     source={key}
                     label={
                       columnAliases[key]?.trim() ||
-                      object.config.fields[key].label
+                      resolveFieldLabel(object.config.fields[key], labelLocale)
                     }
                     render={(r) => {
                       const cell = (
@@ -1577,7 +1658,10 @@ function RecordTable({
                               "managed-customer" && key === "email" ? (
                             displayCustomerEmail(r[key])
                           ) : (
-                            <FieldValueDisplay value={r[key]} field={object.config.fields[key]}/>
+                            <FieldValueDisplay
+                              value={r[key]}
+                              field={object.config.fields[key]}
+                            />
                           )}
                         </div>
                       );
@@ -1585,17 +1669,22 @@ function RecordTable({
                         !trash &&
                         collectionCapabilities(object).read ? (
                         <div className="grid justify-items-start gap-1">
-                          {object.config.fields[key].type === "RichText" && cell}
+                          {object.config.fields[key].type === "RichText" &&
+                            cell}
                           <button
                             type="button"
                             className="text-left text-primary underline-offset-4 hover:underline focus-visible:underline"
-                            aria-label={`Abrir ${String(r[key] ?? r.id)}`}
+                            aria-label={t("Abrir %{p0}", {
+                              p0: String(r[key] ?? r.id),
+                            })}
                             onClick={(event) => {
                               event.stopPropagation();
                               onOpen(r as CrmRecord);
                             }}
                           >
-                            {object.config.fields[key].type === "RichText" ? "Open record" : cell}
+                            {object.config.fields[key].type === "RichText"
+                              ? t("Open record")
+                              : cell}
                           </button>
                         </div>
                       ) : (
@@ -1613,7 +1702,7 @@ function RecordTable({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        aria-label="Ver columnas a la izquierda"
+                        aria-label={t("Ver columnas a la izquierda")}
                         className="records-table-scroll-control records-table-scroll-control-left"
                         onClick={() => scrollByPage("left")}
                         size="icon"
@@ -1624,7 +1713,7 @@ function RecordTable({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      Ver columnas a la izquierda
+                      {t("Ver columnas a la izquierda")}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -1632,7 +1721,7 @@ function RecordTable({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        aria-label="Ver columnas a la derecha"
+                        aria-label={t("Ver columnas a la derecha")}
                         className="records-table-scroll-control records-table-scroll-control-right"
                         onClick={() => scrollByPage("right")}
                         size="icon"
@@ -1643,7 +1732,7 @@ function RecordTable({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      Ver columnas a la derecha
+                      {t("Ver columnas a la derecha")}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -1659,8 +1748,8 @@ function RecordTable({
       ) : (
         <div className="empty-state">
           <Search size={28} />
-          <h2>No hay registros para mostrar</h2>
-          <p>Prueba otros filtros o crea un registro.</p>
+          <h2>{t("No hay registros para mostrar")}</h2>
+          <p>{t("Prueba otros filtros o crea un registro.")}</p>
         </div>
       )}
       {!data.length && (
@@ -1677,12 +1766,14 @@ function RecordTableRowActions({
   object: CrmObject;
   trash: boolean;
 }) {
+  const t = useMessages(recordsMessages);
+
   const canDelete = collectionCapabilities(object).delete;
   const canRestore = trash && supportsLocalRecordTools(object);
   if (!canDelete && !canRestore) return null;
   return (
     <DataTable.Col
-      label="Acciones"
+      label={t("Acciones")}
       disableSort
       className="records-table-actions-column"
       headerClassName="records-table-actions-column"
@@ -1727,6 +1818,8 @@ async function recordVersionsForBulkDelete(
 }
 
 function RecordsBulkActionsToolbar({ object }: { object: CrmObject }) {
+  const t = useMessages(recordsMessages);
+
   const { selectedIds, data, onUnselectItems, refetch } =
     useListContext<CrmRecord>();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -1758,17 +1851,17 @@ function RecordsBulkActionsToolbar({ object }: { object: CrmObject }) {
           failures
             .map((row) => row.error)
             .filter(Boolean)
-            .join(" ") || "No se pudieron eliminar algunos registros.",
+            .join(" ") || t("No se pudieron eliminar algunos registros."),
         );
       }
       toast.success(
         permanent
           ? count === 1
-            ? "Registro eliminado"
-            : `${count} registros eliminados`
+            ? t("Registro eliminado")
+            : t("%{p0} registros eliminados", { p0: count })
           : count === 1
-            ? "Registro movido a la papelera"
-            : `${count} registros movidos a la papelera`,
+            ? t("Registro movido a la papelera")
+            : t("%{p0} registros movidos a la papelera", { p0: count }),
       );
       setConfirmOpen(false);
       onUnselectItems(true);
@@ -1788,35 +1881,47 @@ function RecordsBulkActionsToolbar({ object }: { object: CrmObject }) {
           variant="destructive"
           className="h-9"
           disabled={busy}
-          aria-label="Eliminar seleccionados"
+          aria-label={t("Eliminar seleccionados")}
           onClick={() => setConfirmOpen(true)}
         >
           <Trash2 size={15} />
-          Eliminar
+          {t("Eliminar")}
         </Button>
       </BulkActionsToolbar>
       <Confirm
         isOpen={confirmOpen}
         title={
-          count === 1 ? "Eliminar registro" : `Eliminar ${count} registros`
+          count === 1
+            ? t("Eliminar registro")
+            : t("Eliminar %{p0} registros", { p0: count })
         }
         content={
           hubspotArchive
-            ? `¿Archivar ${count === 1 ? "este registro" : `${count} registros`} en HubSpot?`
+            ? t("¿Archivar %{p0} en HubSpot?", {
+                p0:
+                  count === 1
+                    ? t("este registro")
+                    : t("%{p0} registros", { p0: count }),
+              })
             : permanent
               ? count === 1
-                ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
-                : `¿Eliminar permanentemente ${count} registros? Esta acción no se puede deshacer.`
+                ? t(
+                    "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer.",
+                  )
+                : t(
+                    "¿Eliminar permanentemente %{p0} registros? Esta acción no se puede deshacer.",
+                    { p0: count },
+                  )
               : count === 1
                 ? "¿Mover este registro a la papelera?"
-                : `¿Mover ${count} registros a la papelera?`
+                : t("¿Mover %{p0} registros a la papelera?", { p0: count })
         }
         confirm={
           hubspotArchive
-            ? "Archivar en HubSpot"
+            ? t("Archivar en HubSpot")
             : permanent
-              ? "Eliminar permanentemente"
-              : "Mover a papelera"
+              ? t("Eliminar permanentemente")
+              : t("Mover a papelera")
         }
         confirmColor="warning"
         loading={busy}
@@ -1834,6 +1939,8 @@ function RecordRowAction({
   object: CrmObject;
   trash: boolean;
 }) {
+  const t = useMessages(recordsMessages);
+
   const record = useRecordContext<CrmRecord>();
   const { refetch } = useListContext<CrmRecord>();
   if (!record) return null;
@@ -1853,14 +1960,16 @@ function RecordRowAction({
         await api(`/records/${object.name}/${record.id}/restore`, "POST", {
           version: record._version,
         });
-        toast.success("Registro restaurado");
+        toast.success(t("Registro restaurado"));
       } else {
         await api(
           `/records/${object.name}/${record.id}?version=${record._version}`,
           "DELETE",
         );
         toast.success(
-          permanent ? "Registro eliminado" : "Registro movido a la papelera",
+          permanent
+            ? t("Registro eliminado")
+            : t("Registro movido a la papelera"),
         );
       }
       close();
@@ -1883,14 +1992,14 @@ function RecordRowAction({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label={`Restaurar ${label}`}
+              aria-label={t("Restaurar %{p0}", { p0: label })}
               onClick={() => setPending("restore")}
             >
               <ArchiveRestore size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={6}>
-            Restaurar
+            {t("Restaurar")}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -1901,33 +2010,35 @@ function RecordRowAction({
               variant="ghost"
               size="icon"
               className="records-table-row-delete"
-              aria-label={`Eliminar ${label}`}
+              aria-label={t("Eliminar %{p0}", { p0: label })}
               onClick={() => setPending("delete")}
             >
               <Trash2 size={15} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={6}>
-            {permanent ? "Eliminar" : "Mover a papelera"}
+            {permanent ? t("Eliminar") : t("Mover a papelera")}
           </TooltipContent>
         </Tooltip>
       )}
       <Confirm
         isOpen={pending === "delete"}
-        title={`Eliminar ${label}`}
+        title={t("Eliminar %{p0}", { p0: label })}
         content={
           hubspotArchive
             ? "¿Archivar este registro en HubSpot?"
             : permanent
-              ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
+              ? t(
+                  "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer.",
+                )
               : "¿Mover este registro a la papelera?"
         }
         confirm={
           hubspotArchive
-            ? "Archivar en HubSpot"
+            ? t("Archivar en HubSpot")
             : permanent
-              ? "Eliminar permanentemente"
-              : "Mover a papelera"
+              ? t("Eliminar permanentemente")
+              : t("Mover a papelera")
         }
         confirmColor="warning"
         loading={busy}
@@ -1936,7 +2047,7 @@ function RecordRowAction({
       />
       <Confirm
         isOpen={pending === "restore"}
-        title={`Restaurar ${label}`}
+        title={t("Restaurar %{p0}", { p0: label })}
         content="El registro volverá a la lista principal si cumple la estructura actual."
         confirm="Restaurar"
         loading={busy}
@@ -1956,12 +2067,14 @@ function RecordsFooter({
   object: CrmObject;
   total: number | undefined;
 }) {
+  const t = useMessages(recordsMessages);
+
   return (
     <div className="list-footer">
       <span>
         {total === undefined
-          ? `${dataLength} registros en esta página`
-          : `${total} registros`}
+          ? t("%{p0} registros en esta página", { p0: dataLength })
+          : t("%{p0} registros", { p0: total })}
       </span>
       <ListPagination
         rowsPerPageOptions={
@@ -1986,6 +2099,11 @@ function PipelineColumn({
   label: string;
   onOpen: (r: CrmRecord) => void;
 }) {
+  const labelLocale = useAppLocale();
+  const uiLocale = intlLocale(labelLocale);
+
+  const t = useMessages(recordsMessages);
+
   const [page, setPage] = useState(1);
   const pipeline = getPipeline(object)!;
   const client = useQueryClient();
@@ -2056,9 +2174,9 @@ function PipelineColumn({
         <div
           className="space-y-2 py-2"
           role="status"
-          aria-label="Cargando tarjetas…"
+          aria-label={t("Cargando tarjetas…")}
         >
-          <span className="sr-only">Cargando tarjetas…</span>
+          <span className="sr-only">{t("Cargando tarjetas…")}</span>
           <div className="rounded-lg border bg-card p-3 space-y-2">
             <Skeleton className="h-4 w-28" />
             <Skeleton className="h-3 w-40" />
@@ -2084,7 +2202,7 @@ function PipelineColumn({
             }
           >
             <button className="card-title" onClick={() => onOpen(r)}>
-              {display(r.name ?? r[object.config.fieldOrder![0]])}
+              {display(r.name ?? r[object.config.fieldOrder![0]], uiLocale)}
             </button>
             {pipeline.amountField && (
               <strong>
@@ -2104,16 +2222,19 @@ function PipelineColumn({
                           ?.integer
                       ? 0
                       : 2,
+                  uiLocale,
                 )}
               </strong>
             )}
-            {pipeline.ownerField && <p>{display(r[pipeline.ownerField])}</p>}
+            {pipeline.ownerField && (
+              <p>{display(r[pipeline.ownerField], uiLocale)}</p>
+            )}
             <select
-              aria-label={`Etapa de ${r.name ?? r.id}`}
+              aria-label={t("Etapa de %{p0}", { p0: String(r.name ?? r.id) })}
               value={String(r[pipeline.field] ?? "")}
               onChange={(e) => move(r, e.target.value)}
             >
-              <option value="">Sin etapa</option>
+              <option value="">{t("Sin etapa")}</option>
               {object.config.fields[pipeline.field].options?.map((o) => (
                 <option key={String(o.value)} value={String(o.value)}>
                   {o.label}
@@ -2130,7 +2251,7 @@ function PipelineColumn({
           disabled={page === 1}
           onClick={() => setPage(page - 1)}
         >
-          Anterior
+          {t("Anterior")}
         </Button>
         <span>{page}</span>
         <Button
@@ -2139,7 +2260,7 @@ function PipelineColumn({
           disabled={page * 20 >= (query.data?.total ?? 0)}
           onClick={() => setPage(page + 1)}
         >
-          Siguiente
+          {t("Siguiente")}
         </Button>
       </div>
     </section>
@@ -2153,6 +2274,9 @@ function RelatedValue({
   objectName: string;
   value: unknown;
 }) {
+  const labelLocale = useAppLocale();
+  const uiLocale = intlLocale(labelLocale);
+
   const ids = (Array.isArray(value) ? value : value ? [value] : []).map(String);
   const query = useQuery({
     queryKey: ["relation-labels", objectName, ids],
@@ -2161,7 +2285,10 @@ function RelatedValue({
         ids.map((id) =>
           api(`/records/${objectName}/${encodeURIComponent(id)}`)
             .then((r) =>
-              display(r.data.name ?? r.data.title ?? r.data.subject ?? id),
+              display(
+                r.data.name ?? r.data.title ?? r.data.subject ?? id,
+                uiLocale,
+              ),
             )
             .catch(() => id),
         ),

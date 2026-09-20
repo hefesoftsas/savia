@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
@@ -14,6 +16,8 @@ type GeocodingSettings = {
 };
 
 export function GeocodingSettingsPanel() {
+  const t = useMessages(studioMessages);
+  const locale = useAppLocale();
   const queryClient = useQueryClient();
   const [apiKey, setApiKey] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,7 +28,7 @@ export function GeocodingSettingsPanel() {
 
   async function saveKey() {
     if (!apiKey.trim()) {
-      toast.error("Indica la API key de Geoapify.");
+      toast.error(t("Indica la API key de Geoapify."));
       return;
     }
     setBusy(true);
@@ -34,7 +38,7 @@ export function GeocodingSettingsPanel() {
       });
       setApiKey("");
       await queryClient.invalidateQueries({ queryKey: ["geocoding-settings"] });
-      toast.success("API key de Geoapify guardada");
+      toast.success(t("API key de Geoapify guardada"));
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -48,7 +52,7 @@ export function GeocodingSettingsPanel() {
       await api("/settings/geocoding", "PUT", { clearGeoapifyApiKey: true });
       setApiKey("");
       await queryClient.invalidateQueries({ queryKey: ["geocoding-settings"] });
-      toast.success("API key de Geoapify eliminada");
+      toast.success(t("API key de Geoapify eliminada"));
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -58,13 +62,13 @@ export function GeocodingSettingsPanel() {
 
   return (
     <fieldset className="studio-fieldset">
-      <legend>Clave de Geoapify</legend>
+      <legend>{t("Clave de Geoapify")}</legend>
       <p className="studio-field-help">
         {settings.data?.geoapifyConfigured
           ? settings.data.geoapifyStored
-            ? "Hay una clave guardada para este espacio."
-            : "Geoapify está disponible mediante configuración del servidor."
-          : "Geoapify requiere una API key gratuita."}
+            ? t("Hay una clave guardada para este espacio.")
+            : t("Geoapify está disponible mediante configuración del servidor.")
+          : t("Geoapify requiere una API key gratuita.")}
       </p>
       <Input
         type="password"
@@ -72,8 +76,8 @@ export function GeocodingSettingsPanel() {
         value={apiKey}
         placeholder={
           settings.data?.geoapifyStored
-            ? "•••••••••••••••• (dejar en blanco para conservar)"
-            : "Pega tu API key de Geoapify"
+            ? t("•••••••••••••••• (dejar en blanco para conservar)")
+            : t("Pega tu API key de Geoapify")
         }
         onChange={(event) => setApiKey(event.target.value)}
       />
@@ -81,11 +85,15 @@ export function GeocodingSettingsPanel() {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200">
           <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            Clave de Geoapify guardada y cifrada
+            {t("Clave de Geoapify guardada y cifrada")}
           </span>
           {settings.data.updatedAt ? (
             <span className="text-emerald-700 dark:text-emerald-400">
-              • Configurada el {formatConfiguredDate(settings.data.updatedAt)}
+              {t("• Configurada el")}{" "}
+              {formatConfiguredDate(
+                settings.data.updatedAt,
+                intlLocale(locale),
+              )}
             </span>
           ) : null}
         </div>
@@ -97,7 +105,7 @@ export function GeocodingSettingsPanel() {
           disabled={busy}
           onClick={() => void saveKey()}
         >
-          Guardar clave
+          {t("Guardar clave")}
         </Button>
         {settings.data?.geoapifyStored ? (
           <Button
@@ -107,12 +115,12 @@ export function GeocodingSettingsPanel() {
             disabled={busy}
             onClick={() => void clearKey()}
           >
-            Quitar clave
+            {t("Quitar clave")}
           </Button>
         ) : null}
       </div>
       <p className="studio-field-help">
-        La clave se cifra en el servidor y no se devuelve al navegador.
+        {t("La clave se cifra en el servidor y no se devuelve al navegador.")}
       </p>
     </fieldset>
   );

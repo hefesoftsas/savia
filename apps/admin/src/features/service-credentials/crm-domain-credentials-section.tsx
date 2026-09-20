@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import {
   useEffect,
   useLayoutEffect,
@@ -89,10 +91,13 @@ function GlobalCredentialsPanel({
   freeServicesEntry: ReactNode;
   loadingMessage?: ReactNode;
 }) {
+  const t = useMessages(settingsMessages);
   return (
     <CredentialGroup
-      title="Credenciales globales"
-      description="Una clave por espacio. Solo se usa cuando activas el servicio correspondiente."
+      title={t("Credenciales globales")}
+      description={t(
+        "Una clave por espacio. Solo se usa cuando activas el servicio correspondiente.",
+      )}
     >
       {globalCredentials}
       {loadingMessage}
@@ -103,21 +108,24 @@ function GlobalCredentialsPanel({
 }
 
 function FreeServicesEntry() {
+  const t = useMessages(settingsMessages);
   return (
     <CredentialEntry
-      title="Proveedores de mapas gratuitos"
-      description="Photon y Nominatim cubren autocompletar de direcciones sin registrar credenciales."
+      title={t("Proveedores de mapas gratuitos")}
+      description={t(
+        "Photon y Nominatim cubren autocompletar de direcciones sin registrar credenciales.",
+      )}
       requirement="none"
     >
       <CredentialFreeServiceList
         items={[
           {
             name: "Photon (Komoot)",
-            detail: "Búsqueda de direcciones sin API key.",
+            detail: t("Búsqueda de direcciones sin API key."),
           },
           {
             name: "Nominatim (OpenStreetMap)",
-            detail: "Geocodificación abierta sin registro previo.",
+            detail: t("Geocodificación abierta sin registro previo."),
           },
         ]}
       />
@@ -127,7 +135,7 @@ function FreeServicesEntry() {
 
 function integrationStatus(item: IntegrationSummary): {
   configured: boolean;
-  label: string;
+  label: keyof typeof settingsMessages;
 } {
   if (item.connection?.mode === "external") {
     if (item.connection.authType === "none") {
@@ -151,6 +159,8 @@ export function CrmDomainCredentialsSection({
   services: Pick<AppServices, "apiClient">;
   globalCredentials?: ReactNode;
 }) {
+  const t = useMessages(settingsMessages);
+  const locale = intlLocale(useAppLocale());
   const navigate = useNavigate();
   const [domains, setDomains] = useState<CrmDomain[]>([]);
   const [loadingDomains, setLoadingDomains] = useState(true);
@@ -214,12 +224,14 @@ export function CrmDomainCredentialsSection({
         <TabsList className="credentials-tabs-list">
           <CredentialTab
             value="global"
-            tooltip="Una clave por espacio para IA y servicios opcionales como Geoapify."
+            tooltip={t(
+              "Una clave por espacio para IA y servicios opcionales como Geoapify.",
+            )}
           >
-            Globales
+            {t("Globales")}
           </CredentialTab>
           <CredentialTab value="integrations" tooltip="" disabled>
-            Integraciones
+            {t("Integraciones")}
           </CredentialTab>
         </TabsList>
         <TabsContent value="global" className="credentials-tabs-panel">
@@ -227,8 +239,14 @@ export function CrmDomainCredentialsSection({
             globalCredentials={globalCredentials}
             freeServicesEntry={<FreeServicesEntry />}
             loadingMessage={
-              <div className="space-y-2 py-2" role="status" aria-label="Cargando mapas e integraciones…">
-                <span className="sr-only">Cargando mapas e integraciones…</span>
+              <div
+                className="space-y-2 py-2"
+                role="status"
+                aria-label={t("Cargando mapas e integraciones…")}
+              >
+                <span className="sr-only">
+                  {t("Cargando mapas e integraciones…")}
+                </span>
                 <Skeleton className="h-4 w-48" />
                 <Skeleton className="h-9 w-full max-w-sm rounded-md" />
               </div>
@@ -245,12 +263,14 @@ export function CrmDomainCredentialsSection({
         <TabsList className="credentials-tabs-list">
           <CredentialTab
             value="global"
-            tooltip="Una clave por espacio para IA y servicios opcionales como Geoapify."
+            tooltip={t(
+              "Una clave por espacio para IA y servicios opcionales como Geoapify.",
+            )}
           >
-            Globales
+            {t("Globales")}
           </CredentialTab>
           <CredentialTab value="integrations" tooltip="" disabled>
-            Integraciones
+            {t("Integraciones")}
           </CredentialTab>
         </TabsList>
         <TabsContent value="global" className="credentials-tabs-panel">
@@ -259,8 +279,9 @@ export function CrmDomainCredentialsSection({
             freeServicesEntry={<FreeServicesEntry />}
             loadingMessage={
               <p className="credentials-muted">
-                No hay dominios de datos disponibles para Geoapify o
-                integraciones del CRM.
+                {t(
+                  "No hay dominios de datos disponibles para Geoapify o integraciones del CRM.",
+                )}
               </p>
             }
           />
@@ -289,7 +310,9 @@ export function CrmDomainCredentialsSection({
   const geoapifyEntry = (
     <CredentialEntry
       title="Geoapify"
-      description="Autocompletar de direcciones en el diseñador cuando eliges Geoapify como proveedor."
+      description={t(
+        "Autocompletar de direcciones en el diseñador cuando eliges Geoapify como proveedor.",
+      )}
       requirement="optional"
       status={
         geocoding.isLoading ? null : (
@@ -297,10 +320,10 @@ export function CrmDomainCredentialsSection({
             configured={Boolean(geoapifyConfigured)}
             label={
               geocoding.data?.geoapifyStored
-                ? "Clave guardada"
+                ? t("Clave guardada")
                 : geocoding.data?.geoapifyConfigured
-                  ? "Disponible en servidor"
-                  : "Sin clave"
+                  ? t("Disponible en servidor")
+                  : t("Sin clave")
             }
           />
         )
@@ -312,12 +335,16 @@ export function CrmDomainCredentialsSection({
 
   const integrationsPanel = (
     <CredentialGroup
-      title="Por integración"
-      description="Cada OpenAPI externa guarda su URL base y credencial por separado."
+      title={t("Por integración")}
+      description={t(
+        "Cada OpenAPI externa guarda su URL base y credencial por separado.",
+      )}
     >
       <CredentialEntry
-        title="Integraciones OpenAPI del CRM"
-        description="Revisa qué conexiones externas ya tienen credencial y cuáles siguen pendientes."
+        title={t("Integraciones OpenAPI del CRM")}
+        description={t(
+          "Revisa qué conexiones externas ya tienen credencial y cuáles siguen pendientes.",
+        )}
         requirement="per-item"
         status={
           integrations.isLoading ? null : integrations.data?.data.length ? (
@@ -325,16 +352,24 @@ export function CrmDomainCredentialsSection({
               configured={pendingIntegrations.length === 0}
               label={
                 pendingIntegrations.length === 0
-                  ? `${configuredIntegrations.length} listas`
-                  : `${pendingIntegrations.length} pendientes`
+                  ? t("%{count} listas", {
+                      count: configuredIntegrations.length,
+                    })
+                  : t("%{count} pendientes", {
+                      count: pendingIntegrations.length,
+                    })
               }
             />
           ) : null
         }
       >
         {integrations.isLoading ? (
-          <div className="space-y-2 py-2" role="status" aria-label="Cargando integraciones…">
-            <span className="sr-only">Cargando integraciones…</span>
+          <div
+            className="space-y-2 py-2"
+            role="status"
+            aria-label={t("Cargando integraciones…")}
+          >
+            <span className="sr-only">{t("Cargando integraciones…")}</span>
             <Skeleton className="h-4 w-40" />
             <Skeleton className="h-9 w-full max-w-sm rounded-md" />
           </div>
@@ -352,9 +387,9 @@ export function CrmDomainCredentialsSection({
                     <div className="credentials-list-copy">
                       <strong>{item.name}</strong>
                       <span className="credentials-list-meta">
-                        {status.label}
+                        {t(status.label)}
                         {item.hasSecret && item.created_at
-                          ? ` • Configurada el ${formatConfiguredDate(item.created_at)}`
+                          ? ` • ${t("Configurado el %{date}", { date: formatConfiguredDate(item.created_at, locale) })}`
                           : ""}
                       </span>
                     </div>
@@ -373,14 +408,16 @@ export function CrmDomainCredentialsSection({
             {(pendingIntegrations.length > 0 ||
               configuredIntegrations.length > 0) && (
               <p className="credentials-summary-line">
-                {configuredIntegrations.length} con credencial ·{" "}
-                {pendingIntegrations.length} pendientes
+                {t("%{configured} con credencial · %{pending} pendientes", {
+                  configured: configuredIntegrations.length,
+                  pending: pendingIntegrations.length,
+                })}
               </p>
             )}
           </>
         ) : (
           <p className="credentials-muted">
-            Aún no importaste integraciones en este dominio.
+            {t("Aún no importaste integraciones en este dominio.")}
           </p>
         )}
         <div className="credentials-entry-actions">
@@ -396,7 +433,7 @@ export function CrmDomainCredentialsSection({
               )
             }
           >
-            Administrar integraciones
+            {t("Administrar integraciones")}
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -406,12 +443,16 @@ export function CrmDomainCredentialsSection({
 
   const sourcesPanel = domainTools ? (
     <CredentialGroup
-      title="Por fuente"
-      description="Los tokens JSON:API se guardan en cada fuente, no de forma global."
+      title={t("Por fuente")}
+      description={t(
+        "Los tokens JSON:API se guardan en cada fuente, no de forma global.",
+      )}
     >
       <CredentialEntry
-        title="Fuentes de datos externas"
-        description="Conecta recursos remotos y define el token de acceso por fuente."
+        title={t("Fuentes de datos externas")}
+        description={t(
+          "Conecta recursos remotos y define el token de acceso por fuente.",
+        )}
         requirement="per-item"
       >
         <div className="credentials-entry-actions">
@@ -427,7 +468,7 @@ export function CrmDomainCredentialsSection({
               )
             }
           >
-            Administrar fuentes de datos
+            {t("Administrar fuentes de datos")}
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -440,15 +481,19 @@ export function CrmDomainCredentialsSection({
       <TabsList className="credentials-tabs-list">
         <CredentialTab
           value="global"
-          tooltip="Una clave por espacio para IA y servicios opcionales como Geoapify."
+          tooltip={t(
+            "Una clave por espacio para IA y servicios opcionales como Geoapify.",
+          )}
         >
-          Globales
+          {t("Globales")}
         </CredentialTab>
         <CredentialTab
           value="integrations"
-          tooltip="Cada OpenAPI externa guarda su URL y credencial por separado."
+          tooltip={t(
+            "Cada OpenAPI externa guarda su URL y credencial por separado.",
+          )}
         >
-          Integraciones
+          {t("Integraciones")}
           {pendingIntegrations.length > 0 ? (
             <Badge className="ml-1.5" variant="secondary">
               {pendingIntegrations.length}
@@ -458,9 +503,11 @@ export function CrmDomainCredentialsSection({
         {domainTools ? (
           <CredentialTab
             value="sources"
-            tooltip="Los tokens JSON:API se configuran en cada fuente de datos."
+            tooltip={t(
+              "Los tokens JSON:API se configuran en cada fuente de datos.",
+            )}
           >
-            Fuentes
+            {t("Fuentes")}
           </CredentialTab>
         ) : null}
       </TabsList>

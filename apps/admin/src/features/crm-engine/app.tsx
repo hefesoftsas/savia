@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import {
   canDuplicateRecord,
   duplicateRecordValues,
@@ -141,33 +143,26 @@ const icons: Record<string, typeof Boxes> = {
   task: CheckSquare,
   activity: Activity,
 };
-const money = (value: unknown) =>
-  new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
-const compact = (value: number) =>
-  new Intl.NumberFormat("es-CO", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
 const initials = (value: unknown) =>
   String(value ?? "")
     .split(" ")
     .slice(0, 2)
     .map((w) => w[0])
     .join("");
-const Loading = () => (
-  <div
-    className="w-full space-y-4 py-4"
-    role="status"
-    aria-label="Cargando espacio de trabajo…"
-  >
-    <span className="sr-only">Cargando espacio de trabajo…</span>
-    <ScreenListSkeleton count={4} />
-  </div>
-);
+const Loading = () => {
+  const t = useMessages(automationMessages);
+
+  return (
+    <div
+      className="w-full space-y-4 py-4"
+      role="status"
+      aria-label={t("Cargando espacio de trabajo…")}
+    >
+      <span className="sr-only">{t("Cargando espacio de trabajo…")}</span>
+      <ScreenListSkeleton count={4} />
+    </div>
+  );
+};
 function Modal({
   title,
   description,
@@ -191,6 +186,8 @@ function Modal({
   drawerLong?: boolean;
   dialogClassName?: string;
 }) {
+  const t = useMessages(automationMessages);
+
   if (page)
     return (
       <section
@@ -200,13 +197,16 @@ function Modal({
       >
         <Button variant="ghost" onClick={onClose}>
           <ArrowLeft size={16} />
-          Volver a {title.split(" · ").slice(1).join(" · ") || "la lista"}
+          {t("Volver a")}{" "}
+          {title.split(" · ").slice(1).join(" · ") || t("la lista")}
         </Button>
         <header className="record-page-heading">
           <h1>{title}</h1>
           <p>
             {conversational
-              ? "Vamos paso a paso. Podrás revisar tus respuestas antes de guardar."
+              ? t(
+                  "Vamos paso a paso. Podrás revisar tus respuestas antes de guardar.",
+                )
               : description}
           </p>
         </header>
@@ -214,7 +214,7 @@ function Modal({
       </section>
     );
   const copy = conversational
-    ? "Vamos paso a paso. Podrás revisar tus respuestas antes de guardar."
+    ? t("Vamos paso a paso. Podrás revisar tus respuestas antes de guardar.")
     : description;
   if (drawer)
     return (
@@ -286,6 +286,8 @@ function App({
   embedded?: boolean;
   search?: string;
 }) {
+  const t = useMessages(automationMessages);
+
   const activeQueryClient = useQueryClient();
   const [ready, setReady] = useState(false),
     [bootError, setBootError] = useState("");
@@ -299,7 +301,7 @@ function App({
       });
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
-        throw new Error(body.error ?? "No se pudo preparar el dominio.");
+        throw new Error(body.error ?? t("No se pudo preparar el dominio."));
       }
     };
     void bootstrap("/bootstrap")
@@ -587,7 +589,7 @@ function App({
       );
       await refresh();
       toast.success(
-        hidden ? "Pantalla eliminada del menú" : "Pantalla recuperada",
+        hidden ? t("Pantalla eliminada del menú") : t("Pantalla recuperada"),
       );
     } catch (error) {
       toast.error((error as Error).message);
@@ -598,7 +600,7 @@ function App({
     try {
       await api("/objects/reorder", "PUT", { layout });
       await refresh();
-      toast.success("Menú de pantallas actualizado");
+      toast.success(t("Menú de pantallas actualizado"));
     } catch (error) {
       toast.error((error as Error).message);
       throw error;
@@ -628,8 +630,12 @@ function App({
       );
       toast.success(
         deletedRecords
-          ? `Pantalla «${target.label}» y sus registros eliminados`
-          : `Pantalla «${target.label}» eliminada permanentemente`,
+          ? t("Pantalla «%{value0}» y sus registros eliminados", {
+              value0: target.label,
+            })
+          : t("Pantalla «%{value0}» eliminada permanentemente", {
+              value0: target.label,
+            }),
       );
       if (selected === target.name) {
         const remaining = objects.filter((item) => item.name !== target.name);
@@ -675,9 +681,11 @@ function App({
     return (
       <div className="fatal">
         <Leaf />
-        <h1>No pudimos conectar con el CRM</h1>
+        <h1>{t("No pudimos conectar con el CRM")}</h1>
         <p>{bootError}</p>
-        <Button onClick={() => window.location.reload()}>Reintentar</Button>
+        <Button onClick={() => window.location.reload()}>
+          {t("Reintentar")}
+        </Button>
       </div>
     );
   const domainContent =
@@ -690,7 +698,7 @@ function App({
               variant="outline"
               onClick={() => navigate(selected, "collection-sources")}
             >
-              Fuentes y colecciones
+              {t("Fuentes y colecciones")}
             </Button>
           </div>
         )}
@@ -795,15 +803,17 @@ function App({
         }
         title={
           editing === "new"
-            ? `${copying ? "Duplicar registro" : "Nuevo registro"} · ${object.label}`
-            : String(editing.name ?? "Editar registro")
+            ? `${copying ? t("Duplicar registro") : t("Nuevo registro")} · ${object.label}`
+            : String(editing.name ?? t("Editar registro"))
         }
         description={
           editing === "new"
             ? copying
-              ? "Se copiaron los campos simples editables. Se excluyen identificadores, propietarios, fechas de auditoría, campos únicos, ocultos o calculados, archivos y relaciones. Revisa los datos antes de guardar. Al cerrar se descarta esta copia."
-              : "Completa los datos. Los campos con * son obligatorios."
-            : "Edita los datos y guarda tus cambios."
+              ? t(
+                  "Se copiaron los campos simples editables. Se excluyen identificadores, propietarios, fechas de auditoría, campos únicos, ocultos o calculados, archivos y relaciones. Revisa los datos antes de guardar. Al cerrar se descarta esta copia.",
+                )
+              : t("Completa los datos. Los campos con * son obligatorios.")
+            : t("Edita los datos y guarda tus cambios.")
         }
         onClose={closeEditor}
       >
@@ -852,10 +862,10 @@ function App({
           onSaved={(saved) => {
             toast.success(
               saved && saved._localPending
-                ? "Guardado en este dispositivo · sincronización pendiente"
+                ? t("Guardado en este dispositivo · sincronización pendiente")
                 : editing === "new"
-                  ? "Registro creado"
-                  : "Cambios guardados",
+                  ? t("Registro creado")
+                  : t("Cambios guardados"),
             );
             closeEditor();
             refresh();
@@ -888,20 +898,21 @@ function App({
               <Leaf size={25} />
             </span>
             <span>
-              savia<span className="brand-dot">.</span>
+              {t("savia")}
+              <span className="brand-dot">.</span>
             </span>
-            <span className="studio-label">CRM Studio</span>
+            <span className="studio-label">{t("CRM Studio")}</span>
           </a>
           <div className="workspace-switch">
             <span className="workspace-icon">S</span>
             <div>
-              <strong>Espacio de Savia</strong>
-              <span>Demostración local</span>
+              <strong>{t("Espacio de Savia")}</strong>
+              <span>{t("Demostración local")}</span>
             </div>
             <span className="workspace-status" />
           </div>
-          <p className="nav-caption">Tu negocio</p>
-          <nav aria-label="Módulos del CRM">
+          <p className="nav-caption">{t("Tu negocio")}</p>
+          <nav aria-label={t("Módulos del CRM")}>
             {menuBlocks.map((block) => (
               <Fragment key={block.kind === "section" ? block.id : "ungrouped"}>
                 {block.kind === "section" ? (
@@ -929,8 +940,12 @@ function App({
                       </button>
                       <button
                         className="nav-screen-delete"
-                        aria-label={`Eliminar pantalla ${o.label}`}
-                        title={`Eliminar pantalla ${o.label}`}
+                        aria-label={t("Eliminar pantalla %{value0}", {
+                          value0: o.label,
+                        })}
+                        title={t("Eliminar pantalla %{value0}", {
+                          value0: o.label,
+                        })}
                         onClick={() => navigate(o.name, "remove-screen")}
                       >
                         <Trash2 size={15} />
@@ -945,7 +960,7 @@ function App({
             className="nav-item"
             onClick={() => navigate(selected, "admin")}
           >
-            <SlidersHorizontal size={18} /> Administrar
+            <SlidersHorizontal size={18} /> {t("Administrar")}
           </button>
           <button
             className={
@@ -953,19 +968,19 @@ function App({
             }
             onClick={() => navigate(selected, "service-credentials")}
           >
-            <KeyRound size={18} /> Claves y servicios
+            <KeyRound size={18} /> {t("Claves y servicios")}
           </button>
           <div className="sidebar-bottom">
             <div className="storage-note">
               <Database size={15} />
-              <span>Datos persistidos en D1</span>
+              <span>{t("Datos persistidos en D1")}</span>
               <span className="live-dot" />
             </div>
             <div className="profile">
-              <span className="avatar">SV</span>
+              <span className="avatar">{t("SV")}</span>
               <div>
-                <strong>Equipo Savia</strong>
-                <span>Sesión de demostración</span>
+                <strong>{t("Equipo Savia")}</strong>
+                <span>{t("Sesión de demostración")}</span>
               </div>
               <PanelLeftClose size={17} />
             </div>
@@ -975,7 +990,7 @@ function App({
       {!embedded && mobile ? (
         <button
           className="sidebar-backdrop"
-          aria-label="Cerrar menú"
+          aria-label={t("Cerrar menú")}
           onClick={() => setMobile(false)}
         />
       ) : null}
@@ -985,35 +1000,35 @@ function App({
             <div className="breadcrumb">
               <button
                 className="mobile-menu"
-                aria-label="Abrir menú"
+                aria-label={t("Abrir menú")}
                 onClick={() => setMobile(true)}
               >
                 <Menu size={20} />
               </button>
-              <span>Espacio de Savia</span>
+              <span>{t("Espacio de Savia")}</span>
               <ChevronRight size={14} />
               <strong>
                 {view === "records" || view === "create" || view === "edit"
                   ? object.label
                   : view === "collection-sources"
-                    ? "Fuentes y colecciones"
+                    ? t("Fuentes y colecciones")
                     : view === "designer"
-                      ? "Diseñador"
+                      ? t("Diseñador")
                       : view === "integrations"
-                        ? "Integraciones"
+                        ? t("Integraciones")
                         : view === "service-credentials"
-                          ? "Claves y servicios"
+                          ? t("Claves y servicios")
                           : view === "operations"
-                            ? "Operaciones"
+                            ? t("Operaciones")
                             : view === "screens" || view === "remove-screen"
-                              ? "Pantallas"
+                              ? t("Pantallas")
                               : view.startsWith("admin")
-                                ? "Administración"
-                                : "Historial"}
+                                ? t("Administración")
+                                : t("Historial")}
               </strong>
             </div>
             <span className="demo-label">
-              <span className="live-dot" /> Entorno de prueba
+              <span className="live-dot" /> {t("Entorno de prueba")}
             </span>
           </header>
         ) : null}
@@ -1052,27 +1067,31 @@ function App({
             <div className="screens-page">
               <div className="page-heading">
                 <div>
-                  <p className="eyebrow">Tu negocio</p>
+                  <p className="eyebrow">{t("Tu negocio")}</p>
                   <div className="page-heading-title-row">
                     <h1>
                       {removeScreen
-                        ? `Eliminar pantalla · ${removeScreen.label}`
+                        ? t("Eliminar pantalla · %{value0}", {
+                            value0: removeScreen.label,
+                          })
                         : view === "screen-settings"
-                          ? "Presentación"
-                          : "Gestionar pantallas"}
+                          ? t("Presentación")
+                          : t("Gestionar pantallas")}
                     </h1>
                     {view !== "screen-settings" ? (
-                      <StudioHelpTooltip label="Ayuda sobre gestionar pantallas">
-                        Reordena el menú de Tu negocio, crea secciones, activa u
-                        oculta pantallas y configura cómo se abren sus
-                        formularios.
+                      <StudioHelpTooltip
+                        label={t("Ayuda sobre gestionar pantallas")}
+                      >
+                        {t(
+                          "Reordena el menú de Tu negocio, crea secciones, activa u oculta pantallas y configura cómo se abren sus formularios.",
+                        )}
                       </StudioHelpTooltip>
                     ) : null}
                   </div>
                 </div>
                 {view === "screen-settings" ? (
                   <select
-                    aria-label="Pantalla a configurar"
+                    aria-label={t("Pantalla a configurar")}
                     className="select-input screen-presentation-picker"
                     disabled={!objects.length}
                     value={selected}
@@ -1083,7 +1102,9 @@ function App({
                     {sortScreens(objects).map((item) => (
                       <option key={item.name} value={item.name}>
                         {item.label}
-                        {item.config.studio?.screen?.hidden ? " · Oculta" : ""}
+                        {item.config.studio?.screen?.hidden
+                          ? t(" · Oculta")
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -1101,14 +1122,14 @@ function App({
                       className="gap-2 px-3.5 py-1.5 text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all"
                     >
                       <GripVertical className="size-3.5" aria-hidden="true" />
-                      Orden del menú
+                      {t("Orden del menú")}
                     </TabsTrigger>
                     <TabsTrigger
                       value="screens"
                       className="gap-2 px-3.5 py-1.5 text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all"
                     >
                       <Table2 className="size-3.5" aria-hidden="true" />
-                      Pantallas
+                      {t("Pantallas")}
                     </TabsTrigger>
                   </TabsList>
 
@@ -1250,7 +1271,7 @@ function App({
             <>
               <div className="page-heading">
                 <div>
-                  <p className="eyebrow">Relaciones que crecen</p>
+                  <p className="eyebrow">{t("Relaciones que crecen")}</p>
                   <h1>
                     {object.label}
                     {object.count !== undefined && (
@@ -1266,7 +1287,7 @@ function App({
                   {capabilities.create && (
                     <Button onClick={() => editRecord("new")}>
                       <Plus size={17} />
-                      Nuevo
+                      {t("Nuevo")}
                     </Button>
                   )}
                 </div>
@@ -1283,7 +1304,7 @@ function App({
                   />
                 ) : (
                   <p role="alert">
-                    Esta colección no permite listar registros.
+                    {t("Esta colección no permite listar registros.")}
                   </p>
                 )}
               </Suspense>
@@ -1292,11 +1313,11 @@ function App({
             <>
               <div className="page-heading">
                 <div>
-                  <p className="eyebrow">Tu CRM, a tu manera</p>
-                  <h1>Diseña una vez. Úsalo siempre.</h1>
+                  <p className="eyebrow">{t("Tu CRM, a tu manera")}</p>
+                  <h1>{t("Diseña una vez. Úsalo siempre.")}</h1>
                 </div>
                 <select
-                  aria-label="Objeto a diseñar"
+                  aria-label={t("Objeto a diseñar")}
                   className="select-input"
                   disabled={!visibleObjects.length}
                   value={
@@ -1324,13 +1345,14 @@ function App({
                   />
                 ) : (
                   <div className="empty-screens">
-                    <h2>No hay pantallas activas</h2>
+                    <h2>{t("No hay pantallas activas")}</h2>
                     <p>
-                      Crea un objeto o recupera una pantalla para diseñar su
-                      formulario.
+                      {t(
+                        "Crea un objeto o recupera una pantalla para diseñar su formulario.",
+                      )}
                     </p>
                     <Button onClick={() => navigate(selected, "screens")}>
-                      Gestionar pantallas
+                      {t("Gestionar pantallas")}
                     </Button>
                   </div>
                 )}
@@ -1373,8 +1395,8 @@ function App({
         </div>
         {!embedded ? (
           <footer className="app-footer">
-            <span>Savia CRM Studio</span>
-            <span>Entorno local · Guardado en el servidor</span>
+            <span>{t("Savia CRM Studio")}</span>
+            <span>{t("Entorno local · Guardado en el servidor")}</span>
           </footer>
         ) : null}
       </main>
@@ -1412,11 +1434,11 @@ function App({
       )}
       {recordId && !editing && detailQuery.error && (
         <Modal
-          title="Registro no disponible"
+          title={t("Registro no disponible")}
           description={detailQuery.error.message}
           onClose={closeRecord}
         >
-          <Button onClick={closeRecord}>Volver a la lista</Button>
+          <Button onClick={closeRecord}>{t("Volver a la lista")}</Button>
         </Modal>
       )}
       {view !== "create" &&
@@ -1437,6 +1459,8 @@ function DeleteRecord({
   record: CrmRecord;
   onDeleted: () => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const hubspotArchive = object.config.studio?.collection?.kind === "crm";
   const permanent = !supportsLocalRecordTools(object);
   const [confirm, setConfirm] = useState(false),
@@ -1448,13 +1472,15 @@ function DeleteRecord({
         <>
           <span>
             {hubspotArchive
-              ? "¿Archivar este registro en HubSpot?"
+              ? t("¿Archivar este registro en HubSpot?")
               : permanent
-                ? "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer."
-                : "¿Mover este registro a la papelera?"}
+                ? t(
+                    "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer.",
+                  )
+                : t("¿Mover este registro a la papelera?")}
           </span>
           <Button variant="ghost" onClick={() => setConfirm(false)}>
-            Cancelar
+            {t("Cancelar")}
           </Button>
           <Button
             variant="destructive"
@@ -1468,10 +1494,10 @@ function DeleteRecord({
                 );
                 toast.success(
                   hubspotArchive
-                    ? "Registro archivado en HubSpot"
+                    ? t("Registro archivado en HubSpot")
                     : permanent
-                      ? "Registro eliminado"
-                      : "Registro movido a la papelera",
+                      ? t("Registro eliminado")
+                      : t("Registro movido a la papelera"),
                 );
                 onDeleted();
               } catch (e) {
@@ -1482,10 +1508,10 @@ function DeleteRecord({
             }}
           >
             {hubspotArchive
-              ? "Archivar en HubSpot"
+              ? t("Archivar en HubSpot")
               : permanent
-                ? "Eliminar permanentemente"
-                : "Mover a papelera"}
+                ? t("Eliminar permanentemente")
+                : t("Mover a papelera")}
           </Button>
         </>
       ) : (
@@ -1496,10 +1522,10 @@ function DeleteRecord({
         >
           <Trash2 size={15} />
           {hubspotArchive
-            ? "Archivar en HubSpot"
+            ? t("Archivar en HubSpot")
             : permanent
-              ? "Eliminar permanentemente"
-              : "Mover a papelera"}
+              ? t("Eliminar permanentemente")
+              : t("Mover a papelera")}
         </Button>
       )}
     </div>
@@ -1514,6 +1540,8 @@ function NewObject({
   onCreated: (name: string) => void | Promise<void>;
   initialMode?: "spreadsheet" | "blank";
 }) {
+  const t = useMessages(automationMessages);
+
   const [mode, setMode] = useState<"spreadsheet" | "blank">(initialMode);
   const [name, setName] = useState(""),
     [label, setLabel] = useState(""),
@@ -1534,15 +1562,15 @@ function NewObject({
 
   return (
     <Modal
-      title="Crea un objeto a tu medida"
-      description="Define una entidad y dale forma en el diseñador."
+      title={t("Crea un objeto a tu medida")}
+      description={t("Define una entidad y dale forma en el diseñador.")}
       onClose={onClose}
       dialogClassName="savia-crm-new-object-dialog"
     >
       <div className="flex items-center justify-between p-2.5 mb-4 bg-emerald-50/70 border border-emerald-200/80 rounded-lg">
         <div className="flex items-center gap-2 text-xs text-emerald-900 font-medium">
           <FileSpreadsheet size={16} className="text-emerald-700 shrink-0" />
-          <span>¿Tienes un archivo Excel o CSV?</span>
+          <span>{t("¿Tienes un archivo Excel o CSV?")}</span>
         </div>
         <Button
           type="button"
@@ -1551,7 +1579,7 @@ function NewObject({
           className="text-xs h-7 gap-1 bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300 shadow-none font-semibold cursor-pointer"
           onClick={() => setMode("spreadsheet")}
         >
-          Crear desde archivo
+          {t("Crear desde archivo")}
         </Button>
       </div>
       <form
@@ -1562,7 +1590,7 @@ function NewObject({
           setError("");
           try {
             const baseConfig = makeConfig({
-              name: { type: "Textbox", label: "Nombre", required: true },
+              name: { type: "Textbox", label: t("Nombre"), required: true },
             });
             await api("/objects", "POST", {
               name,
@@ -1579,7 +1607,7 @@ function NewObject({
                     },
                   },
             });
-            toast.success("Objeto creado");
+            toast.success(t("Objeto creado"));
             await onCreated(name);
           } catch (e) {
             setError((e as Error).message);
@@ -1589,10 +1617,10 @@ function NewObject({
         }}
       >
         <div className="new-object-field">
-          <Label htmlFor="object-label">Nombre visible</Label>
+          <Label htmlFor="object-label">{t("Nombre visible")}</Label>
           <Input
             id="object-label"
-            placeholder="Nombre del objeto"
+            placeholder={t("Nombre del objeto")}
             value={label}
             onChange={(e) => {
               setLabel(e.target.value);
@@ -1608,10 +1636,10 @@ function NewObject({
           />
         </div>
         <div className="new-object-field">
-          <Label htmlFor="object-name">Identificador</Label>
+          <Label htmlFor="object-name">{t("Identificador")}</Label>
           <Input
             id="object-name"
-            placeholder="nombre_del_objeto"
+            placeholder={t("nombre_del_objeto")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             pattern="[a-z][a-z0-9_]{0,47}"
@@ -1619,10 +1647,10 @@ function NewObject({
           />
         </div>
         <div className="new-object-field">
-          <Label htmlFor="object-description">Descripción</Label>
+          <Label htmlFor="object-description">{t("Descripción")}</Label>
           <Input
             id="object-description"
-            placeholder="Describe qué gestionarás"
+            placeholder={t("Describe qué gestionarás")}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -1634,11 +1662,12 @@ function NewObject({
                 htmlFor="object-sidebar-toggle"
                 className="text-sm font-medium cursor-pointer"
               >
-                Mostrar en la barra lateral
+                {t("Mostrar en la barra lateral")}
               </Label>
               <p className="text-xs text-muted-foreground">
-                Desactívalo si esta pantalla solo se llamará desde otras páginas
-                o flujos.
+                {t(
+                  "Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.",
+                )}
               </p>
             </div>
             <Switch
@@ -1646,7 +1675,7 @@ function NewObject({
               checked={showInSidebar}
               onCheckedChange={setShowInSidebar}
               disabled={busy}
-              aria-label="Mostrar en la barra lateral"
+              aria-label={t("Mostrar en la barra lateral")}
             />
           </div>
         </div>
@@ -1657,13 +1686,16 @@ function NewObject({
         )}
         <Button type="submit" disabled={busy} className="form-submit">
           <Plus size={16} />
-          {busy ? "Creando…" : "Crear y diseñar"}
+          {busy ? t("Creando…") : t("Crear y diseñar")}
         </Button>
       </form>
     </Modal>
   );
 }
 function Audit({ objectName }: { objectName?: string }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+
   const query = useQuery({
     queryKey: ["audit", objectName],
     queryFn: () =>
@@ -1673,27 +1705,27 @@ function Audit({ objectName }: { objectName?: string }) {
       ),
   });
   const actions: Record<string, string> = {
-    "record.created": "Registro creado",
-    "record.updated": "Registro actualizado",
-    "record.deleted": "Registro eliminado",
-    "object.created": "Objeto creado",
-    "object.updated": "Formulario publicado",
-    "object.imported": "Objeto importado",
-    "integration.executed": "Operación ejecutada",
+    "record.created": t("Registro creado"),
+    "record.updated": t("Registro actualizado"),
+    "record.deleted": t("Registro eliminado"),
+    "object.created": t("Objeto creado"),
+    "object.updated": t("Formulario publicado"),
+    "object.imported": t("Objeto importado"),
+    "integration.executed": t("Operación ejecutada"),
   };
   return (
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Todo cambio deja una historia</p>
-          <h1>Historial de cambios</h1>
+          <p className="eyebrow">{t("Todo cambio deja una historia")}</p>
+          <h1>{t("Historial de cambios")}</h1>
           <p>
-            Las últimas 100 operaciones guardadas
-            {objectName ? " para esta pantalla" : " en el dominio"}.
+            {t("Las últimas 100 operaciones guardadas")}
+            {objectName ? t(" para esta pantalla") : t(" en el dominio")}.
           </p>
         </div>
         <Button variant="outline" onClick={() => query.refetch()}>
-          Actualizar
+          {t("Actualizar")}
         </Button>
       </div>
       {query.isPending ? (
@@ -1714,16 +1746,20 @@ function Audit({ objectName }: { objectName?: string }) {
                   {row.record_id && " · " + row.record_id.slice(0, 8)}
                 </p>
               </div>
-              <time>{new Date(row.created_at).toLocaleString("es-CO")}</time>
+              <time>
+                {new Date(row.created_at).toLocaleString(intlLocale(locale))}
+              </time>
             </div>
           ))}
         </div>
       ) : (
         <div className="empty-state">
           <History size={30} />
-          <h2>Tu historia está por empezar</h2>
+          <h2>{t("Tu historia está por empezar")}</h2>
           <p>
-            Crea un registro o publica un formulario para ver el primer cambio.
+            {t(
+              "Crea un registro o publica un formulario para ver el primer cambio.",
+            )}
           </p>
         </div>
       )}
@@ -1737,6 +1773,8 @@ export default function Root({
   embedded?: boolean;
   search?: string;
 } = {}) {
+  const t = useMessages(automationMessages);
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -1793,8 +1831,9 @@ export default function Root({
   if (authorizationError)
     return (
       <div role="alert">
-        Tu acceso a este espacio cambió. Conecta y verifica tu sesión para
-        continuar.
+        {t(
+          "Tu acceso a este espacio cambió. Conecta y verifica tu sesión para continuar.",
+        )}
       </div>
     );
   return (

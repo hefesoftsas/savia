@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import {
   useEffect,
   useRef,
@@ -26,7 +28,7 @@ type Tenant = {
   isActive?: boolean | number;
 };
 type Asset = "logo" | "cover";
-function message(error: unknown) {
+function message(error: unknown): keyof typeof settingsMessages {
   if (error instanceof ApiClientError && error.status === 403)
     return "No tienes permisos para modificar la marca de esta agencia.";
   if (
@@ -37,6 +39,7 @@ function message(error: unknown) {
   return "No se pudo completar la operación. Revisa tu conexión y vuelve a intentarlo.";
 }
 export function TenantBrandingPage({ services }: { services: AppServices }) {
+  const t = useMessages(settingsMessages);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
@@ -83,22 +86,27 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
   return (
     <main className="tenant-branding-page" lang="es">
       <header className="tenant-branding-heading">
-        <h1>Marca de tu agencia</h1>
+        <h1>{t("Marca de tu agencia")}</h1>
         <p>
-          Personaliza la identidad y la pantalla de acceso de tu equipo. Revisa
-          la vista previa y guarda cuando esté lista.
+          {t(
+            "Personaliza la identidad y la pantalla de acceso de tu equipo. Revisa la vista previa y guarda cuando esté lista.",
+          )}
         </p>
       </header>
       {loading ? (
-        <p role="status">Cargando agencias…</p>
+        <p role="status">{t("Cargando agencias…")}</p>
       ) : error ? (
         <div role="alert">
-          <p>{error}</p>
+          <p>
+            {error in settingsMessages
+              ? t(error as keyof typeof settingsMessages)
+              : error}
+          </p>
           <Button
             variant="outline"
             onClick={() => setAttempt((value) => value + 1)}
           >
-            Volver a cargar
+            {t("Volver a cargar")}
           </Button>
         </div>
       ) : tenants.length ? (
@@ -107,7 +115,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
             <p className="tenant-branding-agency">{tenants[0].name}</p>
           ) : (
             <div className="tenant-branding-selector">
-              <label htmlFor="branding-tenant">Agencia</label>
+              <label htmlFor="branding-tenant">{t("Agencia")}</label>
               <select
                 id="branding-tenant"
                 value={selected}
@@ -120,7 +128,9 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
                 ))}
               </select>
               <p>
-                Cambiar de agencia descarta los cambios que no hayas guardado.
+                {t(
+                  "Cambiar de agencia descarta los cambios que no hayas guardado.",
+                )}
               </p>
             </div>
           )}
@@ -133,7 +143,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
           )}
         </>
       ) : (
-        <p>No hay agencias disponibles para esta cuenta.</p>
+        <p>{t("No hay agencias disponibles para esta cuenta.")}</p>
       )}
     </main>
   );
@@ -145,6 +155,7 @@ function BrandingEditor({
   tenantId: string;
   services: AppServices;
 }) {
+  const t = useMessages(settingsMessages);
   const { refetch } = useTenantBranding();
   const [saved, setSaved] = useState<TenantBranding>();
   const [draft, setDraft] = useState<TenantBranding>();
@@ -318,16 +329,20 @@ function BrandingEditor({
     setPreviews((previous) => ({ ...previous, [kind]: undefined }));
     edit(`${kind}Url`, null);
   }
-  if (loading) return <p role="status">Cargando marca…</p>;
+  if (loading) return <p role="status">{t("Cargando marca…")}</p>;
   if (!draft)
     return (
       <div role="alert">
-        <p>{error}</p>
+        <p>
+          {error in settingsMessages
+            ? t(error as keyof typeof settingsMessages)
+            : error}
+        </p>
         <Button
           variant="outline"
           onClick={() => setReload((value) => value + 1)}
         >
-          Volver a cargar
+          {t("Volver a cargar")}
         </Button>
       </div>
     );
@@ -347,14 +362,15 @@ function BrandingEditor({
       >
         {!canManage && (
           <p className="tenant-branding-note">
-            Puedes consultar la marca. Solo los administradores de esta agencia
-            pueden modificarla.
+            {t(
+              "Puedes consultar la marca. Solo los administradores de esta agencia pueden modificarla.",
+            )}
           </p>
         )}
         <fieldset disabled={disabled}>
-          <legend>Identidad</legend>
+          <legend>{t("Identidad")}</legend>
           <div className="tenant-branding-field">
-            <label htmlFor="branding-name">Nombre visible</label>
+            <label htmlFor="branding-name">{t("Nombre visible")}</label>
             <Input
               id="branding-name"
               value={draft.displayName}
@@ -365,7 +381,7 @@ function BrandingEditor({
           </div>
           <div className="tenant-branding-colors">
             <div className="tenant-branding-field">
-              <label htmlFor="branding-primary">Color principal</label>
+              <label htmlFor="branding-primary">{t("Color principal")}</label>
               <div className="tenant-branding-color">
                 <input
                   id="branding-primary"
@@ -377,7 +393,7 @@ function BrandingEditor({
               </div>
             </div>
             <div className="tenant-branding-field">
-              <label htmlFor="branding-accent">Color de acento</label>
+              <label htmlFor="branding-accent">{t("Color de acento")}</label>
               <div className="tenant-branding-color">
                 <input
                   id="branding-accent"
@@ -391,9 +407,9 @@ function BrandingEditor({
           </div>
         </fieldset>
         <fieldset disabled={disabled}>
-          <legend>Pantalla de acceso</legend>
+          <legend>{t("Pantalla de acceso")}</legend>
           <div className="tenant-branding-field">
-            <label htmlFor="branding-title">Título de acceso</label>
+            <label htmlFor="branding-title">{t("Título de acceso")}</label>
             <Input
               id="branding-title"
               value={draft.loginTitle}
@@ -403,7 +419,9 @@ function BrandingEditor({
             />
           </div>
           <div className="tenant-branding-field">
-            <label htmlFor="branding-description">Mensaje de bienvenida</label>
+            <label htmlFor="branding-description">
+              {t("Mensaje de bienvenida")}
+            </label>
             <textarea
               id="branding-description"
               value={draft.loginDescription}
@@ -414,15 +432,16 @@ function BrandingEditor({
           </div>
         </fieldset>
         <fieldset disabled={disabled}>
-          <legend>Imágenes</legend>
+          <legend>{t("Imágenes")}</legend>
           <p className="tenant-branding-help">
-            PNG, JPEG o WEBP de hasta 2 MB. El logo se ajusta sin recortes; la
-            portada puede recortarse para llenar el espacio.
+            {t(
+              "PNG, JPEG o WEBP de hasta 2 MB. El logo se ajusta sin recortes; la portada puede recortarse para llenar el espacio.",
+            )}
           </p>
           {(["logo", "cover"] as const).map((kind) => (
             <div className="tenant-branding-field" key={kind}>
               <label htmlFor={`branding-${kind}`}>
-                {kind === "logo" ? "Subir logo" : "Subir portada"}
+                {kind === "logo" ? t("Subir logo") : t("Subir portada")}
               </label>
               <Input
                 id={`branding-${kind}`}
@@ -430,14 +449,14 @@ function BrandingEditor({
                 accept="image/png,image/jpeg,image/webp"
                 onChange={(event) => void upload(kind, event)}
               />
-              {pending === kind && <p role="status">Subiendo imagen…</p>}
+              {pending === kind && <p role="status">{t("Subiendo imagen…")}</p>}
               {draft[`${kind}Url`] && (
                 <Button
                   variant="ghost"
                   type="button"
                   onClick={() => removeImage(kind)}
                 >
-                  {kind === "logo" ? "Quitar logo" : "Quitar portada"}
+                  {kind === "logo" ? t("Quitar logo") : t("Quitar portada")}
                 </Button>
               )}
             </div>
@@ -445,22 +464,32 @@ function BrandingEditor({
         </fieldset>
         {error && (
           <div role="alert" className="tenant-branding-error">
-            <p>{error}</p>
+            <p>
+              {error in settingsMessages
+                ? t(error as keyof typeof settingsMessages)
+                : error}
+            </p>
             {conflict && (
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setReload((value) => value + 1)}
               >
-                Cargar versión guardada
+                {t("Cargar versión guardada")}
               </Button>
             )}
           </div>
         )}
-        {notice && <p role="status">{notice}</p>}
+        {notice && (
+          <p role="status">
+            {notice in settingsMessages
+              ? t(notice as keyof typeof settingsMessages)
+              : notice}
+          </p>
+        )}
         <div className="tenant-branding-actions">
           <Button type="submit" disabled={disabled || !dirty || conflict}>
-            {pending === "save" ? "Guardando…" : "Guardar cambios"}
+            {pending === "save" ? t("Guardando…") : t("Guardar cambios")}
           </Button>
           <Button
             variant="outline"
@@ -473,29 +502,29 @@ function BrandingEditor({
               if (!conflict) setError("");
             }}
           >
-            Descartar cambios
+            {t("Descartar cambios")}
           </Button>
         </div>
         {dirty && (
           <p className="tenant-branding-help">
-            Cambios sin guardar. La vista previa solo se muestra aquí.
+            {t("Cambios sin guardar. La vista previa solo se muestra aquí.")}
           </p>
         )}
       </form>
       <aside
         className="tenant-branding-preview"
-        aria-label="Vista previa de marca"
+        aria-label={t("Vista previa de marca")}
         style={previewStyle}
       >
         <div className="tenant-branding-preview-label">
-          Vista previa · acceso
+          {t("Vista previa · acceso")}
         </div>
         <div className="tenant-branding-preview-content">
           {(previews.cover ?? draft.coverUrl) && (
             <img
               className="tenant-branding-cover"
               src={previews.cover ?? draft.coverUrl!}
-              alt="Portada de la agencia"
+              alt={t("Portada de la agencia")}
             />
           )}
           <div className="tenant-branding-preview-form">
@@ -512,22 +541,24 @@ function BrandingEditor({
             <h2>{draft.loginTitle}</h2>
             <p>{draft.loginDescription}</p>
             <div className="tenant-branding-preview-input">
-              Correo electrónico
+              {t("Correo electrónico")}
             </div>
             <div className="tenant-branding-preview-button" aria-hidden="true">
-              Continuar
+              {t("Continuar")}
             </div>
             <p className="tenant-branding-preview-caption">
-              Vista previa, sin inicio de sesión.
+              {t("Vista previa, sin inicio de sesión.")}
             </p>
           </div>
         </div>
         <div className="tenant-branding-preview-label">
-          Vista previa · aplicación
+          {t("Vista previa · aplicación")}
         </div>
         <div className="tenant-branding-preview-nav">
-          <span className="tenant-branding-preview-selected">Inicio</span>
-          <span>Mi agencia</span>
+          <span className="tenant-branding-preview-selected">
+            {t("Inicio")}
+          </span>
+          <span>{t("Mi agencia")}</span>
         </div>
       </aside>
     </div>

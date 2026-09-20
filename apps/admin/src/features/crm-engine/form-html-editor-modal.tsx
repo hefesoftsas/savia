@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,13 +12,7 @@ import {
 import type { FormHtmlConfig } from "@savia/crm-shared/form-html";
 import { MonacoCodeEditor } from "./monaco-code-editor";
 
-function Control({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Control({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="studio-control form-html-editor-control">
       <span>{label}</span>
@@ -36,6 +32,8 @@ export function FormHtmlEditorModal({
   value: FormHtmlConfig;
   onSave: (next: FormHtmlConfig) => void;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [html, setHtml] = useState(value.html);
   const [script, setScript] = useState(value.script ?? "");
 
@@ -49,21 +47,21 @@ export function FormHtmlEditorModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="form-html-editor-dialog">
         <DialogHeader>
-          <DialogTitle>Editor HTML y JavaScript</DialogTitle>
+          <DialogTitle>{t("Editor HTML y JavaScript")}</DialogTitle>
         </DialogHeader>
         {open ? (
           <div className="form-html-editor-dialog-body">
-            <Control label="HTML">
+            <Control label={t("HTML")}>
               <MonacoCodeEditor
                 ariaLabel="Editor HTML"
                 language="html"
                 height={280}
                 value={html}
                 onChange={setHtml}
-                placeholder={'<div><p>{{values.nombre}}</p></div>'}
+                placeholder={"<div><p>{{values.nombre}}</p></div>"}
               />
             </Control>
-            <Control label="JavaScript (opcional)">
+            <Control label={t("JavaScript (opcional)")}>
               <MonacoCodeEditor
                 ariaLabel="Editor JavaScript"
                 language="javascript"
@@ -78,8 +76,12 @@ export function FormHtmlEditorModal({
           </div>
         ) : null}
         <DialogFooter className="form-html-editor-dialog-footer">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            {t("Cancelar")}
           </Button>
           <Button
             type="button"
@@ -91,7 +93,7 @@ export function FormHtmlEditorModal({
               onOpenChange(false);
             }}
           >
-            Guardar
+            {t("Guardar")}
           </Button>
         </DialogFooter>
       </DialogContent>

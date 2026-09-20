@@ -2,7 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Designer from "../designer";
 import { makeConfig, type CrmObject } from "@savia/crm-shared/metadata";
@@ -61,7 +62,9 @@ it("offers Currency (Moneda) from the designer palette and configures properties
   const searchInput = screen.getByPlaceholderText("texto, número, fecha…");
   fireEvent.change(searchInput, { target: { value: "precio" } });
   expect(screen.getByRole("button", { name: "Moneda" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Fecha" })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Fecha" }),
+  ).not.toBeInTheDocument();
 
   // Clear search
   fireEvent.change(searchInput, { target: { value: "" } });
@@ -75,14 +78,24 @@ it("offers Currency (Moneda) from the designer palette and configures properties
   expect(screen.getByLabelText("Moneda")).toBeInTheDocument();
   expect(screen.getByText("COP ($)")).toBeInTheDocument();
   expect(screen.getByLabelText("Decimales")).toBeInTheDocument();
-  expect((screen.getByLabelText("Decimales") as HTMLSelectElement).value).toBe("2");
+  expect((screen.getByLabelText("Decimales") as HTMLSelectElement).value).toBe(
+    "2",
+  );
 
   // Change currency to USD and decimals to 0
-  fireEvent.change(screen.getByLabelText("Moneda"), { target: { value: "USD" } });
-  expect((screen.getByLabelText("Moneda") as HTMLSelectElement).value).toBe("USD");
+  fireEvent.change(screen.getByLabelText("Moneda"), {
+    target: { value: "USD" },
+  });
+  expect((screen.getByLabelText("Moneda") as HTMLSelectElement).value).toBe(
+    "USD",
+  );
 
-  fireEvent.change(screen.getByLabelText("Decimales"), { target: { value: "0" } });
-  expect((screen.getByLabelText("Decimales") as HTMLSelectElement).value).toBe("0");
+  fireEvent.change(screen.getByLabelText("Decimales"), {
+    target: { value: "0" },
+  });
+  expect((screen.getByLabelText("Decimales") as HTMLSelectElement).value).toBe(
+    "0",
+  );
 });
 
 it("renders CurrencyField with $ prefix, currency badge and formats decimals in preview form", () => {
@@ -106,7 +119,11 @@ it("renders CurrencyField with $ prefix, currency badge and formats decimals in 
   );
 
   expect(screen.getByText("Monto cotizado")).toBeInTheDocument();
-  const prefix = screen.getByText("$");
+  const prefix = screen.getByText(
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "USD" })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")!.value,
+  );
   expect(prefix).toBeInTheDocument();
   expect(screen.getByText("USD")).toBeInTheDocument();
   const input = screen.getByLabelText("Monto cotizado");
@@ -117,7 +134,7 @@ it("renders CurrencyField with $ prefix, currency badge and formats decimals in 
 
   // Type value and blur to verify formatted decimals
   fireEvent.focus(input);
-  fireEvent.change(input, { target: { value: "1500.5" } });
+  fireEvent.change(input, { target: { value: "1500,5" } });
   fireEvent.blur(input);
   expect((input as HTMLInputElement).value).toBe("1.500,50");
 });

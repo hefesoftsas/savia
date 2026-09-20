@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { render } from "@/features/crm-engine/test/locale-test-render";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ServiceCredentialsPage } from "./service-credentials-page";

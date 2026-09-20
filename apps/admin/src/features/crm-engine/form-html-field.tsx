@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import {
   useCallback,
   useEffect,
@@ -32,6 +34,8 @@ export function syncFormHtmlMarkup(
 }
 
 export function FormHtmlField(p: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   const object = p.config?.studioObject as CrmObject | undefined;
   const values = useFormTemplateValues(object, p.fieldName);
   const { setValue } = useFormContext();
@@ -49,8 +53,11 @@ export function FormHtmlField(p: IFieldProps) {
         const available = Object.keys(fields);
         throw new Error(
           available.length
-            ? `Campo desconocido: ${name}. Disponibles: ${available.join(", ")}.`
-            : `Campo desconocido: ${name}.`,
+            ? t("Campo desconocido: %{p0}. Disponibles: %{p1}.", {
+                p0: name,
+                p1: available.join(", "),
+              })
+            : t("Campo desconocido: %{p0}.", { p0: name }),
         );
       }
       setValue(name, value, {
@@ -59,7 +66,7 @@ export function FormHtmlField(p: IFieldProps) {
         shouldTouch: true,
       });
     },
-    [object, setValue],
+    [object, setValue, t],
   );
 
   const renderedHtml = useMemo(() => {
@@ -68,9 +75,7 @@ export function FormHtmlField(p: IFieldProps) {
       renderFormHtmlTemplate(settings.html, {
         values,
         recordId,
-        object: object
-          ? { name: object.name, label: object.label }
-          : undefined,
+        object: object ? { name: object.name, label: object.label } : undefined,
       }),
     );
   }, [object, recordId, settings?.html, values]);
@@ -106,14 +111,7 @@ export function FormHtmlField(p: IFieldProps) {
     } catch (error) {
       setScriptError((error as Error).message);
     }
-  }, [
-    object,
-    recordId,
-    renderedHtml,
-    setFieldValue,
-    settings?.script,
-    values,
-  ]);
+  }, [object, recordId, renderedHtml, setFieldValue, settings?.script, values]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -138,7 +136,7 @@ export function FormHtmlField(p: IFieldProps) {
   if (!settings || (!settings.html.trim() && !settings.script?.trim())) {
     return (
       <p className="form-html-empty studio-field-help">
-        Configura HTML o JavaScript en las propiedades del campo.
+        {t("Configura HTML o JavaScript en las propiedades del campo.")}
       </p>
     );
   }

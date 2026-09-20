@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { describe, expect, it, vi } from "vitest";
 import { ResultCards, type ResultCardRow } from "../result-cards";
 import { requestPageSchema } from "@savia/crm-shared/request-page";
@@ -57,14 +58,22 @@ describe("presentación configurable", () => {
         .resultLayout,
     ).toBe("comparison");
     expect(
-      requestPageSchema.safeParse({ ...config, resultLayout: "unsupported" }).success,
+      requestPageSchema.safeParse({ ...config, resultLayout: "unsupported" })
+        .success,
     ).toBe(false);
   });
 });
 
 it("renders custom HTML in an isolated frame and escapes response values", () => {
   const row = { ...rows[0], title: '<img src=x onerror="alert(1)">' };
-  const { container } = render(<ResultCards rows={[row]} columns={[]} comparison={false} customHtml="<h2>{{values.title}}</h2>" />);
+  const { container } = render(
+    <ResultCards
+      rows={[row]}
+      columns={[]}
+      comparison={false}
+      customHtml="<h2>{{values.title}}</h2>"
+    />,
+  );
   const frame = container.querySelector("iframe")!;
   expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
   expect(frame.srcdoc).toContain("&lt;img");

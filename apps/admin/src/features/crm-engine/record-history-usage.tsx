@@ -1,3 +1,6 @@
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { historyRequest } from "./record-history-client";
@@ -10,6 +13,10 @@ type Usage = {
   measuredAt: string;
 };
 export function RecordHistoryUsage({ path }: { path: string }) {
+  const uiLocale = intlLocale(useAppLocale());
+
+  const t = useMessages(recordsMessages);
+
   const [requested, setRequested] = useState(0);
   const [data, setData] = useState<Usage>();
   const [error, setError] = useState("");
@@ -35,7 +42,7 @@ export function RecordHistoryUsage({ path }: { path: string }) {
   return (
     <section
       className="grid gap-2 border-t pt-4"
-      aria-label="Consumo del historial"
+      aria-label={t("Consumo del historial")}
     >
       <Button
         type="button"
@@ -43,41 +50,45 @@ export function RecordHistoryUsage({ path }: { path: string }) {
         disabled={busy}
         onClick={() => setRequested((v) => v + 1)}
       >
-        {busy ? "Midiendo…" : "Consultar consumo del historial"}
+        {busy ? t("Midiendo…") : t("Consultar consumo del historial")}
       </Button>
       {error && <p role="alert">{error}</p>}
       {data && (
         <>
           <dl className="grid grid-cols-2 gap-2 text-sm">
-            <dt>Eventos conservados</dt>
+            <dt>{t("Eventos conservados")}</dt>
             <dd>
-              {data.limited ? "Al menos " : ""}
-              {data.events.toLocaleString("es-CO")}
+              {data.limited ? t("Al menos ") : ""}
+              {data.events.toLocaleString(uiLocale)}
             </dd>
-            <dt>Datos de cambios</dt>
+            <dt>{t("Datos de cambios")}</dt>
             <dd>
-              {data.limited ? "Al menos " : ""}
-              {data.logicalBytes.toLocaleString("es-CO")} bytes
+              {data.limited ? t("Al menos ") : ""}
+              {data.logicalBytes.toLocaleString(uiLocale)} {t("bytes")}
             </dd>
-            <dt>Vencidos por limpiar</dt>
+            <dt>{t("Vencidos por limpiar")}</dt>
             <dd>
-              {data.limited ? "Al menos " : ""}
-              {data.expiredEvents.toLocaleString("es-CO")}
+              {data.limited ? t("Al menos ") : ""}
+              {data.expiredEvents.toLocaleString(uiLocale)}
             </dd>
           </dl>
           {data.oldestExpiredAt && (
             <p className="text-sm">
-              Vencimiento más antiguo {data.limited ? "en la muestra " : ""}:{" "}
-              {new Date(data.oldestExpiredAt).toLocaleString("es-CO")}.
+              {t("Vencimiento más antiguo")}{" "}
+              {data.limited ? `${t("en la muestra")} ` : ""}:{" "}
+              {new Date(data.oldestExpiredAt).toLocaleString(uiLocale)}.
             </p>
           )}
           <p className="text-sm text-muted-foreground">
             {data.limited
-              ? "Medición parcial: se revisan hasta 1.000 eventos por consulta. "
+              ? t(
+                  "Medición parcial: se revisan hasta 1.000 eventos por consulta. ",
+                )
               : ""}
-            Bytes del contenido de cambios; excluye índices y otros datos. No es
-            el almacenamiento facturado. Medido:{" "}
-            {new Date(data.measuredAt).toLocaleString("es-CO")}.
+            {t(
+              "Bytes del contenido de cambios; excluye índices y otros datos. No es el almacenamiento facturado. Medido:",
+            )}{" "}
+            {new Date(data.measuredAt).toLocaleString(uiLocale)}.
           </p>
         </>
       )}

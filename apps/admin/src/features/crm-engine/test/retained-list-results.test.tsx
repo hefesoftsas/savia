@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "@testing-library/react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { render } from "./locale-test-render";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { ListContextProvider, useListContext } from "ra-core";
 import { RetainedListResults } from "../retained-list-results";

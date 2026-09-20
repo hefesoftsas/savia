@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, it, expect, vi } from "vitest";
-import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DynamicForm from "../dynamic-form";
 import { makeConfig } from "@savia/crm-shared/metadata";
@@ -214,11 +215,11 @@ it("deletes uploaded temporary attachments when a record form is cancelled", asy
   fireEvent.change(await screen.findByTestId("file-picker-input"), {
     target: { files: [file] },
   });
-  await waitFor(() =>
-    expect(screen.getByText("Archivo cargado")).toBeTruthy(),
-  );
+  await waitFor(() => expect(screen.getByText("Archivo cargado")).toBeTruthy());
   fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-  await waitFor(() => expect(discardTemporary).toHaveBeenCalledWith([temporary]));
+  await waitFor(() =>
+    expect(discardTemporary).toHaveBeenCalledWith([temporary]),
+  );
   expect(onCancel).toHaveBeenCalledOnce();
 });
 
@@ -232,15 +233,13 @@ it("shows R2 transfer progress while an attachment is being uploaded", async () 
     created_at: "2026-09-09T00:00:00.000Z",
     updated_at: "2026-09-09T00:00:00.000Z",
   });
-  const persistAttachments = vi.fn(
-    async (_record, _attachments, onStatus) => {
-      onStatus({ field: "contract", file, status: "uploading" });
-      await new Promise<void>((resolve) => {
-        finishUpload = resolve;
-      });
-      onStatus({ field: "contract", file, status: "uploaded" });
-    },
-  );
+  const persistAttachments = vi.fn(async (_record, _attachments, onStatus) => {
+    onStatus({ field: "contract", file, status: "uploading" });
+    await new Promise<void>((resolve) => {
+      finishUpload = resolve;
+    });
+    onStatus({ field: "contract", file, status: "uploaded" });
+  });
   const fetcher = vi.fn(async () => Response.json({ data: [] }));
   vi.stubGlobal("fetch", fetcher);
 
@@ -272,7 +271,8 @@ it("shows R2 transfer progress while an attachment is being uploaded", async () 
 
   expect(await screen.findByText("Cargando archivo…")).toBeTruthy();
   expect(
-    screen.getByRole("progressbar", { name: "Carga de contract.pdf" })
+    screen
+      .getByRole("progressbar", { name: "Carga de contract.pdf" })
       .getAttribute("aria-valuetext"),
   ).toBe("Cargando archivo");
 

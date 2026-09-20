@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import { DeploymentRecovery } from "@/pwa/deployment-recovery-ui";
 import { isModuleLoadError } from "@/pwa/deployment-recovery";
 import type { FallbackProps } from "react-error-boundary";
@@ -21,6 +23,7 @@ import type { HtmlHTMLAttributes, ErrorInfo } from "react";
  * @see {@link https://marmelab.com/shadcn-admin-kit/docs/error Error documentation}
  */
 export const Error = (props: InternalErrorProps & {}) => {
+  const t = useMessages(settingsMessages);
   const { error, errorInfo, resetErrorBoundary, ...rest } = props;
 
   useResetErrorBoundaryOnLocationChange(resetErrorBoundary);
@@ -35,7 +38,7 @@ export const Error = (props: InternalErrorProps & {}) => {
       ? (error.message ?? "")
       : typeof error === "string"
         ? error
-        : String(error ?? "Unknown error");
+        : String(error ?? t("Unknown error"));
 
   return (
     <div className="flex flex-col items-center md:p-16 gap-5" {...rest}>
@@ -63,31 +66,31 @@ export const Error = (props: InternalErrorProps & {}) => {
           </Accordion>
 
           <p className="text-center ">
-            Need help with this error? Try the following:
+            {t("Need help with this error? Try the following:")}
           </p>
           <div>
             <ul className="list-disc">
               <li>
-                Check the{" "}
+                {t("Check the")}{" "}
                 <a
                   className="text-primary underline-offset-4 hover:underline"
                   href="https://marmelab.com/shadcn-admin-kit/docs"
                 >
-                  shadcn-admin-kit documentation
+                  {t("shadcn-admin-kit documentation")}
                 </a>
               </li>
               <li>
-                Search on{" "}
+                {t("Search on")}{" "}
                 <a
                   className="text-primary underline-offset-4 hover:underline"
                   href="https://stackoverflow.com/questions/tagged/shadcn-admin-kit"
                 >
                   StackOverflow
                 </a>{" "}
-                for community answers
+                {t("for community answers")}
               </li>
               <li>
-                Get help from the core team via{" "}
+                {t("Get help from the core team via")}{" "}
                 <a
                   className="text-primary underline-offset-4 hover:underline"
                   href="https://marmelab.com/shadcn-admin-kit/"

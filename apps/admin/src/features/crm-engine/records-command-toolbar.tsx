@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,13 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Columns3,
-  ListFilter,
-  Search,
-  Table2,
-  Trash2,
-} from "lucide-react";
+import { Columns3, ListFilter, Search, Table2, Trash2 } from "lucide-react";
 import MicrosoftExcel from "@thesvg/react/microsoft-excel";
 import { useEffect, useState } from "react";
 import type { CollectionCapabilities } from "./collection-capabilities";
@@ -79,6 +75,8 @@ export function RecordsCommandToolbar({
   supportsLocalRecordTools: boolean;
   showDelete: boolean;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState(filters);
   const activeFilters = filters.conditions.length;
@@ -116,38 +114,48 @@ export function RecordsCommandToolbar({
   return (
     <section
       className="records-command-toolbar"
-      aria-label="Comandos de la tabla"
+      aria-label={t("Comandos de la tabla")}
     >
       {searchEnabled && (
         <div className="records-command-search">
-          {object.config.studio?.collection?.kind !== "crm" && <label className="records-command-field">
-            <span className="view-config-sr-only">Buscar por campo</span>
-            <select
-              aria-label="Buscar por campo"
-              className="select-input"
-              value={searchField}
-              onChange={(event) => onSearchFieldChange(event.target.value)}
-            >
-              <option value="">Todos los campos</option>
-              {searchOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>}
+          {object.config.studio?.collection?.kind !== "crm" && (
+            <label className="records-command-field">
+              <span className="view-config-sr-only">
+                {t("Buscar por campo")}
+              </span>
+              <select
+                aria-label={t("Buscar por campo")}
+                className="select-input"
+                value={searchField}
+                onChange={(event) => onSearchFieldChange(event.target.value)}
+              >
+                <option value="">{t("Todos los campos")}</option>
+                {searchOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="search-wrap">
             <Search size={17} aria-hidden="true" />
             <Input
               aria-label={
                 object.config.studio?.collection?.kind !== "crm" && searchField
-                  ? `Buscar en ${object.config.fields[searchField]?.label ?? searchField}`
-                  : `Buscar en ${object.label.toLowerCase()}`
+                  ? t("Buscar en %{p0}", {
+                      p0:
+                        object.config.fields[searchField]?.label ?? searchField,
+                    })
+                  : t("Buscar en %{p0}", { p0: object.label.toLowerCase() })
               }
               placeholder={
                 object.config.studio?.collection?.kind !== "crm" && searchField
-                  ? `Buscar en ${object.config.fields[searchField]?.label ?? searchField}…`
-                  : `Buscar en ${object.label.toLowerCase()}…`
+                  ? t("Buscar en %{p0}…", {
+                      p0:
+                        object.config.fields[searchField]?.label ?? searchField,
+                    })
+                  : t("Buscar en %{p0}…", { p0: object.label.toLowerCase() })
               }
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
@@ -159,15 +167,15 @@ export function RecordsCommandToolbar({
         {stageOptions.length > 0 && capabilities.filter !== false && (
           <label className="records-command-field">
             <span className="view-config-sr-only">
-              {pipelineFieldLabel ?? "Etapa"}
+              {pipelineFieldLabel ?? t("Etapa")}
             </span>
             <select
-              aria-label={pipelineFieldLabel ?? "Filtrar por etapa"}
+              aria-label={pipelineFieldLabel ?? t("Filtrar por etapa")}
               className="select-input"
               value={stage}
               onChange={(event) => onStageChange(event.target.value)}
             >
-              <option value="">Todas las etapas</option>
+              <option value="">{t("Todas las etapas")}</option>
               {stageOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -186,7 +194,7 @@ export function RecordsCommandToolbar({
                     variant="outline"
                     size="icon"
                     className="records-command-filter-trigger"
-                    aria-label="Filtros"
+                    aria-label={t("Filtros")}
                   >
                     <ListFilter size={15} />
                     {activeFilters > 0 && (
@@ -198,7 +206,7 @@ export function RecordsCommandToolbar({
                 </PopoverTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Filtros
+                {t("Filtros")}
               </TooltipContent>
             </Tooltip>
             <PopoverContent
@@ -207,8 +215,10 @@ export function RecordsCommandToolbar({
               sideOffset={8}
             >
               <div className="records-filters-popover-header">
-                <h3>Filtros</h3>
-                <p>Combina condiciones para acotar los registros visibles.</p>
+                <h3>{t("Filtros")}</h3>
+                <p>
+                  {t("Combina condiciones para acotar los registros visibles.")}
+                </p>
               </div>
               <RecordsFiltersPanel
                 object={object}
@@ -223,13 +233,14 @@ export function RecordsCommandToolbar({
                   size="sm"
                   onClick={clearFilters}
                   disabled={
-                    !draftFilters.conditions.length && !filters.conditions.length
+                    !draftFilters.conditions.length &&
+                    !filters.conditions.length
                   }
                 >
-                  Limpiar
+                  {t("Limpiar")}
                 </Button>
                 <Button type="button" size="sm" onClick={applyFilters}>
-                  Aplicar
+                  {t("Aplicar")}
                 </Button>
               </div>
             </PopoverContent>
@@ -242,14 +253,14 @@ export function RecordsCommandToolbar({
                 type="button"
                 variant="outline"
                 size="icon"
-                aria-label="Exportar a CSV"
+                aria-label={t("Exportar a CSV")}
                 onClick={onExportCsv}
               >
                 <MicrosoftExcel aria-hidden className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Exportar a CSV
+              {t("Exportar a CSV")}
             </TooltipContent>
           </Tooltip>
         )}
@@ -260,14 +271,14 @@ export function RecordsCommandToolbar({
                 type="button"
                 variant={trash ? "secondary" : "ghost"}
                 size="icon"
-                aria-label="Papelera"
+                aria-label={t("Papelera")}
                 onClick={onTrashToggle}
               >
                 <Trash2 size={15} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Papelera
+              {t("Papelera")}
             </TooltipContent>
           </Tooltip>
         )}
@@ -279,7 +290,7 @@ export function RecordsCommandToolbar({
               onClick={() => onModeChange("table")}
             >
               <Table2 size={15} />
-              Tabla
+              {t("Tabla")}
             </button>
             <button
               type="button"
@@ -287,7 +298,7 @@ export function RecordsCommandToolbar({
               onClick={() => onModeChange("pipeline")}
             >
               <Columns3 size={15} />
-              Pipeline
+              {t("Pipeline")}
             </button>
           </div>
         )}

@@ -1,3 +1,8 @@
+import { parseLocalizedNumber } from "@/i18n/locale-number";
+import { resolveOptionLabel } from "@savia/crm-shared/field-labels";
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { PercentageField, RatingField } from "./percentage-rating-fields";
 import { MultiSelectField } from "./multi-select-field";
 import { RichTextField } from "./rich-text-field";
@@ -14,10 +19,7 @@ import { api } from "./api";
 import { getCrmRuntime } from "./runtime";
 import { relationRecordLabel } from "./relation-record-label";
 import { prepareRecord } from "@savia/crm-shared/rules";
-import {
-  r2AttachmentPolicy,
-  type CrmObject,
-} from "@savia/crm-shared/metadata";
+import { r2AttachmentPolicy, type CrmObject } from "@savia/crm-shared/metadata";
 import type { IFieldProps } from "@form-eng/core";
 import { createRadixFieldRegistry } from "@form-eng/radix";
 import { Input } from "@/components/ui/input";
@@ -78,6 +80,8 @@ function TextField(p: IFieldProps) {
   );
 }
 function NumberField(p: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   const values = useWatch();
   const { setValue } = useFormContext();
   const object = p.config?.studioObject as CrmObject | undefined;
@@ -125,61 +129,17 @@ function NumberField(p: IFieldProps) {
       />
       {p.config?.formula ? (
         <small className="studio-field-help">
-          {calculationError || "Calculado automáticamente"}
+          {calculationError || t("Calculado automáticamente")}
         </small>
       ) : null}
     </>
   );
 }
-function parseCurrencyString(text: string): number | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const isNegative = trimmed.startsWith("-");
-  const clean = trimmed.replace(/^[+-]/, "");
-
-  const lastDot = clean.lastIndexOf(".");
-  const lastComma = clean.lastIndexOf(",");
-
-  let integerPart = clean;
-  let decimalPart = "";
-
-  if (lastDot !== -1 && lastComma !== -1) {
-    if (lastComma > lastDot) {
-      integerPart = clean.slice(0, lastComma).replace(/\./g, "");
-      decimalPart = clean.slice(lastComma + 1);
-    } else {
-      integerPart = clean.slice(0, lastDot).replace(/,/g, "");
-      decimalPart = clean.slice(lastDot + 1);
-    }
-  } else if (lastComma !== -1) {
-    const commaCount = (clean.match(/,/g) || []).length;
-    if (commaCount === 1) {
-      integerPart = clean.slice(0, lastComma);
-      decimalPart = clean.slice(lastComma + 1);
-    } else {
-      integerPart = clean.replace(/,/g, "");
-    }
-  } else if (lastDot !== -1) {
-    const dotCount = (clean.match(/\./g) || []).length;
-    if (dotCount === 1) {
-      integerPart = clean.slice(0, lastDot);
-      decimalPart = clean.slice(lastDot + 1);
-    } else {
-      integerPart = clean.replace(/\./g, "");
-    }
-  }
-
-  const cleanInt = integerPart.replace(/\D/g, "");
-  const cleanDec = decimalPart.replace(/\D/g, "");
-
-  if (!cleanInt && !cleanDec) return null;
-
-  const numStr = `${isNegative ? "-" : ""}${cleanInt || "0"}${cleanDec ? `.${cleanDec}` : ""}`;
-  const val = Number(numStr);
-  return Number.isFinite(val) ? val : null;
-}
-
 function CurrencyField(p: IFieldProps) {
+  const uiLocale = intlLocale(useAppLocale());
+
+  const t = useMessages(recordsMessages);
+
   const values = useWatch();
   const { setValue } = useFormContext();
   const object = p.config?.studioObject as CrmObject | undefined;
@@ -203,6 +163,19 @@ function CurrencyField(p: IFieldProps) {
     setValue,
   ]);
   const currencyCode = String(p.config?.currency || "COP");
+  let currencySymbol = currencyCode;
+  try {
+    currencySymbol =
+      new Intl.NumberFormat(uiLocale, {
+        style: "currency",
+        currency: currencyCode,
+      })
+        .formatToParts(0)
+        .find((part) => part.type === "currency")?.value ?? currencyCode;
+  } catch {
+    // Imported schemas may contain non-ISO currency codes; keep them usable.
+  }
+
   const decimals =
     typeof p.config?.decimals === "number"
       ? p.config.decimals
@@ -212,6 +185,7 @@ function CurrencyField(p: IFieldProps) {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const editingLocale = useRef(uiLocale);
   const [localText, setLocalText] = useState<string>("");
 
   useEffect(() => {
@@ -222,7 +196,7 @@ function CurrencyField(p: IFieldProps) {
         const num = Number(computed);
         if (Number.isFinite(num)) {
           setLocalText(
-            new Intl.NumberFormat("es-CO", {
+            new Intl.NumberFormat(uiLocale, {
               minimumFractionDigits: decimals,
               maximumFractionDigits: decimals,
             }).format(num),
@@ -232,14 +206,21 @@ function CurrencyField(p: IFieldProps) {
         }
       }
     }
-  }, [computed, isFocused, decimals]);
+  }, [computed, isFocused, decimals, uiLocale]);
 
   const handleFocus = () => {
+    editingLocale.current = uiLocale;
     setIsFocused(true);
     if (computed != null && computed !== "") {
       const num = Number(computed);
       if (Number.isFinite(num)) {
-        setLocalText(decimals > 0 ? num.toFixed(decimals) : String(num));
+        setLocalText(
+          new Intl.NumberFormat(uiLocale, {
+            useGrouping: false,
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          }).format(num),
+        );
       } else {
         setLocalText(String(computed));
       }
@@ -250,12 +231,15 @@ function CurrencyField(p: IFieldProps) {
 
   const handleBlur = () => {
     setIsFocused(false);
-    const parsed = parseCurrencyString(localText);
+    const parsed = parseLocalizedNumber(
+      localText,
+      isFocused ? editingLocale.current : uiLocale,
+    );
     if (parsed !== null) {
       const finalVal = p.config?.integer ? Math.round(parsed) : parsed;
       p.setFieldValue?.(p.fieldName!, finalVal);
       setLocalText(
-        new Intl.NumberFormat("es-CO", {
+        new Intl.NumberFormat(uiLocale, {
           minimumFractionDigits: decimals,
           maximumFractionDigits: decimals,
         }).format(finalVal),
@@ -269,7 +253,10 @@ function CurrencyField(p: IFieldProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
     setLocalText(text);
-    const parsed = parseCurrencyString(text);
+    const parsed = parseLocalizedNumber(
+      text,
+      isFocused ? editingLocale.current : uiLocale,
+    );
     if (parsed !== null) {
       const finalVal = p.config?.integer ? Math.round(parsed) : parsed;
       p.setFieldValue?.(p.fieldName!, finalVal);
@@ -288,7 +275,8 @@ function CurrencyField(p: IFieldProps) {
         className={cn(
           "border-input dark:bg-input/30 flex h-9 w-full min-w-0 items-center rounded-md border bg-transparent px-3 text-base shadow-xs transition-[color,box-shadow] md:text-sm cursor-text",
           "focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]",
-          p.error && "border-destructive ring-destructive/20 dark:ring-destructive/40 ring-[3px]",
+          p.error &&
+            "border-destructive ring-destructive/20 dark:ring-destructive/40 ring-[3px]",
           p.readOnly && "cursor-not-allowed opacity-50",
         )}
       >
@@ -296,7 +284,7 @@ function CurrencyField(p: IFieldProps) {
           className="flex shrink-0 select-none items-center pr-1.5 text-sm font-semibold text-muted-foreground"
           aria-hidden="true"
         >
-          $
+          {currencySymbol}
         </span>
         <input
           ref={inputRef}
@@ -308,7 +296,7 @@ function CurrencyField(p: IFieldProps) {
           type="text"
           inputMode="decimal"
           className="h-full w-full min-w-0 flex-1 bg-transparent py-1 font-mono text-sm tracking-tight outline-none placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground disabled:pointer-events-none disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          placeholder={new Intl.NumberFormat("es-CO", {
+          placeholder={new Intl.NumberFormat(uiLocale, {
             minimumFractionDigits: decimals,
             maximumFractionDigits: decimals,
           }).format(0)}
@@ -326,7 +314,7 @@ function CurrencyField(p: IFieldProps) {
       </div>
       {p.config?.formula ? (
         <small className="studio-field-help">
-          {calculationError || "Calculado automáticamente"}
+          {calculationError || t("Calculado automáticamente")}
         </small>
       ) : null}
     </>
@@ -371,6 +359,9 @@ function LongText(p: IFieldProps) {
   );
 }
 function SelectField(p: IFieldProps) {
+  const optionLocale = useAppLocale();
+  const t = useMessages(recordsMessages);
+
   const { options, dependency, waiting } = useDependentOptions(p);
   if (p.config?.relation) return <RelationField {...p} />;
   return (
@@ -388,15 +379,15 @@ function SelectField(p: IFieldProps) {
           aria-invalid={!!p.error}
           aria-required={p.required}
         >
-          <SelectValue placeholder="Seleccionar…" />
+          <SelectValue placeholder={t("Seleccionar…")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__empty">Seleccionar…</SelectItem>
+          <SelectItem value="__empty">{t("Seleccionar…")}</SelectItem>
           {options
             .filter((o) => o.value !== "")
             .map((o) => (
               <SelectItem key={String(o.value)} value={String(o.value)}>
-                {o.label}
+                {resolveOptionLabel(o, optionLocale)}
               </SelectItem>
             ))}
         </SelectContent>
@@ -404,16 +395,19 @@ function SelectField(p: IFieldProps) {
       {dependency && (
         <p className="studio-field-help">
           {waiting
-            ? "Selecciona primero el campo del que depende."
+            ? t("Selecciona primero el campo del que depende.")
             : options.length
-              ? "Opciones según la selección anterior."
-              : "No hay opciones para la selección anterior."}
+              ? t("Opciones según la selección anterior.")
+              : t("No hay opciones para la selección anterior.")}
         </p>
       )}
     </>
   );
 }
 function AutocompleteField(p: IFieldProps) {
+  const optionLocale = useAppLocale();
+  const t = useMessages(recordsMessages);
+
   const { options, dependency, waiting } = useDependentOptions(p);
   const [open, setOpen] = useState(false);
   const currentValue = String(p.value ?? "");
@@ -439,7 +433,9 @@ function AutocompleteField(p: IFieldProps) {
             )}
           >
             <span className="truncate">
-              {selected?.label ?? "Seleccionar…"}
+              {selected
+                ? resolveOptionLabel(selected, optionLocale)
+                : t("Seleccionar…")}
             </span>
             <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>
@@ -449,9 +445,9 @@ function AutocompleteField(p: IFieldProps) {
           align="start"
         >
           <Command>
-            <CommandInput placeholder="Buscar opción…" />
+            <CommandInput placeholder={t("Buscar opción…")} />
             <CommandList>
-              <CommandEmpty>Sin coincidencias.</CommandEmpty>
+              <CommandEmpty>{t("Sin coincidencias.")}</CommandEmpty>
               <CommandGroup>
                 <CommandItem
                   value="__empty"
@@ -466,14 +462,14 @@ function AutocompleteField(p: IFieldProps) {
                       !currentValue ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  Seleccionar…
+                  {t("Seleccionar…")}
                 </CommandItem>
                 {options
                   .filter((option) => option.value !== "")
                   .map((option) => (
                     <CommandItem
                       key={String(option.value)}
-                      value={`${option.label} ${option.value}`}
+                      value={`${resolveOptionLabel(option, optionLocale)} ${option.value}`}
                       onSelect={() => {
                         p.setFieldValue?.(p.fieldName!, option.value);
                         setOpen(false);
@@ -487,7 +483,7 @@ function AutocompleteField(p: IFieldProps) {
                             : "opacity-0",
                         )}
                       />
-                      {option.label}
+                      {resolveOptionLabel(option, optionLocale)}
                     </CommandItem>
                   ))}
               </CommandGroup>
@@ -498,19 +494,23 @@ function AutocompleteField(p: IFieldProps) {
       {dependency && (
         <p className="studio-field-help">
           {waiting
-            ? "Selecciona primero el campo del que depende."
+            ? t("Selecciona primero el campo del que depende.")
             : options.length
-              ? "Opciones según la selección anterior."
-              : "No hay opciones para la selección anterior."}
+              ? t("Opciones según la selección anterior.")
+              : t("No hay opciones para la selección anterior.")}
         </p>
       )}
     </>
   );
 }
 export function RelationField(p: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   const relation = String(p.config?.relation ?? "");
   const runtime = getCrmRuntime();
-  const displayField = p.config?.relationDisplayField ? String(p.config.relationDisplayField) : undefined;
+  const displayField = p.config?.relationDisplayField
+    ? String(p.config.relationDisplayField)
+    : undefined;
   const multiple = !!p.config?.multiple;
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
@@ -532,14 +532,28 @@ export function RelationField(p: IFieldProps) {
         : []
   ).map(String);
   const results = useQuery({
-    queryKey: ["relation-options", runtime.apiBasePath, runtime.domainId, relation, search, page],
+    queryKey: [
+      "relation-options",
+      runtime.apiBasePath,
+      runtime.domainId,
+      relation,
+      search,
+      page,
+    ],
     queryFn: () =>
       api(
         `/records/${encodeURIComponent(relation)}?${new URLSearchParams({ q: search, page: String(page), perPage: "20" })}`,
       ),
   });
   const labels = useQuery({
-    queryKey: ["relation-selected", runtime.apiBasePath, runtime.domainId, relation, displayField, selected],
+    queryKey: [
+      "relation-selected",
+      runtime.apiBasePath,
+      runtime.domainId,
+      relation,
+      displayField,
+      selected,
+    ],
     enabled: selected.length > 0,
     queryFn: async () =>
       Object.fromEntries(
@@ -549,7 +563,10 @@ export function RelationField(p: IFieldProps) {
               const result = await api(
                 `/records/${encodeURIComponent(relation)}/${encodeURIComponent(id)}`,
               );
-              return [id, relationRecordLabel({...result.data, id}, displayField)];
+              return [
+                id,
+                relationRecordLabel({ ...result.data, id }, displayField),
+              ];
             } catch {
               return [id, id];
             }
@@ -580,7 +597,7 @@ export function RelationField(p: IFieldProps) {
               key={id}
               disabled={p.readOnly}
               onClick={() => toggle(id)}
-              aria-label={`Quitar ${labels.data?.[id] ?? id}`}
+              aria-label={t("Quitar %{p0}", { p0: labels.data?.[id] ?? id })}
             >
               {labels.data?.[id] ?? id} ×
             </Button>
@@ -592,11 +609,11 @@ export function RelationField(p: IFieldProps) {
           <Input
             id={String(p.config?.inputId ?? p.fieldName)}
             aria-labelledby={`${p.config?.inputId ?? p.fieldName}_label`}
-            placeholder="Buscar registros…"
+            placeholder={t("Buscar registros…")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {results.isPending && <p role="status">Buscando registros…</p>}
+          {results.isPending && <p role="status">{t("Buscando registros…")}</p>}
           {results.error && (
             <p role="alert">
               {results.error.message}{" "}
@@ -606,14 +623,14 @@ export function RelationField(p: IFieldProps) {
                 variant="ghost"
                 onClick={() => results.refetch()}
               >
-                Reintentar
+                {t("Reintentar")}
               </Button>
             </p>
           )}
           <div
             className="studio-relation-options"
             role="group"
-            aria-label="Registros disponibles"
+            aria-label={t("Registros disponibles")}
           >
             {results.data?.data.map((record: any) => (
               <button
@@ -628,7 +645,7 @@ export function RelationField(p: IFieldProps) {
             ))}
           </div>
           {results.data && !results.data.data.length && (
-            <p>No hay registros coincidentes.</p>
+            <p>{t("No hay registros coincidentes.")}</p>
           )}
           <div className="studio-pager">
             <Button
@@ -638,9 +655,11 @@ export function RelationField(p: IFieldProps) {
               disabled={page === 1 || results.isFetching}
               onClick={() => setPage(page - 1)}
             >
-              Anterior
+              {t("Anterior")}
             </Button>
-            <span>Página {page}</span>
+            <span>
+              {t("Página")} {page}
+            </span>
             <Button
               type="button"
               size="sm"
@@ -653,12 +672,12 @@ export function RelationField(p: IFieldProps) {
               }
               onClick={() => setPage(page + 1)}
             >
-              Siguiente
+              {t("Siguiente")}
             </Button>
           </div>
         </>
       )}
-      {p.readOnly && !selected.length && <span>Sin relación</span>}
+      {p.readOnly && !selected.length && <span>{t("Sin relación")}</span>}
     </div>
   );
 }

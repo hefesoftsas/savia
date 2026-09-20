@@ -46,3 +46,11 @@ export function resolveFieldLabel(
   const localized = field.labels?.[locale]?.trim();
   return localized || field.label;
 }
+
+/** Localized option captions never change the option's stored value. */
+export function resolveOptionLabel(
+  option: { label: unknown; labels?: FieldLabels | null },
+  locale: FieldLabelLocale = "es",
+): string {
+  return option.labels?.[locale]?.trim() || String(option.label ?? "");
+}

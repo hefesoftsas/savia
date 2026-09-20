@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { publicFormsMessages } from "@/i18n/locales/public-forms";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,8 @@ export function PublicLinkManager({
   kind,
   request,
 }: Props) {
+  const t = useMessages(publicFormsMessages);
+  const locale = useAppLocale();
   const id = useId();
   const [links, setLinks] = useState<PublicLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,20 +176,22 @@ export function PublicLinkManager({
     <section
       className="public-link-manager"
       aria-labelledby={`${id}-heading`}
-      lang="es"
+      lang={locale}
     >
       <header>
-        <h2 id={`${id}-heading`}>Enlace público</h2>
+        <h2 id={`${id}-heading`}>{t("Enlace público")}</h2>
         <p className="public-form-help">
-          Comparte este formulario para recibir{" "}
-          {kind === "quote" ? "solicitudes de cotización" : "solicitudes"} sin
-          iniciar sesión. Cada envío requiere una verificación de seguridad.
+          {t(
+            kind === "quote"
+              ? "Comparte este formulario para recibir solicitudes de cotización sin iniciar sesión. Cada envío requiere una verificación de seguridad."
+              : "Comparte este formulario para recibir solicitudes sin iniciar sesión. Cada envío requiere una verificación de seguridad.",
+          )}
         </p>
       </header>
       <form onSubmit={publish} aria-busy={pending === "publish"}>
         <div className="public-link-fields">
           <div className="public-form-field">
-            <label htmlFor={`${id}-expires`}>Vence el (opcional)</label>
+            <label htmlFor={`${id}-expires`}>{t("Vence el (opcional)")}</label>
             <Input
               id={`${id}-expires`}
               type="datetime-local"
@@ -195,7 +201,9 @@ export function PublicLinkManager({
             />
           </div>
           <div className="public-form-field">
-            <label htmlFor={`${id}-limit`}>Máximo de envíos al día</label>
+            <label htmlFor={`${id}-limit`}>
+              {t("Máximo de envíos al día")}
+            </label>
             <Input
               id={`${id}-limit`}
               type="number"
@@ -217,7 +225,7 @@ export function PublicLinkManager({
               onChange={(event) => setReturnResult(event.target.checked)}
               disabled={!!pending}
             />
-            Mostrar el resultado público de la cotización al finalizar.
+            {t("Mostrar el resultado público de la cotización al finalizar.")}
           </label>
         )}
         <label className="public-link-confirm">
@@ -227,21 +235,30 @@ export function PublicLinkManager({
             onChange={(event) => setConfirmed(event.target.checked)}
             disabled={!!pending}
           />
-          Publicar la versión actual del formulario. Los cambios posteriores
-          requieren un enlace nuevo.
+          {t(
+            "Publicar la versión actual del formulario. Los cambios posteriores requieren un enlace nuevo.",
+          )}
         </label>
         <Button type="submit" disabled={!confirmed || !!pending || loading}>
-          {pending === "publish" ? "Publicando…" : "Publicar enlace"}
+          {pending === "publish" ? t("Publicando…") : t("Publicar enlace")}
         </Button>
       </form>
       {error && (
         <p role="alert" className="public-form-error">
-          {error}
+          {Object.hasOwn(publicFormsMessages, error)
+            ? t(error as keyof typeof publicFormsMessages)
+            : error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <p role="status">
+          {Object.hasOwn(publicFormsMessages, notice)
+            ? t(notice as keyof typeof publicFormsMessages)
+            : notice}
+        </p>
+      )}
       {loading ? (
-        <p role="status">Cargando enlaces…</p>
+        <p role="status">{t("Cargando enlaces…")}</p>
       ) : links.length ? (
         <ul className="public-link-list">
           {links.map((link) => {
@@ -254,20 +271,26 @@ export function PublicLinkManager({
                 <div className="public-link-details">
                   <strong>
                     {link.revokedAt
-                      ? "Revocado"
+                      ? t("Revocado")
                       : expired
-                        ? "Vencido"
-                        : "Activo"}
+                        ? t("Vencido")
+                        : t("Activo")}
                   </strong>
-                  <span>{link.dailyLimit} envíos al día</span>
+                  <span>
+                    {t("%{count} envíos al día", { count: link.dailyLimit })}
+                  </span>
                   <span>
                     {link.expiresAt
-                      ? `Vence: ${new Date(link.expiresAt).toLocaleString("es")}`
-                      : "Sin vencimiento"}
+                      ? t("Vence: %{date}", {
+                          date: new Date(link.expiresAt).toLocaleString(
+                            intlLocale(locale),
+                          ),
+                        })
+                      : t("Sin vencimiento")}
                   </span>
                 </div>
                 <Input
-                  aria-label="Dirección del enlace público"
+                  aria-label={t("Dirección del enlace público")}
                   value={linkUrl(link)}
                   readOnly
                   onFocus={(event) => event.target.select()}
@@ -279,7 +302,7 @@ export function PublicLinkManager({
                     onClick={() => void copy(link)}
                     disabled={unavailable}
                   >
-                    Copiar enlace
+                    {t("Copiar enlace")}
                   </Button>
                   <Button
                     type="button"
@@ -287,7 +310,9 @@ export function PublicLinkManager({
                     onClick={() => void revoke(link)}
                     disabled={unavailable || !!pending}
                   >
-                    {pending === link.id ? "Revocando…" : "Revocar enlace"}
+                    {pending === link.id
+                      ? t("Revocando…")
+                      : t("Revocar enlace")}
                   </Button>
                 </div>
               </li>
@@ -296,7 +321,7 @@ export function PublicLinkManager({
         </ul>
       ) : (
         <p className="public-form-help">
-          Aún no hay enlaces publicados para este formulario.
+          {t("Aún no hay enlaces publicados para este formulario.")}
         </p>
       )}
     </section>

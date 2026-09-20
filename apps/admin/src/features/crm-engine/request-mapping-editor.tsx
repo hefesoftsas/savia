@@ -1,3 +1,6 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { integrationMessages } from "@/i18n/locales/integrations";
+import { automationMessages } from "@/i18n/locales/automation";
 import { RequestLookupSettings } from "./request-lookup-settings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import "./request-mapping-editor.css";
@@ -30,6 +33,10 @@ export function RequestMappingEditor({
   pageName?: string;
   onChange: (config: RequestPageConfig) => void;
 }) {
+  const t = useMessages(automationMessages);
+  const statusText = useMessages(integrationMessages);
+  const locale = useAppLocale();
+
   const [actionId, setActionId] = useState(config.actions[0]?.id ?? "");
   const [runs, setRuns] = useState<PageRun[]>([]);
   const [runId, setRunId] = useState("");
@@ -67,7 +74,7 @@ export function RequestMappingEditor({
           setError(
             error instanceof Error
               ? error.message
-              : "No se pudieron consultar las respuestas.",
+              : t("No se pudieron consultar las respuestas."),
           );
       })
       .finally(() => {
@@ -80,7 +87,8 @@ export function RequestMappingEditor({
   useEffect(() => {
     setPropertySearch("");
   }, [action?.id]);
-  if (!action) return <p>No hay operaciones configuradas en esta página.</p>;
+  if (!action)
+    return <p>{t("No hay operaciones configuradas en esta página.")}</p>;
   const canRemove =
     action.kind !== "submit" ||
     config.actions.filter((item) => item.kind === "submit").length > 1;
@@ -90,10 +98,10 @@ export function RequestMappingEditor({
     <div className="request-connections">
       <header className="request-connections-toolbar">
         <div className="request-connections-heading">
-          <h4>Requests conectados</h4>
-          <StudioHelpTooltip label="Estado de las conexiones">
-            {config.actions.length} operaciones · Los cambios se guardan al
-            publicar
+          <h4>{t("Requests conectados")}</h4>
+          <StudioHelpTooltip label={t("Estado de las conexiones")}>
+            {config.actions.length}{" "}
+            {t("operaciones · Los cambios se guardan al publicar")}
           </StudioHelpTooltip>
         </div>
         <RequestCatalogDialog
@@ -107,7 +115,7 @@ export function RequestMappingEditor({
         />
       </header>
       <label className="studio-control">
-        <span>Operación de Savia Request</span>
+        <span>{t("Operación de Savia Request")}</span>
         <select
           value={action.id}
           onChange={(event) => {
@@ -118,7 +126,9 @@ export function RequestMappingEditor({
           {config.actions.map((item) => (
             <option key={item.id} value={item.id}>
               {item.label} ·{" "}
-              {item.kind === "submit" ? "Botón principal" : "Consulta de campo"}
+              {item.kind === "submit"
+                ? t("Botón principal")
+                : t("Consulta de campo")}
             </option>
           ))}
         </select>
@@ -127,10 +137,10 @@ export function RequestMappingEditor({
         <div>
           <div className="request-connection-title">
             <strong>{action.label}</strong>
-            <StudioHelpTooltip label="Cómo se ejecuta esta operación">
+            <StudioHelpTooltip label={t("Cómo se ejecuta esta operación")}>
               {action.kind === "submit"
-                ? "Se ejecuta con el botón principal"
-                : "Consulta desde un campo"}
+                ? t("Se ejecuta con el botón principal")
+                : t("Consulta desde un campo")}
             </StudioHelpTooltip>
           </div>
           <code>{action.id}</code>
@@ -142,7 +152,7 @@ export function RequestMappingEditor({
               variant="ghost"
               size="icon"
               className="size-8"
-              aria-label="Quitar de esta página"
+              aria-label={t("Quitar de esta página")}
               disabled={!canRemove}
               onClick={() => {
                 if (!canRemove) return;
@@ -158,27 +168,31 @@ export function RequestMappingEditor({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={6}>
-            Quitar de esta página
+            {t("Quitar de esta página")}
           </TooltipContent>
         </Tooltip>
       </div>
       {!canRemove && (
         <p className="text-sm text-muted-foreground">
-          Conecta otro request al botón principal antes de quitar el último.
+          {t(
+            "Conecta otro request al botón principal antes de quitar el último.",
+          )}
         </p>
       )}
       <Tabs defaultValue="mapping" key={action.id}>
-        <TabsList aria-label="Detalle del request">
+        <TabsList aria-label={t("Detalle del request")}>
           <TabsTrigger value="mapping">
-            Entradas ({Object.keys(action.input).length})
+            {t("Entradas (")}
+            {Object.keys(action.input).length})
           </TabsTrigger>
           <TabsTrigger value="responses">
-            Respuestas ({history.length})
+            {t("Respuestas (")}
+            {history.length})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="mapping">
           <section className="request-mapping-properties">
-            <h4 className="font-semibold">Conectar campos</h4>
+            <h4 className="font-semibold">{t("Conectar campos")}</h4>
             <PropertyPanelSearch
               query={propertySearch}
               onQueryChange={setPropertySearch}
@@ -187,7 +201,7 @@ export function RequestMappingEditor({
             />
             {propertyFilterEmpty ? (
               <p className="request-mapping-empty" role="status">
-                No hay propiedades que coincidan con esta búsqueda.
+                {t("No hay propiedades que coincidan con esta búsqueda.")}
               </p>
             ) : null}
             <div
@@ -216,9 +230,9 @@ export function RequestMappingEditor({
                         field,
                       )}
                     >
-                      <span>Campo de Savia</span>
+                      <span>{t("Campo de Savia")}</span>
                       <select
-                        aria-label={`Campo para ${input}`}
+                        aria-label={t("Campo para %{input}", { input: input })}
                         value={field}
                         onChange={(event) =>
                           onChange({
@@ -239,7 +253,7 @@ export function RequestMappingEditor({
                       >
                         {!fields[field] && (
                           <option value={field}>
-                            Campo no disponible: {field}
+                            {t("Campo no disponible:")} {field}
                           </option>
                         )}
                         {Object.entries(fields).map(([name, definition]) => (
@@ -273,10 +287,13 @@ export function RequestMappingEditor({
           <section className="space-y-3 min-w-0">
             <div className="flex flex-wrap justify-between gap-3">
               <div className="request-responses-heading">
-                <h4 className="font-semibold">Respuestas guardadas</h4>
-                <StudioHelpTooltip label="Ayuda sobre las respuestas guardadas">
-                  Datos enviados desde el formulario y respuesta guardada.
-                  Consultar este historial no ejecuta el request.
+                <h4 className="font-semibold">{t("Respuestas guardadas")}</h4>
+                <StudioHelpTooltip
+                  label={t("Ayuda sobre las respuestas guardadas")}
+                >
+                  {t(
+                    "Datos enviados desde el formulario y respuesta guardada. Consultar este historial no ejecuta el request.",
+                  )}
                 </StudioHelpTooltip>
               </div>
               <Button
@@ -286,38 +303,41 @@ export function RequestMappingEditor({
                 disabled={loading || !pageName}
                 onClick={() => setRevision((value) => value + 1)}
               >
-                Actualizar respuestas
+                {t("Actualizar respuestas")}
               </Button>
             </div>
             {loading ? (
-              <p role="status">Cargando respuestas…</p>
+              <p role="status">{t("Cargando respuestas…")}</p>
             ) : error ? (
               <p role="alert">{error}</p>
             ) : !selected ? (
               <p className="text-sm text-muted-foreground">
-                Esta operación todavía no tiene ejecuciones guardadas en esta
-                página.
+                {t(
+                  "Esta operación todavía no tiene ejecuciones guardadas en esta página.",
+                )}
               </p>
             ) : (
               <>
                 <label className="studio-control">
-                  <span>Ejecución</span>
+                  <span>{t("Ejecución")}</span>
                   <select
                     value={selected.id}
                     onChange={(event) => setRunId(event.target.value)}
                   >
                     {history.map((run) => (
                       <option key={run.id} value={run.id}>
-                        {new Date(run.createdAt).toLocaleString("es-CO")} ·{" "}
-                        {run.mode === "mock" ? "Simulación" : "Real"} ·{" "}
-                        {run.status}
+                        {new Date(run.createdAt).toLocaleString(
+                          intlLocale(locale),
+                        )}{" "}
+                        · {run.mode === "mock" ? t("Simulación") : t("Real")} ·{" "}
+                        {statusText(run.status)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <MonacoCodeEditor
                   language="json"
-                  ariaLabel="Entrada y respuesta de Savia Request"
+                  ariaLabel={t("Entrada y respuesta de Savia Request")}
                   readOnly
                   onChange={() => {}}
                   height={420}

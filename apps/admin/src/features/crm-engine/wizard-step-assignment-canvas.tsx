@@ -1,3 +1,6 @@
+import { fieldTypeLabel } from "./field-type-icons";
+import { useMessages, useAppLocale } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import {
   useMemo,
   useCallback,
@@ -118,6 +121,8 @@ export function WizardStepAssignmentCanvas({
   onChange: (wizard: WizardConfig) => void;
   view?: "full" | "assignment";
 }) {
+  const t = useMessages(studioMessages);
+  const locale = useAppLocale();
   const { state, updateField, reorderFields } = useDesigner();
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dropTargetZoneId, setDropTargetZoneId] = useState<string | null>(null);
@@ -159,11 +164,11 @@ export function WizardStepAssignmentCanvas({
       {
         id: "",
         index: -1,
-        label: "Sin paso",
+        label: t("Sin paso"),
         step: null,
       },
     ];
-  }, [wizard.steps, visibleFields, state.fields, stepIds]);
+  }, [wizard.steps, visibleFields, state.fields, stepIds, t]);
 
   useEffect(() => {
     if (view === "assignment") return;
@@ -398,7 +403,7 @@ export function WizardStepAssignmentCanvas({
     >
       <div
         className="wizard-step-zones"
-        aria-label="Pasos del wizard y asignación de campos"
+        aria-label={t("Pasos del wizard y asignación de campos")}
       >
         {groups.map((group) => {
           const ids = fieldsByStep.get(group.id) ?? [];
@@ -419,7 +424,10 @@ export function WizardStepAssignmentCanvas({
                 .filter(Boolean)
                 .join(" ")}
               open={isZoneOpen(group.id)}
-              aria-label={`${group.label} (${ids.length} campos)`}
+              aria-label={t("%{v1} (%{v2} campos)", {
+                v1: group.label,
+                v2: ids.length,
+              })}
               onDragEnter={(event) => {
                 if (!event.dataTransfer.types.includes(dragType)) return;
                 setDropTargetZoneId(group.id);
@@ -467,7 +475,7 @@ export function WizardStepAssignmentCanvas({
                   {group.label}
                 </span>
                 <span className="wizard-step-zone-count">
-                  {ids.length} {ids.length === 1 ? "campo" : "campos"}
+                  {ids.length} {ids.length === 1 ? t("campo") : t("campos")}
                 </span>
                 {showStepActions && group.step && (
                   <div
@@ -480,7 +488,9 @@ export function WizardStepAssignmentCanvas({
                       size="icon"
                       variant="ghost"
                       className="size-7"
-                      aria-label={`Subir paso ${group.index + 1}`}
+                      aria-label={t("Subir paso %{v1}", {
+                        v1: group.index + 1,
+                      })}
                       disabled={group.index === 0}
                       onClick={() => moveStep(group.index, -1)}
                     >
@@ -491,7 +501,9 @@ export function WizardStepAssignmentCanvas({
                       size="icon"
                       variant="ghost"
                       className="size-7"
-                      aria-label={`Bajar paso ${group.index + 1}`}
+                      aria-label={t("Bajar paso %{v1}", {
+                        v1: group.index + 1,
+                      })}
                       disabled={group.index === wizard.steps.length - 1}
                       onClick={() => moveStep(group.index, 1)}
                     >
@@ -502,7 +514,9 @@ export function WizardStepAssignmentCanvas({
                       size="icon"
                       variant="ghost"
                       className="size-7"
-                      aria-label={`Eliminar paso ${group.index + 1}`}
+                      aria-label={t("Eliminar paso %{v1}", {
+                        v1: group.index + 1,
+                      })}
                       disabled={wizard.steps.length <= 2}
                       onClick={() => removeStep(group.id)}
                     >
@@ -516,10 +530,12 @@ export function WizardStepAssignmentCanvas({
                   <div className="wizard-step-zone-meta">
                     <label className="studio-control wizard-step-zone-title-field">
                       <span className="sr-only">
-                        Título del paso {group.index + 1}
+                        {t("Título del paso")} {group.index + 1}
                       </span>
                       <Input
-                        aria-label={`Título del paso ${group.index + 1}`}
+                        aria-label={t("Título del paso %{v1}", {
+                          v1: group.index + 1,
+                        })}
                         maxLength={80}
                         value={group.step.title}
                         onChange={(event) =>
@@ -535,7 +551,7 @@ export function WizardStepAssignmentCanvas({
                       />
                     </label>
                     <details className="wizard-step-zone-desc">
-                      <summary>Descripción (opcional)</summary>
+                      <summary>{t("Descripción (opcional)")}</summary>
                       <Textarea
                         rows={2}
                         maxLength={300}
@@ -555,7 +571,9 @@ export function WizardStepAssignmentCanvas({
                   </div>
                 )}
                 {!ids.length && (
-                  <p className="wizard-step-zone-empty">Arrastra campos aquí</p>
+                  <p className="wizard-step-zone-empty">
+                    {t("Arrastra campos aquí")}
+                  </p>
                 )}
                 <ul
                   className="wizard-step-zone-list"
@@ -623,7 +641,9 @@ export function WizardStepAssignmentCanvas({
                               type="button"
                               className="wizard-step-field-grip"
                               draggable
-                              aria-label={`Arrastrar ${field.label}`}
+                              aria-label={t("Arrastrar %{v1}", {
+                                v1: field.label,
+                              })}
                               onDragStart={(event) => startDrag(name, event)}
                               onDragEnd={clearDragState}
                             >
@@ -634,21 +654,23 @@ export function WizardStepAssignmentCanvas({
                                 {field.label}
                               </span>
                               <span className="wizard-step-field-card-meta">
-                                {field.type}
-                                {field.required ? " · Obligatorio" : ""}
+                                {fieldTypeLabel(field.type, locale)}
+                                {field.required ? t("· Obligatorio") : ""}
                               </span>
                             </div>
                           </div>
                           <select
                             className="wizard-step-field-move"
-                            aria-label={`Mover ${field.label} a paso`}
+                            aria-label={t("Mover %{v1} a paso", {
+                              v1: field.label,
+                            })}
                             value={current}
                             onChange={(event) => {
                               assignStep(name, event.target.value || undefined);
                               markLanded(name);
                             }}
                           >
-                            <option value="">Sin paso</option>
+                            <option value="">{t("Sin paso")}</option>
                             {wizard.steps.map((step, index) => (
                               <option key={step.id} value={step.id}>
                                 {index + 1}. {step.title}

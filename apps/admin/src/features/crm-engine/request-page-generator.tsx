@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,11 +17,13 @@ export default function RequestPageGenerator({
 }: {
   onCreated: (object: CrmObject) => Promise<void>;
 }) {
+  const t = useMessages(automationMessages);
+
   const [document, setDocument] = useState<unknown>();
   const [operations, setOperations] = useState<RequestOperation[]>([]);
   const [selected, setSelected] = useState<string[]>([]),
     [lookups, setLookups] = useState<string[]>([]);
-  const [label, setLabel] = useState("Cotizador"),
+  const [label, setLabel] = useState(t("Cotizador")),
     [name, setName] = useState("cotizador");
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -80,18 +84,21 @@ export default function RequestPageGenerator({
   }, [availableLookupIdKey]);
   const selectedLabel =
     selected.length === 1
-      ? "1 operación seleccionada"
-      : `${selected.length} operaciones seleccionadas`;
+      ? t("1 operación seleccionada")
+      : t("%{value0} operaciones seleccionadas", { value0: selected.length });
   return (
     <section
       className="mx-auto max-w-4xl space-y-6"
-      aria-label="Generar página desde Savia request"
+      aria-label={t("Generar página desde Savia request")}
     >
       <header>
-        <h1 className="text-2xl font-semibold">Página desde Savia request</h1>
+        <h1 className="text-2xl font-semibold">
+          {t("Página desde Savia request")}
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          Selecciona los requests. Sus contratos OpenAPI generan el formulario y
-          las acciones de la página.
+          {t(
+            "Selecciona los requests. Sus contratos OpenAPI generan el formulario y las acciones de la página.",
+          )}
         </p>
       </header>
       <form
@@ -126,7 +133,7 @@ export default function RequestPageGenerator({
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2">
-            Nombre de la página
+            {t("Nombre de la página")}
             <Input
               required
               value={label}
@@ -134,7 +141,7 @@ export default function RequestPageGenerator({
             />
           </label>
           <label className="grid gap-2">
-            Identificador
+            {t("Identificador")}
             <Input
               required
               pattern="[a-z][a-z0-9_]{0,47}"
@@ -145,7 +152,7 @@ export default function RequestPageGenerator({
         </div>
         <fieldset className="space-y-3">
           <legend className="mb-3 font-semibold">
-            Operaciones al enviar el formulario
+            {t("Operaciones al enviar el formulario")}
           </legend>
           <div className="grid max-h-52 gap-3 overflow-y-auto pr-1 md:max-h-[min(42dvh,30rem)] md:grid-cols-2">
             {submitOperations.map((o) => (
@@ -168,7 +175,7 @@ export default function RequestPageGenerator({
                 <span>
                   {o.label}
                   <small className="block text-muted-foreground">
-                    {Object.keys(o.input).length} campos de entrada
+                    {Object.keys(o.input).length} {t("campos de entrada")}
                   </small>
                 </span>
               </label>
@@ -177,7 +184,7 @@ export default function RequestPageGenerator({
         </fieldset>
         <fieldset className="space-y-3">
           <legend className="mb-3 font-semibold">
-            Consultas para completar campos
+            {t("Consultas para completar campos")}
           </legend>
           <div className="grid max-h-56 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
             {lookupOptions.map(({ operation, missingFields }) => (
@@ -205,7 +212,9 @@ export default function RequestPageGenerator({
                   {operation.label}
                   {missingFields.length ? (
                     <small className="block text-muted-foreground">
-                      Selecciona una cotización compatible para activarla.
+                      {t(
+                        "Selecciona una cotización compatible para activarla.",
+                      )}
                     </small>
                   ) : null}
                 </span>
@@ -230,7 +239,7 @@ export default function RequestPageGenerator({
             disabled={!document || !selected.length || busy}
             type="submit"
           >
-            {busy ? "Generando…" : "Generar página"}
+            {busy ? t("Generando…") : t("Generar página")}
           </Button>
         </div>
       </form>

@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import {
@@ -21,11 +23,7 @@ import { cn } from "@/lib/utils";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
 
 function normalize(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "");
+  return value.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 }
 
 export function LookupTriggerEventTags({
@@ -35,6 +33,8 @@ export function LookupTriggerEventTags({
   events?: LookupTriggerEvent[];
   onChange: (events: LookupTriggerEvent[] | undefined) => void;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,8 +72,8 @@ export function LookupTriggerEventTags({
       data-property-search="eventos del campo blur change input focus enter"
     >
       <legend className="studio-fieldset-legend-with-help">
-        Eventos del campo
-        <StudioHelpTooltip label="Eventos HTML disponibles">
+        {t("Eventos del campo")}
+        <StudioHelpTooltip label={t("Eventos HTML disponibles")}>
           {LOOKUP_TRIGGER_EVENTS.join(", ")}
         </StudioHelpTooltip>
       </legend>
@@ -100,7 +100,7 @@ export function LookupTriggerEventTags({
                   <button
                     type="button"
                     className="lookup-trigger-pill-remove"
-                    aria-label={`Quitar ${event}`}
+                    aria-label={t("Quitar %{p0}", { p0: event })}
                     onClick={(clickEvent) => {
                       clickEvent.stopPropagation();
                       remove(event);
@@ -118,13 +118,13 @@ export function LookupTriggerEventTags({
                 aria-expanded={open}
                 aria-autocomplete="list"
                 aria-controls="lookup-trigger-event-list"
-                aria-label="Buscar eventos del campo"
+                aria-label={t("Buscar eventos del campo")}
                 placeholder={
                   available.length
                     ? selected.length
-                      ? "Añadir…"
-                      : "Buscar evento…"
-                    : "Completo"
+                      ? t("Añadir…")
+                      : t("Buscar evento…")
+                    : t("Completo")
                 }
                 value={query}
                 disabled={!available.length}
@@ -168,8 +168,8 @@ export function LookupTriggerEventTags({
               {filtered.length === 0 ? (
                 <CommandEmpty>
                   {available.length === 0
-                    ? "Sin eventos disponibles."
-                    : "Sin coincidencias."}
+                    ? t("Sin eventos disponibles.")
+                    : t("Sin coincidencias.")}
                 </CommandEmpty>
               ) : (
                 <CommandGroup>

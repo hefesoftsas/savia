@@ -19,6 +19,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Core localization](localization.md) — ES/EN/PT coverage, translated labels, locale formatting and regression checks.
+
 - [PostgreSQL for Docker](guides/self-hosted-postgres.md) — optional database, offline SQLite import, backup and recovery.
 - [Licensing](licensing.md): revenue threshold, commercial licensing, source redistribution, and mandatory attribution.
 

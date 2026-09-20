@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { uiMessages } from "@/i18n/locales/ui";
 import {
   TenantBrandingProvider,
   useTenantBranding,
@@ -11,13 +13,7 @@ import {
   useState,
 } from "react";
 import { Building2, LoaderCircle } from "lucide-react";
-import {
-  CustomRoutes,
-  I18nContextProvider,
-  memoryStore,
-  Resource,
-  useTranslate,
-} from "ra-core";
+import { CustomRoutes, memoryStore, Resource, useTranslate } from "ra-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
@@ -26,7 +22,7 @@ import { users } from "@/features/users";
 import { PasswordResetPage } from "@/features/users/password-reset-page";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { Admin } from "@/components/admin";
-import { i18nProvider } from "@/lib/i18nProvider";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { OfflineBanner } from "@/offline/offline-banner";
 import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
@@ -165,6 +161,17 @@ function AccountRoute({ apiUrl }: { apiUrl: string }) {
   );
 }
 
+function TenantBrandingRoute({ services }: { services: AppServices }) {
+  const t = useMessages(uiMessages);
+  return (
+    <Suspense
+      fallback={<RouteLoading label={t("Cargando identidad del tenant…")} />}
+    >
+      <TenantBrandingPage services={services} />
+    </Suspense>
+  );
+}
+
 function TenantTitleSync({ title }: { title: string }) {
   const { branding } = useTenantBranding();
   useEffect(() => {
@@ -229,22 +236,22 @@ function AppContent({ services }: { services?: AppServices } = {}) {
 
   if (window.location.pathname === "/auth/reset-password") {
     return (
-      <I18nContextProvider value={i18nProvider}>
+      <AppLocaleProvider>
         <PasswordResetPage
           apiUrl={import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin}
         />
-      </I18nContextProvider>
+      </AppLocaleProvider>
     );
   }
 
   if (handlingCallback) {
     return (
-      <I18nContextProvider value={i18nProvider}>
+      <AppLocaleProvider>
         <BetterAuthCallback
           services={appServices}
           onComplete={finishCallback}
         />
-      </I18nContextProvider>
+      </AppLocaleProvider>
     );
   }
 
@@ -268,15 +275,7 @@ function AppContent({ services }: { services?: AppServices } = {}) {
           <CustomRoutes>
             <Route
               path="/tenant-branding"
-              element={
-                <Suspense
-                  fallback={
-                    <RouteLoading label="Cargando identidad del tenant…" />
-                  }
-                >
-                  <TenantBrandingPage services={appServices} />
-                </Suspense>
-              }
+              element={<TenantBrandingRoute services={appServices} />}
             />
             <Route
               path="/roles"

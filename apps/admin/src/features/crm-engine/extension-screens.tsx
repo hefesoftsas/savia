@@ -64,4 +64,3 @@ export function extensionScreenDefaultHidden(object: string): boolean {
   const match = extensionScreens.find((screen) => screen.object === object);
   return match?.hidden === true;
 }
-

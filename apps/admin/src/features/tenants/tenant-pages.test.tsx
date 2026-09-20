@@ -137,7 +137,7 @@ describe("generic tenant pages", () => {
       total: 2,
     });
     await renderApp(appServices);
-    expect(await screen.findByText("Tenant #101")).toBeVisible();
+    expect(await screen.findByText("Organización #101")).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Quitar" }),
     ).not.toBeInTheDocument();

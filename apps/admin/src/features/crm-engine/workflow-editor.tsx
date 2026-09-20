@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { WorkflowDestinationPicker } from "./workflow-webhooks";
 import { TriggerConditions } from "./workflow-trigger-conditions";
 import { useId } from "react";
@@ -10,7 +12,10 @@ import type {
   WorkflowValue,
 } from "@savia/crm-shared/workflows";
 
-export const stepLabels: Record<WorkflowNode["type"], string> = {
+export const stepLabels: Record<
+  WorkflowNode["type"],
+  keyof typeof automationMessages
+> = {
   webhook: "Enviar webhook",
   condition: "Condición",
   transform: "Transformar datos",
@@ -77,6 +82,8 @@ export function ValueInput({
   onChange: (v: WorkflowValue) => void;
   variables: string[];
 }) {
+  const t = useMessages(automationMessages);
+
   const id = useId(),
     kind =
       value === null
@@ -93,7 +100,7 @@ export function ValueInput({
       <label htmlFor={id}>{label}</label>
       <div>
         <select
-          aria-label={`Tipo de ${label}`}
+          aria-label={t("Tipo de %{label}", { label: label })}
           value={kind}
           onChange={(e) =>
             onChange(
@@ -113,21 +120,21 @@ export function ValueInput({
             )
           }
         >
-          <option value="string">Texto</option>
-          <option value="number">Número</option>
-          <option value="boolean">Sí / No</option>
-          <option value="null">Vacío</option>
-          <option value="ref">Variable</option>
-          <option value="concat">Combinar textos</option>
-          <option value="dateOffset">Desplazar fecha</option>
+          <option value="string">{t("Texto")}</option>
+          <option value="number">{t("Número")}</option>
+          <option value="boolean">{t("Sí / No")}</option>
+          <option value="null">{t("Vacío")}</option>
+          <option value="ref">{t("Variable")}</option>
+          <option value="concat">{t("Combinar textos")}</option>
+          <option value="dateOffset">{t("Desplazar fecha")}</option>
         </select>
         {typeof value === "object" && value && "concat" in value ? (
           <fieldset>
-            <legend>Partes del texto</legend>
+            <legend>{t("Partes del texto")}</legend>
             {value.concat.map((part, index) => (
               <div key={index}>
                 <ValueInput
-                  label={`Parte ${index + 1}`}
+                  label={t("Parte %{value0}", { value0: index + 1 })}
                   value={part}
                   variables={variables}
                   onChange={(next) =>
@@ -147,7 +154,7 @@ export function ValueInput({
                     })
                   }
                 >
-                  Quitar parte
+                  {t("Quitar parte")}
                 </Button>
               </div>
             ))}
@@ -156,14 +163,14 @@ export function ValueInput({
               disabled={value.concat.length >= 12}
               onClick={() => onChange({ concat: [...value.concat, ""] })}
             >
-              Añadir parte
+              {t("Añadir parte")}
             </Button>
           </fieldset>
         ) : typeof value === "object" && value && "dateOffset" in value ? (
           <fieldset>
-            <legend>Fecha relativa</legend>
+            <legend>{t("Fecha relativa")}</legend>
             <ValueInput
-              label="Fecha base"
+              label={t("Fecha base")}
               value={value.dateOffset.value}
               variables={variables}
               onChange={(next) =>
@@ -171,7 +178,7 @@ export function ValueInput({
               }
             />
             <label>
-              Días antes (negativo) o después
+              {t("Días antes (negativo) o después")}
               <Input
                 type="number"
                 min={-3660}
@@ -194,8 +201,8 @@ export function ValueInput({
             value={String(value)}
             onChange={(e) => onChange(e.target.value === "true")}
           >
-            <option value="true">Sí</option>
-            <option value="false">No</option>
+            <option value="true">{t("Sí")}</option>
+            <option value="false">{t("No")}</option>
           </select>
         ) : kind !== "null" ? (
           <Input
@@ -240,14 +247,16 @@ function Mappings({
   fields: string[];
   variables: string[];
 }) {
+  const t = useMessages(automationMessages);
+
   return (
     <fieldset>
-      <legend>Valores de salida</legend>
+      <legend>{t("Valores de salida")}</legend>
       {Object.entries(values).map(([key, value], index) => (
         <div className="wf-mapping" key={index}>
           {fields.length ? (
             <select
-              aria-label={`Campo ${index + 1}`}
+              aria-label={t("Campo %{value0}", { value0: index + 1 })}
               value={key}
               onChange={(e) => {
                 const next = { ...values };
@@ -265,7 +274,7 @@ function Mappings({
             </select>
           ) : (
             <Input
-              aria-label={`Campo ${index + 1}`}
+              aria-label={t("Campo %{value0}", { value0: index + 1 })}
               value={key}
               onChange={(e) => {
                 const next = Object.fromEntries(
@@ -279,7 +288,7 @@ function Mappings({
             />
           )}
           <ValueInput
-            label={`Valor ${index + 1}`}
+            label={t("Valor %{value0}", { value0: index + 1 })}
             value={value}
             onChange={(v) => onChange({ ...values, [key]: v })}
             variables={variables}
@@ -291,9 +300,9 @@ function Mappings({
               delete next[key];
               onChange(next);
             }}
-            aria-label={`Quitar campo ${key}`}
+            aria-label={t("Quitar campo %{key}", { key: key })}
           >
-            Quitar
+            {t("Quitar")}
           </Button>
         </div>
       ))}
@@ -306,7 +315,7 @@ function Mappings({
           onChange({ ...values, [key]: "" });
         }}
       >
-        Añadir valor
+        {t("Añadir valor")}
       </Button>
     </fieldset>
   );
@@ -320,14 +329,16 @@ export function TriggerEditor({
   onChange: (v: WorkflowDefinition) => void;
   objects: CrmObject[];
 }) {
+  const t = useMessages(automationMessages);
+
   const trigger = definition.trigger;
   const set = (value: WorkflowDefinition["trigger"]) =>
     onChange({ ...definition, trigger: value });
   return (
     <fieldset className="wf-trigger">
-      <legend>Cuándo se inicia</legend>
+      <legend>{t("Cuándo se inicia")}</legend>
       <label>
-        Disparador
+        {t("Disparador")}
         <select
           value={trigger.type}
           onChange={(e) => {
@@ -351,25 +362,26 @@ export function TriggerEditor({
             );
           }}
         >
-          <option value="manual">Acción manual</option>
-          <option value="webhook">Webhook recibido</option>
-          <option value="created">Registro creado</option>
-          <option value="updated">Registro actualizado</option>
+          <option value="manual">{t("Acción manual")}</option>
+          <option value="webhook">{t("Webhook recibido")}</option>
+          <option value="created">{t("Registro creado")}</option>
+          <option value="updated">{t("Registro actualizado")}</option>
           <option value="created_or_updated">
-            Registro creado o actualizado
+            {t("Registro creado o actualizado")}
           </option>
-          <option value="deleted">Registro eliminado</option>
-          <option value="schedule">Programación</option>
+          <option value="deleted">{t("Registro eliminado")}</option>
+          <option value="schedule">{t("Programación")}</option>
         </select>
       </label>
       {trigger.type === "webhook" ? (
         <p className="wf-muted">
-          Un sistema externo inicia este flujo mediante una solicitud
-          autenticada.
+          {t(
+            "Un sistema externo inicia este flujo mediante una solicitud autenticada.",
+          )}
         </p>
       ) : trigger.type !== "schedule" ? (
         <label>
-          Colección
+          {t("Colección")}
           <select
             value={trigger.collection ?? ""}
             onChange={(e) =>
@@ -385,8 +397,8 @@ export function TriggerEditor({
           >
             <option value="">
               {trigger.type === "manual"
-                ? "Sin registro asociado"
-                : "Selecciona una colección"}
+                ? t("Sin registro asociado")
+                : t("Selecciona una colección")}
             </option>
             {objects.map((o) => (
               <option key={o.name} value={o.name}>
@@ -398,7 +410,7 @@ export function TriggerEditor({
       ) : (
         <>
           <label>
-            Intervalo en minutos
+            {t("Intervalo en minutos")}
             <Input
               type="number"
               min={1}
@@ -409,7 +421,7 @@ export function TriggerEditor({
             />
           </label>
           <label>
-            Inicio (UTC)
+            {t("Inicio (UTC)")}
             <Input
               type="datetime-local"
               value={trigger.startAt.slice(0, 16)}
@@ -426,7 +438,7 @@ export function TriggerEditor({
       )}
       {trigger.type === "updated" || trigger.type === "created_or_updated" ? (
         <label>
-          Campos que deben cambiar
+          {t("Campos que deben cambiar")}
           <select
             multiple
             value={trigger.changedFields}
@@ -450,21 +462,24 @@ export function TriggerEditor({
             ))}
           </select>
           <small>
-            Sin selección: cualquier cambio de datos. Basta con que cambie uno
-            de los campos seleccionados.
+            {t(
+              "Sin selección: cualquier cambio de datos. Basta con que cambie uno de los campos seleccionados.",
+            )}
           </small>
           {trigger.type === "created_or_updated" && (
             <small>
-              Al crear, se evalúan las condiciones sin exigir cambios en estos
-              campos.
+              {t(
+                "Al crear, se evalúan las condiciones sin exigir cambios en estos campos.",
+              )}
             </small>
           )}
         </label>
       ) : null}
       {trigger.type === "deleted" && (
         <p className="wf-muted">
-          El flujo recibe los datos del registro eliminado. Vaciar la papelera
-          no vuelve a iniciarlo.
+          {t(
+            "El flujo recibe los datos del registro eliminado. Vaciar la papelera no vuelve a iniciarlo.",
+          )}
         </p>
       )}
       {trigger.type === "created" ||
@@ -479,7 +494,7 @@ export function TriggerEditor({
               objects.find((o) => o.name === trigger.collection) ??
                 ({ config: { fields: {} } } as CrmObject),
             ).map(([name, field]) => ({ name, label: field.label })),
-            { name: "id", label: "ID del registro" },
+            { name: "id", label: t("ID del registro") },
           ]}
           onChange={(conditions) => set({ ...trigger, conditions })}
           onModeChange={(conditionMode) => set({ ...trigger, conditionMode })}
@@ -499,6 +514,8 @@ export function StepEditor({
   objects: CrmObject[];
   onChange: (v: WorkflowNode) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const patch = (value: Partial<WorkflowNode>) =>
     onChange({ ...node, ...value } as WorkflowNode);
   const object =
@@ -542,23 +559,25 @@ export function StepEditor({
         value={(node as { next?: string; otherwise?: string })[key] ?? ""}
         onChange={(e) => patch({ [key]: e.target.value || undefined })}
       >
-        <option value="">Finalizar</option>
+        <option value="">{t("Finalizar")}</option>
         {definition.nodes
           .filter((n) => n.id !== node.id)
           .map((n) => (
             <option key={n.id} value={n.id}>
-              {n.label || stepLabels[n.type]} · {n.id}
+              {n.label || t(stepLabels[n.type])} · {n.id}
             </option>
           ))}
       </select>
     </label>
   );
   return (
-    <section className="wf-config" aria-label="Configuración del paso">
-      <h3>{stepLabels[node.type]}</h3>
-      <p className="wf-muted">Identificador: {node.id}</p>
+    <section className="wf-config" aria-label={t("Configuración del paso")}>
+      <h3>{t(stepLabels[node.type])}</h3>
+      <p className="wf-muted">
+        {t("Identificador:")} {node.id}
+      </p>
       <label>
-        Etiqueta
+        {t("Etiqueta")}
         <Input
           value={node.label ?? ""}
           onChange={(e) => patch({ label: e.target.value })}
@@ -566,12 +585,12 @@ export function StepEditor({
       </label>
       {"collection" in node ? (
         <label>
-          Colección del paso
+          {t("Colección del paso")}
           <select
             value={node.collection}
             onChange={(e) => patch({ collection: e.target.value })}
           >
-            <option value="">Selecciona una colección</option>
+            <option value="">{t("Selecciona una colección")}</option>
             {objects.map((o) => (
               <option key={o.name} value={o.name}>
                 {o.label}
@@ -583,13 +602,13 @@ export function StepEditor({
       {node.type === "condition" ? (
         <>
           <ValueInput
-            label="Valor a comparar"
+            label={t("Valor a comparar")}
             value={node.left}
             onChange={(v) => patch({ left: v })}
             variables={variables}
           />
           <label>
-            Operador
+            {t("Operador")}
             <select
               value={node.operator}
               onChange={(e) =>
@@ -610,15 +629,15 @@ export function StepEditor({
                 <option key={op} value={op}>
                   {
                     [
-                      "Igual",
-                      "Distinto",
-                      "Mayor",
-                      "Mayor o igual",
-                      "Menor",
-                      "Menor o igual",
-                      "Contiene",
-                      "Está vacío",
-                      "Fecha posterior",
+                      t("Igual"),
+                      t("Distinto"),
+                      t("Mayor"),
+                      t("Mayor o igual"),
+                      t("Menor"),
+                      t("Menor o igual"),
+                      t("Contiene"),
+                      t("Está vacío"),
+                      t("Fecha posterior"),
                     ][i]
                   }
                 </option>
@@ -626,7 +645,7 @@ export function StepEditor({
             </select>
           </label>
           <ValueInput
-            label="Comparar con"
+            label={t("Comparar con")}
             value={node.right}
             onChange={(v) => patch({ right: v })}
             variables={variables}
@@ -646,12 +665,12 @@ export function StepEditor({
       ) : null}
       {node.type === "create" ? (
         <label>
-          Evitar duplicados por campo único
+          {t("Evitar duplicados por campo único")}
           <select
             value={node.matchField ?? ""}
             onChange={(e) => patch({ matchField: e.target.value || undefined })}
           >
-            <option value="">Crear siempre</option>
+            <option value="">{t("Crear siempre")}</option>
             {fields
               .filter((field) => {
                 const definition = objects.find(
@@ -673,7 +692,7 @@ export function StepEditor({
       ) : null}
       {node.type === "update" ? (
         <ValueInput
-          label="ID del registro"
+          label={t("ID del registro")}
           value={node.recordId}
           onChange={(v) => patch({ recordId: v })}
           variables={variables}
@@ -682,26 +701,26 @@ export function StepEditor({
       {node.type === "query" ? (
         <>
           <label>
-            Campo de búsqueda
+            {t("Campo de búsqueda")}
             <select
               value={node.field}
               onChange={(e) => patch({ field: e.target.value })}
             >
-              <option value="">Selecciona un campo</option>
-              <option value="id">ID del registro</option>
+              <option value="">{t("Selecciona un campo")}</option>
+              <option value="id">{t("ID del registro")}</option>
               {fields.map((f) => (
                 <option key={f}>{f}</option>
               ))}
             </select>
           </label>
           <ValueInput
-            label="Valor de búsqueda"
+            label={t("Valor de búsqueda")}
             value={node.value}
             onChange={(v) => patch({ value: v })}
             variables={variables}
           />
           <label>
-            Límite de resultados
+            {t("Límite de resultados")}
             <Input
               type="number"
               min={1}
@@ -715,13 +734,13 @@ export function StepEditor({
       {node.type === "task" || node.type === "notification" ? (
         <>
           <ValueInput
-            label="Título"
+            label={t("Título")}
             value={node.title}
             onChange={(v) => patch({ title: v })}
             variables={variables}
           />
           <ValueInput
-            label="ID del destinatario"
+            label={t("ID del destinatario")}
             value={node.assignee}
             onChange={(v) => patch({ assignee: v })}
             variables={variables}
@@ -730,7 +749,7 @@ export function StepEditor({
       ) : null}
       {node.type === "task" ? (
         <label>
-          Vence en días
+          {t("Vence en días")}
           <Input
             type="number"
             min={0}
@@ -741,9 +760,9 @@ export function StepEditor({
       ) : null}
       {node.type === "delay" ? (
         <fieldset>
-          <legend>Momento de continuación</legend>
+          <legend>{t("Momento de continuación")}</legend>
           <select
-            aria-label="Tipo de espera"
+            aria-label={t("Tipo de espera")}
             value={node.until === undefined ? "seconds" : "until"}
             onChange={(e) =>
               patch(
@@ -753,12 +772,12 @@ export function StepEditor({
               )
             }
           >
-            <option value="seconds">Duración en segundos</option>
-            <option value="until">Hasta una fecha UTC</option>
+            <option value="seconds">{t("Duración en segundos")}</option>
+            <option value="until">{t("Hasta una fecha UTC")}</option>
           </select>
           {node.until === undefined ? (
             <label>
-              Segundos de espera
+              {t("Segundos de espera")}
               <Input
                 type="number"
                 min={1}
@@ -768,7 +787,7 @@ export function StepEditor({
             </label>
           ) : (
             <ValueInput
-              label="Continuar en fecha"
+              label={t("Continuar en fecha")}
               value={node.until}
               onChange={(value) => patch({ until: value })}
               variables={variables}
@@ -777,11 +796,11 @@ export function StepEditor({
         </fieldset>
       ) : null}
       {destination(
-        node.type === "condition" ? "Si se cumple" : "Siguiente paso",
+        node.type === "condition" ? t("Si se cumple") : t("Siguiente paso"),
         "next",
       )}
       {node.type === "condition"
-        ? destination("Si no se cumple", "otherwise")
+        ? destination(t("Si no se cumple"), "otherwise")
         : null}
     </section>
   );

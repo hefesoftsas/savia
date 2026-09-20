@@ -40,3 +40,25 @@ it("formats temporal values and missing currency consistently", () => {
     }).format(new Date(value)),
   );
 });
+it("formats numbers and booleans in the selected locale without translating user options", () => {
+  const numeric = { type: "Number", label: "Count" };
+  expect(formatFieldValue(1234.5, numeric, "en-US")).toBe("1,234.5");
+  expect(formatFieldValue(1234.5, numeric, "pt-BR")).toBe("1.234,5");
+  expect(
+    formatFieldValue(true, { type: "Toggle", label: "Active" }, "en-US"),
+  ).toBe("Yes");
+  expect(
+    formatFieldValue(false, { type: "Toggle", label: "Active" }, "pt-BR"),
+  ).toBe("Não");
+  expect(
+    formatFieldValue(
+      "yes",
+      {
+        type: "Dropdown",
+        label: "Option",
+        options: [{ value: "yes", label: "Sí" }],
+      },
+      "en-US",
+    ),
+  ).toBe("Sí");
+});

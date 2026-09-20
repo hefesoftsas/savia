@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ResultColumn } from "@savia/crm-shared/request-page";
 import type { ResultCardRow } from "./result-cards";
@@ -45,6 +47,8 @@ export function ResultHtmlSurface({
   columns: ResultColumn[];
   disabled?: boolean;
 }) {
+  const t = useMessages(recordsMessages);
+
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(600);
   const srcDoc = useMemo(
@@ -68,7 +72,7 @@ export function ResultHtmlSurface({
   return (
     <iframe
       ref={frame}
-      title="Resultados personalizados"
+      title={t("Resultados personalizados")}
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       srcDoc={srcDoc}

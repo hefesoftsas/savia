@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useState } from "react";
 import { Settings2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -35,17 +37,6 @@ type ExtensionEntry = {
   installed: { version: string; enabled: boolean } | null;
 };
 
-const message = (error: unknown) =>
-  error instanceof Error
-    ? error.message
-    : "No se pudo actualizar la extensión. Intenta de nuevo.";
-
-function state(entry: ExtensionEntry) {
-  if (entry.builtIn) return "Incluida";
-  if (!entry.installed) return "Disponible";
-  return entry.installed.enabled ? "Activa" : "Inactiva";
-}
-
 function isActive(entry: ExtensionEntry) {
   return entry.builtIn || entry.installed?.enabled === true;
 }
@@ -60,33 +51,48 @@ function labelForField(name: string): string {
     .join(" ");
 }
 
-function connectorsFor(extensionId: string): ExtensionConnectionConnector[] {
-  return (
-    releaseCatalog.extensionRegistry.get(extensionId)?.runtime?.connectors ?? []
-  ).map((connector) => {
-    const schema = connector.configurationSchema as {
-      shape?: Record<string, unknown>;
-    };
-    return {
-      connectorId: connector.connectorId,
-      label: connector.label,
-      fields: Object.keys(schema.shape ?? {}).map((name) => ({
-        name,
-        label:
-          name === "credentials" ? "Credenciales (JSON)" : labelForField(name),
-        secret: connector.secretFields.includes(name),
-        multiline: name === "credentials",
-        json: name === "credentials",
-      })),
-    };
-  });
-}
-
 export default function ExtensionManager({
   onChanged,
 }: {
   onChanged: () => void | Promise<unknown>;
 }) {
+  const t = useMessages(automationMessages);
+  function connectorsFor(extensionId: string): ExtensionConnectionConnector[] {
+    return (
+      releaseCatalog.extensionRegistry.get(extensionId)?.runtime?.connectors ??
+      []
+    ).map((connector) => {
+      const schema = connector.configurationSchema as {
+        shape?: Record<string, unknown>;
+      };
+      return {
+        connectorId: connector.connectorId,
+        label: connector.label,
+        fields: Object.keys(schema.shape ?? {}).map((name) => ({
+          name,
+          label:
+            name === "credentials"
+              ? t("Credenciales (JSON)")
+              : labelForField(name),
+          secret: connector.secretFields.includes(name),
+          multiline: name === "credentials",
+          json: name === "credentials",
+        })),
+      };
+    });
+  }
+
+  function state(entry: ExtensionEntry) {
+    if (entry.builtIn) return t("Incluida");
+    if (!entry.installed) return t("Disponible");
+    return entry.installed.enabled ? t("Activa") : t("Inactiva");
+  }
+
+  const message = (error: unknown) =>
+    error instanceof Error
+      ? error.message
+      : t("No se pudo actualizar la extensión. Intenta de nuevo.");
+
   const [entries, setEntries] = useState<ExtensionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -132,18 +138,19 @@ export default function ExtensionManager({
   }
 
   return (
-    <section aria-label="Extensiones disponibles" className="space-y-5">
+    <section aria-label={t("Extensiones disponibles")} className="space-y-5">
       <div className="savia-surface-card">
         <header className="flex items-center gap-2 border-b px-6 py-5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">
-            Extensiones
+            {t("Extensiones")}
           </h2>
           <StudioHelpTooltip
-            label="Cómo funcionan las extensiones"
+            label={t("Cómo funcionan las extensiones")}
             side="bottom"
           >
-            Añaden capacidades incluidas en este release. Se activan solo para
-            este espacio.
+            {t(
+              "Añaden capacidades incluidas en este release. Se activan solo para este espacio.",
+            )}
           </StudioHelpTooltip>
         </header>
         {error ? (
@@ -153,11 +160,11 @@ export default function ExtensionManager({
         ) : null}
         {loading ? (
           <p role="status" className="px-6 py-5 text-sm text-muted-foreground">
-            Cargando extensiones…
+            {t("Cargando extensiones…")}
           </p>
         ) : entries.length === 0 ? (
           <p className="px-6 py-5 text-sm text-muted-foreground">
-            No hay extensiones incluidas en este release.
+            {t("No hay extensiones incluidas en este release.")}
           </p>
         ) : (
           <div className="divide-y" role="list">
@@ -185,7 +192,9 @@ export default function ExtensionManager({
                         {state(entry)}
                       </Badge>
                       <StudioHelpTooltip
-                        label={`Más información sobre ${entry.manifest.label}`}
+                        label={t("Más información sobre %{value0}", {
+                          value0: entry.manifest.label,
+                        })}
                         side="bottom"
                       >
                         <span className="block max-w-xs space-y-1">
@@ -193,10 +202,12 @@ export default function ExtensionManager({
                             {entry.manifest.description}
                           </span>
                           <span className="block text-primary-foreground/75">
-                            Versión{" "}
+                            {t("Versión")}{" "}
                             {entry.installed?.version ?? entry.manifest.version}
                             {entry.manifest.requires.length
-                              ? ` · Requiere: ${entry.manifest.requires.join(", ")}`
+                              ? t(" · Requiere: %{value0}", {
+                                  value0: entry.manifest.requires.join(", "),
+                                })
                               : ""}
                           </span>
                         </span>
@@ -215,9 +226,11 @@ export default function ExtensionManager({
                               ),
                             )
                           }
-                          aria-label={`Instalar ${entry.manifest.label}`}
+                          aria-label={t("Instalar %{value0}", {
+                            value0: entry.manifest.label,
+                          })}
                         >
-                          Instalar
+                          {t("Instalar")}
                         </Button>
                       ) : null}
                       {!entry.builtIn && entry.installed ? (
@@ -232,9 +245,11 @@ export default function ExtensionManager({
                               }),
                             )
                           }
-                          aria-label={`${entry.installed.enabled ? "Desactivar" : "Activar"} ${entry.manifest.label}`}
+                          aria-label={`${entry.installed.enabled ? t("Desactivar") : t("Activar")} ${entry.manifest.label}`}
                         >
-                          {entry.installed.enabled ? "Desactivar" : "Activar"}
+                          {entry.installed.enabled
+                            ? t("Desactivar")
+                            : t("Activar")}
                         </Button>
                       ) : null}
                       {active && connectors.length ? (
@@ -243,10 +258,12 @@ export default function ExtensionManager({
                             size="sm"
                             variant="outline"
                             disabled={pending}
-                            aria-label={`Configurar conexión de ${entry.manifest.label}`}
+                            aria-label={t("Configurar conexión de %{value0}", {
+                              value0: entry.manifest.label,
+                            })}
                           >
                             <Settings2 aria-hidden="true" />
-                            Configurar
+                            {t("Configurar")}
                           </Button>
                         </CollapsibleTrigger>
                       ) : null}
@@ -266,13 +283,17 @@ export default function ExtensionManager({
                                   ),
                                 )
                               }
-                              aria-label={`Reparar instalación ${entry.manifest.label}`}
+                              aria-label={t("Reparar instalación %{value0}", {
+                                value0: entry.manifest.label,
+                              })}
                             >
                               <Wrench aria-hidden="true" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Reaplica los requisitos sin desactivar la extensión.
+                            {t(
+                              "Reaplica los requisitos sin desactivar la extensión.",
+                            )}
                           </TooltipContent>
                         </Tooltip>
                       ) : null}

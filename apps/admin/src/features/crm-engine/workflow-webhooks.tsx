@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,8 @@ export function WorkflowWebhookSettings({
 }: {
   workflowId: string;
 }) {
+  const t = useMessages(automationMessages);
+
   const client = useQueryClient(),
     key = ["workflow-webhook", scope(), workflowId];
   const endpoint = useQuery({
@@ -54,26 +58,31 @@ export function WorkflowWebhookSettings({
     : "";
   const example = `curl -X POST '${url}' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_SECRET' \\\n  -H 'Idempotency-Key: unique-event-id' \\\n  -d '{"name":"Example"}'`;
   return (
-    <section className="wf-webhook" aria-label="Webhook recibido">
-      <h3>Recibir eventos externos</h3>
+    <section className="wf-webhook" aria-label={t("Webhook recibido")}>
+      <h3>{t("Recibir eventos externos")}</h3>
       <p className="wf-muted">
-        Publica y activa el flujo para recibir eventos. Los campos JSON estarán
-        disponibles como variables, por ejemplo <code>trigger.name</code>.
+        {t(
+          "Publica y activa el flujo para recibir eventos. Los campos JSON estarán disponibles como variables, por ejemplo",
+        )}{" "}
+        <code>trigger.name</code>.
       </p>
-      {endpoint.isPending ? <p role="status">Cargando webhook…</p> : null}
+      {endpoint.isPending ? (
+        <p role="status">{t("Cargando webhook…")}</p>
+      ) : null}
       {url ? (
         <>
           <label>
-            URL del webhook
+            {t("URL del webhook")}
             <Input readOnly value={url} />
           </label>
           <details>
-            <summary>Ejemplo de solicitud</summary>
+            <summary>{t("Ejemplo de solicitud")}</summary>
             <pre>{example}</pre>
           </details>
           <p className="wf-muted">
-            Reutiliza el identificador del evento si reenvías una solicitud.
-            Rotar el secreto invalida el anterior inmediatamente.
+            {t(
+              "Reutiliza el identificador del evento si reenvías una solicitud. Rotar el secreto invalida el anterior inmediatamente.",
+            )}
           </p>
         </>
       ) : null}
@@ -83,22 +92,22 @@ export function WorkflowWebhookSettings({
         onClick={() => void change(!!url)}
       >
         {busy
-          ? "Guardando…"
+          ? t("Guardando…")
           : url
-            ? "Rotar secreto del webhook"
-            : "Crear URL y secreto"}
+            ? t("Rotar secreto del webhook")
+            : t("Crear URL y secreto")}
       </Button>
       {secret ? (
         <div className="wf-webhook-secret">
           <label>
-            Secreto del webhook
+            {t("Secreto del webhook")}
             <Input readOnly value={secret} />
           </label>
           <p className="wf-muted">
-            Cópialo ahora. No podrás volver a consultarlo.
+            {t("Cópialo ahora. No podrás volver a consultarlo.")}
           </p>
           <Button variant="outline" onClick={() => setSecret(null)}>
-            Ocultar secreto
+            {t("Ocultar secreto")}
           </Button>
         </div>
       ) : null}
@@ -116,6 +125,8 @@ export function WorkflowDestinationPicker({
   value: { destinationId: string; destinationRevision: number };
   onChange: (v: { destinationId: string; destinationRevision: number }) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const client = useQueryClient(),
     key = ["workflow-webhook-destinations", scope()];
   const query = useQuery({
@@ -161,9 +172,9 @@ export function WorkflowDestinationPicker({
       setForm(empty);
     });
   return (
-    <section className="wf-webhook" aria-label="Destino del webhook">
+    <section className="wf-webhook" aria-label={t("Destino del webhook")}>
       <label>
-        Destino HTTPS
+        {t("Destino HTTPS")}
         <select
           value={value.destinationId}
           disabled={busy || query.isPending}
@@ -176,21 +187,21 @@ export function WorkflowDestinationPicker({
               });
           }}
         >
-          <option value="">Selecciona un destino</option>
+          <option value="">{t("Selecciona un destino")}</option>
           {query.data?.data.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
-              {d.enabled ? "" : " · desactivado"}
+              {d.enabled ? "" : t(" · desactivado")}
             </option>
           ))}
         </select>
       </label>
       {selected ? (
         <p className="wf-muted">
-          Versión elegida: {value.destinationRevision}.{" "}
+          {t("Versión elegida:")} {value.destinationRevision}.{" "}
           {selected.enabled
-            ? "Destino activo."
-            : "Destino desactivado; no se enviarán solicitudes."}
+            ? t("Destino activo.")
+            : t("Destino desactivado; no se enviarán solicitudes.")}
         </p>
       ) : null}
       {selected && selected.revision !== value.destinationRevision ? (
@@ -203,7 +214,7 @@ export function WorkflowDestinationPicker({
             })
           }
         >
-          Usar versión {selected.revision}
+          {t("Usar versión")} {selected.revision}
         </Button>
       ) : null}
       <div className="wf-actions">
@@ -216,7 +227,7 @@ export function WorkflowDestinationPicker({
             setError("");
           }}
         >
-          Nuevo destino
+          {t("Nuevo destino")}
         </Button>
         {selected ? (
           <>
@@ -236,7 +247,7 @@ export function WorkflowDestinationPicker({
                 setError("");
               }}
             >
-              Editar destino
+              {t("Editar destino")}
             </Button>
             <Button
               variant="outline"
@@ -251,32 +262,34 @@ export function WorkflowDestinationPicker({
                 })
               }
             >
-              {selected.enabled ? "Desactivar destino" : "Activar destino"}
+              {selected.enabled
+                ? t("Desactivar destino")
+                : t("Activar destino")}
             </Button>
           </>
         ) : null}
       </div>
       {editing !== undefined ? (
         <fieldset className="wf-destination-form">
-          <legend>{editing ? "Editar destino" : "Nuevo destino"}</legend>
+          <legend>{editing ? t("Editar destino") : t("Nuevo destino")}</legend>
           <label>
-            Nombre del destino
+            {t("Nombre del destino")}
             <Input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </label>
           <label>
-            URL HTTPS
+            {t("URL HTTPS")}
             <Input
               type="url"
-              placeholder="https://api.tusistema.com/eventos"
+              placeholder={t("https://api.tusistema.com/eventos")}
               value={form.url}
               onChange={(e) => setForm({ ...form, url: e.target.value })}
             />
           </label>
           <label>
-            Autenticación
+            {t("Autenticación")}
             <select
               value={form.authType}
               onChange={(e) =>
@@ -291,14 +304,14 @@ export function WorkflowDestinationPicker({
                 })
               }
             >
-              <option value="none">Sin credencial</option>
-              <option value="bearer">Token Bearer</option>
-              <option value="api-key">API key en cabecera</option>
+              <option value="none">{t("Sin credencial")}</option>
+              <option value="bearer">{t("Token Bearer")}</option>
+              <option value="api-key">{t("API key en cabecera")}</option>
             </select>
           </label>
           {form.authType === "api-key" ? (
             <label>
-              Nombre de cabecera
+              {t("Nombre de cabecera")}
               <Input
                 value={form.authHeader ?? ""}
                 onChange={(e) =>
@@ -310,7 +323,7 @@ export function WorkflowDestinationPicker({
           {form.authType !== "none" ? (
             <>
               <label>
-                Credencial
+                {t("Credencial")}
                 <Input
                   type="password"
                   autoComplete="new-password"
@@ -322,8 +335,9 @@ export function WorkflowDestinationPicker({
               </label>
               {editing ? (
                 <p className="wf-muted">
-                  Deja vacío para conservar la credencial. Rotarla también
-                  afecta las versiones anteriores con la misma autenticación.
+                  {t(
+                    "Deja vacío para conservar la credencial. Rotarla también afecta las versiones anteriores con la misma autenticación.",
+                  )}
                 </p>
               ) : null}
             </>
@@ -333,7 +347,7 @@ export function WorkflowDestinationPicker({
               disabled={busy || !form.name.trim() || !form.url}
               onClick={() => void save()}
             >
-              {busy ? "Guardando…" : "Guardar destino"}
+              {busy ? t("Guardando…") : t("Guardar destino")}
             </Button>
             {editing && form.secret ? (
               <Button
@@ -350,7 +364,7 @@ export function WorkflowDestinationPicker({
                   })
                 }
               >
-                Rotar solo credencial
+                {t("Rotar solo credencial")}
               </Button>
             ) : null}
             <Button
@@ -361,7 +375,7 @@ export function WorkflowDestinationPicker({
                 setForm(empty);
               }}
             >
-              Cancelar
+              {t("Cancelar")}
             </Button>
           </div>
         </fieldset>
@@ -370,9 +384,9 @@ export function WorkflowDestinationPicker({
         <p role="alert">{error || String(query.error)}</p>
       ) : null}
       <p className="wf-muted">
-        Se envía un POST JSON. Los fallos temporales tienen hasta 3 intentos con
-        la misma clave de idempotencia; el receptor debe respetarla para evitar
-        duplicados.
+        {t(
+          "Se envía un POST JSON. Los fallos temporales tienen hasta 3 intentos con la misma clave de idempotencia; el receptor debe respetarla para evitar duplicados.",
+        )}
       </p>
     </section>
   );

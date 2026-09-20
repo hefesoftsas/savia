@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useRef, useState } from "react";
 import type { IFieldProps } from "@form-eng/core";
 import ReactMarkdown from "react-markdown";
@@ -43,6 +45,8 @@ export function RichTextValue({ value }: { value: unknown }) {
   );
 }
 export function RichTextField(props: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   const ref = useRef<HTMLTextAreaElement>(null);
   const [preview, setPreview] = useState(false);
   const value = typeof props.value === "string" ? props.value : "";
@@ -66,16 +70,16 @@ export function RichTextField(props: IFieldProps) {
     <div className="space-y-2">
       <div
         role="group"
-        aria-label="Text formatting"
+        aria-label={t("Text formatting")}
         className="flex flex-wrap gap-1"
       >
         {(
           [
-            ["Bold", "**", "**"],
-            ["Italic", "*", "*"],
-            ["Bullet list", "\n- ", ""],
-            ["Numbered list", "\n1. ", ""],
-            ["Link", "[", "](https://)"],
+            [t("Bold"), "**", "**"],
+            [t("Italic"), "*", "*"],
+            [t("Bullet list"), "\n- ", ""],
+            [t("Numbered list"), "\n1. ", ""],
+            [t("Link"), "[", "](https://)"],
           ] as const
         ).map(([label, before, after]) => (
           <Button
@@ -97,7 +101,7 @@ export function RichTextField(props: IFieldProps) {
           aria-pressed={preview}
           onClick={() => setPreview(!preview)}
         >
-          {preview ? "Edit" : "Preview"}
+          {preview ? t("Edit") : t("Preview")}
         </Button>
       </div>
       {preview ? (
@@ -121,8 +125,9 @@ export function RichTextField(props: IFieldProps) {
         />
       )}
       <p id={`${id}_help`} className="text-sm text-muted-foreground">
-        Use the formatting buttons or Markdown. Preview shows the formatted
-        text.
+        {t(
+          "Use the formatting buttons or Markdown. Preview shows the formatted text.",
+        )}
       </p>
     </div>
   );

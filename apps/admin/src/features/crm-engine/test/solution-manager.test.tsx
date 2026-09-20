@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import userEvent from "@testing-library/user-event";
 import SolutionManager from "../solution-manager";
 import { api } from "../api";

@@ -2,13 +2,8 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, it, expect, vi } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  cleanup,
-} from "@testing-library/react";
+import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render } from "./studio-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Panel from "../collection-operations-panel";
 import { api } from "../api";
@@ -66,15 +61,40 @@ it("preloads endpoint configuration and saves an explicitly disabled action with
   await waitFor(() => expect(close).toHaveBeenCalled());
 });
 
-it('allows entering a registered internal endpoint manually',async()=>{
- const list=endpointSchema.parse({path:'/v1/geographic-catalog/countries',method:'GET',format:'domain'});
- vi.mocked(api).mockResolvedValue({data:{version:1,kind:'domain',resource:'countries',fields:[],operations:{list,read:null,create:null,update:null,delete:null},candidates:[]}});
- render(<QueryClientProvider client={new QueryClient()}><Panel name="countries" label="Países" onClose={()=>{}}/></QueryClientProvider>);
- const create=await screen.findByLabelText('Crear',{selector:'select'});
- fireEvent.change(create,{target:{value:'manual'}});
- const route=screen.getByLabelText('Ruta · Crear');
- expect(route).not.toHaveAttribute('readonly');
- fireEvent.change(route,{target:{value:'/v1/geographic-catalog/commands/register-country'}});
- expect(screen.getByLabelText('Método · Crear')).not.toBeDisabled();
- expect(route).toHaveValue('/v1/geographic-catalog/commands/register-country');
+it("allows entering a registered internal endpoint manually", async () => {
+  const list = endpointSchema.parse({
+    path: "/v1/geographic-catalog/countries",
+    method: "GET",
+    format: "domain",
+  });
+  vi.mocked(api).mockResolvedValue({
+    data: {
+      version: 1,
+      kind: "domain",
+      resource: "countries",
+      fields: [],
+      operations: {
+        list,
+        read: null,
+        create: null,
+        update: null,
+        delete: null,
+      },
+      candidates: [],
+    },
+  });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Panel name="countries" label="Países" onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  const create = await screen.findByLabelText("Crear", { selector: "select" });
+  fireEvent.change(create, { target: { value: "manual" } });
+  const route = screen.getByLabelText("Ruta · Crear");
+  expect(route).not.toHaveAttribute("readonly");
+  fireEvent.change(route, {
+    target: { value: "/v1/geographic-catalog/commands/register-country" },
+  });
+  expect(screen.getByLabelText("Método · Crear")).not.toBeDisabled();
+  expect(route).toHaveValue("/v1/geographic-catalog/commands/register-country");
 });

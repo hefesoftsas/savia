@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { withScreen } from "./screen-metadata";
 export { withScreen, sortScreens } from "./screen-metadata";
 import { Fragment, useEffect, useState } from "react";
@@ -23,14 +25,17 @@ import { type LookupIcon } from "@savia/crm-shared/request-page";
 import { api } from "./api";
 import { LookupIconPicker } from "./lookup-icon-picker";
 
-const surfaceLabels: Record<RecordSurface, string> = {
+const surfaceLabels: Record<RecordSurface, keyof typeof studioMessages> = {
   modal: "Ventana modal",
   drawer: "Panel lateral corto",
   "drawer-long": "Panel lateral largo",
   page: "Otra página",
 };
 
-const screenNavigationSectionLabels: Record<ScreenNavigationSection, string> = {
+const screenNavigationSectionLabels: Record<
+  ScreenNavigationSection,
+  keyof typeof studioMessages
+> = {
   operation: "Trabajo",
   productivity: "Construir",
   administration: "Administración",
@@ -54,14 +59,15 @@ function ScreenNavigationFields({
   onSectionChange: (section: ScreenNavigationSection) => void;
   onIconChange: (icon: LookupIcon) => void;
 }) {
+  const t = useMessages(studioMessages);
   return (
     <div
       className={`screen-navigation-fields${compact ? " screen-navigation-fields--compact" : ""}`}
     >
       <label className="screen-presentation-field">
-        <span>Sección del menú</span>
+        <span>{t("Sección del menú")}</span>
         <select
-          aria-label={`Sección de ${object.label} en el menú`}
+          aria-label={t("Sección de %{v1} en el menú", { v1: object.label })}
           disabled={busy}
           value={section}
           onChange={(event) =>
@@ -70,18 +76,18 @@ function ScreenNavigationFields({
         >
           {screenNavigationSections.map((entry) => (
             <option key={entry} value={entry}>
-              {screenNavigationSectionLabels[entry]}
+              {t(screenNavigationSectionLabels[entry])}
             </option>
           ))}
         </select>
       </label>
       <div className="screen-presentation-field">
-        <span>Icono</span>
+        <span>{t("Icono")}</span>
         <LookupIconPicker
           value={icon}
           onChange={onIconChange}
           libraries={["lucide"]}
-          aria-label={`Icono de ${object.label} en el menú`}
+          aria-label={t("Icono de %{v1} en el menú", { v1: object.label })}
         />
       </div>
     </div>
@@ -118,19 +124,23 @@ function ScreenModeSelect({
   busy: boolean;
   onChange: (mode: RecordSurface) => void;
 }) {
-  const label = kind === "create" ? "Nuevo registro" : "Editar registro";
+  const t = useMessages(studioMessages);
+  const label = kind === "create" ? t("Nuevo registro") : t("Editar registro");
   return (
     <label className="screen-presentation-field">
       <span>{label}</span>
       <select
-        aria-label={`Abrir ${label} de ${object.label} en`}
+        aria-label={t("Abrir %{v1} de %{v2} en", {
+          v1: label,
+          v2: object.label,
+        })}
         value={value}
         disabled={busy}
         onChange={(event) => onChange(event.target.value as RecordSurface)}
       >
         {recordSurfaces.map((surface) => (
           <option key={surface} value={surface}>
-            {surfaceLabels[surface]}
+            {t(surfaceLabels[surface])}
           </option>
         ))}
       </select>
@@ -151,6 +161,7 @@ export default function ScreenManager({
   onSaved: (object: CrmObject) => Promise<void>;
   variant?: "table" | "detail";
 }) {
+  const t = useMessages(studioMessages);
   const [drafts, setDrafts] = useState(objects);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -221,10 +232,10 @@ export default function ScreenManager({
       setRemoving(null);
       toast.success(
         changes.hidden === true
-          ? "Pantalla oculta"
+          ? t("Pantalla oculta")
           : changes.hidden === false
-            ? "Pantalla recuperada"
-            : "Cambios guardados",
+            ? t("Pantalla recuperada")
+            : t("Cambios guardados"),
       );
     } catch (e) {
       setDrafts((prev) =>
@@ -255,19 +266,21 @@ export default function ScreenManager({
         >
           <div className="screen-presentation-section-header">
             <div className="flex items-center gap-2">
-              <h2 id="screen-presentation-identity">Identidad en el menú</h2>
+              <h2 id="screen-presentation-identity">
+                {t("Identidad en el menú")}
+              </h2>
               {isPluginScreen(object.name) ? (
-                <span className="screen-admin-plugin-badge">Plugin</span>
+                <span className="screen-admin-plugin-badge">{t("Plugin")}</span>
               ) : null}
             </div>
             <span
               className={`screen-setting-status${hidden ? " is-hidden" : ""}`}
             >
-              {hidden ? "Fuera del menú" : "Visible en Tu negocio"}
+              {hidden ? t("Fuera del menú") : t("Visible en Tu negocio")}
             </span>
           </div>
           <p className="screen-presentation-lede">
-            El nombre que verán las personas en el menú de Tu negocio.
+            {t("El nombre que verán las personas en el menú de Tu negocio.")}
           </p>
           <form
             className="screen-name-form"
@@ -279,12 +292,12 @@ export default function ScreenManager({
             }}
           >
             <label htmlFor={`screen-name-${object.name}`}>
-              Nombre de la pantalla
+              {t("Nombre de la pantalla")}
             </label>
             <div className="screen-name-controls">
               <Input
                 id={`screen-name-${object.name}`}
-                aria-label={`Nombre de pantalla ${object.label}`}
+                aria-label={t("Nombre de pantalla %{v1}", { v1: object.label })}
                 value={labels[object.name] ?? object.label}
                 maxLength={100}
                 disabled={!!busy}
@@ -301,7 +314,9 @@ export default function ScreenManager({
                     type="submit"
                     variant="default"
                     size="icon"
-                    aria-label={`Guardar nombre de ${object.label}`}
+                    aria-label={t("Guardar nombre de %{v1}", {
+                      v1: object.label,
+                    })}
                     disabled={
                       !!busy ||
                       !(labels[object.name] ?? object.label).trim() ||
@@ -314,7 +329,7 @@ export default function ScreenManager({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  Guardar nombre
+                  {t("Guardar nombre")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -324,10 +339,13 @@ export default function ScreenManager({
           className="screen-presentation-section"
           aria-labelledby="screen-presentation-navigation"
         >
-          <h2 id="screen-presentation-navigation">Ubicación en el menú</h2>
+          <h2 id="screen-presentation-navigation">
+            {t("Ubicación en el menú")}
+          </h2>
           <p className="screen-presentation-lede">
-            Elige en qué sección aparece la pantalla y el icono que la
-            identifica.
+            {t(
+              "Elige en qué sección aparece la pantalla y el icono que la identifica.",
+            )}
           </p>
           <ScreenNavigationFields
             object={object}
@@ -342,9 +360,13 @@ export default function ScreenManager({
           className="screen-presentation-section"
           aria-labelledby="screen-presentation-forms"
         >
-          <h2 id="screen-presentation-forms">Cómo se abren los formularios</h2>
+          <h2 id="screen-presentation-forms">
+            {t("Cómo se abren los formularios")}
+          </h2>
           <p className="screen-presentation-lede">
-            Elige dónde aparece el formulario al crear o editar un registro.
+            {t(
+              "Elige dónde aparece el formulario al crear o editar un registro.",
+            )}
           </p>
           <div className="screen-presentation-fields">
             <ScreenModeSelect
@@ -367,25 +389,34 @@ export default function ScreenManager({
           className="screen-presentation-section"
           aria-labelledby="screen-presentation-menu"
         >
-          <h2 id="screen-presentation-menu">Visibilidad en la barra lateral</h2>
+          <h2 id="screen-presentation-menu">
+            {t("Visibilidad en la barra lateral")}
+          </h2>
           <p className="screen-presentation-lede">
             {hidden
-              ? "Esta pantalla está oculta de la barra lateral, pero sigue disponible para ser llamada desde otras páginas o flujos."
-              : "Esta pantalla aparece visible en la barra lateral izquierda."}
+              ? t(
+                  "Esta pantalla está oculta de la barra lateral, pero sigue disponible para ser llamada desde otras páginas o flujos.",
+                )
+              : t(
+                  "Esta pantalla aparece visible en la barra lateral izquierda.",
+                )}
           </p>
           <div className="screen-sidebar-visibility-toggle mb-4">
             <div className="flex items-center justify-between gap-4 py-2 border-b border-border/50">
               <div className="space-y-0.5">
                 <span className="text-sm font-medium">
-                  Mostrar en la barra lateral
+                  {t("Mostrar en la barra lateral")}
                 </span>
                 <p className="text-xs text-muted-foreground">
-                  Desactívalo si esta pantalla solo se llamará desde otras
-                  páginas o flujos.
+                  {t(
+                    "Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.",
+                  )}
                 </p>
               </div>
               <Switch
-                aria-label={`Mostrar u ocultar ${object.label} en la barra lateral`}
+                aria-label={t("Mostrar u ocultar %{v1} en la barra lateral", {
+                  v1: object.label,
+                })}
                 checked={!hidden}
                 disabled={!!busy}
                 onCheckedChange={(checked) =>
@@ -397,8 +428,9 @@ export default function ScreenManager({
           {removing === object.name && !hidden ? (
             <div className="screen-removal">
               <p>
-                ¿Eliminar «{object.label}» de Tu negocio? Los registros se
-                conservarán.
+                {t("¿Eliminar «")}
+                {object.label}
+                {t("» de Tu negocio? Los registros se conservarán.")}
               </p>
               <div>
                 <Button
@@ -406,14 +438,14 @@ export default function ScreenManager({
                   disabled={!!busy}
                   onClick={() => setRemoving(null)}
                 >
-                  Cancelar
+                  {t("Cancelar")}
                 </Button>
                 <Button
                   variant="destructive"
                   disabled={!!busy}
                   onClick={() => save(object, { hidden: true })}
                 >
-                  Eliminar del menú
+                  {t("Eliminar del menú")}
                 </Button>
               </div>
             </div>
@@ -430,12 +462,12 @@ export default function ScreenManager({
               {busy === object.name ? (
                 <>
                   <LoaderCircle size={16} className="animate-spin" />
-                  Guardando…
+                  {t("Guardando…")}
                 </>
               ) : hidden ? (
-                "Recuperar en el menú"
+                t("Recuperar en el menú")
               ) : (
-                "Eliminar del menú"
+                t("Eliminar del menú")
               )}
             </Button>
           )}
@@ -460,12 +492,12 @@ export default function ScreenManager({
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">Pantalla</th>
-            <th scope="col">Nuevo registro</th>
-            <th scope="col">Editar registro</th>
-            <th scope="col">Menú</th>
+            <th scope="col">{t("Pantalla")}</th>
+            <th scope="col">{t("Nuevo registro")}</th>
+            <th scope="col">{t("Editar registro")}</th>
+            <th scope="col">{t("Menú")}</th>
             <th scope="col">
-              <span className="sr-only">Acciones</span>
+              <span className="sr-only">{t("Acciones")}</span>
             </th>
           </tr>
         </thead>
@@ -485,7 +517,9 @@ export default function ScreenManager({
                         <span
                           className={`screen-setting-status${hidden ? " is-hidden" : ""}`}
                         >
-                          {hidden ? "Fuera del menú" : "Visible en Tu negocio"}
+                          {hidden
+                            ? t("Fuera del menú")
+                            : t("Visible en Tu negocio")}
                         </span>
                       </>
                     ) : (
@@ -506,27 +540,29 @@ export default function ScreenManager({
                       >
                         <div className="screen-name-form-meta">
                           <label htmlFor={`screen-name-${object.name}`}>
-                            Nombre de la pantalla
+                            {t("Nombre de la pantalla")}
                           </label>
                           <div className="flex items-center gap-1.5">
                             {isPluginScreen(object.name) ? (
                               <span className="screen-admin-plugin-badge">
-                                Plugin
+                                {t("Plugin")}
                               </span>
                             ) : null}
                             <span
                               className={`screen-setting-status${hidden ? " is-hidden" : ""}`}
                             >
                               {hidden
-                                ? "Fuera del menú"
-                                : "Visible en Tu negocio"}
+                                ? t("Fuera del menú")
+                                : t("Visible en Tu negocio")}
                             </span>
                           </div>
                         </div>
                         <div className="screen-name-controls">
                           <Input
                             id={`screen-name-${object.name}`}
-                            aria-label={`Nombre de pantalla ${object.label}`}
+                            aria-label={t("Nombre de pantalla %{v1}", {
+                              v1: object.label,
+                            })}
                             value={labels[object.name] ?? object.label}
                             maxLength={100}
                             disabled={!!busy}
@@ -541,7 +577,9 @@ export default function ScreenManager({
                             type="submit"
                             variant="outline"
                             size="sm"
-                            aria-label={`Guardar nombre de ${object.label}`}
+                            aria-label={t("Guardar nombre de %{v1}", {
+                              v1: object.label,
+                            })}
                             disabled={
                               !!busy ||
                               !(labels[object.name] ?? object.label).trim() ||
@@ -551,7 +589,7 @@ export default function ScreenManager({
                                 .length > 100
                             }
                           >
-                            Guardar
+                            {t("Guardar")}
                           </Button>
                         </div>
                       </form>
@@ -562,10 +600,12 @@ export default function ScreenManager({
                       <td>
                         <label className="screen-mode">
                           <span className="screen-mode-label">
-                            Nuevo registro
+                            {t("Nuevo registro")}
                           </span>
                           <select
-                            aria-label={`Abrir Nuevo registro de ${object.label} en`}
+                            aria-label={t("Abrir Nuevo registro de %{v1} en", {
+                              v1: object.label,
+                            })}
                             value={
                               object.config.studio?.screen?.createMode ??
                               "modal"
@@ -579,7 +619,7 @@ export default function ScreenManager({
                           >
                             {recordSurfaces.map((value) => (
                               <option key={value} value={value}>
-                                {surfaceLabels[value]}
+                                {t(surfaceLabels[value])}
                               </option>
                             ))}
                           </select>
@@ -588,10 +628,12 @@ export default function ScreenManager({
                       <td>
                         <label className="screen-mode">
                           <span className="screen-mode-label">
-                            Editar registro
+                            {t("Editar registro")}
                           </span>
                           <select
-                            aria-label={`Abrir Editar registro de ${object.label} en`}
+                            aria-label={t("Abrir Editar registro de %{v1} en", {
+                              v1: object.label,
+                            })}
                             value={
                               object.config.studio?.screen?.editMode ?? "modal"
                             }
@@ -604,7 +646,7 @@ export default function ScreenManager({
                           >
                             {recordSurfaces.map((value) => (
                               <option key={value} value={value}>
-                                {surfaceLabels[value]}
+                                {t(surfaceLabels[value])}
                               </option>
                             ))}
                           </select>
@@ -630,10 +672,17 @@ export default function ScreenManager({
                           disabled={!!busy}
                           title={
                             hidden
-                              ? `Recuperar pantalla ${object.label}`
-                              : `Eliminar pantalla ${object.label}`
+                              ? t("Recuperar pantalla %{v1}", {
+                                  v1: object.label,
+                                })
+                              : t("Eliminar pantalla %{v1}", {
+                                  v1: object.label,
+                                })
                           }
-                          aria-label={`${hidden ? "Recuperar" : "Eliminar"} pantalla ${object.label}`}
+                          aria-label={t("%{v1} pantalla %{v2}", {
+                            v1: hidden ? t("Recuperar") : t("Eliminar"),
+                            v2: object.label,
+                          })}
                           onClick={() =>
                             hidden
                               ? save(object, { hidden: false })
@@ -659,8 +708,9 @@ export default function ScreenManager({
                     <td colSpan={5}>
                       <div className="screen-removal">
                         <p>
-                          ¿Eliminar «{object.label}» de Tu negocio? Los
-                          registros se conservarán.
+                          {t("¿Eliminar «")}
+                          {object.label}
+                          {t("» de Tu negocio? Los registros se conservarán.")}
                         </p>
                         <div>
                           <Button
@@ -672,14 +722,14 @@ export default function ScreenManager({
                                 : setRemoving(null)
                             }
                           >
-                            Cancelar
+                            {t("Cancelar")}
                           </Button>
                           <Button
                             variant="destructive"
                             disabled={!!busy}
                             onClick={() => save(object, { hidden: true })}
                           >
-                            Eliminar del menú
+                            {t("Eliminar del menú")}
                           </Button>
                         </div>
                       </div>

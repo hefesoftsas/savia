@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import {
   supportsLocalRecordTools,
   collectionCapabilities,
@@ -39,8 +41,8 @@ import Workflows from "./workflows";
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-const dateLabel = (value: string) =>
-  new Intl.DateTimeFormat("es-CO", {
+const dateLabel = (value: string, locale: string) =>
+  new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeZone: "UTC",
   }).format(new Date(value));
@@ -51,12 +53,14 @@ export function OperationError({
   error: unknown;
   retry?: () => void;
 }) {
+  const t = useMessages(automationMessages);
+
   return error ? (
     <div className="op-error" role="alert">
       {message(error)}{" "}
       {retry && (
         <Button size="sm" variant="outline" onClick={retry}>
-          Reintentar
+          {t("Reintentar")}
         </Button>
       )}
     </div>
@@ -71,10 +75,12 @@ export function OperationPager({
   total: number;
   onPage: (page: number) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   return (
     <div className="op-pager">
       <span>
-        {total} resultados · página {page} de{" "}
+        {total} {t("resultados · página")} {page} {t("de")}{" "}
         {Math.max(1, Math.ceil(total / 20))}
       </span>
       <div>
@@ -84,7 +90,7 @@ export function OperationPager({
           disabled={page <= 1}
           onClick={() => onPage(page - 1)}
         >
-          Anterior
+          {t("Anterior")}
         </Button>
         <Button
           size="sm"
@@ -92,7 +98,7 @@ export function OperationPager({
           disabled={page * 20 >= total}
           onClick={() => onPage(page + 1)}
         >
-          Siguiente
+          {t("Siguiente")}
         </Button>
       </div>
     </div>
@@ -118,6 +124,9 @@ export function TaskPanel({
   recordId?: string;
   onChange?: () => void;
 }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+
   const [page, setPage] = useState(1),
     [status, setStatus] = useState("pending"),
     [editing, setEditing] = useState<Partial<Task> | null>(null),
@@ -148,7 +157,7 @@ export function TaskPanel({
       );
       setEditing(null);
       refresh();
-      toast.success(task.id ? "Tarea actualizada" : "Tarea creada");
+      toast.success(task.id ? t("Tarea actualizada") : t("Tarea creada"));
     } catch (e) {
       toast.error(message(e));
     } finally {
@@ -170,11 +179,13 @@ export function TaskPanel({
     <section className="op-section">
       <div className="op-section-title">
         <div>
-          <h3>Tareas y seguimiento</h3>
+          <h3>{t("Tareas y seguimiento")}</h3>
           <p>
             {query.data?.overdue
-              ? `${query.data.overdue} tareas vencidas en el espacio de trabajo`
-              : "Fechas, responsables y próximos pasos"}
+              ? t("%{value0} tareas vencidas en el espacio de trabajo", {
+                  value0: query.data.overdue,
+                })
+              : t("Fechas, responsables y próximos pasos")}
           </p>
         </div>
         {recordId && (
@@ -191,28 +202,28 @@ export function TaskPanel({
               })
             }
           >
-            <Plus size={15} /> Tarea
+            <Plus size={15} /> {t("Tarea")}
           </Button>
         )}
       </div>
       <div className="op-toolbar">
-        <Label htmlFor="task-status">Mostrar</Label>
+        <Label htmlFor="task-status">{t("Mostrar")}</Label>
         <select
           id="task-status"
           className="op-select"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
-          <option value="pending">Pendientes</option>
-          <option value="overdue">Vencidas</option>
-          <option value="done">Completadas</option>
-          <option value="">Todas</option>
+          <option value="pending">{t("Pendientes")}</option>
+          <option value="overdue">{t("Vencidas")}</option>
+          <option value="done">{t("Completadas")}</option>
+          <option value="">{t("Todas")}</option>
         </select>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => query.refetch()}
-          aria-label="Actualizar tareas"
+          aria-label={t("Actualizar tareas")}
         >
           <RefreshCw size={15} />
         </Button>
@@ -220,7 +231,7 @@ export function TaskPanel({
       <OperationError error={query.error} retry={() => query.refetch()} />
       {query.isPending ? (
         <div className="space-y-3" role="status" aria-live="polite">
-          <p className="op-muted">Cargando tareas…</p>
+          <p className="op-muted">{t("Cargando tareas…")}</p>
           <div className="space-y-2">
             {Array.from({ length: 3 }, (_, i) => (
               <div
@@ -239,11 +250,12 @@ export function TaskPanel({
         </div>
       ) : !query.data?.data.length ? (
         <div className="op-empty">
-          No hay tareas en esta vista.
+          {t("No hay tareas en esta vista.")}
           {!recordId && (
             <p>
-              Abre la ficha de un registro para programar su siguiente
-              actividad.
+              {t(
+                "Abre la ficha de un registro para programar su siguiente actividad.",
+              )}
             </p>
           )}
         </div>
@@ -256,7 +268,9 @@ export function TaskPanel({
                 variant="outline"
                 disabled={saving}
                 aria-label={
-                  task.status === "done" ? "Reabrir tarea" : "Completar tarea"
+                  task.status === "done"
+                    ? t("Reabrir tarea")
+                    : t("Completar tarea")
                 }
                 onClick={() =>
                   save({
@@ -280,9 +294,9 @@ export function TaskPanel({
                         : ""
                     }
                   >
-                    {dateLabel(task.due_at)}
+                    {dateLabel(task.due_at, intlLocale(locale))}
                   </span>{" "}
-                  · {task.owner || "Sin responsable"}
+                  · {task.owner || t("Sin responsable")}
                   {!recordId && (
                     <>
                       {" "}
@@ -297,7 +311,7 @@ export function TaskPanel({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label={`Editar ${task.title}`}
+                aria-label={t("Editar %{value0}", { value0: task.title })}
                 onClick={() => setEditing(task)}
               >
                 <Pencil size={15} />
@@ -306,7 +320,7 @@ export function TaskPanel({
                 size="icon"
                 variant="ghost"
                 disabled={saving}
-                aria-label={`Eliminar ${task.title}`}
+                aria-label={t("Eliminar %{value0}", { value0: task.title })}
                 onClick={() => remove(task)}
               >
                 <Trash2 size={15} />
@@ -325,10 +339,10 @@ export function TaskPanel({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editing?.id ? "Editar tarea" : "Programar tarea"}
+              {editing?.id ? t("Editar tarea") : t("Programar tarea")}
             </DialogTitle>
             <DialogDescription>
-              Asocia el siguiente paso a este registro.
+              {t("Asocia el siguiente paso a este registro.")}
             </DialogDescription>
           </DialogHeader>
           {editing && (
@@ -339,7 +353,7 @@ export function TaskPanel({
                 void save(editing);
               }}
             >
-              <Label htmlFor="task-title">Título</Label>
+              <Label htmlFor="task-title">{t("Título")}</Label>
               <Input
                 id="task-title"
                 required
@@ -349,7 +363,7 @@ export function TaskPanel({
                   setEditing({ ...editing, title: e.target.value })
                 }
               />
-              <Label htmlFor="task-owner">Responsable</Label>
+              <Label htmlFor="task-owner">{t("Responsable")}</Label>
               <Input
                 id="task-owner"
                 maxLength={100}
@@ -358,7 +372,7 @@ export function TaskPanel({
                   setEditing({ ...editing, owner: e.target.value })
                 }
               />
-              <Label htmlFor="task-due">Vencimiento</Label>
+              <Label htmlFor="task-due">{t("Vencimiento")}</Label>
               <Input
                 id="task-due"
                 type="date"
@@ -369,7 +383,7 @@ export function TaskPanel({
                 }
               />
               <Button disabled={saving} type="submit">
-                {saving ? "Guardando…" : "Guardar tarea"}
+                {saving ? t("Guardando…") : t("Guardar tarea")}
               </Button>
             </form>
           )}
@@ -392,6 +406,8 @@ type ImportResult = {
   summary: { ready: number; created: number; skipped: number; errors: number };
 };
 function ImportExport({ objects }: { objects: CrmObject[] }) {
+  const t = useMessages(automationMessages);
+
   const [objectName, setObjectName] = useState(objects[0]?.name ?? ""),
     [csv, setCsv] = useState(""),
     [headers, setHeaders] = useState<string[]>([]),
@@ -423,7 +439,7 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
     setError("");
     invalidatePreview();
     try {
-      if (file.size > 1024 * 1024) throw new Error("Máximo 1 MB por CSV.");
+      if (file.size > 1024 * 1024) throw new Error(t("Máximo 1 MB por CSV."));
       const text = await file.text(),
         parsed = parseCsv(text);
       setCsv(text);
@@ -463,7 +479,10 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
       if (commit) {
         void queryClient.invalidateQueries();
         toast.success(
-          `${data.summary.created} registros creados; ${data.summary.errors} errores`,
+          t("%{value0} registros creados; %{value1} errores", {
+            value0: data.summary.created,
+            value1: data.summary.errors,
+          }),
         );
       }
     } catch (e) {
@@ -473,27 +492,29 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
     }
   }
   const statusLabel: Record<string, string> = {
-    ready: "Listo",
-    created: "Creado",
-    skipped: "Omitido",
-    error: "Error",
+    ready: t("Listo"),
+    created: t("Creado"),
+    skipped: t("Omitido"),
+    error: t("Error"),
   };
   return (
     <div className="op-section">
       <div className="op-section-title">
         <div>
-          <h3>Entrada y salida de datos</h3>
+          <h3>{t("Entrada y salida de datos")}</h3>
           <p>
             {managedCustomer
-              ? "Exporta hasta 10.000 clientes por archivo CSV."
+              ? t("Exporta hasta 10.000 clientes por archivo CSV.")
               : managedObject
-                ? "Exporta registros a CSV."
-                : "Importa hasta 1.000 filas por lote y exporta todos los registros."}
+                ? t("Exporta registros a CSV.")
+                : t(
+                    "Importa hasta 1.000 filas por lote y exporta todos los registros.",
+                  )}
           </p>
         </div>
       </div>
       <div className="op-toolbar">
-        <Label htmlFor="csv-object">Objeto</Label>
+        <Label htmlFor="csv-object">{t("Objeto")}</Label>
         <select
           id="csv-object"
           className="op-select"
@@ -520,13 +541,13 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
               download
               aria-label={
                 managedCustomer
-                  ? "Exportar CSV (máximo 10.000)"
-                  : "Exportar CSV completo"
+                  ? t("Exportar CSV (máximo 10.000)")
+                  : t("Exportar CSV completo")
               }
               title={
                 managedCustomer
-                  ? "Exportar CSV (máximo 10.000)"
-                  : "Exportar CSV completo"
+                  ? t("Exportar CSV (máximo 10.000)")
+                  : t("Exportar CSV completo")
               }
               onClick={(e) => {
                 e.preventDefault();
@@ -548,10 +569,11 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
             <div className="op-upload">
               <FileSpreadsheet size={24} />
               <div>
-                <Label htmlFor="csv-file">Seleccionar CSV</Label>
+                <Label htmlFor="csv-file">{t("Seleccionar CSV")}</Label>
                 <p>
-                  UTF-8, separado por comas o punto y coma. Relaciones: ID;
-                  múltiples: arreglo JSON.
+                  {t(
+                    "UTF-8, separado por comas o punto y coma. Relaciones: ID; múltiples: arreglo JSON.",
+                  )}
                 </p>
                 <Input
                   id="csv-file"
@@ -566,9 +588,9 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
             {headers.length > 0 && object && (
               <>
                 <div className="op-section-title">
-                  <h4>Asignar columnas</h4>
+                  <h4>{t("Asignar columnas")}</h4>
                   <span className="op-muted">
-                    Las columnas sin asignar se omiten
+                    {t("Las columnas sin asignar se omiten")}
                   </span>
                 </div>
                 <div className="op-mapping">
@@ -585,7 +607,7 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                           invalidatePreview();
                         }}
                       >
-                        <option value="">Omitir columna</option>
+                        <option value="">{t("Omitir columna")}</option>
                         {fieldEntries(object).map(([name, f]) => (
                           <option key={name} value={name}>
                             {f.label}
@@ -598,7 +620,7 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                 </div>
                 <div className="op-toolbar">
                   <Label htmlFor="csv-duplicates">
-                    Detectar duplicados por
+                    {t("Detectar duplicados por")}
                   </Label>
                   <select
                     id="csv-duplicates"
@@ -609,7 +631,9 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                       invalidatePreview();
                     }}
                   >
-                    <option value="">Campos con restricción única</option>
+                    <option value="">
+                      {t("Campos con restricción única")}
+                    </option>
                     {fieldEntries(object).map(([name, f]) => (
                       <option key={name} value={name}>
                         {f.label}
@@ -617,7 +641,7 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                     ))}
                   </select>
                   <select
-                    aria-label="Política de duplicados"
+                    aria-label={t("Política de duplicados")}
                     className="op-select"
                     value={policy}
                     onChange={(e) => {
@@ -625,15 +649,17 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                       invalidatePreview();
                     }}
                   >
-                    <option value="skip">Omitir duplicados</option>
-                    <option value="error">Marcar duplicados como error</option>
+                    <option value="skip">{t("Omitir duplicados")}</option>
+                    <option value="error">
+                      {t("Marcar duplicados como error")}
+                    </option>
                   </select>
                   <Button
                     disabled={pending}
                     variant="outline"
                     onClick={() => run(false)}
                   >
-                    {pending ? "Procesando…" : "Validar y previsualizar"}
+                    {pending ? t("Procesando…") : t("Validar y previsualizar")}
                   </Button>
                 </div>
               </>
@@ -649,29 +675,30 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                         : result.summary.ready}
                     </strong>
                     <span>
-                      {committed ? "Creados" : "Listos para importar"}
+                      {committed ? t("Creados") : t("Listos para importar")}
                     </span>
                   </div>
                   <div>
                     <strong>{result.summary.skipped}</strong>
-                    <span>Duplicados omitidos</span>
+                    <span>{t("Duplicados omitidos")}</span>
                   </div>
                   <div>
                     <strong>{result.summary.errors}</strong>
-                    <span>Filas con error</span>
+                    <span>{t("Filas con error")}</span>
                   </div>
                 </div>
                 <p className="op-muted">
-                  Se importan únicamente las filas válidas. Corrige los errores
-                  en el CSV y vuelve a cargarlo; cada fila muestra su resultado.
+                  {t(
+                    "Se importan únicamente las filas válidas. Corrige los errores en el CSV y vuelve a cargarlo; cada fila muestra su resultado.",
+                  )}
                 </p>
                 <div className="op-table-wrap">
                   <table className="op-table">
                     <thead>
                       <tr>
-                        <th>Fila</th>
-                        <th>Estado</th>
-                        <th>Datos / resultado</th>
+                        <th>{t("Fila")}</th>
+                        <th>{t("Estado")}</th>
+                        <th>{t("Datos / resultado")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -690,7 +717,7 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                             <td className="op-break">
                               {row.error ??
                                 (row.id
-                                  ? `ID: ${row.id}`
+                                  ? t("ID: %{id}", { id: row.id })
                                   : Object.entries(row.data ?? {})
                                       .map(
                                         ([k, v]) =>
@@ -713,7 +740,7 @@ function ImportExport({ objects }: { objects: CrmObject[] }) {
                     disabled={pending || !result.summary.ready}
                     onClick={() => run(true)}
                   >
-                    Importar {result.summary.ready} filas válidas
+                    {t("Importar")} {result.summary.ready} {t("filas válidas")}
                   </Button>
                 )}
               </>
@@ -740,6 +767,9 @@ type Automation = {
   };
 };
 function Automations({ objects }: { objects: CrmObject[] }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+
   const [editing, setEditing] = useState<Automation | null>(null),
     [saving, setSaving] = useState(false),
     [page, setPage] = useState(1),
@@ -781,7 +811,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
       );
       setEditing(null);
       refresh();
-      toast.success("Automatización guardada");
+      toast.success(t("Automatización guardada"));
     } catch (e) {
       setSaveError(message(e));
       toast.error(message(e));
@@ -804,10 +834,11 @@ function Automations({ objects }: { objects: CrmObject[] }) {
     <div className="op-section">
       <div className="op-section-title">
         <div>
-          <h3>Automatizaciones</h3>
+          <h3>{t("Automatizaciones")}</h3>
           <p>
-            Al crear un registro o cambiar un campo al valor indicado, programa
-            una tarea.
+            {t(
+              "Al crear un registro o cambiar un campo al valor indicado, programa una tarea.",
+            )}
           </p>
         </div>
         <Button
@@ -829,14 +860,14 @@ function Automations({ objects }: { objects: CrmObject[] }) {
             });
           }}
         >
-          <Plus size={16} /> Nueva regla
+          <Plus size={16} /> {t("Nueva regla")}
         </Button>
       </div>
       <OperationError error={query.error} retry={() => query.refetch()} />
       {query.isPending ? (
         <div className="space-y-3" role="status" aria-live="polite">
           <p className="text-xs font-medium text-muted-foreground">
-            Cargando reglas…
+            {t("Cargando reglas…")}
           </p>
           <div className="space-y-2">
             {Array.from({ length: 3 }, (_, i) => (
@@ -853,10 +884,11 @@ function Automations({ objects }: { objects: CrmObject[] }) {
         </div>
       ) : !query.data?.data.length ? (
         <div className="op-empty">
-          Aún no hay automatizaciones.
+          {t("Aún no hay automatizaciones.")}
           <p>
-            Por ejemplo: al ganar una oportunidad, crear «Preparar bienvenida»
-            para el día siguiente.
+            {t(
+              "Por ejemplo: al ganar una oportunidad, crear «Preparar bienvenida» para el día siguiente.",
+            )}
           </p>
         </div>
       ) : (
@@ -867,7 +899,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                 <span
                   className={`op-badge ${rule.enabled ? "" : "op-badge-muted"}`}
                 >
-                  {rule.enabled ? "Activa" : "Pausada"}
+                  {rule.enabled ? t("Activa") : t("Pausada")}
                 </span>
                 <h4>{rule.name}</h4>
                 <p>
@@ -876,10 +908,11 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                   · {rule.config.field} = {String(rule.config.value)}
                 </p>
                 <p>
-                  Crear «{rule.config.title}» · +{rule.config.dueDays} días ·{" "}
+                  {t("Crear «")}
+                  {rule.config.title}» · +{rule.config.dueDays} {t("días ·")}{" "}
                   {rule.config.ownerField ||
                     rule.config.owner ||
-                    "Sin responsable"}
+                    t("Sin responsable")}
                 </p>
               </div>
               <div className="op-actions">
@@ -889,12 +922,12 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                   disabled={saving}
                   onClick={() => save({ ...rule, enabled: !rule.enabled })}
                 >
-                  {rule.enabled ? "Pausar" : "Activar"}
+                  {rule.enabled ? t("Pausar") : t("Activar")}
                 </Button>
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`Editar ${rule.name}`}
+                  aria-label={t("Editar %{value0}", { value0: rule.name })}
                   onClick={() => {
                     setSaveError("");
                     setEditing(rule);
@@ -905,7 +938,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`Eliminar ${rule.name}`}
+                  aria-label={t("Eliminar %{value0}", { value0: rule.name })}
                   onClick={() => remove(rule)}
                 >
                   <Trash2 size={15} />
@@ -917,36 +950,40 @@ function Automations({ objects }: { objects: CrmObject[] }) {
       )}
       <div className="op-section-title">
         <div>
-          <h3>Historial de ejecución</h3>
+          <h3>{t("Historial de ejecución")}</h3>
           <p>
-            Una tarea por regla y versión del registro, incluso ante reintentos.
+            {t(
+              "Una tarea por regla y versión del registro, incluso ante reintentos.",
+            )}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => logs.refetch()}>
-          <RefreshCw size={15} /> Actualizar
+          <RefreshCw size={15} /> {t("Actualizar")}
         </Button>
       </div>
       <OperationError error={logs.error} retry={() => logs.refetch()} />
       {!logs.data?.data.length ? (
         <p className="op-muted">
-          Las ejecuciones aparecerán aquí cuando un registro cumpla una regla.
+          {t(
+            "Las ejecuciones aparecerán aquí cuando un registro cumpla una regla.",
+          )}
         </p>
       ) : (
         <div className="op-table-wrap">
           <table className="op-table">
             <thead>
               <tr>
-                <th>Regla</th>
-                <th>Registro</th>
-                <th>Estado</th>
-                <th>Fecha</th>
+                <th>{t("Regla")}</th>
+                <th>{t("Registro")}</th>
+                <th>{t("Estado")}</th>
+                <th>{t("Fecha")}</th>
               </tr>
             </thead>
             <tbody>
               {logs.data.data.map((log) => (
                 <tr key={log.id}>
                   <td>
-                    {log.detail.name ?? "Regla eliminada"}
+                    {log.detail.name ?? t("Regla eliminada")}
                     {log.detail.error && (
                       <p className="op-overdue">{log.detail.error}</p>
                     )}
@@ -956,7 +993,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                   </td>
                   <td>
                     {log.status === "success" ? (
-                      "Tarea creada"
+                      t("Tarea creada")
                     ) : (
                       <Button
                         size="sm"
@@ -974,11 +1011,11 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                           }
                         }}
                       >
-                        Reintentar
+                        {t("Reintentar")}
                       </Button>
                     )}
                   </td>
-                  <td>{dateLabel(log.created_at)}</td>
+                  <td>{dateLabel(log.created_at, intlLocale(locale))}</td>
                 </tr>
               ))}
             </tbody>
@@ -995,10 +1032,12 @@ function Automations({ objects }: { objects: CrmObject[] }) {
         <DialogContent className="op-dialog">
           <DialogHeader>
             <DialogTitle>
-              {editing?.id ? "Editar automatización" : "Nueva automatización"}
+              {editing?.id
+                ? t("Editar automatización")
+                : t("Nueva automatización")}
             </DialogTitle>
             <DialogDescription>
-              Elige el evento y la tarea que debe generarse.
+              {t("Elige el evento y la tarea que debe generarse.")}
             </DialogDescription>
           </DialogHeader>
           {editing && (
@@ -1009,7 +1048,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                 void save(editing);
               }}
             >
-              <Label htmlFor="rule-name">Nombre de la regla</Label>
+              <Label htmlFor="rule-name">{t("Nombre de la regla")}</Label>
               <Input
                 id="rule-name"
                 required
@@ -1019,7 +1058,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                   setEditing({ ...editing, name: e.target.value })
                 }
               />
-              <Label htmlFor="rule-object">Objeto</Label>
+              <Label htmlFor="rule-object">{t("Objeto")}</Label>
               <select
                 id="rule-object"
                 className="op-select"
@@ -1046,7 +1085,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
               </select>
               <div className="op-two">
                 <div>
-                  <Label htmlFor="rule-field">Cuando cambie</Label>
+                  <Label htmlFor="rule-field">{t("Cuando cambie")}</Label>
                   <select
                     id="rule-field"
                     className="op-select"
@@ -1064,7 +1103,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="rule-value">Al valor</Label>
+                  <Label htmlFor="rule-value">{t("Al valor")}</Label>
                   {field?.options?.length ? (
                     <select
                       id="rule-value"
@@ -1080,7 +1119,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                         })
                       }
                     >
-                      <option value="">Seleccionar</option>
+                      <option value="">{t("Seleccionar")}</option>
                       {field.options.map((o) => (
                         <option key={String(o.value)} value={String(o.value)}>
                           {o.label}
@@ -1096,43 +1135,53 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                         setConfig({ value: e.target.value === "true" })
                       }
                     >
-                      <option value="">Seleccionar</option>
-                      <option value="true">Sí</option>
-                      <option value="false">No</option>
+                      <option value="">{t("Seleccionar")}</option>
+                      <option value="true">{t("Sí")}</option>
+                      <option value="false">{t("No")}</option>
                     </select>
                   ) : (
                     <Input
                       id="rule-value"
                       required
                       value={String(editing.config.value)}
-                      type={["Number", "Currency", "Percentage", "Rating"].includes(field?.type ?? "") ? "number" : "text"}
+                      type={
+                        ["Number", "Currency", "Percentage", "Rating"].includes(
+                          field?.type ?? "",
+                        )
+                          ? "number"
+                          : "text"
+                      }
                       onChange={(e) =>
                         setConfig({
-                          value:
-                            ["Number", "Currency", "Percentage", "Rating"].includes(field?.type ?? "")
-                              ? Number(e.target.value)
-                              : e.target.value,
+                          value: [
+                            "Number",
+                            "Currency",
+                            "Percentage",
+                            "Rating",
+                          ].includes(field?.type ?? "")
+                            ? Number(e.target.value)
+                            : e.target.value,
                         })
                       }
                     />
                   )}
                 </div>
               </div>
-              <Label htmlFor="rule-title">Título de la tarea</Label>
+              <Label htmlFor="rule-title">{t("Título de la tarea")}</Label>
               <Input
                 id="rule-title"
                 required
                 maxLength={200}
-                placeholder="Dar seguimiento a {{name}}"
+                placeholder={t("Dar seguimiento a {{name}}")}
                 value={editing.config.title}
                 onChange={(e) => setConfig({ title: e.target.value })}
               />
               <p className="op-muted">
-                Puedes insertar valores con {"{{nombre_del_campo}}"}.
+                {t("Puedes insertar valores con")} {"{{nombre_del_campo}}"}.
               </p>
               <div className="op-two">
                 <div>
-                  <Label htmlFor="rule-due">Vence en días</Label>
+                  <Label htmlFor="rule-due">{t("Vence en días")}</Label>
                   <Input
                     id="rule-due"
                     type="number"
@@ -1146,7 +1195,9 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="rule-owner">Responsable predeterminado</Label>
+                  <Label htmlFor="rule-owner">
+                    {t("Responsable predeterminado")}
+                  </Label>
                   <Input
                     id="rule-owner"
                     value={editing.config.owner}
@@ -1156,7 +1207,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                 </div>
               </div>
               <Label htmlFor="rule-owner-field">
-                Tomar responsable del registro
+                {t("Tomar responsable del registro")}
               </Label>
               <select
                 id="rule-owner-field"
@@ -1164,7 +1215,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
                 value={editing.config.ownerField}
                 onChange={(e) => setConfig({ ownerField: e.target.value })}
               >
-                <option value="">Usar responsable predeterminado</option>
+                <option value="">{t("Usar responsable predeterminado")}</option>
                 {object &&
                   fieldEntries(object).map(([name, f]) => (
                     <option key={name} value={name}>
@@ -1174,7 +1225,7 @@ function Automations({ objects }: { objects: CrmObject[] }) {
               </select>
               <OperationError error={saveError} />
               <Button type="submit" disabled={saving}>
-                {saving ? "Guardando…" : "Guardar regla"}
+                {saving ? t("Guardando…") : t("Guardar regla")}
               </Button>
             </form>
           )}
@@ -1195,31 +1246,37 @@ type Report = {
   groups: { stage: string; owner: string; count: number; amount: number }[];
 };
 function Reports() {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+
   const query = useQuery({
     queryKey: ["operational-reports"],
     queryFn: () => api<{ data: Report[]; generatedAt: string }>("/reports"),
   });
   const number = (value: number) =>
-    new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 }).format(value);
+    new Intl.NumberFormat(intlLocale(locale), {
+      maximumFractionDigits: 2,
+    }).format(value);
   return (
     <section className="op-section">
       <div className="op-section-title">
         <div>
-          <h3>Resultados del pipeline</h3>
+          <h3>{t("Resultados del pipeline")}</h3>
           <p>
-            Agregados de todos los registros, según la configuración de cada
-            objeto.
+            {t(
+              "Agregados de todos los registros, según la configuración de cada objeto.",
+            )}
           </p>
         </div>
         <Button variant="outline" onClick={() => query.refetch()}>
-          <RefreshCw size={15} /> Actualizar
+          <RefreshCw size={15} /> {t("Actualizar")}
         </Button>
       </div>
       <OperationError error={query.error} retry={() => query.refetch()} />
       {query.isPending ? (
         <div className="space-y-4" role="status" aria-live="polite">
           <p className="text-xs font-medium text-muted-foreground">
-            Cargando reportes…
+            {t("Cargando reportes…")}
           </p>
           <div className="rounded-xl border bg-card p-6 space-y-4">
             <Skeleton className="h-6 w-48" />
@@ -1252,8 +1309,9 @@ function Reports() {
         </div>
       ) : !query.data?.data.length ? (
         <div className="op-empty">
-          Configura un pipeline en el diseñador de un objeto para ver sus
-          resultados.
+          {t(
+            "Configura un pipeline en el diseñador de un objeto para ver sus resultados.",
+          )}
         </div>
       ) : (
         query.data.data.map((report) => (
@@ -1262,11 +1320,11 @@ function Reports() {
             <div className="op-stats">
               <div>
                 <strong>{number(report.total)}</strong>
-                <span>Registros</span>
+                <span>{t("Registros")}</span>
               </div>
               <div>
                 <strong>{number(report.amount)}</strong>
-                <span>Importe total</span>
+                <span>{t("Importe total")}</span>
               </div>
               <div>
                 <strong>
@@ -1274,23 +1332,23 @@ function Reports() {
                     ? "—"
                     : `${number(report.conversion * 100)}%`}
                 </strong>
-                <span>Ganadas / cerradas</span>
+                <span>{t("Ganadas / cerradas")}</span>
               </div>
               <div>
                 <strong>
                   {report.won} / {report.lost}
                 </strong>
-                <span>Ganadas / perdidas</span>
+                <span>{t("Ganadas / perdidas")}</span>
               </div>
             </div>
             <div className="op-table-wrap">
               <table className="op-table">
                 <thead>
                   <tr>
-                    <th>Etapa</th>
-                    <th>Responsable</th>
-                    <th>Registros</th>
-                    <th>Importe</th>
+                    <th>{t("Etapa")}</th>
+                    <th>{t("Responsable")}</th>
+                    <th>{t("Registros")}</th>
+                    <th>{t("Importe")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1309,8 +1367,9 @@ function Reports() {
         ))
       )}
       <p className="op-muted">
-        Conversión = ganadas ÷ (ganadas + perdidas), usando las etapas de cierre
-        configuradas. Las oportunidades abiertas se excluyen del denominador.
+        {t(
+          "Conversión = ganadas ÷ (ganadas + perdidas), usando las etapas de cierre configuradas. Las oportunidades abiertas se excluyen del denominador.",
+        )}
       </p>
     </section>
   );
@@ -1325,6 +1384,8 @@ export default function Operations({
   tab?: string;
   onTabChange?: (tab: string) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const [localTab, setLocalTab] = useState("tasks");
   const requestedTab = controlledTab ?? localTab;
   const tab = [
@@ -1344,20 +1405,26 @@ export default function Operations({
     <main className="operations-page">
       <header className="op-page-title">
         <div>
-          <span className="eyebrow">OPERACIONES</span>
-          <h1>Trabajo y resultados</h1>
+          <span className="eyebrow">{t("OPERACIONES")}</span>
+          <h1>{t("Trabajo y resultados")}</h1>
           <p>
-            Coordina seguimientos, mueve datos y observa cómo avanza tu negocio.
+            {t(
+              "Coordina seguimientos, mueve datos y observa cómo avanza tu negocio.",
+            )}
           </p>
         </div>
       </header>
-      <nav className="op-tabs" aria-label="Operaciones">
+      <nav className="op-tabs" aria-label={t("Operaciones")}>
         {[
-          { id: "tasks", label: "Seguimiento", Icon: CalendarDays },
-          { id: "import", label: "Importar y exportar", Icon: FileSpreadsheet },
-          { id: "automations", label: "Automatizaciones", Icon: Zap },
-          { id: "workflows", label: "Flujos de trabajo", Icon: ArrowRight },
-          { id: "reports", label: "Reportes", Icon: ChartNoAxesCombined },
+          { id: "tasks", label: t("Seguimiento"), Icon: CalendarDays },
+          {
+            id: "import",
+            label: t("Importar y exportar"),
+            Icon: FileSpreadsheet,
+          },
+          { id: "automations", label: t("Automatizaciones"), Icon: Zap },
+          { id: "workflows", label: t("Flujos de trabajo"), Icon: ArrowRight },
+          { id: "reports", label: t("Reportes"), Icon: ChartNoAxesCombined },
         ].map(({ id, label, Icon }) => (
           <button
             key={id}

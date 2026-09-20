@@ -1,3 +1,6 @@
+import { useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import {
   cloneElement,
   useEffect,
@@ -33,6 +36,9 @@ export function RelatedRecordSubform({
   onChange: (data: Record<string, unknown>, errors: string[]) => void;
   onClose: () => void;
 }) {
+  const t = useMessages(recordsMessages);
+  const validationLocale = useAppLocale();
+
   const inputPrefix = useId();
   const defaults = Object.fromEntries(
     fieldEntries(object).map(([name, field]) => [
@@ -48,13 +54,18 @@ export function RelatedRecordSubform({
   const initial = useRef<string | undefined>(undefined);
   const callback = useRef(onChange);
   callback.current = onChange;
-  const validation = validateRecord(object, data);
+  const validation = validateRecord(object, data, validationLocale);
   useEffect(() => {
-    if (serialized === initial.current) return;
-    initial.current = serialized;
-    const result = validateRecord(object, JSON.parse(serialized));
+    const validationKey = `${validationLocale}:${serialized}`;
+    if (validationKey === initial.current) return;
+    initial.current = validationKey;
+    const result = validateRecord(
+      object,
+      JSON.parse(serialized),
+      validationLocale,
+    );
     callback.current(result.data, Object.values(result.errors));
-  }, [serialized, object]);
+  }, [serialized, object, validationLocale]);
   let prepared: Record<string, unknown> = data;
   try {
     prepared = prepareRecord(object, data);
@@ -73,11 +84,13 @@ export function RelatedRecordSubform({
             event.preventDefault();
         }}
       >
-        <legend className="px-1 text-sm font-medium">Editar relacionado</legend>
+        <legend className="px-1 text-sm font-medium">
+          {t("Editar relacionado")}
+        </legend>
         <p className="text-sm text-muted-foreground">
-          Los cambios se incluyen al guardar el formulario principal. Los
-          archivos y las relaciones anidadas se editan desde el registro
-          original.
+          {t(
+            "Los cambios se incluyen al guardar el formulario principal. Los archivos y las relaciones anidadas se editan desde el registro original.",
+          )}
         </p>
         {fieldEntries(object).map(([name, field]) => {
           const section = object.config.studio?.sections?.find(
@@ -150,7 +163,7 @@ export function RelatedRecordSubform({
           );
         })}
         <Button type="button" variant="outline" size="sm" onClick={onClose}>
-          Cerrar edición
+          {t("Cerrar edición")}
         </Button>
       </fieldset>
     </FormProvider>

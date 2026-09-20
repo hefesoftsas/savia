@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -30,6 +32,9 @@ export default function Integrations({
 }: {
   onImported: (name: string) => void;
 }) {
+  const t = useMessages(automationMessages);
+  const locale = useAppLocale();
+
   const [source, setSource] = useState(""),
     [sourceUrl, setSourceUrl] = useState(""),
     [busy, setBusy] = useState(false),
@@ -78,14 +83,15 @@ export default function Integrations({
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Integraciones</p>
-          <h1>De API a herramienta.</h1>
+          <p className="eyebrow">{t("Integraciones")}</p>
+          <h1>{t("De API a herramienta.")}</h1>
           <p>
-            Importa contratos, configura conexiones y convierte respuestas en
-            registros.
+            {t(
+              "Importa contratos, configura conexiones y convierte respuestas en registros.",
+            )}
           </p>
         </div>
-        <span className="neutral-badge">OpenAPI 3.0 / 3.1</span>
+        <span className="neutral-badge">{t("OpenAPI 3.0 / 3.1")}</span>
       </div>
       {error && (
         <p className="error-message" role="alert">
@@ -99,8 +105,8 @@ export default function Integrations({
       )}
       <div className="integration-layout">
         <section className="integration-source">
-          <h2>Importa una API</h2>
-          <p>JSON o YAML, archivo de hasta 1 MB o URL pública HTTPS.</p>
+          <h2>{t("Importa una API")}</h2>
+          <p>{t("JSON o YAML, archivo de hasta 1 MB o URL pública HTTPS.")}</p>
           <div className="source-actions">
             <Button
               variant="outline"
@@ -110,19 +116,19 @@ export default function Integrations({
                 setSourceUrl("");
               }}
             >
-              <Code2 size={15} /> Cargar ejemplo
+              <Code2 size={15} /> {t("Cargar ejemplo")}
             </Button>
             <label className="upload-button">
-              Cargar archivo
+              {t("Cargar archivo")}
               <input
                 type="file"
-                aria-label="Cargar archivo OpenAPI"
+                aria-label={t("Cargar archivo OpenAPI")}
                 accept=".json,.yaml,.yml"
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
                   if (f.size > 1024 * 1024) {
-                    setError("El archivo supera 1 MB.");
+                    setError(t("El archivo supera 1 MB."));
                     return;
                   }
                   setSource(await f.text());
@@ -131,18 +137,18 @@ export default function Integrations({
               />
             </label>
           </div>
-          <Label htmlFor="contract-url">URL del contrato</Label>
+          <Label htmlFor="contract-url">{t("URL del contrato")}</Label>
           <Input
             id="contract-url"
             type="url"
-            placeholder="https://api.empresa.com/openapi.json"
+            placeholder={t("https://api.empresa.com/openapi.json")}
             value={sourceUrl}
             onChange={(e) => setSourceUrl(e.target.value)}
           />
           <textarea
-            aria-label="Documento OpenAPI"
+            aria-label={t("Documento OpenAPI")}
             className="code-input"
-            placeholder="openapi: 3.1.0"
+            placeholder={t("openapi: 3.1.0")}
             value={source}
             onChange={(e) => setSource(e.target.value)}
           />
@@ -159,14 +165,14 @@ export default function Integrations({
                 );
                 choose(r.data);
                 await integrations.refetch();
-                toast.success("Contrato importado");
+                toast.success(t("Contrato importado"));
               })
             }
           >
             <Plug size={16} />
-            {busy ? "Importando…" : "Importar contrato"}
+            {busy ? t("Importando…") : t("Importar contrato")}
           </Button>
-          <h3>Contratos guardados</h3>
+          <h3>{t("Contratos guardados")}</h3>
           {integrations.data?.data?.map((item: any) => (
             <button
               className="saved-integration"
@@ -179,7 +185,7 @@ export default function Integrations({
             </button>
           ))}
           {!integrations.data?.data?.length && (
-            <p>Aún no has importado contratos.</p>
+            <p>{t("Aún no has importado contratos.")}</p>
           )}
         </section>
         <section className="integration-detail">
@@ -190,16 +196,19 @@ export default function Integrations({
                   <Plug size={24} />
                 </span>
                 <div>
-                  <span className="connected-label">Contrato guardado</span>
+                  <span className="connected-label">
+                    {t("Contrato guardado")}
+                  </span>
                   <h2>{info.title}</h2>
                 </div>
               </div>
-              <h3>Crear un objeto desde un esquema</h3>
+              <h3>{t("Crear un objeto desde un esquema")}</h3>
               <p>
-                Los objetos anidados y arrays se editan como JSON con validación
-                del contrato.
+                {t(
+                  "Los objetos anidados y arrays se editan como JSON con validación del contrato.",
+                )}
               </p>
-              <Label htmlFor="schema-select">Esquema</Label>
+              <Label htmlFor="schema-select">{t("Esquema")}</Label>
               <select
                 id="schema-select"
                 className="select-input full-width"
@@ -214,7 +223,7 @@ export default function Integrations({
                 ))}
               </select>
               <Label htmlFor="import-name">
-                Identificador del nuevo objeto
+                {t("Identificador del nuevo objeto")}
               </Label>
               <Input
                 id="import-name"
@@ -234,16 +243,16 @@ export default function Integrations({
                     await queryClient.invalidateQueries({
                       queryKey: ["objects"],
                     });
-                    toast.success("Objeto creado");
+                    toast.success(t("Objeto creado"));
                     onImported(objectName);
                   })
                 }
               >
-                Crear objeto
+                {t("Crear objeto")}
               </Button>
               <div className="connection-panel">
-                <h3>Conexión de ejecución</h3>
-                <Label htmlFor="connection-mode">Destino</Label>
+                <h3>{t("Conexión de ejecución")}</h3>
+                <Label htmlFor="connection-mode">{t("Destino")}</Label>
                 <select
                   id="connection-mode"
                   className="select-input full-width"
@@ -252,15 +261,19 @@ export default function Integrations({
                     setConnection({ ...connection, mode: e.target.value })
                   }
                 >
-                  <option value="demo">Cotizador local de demostración</option>
-                  <option value="external">Servicio externo HTTPS</option>
+                  <option value="demo">
+                    {t("Cotizador local de demostración")}
+                  </option>
+                  <option value="external">
+                    {t("Servicio externo HTTPS")}
+                  </option>
                 </select>
                 {connection.mode === "external" && (
                   <>
-                    <Label htmlFor="connection-url">URL base</Label>
+                    <Label htmlFor="connection-url">{t("URL base")}</Label>
                     <Input
                       id="connection-url"
-                      placeholder="https://api.empresa.com/v1"
+                      placeholder={t("https://api.empresa.com/v1")}
                       value={connection.baseUrl}
                       onChange={(e) =>
                         setConnection({
@@ -269,7 +282,7 @@ export default function Integrations({
                         })
                       }
                     />
-                    <Label htmlFor="auth-type">Credencial</Label>
+                    <Label htmlFor="auth-type">{t("Credencial")}</Label>
                     <select
                       id="auth-type"
                       className="select-input full-width"
@@ -281,13 +294,17 @@ export default function Integrations({
                         })
                       }
                     >
-                      <option value="none">Sin credencial</option>
-                      <option value="bearer">Bearer token</option>
-                      <option value="api-key">API key en cabecera</option>
+                      <option value="none">{t("Sin credencial")}</option>
+                      <option value="bearer">{t("Bearer token")}</option>
+                      <option value="api-key">
+                        {t("API key en cabecera")}
+                      </option>
                     </select>
                     {connection.authType === "api-key" && (
                       <>
-                        <Label htmlFor="auth-header">Nombre de cabecera</Label>
+                        <Label htmlFor="auth-header">
+                          {t("Nombre de cabecera")}
+                        </Label>
                         <Input
                           id="auth-header"
                           value={connection.authHeader}
@@ -304,8 +321,8 @@ export default function Integrations({
                       <>
                         <Label htmlFor="auth-secret">
                           {selected.hasSecret
-                            ? "Reemplazar credencial (opcional)"
-                            : "Credencial"}
+                            ? t("Reemplazar credencial (opcional)")
+                            : t("Credencial")}
                         </Label>
                         <Input
                           id="auth-secret"
@@ -315,8 +332,9 @@ export default function Integrations({
                           onChange={(e) => setSecret(e.target.value)}
                         />
                         <small>
-                          Se cifra en el servidor. La credencial guardada no se
-                          devuelve al navegador.
+                          {t(
+                            "Se cifra en el servidor. La credencial guardada no se devuelve al navegador.",
+                          )}
                         </small>
                       </>
                     )}
@@ -331,8 +349,9 @@ export default function Integrations({
                           })
                         }
                       />{" "}
-                      Este servicio garantiza idempotencia con la cabecera
-                      Idempotency-Key.
+                      {t(
+                        "Este servicio garantiza idempotencia con la cabecera Idempotency-Key.",
+                      )}
                     </label>
                   </>
                 )}
@@ -349,19 +368,21 @@ export default function Integrations({
                       setSelected({ ...selected, ...response.data });
                       setSecret("");
                       await integrations.refetch();
-                      toast.success("Conexión guardada");
+                      toast.success(t("Conexión guardada"));
                     })
                   }
                 >
-                  Guardar conexión
+                  {t("Guardar conexión")}
                 </Button>
                 <p className="integration-hint">
                   {selected.connection?.mode
-                    ? "Conexión guardada. Los cambios requieren guardar de nuevo."
-                    : "Guarda la conexión para habilitar la ejecución."}
+                    ? t(
+                        "Conexión guardada. Los cambios requieren guardar de nuevo.",
+                      )
+                    : t("Guarda la conexión para habilitar la ejecución.")}
                 </p>
               </div>
-              <h3>Operaciones</h3>
+              <h3>{t("Operaciones")}</h3>
               {info.operations.map((op) => (
                 <button
                   className="operation-row"
@@ -379,35 +400,30 @@ export default function Integrations({
                 </button>
               ))}
               {!info.operations.length && (
-                <p>El contrato no define operaciones.</p>
+                <p>{t("El contrato no define operaciones.")}</p>
               )}
               <details className="integration-support">
-                <summary>Compatibilidad y límites</summary>
+                <summary>{t("Compatibilidad y límites")}</summary>
                 <p>
-                  Referencias locales, allOf, oneOf y anyOf; JSON anidado,
-                  parámetros escalares path/query/header y arrays query con
-                  form/explode. Cuerpos y respuestas JSON, conexión Bearer o API
-                  key. Sin OAuth, multipart, referencias externas ni esquemas
-                  cíclicos. Los esquemas con condicionales o keywords no
-                  soportadas se rechazan. Tiempo de espera: 10 s; respuesta: 1
-                  MB. Las rutas y redirecciones internas están bloqueadas; se
-                  comprueba DNS público antes de llamar.
+                  {t(
+                    "Referencias locales, allOf, oneOf y anyOf; JSON anidado, parámetros escalares path/query/header y arrays query con form/explode. Cuerpos y respuestas JSON, conexión Bearer o API key. Sin OAuth, multipart, referencias externas ni esquemas cíclicos. Los esquemas con condicionales o keywords no soportadas se rechazan. Tiempo de espera: 10 s; respuesta: 1 MB. Las rutas y redirecciones internas están bloqueadas; se comprueba DNS público antes de llamar.",
+                  )}
                 </p>
                 <p>
-                  GET admite un reintento. Escrituras solo reintentan cuando
-                  declaras que el proveedor soporta idempotencia. Un resultado
-                  desconocido requiere revisar el proveedor antes de intentar
-                  una nueva escritura.
+                  {t(
+                    "GET admite un reintento. Escrituras solo reintentan cuando declaras que el proveedor soporta idempotencia. Un resultado desconocido requiere revisar el proveedor antes de intentar una nueva escritura.",
+                  )}
                 </p>
               </details>
             </>
           ) : (
             <div className="integration-empty">
               <Code2 size={36} />
-              <h2>Tu próxima herramienta empieza aquí</h2>
+              <h2>{t("Tu próxima herramienta empieza aquí")}</h2>
               <p>
-                Carga el ejemplo, guarda la conexión demo y ejecuta una
-                cotización local.
+                {t(
+                  "Carga el ejemplo, guarda la conexión demo y ejecuta una cotización local.",
+                )}
               </p>
             </div>
           )}
@@ -417,11 +433,11 @@ export default function Integrations({
         <section className="integration-runs">
           <div className="integration-runs-heading">
             <div>
-              <h2>Historial de ejecución</h2>
-              <p>Últimas 100 solicitudes de este contrato.</p>
+              <h2>{t("Historial de ejecución")}</h2>
+              <p>{t("Últimas 100 solicitudes de este contrato.")}</p>
             </div>
             <Button variant="outline" onClick={() => runs.refetch()}>
-              <RefreshCw size={15} /> Actualizar
+              <RefreshCw size={15} /> {t("Actualizar")}
             </Button>
           </div>
           {runs.error && <p role="alert">{runs.error.message}</p>}
@@ -430,12 +446,12 @@ export default function Integrations({
               <table>
                 <thead>
                   <tr>
-                    <th>Operación</th>
-                    <th>Resultado</th>
-                    <th>HTTP</th>
-                    <th>Intentos</th>
-                    <th>Duración</th>
-                    <th>Fecha</th>
+                    <th>{t("Operación")}</th>
+                    <th>{t("Resultado")}</th>
+                    <th>{t("HTTP")}</th>
+                    <th>{t("Intentos")}</th>
+                    <th>{t("Duración")}</th>
+                    <th>{t("Fecha")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -445,20 +461,26 @@ export default function Integrations({
                         {r.method} {r.operation_id}
                       </td>
                       <td>
-                        {statusLabel(r.status)}
+                        {statusLabel(r.status, t)}
                         {r.error && <small>{r.error}</small>}
                       </td>
                       <td>{r.http_status ?? "—"}</td>
                       <td>{r.attempts}</td>
-                      <td>{r.duration_ms} ms</td>
-                      <td>{new Date(r.created_at).toLocaleString("es-CO")}</td>
+                      <td>
+                        {r.duration_ms} {t("ms")}
+                      </td>
+                      <td>
+                        {new Date(r.created_at).toLocaleString(
+                          intlLocale(locale),
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p>Aún no hay ejecuciones.</p>
+            <p>{t("Aún no hay ejecuciones.")}</p>
           )}
         </section>
       )}
@@ -477,15 +499,18 @@ export default function Integrations({
     </>
   );
 }
-function statusLabel(status: string) {
+function statusLabel(
+  status: string,
+  t: ReturnType<typeof useMessages<typeof automationMessages>>,
+) {
   return (
     (
       {
-        succeeded: "Correcta",
-        failed: "Fallida",
-        unknown: "Resultado desconocido",
-        running: "En curso",
-        "invalid-response": "Respuesta fuera de contrato",
+        succeeded: t("Correcta"),
+        failed: t("Fallida"),
+        unknown: t("Resultado desconocido"),
+        running: t("En curso"),
+        "invalid-response": t("Respuesta fuera de contrato"),
       } as Record<string, string>
     )[status] ?? status
   );
@@ -501,6 +526,8 @@ function Execution({
   onClose: () => void;
   onExecuted: () => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const [parameters, setParameters] = useState<Record<string, unknown>>({}),
     [rawBody, setRawBody] = useState("{}"),
     [confirmed, setConfirmed] = useState(false),
@@ -562,8 +589,8 @@ function Execution({
           <DialogDescription>
             {op.method} {op.path} ·{" "}
             {integration.connection?.mode === "demo"
-              ? "Servicio local de demostración"
-              : integration.connection?.baseUrl || "Conexión sin guardar"}
+              ? t("Servicio local de demostración")
+              : integration.connection?.baseUrl || t("Conexión sin guardar")}
           </DialogDescription>
         </DialogHeader>
         {op.parameters.map((p) => (
@@ -577,7 +604,7 @@ function Execution({
               id={`param-${p.in}-${p.name}`}
               placeholder={
                 p.schema.type === "array"
-                  ? '["valor1", "valor2"]'
+                  ? t('["valor1", "valor2"]')
                   : (p.description ?? "")
               }
               value={String(parameters[`${p.in}:${p.name}`] ?? "")}
@@ -597,11 +624,13 @@ function Execution({
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
             />{" "}
-            Autorizo enviar esta solicitud de escritura a la conexión indicada.
+            {t(
+              "Autorizo enviar esta solicitud de escritura a la conexión indicada.",
+            )}
           </label>
         )}
         {!integration.connection?.mode && (
-          <p role="alert">Guarda primero una conexión.</p>
+          <p role="alert">{t("Guarda primero una conexión.")}</p>
         )}
         <fieldset
           disabled={
@@ -612,10 +641,10 @@ function Execution({
           className="integration-execution-fields"
         >
           {op.object ? (
-            <Suspense fallback={<p>Cargando formulario…</p>}>
+            <Suspense fallback={<p>{t("Cargando formulario…")}</p>}>
               <DynamicForm
                 object={op.object}
-                submitLabel="Ejecutar solicitud"
+                submitLabel={t("Ejecutar solicitud")}
                 onSave={async (data) => {
                   const body = { ...data };
                   for (const [name, field] of Object.entries(
@@ -638,7 +667,7 @@ function Execution({
               {op.bodySchema && (
                 <>
                   <Label htmlFor="request-json">
-                    Cuerpo JSON {op.bodyRequired ? "*" : ""}
+                    {t("Cuerpo JSON")} {op.bodyRequired ? "*" : ""}
                   </Label>
                   <textarea
                     id="request-json"
@@ -661,7 +690,7 @@ function Execution({
                   }
                 }}
               >
-                {busy ? "Ejecutando…" : "Ejecutar solicitud"}
+                {busy ? t("Ejecutando…") : t("Ejecutar solicitud")}
               </Button>
             </>
           )}
@@ -674,13 +703,13 @@ function Execution({
         {result && (
           <div className="operation-result">
             <h3>
-              {statusLabel(result.run.status)} · HTTP{" "}
+              {statusLabel(result.run.status, t)} {t("· HTTP")}{" "}
               {result.run.httpStatus ?? "—"}
             </h3>
             <p>
-              {result.run.attempts} intento(s)
+              {result.run.attempts} {t("intento(s)")}
               {result.replayed
-                ? " · respuesta recuperada por idempotencia"
+                ? t(" · respuesta recuperada por idempotencia")
                 : ""}
             </p>
             {result.run.error && <p role="alert">{result.run.error}</p>}
@@ -693,12 +722,14 @@ function Execution({
                 setConfirmed(false);
               }}
             >
-              Preparar una nueva solicitud
+              {t("Preparar una nueva solicitud")}
             </Button>
             {result.run.status === "succeeded" && (
               <div className="integration-mapping">
-                <h3>Guardar respuesta en el CRM</h3>
-                <Label htmlFor="response-target">Objeto de destino</Label>
+                <h3>{t("Guardar respuesta en el CRM")}</h3>
+                <Label htmlFor="response-target">
+                  {t("Objeto de destino")}
+                </Label>
                 <select
                   id="response-target"
                   className="select-input full-width"
@@ -709,7 +740,7 @@ function Execution({
                     setSaved(false);
                   }}
                 >
-                  <option value="">Seleccionar objeto</option>
+                  <option value="">{t("Seleccionar objeto")}</option>
                   {objects.data?.data?.map((o: CrmObject) => (
                     <option key={o.name} value={o.name}>
                       {o.label}
@@ -717,8 +748,9 @@ function Execution({
                   ))}
                 </select>
                 <p>
-                  Relaciona cada campo con una ruta de la respuesta: /project,
-                  /monthlyTotal. Deja vacíos los campos que no quieras guardar.
+                  {t(
+                    "Relaciona cada campo con una ruta de la respuesta: /project, /monthlyTotal. Deja vacíos los campos que no quieras guardar.",
+                  )}
                 </p>
                 {targetObject &&
                   Object.entries(targetObject.config.fields).map(
@@ -755,7 +787,7 @@ function Execution({
                         },
                       );
                       setSaved(true);
-                      toast.success("Respuesta guardada como registro");
+                      toast.success(t("Respuesta guardada como registro"));
                     } catch (e) {
                       setError((e as Error).message);
                     } finally {
@@ -763,7 +795,7 @@ function Execution({
                     }
                   }}
                 >
-                  {saved ? "Registro guardado" : "Guardar registro"}
+                  {saved ? t("Registro guardado") : t("Guardar registro")}
                 </Button>
               </div>
             )}

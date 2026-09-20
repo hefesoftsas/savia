@@ -14,7 +14,13 @@ import { formHtmlConfigSchema } from "./form-html";
 import { displayTextConfigSchema } from "./display-text";
 import { availableOptions, type OptionDependency } from "./dependent-options";
 import { validateJsonSchema } from "./json-schema";
-import { fieldLabelsSchema, normalizeFieldLabels } from "./field-labels";
+import { recordValidationMessage } from "./record-validation-messages";
+import {
+  fieldLabelsSchema,
+  normalizeFieldLabels,
+  resolveFieldLabel,
+  type FieldLabelLocale,
+} from "./field-labels";
 import {
   evaluateCondition,
   isSectionVisible,
@@ -224,6 +230,7 @@ const condition = z.object({
 const option = z.object({
   value: z.string().min(1).max(200),
   label: z.string().min(1).max(200),
+  labels: fieldLabelsSchema,
 });
 export const fieldSchema = z
   .object({
@@ -799,6 +806,7 @@ export const fieldEntries = (object: CrmObject) =>
 export function validateRecord(
   object: CrmObject,
   input: Record<string, unknown>,
+  locale?: FieldLabelLocale,
 ) {
   const errors: Record<string, string> = {},
     clean: Record<string, unknown> = {};
@@ -809,6 +817,7 @@ export function validateRecord(
     return { data: input, errors: { _form: (e as Error).message } };
   }
   for (const [name, field] of fieldEntries(object)) {
+    const fieldLabel = locale ? resolveFieldLabel(field, locale) : field.label;
     if (field.type === R2_ATTACHMENT_TYPE) continue;
     if (field.type === FORM_HTML_TYPE) continue;
     if (field.type === DISPLAY_TEXT_TYPE) continue;
@@ -836,7 +845,9 @@ export function validateRecord(
         !value.trim()) ||
       (Array.isArray(value) && !value.length);
     if (empty) {
-      if (required) errors[name] = `${field.label}: obligatorio`;
+      if (required)
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("required", locale)}`;
       clean[name] =
         c.multiple || field.type === "MultiSelect"
           ? []
@@ -851,13 +862,14 @@ export function validateRecord(
         !z.iso.datetime({ offset: true }).safeParse(value).success
       )
         errors[name] =
-          `${field.label}: enter a valid date and time with a time zone`;
+          `${fieldLabel}: ${recordValidationMessage("dateTime", locale)}`;
       else clean[name] = new Date(value).toISOString();
       continue;
     }
     if (field.type === "Time") {
       if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
-        errors[name] = `${field.label}: enter a valid time (HH:mm)`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("time", locale)}`;
       else clean[name] = value;
       continue;
     }
@@ -873,7 +885,7 @@ export function validateRecord(
         (rating && !Number.isInteger(value))
       )
         errors[name] =
-          `${field.label}: enter ${rating ? "an integer" : "a number"} between ${min} and ${max}`;
+          `${fieldLabel}: ${recordValidationMessage(rating ? "integerRange" : "numberRange", locale, { min, max })}`;
       else if (!rating) {
         const scaled = value * 10 ** Number(c.decimals ?? 2);
         if (
@@ -882,7 +894,7 @@ export function validateRecord(
             Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8
         )
           errors[name] =
-            `${field.label}: use at most ${c.decimals ?? 2} decimal places`;
+            `${fieldLabel}: ${recordValidationMessage("decimals", locale, { decimals: Number(c.decimals ?? 2) })}`;
       }
       clean[name] = value;
       continue;
@@ -896,7 +908,8 @@ export function validateRecord(
         value.length > 500 ||
         value.some((item) => typeof item !== "string" || !allowed.has(item))
       )
-        errors[name] = `${field.label}: select valid options`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("options", locale)}`;
       else clean[name] = [...new Set(value)];
       continue;
     }
@@ -906,7 +919,8 @@ export function validateRecord(
         value.some((v) => typeof v !== "string") ||
         value.length > 500
       )
-        errors[name] = `${field.label}: selecciona registros válidos`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("records", locale)}`;
       else clean[name] = [...new Set(value)];
       continue;
     }
@@ -914,26 +928,31 @@ export function validateRecord(
       (field.type === "Number" || field.type === "Currency") &&
       (typeof value !== "number" || !Number.isFinite(value))
     )
-      errors[name] = `${field.label}: debe ser un número`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("number", locale)}`;
     else if (
       (field.type === "Number" || field.type === "Currency") &&
       c.integer &&
       !Number.isInteger(value)
     )
-      errors[name] = `${field.label}: debe ser entero`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("integer", locale)}`;
     else if (field.type === "Toggle" && typeof value !== "boolean")
-      errors[name] = `${field.label}: debe ser verdadero o falso`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("boolean", locale)}`;
     else if (field.type === "MapLocation") {
       const location = parseMapLocation(value);
       if (!location)
-        errors[name] = `${field.label}: selecciona un punto válido en el mapa`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("map", locale)}`;
       else clean[name] = location;
       continue;
     } else if (
       !["Number", "Currency", "Toggle", "MapLocation"].includes(field.type) &&
       typeof value !== "string"
     )
-      errors[name] = `${field.label}: debe ser texto`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("text", locale)}`;
     else if (
       isStaticOptionField(field.type) &&
       !c.relation &&
@@ -945,7 +964,8 @@ export function validateRecord(
         data,
       ).some((o) => o.value === value)
     )
-      errors[name] = `${field.label}: opción inválida`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("option", locale)}`;
     else if (
       field.type === "DateControl" &&
       (typeof value !== "string" ||
@@ -953,23 +973,27 @@ export function validateRecord(
         Number.isNaN(Date.parse(value)) ||
         new Date(value).toISOString().slice(0, 10) !== value)
     )
-      errors[name] = `${field.label}: fecha inválida`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("date", locale)}`;
     else if (
       fieldTextFormat(field) === "email" &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))
     )
-      errors[name] = `${field.label}: correo inválido`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("email", locale)}`;
     else if (
       fieldTextFormat(field) === "phone" &&
       !/^\+?[\d ()-]{5,30}$/.test(String(value))
     )
-      errors[name] = `${field.label}: teléfono inválido`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("phone", locale)}`;
     else if (fieldTextFormat(field) === "url") {
       try {
         const u = new URL(String(value));
         if (!["https:", "http:"].includes(u.protocol)) throw 0;
       } catch {
-        errors[name] = `${field.label}: URL inválida`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("url", locale)}`;
       }
     }
     if (
@@ -977,7 +1001,8 @@ export function validateRecord(
       ((typeof c.minimum === "number" && value < c.minimum) ||
         (typeof c.maximum === "number" && value > c.maximum))
     )
-      errors[name] = `${field.label}: fuera del rango permitido`;
+      errors[name] =
+        `${fieldLabel}: ${recordValidationMessage("range", locale)}`;
     if (typeof value === "string") {
       const max =
           typeof c.maxLength === "number"
@@ -987,43 +1012,43 @@ export function validateRecord(
               : 10000,
         min = typeof c.minLength === "number" ? c.minLength : 0;
       if (value.length < min || value.length > max)
-        errors[name] = `${field.label}: longitud permitida ${min}–${max}`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("length", locale, { min, max })}`;
       if (
         c.pattern &&
         typeof c.pattern === "string" &&
         !new RegExp(c.pattern, "u").test(value)
       )
-        errors[name] = `${field.label}: formato inválido`;
+        errors[name] =
+          `${fieldLabel}: ${recordValidationMessage("pattern", locale)}`;
     }
     if (c.jsonSchema && typeof value === "string") {
       try {
         const parsed = JSON.parse(value),
           issues = validateJsonSchema({}, c.jsonSchema as any, parsed);
-        if (issues.length)
-          errors[name] = `${field.label}: ${issues.join("; ")}`;
+        if (issues.length) errors[name] = `${fieldLabel}: ${issues.join("; ")}`;
         else {
           clean[name] = JSON.stringify(parsed);
           continue;
         }
       } catch (e) {
         errors[name] =
-          `${field.label}: JSON inválido (${(e as Error).message})`;
+          `${fieldLabel}: ${recordValidationMessage("json", locale, { detail: (e as Error).message })}`;
       }
     }
     if (c.validationSchema && !c.jsonSchema) {
       try {
         const issues = validateJsonSchema({}, c.validationSchema as any, value);
-        if (issues.length)
-          errors[name] = `${field.label}: ${issues.join("; ")}`;
+        if (issues.length) errors[name] = `${fieldLabel}: ${issues.join("; ")}`;
       } catch (e) {
-        errors[name] = `${field.label}: ${(e as Error).message}`;
+        errors[name] = `${fieldLabel}: ${(e as Error).message}`;
       }
     }
     clean[name] = value;
   }
   for (const name of Object.keys(input))
     if (!object.config.fields[name])
-      errors[name] = `Campo desconocido: ${name}`;
+      errors[name] = recordValidationMessage("unknown", locale, { name });
   return { errors, data: clean };
 }
 export function recordSurface(

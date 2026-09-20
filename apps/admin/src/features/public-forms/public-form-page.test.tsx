@@ -1,8 +1,16 @@
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
+import {
+  StoreContextProvider,
+  memoryStore,
+  useSetLocale,
+  I18nContextProvider,
+} from "ra-core";
+import type { ReactElement, ReactNode } from "react";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
+  render as testingRender,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -301,4 +309,53 @@ it("uses the bundled self-hosted challenge and keeps the solved proof for an unc
       ([url]) => !String(url).includes("cloudflare.com"),
     ),
   ).toBe(true);
+});
+
+function render(ui: ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <I18nContextProvider
+        value={{
+          translate: (key: string) => key,
+          changeLocale: async () => {},
+          getLocale: () => "es",
+        }}
+      >
+        {children}
+      </I18nContextProvider>
+    ),
+  });
+}
+
+function LocaleSwitcher() {
+  const setLocale = useSetLocale();
+  return (
+    <>
+      <button onClick={() => setLocale("es")}>ES</button>
+      <button onClick={() => setLocale("pt")}>PT</button>
+    </>
+  );
+}
+it("switches public form chrome and captcha language while preserving entered business content", async () => {
+  testingRender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <LocaleSwitcher />
+        <PublicFormPage token="public-token" />
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+  const input = await screen.findByLabelText(/Nombre/);
+  fireEvent.change(input, { target: { value: "Ana business content" } });
+  expect(screen.getByRole("button", { name: "Submit request" })).toBeDisabled();
+  await waitFor(() => expect(widget?.language).toBe("en"));
+  fireEvent.click(screen.getByText("ES"));
+  await screen.findByRole("button", { name: "Enviar solicitud" });
+  expect(screen.getByLabelText(/Nombre/)).toHaveValue("Ana business content");
+  await waitFor(() => expect(widget?.language).toBe("es"));
+  fireEvent.click(screen.getByText("PT"));
+  await screen.findByRole("button", { name: "Enviar solicitação" });
+  expect(screen.getByLabelText(/Nombre/)).toHaveValue("Ana business content");
+  await waitFor(() => expect(widget?.language).toBe("pt"));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
 });

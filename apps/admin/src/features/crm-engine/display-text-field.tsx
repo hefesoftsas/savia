@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useMemo, type HTMLAttributes } from "react";
 import type { IFieldProps } from "@form-eng/core";
 import type { CrmObject } from "@savia/crm-shared/metadata";
@@ -36,6 +38,8 @@ function DisplayTextBody({
 }
 
 export function DisplayTextField(p: IFieldProps) {
+  const t = useMessages(recordsMessages);
+
   const object = p.config?.studioObject as CrmObject | undefined;
   const recordId =
     typeof p.config?.recordId === "string" ? p.config.recordId : undefined;
@@ -48,16 +52,14 @@ export function DisplayTextField(p: IFieldProps) {
     return renderDisplayTextContent(content, {
       values,
       recordId,
-      object: object
-        ? { name: object.name, label: object.label }
-        : undefined,
+      object: object ? { name: object.name, label: object.label } : undefined,
     });
   }, [object, p.label, recordId, settings?.content, values]);
 
   if (!settings) {
     return (
       <p className="display-text-empty studio-field-help">
-        Configura el texto en las propiedades del campo.
+        {t("Configura el texto en las propiedades del campo.")}
       </p>
     );
   }

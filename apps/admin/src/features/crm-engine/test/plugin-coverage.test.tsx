@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { releaseCatalog } from "@savia/release-catalog";
 import { ValueInput } from "../workflow-editor";

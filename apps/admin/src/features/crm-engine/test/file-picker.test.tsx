@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
+import { render } from "./locale-test-render";
 import { FilePicker } from "../file-picker";
 
 it("keeps accepted files and reports a rejected MIME type", () => {
@@ -44,9 +45,7 @@ it("uses one compact, task-oriented attachment action", () => {
     />,
   );
 
-  expect(
-    screen.getByRole("button", { name: "Adjuntar archivo" }),
-  ).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Adjuntar archivo" })).toBeTruthy();
   expect(screen.queryByLabelText("Seleccionar archivos")).toBeNull();
 });
 

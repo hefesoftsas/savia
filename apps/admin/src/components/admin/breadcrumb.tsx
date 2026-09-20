@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { Separator } from "@/components/ui/separator";
@@ -55,6 +57,7 @@ import { Translate } from "ra-core";
  * );
  */
 export const Breadcrumb = ({ children, ref }: BreadcrumbProps) => {
+  const t = useMessages(settingsMessages);
   const breadcrumbPortal = document.getElementById("breadcrumb");
   const isMobile = useIsMobile();
   const [open, setOpen] = React.useState(false);
@@ -72,7 +75,7 @@ export const Breadcrumb = ({ children, ref }: BreadcrumbProps) => {
             <React.Fragment>
               <BreadcrumbItem>
                 <Drawer open={open} onOpenChange={setOpen}>
-                  <DrawerTrigger aria-label="Toggle Menu">
+                  <DrawerTrigger aria-label={t("Toggle Menu")}>
                     <BreadcrumbEllipsis className="h-4 w-4" />
                   </DrawerTrigger>
                   <DrawerContent>

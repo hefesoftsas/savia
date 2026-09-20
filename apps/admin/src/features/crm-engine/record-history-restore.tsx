@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useState } from "react";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import type { RecordHistoryDetail } from "@savia/crm-shared/record-history";
@@ -18,15 +20,18 @@ type Preview = {
     RecordHistoryDetail["changes"][string] & { current?: unknown }
   >;
 };
-const show = (v: unknown) =>
+const show = (
+  v: unknown,
+  t: ReturnType<typeof useMessages<typeof recordsMessages>>,
+) =>
   v === undefined
-    ? "No disponible"
+    ? t("No disponible")
     : v === null
-      ? "Sin valor"
+      ? t("Sin valor")
       : typeof v === "boolean"
         ? v
-          ? "Sí"
-          : "No"
+          ? t("Sí")
+          : t("No")
         : String(v);
 export function RecordHistoryRestore({
   object,
@@ -39,6 +44,8 @@ export function RecordHistoryRestore({
   onClose: () => void;
   onRestored: () => void;
 }) {
+  const t = useMessages(recordsMessages);
+
   const [preview, setPreview] = useState<Preview>();
   const [fields, setFields] = useState<string[]>([]);
   const [side, setSide] = useState<"before" | "after">("before");
@@ -68,23 +75,23 @@ export function RecordHistoryRestore({
     >
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Restaurar campos</DialogTitle>
+          <DialogTitle>{t("Restaurar campos")}</DialogTitle>
           <DialogDescription>
-            Compara con el registro actual y selecciona los campos. Se guardará
-            una nueva edición; los demás campos se conservarán. Requiere
-            conexión y sincronización sin pendientes.
+            {t(
+              "Compara con el registro actual y selecciona los campos. Se guardará una nueva edición; los demás campos se conservarán. Requiere conexión y sincronización sin pendientes.",
+            )}
           </DialogDescription>
         </DialogHeader>
         {error && (
           <div role="alert" className="grid gap-2">
             <p>{error}</p>
             <Button variant="outline" onClick={() => setReload((v) => v + 1)}>
-              Revisar comparación de nuevo
+              {t("Revisar comparación de nuevo")}
             </Button>
           </div>
         )}
         {!preview ? (
-          !error && <p role="status">Preparando comparación…</p>
+          !error && <p role="status">{t("Preparando comparación…")}</p>
         ) : (
           <form
             className="grid gap-4"
@@ -106,7 +113,9 @@ export function RecordHistoryRestore({
                 setError(
                   e instanceof Error
                     ? e.message
-                    : "No se pudo confirmar la restauración. Revisa el registro antes de reintentar.",
+                    : t(
+                        "No se pudo confirmar la restauración. Revisa el registro antes de reintentar.",
+                      ),
                 );
               } finally {
                 setBusy(false);
@@ -115,7 +124,7 @@ export function RecordHistoryRestore({
           >
             <fieldset disabled={busy} className="grid gap-3">
               <label className="grid gap-2">
-                Valores a recuperar
+                {t("Valores a recuperar")}
                 <select
                   className="rounded-md border bg-background p-2"
                   value={side}
@@ -124,12 +133,12 @@ export function RecordHistoryRestore({
                     setFields([]);
                   }}
                 >
-                  <option value="before">Antes del cambio</option>
-                  <option value="after">Después del cambio</option>
+                  <option value="before">{t("Antes del cambio")}</option>
+                  <option value="after">{t("Después del cambio")}</option>
                 </select>
               </label>
               {!Object.keys(preview.changes).length && (
-                <p>No hay campos que puedas restaurar en este cambio.</p>
+                <p>{t("No hay campos que puedas restaurar en este cambio.")}</p>
               )}
               {Object.entries(preview.changes).map(([name, change]) => {
                 const available =
@@ -157,20 +166,20 @@ export function RecordHistoryRestore({
                     <dl className="grid gap-3 sm:grid-cols-2">
                       <div className="min-w-0">
                         <dt className="text-sm text-muted-foreground">
-                          Actual
+                          {t("Actual")}
                         </dt>
                         <dd className="whitespace-pre-wrap break-words">
-                          {show(change.current)}
+                          {show(change.current, t)}
                         </dd>
                       </div>
                       <div className="min-w-0">
                         <dt className="text-sm text-muted-foreground">
-                          Valor a recuperar
+                          {t("Valor a recuperar")}
                         </dt>
                         <dd className="whitespace-pre-wrap break-words">
                           {available
-                            ? show(change[side])
-                            : "No restaurable: valor ausente o truncado."}
+                            ? show(change[side], t)
+                            : t("No restaurable: valor ausente o truncado.")}
                         </dd>
                       </div>
                     </dl>
@@ -185,10 +194,10 @@ export function RecordHistoryRestore({
                 disabled={busy}
                 onClick={onClose}
               >
-                Cancelar
+                {t("Cancelar")}
               </Button>
               <Button disabled={busy || !fields.length} type="submit">
-                {busy ? "Restaurando…" : "Confirmar restauración"}
+                {busy ? t("Restaurando…") : t("Confirmar restauración")}
               </Button>
             </div>
           </form>

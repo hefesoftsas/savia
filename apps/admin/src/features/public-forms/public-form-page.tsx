@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { publicFormsMessages } from "@/i18n/locales/public-forms";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -101,6 +103,8 @@ function publicError(status: number) {
 
 /** Standalone entry: intentionally imports no admin services, session or local data modules. */
 export function PublicFormPage({ token }: { token: string }) {
+  const t = useMessages(publicFormsMessages);
+  const locale = useAppLocale();
   const [definition, setDefinition] = useState<Definition>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,15 +142,19 @@ export function PublicFormPage({ token }: { token: string }) {
     return () => controller.abort();
   }, [endpoint]);
   return (
-    <main className="public-form-page" lang="es">
+    <main className="public-form-page" lang={locale}>
       <div className="public-form-shell">
         <p className="public-form-brand">Savia</p>
         {loading ? (
-          <p role="status">Cargando formulario…</p>
+          <p role="status">{t("Cargando formulario…")}</p>
         ) : error ? (
           <div role="alert" className="public-form-notice">
-            <h1>Formulario no disponible</h1>
-            <p>{error}</p>
+            <h1>{t("Formulario no disponible")}</h1>
+            <p>
+              {Object.hasOwn(publicFormsMessages, error)
+                ? t(error as keyof typeof publicFormsMessages)
+                : error}
+            </p>
           </div>
         ) : definition ? (
           <SubmissionForm
@@ -156,7 +164,7 @@ export function PublicFormPage({ token }: { token: string }) {
           />
         ) : null}
         <footer className="public-form-footer">
-          Formulario compartido mediante Savia.
+          {t("Formulario compartido mediante Savia.")}
         </footer>
       </div>
     </main>
@@ -169,6 +177,8 @@ function SubmissionForm({
   definition: Definition;
   endpoint: string;
 }) {
+  const t = useMessages(publicFormsMessages);
+  const locale = useAppLocale();
   const captchaElement = useRef<HTMLDivElement>(null);
   const widget = useRef<{ api: Turnstile; id: string } | null>(null);
   const altchaWidget = useRef<Awaited<ReturnType<typeof mountAltcha>> | null>(
@@ -200,6 +210,7 @@ function SubmissionForm({
   }, []);
   useEffect(() => {
     if (receipt || duplicate) return;
+    if (!retryProof.current) setCaptcha("");
     let active = true;
     if (definition.captchaProvider === "altcha") {
       if (captchaElement.current)
@@ -220,6 +231,7 @@ function SubmissionForm({
                 "No se pudo completar la verificación. Revisa tu conexión y vuelve a intentarlo.",
               );
           },
+          locale,
         )
           .then((instance) => {
             if (active) altchaWidget.current = instance;
@@ -244,7 +256,7 @@ function SubmissionForm({
           sitekey: definition.siteKey,
           action: "public_submit",
           cData: definition.id,
-          language: "es",
+          language: locale,
           size: "flexible",
           callback: (value: string) => {
             if (active) {
@@ -280,6 +292,7 @@ function SubmissionForm({
       }
     };
   }, [
+    locale,
     definition.id,
     definition.siteKey,
     definition.captchaProvider,
@@ -308,7 +321,7 @@ function SubmissionForm({
           if (field.type === "number") {
             const number = Number(value);
             if (!Number.isFinite(number)) {
-              setError(`Revisa el campo ${field.label}.`);
+              setError(t("Revisa el campo %{field}.", { field: field.label }));
               return;
             }
             values[field.name] = number;
@@ -405,30 +418,33 @@ function SubmissionForm({
           className="public-form-notice"
           role="status"
         >
-          <h2 id="public-form-success">Solicitud recibida</h2>
+          <h2 id="public-form-success">{t("Solicitud recibida")}</h2>
           <p>
-            Conserva esta referencia para consultar con quien compartió el
-            formulario.
+            {t(
+              "Conserva esta referencia para consultar con quien compartió el formulario.",
+            )}
           </p>
           <p className="public-form-reference">{receipt.reference}</p>
           <SafeResult result={receipt.result} />
           <Button type="button" variant="outline" onClick={startNew}>
-            Iniciar otro envío
+            {t("Iniciar otro envío")}
           </Button>
         </section>
       ) : duplicate ? (
         <section className="public-form-notice" role="status">
-          <h2>Envío registrado</h2>
+          <h2>{t("Envío registrado")}</h2>
           <p>
-            Este envío ya fue recibido o está en proceso. No lo vuelvas a
-            enviar.
+            {t(
+              "Este envío ya fue recibido o está en proceso. No lo vuelvas a enviar.",
+            )}
           </p>
           <p>
-            Si necesitas confirmar el resultado, contacta a quien compartió el
-            enlace.
+            {t(
+              "Si necesitas confirmar el resultado, contacta a quien compartió el enlace.",
+            )}
           </p>
           <Button type="button" variant="outline" onClick={startNew}>
-            Iniciar otro envío
+            {t("Iniciar otro envío")}
           </Button>
         </section>
       ) : (
@@ -439,7 +455,7 @@ function SubmissionForm({
           aria-busy={pending}
         >
           <p className="public-form-help">
-            Los campos marcados con * son obligatorios.
+            {t("Los campos marcados con * son obligatorios.")}
           </p>
           <fieldset disabled={pending || uncertain}>
             {definition.fields.map((field) => (
@@ -455,9 +471,9 @@ function SubmissionForm({
                     required
                     defaultValue=""
                   >
-                    <option value="">Selecciona una opción</option>
-                    <option value="true">Sí</option>
-                    <option value="false">No</option>
+                    <option value="">{t("Selecciona una opción")}</option>
+                    <option value="true">{t("Sí")}</option>
+                    <option value="false">{t("No")}</option>
                   </select>
                 ) : field.type === "boolean" ? (
                   <input
@@ -473,7 +489,7 @@ function SubmissionForm({
                     required={field.required}
                     defaultValue=""
                   >
-                    <option value="">Selecciona una opción</option>
+                    <option value="">{t("Selecciona una opción")}</option>
                     {field.options?.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -493,27 +509,34 @@ function SubmissionForm({
               </div>
             ))}
           </fieldset>
-          <div ref={captchaElement} aria-label="Verificación de seguridad" />
+          <div
+            ref={captchaElement}
+            aria-label={t("Verificación de seguridad")}
+          />
           {captchaError && (
             <p role="alert" className="public-form-error">
-              {captchaError}
+              {Object.hasOwn(publicFormsMessages, captchaError)
+                ? t(captchaError as keyof typeof publicFormsMessages)
+                : captchaError}
             </p>
           )}
           {error && (
             <p role="alert" className="public-form-error">
-              {error}
+              {Object.hasOwn(publicFormsMessages, error)
+                ? t(error as keyof typeof publicFormsMessages)
+                : error}
             </p>
           )}
           <Button type="submit" disabled={!captcha || pending}>
             {pending
-              ? "Enviando…"
+              ? t("Enviando…")
               : uncertain
-                ? "Reintentar el mismo envío"
-                : "Enviar solicitud"}
+                ? t("Reintentar el mismo envío")
+                : t("Enviar solicitud")}
           </Button>
           {!captcha && !captchaError && (
             <p className="public-form-help">
-              Completa la verificación de seguridad para enviar.
+              {t("Completa la verificación de seguridad para enviar.")}
             </p>
           )}
         </form>
@@ -536,10 +559,12 @@ const quoteProjection = z.object({
   unavailable: z.number().int().nonnegative(),
 });
 function SafeResult({ result }: { result: unknown }) {
+  const t = useMessages(publicFormsMessages);
+  const locale = useAppLocale();
   const projection = quoteProjection.safeParse(result);
   if (projection.success) {
     const { quotes, unavailable } = projection.data;
-    const money = new Intl.NumberFormat("es-CO", {
+    const money = new Intl.NumberFormat(intlLocale(locale), {
       style: "currency",
       currency: "COP",
       maximumFractionDigits: 2,
@@ -547,9 +572,9 @@ function SafeResult({ result }: { result: unknown }) {
     return (
       <section
         className="public-quote-results"
-        aria-label="Resultados de cotización"
+        aria-label={t("Resultados de cotización")}
       >
-        <h3>Resultados de cotización</h3>
+        <h3>{t("Resultados de cotización")}</h3>
         {quotes.length ? (
           <ul>
             {quotes.map((quote, index) => (
@@ -560,12 +585,12 @@ function SafeResult({ result }: { result: unknown }) {
                 </div>
                 <p className="public-quote-price">
                   {quote.premiumTotal === null
-                    ? "Valor por confirmar"
+                    ? t("Valor por confirmar")
                     : money.format(quote.premiumTotal)}
                   {quote.premiumTotal !== null && <span> COP</span>}
                 </p>
                 {quote.coverages.length > 0 && (
-                  <ul aria-label="Coberturas">
+                  <ul aria-label={t("Coberturas")}>
                     {quote.coverages.map((coverage, coverageIndex) => (
                       <li key={coverageIndex}>{coverage}</li>
                     ))}
@@ -576,17 +601,19 @@ function SafeResult({ result }: { result: unknown }) {
           </ul>
         ) : (
           <p>
-            No hay cotizaciones disponibles en este resultado. Contacta a quien
-            compartió el formulario.
+            {t(
+              "No hay cotizaciones disponibles en este resultado. Contacta a quien compartió el formulario.",
+            )}
           </p>
         )}
         {unavailable > 0 && (
           <p className="public-form-help">
-            {unavailable}{" "}
-            {unavailable === 1
-              ? "resultado no está disponible"
-              : "resultados no están disponibles"}
-            .
+            {t(
+              unavailable === 1
+                ? "%{count} resultado no está disponible."
+                : "%{count} resultados no están disponibles.",
+              { count: unavailable },
+            )}
           </p>
         )}
       </section>

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { screen, cleanup, within } from "@testing-library/react";
+import { render } from "../crm-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it } from "vitest";

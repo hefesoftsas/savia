@@ -1,6 +1,8 @@
+import { useMessages } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import "./form-layout-picker.css";
 
-const COLUMN_LABELS: Record<1 | 2 | 3, string> = {
+const COLUMN_LABELS: Record<1 | 2 | 3, keyof typeof studioMessages> = {
   1: "Una columna",
   2: "Dos columnas",
   3: "Tres columnas",
@@ -36,16 +38,17 @@ export function FormColumnPicker({
   name?: string;
   className?: string;
 }) {
+  const t = useMessages(studioMessages);
   return (
     <div
-      aria-label="Columnas del formulario"
+      aria-label={t("Columnas del formulario")}
       className={["form-column-picker", className].filter(Boolean).join(" ")}
       role="radiogroup"
     >
       {([1, 2, 3] as const).map((columns) => (
         <label className="form-column-option" key={columns}>
           <input
-            aria-label={COLUMN_LABELS[columns]}
+            aria-label={t(COLUMN_LABELS[columns])}
             checked={value === columns}
             name={name}
             onChange={() => onChange(columns)}
@@ -54,7 +57,7 @@ export function FormColumnPicker({
           />
           <span className="form-column-option-content">
             <span className="form-column-option-title">
-              {COLUMN_LABELS[columns]}
+              {t(COLUMN_LABELS[columns])}
             </span>
             <FormLayoutPreview columns={columns} />
           </span>

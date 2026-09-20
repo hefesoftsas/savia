@@ -21,12 +21,13 @@ const requirementLabels: Record<CredentialRequirementKind, string> = {
 
 export function formatConfiguredDate(
   dateString: string | undefined | null,
+  locale = "es-CO",
 ): string {
   if (!dateString) return "";
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return dateString;
-    return new Intl.DateTimeFormat("es-ES", {
+    return new Intl.DateTimeFormat(locale, {
       day: "numeric",
       month: "short",
       year: "numeric",

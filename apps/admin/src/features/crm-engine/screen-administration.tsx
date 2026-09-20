@@ -1,3 +1,5 @@
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { studioMessages } from "@/i18n/locales/studio";
 import { getCrmRuntime } from "./runtime";
 import { lazy, Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -113,6 +115,8 @@ export default function ScreenAdministration({
   tab?: "screens" | "packages";
   onTabChange?: (tab: "screens" | "packages") => void;
 }) {
+  const t = useMessages(studioMessages);
+  const locale = useAppLocale();
   const [currentTab, setCurrentTab] = useState<"screens" | "packages">(
     defaultTab,
   );
@@ -132,6 +136,7 @@ export default function ScreenAdministration({
   );
   const active = sortScreens(
     objects.filter((o) => !o.config.studio?.screen?.hidden),
+    intlLocale(locale),
   );
   const activeLayout = reconcileMenuLayout(
     menuLayout,
@@ -141,11 +146,12 @@ export default function ScreenAdministration({
   const screensByName = new Map(active.map((screen) => [screen.name, screen]));
   const inactive = sortScreens(
     objects.filter((o) => o.config.studio?.screen?.hidden),
+    intlLocale(locale),
   );
-  const normalizedFilter = filter.trim().toLocaleLowerCase("es");
+  const normalizedFilter = filter.trim().toLocaleLowerCase(intlLocale(locale));
   const matchesScreenFilter = (item: CrmObject) =>
     !normalizedFilter ||
-    item.label.toLocaleLowerCase("es").includes(normalizedFilter);
+    item.label.toLocaleLowerCase(intlLocale(locale)).includes(normalizedFilter);
   const filteredActive = active.filter(matchesScreenFilter);
   const filteredInactive = inactive.filter(matchesScreenFilter);
   const filteredActiveBlocks = normalizedFilter
@@ -162,63 +168,63 @@ export default function ScreenAdministration({
   const screen = objects.find((o) => o.name === selected);
   const domainActions = [
     {
-      label: "Pantalla desde Savia request",
+      label: t("Pantalla desde Savia request"),
       icon: Plug,
       view: "request-page-generator",
       primary: false,
       visible: Boolean(getCrmRuntime().requestTransport),
     },
     {
-      label: "Nueva pantalla",
+      label: t("Nueva pantalla"),
       icon: Plus,
       view: "new-object",
       primary: true,
       visible: true,
     },
     {
-      label: "Desde Excel o CSV",
+      label: t("Desde Excel o CSV"),
       icon: FileSpreadsheet,
       view: "import-spreadsheet",
       primary: false,
       visible: true,
     },
     {
-      label: "Gestionar pantallas",
+      label: t("Gestionar pantallas"),
       icon: LayoutDashboard,
       view: "screens",
       primary: false,
       visible: objects.length > 0,
     },
     {
-      label: "Fuentes de datos",
+      label: t("Fuentes de datos"),
       icon: Database,
       view: "collection-sources",
       primary: false,
       visible: domainTools,
     },
     {
-      label: "Integraciones y API",
+      label: t("Integraciones y API"),
       icon: Plug,
       view: "integrations",
       primary: false,
       visible: objects.length > 0,
     },
     {
-      label: "Claves y servicios",
+      label: t("Claves y servicios"),
       icon: KeyRound,
       view: "service-credentials",
       primary: false,
       visible: objects.length > 0,
     },
     {
-      label: "Reportes y acciones",
+      label: t("Reportes y acciones"),
       icon: SlidersHorizontal,
       view: "operations",
       primary: false,
       visible: objects.length > 0,
     },
     {
-      label: "Historial del dominio",
+      label: t("Historial del dominio"),
       icon: History,
       view: "audit",
       primary: false,
@@ -232,16 +238,17 @@ export default function ScreenAdministration({
   const screenGroups = [
     {
       id: "active",
-      label: "Pantallas disponibles",
-      subtitle: "Disponibles para el menú según tus permisos y preferencias",
+      label: t("Pantallas disponibles"),
+      subtitle: t("Disponibles para el menú según tus permisos y preferencias"),
       screens: filteredActive,
       hidden: false,
     },
     {
       id: "inactive",
-      label: "Pantallas fuera del menú",
-      subtitle:
+      label: t("Pantallas fuera del menú"),
+      subtitle: t(
         "Fuera del menú del dominio · Accesibles mediante enlaces con permiso",
+      ),
       screens: filteredInactive,
       hidden: true,
     },
@@ -298,9 +305,11 @@ export default function ScreenAdministration({
       const right = screensByName.get(rightName);
       const labelOrder = (left?.label ?? leftName).localeCompare(
         right?.label ?? rightName,
-        "es",
+        intlLocale(locale),
       );
-      return labelOrder || leftName.localeCompare(rightName, "es");
+      return (
+        labelOrder || leftName.localeCompare(rightName, intlLocale(locale))
+      );
     };
     void persistMenuLayout({
       version: 1,
@@ -356,7 +365,7 @@ export default function ScreenAdministration({
       <button
         type="button"
         className="screen-admin-row-open"
-        aria-label={`Configurar ${item.label}`}
+        aria-label={t("Configurar %{v1}", { v1: item.label })}
         onClick={() => openScreenConfig(item)}
       >
         <span className="screen-admin-row-icon" aria-hidden="true">
@@ -372,15 +381,15 @@ export default function ScreenAdministration({
           <span className="screen-admin-row-title-wrap">
             <span className="screen-admin-row-title">{item.label}</span>
             {fromPlugin ? (
-              <span className="screen-admin-plugin-badge">Plugin</span>
+              <span className="screen-admin-plugin-badge">{t("Plugin")}</span>
             ) : null}
           </span>
           <span className="screen-admin-row-meta">
             {hasSource
-              ? "Conectada a una fuente de datos"
+              ? t("Conectada a una fuente de datos")
               : fromPlugin
-                ? "Pantalla provista por plugin / extensión"
-                : "Colección local"}
+                ? t("Pantalla provista por plugin / extensión")
+                : t("Colección local")}
           </span>
         </span>
       </button>
@@ -425,7 +434,7 @@ export default function ScreenAdministration({
             type="button"
             className="screen-admin-row-drag"
             draggable={!isPending}
-            aria-label={`Reordenar ${item.label}`}
+            aria-label={t("Reordenar %{v1}", { v1: item.label })}
             onDragStart={(event) => {
               event.dataTransfer.setData(screenDragType, item.name);
               event.dataTransfer.effectAllowed = "move";
@@ -439,15 +448,15 @@ export default function ScreenAdministration({
           <div className="screen-admin-row-actions">
             <span className="screen-admin-row-visibility">
               <Switch
-                aria-label={`Desactivar ${item.label}`}
-                title="Mostrar u ocultar en la barra lateral"
+                aria-label={t("Desactivar %{v1}", { v1: item.label })}
+                title={t("Mostrar u ocultar en la barra lateral")}
                 checked
                 disabled={isPending}
                 onCheckedChange={(visible) => {
                   void setScreenVisibility(item, visible);
                 }}
               />
-              <span>Activa</span>
+              <span>{t("Activa")}</span>
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -457,7 +466,7 @@ export default function ScreenAdministration({
                   size="icon"
                   disabled={isPending}
                   className="screen-admin-row-delete"
-                  aria-label={`Eliminar pantalla ${item.label}`}
+                  aria-label={t("Eliminar pantalla %{v1}", { v1: item.label })}
                   onClick={() => setRemovingScreen(item.name)}
                 >
                   {isPending ? (
@@ -468,7 +477,7 @@ export default function ScreenAdministration({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left" sideOffset={6}>
-                Eliminar del menú
+                {t("Eliminar del menú")}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -477,14 +486,14 @@ export default function ScreenAdministration({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Configurar ${item.label}`}
+                  aria-label={t("Configurar %{v1}", { v1: item.label })}
                   onClick={() => openScreenConfig(item)}
                 >
                   <Settings aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left" sideOffset={6}>
-                Configurar
+                {t("Configurar")}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -492,7 +501,9 @@ export default function ScreenAdministration({
         {removingScreen === item.name ? (
           <div className="screen-admin-removal">
             <p>
-              ¿Eliminar «{item.label}» del menú? Los registros se conservarán.
+              {t("¿Eliminar «")}
+              {item.label}
+              {t("» del menú? Los registros se conservarán.")}
             </p>
             <div className="screen-admin-removal-actions">
               <Button
@@ -502,7 +513,7 @@ export default function ScreenAdministration({
                 disabled={isPending}
                 onClick={() => setRemovingScreen(null)}
               >
-                Cancelar
+                {t("Cancelar")}
               </Button>
               <Button
                 type="button"
@@ -511,7 +522,7 @@ export default function ScreenAdministration({
                 disabled={isPending}
                 onClick={() => void removeScreenFromMenu(item)}
               >
-                Eliminar del menú
+                {t("Eliminar del menú")}
               </Button>
               {!hasSource ? (
                 <Button
@@ -525,7 +536,7 @@ export default function ScreenAdministration({
                     openPermanentDelete(item);
                   }}
                 >
-                  Eliminar permanentemente
+                  {t("Eliminar permanentemente")}
                 </Button>
               ) : null}
             </div>
@@ -545,15 +556,15 @@ export default function ScreenAdministration({
           <div className="screen-admin-row-actions">
             <span className="screen-admin-row-visibility">
               <Switch
-                aria-label={`Activar ${item.label}`}
-                title="Mostrar u ocultar en la barra lateral"
+                aria-label={t("Activar %{v1}", { v1: item.label })}
+                title={t("Mostrar u ocultar en la barra lateral")}
                 checked={false}
                 disabled={isPending}
                 onCheckedChange={(visible) => {
                   void setScreenVisibility(item, visible);
                 }}
               />
-              <span>Inactiva</span>
+              <span>{t("Inactiva")}</span>
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -562,7 +573,7 @@ export default function ScreenAdministration({
                   variant="ghost"
                   size="icon"
                   disabled={isPending}
-                  aria-label={`Recuperar pantalla ${item.label}`}
+                  aria-label={t("Recuperar pantalla %{v1}", { v1: item.label })}
                   onClick={() => void setScreenVisibility(item, true)}
                 >
                   {isPending ? (
@@ -573,7 +584,7 @@ export default function ScreenAdministration({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left" sideOffset={6}>
-                Recuperar en el menú
+                {t("Recuperar en el menú")}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -584,7 +595,9 @@ export default function ScreenAdministration({
                   size="icon"
                   disabled={isPending || hasSource}
                   className="screen-admin-row-delete-permanent"
-                  aria-label={`Eliminar permanentemente ${item.label}`}
+                  aria-label={t("Eliminar permanentemente %{v1}", {
+                    v1: item.label,
+                  })}
                   onClick={() => openPermanentDelete(item)}
                 >
                   <Trash2 aria-hidden="true" />
@@ -592,8 +605,8 @@ export default function ScreenAdministration({
               </TooltipTrigger>
               <TooltipContent side="left" sideOffset={6}>
                 {hasSource
-                  ? "Desvincula la fuente antes de eliminar"
-                  : "Eliminar permanentemente"}
+                  ? t("Desvincula la fuente antes de eliminar")
+                  : t("Eliminar permanentemente")}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -602,14 +615,14 @@ export default function ScreenAdministration({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Configurar ${item.label}`}
+                  aria-label={t("Configurar %{v1}", { v1: item.label })}
                   onClick={() => openScreenConfig(item)}
                 >
                   <Settings aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left" sideOffset={6}>
-                Configurar
+                {t("Configurar")}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -634,26 +647,27 @@ export default function ScreenAdministration({
         group: "experience",
         icon: Eye,
         view: "records",
-        label: "Ver pantalla",
-        description: "Abre los registros de esta pantalla.",
+        label: t("Ver pantalla"),
+        description: t("Abre los registros de esta pantalla."),
       },
       {
         group: "experience",
         icon: FormInput,
         view: usesSourceFormSettings ? "records" : "designer",
         extra: usesSourceFormSettings ? { configure: "form" } : undefined,
-        label: "Campos y formulario",
+        label: t("Campos y formulario"),
         description: usesSourceFormSettings
-          ? "Configura la tabla y la distribución del formulario."
-          : "Configura las etiquetas, los campos y el formulario.",
+          ? t("Configura la tabla y la distribución del formulario.")
+          : t("Configura las etiquetas, los campos y el formulario."),
       },
       {
         group: "experience",
         icon: PanelTop,
         view: "screen-settings",
-        label: "Presentación y menú",
-        description:
+        label: t("Presentación y menú"),
+        description: t(
           "Elige cómo se abren crear y editar, y la visibilidad en el menú.",
+        ),
       },
       ...(binding
         ? [
@@ -661,9 +675,10 @@ export default function ScreenAdministration({
               group: "data",
               icon: Database,
               view: "screen-operations",
-              label: "Operaciones del API",
-              description:
+              label: t("Operaciones del API"),
+              description: t(
                 "Elige los endpoints y mapeos para listar, crear, editar y eliminar.",
+              ),
             },
           ]
         : []),
@@ -673,9 +688,10 @@ export default function ScreenAdministration({
               group: "data",
               icon: Network,
               view: "screen-relations",
-              label: "Relaciones",
-              description:
+              label: t("Relaciones"),
+              description: t(
                 "Consulta y configura las conexiones de esta pantalla.",
+              ),
             },
           ]
         : []),
@@ -683,14 +699,14 @@ export default function ScreenAdministration({
         group: "tracking",
         icon: History,
         view: "screen-audit",
-        label: "Historial de cambios",
-        description: "Consulta los cambios registrados para esta pantalla.",
+        label: t("Historial de cambios"),
+        description: t("Consulta los cambios registrados para esta pantalla."),
       },
     ].filter((o) => o.view !== "records" || capabilities.read);
     const optionGroups = [
-      { id: "experience", label: "Experiencia" },
-      { id: "data", label: "Datos y conexiones" },
-      { id: "tracking", label: "Seguimiento" },
+      { id: "experience", label: t("Experiencia") },
+      { id: "data", label: t("Datos y conexiones") },
+      { id: "tracking", label: t("Seguimiento") },
     ]
       .map((group) => ({
         ...group,
@@ -699,7 +715,7 @@ export default function ScreenAdministration({
       .filter((group) => group.options.length);
     return (
       <section
-        aria-label={`Configurar ${screen.label}`}
+        aria-label={t("Configurar %{v1}", { v1: screen.label })}
         className="screen-admin"
       >
         <header className="screen-admin-detail-header">
@@ -709,7 +725,7 @@ export default function ScreenAdministration({
             <span>
               {binding
                 ? `${binding.domain ?? binding.sourceId} · ${binding.resource}`
-                : "Colección local del dominio"}
+                : t("Colección local del dominio")}
             </span>
           </p>
         </header>
@@ -731,7 +747,10 @@ export default function ScreenAdministration({
                           type="button"
                           variant="ghost"
                           className="screen-admin-option-row"
-                          aria-label={`${option.label} de ${screen.label}`}
+                          aria-label={t("%{v1} de %{v2}", {
+                            v1: option.label,
+                            v2: screen.label,
+                          })}
                           onClick={() => {
                             if (option.view === "screen-operations") {
                               setOperations(true);
@@ -764,7 +783,7 @@ export default function ScreenAdministration({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="left" sideOffset={6}>
-                        Abrir {option.label}
+                        {t("Abrir")} {option.label}
                       </TooltipContent>
                     </Tooltip>
                   );
@@ -774,17 +793,21 @@ export default function ScreenAdministration({
           ))}
         </div>
         {canPublish && (
-          <section aria-label="Acceso público">
+          <section aria-label={t("Acceso público")}>
             <Button
               type="button"
               variant="outline"
               aria-expanded={publicLinks}
               onClick={() => setPublicLinks(!publicLinks)}
             >
-              {publicLinks ? "Ocultar enlaces públicos" : "Enlaces públicos"}
+              {publicLinks
+                ? t("Ocultar enlaces públicos")
+                : t("Enlaces públicos")}
             </Button>
             {publicLinks && (
-              <Suspense fallback={<p role="status">Cargando enlaces…</p>}>
+              <Suspense
+                fallback={<p role="status">{t("Cargando enlaces…")}</p>}
+              >
                 <PublicLinkManager
                   key={`${runtime.domainId}:${screen.name}`}
                   domainId={runtime.domainId!}
@@ -807,7 +830,7 @@ export default function ScreenAdministration({
     );
   }
   return (
-    <section aria-label="Administrar pantallas" className="screen-admin">
+    <section aria-label={t("Administrar pantallas")} className="screen-admin">
       <Tabs
         value={tab ?? currentTab}
         onValueChange={(val) => {
@@ -824,7 +847,7 @@ export default function ScreenAdministration({
               className="gap-2 px-4 py-2 text-sm font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
               <LayoutDashboard className="size-4" aria-hidden="true" />
-              <span>Pantallas</span>
+              <span>{t("Pantallas")}</span>
               {active.length > 0 && (
                 <span className="screen-admin-count text-xs" aria-hidden="true">
                   {active.length}
@@ -836,7 +859,7 @@ export default function ScreenAdministration({
               className="gap-2 px-4 py-2 text-sm font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
               <Boxes className="size-4" aria-hidden="true" />
-              <span>Paquetes y extensiones</span>
+              <span>{t("Paquetes y extensiones")}</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -848,17 +871,17 @@ export default function ScreenAdministration({
           <header className="screen-admin-overview">
             <div className="screen-admin-overview-copy">
               <div className="screen-admin-title-row">
-                <h1>Pantallas</h1>
+                <h1>{t("Pantallas")}</h1>
                 {active.length > 0 && (
                   <span className="screen-admin-count">
-                    {active.length} disponibles
+                    {active.length} {t("disponibles")}
                   </span>
                 )}
               </div>
             </div>
             <div
               className="screen-admin-actions"
-              aria-label="Herramientas del dominio"
+              aria-label={t("Herramientas del dominio")}
             >
               {secondaryDomainActions.length > 0 && (
                 <DropdownMenu>
@@ -867,15 +890,15 @@ export default function ScreenAdministration({
                       type="button"
                       variant="outline"
                       size="icon"
-                      aria-label="Más herramientas"
-                      title="Más herramientas"
+                      aria-label={t("Más herramientas")}
+                      title={t("Más herramientas")}
                     >
                       <MoreHorizontal aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>
-                      Herramientas del dominio
+                      {t("Herramientas del dominio")}
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {secondaryDomainActions.map((action) => {
@@ -897,8 +920,8 @@ export default function ScreenAdministration({
                 <Button
                   type="button"
                   size="icon"
-                  aria-label="Nueva pantalla"
-                  title="Nueva pantalla"
+                  aria-label={t("Nueva pantalla")}
+                  title={t("Nueva pantalla")}
                   onClick={() => onNavigate(selected, primaryDomainAction.view)}
                 >
                   <Plus aria-hidden="true" />
@@ -908,15 +931,15 @@ export default function ScreenAdministration({
           </header>
           <section
             className="screen-admin-list savia-surface-card"
-            aria-label="Pantallas"
+            aria-label={t("Pantallas")}
           >
             <div className="screen-admin-screen-toolbar">
               <div className="screen-admin-menu-filter">
                 <Search aria-hidden="true" />
                 <Input
                   type="search"
-                  aria-label="Filtrar pantallas"
-                  placeholder="Filtrar pantallas"
+                  aria-label={t("Filtrar pantallas")}
+                  placeholder={t("Filtrar pantallas")}
                   value={filter}
                   onChange={(event) => setFilter(event.target.value)}
                 />
@@ -928,7 +951,7 @@ export default function ScreenAdministration({
                     variant="outline"
                     size="icon"
                     className="size-8"
-                    aria-label="Ordenar pantallas de A a Z"
+                    aria-label={t("Ordenar pantallas de A a Z")}
                     disabled={pendingScreen === "__menu__"}
                     onClick={sortMenuAlphabetically}
                   >
@@ -936,7 +959,7 @@ export default function ScreenAdministration({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  Ordenar pantallas de A a Z
+                  {t("Ordenar pantallas de A a Z")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -995,7 +1018,9 @@ export default function ScreenAdministration({
                                 type="button"
                                 className="screen-admin-row-drag"
                                 draggable={pendingScreen !== "__menu__"}
-                                aria-label={`Reordenar sección ${block.label}`}
+                                aria-label={t("Reordenar sección %{v1}", {
+                                  v1: block.label,
+                                })}
                                 onDragStart={(event) => {
                                   event.dataTransfer.setData(
                                     sectionDragType,
@@ -1010,7 +1035,9 @@ export default function ScreenAdministration({
                               </button>
                               <Input
                                 className="screen-admin-menu-section-label"
-                                aria-label={`Nombre de la sección ${block.label}`}
+                                aria-label={t("Nombre de la sección %{v1}", {
+                                  v1: block.label,
+                                })}
                                 defaultValue={block.label}
                                 disabled={pendingScreen === "__menu__"}
                                 onBlur={(event) => {
@@ -1032,7 +1059,9 @@ export default function ScreenAdministration({
                                     variant="ghost"
                                     size="icon"
                                     disabled={pendingScreen === "__menu__"}
-                                    aria-label={`Eliminar sección ${block.label}`}
+                                    aria-label={t("Eliminar sección %{v1}", {
+                                      v1: block.label,
+                                    })}
                                     onClick={() =>
                                       void persistMenuLayout(
                                         removeMenuSection(
@@ -1046,7 +1075,7 @@ export default function ScreenAdministration({
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent side="left" sideOffset={6}>
-                                  Eliminar sección
+                                  {t("Eliminar sección")}
                                 </TooltipContent>
                               </Tooltip>
                             </header>
@@ -1084,7 +1113,7 @@ export default function ScreenAdministration({
                             void handleScreenDrop(sourceName, { kind: "end" });
                           }}
                         >
-                          Suelta aquí para mover al final
+                          {t("Suelta aquí para mover al final")}
                         </div>
                       ) : null}
                     </>
@@ -1100,8 +1129,8 @@ export default function ScreenAdministration({
                   aria-hidden="true"
                 />
                 <div>
-                  <h2>No se encontraron pantallas</h2>
-                  <p>Prueba con otro nombre o limpia el filtro.</p>
+                  <h2>{t("No se encontraron pantallas")}</h2>
+                  <p>{t("Prueba con otro nombre o limpia el filtro.")}</p>
                 </div>
               </div>
             ) : (
@@ -1111,10 +1140,11 @@ export default function ScreenAdministration({
                   aria-hidden="true"
                 />
                 <div>
-                  <h2>Aún no tienes pantallas</h2>
+                  <h2>{t("Aún no tienes pantallas")}</h2>
                   <p>
-                    Crea la primera para definir sus datos, diseño y
-                    operaciones.
+                    {t(
+                      "Crea la primera para definir sus datos, diseño y operaciones.",
+                    )}
                   </p>
                 </div>
                 <Button
@@ -1122,7 +1152,7 @@ export default function ScreenAdministration({
                   onClick={() => onNavigate(selected, "new-object")}
                 >
                   <Plus aria-hidden="true" />
-                  Crear pantalla
+                  {t("Crear pantalla")}
                 </Button>
               </div>
             )}
@@ -1168,6 +1198,7 @@ function PermanentDeleteDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const t = useMessages(studioMessages);
   const hasSource = Boolean(screen.config.studio?.collection);
   const recordCount = screen.count ?? 0;
   const hasRecords = recordCount > 0;
@@ -1181,13 +1212,24 @@ function PermanentDeleteDialog({
     >
       <DialogContent className="screen-admin-delete-dialog">
         <DialogHeader>
-          <DialogTitle>Eliminar pantalla permanentemente</DialogTitle>
+          <DialogTitle>{t("Eliminar pantalla permanentemente")}</DialogTitle>
           <DialogDescription>
             {hasSource
-              ? "Desvincula la fuente de datos antes de eliminar esta pantalla."
+              ? t(
+                  "Desvincula la fuente de datos antes de eliminar esta pantalla.",
+                )
               : hasRecords
-                ? `«${screen.label}» tiene ${recordCount} registro${recordCount === 1 ? "" : "s"}. Se borrará la pantalla, su configuración y todos los datos relacionados.`
-                : `Se borrará «${screen.label}» y su configuración.`}
+                ? t(
+                    "«%{v1}» tiene %{v2} registro%{v3}. Se borrará la pantalla, su configuración y todos los datos relacionados.",
+                    {
+                      v1: screen.label,
+                      v2: recordCount,
+                      v3: recordCount === 1 ? "" : "s",
+                    },
+                  )
+                : t("Se borrará «%{v1}» y su configuración.", {
+                    v1: screen.label,
+                  })}
           </DialogDescription>
         </DialogHeader>
         {hasRecords && !hasSource ? (
@@ -1200,13 +1242,14 @@ function PermanentDeleteDialog({
               }
             />
             <span>
-              Entiendo que también se eliminarán {recordCount} registro
-              {recordCount === 1 ? "" : "s"} y no se puede deshacer
+              {t("Entiendo que también se eliminarán")} {recordCount}{" "}
+              {t("registro")}
+              {recordCount === 1 ? "" : "s"} {t("y no se puede deshacer")}
             </span>
           </label>
         ) : null}
         <p className="screen-admin-delete-warning">
-          Esta acción no se puede deshacer.
+          {t("Esta acción no se puede deshacer.")}
         </p>
         <DialogFooter>
           <Button
@@ -1215,7 +1258,7 @@ function PermanentDeleteDialog({
             disabled={pending}
             onClick={onClose}
           >
-            Cancelar
+            {t("Cancelar")}
           </Button>
           <Button
             type="button"
@@ -1226,10 +1269,10 @@ function PermanentDeleteDialog({
             {pending ? (
               <>
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
-                Eliminando…
+                {t("Eliminando…")}
               </>
             ) : (
-              "Eliminar permanentemente"
+              t("Eliminar permanentemente")
             )}
           </Button>
         </DialogFooter>

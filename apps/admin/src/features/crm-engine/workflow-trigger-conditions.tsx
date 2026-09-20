@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { WorkflowTriggerCondition } from "@savia/crm-shared/workflows";
@@ -11,6 +13,8 @@ function NumericConditionValue({
   value: number;
   onChange: (value: number) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const [text, setText] = useState(() =>
     Number.isFinite(value) ? String(value) : "",
   );
@@ -28,7 +32,7 @@ function NumericConditionValue({
     <Input
       type="text"
       inputMode="decimal"
-      placeholder="Ej. -1.5"
+      placeholder={t("Ej. -1.5")}
       aria-invalid={!Number.isFinite(value)}
       value={text}
       onChange={(event) => {
@@ -38,18 +42,6 @@ function NumericConditionValue({
     />
   );
 }
-
-const operators: Record<WorkflowTriggerCondition["operator"], string> = {
-  eq: "Es igual a",
-  neq: "Es diferente de",
-  gt: "Es mayor que",
-  gte: "Es mayor o igual que",
-  lt: "Es menor que",
-  lte: "Es menor o igual que",
-  contains: "Contiene",
-  empty: "Está vacío",
-  not_empty: "No está vacío",
-};
 
 export function TriggerConditions({
   conditions,
@@ -64,6 +56,19 @@ export function TriggerConditions({
   onChange: (conditions: WorkflowTriggerCondition[]) => void;
   onModeChange: (mode: "all" | "any") => void;
 }) {
+  const t = useMessages(automationMessages);
+  const operators: Record<WorkflowTriggerCondition["operator"], string> = {
+    eq: t("Es igual a"),
+    neq: t("Es diferente de"),
+    gt: t("Es mayor que"),
+    gte: t("Es mayor o igual que"),
+    lt: t("Es menor que"),
+    lte: t("Es menor o igual que"),
+    contains: t("Contiene"),
+    empty: t("Está vacío"),
+    not_empty: t("No está vacío"),
+  };
+
   const update = (index: number, patch: Partial<WorkflowTriggerCondition>) =>
     onChange(
       conditions.map((condition, i) =>
@@ -72,19 +77,19 @@ export function TriggerConditions({
     );
   return (
     <fieldset className="wf-trigger-conditions">
-      <legend>Condiciones para iniciar</legend>
+      <legend>{t("Condiciones para iniciar")}</legend>
       <p className="wf-muted">
-        Sin condiciones, cada evento seleccionado inicia el flujo.
+        {t("Sin condiciones, cada evento seleccionado inicia el flujo.")}
       </p>
       {conditions.length > 0 && (
         <label>
-          Iniciar cuando se cumplan
+          {t("Iniciar cuando se cumplan")}
           <select
             value={mode}
             onChange={(e) => onModeChange(e.target.value as "all" | "any")}
           >
-            <option value="all">Todas las condiciones</option>
-            <option value="any">Cualquiera de las condiciones</option>
+            <option value="all">{t("Todas las condiciones")}</option>
+            <option value="any">{t("Cualquiera de las condiciones")}</option>
           </select>
         </label>
       )}
@@ -95,9 +100,11 @@ export function TriggerConditions({
         const kind = condition.value === null ? "null" : typeof condition.value;
         return (
           <fieldset key={index} className="wf-trigger-condition">
-            <legend>Condición {index + 1}</legend>
+            <legend>
+              {t("Condición")} {index + 1}
+            </legend>
             <label>
-              Campo de condición {index + 1}
+              {t("Campo de condición")} {index + 1}
               <select
                 value={condition.field}
                 onChange={(e) => update(index, { field: e.target.value })}
@@ -110,7 +117,7 @@ export function TriggerConditions({
               </select>
             </label>
             <label>
-              Comparación de condición {index + 1}
+              {t("Comparación de condición")} {index + 1}
               <select
                 value={condition.operator}
                 onChange={(e) => {
@@ -141,7 +148,7 @@ export function TriggerConditions({
               <>
                 {!numeric && condition.operator !== "contains" && (
                   <label>
-                    Tipo de condición {index + 1}
+                    {t("Tipo de condición")} {index + 1}
                     <select
                       value={kind}
                       onChange={(e) =>
@@ -157,16 +164,16 @@ export function TriggerConditions({
                         })
                       }
                     >
-                      <option value="string">Texto</option>
-                      <option value="number">Número</option>
-                      <option value="boolean">Sí / No</option>
-                      <option value="null">Nulo</option>
+                      <option value="string">{t("Texto")}</option>
+                      <option value="number">{t("Número")}</option>
+                      <option value="boolean">{t("Sí / No")}</option>
+                      <option value="null">{t("Nulo")}</option>
                     </select>
                   </label>
                 )}
                 {kind !== "null" && (
                   <label>
-                    Valor de condición {index + 1}
+                    {t("Valor de condición")} {index + 1}
                     {kind === "boolean" ? (
                       <select
                         value={String(condition.value)}
@@ -174,8 +181,8 @@ export function TriggerConditions({
                           update(index, { value: e.target.value === "true" })
                         }
                       >
-                        <option value="true">Sí</option>
-                        <option value="false">No</option>
+                        <option value="true">{t("Sí")}</option>
+                        <option value="false">{t("No")}</option>
                       </select>
                     ) : typeof condition.value === "number" ? (
                       <NumericConditionValue
@@ -202,7 +209,7 @@ export function TriggerConditions({
               variant="ghost"
               onClick={() => onChange(conditions.filter((_, i) => i !== index))}
             >
-              Eliminar condición {index + 1}
+              {t("Eliminar condición")} {index + 1}
             </Button>
           </fieldset>
         );
@@ -218,10 +225,12 @@ export function TriggerConditions({
           ])
         }
       >
-        Añadir condición
+        {t("Añadir condición")}
       </Button>
       {conditions.length >= 20 && (
-        <p className="wf-muted">Máximo de 20 condiciones por disparador.</p>
+        <p className="wf-muted">
+          {t("Máximo de 20 condiciones por disparador.")}
+        </p>
       )}
     </fieldset>
   );

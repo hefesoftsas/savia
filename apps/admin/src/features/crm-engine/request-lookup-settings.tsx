@@ -1,3 +1,5 @@
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 import type { RequestAction } from "@savia/crm-shared/request-page";
 import {
   LOOKUP_PLACEMENT_LABELS,
@@ -23,6 +25,8 @@ export function RequestLookupSettings({
   fields: Record<string, { label?: string }>;
   onChange: (action: RequestAction) => void;
 }) {
+  const t = useMessages(automationMessages);
+
   const source = Object.values(action.input)[0];
   const [outputSearch, setOutputSearch] = useState("");
   const outputPropertiesRef = useRef<HTMLDivElement>(null);
@@ -38,11 +42,12 @@ export function RequestLookupSettings({
     <div className="space-y-6">
       <section className="space-y-3">
         <div className="studio-control-label-row">
-          <h4 className="font-semibold">Cuándo se consulta</h4>
-          <StudioHelpTooltip label="Ayuda sobre los disparadores">
-            Campo disparador: {fields[source]?.label ?? source}. El botón
-            permite consultar manualmente; los eventos siguientes agregan
-            disparadores automáticos.
+          <h4 className="font-semibold">{t("Cuándo se consulta")}</h4>
+          <StudioHelpTooltip label={t("Ayuda sobre los disparadores")}>
+            {t("Campo disparador:")} {fields[source]?.label ?? source}
+            {t(
+              ". El botón permite consultar manualmente; los eventos siguientes agregan disparadores automáticos.",
+            )}
           </StudioHelpTooltip>
         </div>
         <LookupTriggerEventTags
@@ -76,11 +81,11 @@ export function RequestLookupSettings({
                   })
                 }
               />
-              Debounce
+              {t("Debounce")}
             </label>
             {action.eventDebounce && (
               <label className="studio-control">
-                <span>Espera del debounce (ms)</span>
+                <span>{t("Espera del debounce (ms)")}</span>
                 <Input
                   type="number"
                   min={0}
@@ -100,10 +105,10 @@ export function RequestLookupSettings({
           </>
         )}
         <details>
-          <summary>Botón del campo</summary>
+          <summary>{t("Botón del campo")}</summary>
           <div className="space-y-3 mt-3">
             <label className="studio-control">
-              <span>Estilo del botón</span>
+              <span>{t("Estilo del botón")}</span>
               <select
                 value={action.buttonStyle ?? "text"}
                 onChange={(event) =>
@@ -117,19 +122,19 @@ export function RequestLookupSettings({
                   })
                 }
               >
-                <option value="text">Texto</option>
-                <option value="icon">Icono</option>
+                <option value="text">{t("Texto")}</option>
+                <option value="icon">{t("Icono")}</option>
               </select>
             </label>
             {action.buttonStyle === "icon" && (
               <LookupIconPicker
-                aria-label="Icono del botón"
+                aria-label={t("Icono del botón")}
                 value={action.icon ?? "search"}
                 onChange={(icon) => onChange({ ...action, icon })}
               />
             )}
             <label className="studio-control">
-              <span>Posición del botón</span>
+              <span>{t("Posición del botón")}</span>
               <select
                 value={action.placement ?? "inline-end"}
                 onChange={(event) =>
@@ -153,10 +158,13 @@ export function RequestLookupSettings({
       </section>
       <section className="space-y-3">
         <div className="studio-control-label-row">
-          <h4 className="font-semibold">Respuesta → Campos que se completan</h4>
-          <StudioHelpTooltip label="Ayuda sobre los campos de salida">
-            Selecciona cada campo y escribe la ruta de su valor en la respuesta,
-            por ejemplo /data/vehicle/year.
+          <h4 className="font-semibold">
+            {t("Respuesta → Campos que se completan")}
+          </h4>
+          <StudioHelpTooltip label={t("Ayuda sobre los campos de salida")}>
+            {t(
+              "Selecciona cada campo y escribe la ruta de su valor en la respuesta, por ejemplo /data/vehicle/year.",
+            )}
           </StudioHelpTooltip>
         </div>
         {!!Object.keys(action.output).length && (
@@ -165,12 +173,12 @@ export function RequestLookupSettings({
             onQueryChange={setOutputSearch}
             matchCount={outputMatchCount}
             filtering={outputFiltering}
-            ariaLabel="Buscar campos de salida"
+            ariaLabel={t("Buscar campos de salida")}
           />
         )}
         {outputFilterEmpty ? (
           <p className="request-mapping-empty" role="status">
-            No hay campos de salida que coincidan con esta búsqueda.
+            {t("No hay campos de salida que coincidan con esta búsqueda.")}
           </p>
         ) : null}
         <div ref={outputPropertiesRef} className="request-lookup-output-list">
@@ -192,9 +200,9 @@ export function RequestLookupSettings({
                 )}
               >
                 <label className="studio-control">
-                  <span>Campo de destino</span>
+                  <span>{t("Campo de destino")}</span>
                   <select
-                    aria-label={`Destino ${field}`}
+                    aria-label={t("Destino %{field}", { field: field })}
                     value={field}
                     onChange={(event) => {
                       const next = { ...action.output };
@@ -205,7 +213,7 @@ export function RequestLookupSettings({
                   >
                     {!fields[field] && (
                       <option value={field}>
-                        Campo no disponible: {field}
+                        {t("Campo no disponible:")} {field}
                       </option>
                     )}
                     {Object.entries(fields)
@@ -220,9 +228,9 @@ export function RequestLookupSettings({
                   </select>
                 </label>
                 <label className="studio-control">
-                  <span>Ruta en la respuesta</span>
+                  <span>{t("Ruta en la respuesta")}</span>
                   <Input
-                    aria-label={`Ruta para ${field}`}
+                    aria-label={t("Ruta para %{field}", { field: field })}
                     value={pointer}
                     aria-invalid={!/^\/[a-zA-Z0-9_/]+$/.test(pointer)}
                     onChange={(event) =>
@@ -238,7 +246,7 @@ export function RequestLookupSettings({
                 </label>
                 {!/^\/[a-zA-Z0-9_/]+$/.test(pointer) && (
                   <p role="alert" className="text-sm text-destructive">
-                    Usa una ruta como /data/vehicle/year.
+                    {t("Usa una ruta como /data/vehicle/year.")}
                   </p>
                 )}
                 <Button
@@ -251,7 +259,7 @@ export function RequestLookupSettings({
                     onChange({ ...action, output: next });
                   }}
                 >
-                  Quitar asignación
+                  {t("Quitar asignación")}
                 </Button>
               </div>
             </details>
@@ -275,7 +283,7 @@ export function RequestLookupSettings({
               });
           }}
         >
-          Agregar campo de salida
+          {t("Agregar campo de salida")}
         </Button>
       </section>
     </div>

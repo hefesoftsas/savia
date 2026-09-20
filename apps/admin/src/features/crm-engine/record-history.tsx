@@ -1,3 +1,6 @@
+import { intlLocale, useAppLocale } from "@/i18n/core";
+import { useMessages } from "@/i18n/core";
+import { recordsMessages } from "@/i18n/locales/records";
 import { RecordHistoryRestore } from "./record-history-restore";
 import { collectionCapabilities } from "./collection-capabilities";
 import { useEffect, useState } from "react";
@@ -15,22 +18,25 @@ const actions = {
   updated: "Registro actualizado",
   deleted: "Registro eliminado",
   restored: "Registro restaurado",
-};
+} as const;
 const actors = {
   user: "Usuario",
   workflow: "Flujo",
   "public-form": "Formulario público",
   system: "Sistema",
-};
-const value = (v: unknown) =>
+} as const;
+const value = (
+  v: unknown,
+  t: ReturnType<typeof useMessages<typeof recordsMessages>>,
+) =>
   v === undefined
-    ? "No disponible"
+    ? t("No disponible")
     : v === null
-      ? "Sin valor"
+      ? t("Sin valor")
       : typeof v === "boolean"
         ? v
-          ? "Sí"
-          : "No"
+          ? t("Sí")
+          : t("No")
         : String(v);
 export default function RecordHistory(props: {
   object: CrmObject;
@@ -53,6 +59,10 @@ function HistorySession({
   recordId: string;
   onRestored?: () => void;
 }) {
+  const uiLocale = intlLocale(useAppLocale());
+
+  const t = useMessages(recordsMessages);
+
   const [restoring, setRestoring] = useState(false);
   const [restored, setRestored] = useState(false);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
@@ -116,9 +126,11 @@ function HistorySession({
     setRefresh((v) => v + 1);
   };
   return (
-    <section aria-label="Historial del registro" className="grid gap-4">
+    <section aria-label={t("Historial del registro")} className="grid gap-4">
       {restored && (
-        <p role="status">Campos restaurados. Se guardó una nueva edición.</p>
+        <p role="status">
+          {t("Campos restaurados. Se guardó una nueva edición.")}
+        </p>
       )}
       {restoring && selected && (
         <RecordHistoryRestore
@@ -135,48 +147,54 @@ function HistorySession({
       )}
       <div className="op-section-title">
         <div>
-          <h3>Historial de cambios</h3>
-          <p>Valores de los campos seleccionados al guardar cada cambio.</p>
+          <h3>{t("Historial de cambios")}</h3>
+          <p>
+            {t("Valores de los campos seleccionados al guardar cada cambio.")}
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={newest}>
-          Actualizar historial
+          {t("Actualizar historial")}
         </Button>
       </div>
       {error ? (
         <div role="alert">
           <p>{error}</p>
           <Button variant="outline" onClick={newest}>
-            Reintentar
+            {t("Reintentar")}
           </Button>
         </div>
       ) : !page ? (
-        <p role="status">Cargando historial…</p>
+        <p role="status">{t("Cargando historial…")}</p>
       ) : (
         <>
           <p className="op-muted">
-            Conservación para nuevos cambios: {page.retentionDays} días.{" "}
+            {t("Conservación para nuevos cambios:")} {page.retentionDays}{" "}
+            {t("días.")}{" "}
             {!page.enabled &&
-              "La captura está desactivada; los cambios guardados se conservan hasta su vencimiento."}
+              t(
+                "La captura está desactivada; los cambios guardados se conservan hasta su vencimiento.",
+              )}
           </p>
           {!page.data.length ? (
             <div className="op-empty">
-              No hay cambios conservados. El seguimiento empieza al activarlo y
-              no incluye cambios anteriores.
+              {t(
+                "No hay cambios conservados. El seguimiento empieza al activarlo y no incluye cambios anteriores.",
+              )}
             </div>
           ) : (
             <ol className="op-timeline">
               {page.data.map((entry) => (
                 <li key={entry.version}>
                   <div>
-                    <strong>{actions[entry.action]}</strong>
+                    <strong>{t(actions[entry.action])}</strong>
                     <time dateTime={entry.createdAt}>
-                      {new Date(entry.createdAt).toLocaleString("es-CO")}
+                      {new Date(entry.createdAt).toLocaleString(uiLocale)}
                     </time>
                   </div>
                   <p>
-                    {actors[entry.actor.kind]} ·{" "}
-                    {entry.actor.id ?? "Autor no disponible"} · Versión{" "}
-                    {entry.version}
+                    {t(actors[entry.actor.kind])} ·{" "}
+                    {entry.actor.id ?? t("Autor no disponible")}{" "}
+                    {t("· Versión")} {entry.version}
                   </p>
                   <p className="break-words">
                     {entry.fields.length
@@ -185,7 +203,7 @@ function HistorySession({
                             (name) => object.config.fields[name]?.label ?? name,
                           )
                           .join(", ")
-                      : "Sin cambios de campos visibles."}
+                      : t("Sin cambios de campos visibles.")}
                   </p>
                   <Button
                     size="sm"
@@ -199,19 +217,21 @@ function HistorySession({
                       );
                     }}
                   >
-                    Ver cambios · versión {entry.version}
+                    {t("Ver cambios · versión")} {entry.version}
                   </Button>
                   {selected?.version === entry.version && (
                     <section
                       className="mt-3 grid gap-3"
-                      aria-label={`Cambios de versión ${entry.version}`}
+                      aria-label={t("Cambios de versión %{p0}", {
+                        p0: entry.version,
+                      })}
                     >
                       {detail && collectionCapabilities(object).update && (
                         <Button
                           variant="outline"
                           onClick={() => setRestoring(true)}
                         >
-                          Restaurar campos
+                          {t("Restaurar campos")}
                         </Button>
                       )}
                       {detailError ? (
@@ -221,14 +241,16 @@ function HistorySession({
                             variant="outline"
                             onClick={() => setDetailRetry((v) => v + 1)}
                           >
-                            Reintentar detalle
+                            {t("Reintentar detalle")}
                           </Button>
                         </div>
                       ) : !detail ? (
-                        <p role="status">Cargando cambios…</p>
+                        <p role="status">{t("Cargando cambios…")}</p>
                       ) : !Object.keys(detail.changes).length ? (
                         <p>
-                          No hay valores de campos disponibles para este evento.
+                          {t(
+                            "No hay valores de campos disponibles para este evento.",
+                          )}
                         </p>
                       ) : (
                         Object.entries(detail.changes).map(([name, change]) => (
@@ -239,26 +261,30 @@ function HistorySession({
                             <dl className="grid gap-3 sm:grid-cols-2">
                               <div className="min-w-0">
                                 <dt className="text-xs text-muted-foreground">
-                                  Antes
+                                  {t("Antes")}
                                 </dt>
                                 <dd className="whitespace-pre-wrap break-words">
-                                  {value(change.before)}
+                                  {value(change.before, t)}
                                   {change.beforeTruncated && (
                                     <span className="mt-1 block text-xs text-muted-foreground">
-                                      Texto truncado (máximo 2048 caracteres)
+                                      {t(
+                                        "Texto truncado (máximo 2048 caracteres)",
+                                      )}
                                     </span>
                                   )}
                                 </dd>
                               </div>
                               <div className="min-w-0">
                                 <dt className="text-xs text-muted-foreground">
-                                  Después
+                                  {t("Después")}
                                 </dt>
                                 <dd className="whitespace-pre-wrap break-words">
-                                  {value(change.after)}
+                                  {value(change.after, t)}
                                   {change.afterTruncated && (
                                     <span className="mt-1 block text-xs text-muted-foreground">
-                                      Texto truncado (máximo 2048 caracteres)
+                                      {t(
+                                        "Texto truncado (máximo 2048 caracteres)",
+                                      )}
                                     </span>
                                   )}
                                 </dd>
@@ -274,7 +300,7 @@ function HistorySession({
             </ol>
           )}
           <nav
-            aria-label="Páginas del historial"
+            aria-label={t("Páginas del historial")}
             className="flex flex-wrap items-center justify-between gap-2"
           >
             <Button
@@ -285,9 +311,11 @@ function HistorySession({
                 setCursors((v) => v.slice(0, -1));
               }}
             >
-              Más recientes
+              {t("Más recientes")}
             </Button>
-            <span className="op-muted">Página {cursors.length}</span>
+            <span className="op-muted">
+              {t("Página")} {cursors.length}
+            </span>
             <Button
               variant="outline"
               disabled={!page.nextCursor}
@@ -298,7 +326,7 @@ function HistorySession({
                 setCursors((v) => [...v, page.nextCursor]);
               }}
             >
-              Anteriores
+              {t("Anteriores")}
             </Button>
           </nav>
         </>
