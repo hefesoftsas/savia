@@ -1,8 +1,22 @@
 import { useEffect, useState } from "react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock,
+  Cloud,
+  CloudOff,
+  LoaderCircle,
+  Lock,
+  RefreshCw,
+  WifiOff,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useOnlineStatus } from "@/offline/use-online-status";
 import type { LocalWorkspace } from "./workspaces";
 import type { Mutation, LocalStatus } from "./contracts";
-import { useOnlineStatus } from "@/offline/use-online-status";
+
+type SyncTone = "ok" | "error" | "warn" | "sync" | "neutral";
 
 export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
   const [status, setStatus] = useState<LocalStatus>({
@@ -85,63 +99,146 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
       setBusy(false);
     }
   };
+  const attention = (status.conflicts ?? 0) + (status.errors ?? 0);
+  const statusLabel = readError
+    ? "Estado local no disponible"
+    : !loaded
+      ? "Comprobando estado local…"
+      : status.authorizationError
+        ? "Acceso revocado · vuelve a iniciar sesión"
+        : status.syncing
+          ? "Sincronizando…"
+          : !online
+            ? "Sin conexión · los cambios locales se enviarán al reconectar"
+            : status.syncError
+              ? "Sincronización interrumpida"
+              : attention > 0
+                ? "Hay cambios que requieren atención"
+                : !hasLocal
+                  ? "Colecciones remotas · requieren conexión"
+                  : !ready
+                    ? "Preparando datos locales"
+                    : "Datos locales disponibles";
+  const tone: SyncTone =
+    readError || status.authorizationError || status.syncError || attention > 0
+      ? "error"
+      : status.syncing
+        ? "sync"
+        : !online
+          ? "warn"
+          : !loaded || !hasLocal || !ready
+            ? "neutral"
+            : "ok";
+  const StatusIcon = readError
+    ? CloudOff
+    : !loaded
+      ? LoaderCircle
+      : status.authorizationError
+        ? Lock
+        : status.syncing
+          ? LoaderCircle
+          : !online
+            ? WifiOff
+            : status.syncError || attention > 0
+              ? CircleAlert
+              : !hasLocal
+                ? Cloud
+                : !ready
+                  ? LoaderCircle
+                  : CheckCircle2;
+  const statusSpin = StatusIcon === LoaderCircle;
+  const syncLabel =
+    busy || status.syncing
+      ? "Sincronizando…"
+      : status.syncError || readError
+        ? "Reintentar sincronización"
+        : "Sincronizar";
+  const lastSyncedLabel =
+    loaded && status.lastSyncedAt
+      ? `Última comprobación: ${new Date(status.lastSyncedAt).toLocaleString()}`
+      : null;
   return (
     <section
       aria-label="Sincronización local"
-      className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-sm"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 bg-muted/20 px-3 py-1.5"
     >
-      <span role="status" aria-live="polite" className="text-muted-foreground">
-        {readError
-          ? "Estado local no disponible"
-          : !loaded
-            ? "Comprobando estado local…"
-            : status.authorizationError
-              ? "Acceso revocado · vuelve a iniciar sesión"
-              : status.syncing
-                ? "Sincronizando…"
-                : !online
-                  ? "Sin conexión · los cambios locales se enviarán al reconectar"
-                  : status.syncError
-                    ? "Sincronización interrumpida"
-                    : status.conflicts + status.errors > 0
-                      ? "Hay cambios que requieren atención"
-                      : !hasLocal
-                        ? "Colecciones remotas · requieren conexión"
-                        : !ready
-                          ? "Preparando datos locales"
-                          : "Datos locales disponibles"}
+      <span
+        role="status"
+        aria-live="polite"
+        aria-label={statusLabel}
+        title={statusLabel}
+        className={cn(
+          "inline-flex size-7 items-center justify-center rounded-full border",
+          tone === "ok" &&
+            "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+          tone === "error" &&
+            "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400",
+          tone === "warn" &&
+            "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+          tone === "sync" &&
+            "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400",
+          tone === "neutral" &&
+            "border-border bg-muted/40 text-muted-foreground",
+        )}
+      >
+        <StatusIcon
+          aria-hidden
+          className={cn("size-4", statusSpin && "animate-spin")}
+        />
+        <span className="sr-only">{statusLabel}</span>
       </span>
       {loaded && status.pending > 0 && (
-        <span>
+        <span
+          title={
+            status.pending === 1
+              ? "1 cambio pendiente de envío"
+              : `${status.pending} cambios pendientes de envío`
+          }
+          className="inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+        >
           {status.pending === 1
             ? "1 cambio pendiente"
             : `${status.pending} cambios pendientes`}
         </span>
       )}
-      {loaded && status.lastSyncedAt && (
-        <span className="text-muted-foreground">
-          Última comprobación:{" "}
-          <time dateTime={new Date(status.lastSyncedAt).toISOString()}>
+      {lastSyncedLabel && status.lastSyncedAt && (
+        <span
+          title={lastSyncedLabel}
+          className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground/80"
+        >
+          <Clock aria-hidden className="size-3.5 shrink-0" />
+          <time
+            dateTime={new Date(status.lastSyncedAt).toISOString()}
+            className="truncate tabular-nums"
+          >
             {new Date(status.lastSyncedAt).toLocaleString()}
           </time>
+          <span className="sr-only">{lastSyncedLabel}</span>
         </span>
       )}
       <Button
-        size="sm"
+        size="icon"
         variant="ghost"
+        aria-label={syncLabel}
+        title={syncLabel}
         disabled={busy || Boolean(status.syncing) || !online}
         onClick={() => void act(workspace.syncNow, false)}
+        className="size-7"
       >
-        {busy || status.syncing
-          ? "Sincronizando…"
-          : status.syncError || readError
-            ? "Reintentar sincronización"
-            : "Sincronizar"}
+        {busy || status.syncing ? (
+          <LoaderCircle aria-hidden className="size-4 animate-spin" />
+        ) : (
+          <RefreshCw aria-hidden className="size-4" />
+        )}
       </Button>
-      {status.conflicts + status.errors > 0 && (
+      {attention > 0 && (
         <details className="w-full">
-          <summary className="cursor-pointer text-destructive">
-            {status.conflicts + status.errors} cambios requieren atención
+          <summary
+            title={`${attention} cambios requieren atención`}
+            className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400 [&::-webkit-details-marker]:hidden"
+          >
+            <CircleAlert aria-hidden className="size-3.5" />
+            {attention} requieren atención
           </summary>
           <ul className="grid gap-3 py-3">
             {problems.map((op) => (
@@ -274,17 +371,29 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
         </details>
       )}
       {readError && (
-        <p role="alert" className="w-full text-destructive">
+        <p
+          role="alert"
+          className="inline-flex w-full items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
+        >
+          <CircleAlert aria-hidden className="size-3.5 shrink-0" />
           {readError}
         </p>
       )}
       {status.syncError && (
-        <p role="alert" className="w-full text-destructive">
+        <p
+          role="alert"
+          className="inline-flex w-full items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
+        >
+          <CircleAlert aria-hidden className="size-3.5 shrink-0" />
           {status.syncError}
         </p>
       )}
       {error && (
-        <p role="alert" className="w-full text-destructive">
+        <p
+          role="alert"
+          className="inline-flex w-full items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
+        >
+          <CircleAlert aria-hidden className="size-3.5 shrink-0" />
           {error}
         </p>
       )}

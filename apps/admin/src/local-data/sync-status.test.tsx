@@ -215,6 +215,27 @@ it("retries a synchronization failure once without scheduling a second pass", as
   await waitFor(() => expect(workspace.syncNow).toHaveBeenCalledOnce());
   expect(workspace.requestSync).not.toHaveBeenCalled();
 });
+it("renders a green icon-only status when local data is available", async () => {
+  render(<LocalSyncStatus workspace={statusWorkspace({})} />);
+  const status = await screen.findByRole("status", {
+    name: "Datos locales disponibles",
+  });
+  expect(status.className).toContain("border-emerald-500/30");
+  expect(status.getAttribute("title")).toBe("Datos locales disponibles");
+  const sync = screen.getByRole("button", { name: "Sincronizar" });
+  expect(sync.getAttribute("title")).toBe("Sincronizar");
+  expect(sync.textContent).toBe("");
+});
+it("renders a red icon-only status on synchronization failure", async () => {
+  render(<LocalSyncStatus workspace={statusWorkspace({ syncError: "x" })} />);
+  const status = await screen.findByRole("status", {
+    name: "Sincronización interrumpida",
+  });
+  expect(status.className).toContain("border-red-500/30");
+  expect(
+    screen.getByRole("button", { name: "Reintentar sincronización" }),
+  ).toBeEnabled();
+});
 function statusWorkspace(extra: Record<string, unknown>) {
   return {
     store: {
