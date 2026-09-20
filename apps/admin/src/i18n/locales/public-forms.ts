@@ -271,6 +271,28 @@ export const publicFormsMessages = {
   "Copiar enlace": ["Copiar enlace", "Copy link", "Copiar link"],
   "Revocando…": ["Revocando…", "Revoking…", "Revogando…"],
   "Revocar enlace": ["Revocar enlace", "Revoke link", "Revogar link"],
+  "Mostrar QR": ["Mostrar QR", "Show QR", "Mostrar QR"],
+  "Ocultar QR": ["Ocultar QR", "Hide QR", "Ocultar QR"],
+  "Código QR del enlace público": [
+    "Código QR del enlace público",
+    "Public link QR code",
+    "Código QR do link público",
+  ],
+  "Descargar QR en SVG": [
+    "Descargar QR en SVG",
+    "Download QR as SVG",
+    "Baixar QR em SVG",
+  ],
+  "Descargar QR en PNG": [
+    "Descargar QR en PNG",
+    "Download QR as PNG",
+    "Baixar QR em PNG",
+  ],
+  "No se pudo descargar el código QR. Inténtalo de nuevo.": [
+    "No se pudo descargar el código QR. Inténtalo de nuevo.",
+    "Unable to download the QR code. Try again.",
+    "Não foi possível baixar o código QR. Tente novamente.",
+  ],
   "Aún no hay enlaces publicados para este formulario.": [
     "Aún no hay enlaces publicados para este formulario.",
     "No links have been published for this form yet.",

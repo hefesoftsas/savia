@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PublicLinkQr } from "./public-link-qr";
 import "./public-forms.css";
 
 const linkSchema = z.object({
@@ -55,6 +56,7 @@ export function PublicLinkManager({
   const [dailyLimit, setDailyLimit] = useState(25);
   const [expiresAt, setExpiresAt] = useState("");
   const [returnResult, setReturnResult] = useState(false);
+  const [qrVisible, setQrVisible] = useState<Record<string, boolean>>({});
   const busy = useRef(false);
   const generation = useRef(0);
   useEffect(() => {
@@ -172,6 +174,9 @@ export function PublicLinkManager({
       );
     }
   }
+  function toggleQr(linkId: string) {
+    setQrVisible((previous) => ({ ...previous, [linkId]: !previous[linkId] }));
+  }
   return (
     <section
       className="public-link-manager"
@@ -266,6 +271,9 @@ export function PublicLinkManager({
               !!link.expiresAt &&
               new Date(link.expiresAt).getTime() <= Date.now();
             const unavailable = !!link.revokedAt || expired;
+            const url = linkUrl(link);
+            const showingQr = !!qrVisible[link.id] && !unavailable && !!url;
+            const fileBase = `form-${(link.token || link.id).slice(0, 12).replace(/[^A-Za-z0-9_-]+/g, "-")}`;
             return (
               <li key={link.id}>
                 <div className="public-link-details">
@@ -291,7 +299,7 @@ export function PublicLinkManager({
                 </div>
                 <Input
                   aria-label={t("Dirección del enlace público")}
-                  value={linkUrl(link)}
+                  value={url}
                   readOnly
                   onFocus={(event) => event.target.select()}
                 />
@@ -306,6 +314,15 @@ export function PublicLinkManager({
                   </Button>
                   <Button
                     type="button"
+                    variant="outline"
+                    onClick={() => toggleQr(link.id)}
+                    disabled={unavailable || !url}
+                    aria-expanded={showingQr}
+                  >
+                    {showingQr ? t("Ocultar QR") : t("Mostrar QR")}
+                  </Button>
+                  <Button
+                    type="button"
                     variant="ghost"
                     onClick={() => void revoke(link)}
                     disabled={unavailable || !!pending}
@@ -315,6 +332,7 @@ export function PublicLinkManager({
                       : t("Revocar enlace")}
                   </Button>
                 </div>
+                {showingQr && <PublicLinkQr url={url} fileBase={fileBase} />}
               </li>
             );
           })}
