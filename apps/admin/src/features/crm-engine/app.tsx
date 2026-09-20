@@ -1,5 +1,6 @@
 import { ExtensionLocaleBridge } from "@/i18n/app-locale-provider";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { defaultAppLocale, isAppLocale } from "@/i18n/app-locale";
 import { automationMessages } from "@/i18n/locales/automation";
 import {
   canDuplicateRecord,
@@ -27,6 +28,7 @@ import {
   CoreAdminContext,
   ListBase,
   useListContext,
+  useStore,
   memoryStore,
 } from "ra-core";
 import { DataTable } from "@/components/admin/data-table";
@@ -1779,7 +1781,13 @@ export default function Root({
   search?: string;
 } = {}) {
   const t = useMessages(automationMessages);
-  const outerLocale = useAppLocale();
+  // Read the outer admin store directly: useAppLocale() falls back to the
+  // default ra-core I18nContext ("en") when there is no outer provider
+  // (unit tests, standalone Root), which would force English incorrectly.
+  const [outerLocaleRaw] = useStore<string>("locale", defaultAppLocale);
+  const outerLocale = isAppLocale(outerLocaleRaw)
+    ? outerLocaleRaw
+    : defaultAppLocale;
 
   const [queryClient] = useState(
     () =>
