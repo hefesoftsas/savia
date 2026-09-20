@@ -493,6 +493,69 @@ it("returns only opted-in safe quote results and coalesces simultaneous duplicat
   });
   expect((await privateResponse.json()) as any).not.toHaveProperty("result");
 });
+it("returns the public insurance quote presentation", async () => {
+  const frozenSnapshot = {
+    version: 1,
+    publicationId: crypto.randomUUID(),
+    tenant: "domain:demo",
+    domainId: "demo",
+    objectName: "cotizador_por_pasos",
+    extensionId: "insurance.quotes",
+    extensionVersion: "1.2.0",
+    actionId: "quote",
+    mode: "live",
+    connectionId: "simulation",
+    settingsVersion: 1,
+    products: [{ flowId: "sbs-producto-8" }],
+  };
+  const presentation = {
+    renderer: "insurance-quote-wizard",
+    entry: "wizard",
+    products: [{ flowId: "sbs-producto-8", label: "SBS · Autos Producto 8" }],
+  };
+  const presentationFor = vi.fn(async () => presentation);
+  const quote = {
+    publish: async () => ({
+      fields: [
+        { name: "name", label: "Name", type: "text" as const, required: true },
+      ],
+      snapshot: frozenSnapshot,
+    }),
+    validate: async ({ values }: any) => values,
+    execute: async () => undefined,
+    assertAvailable: async () => {},
+    presentation: presentationFor,
+  };
+  const instance = app({ quote });
+  const name = await object();
+  const link = await publish(instance, name, {
+    kind: "quote",
+    returnResult: false,
+  });
+  const response = await instance.request(
+    "https://api.test/api/public/forms/" + link.token,
+  );
+  expect(response.status).toBe(200);
+  const definition = (await response.json()) as any;
+  expect(definition.presentation).toEqual(presentation);
+  expect(presentationFor).toHaveBeenCalledWith({
+    objectName: expect.any(String),
+    snapshot: expect.objectContaining({ products: expect.any(Array) }),
+  });
+  const serialized = JSON.stringify(definition);
+  expect(serialized).not.toMatch(/snapshot|tenant_id|tenantId|extensionVersion|actionId|connectionId|providerPayload/);
+  expect(definition).not.toHaveProperty("snapshot");
+  // Record links remain generic.
+  const recordInstance = app();
+  const recordName = await object();
+  const recordLink = await publish(recordInstance, recordName);
+  const recordDefinition = (await (
+    await recordInstance.request(
+      "https://api.test/api/public/forms/" + recordLink.token,
+    )
+  ).json()) as any;
+  expect(recordDefinition).not.toHaveProperty("presentation");
+});
 it("closes links when their domain disappears and rejects metadata-only remote collections", async () => {
   const instance = app();
   const name = await object(undefined, "retired");

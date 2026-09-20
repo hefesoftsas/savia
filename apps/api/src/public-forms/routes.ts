@@ -173,16 +173,24 @@ export function registerPublicFormRoutes(
     async (c) => {
       const config = captchaConfiguration(options);
       const row = await activePublicForm(db, c.req.valid("param").token);
+      let presentation: unknown;
       if (row.kind === "quote") {
         if (!options.quote)
           throw new HTTPException(503, { message: "Public form unavailable." });
+        const snapshot = JSON.parse(row.snapshot);
         await options.quote.assertAvailable?.({
           db,
           tenant: row.tenant_id,
           domainId: row.domain_id,
           objectName: row.object_name,
-          snapshot: JSON.parse(row.snapshot),
+          snapshot,
         });
+        if (options.quote.presentation) {
+          presentation = await options.quote.presentation({
+            objectName: row.object_name,
+            snapshot,
+          });
+        }
       }
       return c.json(
         {
@@ -191,6 +199,7 @@ export function registerPublicFormRoutes(
           ...(row.description ? { description: row.description } : {}),
           kind: row.kind,
           fields: JSON.parse(row.fields),
+          ...(presentation !== undefined ? { presentation } : {}),
           captchaProvider: config.provider,
           ...(config.provider === "turnstile"
             ? { siteKey: config.siteKey }

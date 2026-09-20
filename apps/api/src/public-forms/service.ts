@@ -16,6 +16,12 @@ export type PublicFormField = {
   required: boolean;
   options?: { value: string; label: string }[];
 };
+export type PublicQuotePresentation = {
+  renderer: "insurance-quote-wizard";
+  entry: "wizard" | "direct";
+  products: Array<{ flowId: string; label: string }>;
+};
+
 export interface PublicQuoteAdapter {
   publish(input: {
     db: D1Database;
@@ -44,6 +50,10 @@ export interface PublicQuoteAdapter {
     objectName: string;
     snapshot: unknown;
   }): Promise<void>;
+  presentation?(input: {
+    objectName: string;
+    snapshot: unknown;
+  }): Promise<PublicQuotePresentation>;
 }
 export type PublicFormOptions = CaptchaOptions & {
   quote?: PublicQuoteAdapter;
