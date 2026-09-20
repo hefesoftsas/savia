@@ -1,3 +1,4 @@
+import { ExternalErrorNotice } from "./external-error-notice";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { lazy, Suspense, useMemo, useState } from "react";
@@ -712,7 +713,7 @@ function Execution({
                 ? t(" · respuesta recuperada por idempotencia")
                 : ""}
             </p>
-            {result.run.error && <p role="alert">{result.run.error}</p>}
+            {result.run.error && <ExternalErrorNotice error={{message:result.run.error, status:result.run.httpStatus}} />}
             <pre>{JSON.stringify(result.data, null, 2)}</pre>
             <Button
               variant="outline"

@@ -1,3 +1,4 @@
+import { LocalizedContentEditor } from "./localized-content-editor";
 import { useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
 import { useEffect, useState, type ReactNode } from "react";
@@ -34,14 +35,16 @@ export function FormHtmlEditorModal({
 }) {
   const t = useMessages(recordsMessages);
 
+  const [translations, setTranslations] = useState(value.translations);
   const [html, setHtml] = useState(value.html);
   const [script, setScript] = useState(value.script ?? "");
 
   useEffect(() => {
     if (!open) return;
     setHtml(value.html);
+    setTranslations(value.translations);
     setScript(value.script ?? "");
-  }, [open, value.html, value.script]);
+  }, [open, value.html, value.script, value.translations]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -61,6 +64,10 @@ export function FormHtmlEditorModal({
                 placeholder={"<div><p>{{values.nombre}}</p></div>"}
               />
             </Control>
+            <LocalizedContentEditor
+              value={translations}
+              onChange={setTranslations}
+            />
             <Control label={t("JavaScript (opcional)")}>
               <MonacoCodeEditor
                 ariaLabel="Editor JavaScript"
@@ -88,6 +95,7 @@ export function FormHtmlEditorModal({
             onClick={() => {
               onSave({
                 html,
+                translations,
                 script: script.trim() ? script : undefined,
               });
               onOpenChange(false);

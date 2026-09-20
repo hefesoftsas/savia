@@ -6,6 +6,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Cartera",
   description: "Cobros, saldos y seguimiento de cuentas por cobrar.",
+  labels: {"en": "Receivables", "pt": "Contas a receber"},
+  descriptions: {"en": "Collections, balances and accounts receivable tracking.", "pt": "Cobranças, saldos e acompanhamento de contas a receber."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

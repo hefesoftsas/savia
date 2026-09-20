@@ -1,3 +1,8 @@
+import {
+  translatePluginMessage,
+  type PluginLocale,
+  type PluginMessages,
+} from "./plugin-localization";
 import { z } from "zod";
 import type { CrmObject } from "./metadata";
 
@@ -6,6 +11,14 @@ export const FORM_HTML_TYPE = "FormHtml" as const;
 export const formHtmlConfigSchema = z
   .object({
     html: z.string().max(100_000).default(""),
+    translations: z
+      .object({
+        es: z.string().max(100_000).optional(),
+        en: z.string().max(100_000).optional(),
+        pt: z.string().max(100_000).optional(),
+      })
+      .strict()
+      .optional(),
     script: z.string().max(100_000).optional(),
   })
   .strict();
@@ -19,6 +32,12 @@ export type FormHtmlTemplateScope = {
 };
 
 export type FormHtmlRuntimeContext = {
+  locale: PluginLocale;
+  t: (
+    catalog: PluginMessages,
+    key: string,
+    params?: Record<string, string | number>,
+  ) => string;
   values: Readonly<Record<string, unknown>>;
   getValue: (name: string) => unknown;
   setValue: (name: string, value: unknown) => void;
@@ -126,12 +145,14 @@ export function buildFormHtmlRuntimeContext({
   object,
   recordId,
   container,
+  locale = "es",
 }: {
   values: Record<string, unknown>;
   setValue: (name: string, value: unknown) => void;
   object?: CrmObject;
   recordId?: string;
   container: HTMLElement;
+  locale?: PluginLocale;
 }): FormHtmlRuntimeContext {
   const fieldMeta = Object.fromEntries(
     Object.entries(object?.config.fields ?? {}).map(([name, field]) => [
@@ -140,6 +161,9 @@ export function buildFormHtmlRuntimeContext({
     ]),
   );
   return {
+    locale,
+    t: (catalog, key, params) =>
+      translatePluginMessage(catalog, key, locale, params),
     values,
     getValue: (name) => values[name],
     setValue: (name, value) => {

@@ -1,3 +1,5 @@
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { useWorkbenchMessages } from "./localization";
 import { useEffect, useId, useState } from "react";
 import type { PluginApi, PluginFile } from "@savia/crm-shared/plugin-api";
 import { errorMessage } from "./data";
@@ -22,6 +24,9 @@ export function Attachments({
   object: string;
   recordId: string;
 }) {
+const locale = usePluginLocale();
+const t = useWorkbenchMessages();
+
   const id = useId();
   const [files, setFiles] = useState<PluginFile[]>([]);
   const [error, setError] = useState("");
@@ -71,28 +76,27 @@ export function Attachments({
   if (!savia.files) return null;
   return (
     <section className="iw-attachments" aria-labelledby={id}>
-      <h3 id={id}>Archivos del registro</h3>
-      <p>Adjunta los soportes de este caso. Máximo 5 MB por archivo.</p>
-      {error && (
+       <h3 id={id}>{t("Archivos del registro")} </h3>
+       <p>{t("Adjunta los soportes de este caso. Máximo 5 MB por archivo.")} </p>
+       {error && (
         <p role="alert">
-          {error}{" "}
-          <button type="button" onClick={() => setRevision((v) => v + 1)}>
-            Actualizar archivos
-          </button>
-        </p>
+           {error}{" "}
+           <button type="button" onClick={() => setRevision((v) => v + 1)}>
+            {t("Actualizar archivos")} </button>
+         </p>
       )}
-      {loading ? (
-        <p role="status">Cargando archivos…</p>
+       {loading ? (
+        <p role="status">{t("Cargando archivos…")} </p>
       ) : !error ? (
         <>
-          {!files.length && !error && <p>No hay archivos adjuntos.</p>}
-          <ul>
-            {files.map((file) => (
+           {!files.length && !error && <p>{t("No hay archivos adjuntos.")} </p>}
+           <ul>
+             {files.map((file) => (
               <li key={file.id}>
-                <span>
-                  {file.name} · {Math.ceil(file.size / 1024)} KB
+                 <span>
+                   {file.name} · {Math.ceil(file.size / 1024)} KB
                 </span>
-                <button
+                 <button
                   type="button"
                   disabled={busy}
                   onClick={() =>
@@ -104,44 +108,39 @@ export function Attachments({
                     )
                   }
                 >
-                  Descargar
-                </button>
-                {removeId === file.id ? (
+                  {t("Descargar")} </button>
+                 {removeId === file.id ? (
                   <>
-                    <button
+                     <button
                       type="button"
                       disabled={busy}
                       onClick={() =>
                         run(() => savia.files!.remove(file.id, file.version))
                       }
                     >
-                      Confirmar eliminación
-                    </button>
-                    <button
+                      {t("Confirmar eliminación")} </button>
+                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => setRemoveId("")}
                     >
-                      Conservar
-                    </button>
-                  </>
+                      {t("Conservar")} </button>
+                   </>
                 ) : (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => setRemoveId(file.id)}
                   >
-                    Eliminar
-                  </button>
+                    {t("Eliminar")} </button>
                 )}
-              </li>
+               </li>
             ))}
-          </ul>
-        </>
+           </ul>
+         </>
       ) : null}
-      <label>
-        Adjuntar archivo
-        <input
+       <label>
+        {t("Adjuntar archivo")} <input
           type="file"
           disabled={busy || loading}
           onChange={(event) => {
@@ -155,8 +154,8 @@ export function Attachments({
             void run(() => savia.files!.upload(object, recordId, file));
           }}
         />
-      </label>
-      {busy && <p role="status">Procesando archivo…</p>}
-    </section>
+       </label>
+       {busy && <p role="status">{t("Procesando archivo…")} </p>}
+     </section>
   );
 }

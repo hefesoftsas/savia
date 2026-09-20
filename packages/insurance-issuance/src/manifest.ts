@@ -6,6 +6,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Emisiones",
   description: "Seguimiento de expedición, revisión y entrega de pólizas.",
+  labels: {"en": "Policy issuance", "pt": "Emissões"},
+  descriptions: {"en": "Track policy issuance, review and delivery.", "pt": "Acompanhe a emissão, revisão e entrega de apólices."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

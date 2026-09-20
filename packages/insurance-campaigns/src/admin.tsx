@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
@@ -12,6 +14,7 @@ import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { recipients } from "./domain";
 export function CampaignsScreen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const state = useIntegration(savia),
     [source, setSource] = useState(""),
     [sources, setSources] = useState<string[]>([]),
@@ -41,13 +44,12 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
   const selected = recipients(clients, segment);
   return (
     <Shell
-      title="Campañas"
-      description="Selecciona clientes autorizados y revisa el consentimiento antes de ejecutar cada mensaje."
+      title={t("Campañas")}
+      description={t("Selecciona clientes autorizados y revisa el consentimiento antes de ejecutar cada mensaje.")}
     >
       <IntegrationStatus state={state} connectorId={`${manifest.id}.gateway`} />
       <label>
-        Campañas guardadas
-        <select
+        {t("Campañas guardadas")}<select
           defaultValue=""
           onChange={(e) => {
             const row = saved.find((r) => String(r.id) === e.target.value);
@@ -65,7 +67,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
             }
           }}
         >
-          <option value="">Selecciona una preparación</option>
+          <option value="">{t("Selecciona una preparación")}</option>
           {saved.map((row) => (
             <option key={String(row.id)} value={String(row.id)}>
               {String(row.title)}
@@ -75,8 +77,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
       </label>
       <div className="integration-fields">
         <label>
-          Colección de clientes
-          <select
+          {t("Colección de clientes")}<select
             value={source}
             onChange={(e) => {
               setSource(e.target.value);
@@ -85,15 +86,14 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
               setKey(crypto.randomUUID());
             }}
           >
-            <option value="">Selecciona una colección</option>
+            <option value="">{t("Selecciona una colección")}</option>
             {sources.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
         </label>
         <label>
-          Segmento exacto (vacío: todos)
-          <input
+          {t("Segmento exacto (vacío: todos)")}<input
             value={segment}
             onChange={(e) => {
               setSegment(e.target.value);
@@ -103,7 +103,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label className="integration-wide">
-          Mensaje · variable {"{{nombre}}"}
+          {t("Mensaje · variable")}{t("{{nombre}}")}
           <textarea
             value={body}
             onChange={(e) => {
@@ -115,10 +115,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
         </label>
       </div>
       <p>
-        Solo se incluyen correos con marketing_consent = true y
-        marketing_suppressed = false. Los valores ausentes se excluyen; los
-        correos repetidos se deduplican.
-      </p>
+        {t("Solo se incluyen correos con marketing_consent = true y marketing_suppressed = false. Los valores ausentes se excluyen; los correos repetidos se deduplican.")}</p>
       <div className="integration-actions">
         <button
           disabled={!source || sending}
@@ -135,8 +132,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
             }
           }}
         >
-          Preparar vista previa
-        </button>
+          {t("Preparar vista previa")}</button>
         <button
           disabled={!preview || !selected.length || sending}
           onClick={async () => {
@@ -162,8 +158,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
             }
           }}
         >
-          Guardar preparación
-        </button>
+          {t("Guardar preparación")}</button>
         <button
           disabled={
             !preview || !selected.length || !state.connections.length || sending
@@ -222,16 +217,14 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
             }
           }}
         >
-          {sending ? "Ejecutando…" : `Ejecutar ${selected.length} mensajes`}
+          {sending ? t("Ejecutando…") : t("Ejecutar %{value} mensajes", {value: selected.length})}
         </button>
       </div>
       {preview ? (
         <section>
-          <h2>Destinatarios elegibles · {selected.length}</h2>
+          <h2>{t("Destinatarios elegibles ·")}{selected.length}</h2>
           <p>
-            {clients.length - selected.length} registros excluidos por segmento,
-            consentimiento, supresión, correo inválido o duplicado.
-          </p>
+            {clients.length - selected.length} {t("registros excluidos por segmento, consentimiento, supresión, correo inválido o duplicado.")}</p>
           {selected.map((c) => (
             <article key={String(c.id)}>
               <strong>{String(c.email)}</strong>

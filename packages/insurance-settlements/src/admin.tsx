@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { money, text, errorMessage } from "@savia/insurance-workbench/data";
@@ -8,6 +10,7 @@ import { useFinance } from "./use-finance";
 import { decimal, download } from "./support";
 import "./finance.css";
 export function Screen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const f = useFinance(savia);
   const [selected, setSelected] = useState<string[]>([]),
     [rate, setRate] = useState(""),
@@ -62,9 +65,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         <div>
           <h1>{manifest.label}</h1>
           <p>
-            Selecciona comisiones recaudadas, calcula la participación y
-            conserva un estado de liquidación por lote.
-          </p>
+            {t("Selecciona comisiones recaudadas, calcula la participación y conserva un estado de liquidación por lote.")}</p>
         </div>
         <button
           disabled={f.busy}
@@ -73,33 +74,27 @@ export function Screen({ savia }: { savia: PluginApi }) {
             void f.refresh();
           }}
         >
-          Actualizar datos
-        </button>
+          {t("Actualizar datos")}</button>
       </header>
       <small>
-        Acceso de administración. Base de cálculo: comisión recibida. Un origen
-        puede liquidarse una sola vez; liquida cuando su recaudo esté completo.
-        Los ajustes pertenecen al lote. No se ejecutan transferencias.
-      </small>
+        {t("Acceso de administración. Base de cálculo: comisión recibida. Un origen puede liquidarse una sola vez; liquida cuando su recaudo esté completo. Los ajustes pertenecen al lote. No se ejecutan transferencias.")}</small>
       {f.error && <p role="alert">{f.error}</p>}
       {f.notice && <p role="status">{f.notice}</p>}
-      {f.busy && <p role="status">Procesando…</p>}
+      {f.busy && <p role="status">{t("Procesando…")}</p>}
       <section>
-        <h2>Comisiones disponibles</h2>
+        <h2>{t("Comisiones disponibles")}</h2>
         {!available.length ? (
           <p>
-            No hay comisiones pendientes de liquidar. Registra primero una
-            comisión.
-          </p>
+            {t("No hay comisiones pendientes de liquidar. Registra primero una comisión.")}</p>
         ) : (
           <div className="if-table">
             <table>
               <thead>
                 <tr>
-                  <th>Incluir</th>
-                  <th>Comisión</th>
-                  <th>Responsable</th>
-                  <th>Recibido</th>
+                  <th>{t("Incluir")}</th>
+                  <th>{t("Comisión")}</th>
+                  <th>{t("Responsable")}</th>
+                  <th>{t("Recibido")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,7 +102,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                   <tr key={r.id}>
                     <td>
                       <input
-                        aria-label={`Incluir ${text(r.name) || r.id}`}
+                        aria-label={t("Incluir %{value}", {value: text(r.name) || r.id})}
                         type="checkbox"
                         checked={selected.includes(r.id)}
                         onChange={(e) => {
@@ -121,7 +116,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                       />
                     </td>
                     <td>{text(r.name) || r.id}</td>
-                    <td>{text(r.owner) || "Sin responsable"}</td>
+                    <td>{text(r.owner) || t("Sin responsable")}</td>
                     <td>{money(r.paid)}</td>
                   </tr>
                 ))}
@@ -131,11 +126,10 @@ export function Screen({ savia }: { savia: PluginApi }) {
         )}
       </section>
       <section>
-        <h2>Calcular liquidación</h2>
+        <h2>{t("Calcular liquidación")}</h2>
         <div className="if-controls">
           <label>
-            Participación (%)
-            <input
+            {t("Participación (%)")}<input
               inputMode="decimal"
               value={rate}
               onChange={(e) => {
@@ -145,8 +139,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
             />
           </label>
           <label>
-            Ajuste del lote (COP)
-            <input
+            {t("Ajuste del lote (COP)")}<input
               inputMode="decimal"
               value={adjustment}
               onChange={(e) => {
@@ -159,8 +152,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
             disabled={f.busy || !f.ready || !selected.length}
             onClick={calculate}
           >
-            Previsualizar liquidación
-          </button>
+            {t("Previsualizar liquidación")}</button>
         </div>
         {problem && <p role="alert">{problem}</p>}
         {preview && (
@@ -169,9 +161,9 @@ export function Screen({ savia }: { savia: PluginApi }) {
               <table>
                 <thead>
                   <tr>
-                    <th>Comisión</th>
-                    <th>Responsable</th>
-                    <th>Participación</th>
+                    <th>{t("Comisión")}</th>
+                    <th>{t("Responsable")}</th>
+                    <th>{t("Participación")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -186,7 +178,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               </table>
             </div>
             <p>
-              Total del lote, incluido ajuste:{" "}
+              {t("Total del lote, incluido ajuste:")}{" "}
               <output>{money(decimal(preview.total))}</output>
             </p>
             <button
@@ -221,24 +213,23 @@ export function Screen({ savia }: { savia: PluginApi }) {
                 })
               }
             >
-              Confirmar liquidación
-            </button>
+              {t("Confirmar liquidación")}</button>
           </>
         )}
       </section>
       <section>
-        <h2>Estados guardados</h2>
+        <h2>{t("Estados guardados")}</h2>
         {!f.state.batches.length ? (
-          <p>Aún no hay liquidaciones confirmadas.</p>
+          <p>{t("Aún no hay liquidaciones confirmadas.")}</p>
         ) : (
           <div className="if-table">
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Comisiones</th>
-                  <th>Total</th>
-                  <th>Estado de cuenta</th>
+                  <th>{t("Fecha")}</th>
+                  <th>{t("Comisiones")}</th>
+                  <th>{t("Total")}</th>
+                  <th>{t("Estado de cuenta")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -249,7 +240,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                     <td>{money(decimal(b.total))}</td>
                     <td>
                       <button onClick={() => exportBatch(b)}>
-                        Exportar {b.id.slice(0, 8)}
+                        {t("Exportar")}{b.id.slice(0, 8)}
                       </button>
                     </td>
                   </tr>

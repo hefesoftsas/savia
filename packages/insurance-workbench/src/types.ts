@@ -1,3 +1,4 @@
+import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import type { ReactNode } from "react";
 import type { WorkRecord } from "./data";
@@ -14,6 +15,7 @@ export type Field = {
   help?: string;
 };
 export type WorkbenchConfig = {
+  messages?: PluginMessages;
   object: string;
   title: string;
   description: string;

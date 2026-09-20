@@ -5,6 +5,14 @@
   "version": "1.0.0",
   "label": "Comisiones",
   "description": "Comisiones esperadas, recaudo y participación del vendedor.",
+  "labels": {
+    "en": "Commissions",
+    "pt": "Comissões"
+  },
+  "descriptions": {
+    "en": "Expected commissions, collections and salesperson shares.",
+    "pt": "Comissões previstas, recebimentos e participação do vendedor."
+  },
   "requires": [],
   "apiVersion": 1
 }

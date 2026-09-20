@@ -23,7 +23,10 @@ export async function apiFetch<T>(
           ? failure.error
           : (failure?.error?.message ?? `Error ${response.status}`),
       ),
-      { status: response.status },
+      { status: response.status,
+        code: typeof failure?.error?.code === "string" ? failure.error.code : typeof failure?.code === "string" ? failure.code : undefined,
+        detail: failure,
+      },
     );
   }
   if (responseType === "blob") return (await response.blob()) as T;

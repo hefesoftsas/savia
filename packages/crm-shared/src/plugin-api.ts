@@ -1,3 +1,4 @@
+import { normalizePluginLocale, translatePluginMessage, localizeExternalError, type PluginLocale, type PluginMessages, type PluginMessageParams, type LocalizedExternalError } from "./plugin-localization";
 import type { AccessPolicy } from "./access-control";
 import type { CrmObject } from "./metadata";
 
@@ -88,6 +89,11 @@ export type PluginFiles = {
   remove(id: string, version: number): Promise<void>;
 };
 export type PluginApi = {
+  i18n?: {
+    readonly locale: PluginLocale;
+    translate<C extends PluginMessages>(catalog:C,key:keyof C & string,params?:PluginMessageParams):string;
+    error(error:unknown):LocalizedExternalError;
+  };
   files?: PluginFiles;
   access?: { effective(): Promise<AccessPolicy | null> };
   settings: {
@@ -128,9 +134,11 @@ type HostData<T> = { data: T };
 export function createPluginApi({
   extensionId,
   request,
+  getLocale = () => "es",
 }: {
   extensionId: string;
   request: PluginHostRequest;
+  getLocale?: () => PluginLocale;
 }): PluginApi {
   const extensionPath = `/extensions/${encodeURIComponent(extensionId)}`;
   const collections: PluginApi["collections"] = {
@@ -208,6 +216,11 @@ export function createPluginApi({
   };
 
   return {
+    i18n: {
+      get locale() { return normalizePluginLocale(getLocale()); },
+      translate: (catalog,key,params) => translatePluginMessage(catalog,key,normalizePluginLocale(getLocale()),params),
+      error: error => localizeExternalError(error,normalizePluginLocale(getLocale())),
+    },
     access: {
       async effective() {
         return (

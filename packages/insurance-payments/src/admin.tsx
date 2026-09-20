@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
@@ -19,6 +21,7 @@ import { useFinance } from "./use-finance";
 import { decimal, download } from "./support";
 import "./finance.css";
 export function Screen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const f = useFinance(savia);
   const [account, setAccount] = useState(""),
     [input, setInput] = useState(""),
@@ -50,33 +53,23 @@ export function Screen({ savia }: { savia: PluginApi }) {
         <div>
           <h1>{manifest.label}</h1>
           <p>
-            Importa recaudos, revisa coincidencias y asigna importes parciales.
-            Cada diferencia conserva su trazabilidad.
-          </p>
+            {t("Importa recaudos, revisa coincidencias y asigna importes parciales. Cada diferencia conserva su trazabilidad.")}</p>
         </div>
         <button disabled={f.busy} onClick={() => void f.refresh()}>
-          Actualizar datos
-        </button>
+          {t("Actualizar datos")}</button>
       </header>
       <small>
-        Acceso de administración. Las asignaciones se guardan en un registro
-        conjunto con control de versión; no modifican el saldo de origen ni
-        ejecutan pagos bancarios.
-      </small>
+        {t("Acceso de administración. Las asignaciones se guardan en un registro conjunto con control de versión; no modifican el saldo de origen ni ejecutan pagos bancarios.")}</small>
       {f.error && <p role="alert">{f.error}</p>}
       {f.notice && <p role="status">{f.notice}</p>}
-      {f.busy && <p role="status">Procesando…</p>}
+      {f.busy && <p role="status">{t("Procesando…")}</p>}
       <section>
-        <h2>Importar extracto</h2>
+        <h2>{t("Importar extracto")}</h2>
         <p>
-          CSV de recaudos positivos: id,date,reference,amount. Fecha AAAA-MM-DD,
-          punto decimal y un identificador bancario estable por movimiento.
-          Máximo 200 movimientos acumulados.
-        </p>
+          {t("CSV de recaudos positivos: id,date,reference,amount. Fecha AAAA-MM-DD, punto decimal y un identificador bancario estable por movimiento. Máximo 200 movimientos acumulados.")}</p>
         <div className="if-controls">
           <label>
-            Cuenta bancaria
-            <input
+            {t("Cuenta bancaria")}<input
               value={account}
               onChange={(e) => {
                 setAccount(e.target.value);
@@ -86,8 +79,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
             />
           </label>
           <label>
-            Archivo CSV
-            <input
+            {t("Archivo CSV")}<input
               type="file"
               accept=".csv,text/csv"
               disabled={f.busy}
@@ -105,8 +97,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
           </label>
         </div>
         <label>
-          Contenido del extracto
-          <textarea
+          {t("Contenido del extracto")}<textarea
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -115,8 +106,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <button disabled={f.busy || !f.ready} onClick={previewImport}>
-          Validar y previsualizar
-        </button>
+          {t("Validar y previsualizar")}</button>
         {previewError && <p role="alert">{previewError}</p>}
         {preview.length > 0 && (
           <>
@@ -124,10 +114,10 @@ export function Screen({ savia }: { savia: PluginApi }) {
               <table>
                 <thead>
                   <tr>
-                    <th>Movimiento</th>
-                    <th>Fecha</th>
-                    <th>Referencia</th>
-                    <th>Recaudo</th>
+                    <th>{t("Movimiento")}</th>
+                    <th>{t("Fecha")}</th>
+                    <th>{t("Referencia")}</th>
+                    <th>{t("Recaudo")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -153,21 +143,19 @@ export function Screen({ savia }: { savia: PluginApi }) {
                 })
               }
             >
-              Confirmar {preview.length} movimientos
-            </button>
+              {t("Confirmar")}{preview.length} {t("movimientos")}</button>
           </>
         )}
       </section>
       <section>
-        <h2>Asignar recaudo</h2>
+        <h2>{t("Asignar recaudo")}</h2>
         <div className="if-controls">
           <label>
-            Movimiento
-            <select
+            {t("Movimiento")}<select
               value={transaction}
               onChange={(e) => setTransaction(e.target.value)}
             >
-              <option value="">Selecciona un movimiento</option>
+              <option value="">{t("Selecciona un movimiento")}</option>
               {f.state.transactions
                 .filter((t) => remaining(f.state, t.id) > 0)
                 .map((t) => (
@@ -179,25 +167,23 @@ export function Screen({ savia }: { savia: PluginApi }) {
             </select>
           </label>
           <label>
-            Obligación
-            <select
+            {t("Obligación")}<select
               value={obligation}
               onChange={(e) => setObligation(e.target.value)}
             >
-              <option value="">Selecciona una obligación</option>
+              <option value="">{t("Selecciona una obligación")}</option>
               {candidates.map((r) => (
                 <option key={r.id} value={r.id}>
                   {text(r.name) || r.id} · {text(r.policy_reference)}
                   {text(r.policy_reference) === current?.reference
-                    ? " · Coincide referencia"
+                    ? t("· Coincide referencia")
                     : ""}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Importe (COP)
-            <input
+            {t("Importe (COP)")}<input
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -217,18 +203,15 @@ export function Screen({ savia }: { savia: PluginApi }) {
               })
             }
           >
-            Guardar asignación
-          </button>
+            {t("Guardar asignación")}</button>
         </div>
         <p>
-          Las coincidencias de referencia son sugerencias. El límite usa el
-          saldo de origen actual menos todas las asignaciones locales.
-        </p>
+          {t("Las coincidencias de referencia son sugerencias. El límite usa el saldo de origen actual menos todas las asignaciones locales.")}</p>
       </section>
       <section>
-        <h2>Movimientos y diferencias</h2>
+        <h2>{t("Movimientos y diferencias")}</h2>
         {!f.state.transactions.length ? (
-          <p>Aún no hay movimientos. Importa un extracto para comenzar.</p>
+          <p>{t("Aún no hay movimientos. Importa un extracto para comenzar.")}</p>
         ) : (
           <>
             <button
@@ -245,17 +228,16 @@ export function Screen({ savia }: { savia: PluginApi }) {
                 ])
               }
             >
-              Exportar conciliación
-            </button>
+              {t("Exportar conciliación")}</button>
             <div className="if-table">
               <table>
                 <thead>
                   <tr>
-                    <th>Movimiento</th>
-                    <th>Referencia</th>
-                    <th>Recaudo</th>
-                    <th>Sin asignar</th>
-                    <th>Asignaciones</th>
+                    <th>{t("Movimiento")}</th>
+                    <th>{t("Referencia")}</th>
+                    <th>{t("Recaudo")}</th>
+                    <th>{t("Sin asignar")}</th>
+                    <th>{t("Asignaciones")}</th>
                   </tr>
                 </thead>
                 <tbody>

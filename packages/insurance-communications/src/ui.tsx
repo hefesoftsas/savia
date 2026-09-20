@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type {
   PluginApi,
@@ -71,20 +73,21 @@ export function useIntegration(savia: PluginApi) {
   };
 }
 export function History({ runs }: { runs: PluginExtensionActionRun[] }) {
+ const t = usePluginMessages(integrationMessages);
   return (
     <section>
-      <h2>Historial de operaciones</h2>
+      <h2>{t("Historial de operaciones")}</h2>
       {!runs.length ? (
-        <p>No hay operaciones registradas.</p>
+        <p>{t("No hay operaciones registradas.")}</p>
       ) : (
         <div className="integration-table">
           <table>
             <thead>
               <tr>
-                <th>Fecha</th>
-                <th>Operación</th>
-                <th>Resultado</th>
-                <th>Referencia</th>
+                <th>{t("Fecha")}</th>
+                <th>{t("Operación")}</th>
+                <th>{t("Resultado")}</th>
+                <th>{t("Referencia")}</th>
               </tr>
             </thead>
             <tbody>
@@ -98,10 +101,10 @@ export function History({ runs }: { runs: PluginExtensionActionRun[] }) {
                       {receipt?.state
                         ? stateLabels[receipt.state]
                         : run.status === "failed"
-                          ? "No confirmado / revisar"
+                          ? t("No confirmado / revisar")
                           : run.status === "pending"
-                            ? "Procesando"
-                            : "Consultar referencia"}
+                            ? t("Procesando")
+                            : t("Consultar referencia")}
                     </td>
                     <td>{receipt?.reference ?? run.runId}</td>
                   </tr>
@@ -121,27 +124,26 @@ export function IntegrationStatus({
   state: ReturnType<typeof useIntegration>;
   connectorId: string;
 }) {
+ const t = usePluginMessages(integrationMessages);
   const [endpoint, setEndpoint] = useState(""),
     [token, setToken] = useState(""),
     [saving, setSaving] = useState(false);
   return (
     <>
       {state.loading ? (
-        <p role="status">Cargando conexiones…</p>
+        <p role="status">{t("Cargando conexiones…")}</p>
       ) : !state.connections.length ? (
         <p role="status">
-          Sin conexión configurada. Registra una conexión cifrada con un destino
-          autorizado por el administrador.
-        </p>
+          {t("Sin conexión configurada. Registra una conexión cifrada con un destino autorizado por el administrador.")}</p>
       ) : (
         <p>
-          Conexión disponible:{" "}
+          {t("Conexión disponible:")}{" "}
           {state.connections.map((c) => c.connectionId).join(", ")}
         </p>
       )}
       {state.error ? <p role="alert">{state.error}</p> : null}
       <details>
-        <summary>Configurar conexión de integración</summary>
+        <summary>{t("Configurar conexión de integración")}</summary>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -163,8 +165,7 @@ export function IntegrationStatus({
           }}
         >
           <label>
-            Endpoint HTTPS autorizado
-            <input
+            {t("Endpoint HTTPS autorizado")}<input
               type="url"
               required
               value={endpoint}
@@ -172,8 +173,7 @@ export function IntegrationStatus({
             />
           </label>
           <label>
-            Token secreto
-            <input
+            {t("Token secreto")}<input
               type="password"
               autoComplete="new-password"
               required
@@ -182,7 +182,7 @@ export function IntegrationStatus({
             />
           </label>
           <button type="submit" disabled={saving}>
-            {saving ? "Guardando…" : "Guardar conexión cifrada"}
+            {saving ? t("Guardando…") : t("Guardar conexión cifrada")}
           </button>
         </form>
       </details>

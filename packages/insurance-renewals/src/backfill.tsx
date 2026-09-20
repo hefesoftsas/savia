@@ -1,3 +1,5 @@
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { useMessages } from "./localization";
 import { useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { loadRecords, type WorkRecord } from "@savia/insurance-workbench/data";
@@ -72,6 +74,9 @@ export function Backfill({
   savia: PluginApi;
   onSaved: () => void;
 }) {
+const locale = usePluginLocale();
+const t = useMessages();
+
   const [lead, setLead] = useState(30),
     [preview, setPreview] = useState<Awaited<
       ReturnType<typeof previewRenewals>
@@ -81,16 +86,14 @@ export function Backfill({
   return (
     <section
       className="iw-workbench iw-tools"
-      aria-label="Renovaciones históricas"
+      aria-label={t("Renovaciones históricas")}
     >
-      <h2>Preparar vigencias existentes</h2>
-      <p>
-        Revisa las pólizas vigentes antes de crear nuevos casos de renovación.
-      </p>
-      <fieldset className="iw-tool-fields">
-        <label>
-          Días de anticipación
-          <input
+       <h2>{t("Preparar vigencias existentes")} </h2>
+       <p>
+        {t("Revisa las pólizas vigentes antes de crear nuevos casos de renovación.")} </p>
+       <fieldset className="iw-tool-fields">
+         <label>
+          {t("Días de anticipación")} <input
             type="number"
             min="0"
             max="365"
@@ -100,9 +103,9 @@ export function Backfill({
               setPreview(null);
             }}
           />
-        </label>
-      </fieldset>
-      <button
+         </label>
+       </fieldset>
+       <button
         type="button"
         disabled={busy}
         onClick={async () => {
@@ -117,23 +120,21 @@ export function Backfill({
           }
         }}
       >
-        Vista previa
-      </button>
-      {preview && (
+        {t("Vista previa")} </button>
+       {preview && (
         <>
-          <p>
-            {preview.candidates.length} renovaciones nuevas · {preview.skipped}{" "}
-            pólizas existentes o no elegibles
-          </p>
-          <ul>
-            {preview.candidates.map(({ values }) => (
+           <p>
+             {preview.candidates.length} {t("renovaciones nuevas ·")} {preview.skipped}{" "}
+            {t("pólizas existentes o no elegibles")} </p>
+           <ul>
+             {preview.candidates.map(({ values }) => (
               <li key={values.term_key}>
-                {values.policy_reference} · {values.expiry_date} · contacto{" "}
-                {values.next_follow_up}
-              </li>
+                 {values.policy_reference} · {values.expiry_date} {t("· contacto")} {" "}
+                 {values.next_follow_up}
+               </li>
             ))}
-          </ul>
-          <button
+           </ul>
+           <button
             type="button"
             disabled={busy || !preview.candidates.length}
             onClick={async () => {
@@ -153,11 +154,10 @@ export function Backfill({
               }
             }}
           >
-            Crear renovaciones revisadas
-          </button>
-        </>
+            {t("Crear renovaciones revisadas")} </button>
+         </>
       )}
-      <p role="status">{message}</p>
-    </section>
+       <p role="status">{t(message)}</p>
+     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { useInsuranceMessages } from "./localization";
 import { insuranceQuotesExtensionId } from "./connectors";
 import {
   InsurancePackageAdminScreen,
@@ -31,6 +32,8 @@ export function isInsuranceQuoteResult(
 }
 
 export function InsuranceQuoteResultRenderer({ result }: { result: unknown }) {
+  const t = useInsuranceMessages();
+
   const quote = isInsuranceQuoteResult(insuranceQuotesExtensionId, result)
     ? result
     : null;
@@ -46,22 +49,21 @@ export function InsuranceQuoteResultRenderer({ result }: { result: unknown }) {
 
   return (
     <article
-      aria-label="Resultado de cotización"
+      aria-label={t("Resultado de cotización")}
       className="space-y-2 rounded-lg border bg-card p-4"
     >
-      <p className="text-sm font-medium">Cotización de {quote.provider}</p>
+      <p className="text-sm font-medium">{t("Cotización de")} {quote.provider}</p>
       {premium ? (
         <strong className="block text-2xl font-semibold">{premium}</strong>
       ) : null}
       {quoteNumber ? (
         <p className="text-sm text-muted-foreground">
-          Referencia: {quoteNumber}
+           {t("Referencia:")} {quoteNumber}
         </p>
       ) : null}
       <details className="text-sm">
         <summary className="cursor-pointer font-medium">
-          Ver respuesta del proveedor
-        </summary>
+           {t("Ver respuesta del proveedor")} </summary>
         <pre className="mt-2 max-h-56 overflow-auto rounded bg-muted/40 p-3 text-xs">
           {JSON.stringify(quote.data, null, 2)}
         </pre>

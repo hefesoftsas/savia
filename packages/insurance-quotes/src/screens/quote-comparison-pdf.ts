@@ -1,3 +1,5 @@
+import { pluginIntlLocale, type PluginLocale, type PluginMessageParams } from "@savia/crm-shared/plugin-localization";
+import { insuranceMessage } from "../messages";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { VehicleInfo } from "./quote-results";
 import { formatCop, type UnifiedComparisonQuote } from "./unified-quote-model";
@@ -27,6 +29,7 @@ export type QuoteComparisonPdfInput = {
   quoteReference?: string;
   vehicleInfo?: VehicleInfo;
   createdAt?: Date;
+  locale?: PluginLocale;
 };
 
 function pdfText(value: string): string {
@@ -37,8 +40,8 @@ function pdfText(value: string): string {
     .replace(/[^\x20-\x7e]/g, "-");
 }
 
-function money(amount: number): string {
-  return pdfText(formatCop(amount).replace(/\u00a0/g, " "));
+function money(amount: number, locale: PluginLocale): string {
+  return pdfText(formatCop(amount, locale).replace(/\u00a0/g, " "));
 }
 
 function ellipsis(font: PDFFont, value: string, size: number, maxWidth: number): string {
@@ -85,14 +88,16 @@ function drawLines(
 }
 
 export async function buildQuoteComparisonPdf(input: QuoteComparisonPdfInput): Promise<Uint8Array> {
+  const locale = input.locale ?? "es";
+  const t = (message: string, params?: PluginMessageParams) => insuranceMessage(message,locale,params);
   // Respeta el orden de selección y muestra TODAS las elegidas (máx. 4 por página).
   const quotes = input.quotes.slice(0, 4);
-  if (!quotes.length) throw new Error("Selecciona al menos una oferta para exportar.");
+  if (!quotes.length) throw new Error(t("Selecciona al menos una oferta para exportar."));
 
   const document = await PDFDocument.create();
-  document.setTitle("Comparador de cotizaciones Savia");
+  document.setTitle(t("Comparador de cotizaciones Savia"));
   document.setAuthor("Savia");
-  document.setSubject("Comparación de ofertas de seguro");
+  document.setSubject(t("Comparación de ofertas de seguro"));
 
   const page = document.addPage(pageSize);
   const regular = await document.embedFont(StandardFonts.Helvetica);
@@ -100,17 +105,17 @@ export async function buildQuoteComparisonPdf(input: QuoteComparisonPdfInput): P
   const { height } = page.getSize();
 
   page.drawRectangle({ color: emerald, height: 7, width: page.getWidth(), x: 0, y: height - 7 });
-  page.drawText("COMPARADOR DE COTIZACIONES", { color: ink, font: bold, size: 19, x: margin, y: height - 45 });
-  page.drawText("Savia · seguros para automóviles", { color: emerald, font: regular, size: 9, x: margin, y: height - 60 });
+  page.drawText(t("COMPARADOR DE COTIZACIONES"), { color: ink, font: bold, size: 19, x: margin, y: height - 45 });
+  page.drawText(t("Savia · seguros para automóviles"), { color: emerald, font: regular, size: 9, x: margin, y: height - 60 });
 
   const metaParts = [
-    input.quoteReference ? `Referencia: ${input.quoteReference}` : null,
-    input.vehicleInfo?.plate ? `Placa: ${input.vehicleInfo.plate}` : null,
-    input.vehicleInfo?.declaredValue ? `Valor asegurado: ${money(input.vehicleInfo.declaredValue)}` : null,
+    input.quoteReference ? t("Referencia: %{p0}", {p0: input.quoteReference}) : null,
+    input.vehicleInfo?.plate ? t("Placa: %{p0}", {p0: input.vehicleInfo.plate}) : null,
+    input.vehicleInfo?.declaredValue ? t("Valor asegurado: %{p0}", {p0: money(input.vehicleInfo.declaredValue, locale)}) : null,
   ].filter(Boolean) as string[];
-  const date = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(input.createdAt ?? new Date());
+  const date = new Intl.DateTimeFormat(pluginIntlLocale(locale), { dateStyle: "medium" }).format(input.createdAt ?? new Date());
   const metaLine = pdfText(
-    [...metaParts, `Generado: ${date}`, `Ofertas: ${quotes.length} de 4`].join("  |  "),
+    [...metaParts, t("Generado: %{p0}", {p0: date}), t("Ofertas: %{p0} de 4", {p0: quotes.length})].join("  |  "),
   );
   const metaFontSize = 8.2;
   page.drawText(ellipsis(regular, metaLine, metaFontSize, page.getWidth() - margin * 2), {
@@ -129,12 +134,12 @@ export async function buildQuoteComparisonPdf(input: QuoteComparisonPdfInput): P
   const rowHeight = 37;
 
   page.drawRectangle({ color: paleEmerald, height: headerHeight, width: tableWidth, x: margin, y: top - headerHeight });
-  page.drawText(`COBERTURA  ·  ${quotes.length} DE 4 OFERTAS`, { color: emerald, font: bold, size: 8, x: margin + 10, y: top - 22 });
+  page.drawText(t("COBERTURA  ·  %{p0} DE 4 OFERTAS", {p0: quotes.length}), { color: emerald, font: bold, size: 8, x: margin + 10, y: top - 22 });
   quotes.forEach((quote, index) => {
     const x = margin + labelWidth + index * planWidth + 9;
     drawLines(page, bold, wrapped(bold, `${index + 1} - ${quote.provider}`, 8.4, planWidth - 18), x, top - 17, 8.4, ink);
     drawLines(page, regular, wrapped(regular, quote.productName, 7.6, planWidth - 18), x, top - 28, 7.6, muted);
-    page.drawText(quote.premium > 0 ? money(quote.premium) : "Consultar", {
+    page.drawText(quote.premium > 0 ? money(quote.premium, locale) : t("Consultar"), {
       color: emerald,
       font: bold,
       size: 8.6,
@@ -150,7 +155,7 @@ export async function buildQuoteComparisonPdf(input: QuoteComparisonPdfInput): P
       page.drawRectangle({ color: rgb(0.975, 0.985, 0.982), height: rowHeight, width: tableWidth, x: margin, y: rowBottom });
     }
     page.drawLine({ color: line, end: { x: margin + tableWidth, y: rowBottom }, start: { x: margin, y: rowBottom }, thickness: 0.55 });
-    drawLines(page, bold, wrapped(bold, label, 7.4, labelWidth - 16), margin + 8, rowTop - 13, 7.4, ink);
+    drawLines(page, bold, wrapped(bold, t(label), 7.4, labelWidth - 16), margin + 8, rowTop - 13, 7.4, ink);
     quotes.forEach((quote, index) => {
       const x = margin + labelWidth + index * planWidth + 9;
       drawLines(page, regular, wrapped(regular, quote.coverages[key], 7.2, planWidth - 18), x, rowTop - 12, 7.2, ink);
@@ -158,14 +163,14 @@ export async function buildQuoteComparisonPdf(input: QuoteComparisonPdfInput): P
   });
 
   const footerY = top - headerHeight - coverages.length * rowHeight - 25;
-  page.drawText("Valores informativos sujetos a las condiciones oficiales de cada aseguradora.", {
+  page.drawText(t("Valores informativos sujetos a las condiciones oficiales de cada aseguradora."), {
     color: muted,
     font: regular,
     size: 7.2,
     x: margin,
     y: footerY,
   });
-  page.drawText(`Ofertas comparadas: ${quotes.length} de 4`, { color: muted, font: regular, size: 7.2, x: page.getWidth() - margin - 118, y: footerY });
+  page.drawText(t("Ofertas comparadas: %{p0} de 4", {p0: quotes.length}), { color: muted, font: regular, size: 7.2, x: page.getWidth() - margin - 118, y: footerY });
 
   return document.save();
 }

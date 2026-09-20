@@ -1,3 +1,4 @@
+import { useMessages } from "./localization";
 import { useEffect, useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
@@ -13,6 +14,8 @@ export function Templates({
   savia: PluginApi;
   onSaved: () => void;
 }) {
+const t = useMessages();
+
   const [name, setName] = useState("Vinculación de cliente"),
     [requirements, setRequirements] = useState(
       "Identificación\nAutorización de tratamiento de datos",
@@ -61,36 +64,32 @@ export function Templates({
   return (
     <section
       className="iw-workbench iw-tools"
-      aria-label="Plantilla de expediente"
+      aria-label={t("Plantilla de expediente")}
     >
-      <h2>Preparar expediente</h2>
-      <p>
-        Define los requisitos de tu operación. La plantilla no determina
-        obligaciones legales.
-      </p>
-      <fieldset className="iw-tool-fields">
-        <label>
-          Nombre de plantilla
-          <input
+       <h2>{t("Preparar expediente")} </h2>
+       <p>
+        {t("Define los requisitos de tu operación. La plantilla no determina obligaciones legales.")} </p>
+       <fieldset className="iw-tool-fields">
+         <label>
+          {t("Nombre de plantilla")} <input
             value={name}
             onChange={(event) => {
               setName(event.target.value);
               setPreview(null);
             }}
           />
-        </label>
-        <label>
-          Requisitos, uno por línea
-          <textarea
+         </label>
+         <label>
+          {t("Requisitos, uno por línea")} <textarea
             value={requirements}
             onChange={(event) => {
               setRequirements(event.target.value);
               setPreview(null);
             }}
           />
-        </label>
-      </fieldset>
-      <button
+         </label>
+       </fieldset>
+       <button
         type="button"
         disabled={busy || version === null}
         onClick={async () => {
@@ -113,40 +112,36 @@ export function Templates({
           }
         }}
       >
-        Guardar plantilla
-      </button>
-      <h2>Asignar requisitos al cliente</h2>
-      <fieldset className="iw-tool-fields">
-        <label>
-          Cliente
-          <select
+        {t("Guardar plantilla")} </button>
+       <h2>{t("Asignar requisitos al cliente")} </h2>
+       <fieldset className="iw-tool-fields">
+         <label>
+          {t("Cliente")} <select
             value={customerId}
             onChange={(event) => {
               setCustomerId(event.target.value);
               setPreview(null);
             }}
           >
-            <option value="">Selecciona un cliente</option>
-            {customers.map((customer) => (
+             <option value="">{t("Selecciona un cliente")} </option>
+             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
-                {String(customer.name)}
-              </option>
+                 {String(customer.name)}
+               </option>
             ))}
-          </select>
-        </label>
-        <label>
-          Responsable
-          <input
+           </select>
+         </label>
+         <label>
+          {t("Responsable")} <input
             value={owner}
             onChange={(event) => {
               setOwner(event.target.value);
               setPreview(null);
             }}
           />
-        </label>
-        <label>
-          Compromiso
-          <input
+         </label>
+         <label>
+          {t("Compromiso")} <input
             type="date"
             value={due}
             onChange={(event) => {
@@ -154,9 +149,9 @@ export function Templates({
               setPreview(null);
             }}
           />
-        </label>
-      </fieldset>
-      <button
+         </label>
+       </fieldset>
+       <button
         type="button"
         disabled={busy || !saved}
         onClick={async () => {
@@ -164,7 +159,7 @@ export function Templates({
           try {
             if (JSON.stringify(template()) !== JSON.stringify(saved))
               throw new Error(
-                "Guarda los cambios de la plantilla antes de preparar el expediente.",
+                t("Guarda los cambios de la plantilla antes de preparar el expediente."),
               );
             const customer = customers.find((row) => row.id === customerId);
             const rows = checklist(
@@ -191,21 +186,19 @@ export function Templates({
           }
         }}
       >
-        Revisar requisitos nuevos
-      </button>
-      {preview && (
+        {t("Revisar requisitos nuevos")} </button>
+       {preview && (
         <>
-          <ul>
-            {preview.map((row) => (
+           <ul>
+             {preview.map((row) => (
               <li key={row.dossier_key}>
-                {row.name} · {row.customer} · {row.due_date}
-              </li>
+                 {row.name} · {row.customer} · {row.due_date}
+               </li>
             ))}
-          </ul>
-          <p>
-            {preview.length} requisitos nuevos; los existentes se conservan.
-          </p>
-          <button
+           </ul>
+           <p>
+             {preview.length} {t("requisitos nuevos; los existentes se conservan.")} </p>
+           <button
             type="button"
             disabled={busy || !preview.length}
             onClick={async () => {
@@ -215,7 +208,7 @@ export function Templates({
                 const settings = await savia.settings.get();
                 if (settings.version !== version)
                   throw new Error(
-                    "La plantilla cambió; recarga y revisa el expediente.",
+                    t("La plantilla cambió; recarga y revisa el expediente."),
                   );
                 await savia.collections.collection("clientes").get(customerId);
                 for (const row of preview) {
@@ -238,11 +231,10 @@ export function Templates({
               }
             }}
           >
-            Crear expediente revisado
-          </button>
-        </>
+            {t("Crear expediente revisado")} </button>
+         </>
       )}
-      <p role="status">{message}</p>
-    </section>
+       <p role="status">{t(message)}</p>
+     </section>
   );
 }

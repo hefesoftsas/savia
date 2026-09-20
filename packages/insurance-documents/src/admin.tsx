@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import { RecordActions } from "./actions";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench } from "@savia/insurance-workbench";
@@ -10,58 +15,66 @@ import { fields, stages, dateField } from "./fields";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate } from "./domain";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Requisito documental",
-  createLabel: "Nuevo requisito",
+  singular: t("Requisito documental"),
+  createLabel: t("Nuevo requisito"),
   description: manifest.description,
-  dateTitle: "Fecha de compromiso",
+  dateTitle: t("Fecha de compromiso"),
   fields,
   stages,
   dateField,
   priority,
   validate,
   defaults: { stage: "requested", kind: "application" },
-  footerNote: "Fechas calendario · Bogotá",
+  footerNote: t("Fechas calendario · Bogotá"),
   valueColumn: {
     key: "kind",
-    label: "Documento / Evidencia",
+    label: t("Documento / Evidencia"),
     render: (record) => (
       <>
-        <strong>{fieldLabel(fields, "kind", record.kind)}</strong>
-        <small>
-          {record.evidence_reference ? "Evidencia registrada" : "Sin evidencia"}
-        </small>
-      </>
+         <strong>{t(fieldLabel(fields, "kind", record.kind))}</strong>
+         <small>
+           {record.evidence_reference ? t("Evidencia registrada") : t("Sin evidencia")}
+         </small>
+       </>
     ),
   },
   metrics: (records, asOf) => [
     {
-      label: "Requisitos pendientes",
+      label: t("Requisitos pendientes"),
       value: records.filter((record) => priority(record, asOf) !== "closed")
         .length,
-      detail: "Solicitados, recibidos o por corregir",
+      detail: t("Solicitados, recibidos o por corregir"),
     },
     {
-      label: "Atrasados",
+      label: t("Atrasados"),
       value: records.filter((record) => priority(record, asOf) === "overdue")
         .length,
-      detail: "Fecha de compromiso vencida",
+      detail: t("Fecha de compromiso vencida"),
     },
     {
-      label: "Por revisar",
+      label: t("Por revisar"),
       value: countBy(records, "stage", "received"),
-      detail: "Recepciones pendientes de revisión",
+      detail: t("Recepciones pendientes de revisión"),
     },
     {
-      label: "Aprobados",
+      label: t("Aprobados"),
       value: countBy(records, "stage", "approved"),
-      detail: "Con revisión documentada",
+      detail: t("Con revisión documentada"),
     },
   ],
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return (
     <Workbench
       savia={savia}

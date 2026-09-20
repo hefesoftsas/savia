@@ -7,6 +7,8 @@ export const manifest = {
   label: "Importación y calidad",
   description:
     "Valida datos, detecta duplicados e importa registros con revisión previa.",
+  labels: {"en": "Import and data quality", "pt": "Importação e qualidade"},
+  descriptions: {"en": "Validate data, detect duplicates and import records after review.", "pt": "Valide dados, detecte duplicatas e importe registros após revisão."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

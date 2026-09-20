@@ -1,3 +1,5 @@
+import { useAppLocale } from "@/i18n/core";
+import { localizedExtensionObjectLabel } from "@/features/crm-engine/extension-screens";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -22,6 +24,7 @@ export function useCrmSidebarNavigation(enabled: boolean): {
   children: CrmSidebarChild[];
 } {
   const services = useAppServices();
+  const locale = useAppLocale();
   const location = useLocation();
   const current = parseCrmSearch(location.search);
   const [domains, setDomains] = useState<CrmDomain[]>([]);
@@ -112,7 +115,7 @@ export function useCrmSidebarNavigation(enabled: boolean): {
     if (!enabled) return [];
     const objects =
       snapshot?.domainId === domain?.id ? (snapshot?.objects ?? []) : [];
-    return crmSidebarChildren(objects, domain?.id, current.object);
-  }, [enabled, snapshot, domain?.id, domains, current.object]);
+    return crmSidebarChildren(objects.map(object => ({...object,label:localizedExtensionObjectLabel(object.name,object.label,locale)})), domain?.id, current.object).map(item => item.id === "studio:admin" ? {...item,label:locale === "en" ? "Manage" : locale === "pt" ? "Administrar" : "Administrar"} : item);
+  }, [enabled, snapshot, domain?.id, domains, current.object, locale]);
   return { agencyId: domain?.agencyId, domainId: domain?.id, children };
 }

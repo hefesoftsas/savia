@@ -10,6 +10,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Calendario",
   description: "Eventos, exportación y sincronización de agenda.",
+  labels: {"en": "Calendar", "pt": "Calendário"},
+  descriptions: {"en": "Events, export and calendar synchronization.", "pt": "Eventos, exportação e sincronização de agenda."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

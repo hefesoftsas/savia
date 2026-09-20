@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
@@ -17,6 +19,7 @@ import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { operations, createIntent, parseIntent } from "./domain";
 export function CarriersScreen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const state = useIntegration(savia),
     [operation, setOperation] = useState("policy-status"),
     [policy, setPolicy] = useState(""),
@@ -103,13 +106,12 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
   }
   return (
     <Shell
-      title="Aseguradoras"
-      description="Guarda cada solicitud antes de enviarla y recupera su referencia para consultar o reintentar con seguridad."
+      title={t("Aseguradoras")}
+      description={t("Guarda cada solicitud antes de enviarla y recupera su referencia para consultar o reintentar con seguridad.")}
     >
       <IntegrationStatus state={state} connectorId={`${manifest.id}.gateway`} />
       <label>
-        Solicitudes guardadas
-        <select
+        {t("Solicitudes guardadas")}<select
           value={selected?.id ?? ""}
           disabled={busy}
           onChange={(event) => {
@@ -134,7 +136,7 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
             }
           }}
         >
-          <option value="">Nueva solicitud</option>
+          <option value="">{t("Nueva solicitud")}</option>
           {saved.map((row) => (
             <option key={row.id} value={row.id}>
               {String(row.title)} · {String(row.stage)}
@@ -149,21 +151,19 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
         }}
       >
         <label>
-          Conexión
-          <select
+          {t("Conexión")}<select
             disabled={busy || !!selected}
             value={connection}
             onChange={(event) => setConnection(event.target.value)}
           >
-            <option value="">Primera conexión disponible</option>
+            <option value="">{t("Primera conexión disponible")}</option>
             {state.connections.map((item) => (
               <option key={item.connectionId}>{item.connectionId}</option>
             ))}
           </select>
         </label>
         <label>
-          Operación
-          <select
+          {t("Operación")}<select
             disabled={busy || !!selected}
             value={operation}
             onChange={(event) => setOperation(event.target.value)}
@@ -176,8 +176,7 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
           </select>
         </label>
         <label>
-          Aseguradora / código del proveedor
-          <input
+          {t("Aseguradora / código del proveedor")}<input
             required
             disabled={busy || !!selected}
             value={carrier}
@@ -185,8 +184,7 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label>
-          Referencia de póliza o solicitud
-          <input
+          {t("Referencia de póliza o solicitud")}<input
             required
             disabled={busy || !!selected}
             value={policy}
@@ -198,18 +196,17 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
           disabled={busy || state.busy || !state.connections.length}
         >
           {busy
-            ? "Procesando…"
+            ? t("Procesando…")
             : selected
-              ? "Reintentar con la misma referencia"
-              : "Guardar y ejecutar"}
+              ? t("Reintentar con la misma referencia")
+              : t("Guardar y ejecutar")}
         </button>
         <button
           type="button"
           disabled={busy || !selected || !state.connections.length}
           onClick={() => execute(true)}
         >
-          Consultar estado guardado
-        </button>
+          {t("Consultar estado guardado")}</button>
         <button
           type="button"
           disabled={busy}
@@ -220,33 +217,27 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
             setPolicy("");
           }}
         >
-          Nueva solicitud
-        </button>
+          {t("Nueva solicitud")}</button>
       </form>
       <p>
-        Una solicitud aceptada no confirma emisión. Ante un resultado
-        desconocido, recupera la solicitud guardada y consulta su estado antes
-        de reintentar.
-      </p>
+        {t("Una solicitud aceptada no confirma emisión. Ante un resultado desconocido, recupera la solicitud guardada y consulta su estado antes de reintentar.")}</p>
       {receipt && (
         <p role="status">
           {stateLabels[receipt.state]} · {receipt.reference}{" "}
           {receipt.documentUrl && (
             <a href={receipt.documentUrl} target="_blank" rel="noreferrer">
-              Abrir documento del proveedor
-            </a>
+              {t("Abrir documento del proveedor")}</a>
           )}
         </p>
       )}
-      <p>Referencia de operación: {key}</p>
+      <p>{t("Referencia de operación:")}{key}</p>
       <button
         onClick={() => {
           void state.refresh();
           void refresh();
         }}
       >
-        Actualizar historial
-      </button>
+        {t("Actualizar historial")}</button>
       <History runs={state.runs} />
     </Shell>
   );

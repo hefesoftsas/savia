@@ -1,3 +1,5 @@
+import { pluginIntlLocale, type PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { insuranceMessage } from "../messages";
 import type { PluginExtensionActionRun } from "@savia/crm-shared/plugin-api";
 import type { QuoteBatchItem } from "./quote-results";
 
@@ -34,8 +36,8 @@ export type UnifiedComparisonQuote = {
   isSimulation?: boolean;
 };
 
-export function formatCop(amount: number): string {
-  return new Intl.NumberFormat("es-CO", {
+export function formatCop(amount: number, locale: PluginLocale = "es"): string {
+  return new Intl.NumberFormat(pluginIntlLocale(locale), {
     style: "currency",
     currency: "COP",
     maximumFractionDigits: 0,
@@ -337,7 +339,7 @@ const defaultProfiles: Record<string, ProviderPlanProfile> = {
   },
 };
 
-export function toUnifiedComparisonQuote(
+function buildUnifiedComparisonQuote(
   item: QuoteBatchItem,
   run?: PluginExtensionActionRun,
 ): UnifiedComparisonQuote {
@@ -433,4 +435,11 @@ export function toUnifiedComparisonQuote(
     error: item.error,
     isSimulation,
   };
+}
+
+/** Localize extension-authored descriptions without changing identifiers or provider responses. */
+export function toUnifiedComparisonQuote(item: QuoteBatchItem, run?: PluginExtensionActionRun, locale: PluginLocale = "es"): UnifiedComparisonQuote {
+ const quote = buildUnifiedComparisonQuote(item,run);
+ const t = (message:string) => insuranceMessage(message,locale);
+ return {...quote, badges: quote.badges.map(t), coverages: Object.fromEntries(Object.entries(quote.coverages).map(([key,value])=>[key,t(value)])) as UnifiedQuoteCoverage, highlights: quote.highlights.map(t), ctaText:t(quote.ctaText), ctaSubtext:t(quote.ctaSubtext)};
 }

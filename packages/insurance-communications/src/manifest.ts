@@ -10,6 +10,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Comunicaciones",
   description: "Plantillas, envíos y seguimiento de entrega.",
+  labels: {"en": "Communications", "pt": "Comunicações"},
+  descriptions: {"en": "Templates, sending and delivery tracking.", "pt": "Modelos, envios e acompanhamento de entrega."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

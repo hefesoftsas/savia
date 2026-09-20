@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench, money, text } from "@savia/insurance-workbench";
 import { cents } from "@savia/insurance-workbench/data";
@@ -10,14 +15,16 @@ import { fields, stages, dateField } from "./fields";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate } from "./domain";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Movimiento de póliza",
-  createLabel: "Nuevo movimiento",
+  singular: t("Movimiento de póliza"),
+  createLabel: t("Nuevo movimiento"),
   description:
-    "Da seguimiento a cambios de cobertura, inclusiones, exclusiones y anexos.",
-  dateTitle: "Fecha de efecto",
+    t("Da seguimiento a cambios de cobertura, inclusiones, exclusiones y anexos."),
+  dateTitle: t("Fecha de efecto"),
   fields,
   stages,
   dateField,
@@ -31,15 +38,15 @@ const config = caseConfig({
   },
   valueColumn: {
     key: "kind",
-    label: "Movimiento / Prima",
+    label: t("Movimiento / Prima"),
     render: (record) => (
       <>
-        <strong>{fieldLabel(fields, "kind", record.kind)}</strong>
-        <small>
-          Adicional: {money(record.additional_premium)} · Devolución:{" "}
-          {money(record.refund)}
-        </small>
-      </>
+         <strong>{t(fieldLabel(fields, "kind", record.kind))}</strong>
+         <small>
+          {t("Adicional:")} {money(record.additional_premium, locale)} {t("· Devolución:")} {" "}
+           {money(record.refund, locale)}
+         </small>
+       </>
     ),
   },
   metrics: (records, asOf) => {
@@ -54,29 +61,35 @@ const config = caseConfig({
       100;
     return [
       {
-        label: "Solicitudes abiertas",
+        label: t("Solicitudes abiertas"),
         value: open.length,
-        detail: "Movimientos pendientes de resolución",
+        detail: t("Movimientos pendientes de resolución"),
       },
       {
-        label: "Fecha de efecto vencida",
+        label: t("Fecha de efecto vencida"),
         value: overdue.length,
-        detail: "Solicitudes que requieren revisión",
+        detail: t("Solicitudes que requieren revisión"),
       },
       {
-        label: "Prima adicional abierta",
-        value: money(sum(open, "additional_premium")),
-        detail: "Valor previsto de los movimientos",
+        label: t("Prima adicional abierta"),
+        value: money(sum(open, "additional_premium"), locale),
+        detail: t("Valor previsto de los movimientos"),
       },
       {
-        label: "Anexos expedidos",
+        label: t("Anexos expedidos"),
         value: countBy(records, "stage", "issued"),
-        detail: "Expedición registrada por el equipo",
+        detail: t("Expedición registrada por el equipo"),
       },
     ];
   },
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return <Workbench savia={savia} config={config} />;
 }
 export const screens = [

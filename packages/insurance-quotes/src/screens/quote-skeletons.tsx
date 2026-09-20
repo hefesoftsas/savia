@@ -1,3 +1,4 @@
+import { useInsuranceMessages } from "../localization";
 import type { CSSProperties } from "react";
 
 export function QuoteWizardSkeleton({
@@ -5,13 +6,15 @@ export function QuoteWizardSkeleton({
 }: {
   isWizard?: boolean;
 }) {
+  const t = useInsuranceMessages();
+
   return (
     <div
       className="insurance-quote"
       role="status"
-      aria-label="Cargando cotizador de seguros…"
+      aria-label={t("Cargando cotizador de seguros…")}
     >
-      <span className="sr-only">Cargando cotizador de seguros…</span>
+      <span className="sr-only">{t("Cargando cotizador de seguros…")}</span>
 
       {/* Header */}
       <header className="insurance-quote__header">
@@ -44,7 +47,7 @@ export function QuoteWizardSkeleton({
       {/* Stepper (if wizard) */}
       {isWizard ? (
         <nav
-          aria-label="Pasos de la cotización"
+          aria-label={t("Pasos de la cotización")}
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3, 1fr)",
@@ -181,11 +184,13 @@ export function QuoteWizardSkeleton({
 }
 
 export function InsuranceAdminSkeleton() {
+  const t = useInsuranceMessages();
+
   return (
     <div
       className="insurance-admin"
       role="status"
-      aria-label="Cargando configuración de seguros…"
+      aria-label={t("Cargando configuración de seguros…")}
       style={{
         marginTop: "24px",
         display: "flex",
@@ -193,7 +198,7 @@ export function InsuranceAdminSkeleton() {
         gap: "20px",
       }}
     >
-      <span className="sr-only">Cargando configuración de seguros…</span>
+      <span className="sr-only">{t("Cargando configuración de seguros…")}</span>
 
       {/* Panel 1: Pantallas */}
       <section

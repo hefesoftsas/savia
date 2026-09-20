@@ -59,3 +59,10 @@ describe("trusted extension screen registry", () => {
     ).resolves.toEqual({ total: 1 });
   });
 });
+
+import { localizedExtensionObjectLabel } from "../extension-screens";
+it("localizes built-in navigation labels without overwriting user renames", () => {
+ expect(localizedExtensionObjectLabel("insurance_claims","Siniestros","en")).toBe("Claims");
+ expect(localizedExtensionObjectLabel("insurance_claims","My claims","pt")).toBe("My claims");
+ expect(localizedExtensionObjectLabel("custom","Siniestros","en")).toBe("Siniestros");
+});

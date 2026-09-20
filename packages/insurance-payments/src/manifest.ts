@@ -10,6 +10,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Conciliación bancaria",
   description: "Importa extractos y asigna recaudos a obligaciones.",
+  labels: {"en": "Bank reconciliation", "pt": "Conciliação bancária"},
+  descriptions: {"en": "Import statements and allocate receipts to obligations.", "pt": "Importe extratos e aloque recebimentos a obrigações."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

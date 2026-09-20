@@ -1,3 +1,6 @@
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { pluginIntlLocale, localizeExternalError } from "@savia/crm-shared/plugin-localization";
+import { useInsuranceMessages } from "../localization";
 import {
   type FormEvent,
   useCallback,
@@ -54,17 +57,7 @@ const blankForm = (): PolicyForm => ({
   estado: "Vigente",
 });
 
-const currency = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
 
-function message(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "No se pudo actualizar la cartera. Intenta de nuevo.";
-}
 
 function asDateInput(value?: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : "";
@@ -103,6 +96,12 @@ const perPage = 25;
 export function InsurancePortfolioPoliciesScreen({
   savia,
 }: InsurancePortfolioScreenProps) {
+  const t = useInsuranceMessages();
+  const locale = usePluginLocale();
+  const currency = new Intl.NumberFormat(pluginIntlLocale(locale), {style: "currency", currency: "COP", maximumFractionDigits: 0});
+  const number = new Intl.NumberFormat(pluginIntlLocale(locale));
+  const date = new Intl.DateTimeFormat(pluginIntlLocale(locale), {dateStyle: "medium"});
+
   const [records, setRecords] = useState<Policy[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -111,7 +110,8 @@ export function InsurancePortfolioPoliciesScreen({
   const [deleting, setDeleting] = useState<Policy | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const errorInfo = error ? localizeExternalError(error, locale) : null;
   const polizas = useMemo(
     () => savia.collections.collection<Policy, PolicyInput>("polizas"),
     [savia],
@@ -134,7 +134,7 @@ export function InsurancePortfolioPoliciesScreen({
       setTotal(recordsResult.total);
       setSummary(summaryResult);
     } catch (reason) {
-      setError(message(reason));
+      setError(reason);
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export function InsurancePortfolioPoliciesScreen({
       if (page !== 1) setPage(1);
       else await reload();
     } catch (reason) {
-      setError(message(reason));
+      setError(reason);
     } finally {
       setSaving(false);
     }
@@ -176,7 +176,7 @@ export function InsurancePortfolioPoliciesScreen({
       setDeleting(null);
       await reload();
     } catch (reason) {
-      setError(message(reason));
+      setError(reason);
     } finally {
       setSaving(false);
     }
@@ -184,11 +184,11 @@ export function InsurancePortfolioPoliciesScreen({
 
   const metrics = summary
     ? [
-        ["Pólizas", summary.total],
-        ["Vigentes", summary.active],
-        ["Por vencer", summary.expiring],
+        [t("Pólizas"), number.format(summary.total)],
+        [t("Vigentes"), number.format(summary.active)],
+        [t("Por vencer"), number.format(summary.expiring)],
         [
-          "Prima total",
+          t("Prima total"),
           summary.premiumTotal === null
             ? "—"
             : currency.format(summary.premiumTotal),
@@ -199,16 +199,15 @@ export function InsurancePortfolioPoliciesScreen({
 
   return (
     <section
-      aria-label="Cartera de pólizas"
+      aria-label={t("Cartera de pólizas")}
       className="extension-policy-screen"
     >
       <header className="extension-policy-heading">
         <div>
-          <p className="extension-policy-eyebrow">Extensión de seguros</p>
-          <h1>Cartera de pólizas</h1>
+          <p className="extension-policy-eyebrow">{t("Extensión de seguros")}</p>
+          <h1>{t("Cartera de pólizas")}</h1>
           <p>
-            Una vista React propia del plugin para gestionar vigencias y primas.
-          </p>
+             {t("Una vista React propia del plugin para gestionar vigencias y primas.")} </p>
         </div>
         <div className="extension-policy-actions">
           <button
@@ -216,27 +215,26 @@ export function InsurancePortfolioPoliciesScreen({
             onClick={() => void reload()}
             disabled={loading || saving}
           >
-            Actualizar
-          </button>
+             {t("Actualizar")} </button>
           <button
             type="button"
             className="extension-policy-primary"
             onClick={() => setForm(blankForm())}
             disabled={saving}
           >
-            Nueva póliza
-          </button>
+             {t("Nueva póliza")} </button>
         </div>
       </header>
 
-      {error ? (
+      {errorInfo ? (
         <div role="alert" className="extension-policy-error">
-          <strong>No pudimos actualizar la cartera.</strong>
-          <span>{error}</span>
+          <strong>{t("No pudimos actualizar la cartera.")}</strong>
+          <span>{errorInfo.message}</span>
+          {errorInfo.detail ? <span>{errorInfo.detail}</span> : null}
         </div>
       ) : null}
 
-      <dl className="extension-policy-metrics" aria-label="Resumen de cartera">
+      <dl className="extension-policy-metrics" aria-label={t("Resumen de cartera")}>
         {metrics.map(([label, value]) => (
           <div key={String(label)}>
             <dd>{loading ? "…" : value}</dd>
@@ -250,10 +248,9 @@ export function InsurancePortfolioPoliciesScreen({
           className="extension-policy-form"
           onSubmit={(event) => void save(event)}
         >
-          <h2>{form.id ? "Editar póliza" : "Nueva póliza"}</h2>
+          <h2>{form.id ? t("Editar póliza") : t("Nueva póliza")}</h2>
           <label>
-            Póliza
-            <input
+             {t("Póliza")} <input
               name="name"
               required
               value={form.name}
@@ -263,22 +260,20 @@ export function InsurancePortfolioPoliciesScreen({
             />
           </label>
           <label>
-            Estado
-            <select
+             {t("Estado")} <select
               name="estado"
               value={form.estado}
               onChange={(event) =>
                 setForm({ ...form, estado: event.target.value })
               }
             >
-              <option value="Vigente">Vigente</option>
-              <option value="Vencida">Vencida</option>
-              <option value="Cancelada">Cancelada</option>
+              <option value="Vigente">{t("Vigente")}</option>
+              <option value="Vencida">{t("Vencida")}</option>
+              <option value="Cancelada">{t("Cancelada")}</option>
             </select>
           </label>
           <label>
-            Inicio
-            <input
+             {t("Inicio")} <input
               name="inicio"
               type="date"
               value={form.inicio}
@@ -288,8 +283,7 @@ export function InsurancePortfolioPoliciesScreen({
             />
           </label>
           <label>
-            Fin
-            <input
+             {t("Fin")} <input
               name="fin"
               type="date"
               value={form.fin}
@@ -299,8 +293,7 @@ export function InsurancePortfolioPoliciesScreen({
             />
           </label>
           <label>
-            Prima
-            <input
+             {t("Prima")} <input
               name="prima"
               type="number"
               min="0"
@@ -316,14 +309,13 @@ export function InsurancePortfolioPoliciesScreen({
               onClick={() => setForm(null)}
               disabled={saving}
             >
-              Cancelar
-            </button>
+               {t("Cancelar")} </button>
             <button
               type="submit"
               className="extension-policy-primary"
               disabled={saving}
             >
-              {saving ? "Guardando…" : "Guardar póliza"}
+              {saving ? t("Guardando…") : t("Guardar póliza")}
             </button>
           </div>
         </form>
@@ -331,53 +323,51 @@ export function InsurancePortfolioPoliciesScreen({
 
       {deleting ? (
         <section
-          aria-label="Confirmar eliminación"
+          aria-label={t("Confirmar eliminación")}
           className="extension-policy-delete"
         >
-          <strong>¿Eliminar la póliza {deleting.name ?? "sin nombre"}?</strong>
-          <span>Esta acción elimina el registro de la cartera.</span>
+          <strong>{t("¿Eliminar la póliza")} {deleting.name ?? "sin nombre"}?</strong>
+          <span>{t("Esta acción elimina el registro de la cartera.")}</span>
           <div className="extension-policy-actions">
             <button
               type="button"
               onClick={() => setDeleting(null)}
               disabled={saving}
             >
-              Cancelar
-            </button>
+               {t("Cancelar")} </button>
             <button
               type="button"
               className="extension-policy-danger"
               onClick={() => void remove()}
               disabled={saving}
             >
-              {saving ? "Eliminando…" : "Confirmar eliminación"}
+              {saving ? t("Eliminando…") : t("Confirmar eliminación")}
             </button>
           </div>
         </section>
       ) : null}
 
-      <section className="extension-policy-table-card" aria-label="Pólizas">
+      <section className="extension-policy-table-card" aria-label={t("Pólizas")}>
         <div className="extension-policy-table-heading">
-          <h2>Pólizas</h2>
-          <span>{loading ? "Cargando…" : `${total} registradas`}</span>
+          <h2>{t("Pólizas")}</h2>
+          <span>{loading ? t("Cargando…") : t("%{p0} registradas", {p0: total})}</span>
         </div>
         {loading ? (
-          <p role="status">Cargando pólizas…</p>
+          <p role="status">{t("Cargando pólizas…")}</p>
         ) : records.length === 0 ? (
           <p className="extension-policy-empty">
-            Aún no hay pólizas. Crea la primera desde esta vista custom.
-          </p>
+             {t("Aún no hay pólizas. Crea la primera desde esta vista custom.")} </p>
         ) : (
           <div className="extension-policy-table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Póliza</th>
-                  <th>Estado</th>
-                  <th>Vence</th>
-                  <th>Prima</th>
+                  <th>{t("Póliza")}</th>
+                  <th>{t("Estado")}</th>
+                  <th>{t("Vence")}</th>
+                  <th>{t("Prima")}</th>
                   <th>
-                    <span className="sr-only">Acciones</span>
+                    <span className="sr-only">{t("Acciones")}</span>
                   </th>
                 </tr>
               </thead>
@@ -387,10 +377,10 @@ export function InsurancePortfolioPoliciesScreen({
                     <td>{record.name || "Sin nombre"}</td>
                     <td>
                       <span className="extension-policy-status">
-                        {record.estado || "—"}
+                        {record.estado ? t(record.estado) : "—"}
                       </span>
                     </td>
-                    <td>{asDateInput(record.fin) || "—"}</td>
+                    <td>{asDateInput(record.fin) ? date.format(new Date(`${asDateInput(record.fin)}T12:00:00`)) : "—"}</td>
                     <td>
                       {record.prima === undefined || record.prima === null
                         ? "—"
@@ -402,15 +392,13 @@ export function InsurancePortfolioPoliciesScreen({
                         onClick={() => setForm(asForm(record))}
                         disabled={saving}
                       >
-                        Editar
-                      </button>
+                         {t("Editar")} </button>
                       <button
                         type="button"
                         onClick={() => setDeleting(record)}
                         disabled={saving}
                       >
-                        Eliminar
-                      </button>
+                         {t("Eliminar")} </button>
                     </td>
                   </tr>
                 ))}
@@ -419,16 +407,15 @@ export function InsurancePortfolioPoliciesScreen({
           </div>
         )}
         {total > perPage ? (
-          <div className="extension-policy-pagination" aria-label="Paginación">
+          <div className="extension-policy-pagination" aria-label={t("Paginación")}>
             <button
               type="button"
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={loading || saving || page === 1}
             >
-              Anterior
-            </button>
+               {t("Anterior")} </button>
             <span>
-              Página {page} de {totalPages}
+               {t("Página")} {page}  {t("de")} {totalPages}
             </span>
             <button
               type="button"
@@ -437,8 +424,7 @@ export function InsurancePortfolioPoliciesScreen({
               }
               disabled={loading || saving || page === totalPages}
             >
-              Siguiente
-            </button>
+               {t("Siguiente")} </button>
           </div>
         ) : null}
       </section>

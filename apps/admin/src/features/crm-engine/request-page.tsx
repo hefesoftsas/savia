@@ -1,3 +1,4 @@
+import { ExternalErrorNotice } from "./external-error-notice";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { RESULT_REACT_EXAMPLE } from "./result-react-example";
@@ -560,11 +561,9 @@ export default function RequestPage({ object }: { object: CrmObject }) {
                         Date.now() - Date.parse(run.createdAt) >= 360000
                           ? t("Sin confirmación")
                           : labels[run.result?.status ?? run.status]}
-                        {run.error && <p role="alert">{run.error}</p>}
+                        {run.error && <ExternalErrorNotice error={run.error} />}
                         {run.result?.errors.map((e, i) => (
-                          <p key={i} className="text-destructive">
-                            {e.message}
-                          </p>
+                          <ExternalErrorNotice key={i} error={e} />
                         ))}
                       </td>
                       {config.resultColumns.map((col) => (

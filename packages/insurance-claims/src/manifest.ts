@@ -7,6 +7,8 @@ export const manifest = {
   label: "Siniestros",
   description:
     "Avisos, documentación y seguimiento de reclamaciones de seguros.",
+  labels: {"en": "Claims", "pt": "Sinistros"},
+  descriptions: {"en": "Notifications, documentation and insurance claim tracking.", "pt": "Avisos, documentação e acompanhamento de sinistros de seguros."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

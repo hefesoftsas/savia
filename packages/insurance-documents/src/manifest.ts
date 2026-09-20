@@ -7,6 +7,8 @@ export const manifest = {
   label: "Requisitos documentales",
   description:
     "Solicita, recibe y revisa los documentos necesarios para cada caso.",
+  labels: {"en": "Document requirements", "pt": "Requisitos documentais"},
+  descriptions: {"en": "Request, receive and review the documents needed for each case.", "pt": "Solicite, receba e revise os documentos necessários para cada caso."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

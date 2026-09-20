@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench, money, text } from "@savia/insurance-workbench";
 import { cents } from "@savia/insurance-workbench/data";
@@ -10,28 +15,30 @@ import { fields, stages, dateField } from "./fields";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate } from "./domain";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Actividad",
-  createLabel: "Nueva actividad",
-  description: "Ten a mano tus llamadas, reuniones y compromisos pendientes.",
-  dateTitle: "Fecha de compromiso",
+  singular: t("Actividad"),
+  createLabel: t("Nueva actividad"),
+  description: t("Ten a mano tus llamadas, reuniones y compromisos pendientes."),
+  dateTitle: t("Fecha de compromiso"),
   fields,
   stages,
   dateField,
   priority,
   validate,
   defaults: { stage: "scheduled", kind: "task", importance: "normal" },
-  footerNote: "Fechas calendario · Bogotá",
+  footerNote: t("Fechas calendario · Bogotá"),
   valueColumn: {
     key: "kind",
-    label: "Tipo / Prioridad",
+    label: t("Tipo / Prioridad"),
     render: (record) => (
       <>
-        <strong>{fieldLabel(fields, "kind", record.kind)}</strong>
-        <small>
-          <span
+         <strong>{t(fieldLabel(fields, "kind", record.kind))}</strong>
+         <small>
+           <span
             className="iw-badge"
             data-tone={
               record.importance === "urgent"
@@ -41,10 +48,10 @@ const config = caseConfig({
                   : undefined
             }
           >
-            {fieldLabel(fields, "importance", record.importance)}
-          </span>
-        </small>
-      </>
+             {t(fieldLabel(fields, "importance", record.importance))}
+           </span>
+         </small>
+       </>
     ),
   },
   metrics: (records, asOf) => {
@@ -59,30 +66,36 @@ const config = caseConfig({
       100;
     return [
       {
-        label: "Actividades abiertas",
+        label: t("Actividades abiertas"),
         value: open.length,
-        detail: "Compromisos que siguen pendientes",
+        detail: t("Compromisos que siguen pendientes"),
       },
       {
-        label: "Para hoy",
+        label: t("Para hoy"),
         value: records.filter((record) => priority(record, asOf) === "today")
           .length,
-        detail: "Según fecha de compromiso",
+        detail: t("Según fecha de compromiso"),
       },
       {
-        label: "Atrasadas",
+        label: t("Atrasadas"),
         value: overdue.length,
-        detail: "Reprograma o registra el resultado",
+        detail: t("Reprograma o registra el resultado"),
       },
       {
-        label: "Realizadas",
+        label: t("Realizadas"),
         value: countBy(records, "stage", "completed"),
-        detail: "Actividades con resultado documentado",
+        detail: t("Actividades con resultado documentado"),
       },
     ];
   },
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return <Workbench savia={savia} config={config} />;
 }
 export const screens = [

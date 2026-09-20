@@ -243,5 +243,20 @@
     "file": "../components/admin/simple-form-iterator.tsx",
     "text": "ra.action.move_down",
     "reason": "React-admin translation key consumed by IconButtonWithTooltip; its visible label is translated by that component."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "locale: \"es\" | \"en\" | \"pt\"",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "t({ hello: [\"Hola\", \"Hello\", \"Olá\"] }, \"hello\")",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/crm-engine/request-page-results-editor.tsx",
+    "text": "window.addEventListener(\"savia-locale-change\", render)",
+    "reason": "Technical identifier or executable configuration example; translation would change its meaning."
   }
 ]

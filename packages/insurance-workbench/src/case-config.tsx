@@ -1,3 +1,5 @@
+import { createWorkbenchTranslator } from "./localization";
+import type { PluginLocale, PluginMessages } from "@savia/crm-shared/plugin-localization";
 import { dateLabel, text, type WorkRecord } from "./data";
 import type { WorkbenchConfig, Field } from "./types";
 type CaseOptions = Pick<
@@ -30,7 +32,8 @@ const labels: Record<string, string> = {
   undated: "Sin fecha",
   invalid: "Revisar valores",
 };
-export function caseConfig(options: CaseOptions): WorkbenchConfig {
+export function caseConfig(options: CaseOptions, locale: PluginLocale = "es", catalog: PluginMessages = {}): WorkbenchConfig {
+  const t = createWorkbenchTranslator(catalog, locale);
   return {
     ...options,
     filters: [
@@ -56,7 +59,7 @@ export function caseConfig(options: CaseOptions): WorkbenchConfig {
           <>
             <strong>{text(record.name)}</strong>
             <small>
-              {text(record.customer) || "Sin cliente asociado"}
+              {text(record.customer) || t("Sin cliente asociado")}
               {record.policy_reference
                 ? ` · ${text(record.policy_reference)}`
                 : ""}
@@ -71,7 +74,7 @@ export function caseConfig(options: CaseOptions): WorkbenchConfig {
           const group = options.priority(record, asOf);
           return (
             <>
-              <span>{dateLabel(record[options.dateField])}</span>
+              <span>{dateLabel(record[options.dateField], locale)}</span>
               <small>
                 <span
                   className="iw-badge"
@@ -85,7 +88,7 @@ export function caseConfig(options: CaseOptions): WorkbenchConfig {
                           : undefined
                   }
                 >
-                  {labels[group] ?? group}
+                  {t(labels[group] ?? group)}
                 </span>
               </small>
             </>
@@ -100,9 +103,9 @@ export function caseConfig(options: CaseOptions): WorkbenchConfig {
           <>
             <span className="iw-badge">
               {options.stages.find((stage) => stage.value === record.stage)
-                ?.label ?? "Revisar etapa"}
+                ?.label ? t(options.stages.find((stage) => stage.value === record.stage)!.label) : t("Revisar etapa")}
             </span>
-            <small>{text(record.owner) || "Sin responsable"}</small>
+            <small>{text(record.owner) || t("Sin responsable")}</small>
           </>
         ),
       },
@@ -112,7 +115,7 @@ export function caseConfig(options: CaseOptions): WorkbenchConfig {
       options.fields.map(
         (field) =>
           field.options?.find((option) => option.value === record[field.key])
-            ?.label ?? record[field.key],
+            ?.label ? t(field.options.find((option) => option.value === record[field.key])!.label) : record[field.key],
       ),
   };
 }

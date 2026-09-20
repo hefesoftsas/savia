@@ -1,3 +1,4 @@
+import { ExternalErrorNotice } from "./external-error-notice";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { ResultReactSurface } from "./result-react-surface";
@@ -129,9 +130,7 @@ export function ResultCards({
               )}
             </dl>
             {row.errors.map((error, index) => (
-              <p className="text-destructive text-sm" key={index}>
-                {error}
-              </p>
+              <ExternalErrorNotice error={error} key={index} />
             ))}
             <footer>
               {comparison && (

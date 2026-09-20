@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
   Workbench,
@@ -25,60 +30,62 @@ const agingLabels: Record<string, string> = {
   undated: "Sin vencimiento",
   invalid: "Revisar saldo",
 };
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config: WorkbenchConfig = {
   object: requirement.object.name,
-  title: "Cartera",
-  singular: "Cuenta por cobrar",
-  createLabel: "Nueva cuenta",
+  title: t("Cartera"),
+  singular: t("Cuenta por cobrar"),
+  createLabel: t("Nueva cuenta"),
   description:
-    "Prioriza los cobros, registra abonos y da continuidad a cada compromiso.",
+    t("Prioriza los cobros, registra abonos y da continuidad a cada compromiso."),
   stages,
   defaults: { stage: "pending", paid: 0 },
   fields: [
-    { key: "name", label: "Referencia", required: true, maxLength: 120 },
-    { key: "customer", label: "Cliente", required: true },
-    { key: "policy_reference", label: "Póliza", maxLength: 120 },
-    { key: "insurer", label: "Aseguradora" },
-    { key: "owner", label: "Responsable", maxLength: 120 },
-    { key: "due_date", label: "Vencimiento", type: "date", required: true },
+    { key: "name", label: t("Referencia"), required: true, maxLength: 120 },
+    { key: "customer", label: t("Cliente"), required: true },
+    { key: "policy_reference", label: t("Póliza"), maxLength: 120 },
+    { key: "insurer", label: t("Aseguradora") },
+    { key: "owner", label: t("Responsable"), maxLength: 120 },
+    { key: "due_date", label: t("Vencimiento"), type: "date", required: true },
     {
       key: "amount",
-      label: "Valor de la cuenta (COP)",
+      label: t("Valor de la cuenta (COP)"),
       type: "number",
       required: true,
       min: 0.01,
     },
     {
       key: "paid",
-      label: "Acumulado pagado (COP)",
+      label: t("Acumulado pagado (COP)"),
       type: "number",
       required: true,
       min: 0,
-      help: "Para agregar un pago recibido usa Registrar abono. Este campo permite corregir el acumulado.",
+      help: t("Para agregar un pago recibido usa Registrar abono. Este campo permite corregir el acumulado."),
     },
-    { key: "last_payment_date", label: "Último pago", type: "date" },
+    { key: "last_payment_date", label: t("Último pago"), type: "date" },
     {
       key: "stage",
-      label: "Etapa de gestión",
+      label: t("Etapa de gestión"),
       type: "select",
       options: stages,
       required: true,
     },
-    { key: "next_follow_up", label: "Próximo seguimiento", type: "date" },
+    { key: "next_follow_up", label: t("Próximo seguimiento"), type: "date" },
     {
       key: "notes",
-      label: "Notas de gestión",
+      label: t("Notas de gestión"),
       type: "textarea",
-      help: "Registra acuerdos, compromisos y el siguiente paso.",
+      help: t("Registra acuerdos, compromisos y el siguiente paso."),
     },
   ],
   filters: [
-    { value: "all", label: "Todas" },
-    { value: "overdue", label: "Vencidas" },
-    { value: "current", label: "Al día" },
-    { value: "promise", label: "Compromisos" },
-    { value: "settled", label: "Pagadas" },
-    { value: "review", label: "Por revisar" },
+    { value: "all", label: t("Todas") },
+    { value: "overdue", label: t("Vencidas") },
+    { value: "current", label: t("Al día") },
+    { value: "promise", label: t("Compromisos") },
+    { value: "settled", label: t("Pagadas") },
+    { value: "review", label: t("Por revisar") },
   ],
   matches: (record, filter, asOf) =>
     filter === "all" ||
@@ -100,53 +107,53 @@ const config: WorkbenchConfig = {
     );
     return [
       {
-        label: "Saldo por cobrar",
-        value: money(sum(records)),
-        detail: "Saldo de cuentas con valores válidos",
+        label: t("Saldo por cobrar"),
+        value: money(sum(records), locale),
+        detail: t("Saldo de cuentas con valores válidos"),
       },
       {
-        label: "Saldo vencido",
-        value: money(sum(overdue)),
-        detail: `${overdue.length} cuentas requieren atención`,
+        label: t("Saldo vencido"),
+        value: money(sum(overdue), locale),
+        detail: t("%{count} cuentas requieren atención", {count: overdue.length}),
       },
       {
-        label: "Mora de más de 60 días",
+        label: t("Mora de más de 60 días"),
         value: money(
-          sum(records.filter((record) => aging(record, asOf) === "61+")),
+          sum(records.filter((record) => aging(record, asOf) === "61+")), locale
         ),
-        detail: "Prioridad de recuperación",
+        detail: t("Prioridad de recuperación"),
       },
       {
-        label: "Cuentas pagadas",
+        label: t("Cuentas pagadas"),
         value: records.filter((record) => balance(record) === 0).length,
-        detail: `${records.length} cuentas en total`,
+        detail: t("%{count} cuentas en total", {count: records.length}),
       },
     ];
   },
   columns: [
     {
       key: "customer",
-      label: "Cliente / Cuenta",
+      label: t("Cliente / Cuenta"),
       render: (record) => (
         <>
-          <strong>{text(record.customer)}</strong>
-          <small>
-            {text(record.name)} ·{" "}
-            {text(record.policy_reference) || "Sin póliza"}
-          </small>
-        </>
+           <strong>{text(record.customer)}</strong>
+           <small>
+             {text(record.name)} ·{" "}
+             {text(record.policy_reference) || t("Sin póliza")}
+           </small>
+         </>
       ),
     },
     {
       key: "due",
-      label: "Vencimiento",
+      label: t("Vencimiento"),
       render: (record, asOf) => {
         const group = aging(record, asOf);
         return (
           <>
-            <span>{dateLabel(record.due_date)}</span>
-            <small>
-              <span
+             <span>{dateLabel(record.due_date, locale)}</span>
+             <small>
+               <span
                 className="iw-badge"
                 data-tone={
                   group === "settled"
@@ -156,57 +163,57 @@ const config: WorkbenchConfig = {
                       : undefined
                 }
               >
-                {agingLabels[group]}
-              </span>
-            </small>
-          </>
+                 {t(agingLabels[group] ?? "")}
+               </span>
+             </small>
+           </>
         );
       },
     },
     {
       key: "balance",
-      label: "Saldo (COP)",
+      label: t("Saldo (COP)"),
       numeric: true,
       render: (record) => (
         <>
-          <strong>{money(balance(record))}</strong>
-          <small>de {money(record.amount)}</small>
-        </>
+           <strong>{money(balance(record), locale)}</strong>
+           <small>{t("de")} {money(record.amount, locale)}</small>
+         </>
       ),
     },
     {
       key: "stage",
-      label: "Gestión",
+      label: t("Gestión"),
       render: (record) => (
         <>
-          <span>
-            {stages.find((stage) => stage.value === record.stage)?.label ??
-              "Sin etapa"}
-          </span>
-          <small>{text(record.owner) || "Sin responsable"}</small>
-        </>
+           <span>
+             {t(stages.find((stage) => stage.value === record.stage)?.label ?? "") ??
+              t("Sin etapa")}
+           </span>
+           <small>{text(record.owner) || t("Sin responsable")}</small>
+         </>
       ),
     },
     {
       key: "followup",
-      label: "Próximo contacto",
-      render: (record) => dateLabel(record.next_follow_up),
+      label: t("Próximo contacto"),
+      render: (record) => dateLabel(record.next_follow_up, locale),
     },
   ],
   validate: validateAccount,
   payment: { balance, patch: paymentPatch },
   exportHeaders: [
-    "Referencia",
-    "Cliente",
-    "Póliza",
-    "Aseguradora",
-    "Responsable",
-    "Vencimiento",
+    t("Referencia"),
+    t("Cliente"),
+    t("Póliza"),
+    t("Aseguradora"),
+    t("Responsable"),
+    t("Vencimiento"),
     "Valor COP",
     "Pagado COP",
     "Saldo COP",
-    "Etapa",
-    "Seguimiento",
+    t("Etapa"),
+    t("Seguimiento"),
   ],
   exportRow: (record) => [
     record.name,
@@ -218,11 +225,17 @@ const config: WorkbenchConfig = {
     record.amount,
     record.paid,
     balance(record),
-    stages.find((stage) => stage.value === record.stage)?.label,
+    t(stages.find((stage) => stage.value === record.stage)?.label ?? ""),
     record.next_follow_up,
   ],
 };
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function CollectionsScreen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return <Workbench savia={savia} config={config} />;
 }
 export const screens = [

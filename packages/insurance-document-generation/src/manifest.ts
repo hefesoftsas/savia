@@ -8,6 +8,8 @@ export const manifest = {
   label: "Documentos y firma",
   description:
     "Genera documentos desde plantillas y gestiona solicitudes de firma.",
+  labels: {"en": "Documents and signatures", "pt": "Documentos e assinaturas"},
+  descriptions: {"en": "Generate documents from templates and manage signature requests.", "pt": "Gere documentos a partir de modelos e gerencie solicitações de assinatura."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

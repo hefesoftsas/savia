@@ -1,3 +1,5 @@
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { useMessages } from "./localization";
 import { useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { text, type WorkRecord } from "@savia/insurance-workbench";
@@ -8,23 +10,25 @@ export function ResponseAction({
   savia: PluginApi;
   record: WorkRecord;
 }) {
+const locale = usePluginLocale();
+const t = useMessages();
+
   const [recipient, setRecipient] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <section className="iw-tools" aria-label="Preparar respuesta">
-      <h2>Preparar respuesta</h2>
-      <div className="iw-tool-fields">
-        <label>
-          Correo del destinatario
-          <input
+    <section className="iw-tools" aria-label={t("Preparar respuesta")}>
+       <h2>{t("Preparar respuesta")} </h2>
+       <div className="iw-tool-fields">
+         <label>
+          {t("Correo del destinatario")} <input
             type="email"
             value={recipient}
             onChange={(event) => setRecipient(event.target.value)}
           />
-        </label>
-      </div>
-      <button
+         </label>
+       </div>
+       <button
         type="button"
         disabled={busy || !String(record.outcome ?? "").trim()}
         onClick={async () => {
@@ -56,16 +60,15 @@ export function ResponseAction({
             setMessage(
               error instanceof Error
                 ? error.message
-                : "No se pudo preparar la respuesta.",
+                : t("No se pudo preparar la respuesta."),
             );
           } finally {
             setBusy(false);
           }
         }}
       >
-        Preparar respuesta por correo
-      </button>
-      <p role="status">{message}</p>
-    </section>
+        {t("Preparar respuesta por correo")} </button>
+       <p role="status">{t(message)}</p>
+     </section>
   );
 }

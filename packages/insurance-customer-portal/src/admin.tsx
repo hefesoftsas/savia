@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type { PluginApi, PluginFile } from "@savia/crm-shared/plugin-api";
 import {
@@ -19,6 +21,7 @@ import {
 } from "./domain";
 import "./portal.css";
 export function Screen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const [customer, setCustomer] = useState(""),
     [policies, setPolicies] = useState<WorkRecord[]>([]),
     [requests, setRequests] = useState<WorkRecord[]>([]),
@@ -117,47 +120,35 @@ export function Screen({ savia }: { savia: PluginApi }) {
     <main className="ic-portal">
       <header>
         <div>
-          <h1>Tu portal de seguros</h1>
+          <h1>{t("Tu portal de seguros")}</h1>
           <p>
-            Consulta tus pólizas y conversa con tu asesor a través de
-            solicitudes con seguimiento.
-          </p>
+            {t("Consulta tus pólizas y conversa con tu asesor a través de solicitudes con seguimiento.")}</p>
         </div>
         <button disabled={busy} onClick={() => void refresh()}>
-          Actualizar
-        </button>
+          {t("Actualizar")}</button>
       </header>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      {busy && <p role="status">Cargando…</p>}
+      {busy && <p role="status">{t("Cargando…")}</p>}
       {!customer && !busy ? (
         <section>
-          <h2>Acceso pendiente de configuración</h2>
+          <h2>{t("Acceso pendiente de configuración")}</h2>
           <p>
-            Este portal necesita una cuenta autenticada con permisos exclusivos
-            para un cliente. Tu asesor debe revisar la asignación en Roles y
-            permisos.
-          </p>
+            {t("Este portal necesita una cuenta autenticada con permisos exclusivos para un cliente. Tu asesor debe revisar la asignación en Roles y permisos.")}</p>
           <details>
-            <summary>Guía para quien administra el acceso</summary>
+            <summary>{t("Guía para quien administra el acceso")}</summary>
             <p>
-              Descarga una propuesta validada de permisos y aplícala en Roles y
-              permisos. No concede acceso por sí sola. Usa una cuenta de cliente
-              sin rol administrador ni permisos adicionales. Consulta la guía de
-              instalación del portal antes de asignar el rol.
-            </p>
+              {t("Descarga una propuesta validada de permisos y aplícala en Roles y permisos. No concede acceso por sí sola. Usa una cuenta de cliente sin rol administrador ni permisos adicionales. Consulta la guía de instalación del portal antes de asignar el rol.")}</p>
             <div className="ic-controls">
               <label>
-                Identificador exacto del cliente
-                <input
+                {t("Identificador exacto del cliente")}<input
                   value={setupId}
                   onChange={(e) => setSetupId(e.target.value)}
                   maxLength={200}
                 />
               </label>
               <button onClick={exportBlueprint}>
-                Descargar propuesta de permisos
-              </button>
+                {t("Descargar propuesta de permisos")}</button>
             </div>
           </details>
         </section>
@@ -165,29 +156,27 @@ export function Screen({ savia }: { savia: PluginApi }) {
         customer && (
           <>
             <section>
-              <h2>Mis pólizas</h2>
+              <h2>{t("Mis pólizas")}</h2>
               {!policies.length ? (
                 <p>
-                  No tienes pólizas disponibles en este portal. Puedes enviar
-                  una consulta a tu asesor.
-                </p>
+                  {t("No tienes pólizas disponibles en este portal. Puedes enviar una consulta a tu asesor.")}</p>
               ) : (
                 <div className="ic-table">
                   <table>
                     <thead>
                       <tr>
-                        <th>Póliza</th>
-                        <th>Estado</th>
-                        <th>Inicio</th>
-                        <th>Vencimiento</th>
-                        <th>Prima</th>
+                        <th>{t("Póliza")}</th>
+                        <th>{t("Estado")}</th>
+                        <th>{t("Inicio")}</th>
+                        <th>{t("Vencimiento")}</th>
+                        <th>{t("Prima")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {policies.map((p) => (
                         <tr key={p.id}>
                           <td>{text(p.name) || p.id}</td>
-                          <td>{text(p.estado) || "Sin estado"}</td>
+                          <td>{text(p.estado) || t("Sin estado")}</td>
                           <td>{dateLabel(p.inicio)}</td>
                           <td>{dateLabel(p.fin)}</td>
                           <td>{money(p.prima)}</td>
@@ -199,12 +188,9 @@ export function Screen({ savia }: { savia: PluginApi }) {
               )}
             </section>
             <section>
-              <h2>Nueva solicitud</h2>
+              <h2>{t("Nueva solicitud")}</h2>
               <p>
-                Para un siniestro, este formulario envía un aviso a tu asesor.
-                No confirma cobertura ni reemplaza los canales de atención
-                urgente de tu aseguradora.
-              </p>
+                {t("Para un siniestro, este formulario envía un aviso a tu asesor. No confirma cobertura ni reemplaza los canales de atención urgente de tu aseguradora.")}</p>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -232,8 +218,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               >
                 <div className="ic-controls">
                   <label>
-                    Asunto
-                    <input
+                    {t("Asunto")}<input
                       required
                       minLength={3}
                       maxLength={160}
@@ -242,25 +227,23 @@ export function Screen({ savia }: { savia: PluginApi }) {
                     />
                   </label>
                   <label>
-                    Tipo
-                    <select
+                    {t("Tipo")}<select
                       value={kind}
                       onChange={(e) => setKind(e.target.value)}
                     >
-                      <option value="query">Consulta</option>
-                      <option value="certificate">Solicitar certificado</option>
-                      <option value="data_update">Actualizar mis datos</option>
-                      <option value="complaint">Reclamo de servicio</option>
-                      <option value="claim">Aviso de siniestro</option>
+                      <option value="query">{t("Consulta")}</option>
+                      <option value="certificate">{t("Solicitar certificado")}</option>
+                      <option value="data_update">{t("Actualizar mis datos")}</option>
+                      <option value="complaint">{t("Reclamo de servicio")}</option>
+                      <option value="claim">{t("Aviso de siniestro")}</option>
                     </select>
                   </label>
                   <label>
-                    Póliza relacionada
-                    <select
+                    {t("Póliza relacionada")}<select
                       value={policy}
                       onChange={(e) => setPolicy(e.target.value)}
                     >
-                      <option value="">Sin póliza relacionada</option>
+                      <option value="">{t("Sin póliza relacionada")}</option>
                       {policies.map((p) => (
                         <option key={p.id} value={p.id}>
                           {text(p.name) || p.id}
@@ -270,8 +253,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                   </label>
                 </div>
                 <label>
-                  Cuéntanos qué necesitas
-                  <textarea
+                  {t("Cuéntanos qué necesitas")}<textarea
                     required
                     minLength={10}
                     maxLength={6000}
@@ -280,23 +262,22 @@ export function Screen({ savia }: { savia: PluginApi }) {
                   />
                 </label>
                 <button className="ic-primary" disabled={busy} type="submit">
-                  Enviar solicitud
-                </button>
+                  {t("Enviar solicitud")}</button>
               </form>
             </section>
             <section>
-              <h2>Mis solicitudes</h2>
+              <h2>{t("Mis solicitudes")}</h2>
               {!requests.length ? (
-                <p>Aún no has enviado solicitudes.</p>
+                <p>{t("Aún no has enviado solicitudes.")}</p>
               ) : (
                 <div className="ic-table">
                   <table>
                     <thead>
                       <tr>
-                        <th>Asunto</th>
-                        <th>Estado</th>
-                        <th>Respuesta</th>
-                        <th>Detalle</th>
+                        <th>{t("Asunto")}</th>
+                        <th>{t("Estado")}</th>
+                        <th>{t("Respuesta")}</th>
+                        <th>{t("Detalle")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -304,7 +285,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                         <tr key={r.id}>
                           <td>{text(r.name)}</td>
                           <td>
-                            {statusLabels[text(r.stage)] ?? "En revisión"}
+                            {statusLabels[text(r.stage)] ?? t("En revisión")}
                           </td>
                           <td>{dateLabel(r.response_date)}</td>
                           <td>
@@ -312,7 +293,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                               disabled={busy}
                               onClick={() => void openRequest(r)}
                             >
-                              Ver {text(r.name)}
+                              {t("Ver")}{text(r.name)}
                             </button>
                           </td>
                         </tr>
@@ -323,7 +304,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               )}
             </section>
             {selected && (
-              <section aria-label="Detalle de la solicitud">
+              <section aria-label={t("Detalle de la solicitud")}>
                 <header>
                   <h2>{text(selected.name)}</h2>
                   <button
@@ -333,27 +314,23 @@ export function Screen({ savia }: { savia: PluginApi }) {
                       setFiles([]);
                     }}
                   >
-                    Cerrar detalle
-                  </button>
+                    {t("Cerrar detalle")}</button>
                 </header>
                 <p style={{ whiteSpace: "pre-wrap" }}>
                   {text(selected.details)}
                 </p>
-                <h3>Respuesta de tu asesor</h3>
+                <h3>{t("Respuesta de tu asesor")}</h3>
                 <p style={{ whiteSpace: "pre-wrap" }}>
                   {text(selected.response) ||
-                    "Tu solicitud está pendiente de respuesta."}
+                    t("Tu solicitud está pendiente de respuesta.")}
                 </p>
-                <h3>Documentos</h3>
+                <h3>{t("Documentos")}</h3>
                 {savia.files ? (
                   <>
                     <p>
-                      Adjunta documentos de esta solicitud. Máximo 5 MB por
-                      archivo y 50 documentos por solicitud.
-                    </p>
+                      {t("Adjunta documentos de esta solicitud. Máximo 5 MB por archivo y 50 documentos por solicitud.")}</p>
                     <label>
-                      Subir documento
-                      <input
+                      {t("Subir documento")}<input
                         type="file"
                         disabled={busy}
                         onChange={(e) => {
@@ -389,21 +366,18 @@ export function Screen({ savia }: { savia: PluginApi }) {
                               disabled={busy}
                               onClick={() => void download(file)}
                             >
-                              Descargar {file.name}
+                              {t("Descargar")}{file.name}
                             </button>{" "}
-                            · {Math.ceil(file.size / 1024)} KB
-                          </li>
+                            · {Math.ceil(file.size / 1024)} {t("KB")}</li>
                         ))}
                       </ul>
                     ) : (
-                      <p>No hay documentos adjuntos.</p>
+                      <p>{t("No hay documentos adjuntos.")}</p>
                     )}
                   </>
                 ) : (
                   <p>
-                    La carga de documentos no está disponible en esta
-                    instalación.
-                  </p>
+                    {t("La carga de documentos no está disponible en esta instalación.")}</p>
                 )}
               </section>
             )}

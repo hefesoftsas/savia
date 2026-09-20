@@ -17,6 +17,8 @@ export const insuranceQuotesExtensionManifest: ExtensionManifest = {
   version: "1.2.0",
   label: "Cotizaciones de seguros",
   description: "Conecta proveedores de seguros para solicitar cotizaciones.",
+  labels: {"en": "Insurance quotes", "pt": "Cotações de seguros"},
+  descriptions: {"en": "Connect insurance providers to request quotes.", "pt": "Conecte provedores de seguros para solicitar cotações."},
   requires: [],
   apiVersion: 1,
 };

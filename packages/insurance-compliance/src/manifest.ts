@@ -11,6 +11,8 @@ export const manifest = {
   label: "Expedientes de cumplimiento",
   description:
     "Organiza requisitos, evidencias, revisiones y vigencias configurables.",
+  labels: {"en": "Compliance files", "pt": "Dossiês de conformidade"},
+  descriptions: {"en": "Organize configurable requirements, evidence, reviews and validity periods.", "pt": "Organize requisitos, evidências, revisões e prazos de validade configuráveis."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench, money, text } from "@savia/insurance-workbench";
 import { cents } from "@savia/insurance-workbench/data";
@@ -10,14 +15,16 @@ import { fields, stages, dateField } from "./fields";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate, weightedPremium } from "./domain";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Oportunidad comercial",
-  createLabel: "Nueva oportunidad",
+  singular: t("Oportunidad comercial"),
+  createLabel: t("Nueva oportunidad"),
   description:
-    "Organiza tu gestión comercial y convierte cada conversación en un siguiente paso.",
-  dateTitle: "Cierre esperado",
+    t("Organiza tu gestión comercial y convierte cada conversación en un siguiente paso."),
+  dateTitle: t("Cierre esperado"),
   fields,
   stages,
   dateField,
@@ -26,16 +33,16 @@ const config = caseConfig({
   defaults: { stage: "lead", probability: 0, premium: 0 },
   valueColumn: {
     key: "premium",
-    label: "Prima / Probabilidad",
+    label: t("Prima / Probabilidad"),
     numeric: true,
     render: (record) => (
       <>
-        <strong>{money(record.premium)}</strong>
-        <small>
-          {String(record.probability ?? 0)} % ·{" "}
-          {text(record.product) || "Sin producto"}
-        </small>
-      </>
+         <strong>{money(record.premium, locale)}</strong>
+         <small>
+           {String(record.probability ?? 0)} % ·{" "}
+           {text(record.product) || t("Sin producto")}
+         </small>
+       </>
     ),
   },
   metrics: (records, asOf) => {
@@ -50,34 +57,40 @@ const config = caseConfig({
       100;
     return [
       {
-        label: "Oportunidades abiertas",
+        label: t("Oportunidades abiertas"),
         value: open.length,
-        detail: "Negocios que siguen en gestión",
+        detail: t("Negocios que siguen en gestión"),
       },
       {
-        label: "Prima potencial",
-        value: money(sum(open, "premium")),
-        detail: "Estimación sin ponderar",
+        label: t("Prima potencial"),
+        value: money(sum(open, "premium"), locale),
+        detail: t("Estimación sin ponderar"),
       },
       {
-        label: "Prima ponderada",
+        label: t("Prima ponderada"),
         value: money(
           open.reduce(
             (sum, record) => sum + (cents(weightedPremium(record)) ?? 0),
             0,
-          ) / 100,
+          ) / 100, locale
         ),
-        detail: "Estimación según probabilidad registrada",
+        detail: t("Estimación según probabilidad registrada"),
       },
       {
-        label: "Ganadas",
+        label: t("Ganadas"),
         value: countBy(records, "stage", "won"),
         detail: `${countBy(records, "stage", "lost")} oportunidades perdidas`,
       },
     ];
   },
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return <Workbench savia={savia} config={config} />;
 }
 export const screens = [

@@ -10,6 +10,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Liquidaciones",
   description: "Calcula participaciones y estados de liquidación.",
+  labels: {"en": "Settlements", "pt": "Liquidações"},
+  descriptions: {"en": "Calculate shares and settlement statements.", "pt": "Calcule participações e demonstrativos de liquidação."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench, money, text } from "@savia/insurance-workbench";
 import { cents } from "@savia/insurance-workbench/data";
@@ -11,14 +16,16 @@ import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate, calculatedCommission } from "./domain";
 import { balance, paymentPatch } from "@savia/insurance-workbench/financial";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Comisión",
-  createLabel: "Nueva comisión",
+  singular: t("Comisión"),
+  createLabel: t("Nueva comisión"),
   description:
-    "Concilia lo esperado, registra lo recibido y controla cada diferencia.",
-  dateTitle: "Recaudo previsto",
+    t("Concilia lo esperado, registra lo recibido y controla cada diferencia."),
+  dateTitle: t("Recaudo previsto"),
   fields,
   stages,
   dateField,
@@ -28,16 +35,16 @@ const config = caseConfig({
   payment: { balance, patch: paymentPatch },
   valueColumn: {
     key: "balance",
-    label: "Por recaudar (COP)",
+    label: t("Por recaudar (COP)"),
     numeric: true,
     render: (record) => (
       <>
-        <strong>{money(balance(record))}</strong>
-        <small>
-          Estimación por tasa:{" "}
-          {money(calculatedCommission(record.premium, record.rate))}
-        </small>
-      </>
+         <strong>{money(balance(record), locale)}</strong>
+         <small>
+          {t("Estimación por tasa:")} {" "}
+           {money(calculatedCommission(record.premium, record.rate), locale)}
+         </small>
+       </>
     ),
   },
   metrics: (records, asOf) => {
@@ -52,32 +59,38 @@ const config = caseConfig({
       100;
     return [
       {
-        label: "Por recaudar",
+        label: t("Por recaudar"),
         value: money(
           open.reduce((sum, record) => sum + (cents(balance(record)) ?? 0), 0) /
-            100,
+            100, locale
         ),
-        detail: "Saldo de comisiones con valores válidos",
+        detail: t("Saldo de comisiones con valores válidos"),
       },
       {
-        label: "Recaudo registrado",
-        value: money(sum(records, "paid")),
-        detail: "Acumulado recibido de aseguradoras",
+        label: t("Recaudo registrado"),
+        value: money(sum(records, "paid"), locale),
+        detail: t("Acumulado recibido de aseguradoras"),
       },
       {
-        label: "Participación del vendedor",
-        value: money(sum(records, "seller_share")),
-        detail: "Asignación prevista, no pago realizado",
+        label: t("Participación del vendedor"),
+        value: money(sum(records, "seller_share"), locale),
+        detail: t("Asignación prevista, no pago realizado"),
       },
       {
-        label: "Diferencias por revisar",
+        label: t("Diferencias por revisar"),
         value: countBy(records, "stage", "disputed"),
-        detail: "Registros pendientes de conciliación",
+        detail: t("Registros pendientes de conciliación"),
       },
     ];
   },
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return <Workbench savia={savia} config={config} />;
 }
 export const screens = [

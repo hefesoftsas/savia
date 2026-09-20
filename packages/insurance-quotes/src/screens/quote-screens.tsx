@@ -1,3 +1,4 @@
+import { useInsuranceMessages } from "../localization";
 import { useEffect, useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
@@ -44,11 +45,12 @@ function useInsuranceSettings(savia: PluginApi) {
 }
 
 function QuoteScreen({ savia, wizard }: ScreenProps & { wizard: boolean }) {
+  const t = useInsuranceMessages();
   const { error, settings } = useInsuranceSettings(savia);
 
   return (
     <>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <p role="alert">{t(error)}</p> : null}
       {!settings ? <QuoteWizardSkeleton isWizard={wizard} /> : null}
       {settings ? (
         <InsuranceQuoteWizard
@@ -80,6 +82,8 @@ function ClientMappingPanel({
     change: (current: InsurancePackageSettings) => InsurancePackageSettings,
   ) => void;
 }) {
+  const t = useInsuranceMessages();
+
   const [crmCollections, setCrmCollections] = useState<
     Array<{ name: string; label?: string }>
   >([]);
@@ -140,29 +144,27 @@ function ClientMappingPanel({
   const rows = Object.entries(mapping.fieldMap);
 
   return (
-    <section className="insurance-admin__panel" aria-label="Mapeo de cliente">
+    <section className="insurance-admin__panel" aria-label={t("Mapeo de cliente")}>
       <div className="insurance-admin__panel-heading">
         <div>
-          <h2>Mapeo de cliente</h2>
+          <h2>{t("Mapeo de cliente")}</h2>
           <p className="insurance-admin__subtle">
-            El paso Solicitante y conductor guarda o actualiza el cliente en
-            esta colección al cotizar.
-          </p>
+             {t("El paso Solicitante y conductor guarda o actualiza el cliente en esta colección al cotizar.")} </p>
         </div>
         <span
           className="insurance-admin__help"
-          title="Colección destino y equivalencia de campos. El campo de coincidencia evita duplicados."
-          aria-label="Ayuda sobre mapeo de cliente"
+          title={t("Colección destino y equivalencia de campos. El campo de coincidencia evita duplicados.")}
+          aria-label={t("Ayuda sobre mapeo de cliente")}
         >
           ?
         </span>
       </div>
       <div className="insurance-admin__lookup">
         <label className="insurance-admin__field">
-          <span>Colección destino</span>
+          <span>{t("Colección destino")}</span>
           {crmCollections.length > 0 ? (
             <select
-              aria-label="Colección destino del cliente"
+              aria-label={t("Colección destino del cliente")}
               value={mapping.collection}
               onChange={(event) =>
                 setMapping((current) => ({
@@ -188,7 +190,7 @@ function ClientMappingPanel({
             </select>
           ) : (
             <input
-              aria-label="Colección destino del cliente"
+              aria-label={t("Colección destino del cliente")}
               value={mapping.collection}
               onChange={(event) =>
                 setMapping((current) => ({
@@ -196,14 +198,14 @@ function ClientMappingPanel({
                   collection: event.target.value,
                 }))
               }
-              placeholder="Ej. clientes"
+              placeholder={t("Ej. clientes")}
             />
           )}
         </label>
         <label className="insurance-admin__field">
-          <span>Campo de coincidencia</span>
+          <span>{t("Campo de coincidencia")}</span>
           <input
-            aria-label="Campo de coincidencia"
+            aria-label={t("Campo de coincidencia")}
             value={mapping.matchField}
             onChange={(event) =>
               setMapping((current) => ({
@@ -211,7 +213,7 @@ function ClientMappingPanel({
                 matchField: event.target.value,
               }))
             }
-            placeholder="Ej. documento"
+            placeholder={t("Ej. documento")}
             list="insurance-mapping-match-fields"
           />
           <datalist id="insurance-mapping-match-fields">
@@ -221,13 +223,13 @@ function ClientMappingPanel({
           </datalist>
         </label>
       </div>
-      <div className="insurance-mapping-rows" role="group" aria-label="Equivalencia de campos">
+      <div className="insurance-mapping-rows" role="group" aria-label={t("Equivalencia de campos")}>
         {rows.map(([collectionField, source]) => (
           <div className="insurance-mapping-row" key={collectionField}>
             <label className="insurance-admin__field">
-              <span>Campo en {mapping.collection || "la colección"}</span>
+              <span>{t("Campo en")} {mapping.collection || "la colección"}</span>
               <input
-                aria-label="Campo de la colección"
+                aria-label={t("Campo de la colección")}
                 value={collectionField}
                 onChange={(event) => {
                   const nextKey = event.target.value.trim();
@@ -244,13 +246,13 @@ function ClientMappingPanel({
                   });
                 }}
                 list="insurance-mapping-collection-fields"
-                placeholder="Ej. telefono"
+                placeholder={t("Ej. telefono")}
               />
             </label>
             <label className="insurance-admin__field">
-              <span>Campo del solicitante</span>
+              <span>{t("Campo del solicitante")}</span>
               <select
-                aria-label={`Origen para ${collectionField}`}
+                aria-label={t("Origen para %{p0}", {p0: collectionField})}
                 value={source}
                 onChange={(event) =>
                   setMapping((current) => ({
@@ -269,13 +271,13 @@ function ClientMappingPanel({
                 ) : null}
                 {APPLICANT_SOURCE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </select>
             </label>
             <button
-              aria-label={`Quitar mapeo de ${collectionField}`}
+              aria-label={t("Quitar mapeo de %{p0}", {p0: collectionField})}
               className="insurance-mapping-remove"
               onClick={() =>
                 setMapping((current) => {
@@ -284,7 +286,7 @@ function ClientMappingPanel({
                   return { ...current, fieldMap: next };
                 })
               }
-              title={`Quitar mapeo de ${collectionField}`}
+              title={t("Quitar mapeo de %{p0}", {p0: collectionField})}
               type="button"
             >
               ✕
@@ -314,11 +316,10 @@ function ClientMappingPanel({
               };
             })
           }
-          title="Agregar una equivalencia de campo"
+          title={t("Agregar una equivalencia de campo")}
           type="button"
         >
-          + Agregar campo
-        </button>
+           {t("+ Agregar campo")} </button>
         <button
           className="insurance-mapping-reset"
           onClick={() =>
@@ -327,17 +328,18 @@ function ClientMappingPanel({
               fieldMap: { ...defaultClientMapping.fieldMap },
             }))
           }
-          title="Volver al mapeo de Clientes por defecto"
+          title={t("Volver al mapeo de Clientes por defecto")}
           type="button"
         >
-          Restablecer
-        </button>
+           {t("Restablecer")} </button>
       </div>
     </section>
   );
 }
 
 export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
+  const t = useInsuranceMessages();
+
   const { error, settings, setError, setSettings, setVersion, version } =
     useInsuranceSettings(savia);
   const [draft, setDraft] = useState<InsurancePackageSettings | null>(null);
@@ -391,19 +393,18 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
     });
 
   return (
-    <main className="extension-policy-screen" aria-label="Administrar Seguros">
+    <main className="extension-policy-screen" aria-label={t("Administrar Seguros")}>
       <header className="extension-policy-heading">
         <div>
-          <p className="extension-policy-eyebrow">Seguros</p>
-          <h1>Administrar Seguros</h1>
+          <p className="extension-policy-eyebrow">{t("Seguros")}</p>
+          <h1>{t("Administrar Seguros")}</h1>
           <p className="extension-policy-empty">
-            Controla qué se cotiza en este tenant.
-          </p>
+             {t("Controla qué se cotiza en este tenant.")} </p>
         </div>
       </header>
       {error ? (
         <p className="extension-policy-error" role="alert">
-          {error}
+          {t(error)}
         </p>
       ) : null}
       {!settings ? <InsuranceAdminSkeleton /> : null}
@@ -411,16 +412,16 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
         <div className="insurance-admin">
           <section
             className="insurance-admin__panel"
-            aria-label="Disponibilidad del paquete"
+            aria-label={t("Disponibilidad del paquete")}
           >
             <div className="insurance-admin__panel-heading">
               <div>
-                <h2>Pantallas</h2>
+                <h2>{t("Pantallas")}</h2>
               </div>
               <span
                 className="insurance-admin__help"
-                title="Los cambios se aplican al guardar."
-                aria-label="Ayuda sobre pantallas"
+                title={t("Los cambios se aplican al guardar.")}
+                aria-label={t("Ayuda sobre pantallas")}
               >
                 ?
               </span>
@@ -440,7 +441,7 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
                     }))
                   }
                 />
-                <span>Cotizador</span>
+                <span>{t("Cotizador")}</span>
               </label>
               <label>
                 <input
@@ -456,28 +457,27 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
                     }))
                   }
                 />
-                <span>Cotizador por pasos</span>
+                <span>{t("Cotizador por pasos")}</span>
               </label>
             </div>
           </section>
 
-          <section className="insurance-admin__panel" aria-label="Productos">
+          <section className="insurance-admin__panel" aria-label={t("Productos")}>
             <div className="insurance-admin__panel-heading">
               <div>
-                <h2>Productos</h2>
+                <h2>{t("Productos")}</h2>
               </div>
               <span
                 className="insurance-admin__help"
-                title="Los productos activos se ejecutan juntos al cotizar. Usa las flechas para ordenar las tarjetas."
-                aria-label="Ayuda sobre productos"
+                title={t("Los productos activos se ejecutan juntos al cotizar. Usa las flechas para ordenar las tarjetas.")}
+                aria-label={t("Ayuda sobre productos")}
               >
                 ?
               </span>
             </div>
             <details className="insurance-admin__products-disclosure">
               <summary>
-                {draft.products.filter((product) => product.enabled).length} de {draft.products.length} activos
-              </summary>
+                {draft.products.filter((product) => product.enabled).length}  {t("de")} {draft.products.length}  {t("activos")} </summary>
               <div className="insurance-admin__products">
                 {[...draft.products].sort((left, right) => left.rank - right.rank).map((product, index) => (
                   <article key={product.id} className="insurance-admin__product">
@@ -499,8 +499,8 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
                       <span>{product.label}</span>
                     </label>
                     <div className="insurance-admin__product-actions">
-                      <button aria-label={`Subir ${product.label}`} disabled={index === 0} onClick={() => moveProduct(product.id, -1)} title="Subir" type="button">↑</button>
-                      <button aria-label={`Bajar ${product.label}`} disabled={index === draft.products.length - 1} onClick={() => moveProduct(product.id, 1)} title="Bajar" type="button">↓</button>
+                      <button aria-label={t("Subir %{p0}", {p0: product.label})} disabled={index === 0} onClick={() => moveProduct(product.id, -1)} title={t("Subir")} type="button">↑</button>
+                      <button aria-label={t("Bajar %{p0}", {p0: product.label})} disabled={index === draft.products.length - 1} onClick={() => moveProduct(product.id, 1)} title={t("Bajar")} type="button">↓</button>
                     </div>
                   </article>
                 ))}
@@ -514,10 +514,10 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
             updateDraft={updateDraft}
           />
 
-          <section className="insurance-admin__panel" aria-label="Consulta de placa">
+          <section className="insurance-admin__panel" aria-label={t("Consulta de placa")}>
             <div className="insurance-admin__panel-heading">
               <div>
-                <h2>Consulta de placa</h2>
+                <h2>{t("Consulta de placa")}</h2>
               </div>
             </div>
             <div className="insurance-admin__lookup">
@@ -535,12 +535,12 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
                     }))
                   }
                 />
-                <span>Habilitar consulta</span>
+                <span>{t("Habilitar consulta")}</span>
               </label>
               <label className="insurance-admin__field">
-                <span>Flow de consulta de placa</span>
+                <span>{t("Flow de consulta de placa")}</span>
                 <select
-                  aria-label="Flow de consulta de placa"
+                  aria-label={t("Flow de consulta de placa")}
                   value={draft.vehicleLookup.flowId}
                   onChange={(event) =>
                     updateDraft((current) => ({
@@ -567,11 +567,11 @@ export function InsurancePackageAdminScreen({ savia }: ScreenProps) {
                 disabled={savingSettings}
                 title={
                   savingSettings
-                    ? "Guardando la configuración…"
-                    : "Guardar productos, mapeo de cliente y consulta de placa"
+                    ? t("Guardando la configuración…")
+                    : t("Guardar productos, mapeo de cliente y consulta de placa")
                 }
               >
-                {savingSettings ? "Guardando…" : "Guardar cambios"}
+                {savingSettings ? t("Guardando…") : t("Guardar cambios")}
               </button>
             </div>
           </section>

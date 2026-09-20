@@ -1,3 +1,5 @@
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { useMessages } from "./localization";
 import { useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { today, type WorkRecord } from "@savia/insurance-workbench";
@@ -11,12 +13,15 @@ export function RecordActions({
   record: WorkRecord;
   onSaved: () => void;
 }) {
+const locale = usePluginLocale();
+const t = useMessages();
+
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   return (
-    <section className="iw-tools" aria-label="Acciones del caso">
-      <h2>Vigencia del documento</h2>
-      <button
+    <section className="iw-tools" aria-label={t("Acciones del caso")}>
+       <h2>{t("Vigencia del documento")} </h2>
+       <button
         type="button"
         disabled={busy}
         onClick={async () => {
@@ -28,7 +33,7 @@ export function RecordActions({
             );
             const current = await collection.get(record.id);
             if (current._version === undefined)
-              throw new Error("Recarga el registro antes de continuar.");
+              throw new Error(t("Recarga el registro antes de continuar."));
             await collection.update(
               current.id,
               reopenExpired(current, today()),
@@ -38,16 +43,15 @@ export function RecordActions({
             setMessage("Cambio guardado.");
           } catch (error) {
             setMessage(
-              error instanceof Error ? error.message : "No se pudo guardar.",
+              error instanceof Error ? error.message : t("No se pudo guardar."),
             );
           } finally {
             setBusy(false);
           }
         }}
       >
-        Reabrir documento vencido
-      </button>
-      <p role="status">{message}</p>
-    </section>
+        {t("Reabrir documento vencido")} </button>
+       <p role="status">{t(message)}</p>
+     </section>
   );
 }

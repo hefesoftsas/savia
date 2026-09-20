@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { saveIntegrationRecord } from "./persistence";
@@ -12,6 +14,7 @@ import {
   loadAll,
 } from "./ui";
 export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const state = useIntegration(savia);
   const [recipient, setRecipient] = useState(""),
     [name, setName] = useState(""),
@@ -87,13 +90,12 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
   }
   return (
     <Shell
-      title="Comunicaciones"
-      description="Prepara mensajes, confirma el consentimiento y consulta la entrega informada por tu proveedor."
+      title={t("Comunicaciones")}
+      description={t("Prepara mensajes, confirma el consentimiento y consulta la entrega informada por tu proveedor.")}
     >
       <IntegrationStatus state={state} connectorId={`${manifest.id}.gateway`} />
       <label>
-        Borradores guardados
-        <select
+        {t("Borradores guardados")}<select
           value={draftId}
           onChange={(e) => {
             if (!e.target.value) {
@@ -120,7 +122,7 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
             }
           }}
         >
-          <option value="">Nuevo mensaje</option>
+          <option value="">{t("Nuevo mensaje")}</option>
           {drafts.map((d) => (
             <option key={String(d.id)} value={String(d.id)}>
               {String(d.title)}
@@ -138,8 +140,7 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
         }}
       >
         <label>
-          Destinatario
-          <input
+          {t("Destinatario")}<input
             required
             value={recipient}
             onChange={(e) => {
@@ -151,8 +152,7 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label>
-          Nombre para la plantilla
-          <input
+          {t("Nombre para la plantilla")}<input
             value={name}
             onChange={(e) => {
               setName(e.target.value);
@@ -161,7 +161,7 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label className="integration-wide">
-          Plantilla · variable disponible: {"{{nombre}}"}
+          {t("Plantilla · variable disponible:")}{t("{{nombre}}")}
           <textarea
             required
             value={template}
@@ -177,24 +177,21 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
           />
-          Consentimiento vigente verificado
-        </label>
+          {t("Consentimiento vigente verificado")}</label>
         <label>
           <input
             type="checkbox"
             checked={suppressed}
             onChange={(e) => setSuppressed(e.target.checked)}
           />
-          Destinatario suprimido
-        </label>
+          {t("Destinatario suprimido")}</label>
         <div className="integration-wide">
-          <h2>Vista previa</h2>
+          <h2>{t("Vista previa")}</h2>
           <pre>{preview}</pre>
         </div>
         <div className="integration-actions integration-wide">
           <button type="button" disabled={state.busy} onClick={save}>
-            Guardar borrador
-          </button>
+            {t("Guardar borrador")}</button>
           <button
             type="submit"
             disabled={
@@ -205,15 +202,14 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
               !state.connections.length
             }
           >
-            {state.busy ? "Procesando…" : "Enviar mensaje"}
+            {state.busy ? t("Procesando…") : t("Enviar mensaje")}
           </button>
           <button type="button" onClick={resetMessage}>
-            Nuevo envío
-          </button>
+            {t("Nuevo envío")}</button>
         </div>
       </form>
       <p role="status">{notice}</p>
-      <p>Referencia para reintentos: {key}</p>
+      <p>{t("Referencia para reintentos:")}{key}</p>
       <div className="integration-actions">
         <button
           disabled={state.busy || !state.connections.length}
@@ -225,9 +221,8 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
             )
           }
         >
-          Consultar entrega
-        </button>
-        <button onClick={state.refresh}>Actualizar historial</button>
+          {t("Consultar entrega")}</button>
+        <button onClick={state.refresh}>{t("Actualizar historial")}</button>
       </div>
       <History runs={state.runs} />
     </Shell>

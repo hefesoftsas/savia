@@ -7,6 +7,8 @@ export const manifest = {
   label: "Portal del cliente",
   description:
     "Comparte información y recibe solicitudes mediante accesos limitados.",
+  labels: {"en": "Customer portal", "pt": "Portal do cliente"},
+  descriptions: {"en": "Share information and receive requests through limited access.", "pt": "Compartilhe informações e receba solicitações por acessos limitados."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

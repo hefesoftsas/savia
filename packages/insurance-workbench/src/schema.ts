@@ -1,3 +1,5 @@
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator } from "./localization";
 import type {
   ExtensionManifest,
   ExtensionObjectRequirement,
@@ -82,13 +84,15 @@ export function objectRequirement(
 export function validateFields(
   fields: readonly Field[],
   record: Record<string, unknown>,
+  locale: PluginLocale = "es",
 ): string | null {
+  const t = createWorkbenchTranslator({}, locale);
   for (const field of fields) {
     const value = record[field.key];
     const empty = value == null || (typeof value === "string" && !value.trim());
     if (empty) {
       if (field.required || field.requiredStages?.includes(text(record.stage)))
-        return `Completa ${field.label.toLowerCase()}.`;
+        return t("Completa %{field}.", {field:field.label.toLowerCase()});
       continue;
     }
     if (field.type === "number") {
@@ -97,19 +101,19 @@ export function validateFields(
         Number(value) < (field.min ?? 0) ||
         Number(value) > (field.max ?? 90000000000)
       )
-        return `${field.label}: revisa el valor y usa máximo dos decimales.`;
+        return t("%{field}: revisa el valor y usa máximo dos decimales.", {field:field.label});
     } else if (field.type === "date") {
       if (day(value) === null)
-        return `${field.label}: indica una fecha válida.`;
+        return t("%{field}: indica una fecha válida.", {field:field.label});
     } else if (field.options) {
       if (!field.options.some((option) => option.value === value))
-        return `${field.label}: selecciona una opción válida.`;
+        return t("%{field}: selecciona una opción válida.", {field:field.label});
     } else if (
       typeof value !== "string" ||
       value.length >
         (field.maxLength ?? (field.type === "textarea" ? 10000 : 200))
     )
-      return `${field.label}: revisa la longitud del texto.`;
+      return t("%{field}: revisa la longitud del texto.", {field:field.label});
   }
   return null;
 }

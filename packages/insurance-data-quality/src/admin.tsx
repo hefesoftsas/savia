@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type {
   PluginApi,
@@ -18,6 +20,7 @@ import {
 } from "./domain";
 import "@savia/insurance-workbench/workbench.css";
 export function Screen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const [objects, setObjects] = useState<PluginCollectionDefinition[]>([]),
     [object, setObject] = useState(""),
     [key, setKey] = useState(""),
@@ -139,9 +142,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         <div>
           <h1>{manifest.label}</h1>
           <p>
-            Revisa el archivo antes de importar. Los registros existentes no se
-            sobrescriben ni se fusionan automáticamente.
-          </p>
+            {t("Revisa el archivo antes de importar. Los registros existentes no se sobrescriben ni se fusionan automáticamente.")}</p>
         </div>
       </header>
       {error && (
@@ -152,8 +153,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
       {notice && <p role="status">{notice}</p>}
       <fieldset disabled={busy} className="iw-tool-fields">
         <label>
-          Colección de destino
-          <select
+          {t("Colección de destino")}<select
             value={object}
             onChange={(e) => {
               setObject(e.target.value);
@@ -161,7 +161,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               invalidate();
             }}
           >
-            <option value="">Selecciona una colección</option>
+            <option value="">{t("Selecciona una colección")}</option>
             {objects.map((item) => (
               <option key={item.name} value={item.name}>
                 {item.label}
@@ -170,15 +170,14 @@ export function Screen({ savia }: { savia: PluginApi }) {
           </select>
         </label>
         <label>
-          Campo único de identificación
-          <select
+          {t("Campo único de identificación")}<select
             value={key}
             onChange={(e) => {
               setKey(e.target.value);
               invalidate();
             }}
           >
-            <option value="">Selecciona un campo único</option>
+            <option value="">{t("Selecciona un campo único")}</option>
             {Object.entries(definition?.config.fields ?? {})
               .filter(
                 ([, field]) =>
@@ -197,13 +196,10 @@ export function Screen({ savia }: { savia: PluginApi }) {
             (f) => f.config?.unique,
           ) && (
             <p>
-              Define un campo único en el diseñador para importar con protección
-              contra duplicados.
-            </p>
+              {t("Define un campo único en el diseñador para importar con protección contra duplicados.")}</p>
           )}
         <label>
-          Archivo CSV
-          <input
+          {t("Archivo CSV")}<input
             type="file"
             accept=".csv,text/csv"
             onChange={async (e) => {
@@ -223,8 +219,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label>
-          Contenido CSV
-          <textarea
+          {t("Contenido CSV")}<textarea
             rows={7}
             value={source}
             maxLength={2_000_000}
@@ -232,26 +227,20 @@ export function Screen({ savia }: { savia: PluginApi }) {
               setSource(e.target.value);
               invalidate();
             }}
-            placeholder="nombre,email&#10;Cliente,cliente@ejemplo.com"
+            placeholder={t("nombre,email&#10;Cliente,cliente@ejemplo.com")}
           />
         </label>
         <p>
-          Usa nombres de campo como encabezados. Máximo 1.000 filas; fechas
-          AAAA-MM-DD y punto decimal. Se permiten texto, números, fechas y
-          listas simples.
-        </p>
+          {t("Usa nombres de campo como encabezados. Máximo 1.000 filas; fechas AAAA-MM-DD y punto decimal. Se permiten texto, números, fechas y listas simples.")}</p>
         <button disabled={!object || !key || !source} onClick={preview}>
-          Validar y detectar duplicados
-        </button>
+          {t("Validar y detectar duplicados")}</button>
       </fieldset>
-      {busy && <p role="status">Procesando lote…</p>}
+      {busy && <p role="status">{t("Procesando lote…")}</p>}
       {!!duplicates.length && (
         <section>
-          <h2>Duplicados existentes</h2>
+          <h2>{t("Duplicados existentes")}</h2>
           <p>
-            Revisa estos identificadores en la colección antes de decidir qué
-            registro conservar.
-          </p>
+            {t("Revisa estos identificadores en la colección antes de decidir qué registro conservar.")}</p>
           <ul>
             {duplicates.map((group, i) => (
               <li key={i}>{group.join(" · ")}</li>
@@ -261,20 +250,19 @@ export function Screen({ savia }: { savia: PluginApi }) {
       )}
       {!!rows.length && (
         <section>
-          <h2>Vista previa · {rows.length} filas</h2>
+          <h2>{t("Vista previa ·")}{rows.length} {t("filas")}</h2>
           <p>
-            {rows.filter((r) => r.status === "ready").length} nuevas ·{" "}
-            {rows.filter((r) => r.status === "exists").length} existentes ·{" "}
-            {rows.filter((r) => r.status === "invalid").length} con errores
-          </p>
+            {rows.filter((r) => r.status === "ready").length} {t("nuevas ·")}{" "}
+            {rows.filter((r) => r.status === "exists").length} {t("existentes ·")}{" "}
+            {rows.filter((r) => r.status === "invalid").length} {t("con errores")}</p>
           <div className="iw-table-scroll" tabIndex={0}>
             <table>
-              <caption>Revisión del lote</caption>
+              <caption>{t("Revisión del lote")}</caption>
               <thead>
                 <tr>
-                  <th>Fila</th>
-                  <th>Clave</th>
-                  <th>Resultado</th>
+                  <th>{t("Fila")}</th>
+                  <th>{t("Clave")}</th>
+                  <th>{t("Resultado")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,9 +285,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
           </div>
           {rows.length > 100 && (
             <p>
-              Se muestran las primeras 100 filas; la validación incluye todo el
-              lote.
-            </p>
+              {t("Se muestran las primeras 100 filas; la validación incluye todo el lote.")}</p>
           )}
           <button
             className="iw-primary"
@@ -311,14 +297,13 @@ export function Screen({ savia }: { savia: PluginApi }) {
             }
             onClick={execute}
           >
-            Importar filas nuevas
-          </button>
+            {t("Importar filas nuevas")}</button>
         </section>
       )}
       <section>
-        <h2>Historial de importaciones</h2>
+        <h2>{t("Historial de importaciones")}</h2>
         {!history.length ? (
-          <p>No hay lotes registrados.</p>
+          <p>{t("No hay lotes registrados.")}</p>
         ) : (
           <ul>
             {history

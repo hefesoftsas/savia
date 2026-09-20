@@ -1,3 +1,4 @@
+import { LocalizedContentEditor } from "./localized-content-editor";
 import { resolveOptionLabel } from "@savia/crm-shared/field-labels";
 import {
   StaticOptionLabelsEditor,
@@ -994,6 +995,13 @@ function Properties({
                     placeholder={t("Hola {{values.nombre}}")}
                   />
                 </Control>
+                <LocalizedContentEditor
+                  maxLength={5000}
+                  value={displayText.translations}
+                  onChange={(translations) =>
+                    patchDisplayText({ translations })
+                  }
+                />
               </fieldset>
             ) : field.type === "Percentage" ? (
               <>

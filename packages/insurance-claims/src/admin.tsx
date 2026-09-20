@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench, money, text } from "@savia/insurance-workbench";
 import { cents } from "@savia/insurance-workbench/data";
@@ -10,13 +15,15 @@ import { fields, stages, dateField } from "./fields";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate } from "./domain";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Siniestro",
-  createLabel: "Nuevo siniestro",
-  description: "Acompaña cada reclamación, desde el aviso hasta su resolución.",
-  dateTitle: "Próximo seguimiento",
+  singular: t("Siniestro"),
+  createLabel: t("Nuevo siniestro"),
+  description: t("Acompaña cada reclamación, desde el aviso hasta su resolución."),
+  dateTitle: t("Próximo seguimiento"),
   fields,
   stages,
   dateField,
@@ -25,13 +32,13 @@ const config = caseConfig({
   defaults: { stage: "reported", amount: 0, paid: 0 },
   valueColumn: {
     key: "amount",
-    label: "Reclamado / Recibido (COP)",
+    label: t("Reclamado / Recibido (COP)"),
     numeric: true,
     render: (record) => (
       <>
-        <strong>{money(record.amount)}</strong>
-        <small>Recibido: {money(record.paid)}</small>
-      </>
+         <strong>{money(record.amount, locale)}</strong>
+         <small>{t("Recibido:")} {money(record.paid, locale)}</small>
+       </>
     ),
   },
   metrics: (records, asOf) => {
@@ -46,29 +53,35 @@ const config = caseConfig({
       100;
     return [
       {
-        label: "Casos abiertos",
+        label: t("Casos abiertos"),
         value: open.length,
-        detail: "Reclamaciones en seguimiento",
+        detail: t("Reclamaciones en seguimiento"),
       },
       {
-        label: "Seguimientos atrasados",
+        label: t("Seguimientos atrasados"),
         value: overdue.length,
-        detail: "Próxima gestión pendiente",
+        detail: t("Próxima gestión pendiente"),
       },
       {
-        label: "Valor reclamado abierto",
-        value: money(sum(open, "amount")),
-        detail: "Valores registrados en los casos",
+        label: t("Valor reclamado abierto"),
+        value: money(sum(open, "amount"), locale),
+        detail: t("Valores registrados en los casos"),
       },
       {
-        label: "Casos resueltos",
+        label: t("Casos resueltos"),
         value: records.length - open.length,
-        detail: "Cerrados o rechazados",
+        detail: t("Cerrados o rechazados"),
       },
     ];
   },
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return <Workbench savia={savia} config={config} />;
 }
 export const screens = [

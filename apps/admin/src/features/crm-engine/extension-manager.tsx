@@ -1,4 +1,5 @@
-import { useMessages } from "@/i18n/core";
+import { resolveLocalizedContent, type LocalizedContent } from "@savia/crm-shared/plugin-localization";
+import { useAppLocale, useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useState } from "react";
 import { Settings2, Wrench } from "lucide-react";
@@ -28,6 +29,8 @@ type ExtensionManifest = {
   version: string;
   label: string;
   description: string;
+  labels?: LocalizedContent;
+  descriptions?: LocalizedContent;
   requires: string[];
 };
 
@@ -57,6 +60,7 @@ export default function ExtensionManager({
   onChanged: () => void | Promise<unknown>;
 }) {
   const t = useMessages(automationMessages);
+  const locale = useAppLocale();
   function connectorsFor(extensionId: string): ExtensionConnectionConnector[] {
     return (
       releaseCatalog.extensionRegistry.get(extensionId)?.runtime?.connectors ??
@@ -169,6 +173,8 @@ export default function ExtensionManager({
         ) : (
           <div className="divide-y" role="list">
             {entries.map((entry) => {
+              const label = resolveLocalizedContent(entry.manifest.label,entry.manifest.labels,locale);
+              const description = resolveLocalizedContent(entry.manifest.description,entry.manifest.descriptions,locale);
               const active = isActive(entry);
               const pending = busy === entry.manifest.id;
               const connectors = connectorsFor(entry.manifest.id);
@@ -186,20 +192,20 @@ export default function ExtensionManager({
                   <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
                     <div className="flex min-w-0 flex-1 basis-72 items-center gap-2">
                       <h3 className="font-medium text-foreground">
-                        {entry.manifest.label}
+                        {label}
                       </h3>
                       <Badge variant={active ? "secondary" : "outline"}>
                         {state(entry)}
                       </Badge>
                       <StudioHelpTooltip
                         label={t("Más información sobre %{value0}", {
-                          value0: entry.manifest.label,
+                          value0: label,
                         })}
                         side="bottom"
                       >
                         <span className="block max-w-xs space-y-1">
                           <span className="block">
-                            {entry.manifest.description}
+                            {description}
                           </span>
                           <span className="block text-primary-foreground/75">
                             {t("Versión")}{" "}
@@ -227,7 +233,7 @@ export default function ExtensionManager({
                             )
                           }
                           aria-label={t("Instalar %{value0}", {
-                            value0: entry.manifest.label,
+                            value0: label,
                           })}
                         >
                           {t("Instalar")}
@@ -245,7 +251,7 @@ export default function ExtensionManager({
                               }),
                             )
                           }
-                          aria-label={`${entry.installed.enabled ? t("Desactivar") : t("Activar")} ${entry.manifest.label}`}
+                          aria-label={`${entry.installed.enabled ? t("Desactivar") : t("Activar")} ${label}`}
                         >
                           {entry.installed.enabled
                             ? t("Desactivar")
@@ -259,7 +265,7 @@ export default function ExtensionManager({
                             variant="outline"
                             disabled={pending}
                             aria-label={t("Configurar conexión de %{value0}", {
-                              value0: entry.manifest.label,
+                              value0: label,
                             })}
                           >
                             <Settings2 aria-hidden="true" />
@@ -284,7 +290,7 @@ export default function ExtensionManager({
                                 )
                               }
                               aria-label={t("Reparar instalación %{value0}", {
-                                value0: entry.manifest.label,
+                                value0: label,
                               })}
                             >
                               <Wrench aria-hidden="true" />
@@ -304,7 +310,7 @@ export default function ExtensionManager({
                           client={extensionRuntimeClient}
                           connectors={connectors}
                           extensionId={entry.manifest.id}
-                          label={entry.manifest.label}
+                          label={label}
                         />
                       </CollapsibleContent>
                     ) : null}

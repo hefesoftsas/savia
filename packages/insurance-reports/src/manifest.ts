@@ -7,6 +7,8 @@ export const manifest = {
   label: "Reportes y cliente 360",
   description:
     "Consulta indicadores operativos y el expediente relacionado del cliente.",
+  labels: {"en": "Reports and customer 360", "pt": "Relatórios e cliente 360"},
+  descriptions: {"en": "View operational indicators and the customer's related records.", "pt": "Consulte indicadores operacionais e os registros relacionados do cliente."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

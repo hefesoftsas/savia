@@ -1,4 +1,5 @@
-import { useMessages } from "@/i18n/core";
+import { resolveLocalizedContent } from "@savia/crm-shared/plugin-localization";
+import { useAppLocale, useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
 import {
   useCallback,
@@ -35,6 +36,7 @@ export function syncFormHtmlMarkup(
 
 export function FormHtmlField(p: IFieldProps) {
   const t = useMessages(recordsMessages);
+  const locale = useAppLocale();
 
   const object = p.config?.studioObject as CrmObject | undefined;
   const values = useFormTemplateValues(object, p.fieldName);
@@ -70,15 +72,27 @@ export function FormHtmlField(p: IFieldProps) {
   );
 
   const renderedHtml = useMemo(() => {
-    if (!settings?.html.trim()) return "";
+    const html = resolveLocalizedContent(
+      settings?.html ?? "",
+      settings?.translations,
+      locale,
+    );
+    if (!html.trim()) return "";
     return sanitizeFormHtml(
-      renderFormHtmlTemplate(settings.html, {
+      renderFormHtmlTemplate(html, {
         values,
         recordId,
         object: object ? { name: object.name, label: object.label } : undefined,
       }),
     );
-  }, [object, recordId, settings?.html, values]);
+  }, [
+    object,
+    recordId,
+    settings?.html,
+    settings?.translations,
+    locale,
+    values,
+  ]);
 
   useLayoutEffect(() => {
     const node = containerRef.current;
@@ -105,13 +119,22 @@ export function FormHtmlField(p: IFieldProps) {
           object,
           recordId,
           container: node,
+          locale,
         }),
       );
       setScriptError("");
     } catch (error) {
       setScriptError((error as Error).message);
     }
-  }, [object, recordId, renderedHtml, setFieldValue, settings?.script, values]);
+  }, [
+    object,
+    recordId,
+    renderedHtml,
+    setFieldValue,
+    settings?.script,
+    values,
+    locale,
+  ]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -133,7 +156,7 @@ export function FormHtmlField(p: IFieldProps) {
     return () => node.removeEventListener("click", handleClick);
   }, [setFieldValue, values]);
 
-  if (!settings || (!settings.html.trim() && !settings.script?.trim())) {
+  if (!settings || (!renderedHtml.trim() && !settings.script?.trim())) {
     return (
       <p className="form-html-empty studio-field-help">
         {t("Configura HTML o JavaScript en las propiedades del campo.")}

@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import { useState } from "react";
 import { Backfill } from "./backfill";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
@@ -19,67 +24,69 @@ const priorityLabels: Record<string, string> = {
   closed: "Cerrada",
   undated: "Revisar fecha",
 };
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config: WorkbenchConfig = {
   object: requirement.object.name,
-  title: "Renovaciones",
-  singular: "Renovación de póliza",
-  createLabel: "Nueva renovación",
+  title: t("Renovaciones"),
+  singular: t("Renovación de póliza"),
+  createLabel: t("Nueva renovación"),
   description:
-    "Anticipa cada vencimiento y acompaña la renovación hasta su cierre.",
+    t("Anticipa cada vencimiento y acompaña la renovación hasta su cierre."),
   stages,
   defaults: { stage: "pending", premium: 0 },
   fields: [
-    { key: "name", label: "Referencia", required: true, maxLength: 120 },
-    { key: "customer", label: "Cliente", required: true },
+    { key: "name", label: t("Referencia"), required: true, maxLength: 120 },
+    { key: "customer", label: t("Cliente"), required: true },
     {
       key: "policy_reference",
-      label: "Póliza actual",
+      label: t("Póliza actual"),
       required: true,
       maxLength: 120,
     },
-    { key: "insurer", label: "Aseguradora" },
-    { key: "owner", label: "Responsable", maxLength: 120 },
+    { key: "insurer", label: t("Aseguradora") },
+    { key: "owner", label: t("Responsable"), maxLength: 120 },
     {
       key: "expiry_date",
-      label: "Vencimiento de la póliza",
+      label: t("Vencimiento de la póliza"),
       type: "date",
       required: true,
     },
     {
       key: "premium",
-      label: "Prima a renovar (COP)",
+      label: t("Prima a renovar (COP)"),
       type: "number",
       required: true,
       min: 0,
     },
     {
       key: "stage",
-      label: "Etapa",
+      label: t("Etapa"),
       type: "select",
       options: stages,
       required: true,
     },
-    { key: "next_follow_up", label: "Próximo seguimiento", type: "date" },
+    { key: "next_follow_up", label: t("Próximo seguimiento"), type: "date" },
     {
       key: "outcome",
-      label: "Nueva póliza o motivo de cierre",
+      label: t("Nueva póliza o motivo de cierre"),
       maxLength: 500,
-      help: "Obligatorio al marcar Renovada o No renovada.",
+      help: t("Obligatorio al marcar Renovada o No renovada."),
     },
     {
       key: "notes",
-      label: "Notas de gestión",
+      label: t("Notas de gestión"),
       type: "textarea",
-      help: "Conserva aquí las condiciones, documentos pendientes y próximos pasos.",
+      help: t("Conserva aquí las condiciones, documentos pendientes y próximos pasos."),
     },
   ],
   filters: [
-    { value: "all", label: "Todas" },
-    { value: "overdue", label: "Vencidas" },
-    { value: "week", label: "Esta semana" },
-    { value: "month", label: "8–30 días" },
-    { value: "open", label: "Abiertas" },
-    { value: "closed", label: "Cerradas" },
+    { value: "all", label: t("Todas") },
+    { value: "overdue", label: t("Vencidas") },
+    { value: "week", label: t("Esta semana") },
+    { value: "month", label: t("8–30 días") },
+    { value: "open", label: t("Abiertas") },
+    { value: "closed", label: t("Cerradas") },
   ],
   matches: (record, filter, asOf) =>
     filter === "all" ||
@@ -90,50 +97,50 @@ const config: WorkbenchConfig = {
     const stats = summarize(records, asOf);
     return [
       {
-        label: "Renovaciones abiertas",
+        label: t("Renovaciones abiertas"),
         value: stats.open,
-        detail: "Casos que siguen en gestión",
+        detail: t("Casos que siguen en gestión"),
       },
       {
-        label: "Atención inmediata",
+        label: t("Atención inmediata"),
         value: stats.urgent,
-        detail: "Vencidas o a 7 días del vencimiento",
+        detail: t("Vencidas o a 7 días del vencimiento"),
       },
       {
-        label: "Prima en gestión",
-        value: money(stats.premium),
-        detail: "Prima de las renovaciones abiertas",
+        label: t("Prima en gestión"),
+        value: money(stats.premium, locale),
+        detail: t("Prima de las renovaciones abiertas"),
       },
       {
-        label: "Renovadas",
+        label: t("Renovadas"),
         value: stats.renewed,
-        detail: `${stats.lost} cerradas sin renovación`,
+        detail: t("%{count} cerradas sin renovación", {count: stats.lost}),
       },
     ];
   },
   columns: [
     {
       key: "customer",
-      label: "Cliente / Póliza",
+      label: t("Cliente / Póliza"),
       render: (record) => (
         <>
-          <strong>{text(record.customer)}</strong>
-          <small>
-            {text(record.policy_reference)} · {text(record.name)}
-          </small>
-        </>
+           <strong>{text(record.customer)}</strong>
+           <small>
+             {text(record.policy_reference)} · {text(record.name)}
+           </small>
+         </>
       ),
     },
     {
       key: "expiry",
-      label: "Vencimiento",
+      label: t("Vencimiento"),
       render: (record, asOf) => {
         const group = priority(record, asOf);
         return (
           <>
-            <span>{dateLabel(record.expiry_date)}</span>
-            <small>
-              <span
+             <span>{dateLabel(record.expiry_date, locale)}</span>
+             <small>
+               <span
                 className="iw-badge"
                 data-tone={
                   group === "overdue"
@@ -143,58 +150,58 @@ const config: WorkbenchConfig = {
                       : undefined
                 }
               >
-                {priorityLabels[group]}
-              </span>
-            </small>
-          </>
+                 {t(priorityLabels[group] ?? "")}
+               </span>
+             </small>
+           </>
         );
       },
     },
     {
       key: "premium",
-      label: "Prima (COP)",
+      label: t("Prima (COP)"),
       numeric: true,
       render: (record) => (
         <>
-          <strong>{money(record.premium)}</strong>
-          <small>{text(record.insurer) || "Sin aseguradora"}</small>
-        </>
+           <strong>{money(record.premium, locale)}</strong>
+           <small>{text(record.insurer) || t("Sin aseguradora")}</small>
+         </>
       ),
     },
     {
       key: "stage",
-      label: "Etapa / Responsable",
+      label: t("Etapa / Responsable"),
       render: (record) => (
         <>
-          <span
+           <span
             className="iw-badge"
             data-tone={record.stage === "renewed" ? "success" : undefined}
           >
-            {stages.find((stage) => stage.value === record.stage)?.label ??
-              "Sin etapa"}
-          </span>
-          <small>{text(record.owner) || "Sin responsable"}</small>
-        </>
+             {t(stages.find((stage) => stage.value === record.stage)?.label ?? "") ??
+              t("Sin etapa")}
+           </span>
+           <small>{text(record.owner) || t("Sin responsable")}</small>
+         </>
       ),
     },
     {
       key: "followup",
-      label: "Próximo contacto",
-      render: (record) => dateLabel(record.next_follow_up),
+      label: t("Próximo contacto"),
+      render: (record) => dateLabel(record.next_follow_up, locale),
     },
   ],
   validate: validateRenewal,
   exportHeaders: [
-    "Referencia",
-    "Cliente",
-    "Póliza",
-    "Aseguradora",
-    "Responsable",
-    "Vencimiento",
+    t("Referencia"),
+    t("Cliente"),
+    t("Póliza"),
+    t("Aseguradora"),
+    t("Responsable"),
+    t("Vencimiento"),
     "Prima COP",
-    "Etapa",
-    "Seguimiento",
-    "Resultado",
+    t("Etapa"),
+    t("Seguimiento"),
+    t("Resultado"),
   ],
   exportRow: (record) => [
     record.name,
@@ -204,12 +211,18 @@ const config: WorkbenchConfig = {
     record.owner,
     record.expiry_date,
     record.premium,
-    stages.find((stage) => stage.value === record.stage)?.label,
+    t(stages.find((stage) => stage.value === record.stage)?.label ?? ""),
     record.next_follow_up,
     record.outcome,
   ],
 };
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function RenewalsScreen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   const [revision, setRevision] = useState(0);
   return (
     <>

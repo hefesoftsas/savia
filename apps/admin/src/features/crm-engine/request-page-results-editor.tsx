@@ -546,6 +546,21 @@ export function RequestPageResultsEditor({
                   </p>
                   <ul className="text-sm space-y-1">
                     <li>
+                      <code>locale: "es" | "en" | "pt"</code>
+                    </li>
+                    <li>
+                      <code>
+                        {'t({ hello: ["Hola", "Hello", "Olá"] }, "hello")'}
+                      </code>
+                    </li>
+                    <li>
+                      <code>
+                        {
+                          'window.addEventListener("savia-locale-change", render)'
+                        }
+                      </code>
+                    </li>
+                    <li>
                       <code>rows[]</code>
                       {t(
                         ": id, title, status, date, simulation, values[], errors[], response.",

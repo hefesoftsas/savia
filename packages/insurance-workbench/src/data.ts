@@ -1,3 +1,4 @@
+import { pluginIntlLocale, type PluginLocale } from "@savia/crm-shared/plugin-localization";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 
 export type WorkRecord = {
@@ -33,21 +34,21 @@ export function cents(value: unknown): number | null {
   const exact = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
   return exact <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(exact) : null;
 }
-export function money(value: unknown): string {
+export function money(value: unknown, locale: PluginLocale = "es"): string {
   const amount = cents(value);
   return amount === null
-    ? "Sin valor"
-    : new Intl.NumberFormat("es-CO", {
+    ? { es: "Sin valor", en: "No amount", pt: "Sem valor" }[locale]
+    : new Intl.NumberFormat(pluginIntlLocale(locale), {
         style: "currency",
         currency: "COP",
         maximumFractionDigits: 2,
       }).format(amount / 100);
 }
-export function dateLabel(value: unknown): string {
+export function dateLabel(value: unknown, locale: PluginLocale = "es"): string {
   const stamp = day(value);
   return stamp === null
-    ? "Sin fecha"
-    : new Intl.DateTimeFormat("es-CO", {
+    ? { es: "Sin fecha", en: "No date", pt: "Sem data" }[locale]
+    : new Intl.DateTimeFormat(pluginIntlLocale(locale), {
         timeZone: "UTC",
         day: "numeric",
         month: "short",

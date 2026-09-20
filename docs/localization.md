@@ -1,9 +1,9 @@
-# Core localization
+# Localization
 
-Owner: Core UI team. Reviewed: 2026-09-19.
+Owner: Core UI team. Reviewed: 2026-09-20.
 
 Savia supports Spanish (`es`, default), English (`en`) and Portuguese (`pt`) in
-its built-in administration and low-code UI. The selected locale controls system
+its built-in administration, low-code UI and shipped insurance extensions. The selected locale controls system
 copy, accessibility labels, validation and presentation of record values.
 Changing languages preserves mounted forms and unsaved edits.
 
@@ -61,11 +61,26 @@ explicit core directories listed in that test. Reviewed technical examples,
 brands and translation keys have exact file/text exceptions with reasons in
 `source-exceptions.json`.
 
+Shipped insurance extensions use the same ES/EN/PT contract through
+`@savia/crm-shared/plugin-localization` (`translatePluginMessage`,
+`resolveLocalizedContent`, `localizeExternalError`) and the optional
+`PluginLocaleProvider` React context. The host bridges its selected locale
+without remounting extension screens, so drafts are retained. Each extension
+owns its `messages`/`locales` catalog; the workbench translator falls back
+to the authored caption when a key is absent, never translating stored values,
+IDs or raw provider details. Extension manifests may provide optional
+`labels`/`descriptions` overrides. DisplayText and FormHtml fields accept
+optional per-locale content with fallback to the authored default; the
+FormHtml/React sandbox exposes `locale` and `t(catalog, key, params)` and
+accepts parent locale updates only from its host. Structured external failures
+are mapped to a localized message while the original service detail stays
+available verbatim.
+
 This is a scoped regression contract, not proof of translation quality or a scan
-of arbitrary runtime data. Dynamic object maps and server/provider error text
-need normal review. Integration responses, custom HTML/React, extension screens,
-JSON-schema diagnostics and user-authored content are not automatically
-translated. Their owners must provide localized content when needed.
+of arbitrary runtime data. Dynamic object maps, JSON-schema diagnostics and
+unlisted provider codes need normal review. Integration responses and
+user-authored content without translations are not automatically translated.
+Their owners must provide localized content when needed.
 
 Tests also verify locale switching without remounting the real admin context,
 field/option labels, validation, interpolation, currency parsing and preservation

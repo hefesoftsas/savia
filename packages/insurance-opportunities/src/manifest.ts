@@ -6,6 +6,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Oportunidades",
   description: "Prospectos, negociación y seguimiento comercial de seguros.",
+  labels: {"en": "Opportunities", "pt": "Oportunidades"},
+  descriptions: {"en": "Insurance prospects, negotiations and sales follow-up.", "pt": "Prospectos, negociações e acompanhamento comercial de seguros."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

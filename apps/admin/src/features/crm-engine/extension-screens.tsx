@@ -1,3 +1,4 @@
+import { resolveLocalizedContent, type PluginLocale } from "@savia/crm-shared/plugin-localization";
 import {
   releaseCatalog,
   type ExtensionScreenContribution,
@@ -22,8 +23,9 @@ const extensionScreens: readonly ExtensionScreenContribution[] =
 export function extensionApiFor(
   screen: ExtensionScreenContribution,
   request: PluginHostRequest,
+  getLocale?: () => PluginLocale,
 ): PluginApi {
-  return createPluginApi({ extensionId: screen.extensionId, request });
+  return createPluginApi({ extensionId: screen.extensionId, request, getLocale });
 }
 
 export function extensionScreenFor(
@@ -63,4 +65,12 @@ export function extensionScreenContribution(
 export function extensionScreenDefaultHidden(object: string): boolean {
   const match = extensionScreens.find((screen) => screen.object === object);
   return match?.hidden === true;
+}
+
+/** Translate only unchanged built-in labels, preserving user-renamed screens. */
+export function localizedExtensionObjectLabel(name: string, label: string, locale: PluginLocale): string {
+  const requirement = releaseCatalog.extensionObjectRequirements.find(item => item.object.name === name);
+  if (!requirement || requirement.object.label !== label) return label;
+  const manifest = releaseCatalog.extensionRegistry.get(requirement.id)?.manifest;
+  return manifest ? resolveLocalizedContent(label, manifest.labels, locale) : label;
 }

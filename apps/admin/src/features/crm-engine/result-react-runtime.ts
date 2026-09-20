@@ -30,17 +30,16 @@ try {
   const root = document.createElement("div");
   root.id = "react-results-root";
   document.body.append(root);
+  const reactRoot = createRoot(root, { onUncaughtError: failure });
   scope.mountResults = () => {
     if (!scope.exports.default)
       throw new Error("Exporta el componente con export default.");
-    createRoot(root, { onUncaughtError: failure }).render(
-      React.createElement(scope.exports.default, scope.savia),
-    );
+    reactRoot.render(React.createElement(scope.exports.default, scope.savia));
   };
+  window.addEventListener("savia-locale-change", scope.mountResults);
   const script = document.createElement("script");
   script.textContent = compiled.code + "\nwindow.mountResults();";
   document.body.append(script);
 } catch (error) {
   failure(error);
 }
-

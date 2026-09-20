@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
@@ -19,6 +21,7 @@ import {
   type CalendarEvent,
 } from "./domain";
 export function CalendarScreen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const state = useIntegration(savia),
     [events, setEvents] = useState<Record<string, unknown>[]>([]),
     [notice, setNotice] = useState(""),
@@ -90,8 +93,8 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
   }
   return (
     <Shell
-      title="Calendario"
-      description="Organiza tus citas en su zona horaria, descárgalas o sincronízalas con tu calendario."
+      title={t("Calendario")}
+      description={t("Organiza tus citas en su zona horaria, descárgalas o sincronízalas con tu calendario.")}
     >
       <IntegrationStatus state={state} connectorId={`${manifest.id}.gateway`} />
       <form
@@ -121,16 +124,14 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
         }}
       >
         <label>
-          Título
-          <input
+          {t("Título")}<input
             required
             value={event.title}
             onChange={(e) => patch("title", e.target.value)}
           />
         </label>
         <label>
-          Zona horaria
-          <select
+          {t("Zona horaria")}<select
             value={event.timeZone}
             onChange={(e) => changeZone(e.target.value)}
           >
@@ -142,8 +143,7 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
           </select>
         </label>
         <label>
-          Inicio
-          <input
+          {t("Inicio")}<input
             type="datetime-local"
             required
             value={startLocal}
@@ -151,8 +151,7 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label>
-          Fin
-          <input
+          {t("Fin")}<input
             type="datetime-local"
             required
             value={endLocal}
@@ -165,23 +164,18 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
           </p>
         ) : null}
         <p className="integration-wide">
-          Las horas corresponden a la zona seleccionada. Cambiar de zona muestra
-          la misma cita en la hora local de ese lugar.
-        </p>
+          {t("Las horas corresponden a la zona seleccionada. Cambiar de zona muestra la misma cita en la hora local de ese lugar.")}</p>
         <label className="integration-wide">
-          Descripción
-          <textarea
+          {t("Descripción")}<textarea
             value={event.description}
             onChange={(e) => patch("description", e.target.value)}
           />
         </label>
         <div className="integration-actions integration-wide">
           <button type="submit" disabled={!event.start || !event.end}>
-            Guardar evento
-          </button>
+            {t("Guardar evento")}</button>
           <button type="button" onClick={exportEvent}>
-            Descargar ICS
-          </button>
+            {t("Descargar ICS")}</button>
           <button
             type="button"
             disabled={
@@ -207,8 +201,7 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
               }
             }}
           >
-            Sincronizar evento guardado
-          </button>
+            {t("Sincronizar evento guardado")}</button>
           <button
             type="button"
             onClick={() => {
@@ -227,15 +220,14 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
               setTimeError("");
             }}
           >
-            Nuevo evento
-          </button>
+            {t("Nuevo evento")}</button>
         </div>
       </form>
       <p role="status">{notice}</p>
       <section>
-        <h2>Agenda guardada</h2>
+        <h2>{t("Agenda guardada")}</h2>
         {!events.length ? (
-          <p>No hay eventos guardados.</p>
+          <p>{t("No hay eventos guardados.")}</p>
         ) : (
           events.map((row) => (
             <p key={String(row.id)}>

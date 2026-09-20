@@ -7,6 +7,8 @@ export const manifest = {
   label: "Operación conectada",
   description:
     "Relaciones reales y plantillas de automatización para los plugins de seguros.",
+  labels: {"en": "Connected operations", "pt": "Operação conectada"},
+  descriptions: {"en": "Real relationships and automation templates for insurance plugins.", "pt": "Relações reais e modelos de automação para os plugins de seguros."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

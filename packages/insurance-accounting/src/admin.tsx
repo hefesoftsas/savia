@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useState } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { money, text, errorMessage } from "@savia/insurance-workbench/data";
@@ -8,6 +10,7 @@ import { useFinance } from "./use-finance";
 import { decimal, download } from "./support";
 import "./finance.css";
 export function Screen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const f = useFinance(savia);
   const [selected, setSelected] = useState<string[]>([]),
     [debit, setDebit] = useState(""),
@@ -49,9 +52,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         <div>
           <h1>{manifest.label}</h1>
           <p>
-            Prepara lotes de obligaciones con débitos y créditos balanceados
-            para revisión e importación contable.
-          </p>
+            {t("Prepara lotes de obligaciones con débitos y créditos balanceados para revisión e importación contable.")}</p>
         </div>
         <button
           disabled={f.busy}
@@ -60,30 +61,26 @@ export function Screen({ savia }: { savia: PluginApi }) {
             void f.refresh();
           }}
         >
-          Actualizar datos
-        </button>
+          {t("Actualizar datos")}</button>
       </header>
       <small>
-        Acceso de administración. Exportación contable de facturas por cobrar;
-        no emite facturas fiscales ni transmite a un proveedor. Define las
-        cuentas con tu responsable contable. Sin impuestos automáticos.
-      </small>
+        {t("Acceso de administración. Exportación contable de facturas por cobrar; no emite facturas fiscales ni transmite a un proveedor. Define las cuentas con tu responsable contable. Sin impuestos automáticos.")}</small>
       {f.error && <p role="alert">{f.error}</p>}
       {f.notice && <p role="status">{f.notice}</p>}
-      {f.busy && <p role="status">Procesando…</p>}
+      {f.busy && <p role="status">{t("Procesando…")}</p>}
       <section>
-        <h2>Obligaciones sin exportar</h2>
+        <h2>{t("Obligaciones sin exportar")}</h2>
         {!available.length ? (
-          <p>No hay obligaciones pendientes de exportar.</p>
+          <p>{t("No hay obligaciones pendientes de exportar.")}</p>
         ) : (
           <div className="if-table">
             <table>
               <thead>
                 <tr>
-                  <th>Incluir</th>
-                  <th>Referencia</th>
-                  <th>Cliente</th>
-                  <th>Importe</th>
+                  <th>{t("Incluir")}</th>
+                  <th>{t("Referencia")}</th>
+                  <th>{t("Cliente")}</th>
+                  <th>{t("Importe")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -92,7 +89,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                     <td>
                       <input
                         type="checkbox"
-                        aria-label={`Incluir ${text(r.name) || r.id}`}
+                        aria-label={t("Incluir %{value}", {value: text(r.name) || r.id})}
                         checked={selected.includes(r.id)}
                         onChange={(e) => {
                           setSelected(
@@ -115,11 +112,10 @@ export function Screen({ savia }: { savia: PluginApi }) {
         )}
       </section>
       <section>
-        <h2>Preparar comprobante</h2>
+        <h2>{t("Preparar comprobante")}</h2>
         <div className="if-controls">
           <label>
-            Cuenta débito · por cobrar
-            <input
+            {t("Cuenta débito · por cobrar")}<input
               value={debit}
               onChange={(e) => {
                 setDebit(e.target.value);
@@ -128,8 +124,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
             />
           </label>
           <label>
-            Cuenta crédito · contrapartida
-            <input
+            {t("Cuenta crédito · contrapartida")}<input
               value={credit}
               onChange={(e) => {
                 setCredit(e.target.value);
@@ -141,8 +136,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
             disabled={f.busy || !f.ready || !selected.length}
             onClick={calculate}
           >
-            Previsualizar comprobante
-          </button>
+            {t("Previsualizar comprobante")}</button>
         </div>
         {problem && <p role="alert">{problem}</p>}
         {preview && (
@@ -151,10 +145,10 @@ export function Screen({ savia }: { savia: PluginApi }) {
               <table>
                 <thead>
                   <tr>
-                    <th>Referencia</th>
-                    <th>Cuenta</th>
-                    <th>Débito</th>
-                    <th>Crédito</th>
+                    <th>{t("Referencia")}</th>
+                    <th>{t("Cuenta")}</th>
+                    <th>{t("Débito")}</th>
+                    <th>{t("Crédito")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,8 +164,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               </table>
             </div>
             <p role="status">
-              Comprobante balanceado · {preview.length} partidas
-            </p>
+              {t("Comprobante balanceado ·")}{preview.length} {t("partidas")}</p>
             <button
               className="if-primary"
               disabled={f.busy}
@@ -200,23 +193,22 @@ export function Screen({ savia }: { savia: PluginApi }) {
                 })
               }
             >
-              Guardar lote contable
-            </button>
+              {t("Guardar lote contable")}</button>
           </>
         )}
       </section>
       <section>
-        <h2>Lotes preparados</h2>
+        <h2>{t("Lotes preparados")}</h2>
         {!f.state.batches.length ? (
-          <p>Aún no hay lotes guardados.</p>
+          <p>{t("Aún no hay lotes guardados.")}</p>
         ) : (
           <div className="if-table">
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Facturas</th>
-                  <th>Exportación</th>
+                  <th>{t("Fecha")}</th>
+                  <th>{t("Facturas")}</th>
+                  <th>{t("Exportación")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,7 +218,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                     <td>{new Set(b.entries.map((e) => e.source)).size}</td>
                     <td>
                       <button onClick={() => exportBatch(b)}>
-                        Exportar {b.id.slice(0, 8)}
+                        {t("Exportar")}{b.id.slice(0, 8)}
                       </button>
                     </td>
                   </tr>

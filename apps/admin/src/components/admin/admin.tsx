@@ -9,7 +9,7 @@ import {
   memoryStore,
   StoreContextProvider,
 } from "ra-core";
-import { useAppI18nProvider } from "@/i18n/app-locale-provider";
+import { ExtensionLocaleBridge, useAppI18nProvider } from "@/i18n/app-locale-provider";
 import { Layout } from "@/components/admin/layout";
 import { LoginPage } from "@/components/admin/login-page";
 import { NotFound } from "@/components/admin/not-found";
@@ -145,6 +145,7 @@ const LocalizedAdmin = (props: CoreAdminProps) => {
       routerProvider={routerProvider}
       store={store}
     >
+      <ExtensionLocaleBridge>
       <AdminUI
         accessDenied={accessDenied}
         authCallbackPage={authCallbackPage}
@@ -162,6 +163,7 @@ const LocalizedAdmin = (props: CoreAdminProps) => {
       >
         {children}
       </AdminUI>
+      </ExtensionLocaleBridge>
     </AdminContext>
   );
 };

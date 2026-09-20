@@ -1,3 +1,5 @@
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { useWorkbenchMessages } from "./localization";
 import { Attachments } from "./attachments";
 import { linkedFields } from "./linked-fields";
 import { validateFields } from "./schema";
@@ -20,6 +22,9 @@ export function RecordEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+const locale = usePluginLocale();
+const t = useWorkbenchMessages(config.messages);
+
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     record ? { ...record } : { ...config.defaults },
   );
@@ -79,12 +84,12 @@ export function RecordEditor({
           }),
         );
         const problem =
-          config.validate(patch) ?? validateFields(extraFields, patch);
+          config.validate(patch) ?? validateFields(extraFields, patch, locale);
         if (problem) throw new Error(problem);
       }
       if (record && !Number.isInteger(record._version))
         throw new Error(
-          "Falta la versión del registro. Cierra el panel y actualiza antes de editar.",
+          t("Falta la versión del registro. Cierra el panel y actualiza antes de editar."),
         );
       setBusy(true);
       const collection = savia.collections.collection<WorkRecord>(
@@ -97,7 +102,7 @@ export function RecordEditor({
     } catch (cause) {
       setError(
         errorMessage(cause) +
-          " Tus cambios siguen en el formulario. Si el registro cambió, ciérralo y actualiza la lista antes de reintentar.",
+          t(" Tus cambios siguen en el formulario. Si el registro cambió, ciérralo y actualiza la lista antes de reintentar."),
       );
     } finally {
       setBusy(false);
@@ -105,25 +110,24 @@ export function RecordEditor({
   }
   return (
     <aside className="iw-editor" aria-labelledby="iw-editor-title">
-      <header className="iw-editor-heading">
-        <div>
-          <p>{record ? "Gestión del registro" : "Nuevo registro"}</p>
-          <h2 id="iw-editor-title" ref={heading} tabIndex={-1}>
-            {record ? text(record.name) : config.singular}
-          </h2>
-        </div>
-        <button
+       <header className="iw-editor-heading">
+         <div>
+           <p>{record ? t("Gestión del registro") : t("Nuevo registro")}</p>
+           <h2 id="iw-editor-title" ref={heading} tabIndex={-1}>
+             {record ? text(record.name) : config.singular}
+           </h2>
+         </div>
+         <button
           type="button"
-          aria-label="Cerrar panel"
+          aria-label={t("Cerrar panel")}
           disabled={busy}
           onClick={onClose}
         >
-          Cerrar
-        </button>
-      </header>
-      {record && config.payment && (
-        <div className="iw-editor-tabs" aria-label="Tipo de gestión">
-          <button
+          {t("Cerrar")} </button>
+       </header>
+       {record && config.payment && (
+        <div className="iw-editor-tabs" aria-label={t("Tipo de gestión")}>
+           <button
             type="button"
             aria-pressed={mode === "details"}
             disabled={busy}
@@ -132,9 +136,8 @@ export function RecordEditor({
               setError("");
             }}
           >
-            Datos y seguimiento
-          </button>
-          <button
+            {t("Datos y seguimiento")} </button>
+           <button
             type="button"
             aria-pressed={mode === "payment"}
             disabled={
@@ -147,33 +150,30 @@ export function RecordEditor({
               setError("");
             }}
           >
-            Registrar abono
-          </button>
-        </div>
+            {t("Registrar abono")} </button>
+         </div>
       )}
-      <form onSubmit={save}>
-        {error && (
+       <form onSubmit={save}>
+         {error && (
           <div role="alert" className="iw-error">
-            {error}
-          </div>
+             {error}
+           </div>
         )}
-        {linksLoading ? <p role="status">Cargando vínculos…</p> : null}
-        {linksError ? (
+         {linksLoading ? <p role="status">{t("Cargando vínculos…")} </p> : null}
+         {linksError ? (
           <p role="alert">
-            {linksError} Cierra el panel y actualiza la lista para reintentar.
-          </p>
+             {linksError} {t("Cierra el panel y actualiza la lista para reintentar.")} </p>
         ) : null}
-        <fieldset disabled={busy || linksLoading || !!linksError}>
-          {mode === "payment" && record && config.payment ? (
+         <fieldset disabled={busy || linksLoading || !!linksError}>
+           {mode === "payment" && record && config.payment ? (
             <>
-              <div className="iw-payment-balance">
-                <span>Saldo pendiente</span>
-                <strong>{money(config.payment.balance(record))}</strong>
-                <p>Registra un pago recibido. Esta acción no mueve dinero.</p>
-              </div>
-              <label htmlFor="iw-payment">
-                Valor del abono (COP)
-                <input
+               <div className="iw-payment-balance">
+                 <span>{t("Saldo pendiente")} </span>
+                 <strong>{money(config.payment.balance(record), locale)}</strong>
+                 <p>{t("Registra un pago recibido. Esta acción no mueve dinero.")} </p>
+               </div>
+               <label htmlFor="iw-payment">
+                {t("Valor del abono (COP)")} <input
                   id="iw-payment"
                   type="number"
                   min="0.01"
@@ -183,32 +183,31 @@ export function RecordEditor({
                   value={payment}
                   onChange={(event) => setPayment(event.target.value)}
                 />
-              </label>
-              <label htmlFor="iw-payment-date">
-                Fecha del pago
-                <input
+               </label>
+               <label htmlFor="iw-payment-date">
+                {t("Fecha del pago")} <input
                   id="iw-payment-date"
                   type="date"
                   required
                   value={paymentDate}
                   onChange={(event) => setPaymentDate(event.target.value)}
                 />
-              </label>
-            </>
+               </label>
+             </>
           ) : (
             allFields.map((field) => (
               <div
                 key={field.key}
                 className={field.type === "textarea" ? "iw-wide" : undefined}
               >
-                <label htmlFor={`iw-field-${field.key}`}>
-                  {field.label}
-                  {(field.required ||
+                 <label htmlFor={`iw-field-${field.key}`}>
+                   {field.label}
+                   {(field.required ||
                     field.requiredStages?.includes(text(values.stage))) && (
                     <span aria-hidden="true"> *</span>
                   )}
-                </label>
-                {field.type === "select" ? (
+                 </label>
+                 {field.type === "select" ? (
                   <select
                     id={`iw-field-${field.key}`}
                     aria-describedby={
@@ -221,15 +220,15 @@ export function RecordEditor({
                     }
                     onChange={(event) => change(field.key, event.target.value)}
                   >
-                    {!field.required && (
-                      <option value="">Sin especificar</option>
+                     {!field.required && (
+                      <option value="">{t("Sin especificar")} </option>
                     )}
-                    {field.options?.map((option) => (
+                     {field.options?.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+                         {option.label}
+                       </option>
                     ))}
-                  </select>
+                   </select>
                 ) : field.type === "textarea" ? (
                   <textarea
                     id={`iw-field-${field.key}`}
@@ -267,38 +266,37 @@ export function RecordEditor({
                     onChange={(event) => change(field.key, event.target.value)}
                   />
                 )}
-                {field.help && (
+                 {field.help && (
                   <small id={`iw-help-${field.key}`}>{field.help}</small>
                 )}
-              </div>
+               </div>
             ))
           )}
-        </fieldset>
-        <footer className="iw-editor-footer">
-          <button type="button" onClick={onClose} disabled={busy}>
-            Cancelar
-          </button>
-          <button
+         </fieldset>
+         <footer className="iw-editor-footer">
+           <button type="button" onClick={onClose} disabled={busy}>
+            {t("Cancelar")} </button>
+           <button
             className="iw-primary"
             type="submit"
             disabled={busy || linksLoading || !!linksError}
           >
-            {busy
-              ? "Guardando…"
+             {busy
+              ? t("Guardando…")
               : mode === "payment"
-                ? "Guardar abono"
-                : "Guardar cambios"}
-          </button>
-        </footer>
-      </form>
-      {record && config.recordActions?.({ savia, record, onSaved })}
-      {record && (
+                ? t("Guardar abono")
+                : t("Guardar cambios")}
+           </button>
+         </footer>
+       </form>
+       {record && config.recordActions?.({ savia, record, onSaved })}
+       {record && (
         <Attachments
           savia={savia}
           object={config.object}
           recordId={record.id}
         />
       )}
-    </aside>
+     </aside>
   );
 }

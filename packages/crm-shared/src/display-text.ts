@@ -28,6 +28,14 @@ export const displayTextConfigSchema = z
   .object({
     variant: z.enum(displayTextVariants).default("span"),
     content: z.string().max(5000).default(""),
+    translations: z
+      .object({
+        es: z.string().max(5000).optional(),
+        en: z.string().max(5000).optional(),
+        pt: z.string().max(5000).optional(),
+      })
+      .strict()
+      .optional(),
     align: z.enum(["left", "center", "right"]).optional(),
   })
   .strict();

@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
+import { messages } from "./messages";
 import { RecordActions } from "./actions";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import { Workbench } from "@savia/insurance-workbench";
@@ -10,56 +15,64 @@ import { fields, stages, dateField } from "./fields";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { priority, validate } from "./domain";
+function createConfig(locale: PluginLocale) {
+const t = createWorkbenchTranslator(messages, locale);
 const config = caseConfig({
   object: requirement.object.name,
   title: manifest.label,
-  singular: "Solicitud de servicio",
-  createLabel: "Nueva solicitud",
+  singular: t("Solicitud de servicio"),
+  createLabel: t("Nueva solicitud"),
   description: manifest.description,
-  dateTitle: "Compromiso de respuesta",
+  dateTitle: t("Compromiso de respuesta"),
   fields,
   stages,
   dateField,
   priority,
   validate,
   defaults: { stage: "received", kind: "query", channel: "email" },
-  footerNote: "Fechas calendario · Bogotá",
+  footerNote: t("Fechas calendario · Bogotá"),
   valueColumn: {
     key: "kind",
-    label: "Solicitud / Canal",
+    label: t("Solicitud / Canal"),
     render: (record) => (
       <>
-        <strong>{fieldLabel(fields, "kind", record.kind)}</strong>
-        <small>{fieldLabel(fields, "channel", record.channel)}</small>
-      </>
+         <strong>{t(fieldLabel(fields, "kind", record.kind))}</strong>
+         <small>{t(fieldLabel(fields, "channel", record.channel))}</small>
+       </>
     ),
   },
   metrics: (records, asOf) => [
     {
-      label: "Solicitudes abiertas",
+      label: t("Solicitudes abiertas"),
       value: records.filter((record) => priority(record, asOf) !== "closed")
         .length,
-      detail: "Casos que necesitan seguimiento",
+      detail: t("Casos que necesitan seguimiento"),
     },
     {
-      label: "Respuesta atrasada",
+      label: t("Respuesta atrasada"),
       value: records.filter((record) => priority(record, asOf) === "overdue")
         .length,
-      detail: "Compromisos de respuesta vencidos",
+      detail: t("Compromisos de respuesta vencidos"),
     },
     {
-      label: "Esperando información",
+      label: t("Esperando información"),
       value: countBy(records, "stage", "waiting"),
-      detail: "Retoma la gestión al recibir respuesta",
+      detail: t("Retoma la gestión al recibir respuesta"),
     },
     {
-      label: "Resueltas",
+      label: t("Resueltas"),
       value: countBy(records, "stage", "resolved"),
-      detail: "Con respuesta y fecha registradas",
+      detail: t("Con respuesta y fecha registradas"),
     },
   ],
-});
+}, locale, messages);
+return localizeWorkbenchConfig(config, locale, messages);
+}
+
 export function Screen({ savia }: { savia: PluginApi }) {
+const locale = usePluginLocale();
+const config = useMemo(() => createConfig(locale), [locale]);
+
   return (
     <Workbench
       savia={savia}

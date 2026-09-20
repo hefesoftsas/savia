@@ -1,3 +1,5 @@
+import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type { PluginApi, PluginFile } from "@savia/crm-shared/plugin-api";
 import {
@@ -18,6 +20,7 @@ import {
   type DocumentRecord,
 } from "./workflow";
 export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
+ const t = usePluginMessages(integrationMessages);
   const integration = useIntegration(savia),
     [records, setRecords] = useState<DocumentRecord[]>([]),
     [selected, setSelected] = useState<DocumentRecord | null>(null),
@@ -170,8 +173,8 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
   }
   return (
     <Shell
-      title="Documentos y firma"
-      description="Prepara plantillas, genera archivos verificables y conserva la evidencia de firma del proveedor."
+      title={t("Documentos y firma")}
+      description={t("Prepara plantillas, genera archivos verificables y conserva la evidencia de firma del proveedor.")}
     >
       <IntegrationStatus
         state={integration}
@@ -179,8 +182,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
       />
       <div className="integration-actions">
         <label>
-          Plantillas y documentos
-          <select
+          {t("Plantillas y documentos")}<select
             value={selected?.id ?? ""}
             disabled={busy || integration.busy}
             onChange={(e) => {
@@ -188,11 +190,11 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
               if (row) choose(row);
             }}
           >
-            <option value="">Selecciona un registro</option>
+            <option value="">{t("Selecciona un registro")}</option>
             {records.map((r) => (
               <option key={r.id} value={r.id}>
                 {String(r.name)} ·{" "}
-                {r.kind === "template" ? "Plantilla" : "Documento"}
+                {r.kind === "template" ? t("Plantilla") : t("Documento")}
               </option>
             ))}
           </select>
@@ -208,8 +210,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
             setNotice("");
           }}
         >
-          Nueva plantilla
-        </button>
+          {t("Nueva plantilla")}</button>
       </div>
       <form
         onSubmit={async (e) => {
@@ -236,8 +237,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
         }}
       >
         <label className="integration-wide">
-          Nombre del documento
-          <input
+          {t("Nombre del documento")}<input
             required
             maxLength={160}
             value={name}
@@ -246,8 +246,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <label className="integration-wide">
-          Contenido de la plantilla
-          <textarea
+          {t("Contenido de la plantilla")}<textarea
             required
             maxLength={10000}
             value={template}
@@ -259,9 +258,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
           />
         </label>
         <p className="integration-wide">
-          Añade variables como {"{{nombre}}"} o {"{{numero_poliza}}"}. Los
-          documentos generados conservan una copia fija del contenido.
-        </p>
+          {t("Añade variables como")}{t("{{nombre}}")} o {t("{{numero_poliza}}")}{t(". Los documentos generados conservan una copia fija del contenido.")}</p>
         {fields.map((field) => (
           <label key={field}>
             {field.replaceAll("_", " ")}
@@ -276,8 +273,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
         <div className="integration-actions integration-wide">
           {selected?.kind !== "document" ? (
             <button type="submit" disabled={busy}>
-              Guardar plantilla
-            </button>
+              {t("Guardar plantilla")}</button>
           ) : null}
           <button
             type="button"
@@ -315,48 +311,41 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
             }}
           >
             {selected?.kind === "document"
-              ? "Reintentar archivo"
-              : "Generar y guardar documento"}
+              ? t("Reintentar archivo")
+              : t("Generar y guardar documento")}
           </button>
         </div>
       </form>
       <section>
-        <h2>Vista previa</h2>
+        <h2>{t("Vista previa")}</h2>
         <pre>{preview}</pre>
       </section>
       {!savia.files ? (
         <p role="status">
-          El entorno no dispone de almacenamiento de archivos. Puedes guardar
-          plantillas; la generación requiere habilitarlo.
-        </p>
+          {t("El entorno no dispone de almacenamiento de archivos. Puedes guardar plantillas; la generación requiere habilitarlo.")}</p>
       ) : null}
       {selected?.kind === "document" ? (
         <section>
-          <h2>Archivos del documento</h2>
+          <h2>{t("Archivos del documento")}</h2>
           {files.length ? (
             files.map((file) => (
               <div key={file.id} className="integration-actions">
                 <span>
-                  {file.name} · versión {file.version}
+                  {file.name} {t("· versión")}{file.version}
                 </span>
                 <button disabled={busy} onClick={() => download(file)}>
-                  Descargar
-                </button>
+                  {t("Descargar")}</button>
                 <button disabled={busy} onClick={() => download(file, true)}>
-                  Imprimir / guardar PDF
-                </button>
+                  {t("Imprimir / guardar PDF")}</button>
               </div>
             ))
           ) : (
             <p>
-              Sin archivo confirmado. Reintenta la generación si el documento
-              sigue en borrador.
-            </p>
+              {t("Sin archivo confirmado. Reintenta la generación si el documento sigue en borrador.")}</p>
           )}
-          <h2>Firma electrónica</h2>
+          <h2>{t("Firma electrónica")}</h2>
           <label>
-            Correo del firmante
-            <input
+            {t("Correo del firmante")}<input
               type="email"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
@@ -374,8 +363,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
               }
               onClick={() => signature("request-signature")}
             >
-              Solicitar firma
-            </button>
+              {t("Solicitar firma")}</button>
             <button
               disabled={
                 busy ||
@@ -385,27 +373,23 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
               }
               onClick={() => signature("signature-status")}
             >
-              Consultar firma
-            </button>
+              {t("Consultar firma")}</button>
           </div>
           {selected.stage === "signed" &&
           selected.signed_at &&
           selected.evidence_url ? (
             <p>
-              Fecha informada: {String(selected.signed_at)} ·{" "}
+              {t("Fecha informada:")}{String(selected.signed_at)} ·{" "}
               <a
                 href={String(selected.evidence_url)}
                 target="_blank"
                 rel="noreferrer"
               >
-                Revisar evidencia de firma
-              </a>
+                {t("Revisar evidencia de firma")}</a>
             </p>
           ) : (
             <p>
-              La aceptación o entrega del documento no acredita por sí sola una
-              firma.
-            </p>
+              {t("La aceptación o entrega del documento no acredita por sí sola una firma.")}</p>
           )}
         </section>
       ) : null}

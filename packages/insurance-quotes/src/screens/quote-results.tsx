@@ -1,9 +1,14 @@
+import { InsuranceNotice } from "../notice";
+import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { pluginIntlLocale, type PluginLocale, type PluginMessageParams } from "@savia/crm-shared/plugin-localization";
+import { insuranceMessage } from "../messages";
+import { useInsuranceMessages } from "../localization";
 import { useEffect, useMemo, useState } from "react";
 import type { PluginExtensionActionRun } from "@savia/crm-shared/plugin-api";
 import { downloadQuoteComparisonPdf } from "./quote-comparison-pdf";
 import { ProviderLogo } from "./provider-logo";
 import {
-  formatCop,
+  formatCop as formatLocalizedCop,
   toUnifiedComparisonQuote,
   type UnifiedComparisonQuote,
 } from "./unified-quote-model";
@@ -20,9 +25,9 @@ function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function money(value: unknown): string | null {
+function money(value: unknown, locale: PluginLocale): string | null {
   if (!Number.isFinite(Number(value))) return null;
-  return new Intl.NumberFormat("es-CO", {
+  return new Intl.NumberFormat(pluginIntlLocale(locale), {
     style: "currency",
     currency: "COP",
     maximumFractionDigits: 0,
@@ -32,8 +37,10 @@ function money(value: unknown): string | null {
 function resultTitle(
   data: RecordValue | null,
   output: RecordValue | null,
+  locale: PluginLocale,
 ): string {
-  if (output?.type === "vehicle_lookup") return "Consultar placa";
+  const t = (message: string, params?: PluginMessageParams) => insuranceMessage(message, locale, params);
+  if (output?.type === "vehicle_lookup") return t("Consultar placa");
   const product = text(data?.product);
   if (product) return product;
   const operation = [text(data?.operationId), text(data?.quoteNumber)].find(
@@ -44,8 +51,8 @@ function resultTitle(
   if (operation?.includes("sbs-product-11")) return "SBS · Autos Plata";
   const provider = text(output?.provider);
   return provider
-    ? `${provider.toUpperCase()} · Cotización`
-    : "Cotización disponible";
+    ? t("%{p0} · Cotización", {p0: provider.toUpperCase()})
+    : t("Cotización disponible");
 }
 
 export type QuoteBatchItem = {
@@ -55,6 +62,7 @@ export type QuoteBatchItem = {
   provider: string;
   status: "pending" | "succeeded" | "failed";
   error?: string;
+  errorCode?: string | null;
   runId?: string;
   detailId?: string;
   detailVersion?: number;
@@ -115,6 +123,10 @@ export function QuoteResults({
   onGoToForm?: () => void;
   showHistorySelector?: boolean;
 }) {
+  const t = useInsuranceMessages();
+  const locale = usePluginLocale();
+  const formatCop = (amount: number) => formatLocalizedCop(amount, locale);
+
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[] | null>(
     null,
@@ -126,16 +138,16 @@ export function QuoteResults({
   const [historyHighlight, setHistoryHighlight] = useState(0);
 
   const filteredHistoryQuotes = useMemo(() => {
-    const query = historyQuery.trim().toLocaleLowerCase("es-CO");
+    const query = historyQuery.trim().toLocaleLowerCase(pluginIntlLocale(locale));
     if (!query) return historyQuotes;
     return historyQuotes.filter((quote) =>
       [quote.name, quote.placa, quote.estado, quote.ramo]
         .filter(Boolean)
         .join(" ")
-        .toLocaleLowerCase("es-CO")
+        .toLocaleLowerCase(pluginIntlLocale(locale))
         .includes(query),
     );
-  }, [historyQuotes, historyQuery]);
+  }, [historyQuotes, historyQuery, locale]);
 
   const selectedHistoryQuote = useMemo(
     () =>
@@ -184,10 +196,10 @@ export function QuoteResults({
             text(data?.errorCode) ?? text(output?.errorCode) ?? r.errorCode;
           const errorMsg = isFailed
             ? errorCode
-              ? `No se completó: ${errorCode}.`
-              : "La ejecución no se completó."
+              ? t("No se completó: %{p0}.", {p0: errorCode})
+              : t("La ejecución no se completó.")
             : undefined;
-          const label = resultTitle(data, output);
+          const label = resultTitle(data, output, locale);
           return {
             productId: r.runId,
             flowId: String(data?.operationId ?? r.runId),
@@ -195,6 +207,7 @@ export function QuoteResults({
             provider: String(output?.provider ?? "Seguros"),
             status: isFailed ? ("failed" as const) : ("succeeded" as const),
             error: errorMsg,
+            errorCode,
             runId: r.runId,
             quoteNumber: text(data?.quoteNumber) ?? undefined,
             premium:
@@ -242,11 +255,11 @@ export function QuoteResults({
     if (succeeded.length > 0) {
       return succeeded.map((item) => {
         const matchingRun = runs.find((r) => r.runId === item.runId);
-        return toUnifiedComparisonQuote(item, matchingRun);
+        return toUnifiedComparisonQuote(item, matchingRun, locale);
       });
     }
     return [];
-  }, [isQuoteActive, effectiveBatchItems, runs]);
+  }, [isQuoteActive, effectiveBatchItems, runs, locale]);
 
   const uniqueProviders = useMemo(() => {
     const list: string[] = [];
@@ -300,7 +313,7 @@ export function QuoteResults({
         return currentIds.filter((item) => item !== id);
       }
       if (currentIds.length >= 4) {
-        setActionNotice("Puedes comparar hasta cuatro ofertas a la vez.");
+        setActionNotice(t("Puedes comparar hasta cuatro ofertas a la vez."));
         return currentIds;
       }
       return [...currentIds, id];
@@ -310,13 +323,12 @@ export function QuoteResults({
   if (loading)
     return (
       <p className="insurance-quote__empty" role="status">
-        Actualizando resultados…
-      </p>
+         {t("Actualizando resultados…")} </p>
     );
 
   return (
     <section
-      aria-label="Comparador de cotizaciones"
+      aria-label={t("Comparador de cotizaciones")}
       className="insurance-results"
     >
       {/* 0. SELECTOR DE COTIZACIÓN ANTERIOR */}
@@ -324,7 +336,7 @@ export function QuoteResults({
         <div
           className="insurance-history-selector-bar"
           role="region"
-          aria-label="Historial de cotizaciones"
+          aria-label={t("Historial de cotizaciones")}
         >
           <div className="insurance-history-selector-inner">
             <div
@@ -360,7 +372,7 @@ export function QuoteResults({
                   aria-autocomplete="list"
                   aria-controls={historyListId}
                   aria-expanded={historyOpen}
-                  aria-label="Seleccionar cotización anterior"
+                  aria-label={t("Seleccionar cotización anterior")}
                   autoComplete="off"
                   className="insurance-history-combobox-input"
                   id="insurance-quote-history-select"
@@ -398,7 +410,7 @@ export function QuoteResults({
                   placeholder={
                     selectedHistoryQuote
                       ? `${selectedHistoryQuote.name}${selectedHistoryQuote.placa ? ` · ${selectedHistoryQuote.placa}` : ""}`
-                      : "Buscar por placa, referencia o estado…"
+                      : t("Buscar por placa, referencia o estado…")
                   }
                   role="combobox"
                   type="text"
@@ -414,8 +426,8 @@ export function QuoteResults({
                   <button
                     aria-label={
                       selectedHistoryQuote
-                        ? "Quitar cotización seleccionada"
-                        : "Limpiar búsqueda"
+                        ? t("Quitar cotización seleccionada")
+                        : t("Limpiar búsqueda")
                     }
                     className="insurance-history-search-clear"
                     onClick={() => chooseHistoryQuote(null)}
@@ -441,8 +453,8 @@ export function QuoteResults({
                   <button
                     aria-label={
                       historyOpen
-                        ? "Cerrar opciones"
-                        : "Abrir opciones de cotización"
+                        ? t("Cerrar opciones")
+                        : t("Abrir opciones de cotización")
                     }
                     className="insurance-history-combobox-toggle"
                     onClick={() => setHistoryOpen((current) => !current)}
@@ -475,7 +487,7 @@ export function QuoteResults({
                   className="insurance-history-combobox-list"
                   id={historyListId}
                   role="listbox"
-                  aria-label="Cotizaciones disponibles"
+                  aria-label={t("Cotizaciones disponibles")}
                 >
                   {visibleHistoryQuotes.map((quote, index) => {
                     const isSelected = quote.id === selectedHistoryQuoteId;
@@ -513,7 +525,7 @@ export function QuoteResults({
                       className="insurance-history-combobox-empty"
                       role="presentation"
                     >
-                      Sin resultados para “{historyQuery.trim()}”.{" "}
+                       {t("Sin resultados para “")}{historyQuery.trim()}”.{" "}
                       <button
                         type="button"
                         className="insurance-history-no-results-clear"
@@ -523,8 +535,7 @@ export function QuoteResults({
                         }}
                         onMouseDown={(event) => event.preventDefault()}
                       >
-                        Ver todas
-                      </button>
+                         {t("Ver todas")} </button>
                     </li>
                   ) : null}
                   {hiddenHistoryCount > 0 ? (
@@ -532,17 +543,16 @@ export function QuoteResults({
                       className="insurance-history-combobox-more"
                       role="presentation"
                     >
-                      …y {hiddenHistoryCount} más · refina la búsqueda
-                    </li>
+                       {t("…y")} {hiddenHistoryCount}  {t("más · refina la búsqueda")} </li>
                   ) : null}
                 </ul>
               ) : null}
               <p className="insurance-history-combobox-count" role="status">
                 {historyQuery
-                  ? `${filteredHistoryQuotes.length} de ${historyQuotes.length}`
+                  ? t("%{p0} de %{p1}", {p0: filteredHistoryQuotes.length, p1: historyQuotes.length})
                   : selectedHistoryQuote
-                    ? "1 seleccionada"
-                    : `${historyQuotes.length} ${historyQuotes.length === 1 ? "disponible" : "disponibles"}`}
+                    ? t("1 seleccionada")
+                    : `${historyQuotes.length} ${historyQuotes.length === 1 ? t("disponible") : t("disponibles")}`}
               </p>
             </div>
           </div>
@@ -555,14 +565,14 @@ export function QuoteResults({
         <header className="insurance-master-header">
           <div className="insurance-master-header__main">
             <div className="insurance-master-header__badge-wrap">
-              <span className="insurance-master-badge">Cotización Maestra</span>
+              <span className="insurance-master-badge">{t("Cotización Maestra")}</span>
               <strong className="insurance-master-reference">
                 {quoteReference ?? masterQuoteId ?? "Ref: General"}
               </strong>
               {masterQuoteId && quoteReference ? (
                 <span
                   className="insurance-master-id"
-                  title="ID de Base de Datos"
+                  title={t("ID de Base de Datos")}
                 >
                   (ID: {masterQuoteId})
                 </span>
@@ -571,27 +581,26 @@ export function QuoteResults({
             <div className="insurance-master-facts">
               {vehicleInfo?.plate ? (
                 <span className="insurance-fact-item">
-                  <strong>Placa:</strong> {vehicleInfo.plate}
+                  <strong>{t("Placa:")}</strong> {vehicleInfo.plate}
                 </span>
               ) : null}
               {vehicleInfo?.declaredValue ? (
                 <span className="insurance-fact-item">
-                  <strong>Valor Asegurado:</strong>{" "}
+                  <strong>{t("Valor Asegurado:")}</strong>{" "}
                   {formatCop(vehicleInfo.declaredValue)}
                 </span>
               ) : null}
               <span className="insurance-fact-item">
-                <strong>Ramo:</strong> Automóviles Livianos
-              </span>
+                <strong>{t("Ramo:")}</strong>  {t("Automóviles Livianos")} </span>
               <span className="insurance-fact-status">
                 {pendingCount > 0
                   ? succeededCount > 0
-                    ? `↻ Recibiendo… (${completedCount}/${totalCount})`
-                    : "↻ Solicitada…"
+                    ? t("↻ Recibiendo… (%{p0}/%{p1})", {p0: completedCount, p1: totalCount})
+                    : t("↻ Solicitada…")
                   : succeededCount > 0
-                    ? "✓ Recibida"
+                    ? t("✓ Recibida")
                     : failedCount > 0
-                      ? "✕ Rechazada"
+                      ? t("✕ Rechazada")
                       : "Solicitada"}
               </span>
             </div>
@@ -600,8 +609,8 @@ export function QuoteResults({
             <span className="insurance-master-count">
               {unifiedQuotes.length}{" "}
               {unifiedQuotes.length === 1
-                ? "opción cotejada"
-                : "opciones cotejadas"}
+                ? t("opción cotejada")
+                : t("opciones cotejadas")}
             </span>
           </div>
         </header>
@@ -624,12 +633,11 @@ export function QuoteResults({
             </div>
             <div className="insurance-busy-indicator__content">
               <strong className="insurance-busy-indicator__title">
-                Cotizando con aseguradoras en vivo… ({completedCount} de {totalCount} recibidas)
-              </strong>
+                 {t("Cotizando con aseguradoras en vivo… (")}{completedCount}  {t("de")} {totalCount}  {t("recibidas)")} </strong>
               <span className="insurance-busy-indicator__subtitle">
                 {succeededCount > 0
-                  ? "Las ofertas recibidas ya están disponibles abajo. Esperando respuestas adicionales…"
-                  : "Consultando tarifas y coberturas oficiales. Cada oferta aparecerá tan pronto responda su aseguradora."}
+                  ? t("Las ofertas recibidas ya están disponibles abajo. Esperando respuestas adicionales…")
+                  : t("Consultando tarifas y coberturas oficiales. Cada oferta aparecerá tan pronto responda su aseguradora.")}
               </span>
             </div>
           </div>
@@ -684,8 +692,7 @@ export function QuoteResults({
               >
                 <strong style={{ fontSize: "0.875rem" }}>{item.label}</strong>
                 <span className="insurance-status-badge insurance-status-badge--pending">
-                  ↻ En progreso
-                </span>
+                   {t("↻ En progreso")} </span>
               </div>
               <div
                 className="quote-skeleton"
@@ -707,7 +714,7 @@ export function QuoteResults({
       {/* 2. COMPARATOR CARDS & COMPARISON */}
       {isQuoteActive && unifiedQuotes.length > 0 ? (
         <section
-          aria-label="Comparador de pólizas de seguro"
+          aria-label={t("Comparador de pólizas de seguro")}
           className="insurance-comparator"
         >
           {/* Top Filter Chips by Provider (only if multiple providers exist) */}
@@ -721,7 +728,7 @@ export function QuoteResults({
                   onClick={() => setSelectedProvider(null)}
                   type="button"
                 >
-                  Todas las aseguradoras ({unifiedQuotes.length})
+                   {t("Todas las aseguradoras (")}{unifiedQuotes.length})
                 </button>
                 {uniqueProviders.map((prov) => (
                   <button
@@ -742,7 +749,7 @@ export function QuoteResults({
 
           <div
             className="insurance-comparator__selection-bar"
-            aria-label="Ofertas seleccionadas para comparar"
+            aria-label={t("Ofertas seleccionadas para comparar")}
           >
             <span
               className="insurance-comparator__selection-count"
@@ -764,17 +771,17 @@ export function QuoteResults({
               </svg>
               {comparedQuotesList.length}{" "}
               {comparedQuotesList.length === 1
-                ? "oferta seleccionada"
-                : "ofertas seleccionadas"}{" "}
-              <span className="insurance-comparator__selection-max">de 4</span>
+                ? t("oferta seleccionada")
+                : t("ofertas seleccionadas")}{" "}
+              <span className="insurance-comparator__selection-max">{t("de 4")}</span>
             </span>
             <div className="insurance-comparator__selection-actions">
               <button
-                aria-label="Limpiar"
+                aria-label={t("Limpiar")}
                 className="insurance-comparator__btn insurance-comparator__btn--ghost insurance-comparator__btn--icon"
                 disabled={!comparedQuotesList.length}
                 onClick={() => setSelectedQuoteIds([])}
-                title="Quitar las 4 ofertas del comparador"
+                title={t("Quitar las 4 ofertas del comparador")}
                 type="button"
               >
                 <svg
@@ -794,7 +801,7 @@ export function QuoteResults({
                 </svg>
               </button>
               <button
-                aria-label="Descargar PDF"
+                aria-label={t("Descargar PDF")}
                 className="insurance-comparator__btn insurance-comparator__btn--primary insurance-comparator__btn--icon"
                 disabled={!comparedQuotesList.length}
                 onClick={() => {
@@ -804,14 +811,14 @@ export function QuoteResults({
                     vehicleInfo,
                   }).catch(() =>
                     setActionNotice(
-                      "No se pudo generar el PDF. Inténtalo de nuevo.",
+                      t("No se pudo generar el PDF. Inténtalo de nuevo."),
                     ),
                   );
                 }}
                 title={
                   comparedQuotesList.length
-                    ? `Descargar PDF con ${comparedQuotesList.length} ${comparedQuotesList.length === 1 ? "oferta" : "ofertas"}`
-                    : "Selecciona al menos una oferta"
+                    ? t("Descargar PDF con %{p0} %{p1}", {p0: comparedQuotesList.length, p1: comparedQuotesList.length === 1 ? t("oferta") : t("ofertas")})
+                    : t("Selecciona al menos una oferta")
                 }
                 type="button"
               >
@@ -859,8 +866,7 @@ export function QuoteResults({
                   {isRecommended ? (
                     <div className="insurance-card__ribbon">
                       <span className="insurance-card__ribbon-tag">
-                        ★ Mejor relación cobertura/precio
-                      </span>
+                         {t("★ Mejor relación cobertura/precio")} </span>
                     </div>
                   ) : (
                     <div className="insurance-card__meta-bar">
@@ -886,7 +892,7 @@ export function QuoteResults({
 
                   {quote.quoteNumber ? (
                     <div className="insurance-card__quote-num">
-                      <span>Cotización:</span> <code>{quote.quoteNumber}</code>
+                      <span>{t("Cotización:")}</span> <code>{quote.quoteNumber}</code>
                     </div>
                   ) : null}
 
@@ -897,7 +903,7 @@ export function QuoteResults({
                         : "Consultar"}
                     </strong>
                     {quote.premium > 0 ? (
-                      <span className="insurance-card__period">COP / año</span>
+                      <span className="insurance-card__period">{t("COP / año")}</span>
                     ) : null}
                   </div>
 
@@ -929,8 +935,8 @@ export function QuoteResults({
                     <button
                       aria-label={
                         isCompared
-                          ? `Quitar ${quote.provider} ${quote.productName} del comparador`
-                          : `Añadir ${quote.provider} ${quote.productName} al comparador`
+                          ? t("Quitar %{p0} %{p1} del comparador", {p0: quote.provider, p1: quote.productName})
+                          : t("Añadir %{p0} %{p1} al comparador", {p0: quote.provider, p1: quote.productName})
                       }
                       aria-pressed={isCompared}
                       className={`insurance-card__compare-btn ${isCompared ? "is-selected" : ""}`}
@@ -956,31 +962,31 @@ export function QuoteResults({
                         )}
                       </svg>
                       {isCompared
-                        ? `Comparando · ${compareOrder}/4`
-                        : "Comparar"}
+                        ? t("Comparando · %{p0}/4", {p0: compareOrder})
+                        : t("Comparar")}
                     </button>
                     <button
                       className="insurance-card__copy-btn"
                       aria-label={
                         copiedId === quote.id
-                          ? "Datos de cotización copiados"
-                          : "Copiar datos de cotización"
+                          ? t("Datos de cotización copiados")
+                          : t("Copiar datos de cotización")
                       }
                       onClick={async () => {
                         const info = [
-                          `Aseguradora: ${quote.provider}`,
-                          `Producto: ${quote.productName}`,
+                          t("Aseguradora: %{p0}", {p0: quote.provider}),
+                          t("Producto: %{p0}", {p0: quote.productName}),
                           quote.quoteNumber
-                            ? `Número de cotización: ${quote.quoteNumber}`
+                            ? t("Número de cotización: %{p0}", {p0: quote.quoteNumber})
                             : null,
                           quote.premium > 0
-                            ? `Prima total: ${formatCop(quote.premium)} COP`
+                            ? t("Prima total: %{p0} COP", {p0: formatCop(quote.premium)})
                             : null,
                           vehicleInfo?.plate
-                            ? `Placa: ${vehicleInfo.plate}`
+                            ? t("Placa: %{p0}", {p0: vehicleInfo.plate})
                             : null,
                           quoteReference
-                            ? `Referencia Savia: ${quoteReference}`
+                            ? t("Referencia Savia: %{p0}", {p0: quoteReference})
                             : null,
                         ]
                           .filter(Boolean)
@@ -990,13 +996,13 @@ export function QuoteResults({
                           setCopiedId(quote.id);
                           setTimeout(() => setCopiedId(null), 2500);
                         } catch {
-                          setActionNotice(`Datos de ${quote.provider} listos.`);
+                          setActionNotice(t("Datos de %{p0} listos.", {p0: quote.provider}));
                         }
                       }}
                       title={
                         copiedId === quote.id
-                          ? "Datos de cotización copiados"
-                          : "Copiar datos de cotización"
+                          ? t("Datos de cotización copiados")
+                          : t("Copiar datos de cotización")
                       }
                       type="button"
                     >
@@ -1041,24 +1047,19 @@ export function QuoteResults({
           {comparedQuotesList.some(
             (q) =>
               q.coverages.rce &&
-              !q.coverages.rce.includes("Según condiciones") &&
-              q.coverages.rce !== "No informado por la aseguradora",
+              !q.coverages.rce.includes(t("Según condiciones")) &&
+              q.coverages.rce !== t("No informado por la aseguradora"),
           ) ? (
             <div className="insurance-comparison">
               <div className="insurance-comparison__header">
                 <div>
                   <h3 className="insurance-comparison__title">
-                    Matriz Detallada de Coberturas Frente a Frente
-                  </h3>
+                     {t("Matriz Detallada de Coberturas Frente a Frente")} </h3>
                   <p className="insurance-comparison__subtitle">
-                    Comparativa técnica cláusula por cláusula para asesoría
-                    fiduciaria al cliente
-                  </p>
+                     {t("Comparativa técnica cláusula por cláusula para asesoría fiduciaria al cliente")} </p>
                 </div>
                 <span className="insurance-comparison__badge">
-                  {comparedQuotesList.length} de {unifiedQuotes.length} Pólizas
-                  cotejadas
-                </span>
+                  {comparedQuotesList.length}  {t("de")} {unifiedQuotes.length}  {t("Pólizas cotejadas")} </span>
               </div>
 
               <div className="insurance-comparison__table-container">
@@ -1066,8 +1067,7 @@ export function QuoteResults({
                   <thead>
                     <tr>
                       <th className="insurance-comparison__th-feature">
-                        DETALLE DE COBERTURA
-                      </th>
+                         {t("DETALLE DE COBERTURA")} </th>
                       {comparedQuotesList.map((q, idx) => (
                         <th
                           className={`insurance-comparison__th-plan ${
@@ -1085,7 +1085,7 @@ export function QuoteResults({
                                 provider={q.provider}
                               />
                               <span className="insurance-comparison__plan-tag">
-                                {idx === 0 ? "★ Recomendado" : q.provider}
+                                {idx === 0 ? t("★ Recomendado") : q.provider}
                               </span>
                             </div>
                             <strong className="insurance-comparison__plan-title">
@@ -1105,8 +1105,7 @@ export function QuoteResults({
                     <tr>
                       <td className="insurance-comparison__td-label">
                         <strong>
-                          Responsabilidad Civil Extracontractual (RCE)
-                        </strong>
+                           {t("Responsabilidad Civil Extracontractual (RCE)")} </strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1125,7 +1124,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Deducible Pérdida Parcial (Daños/Hurto)</strong>
+                        <strong>{t("Deducible Pérdida Parcial (Daños/Hurto)")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1142,7 +1141,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Deducible Pérdida Total</strong>
+                        <strong>{t("Deducible Pérdida Total")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1154,7 +1153,7 @@ export function QuoteResults({
                           key={q.id}
                         >
                           {q.coverages.totalLossDeductible.includes(
-                            "Sin Deducible",
+                            t("Sin Deducible"),
                           ) ||
                           q.coverages.totalLossDeductible.includes("0%") ? (
                             <span className="insurance-val-badge--good">
@@ -1168,7 +1167,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Auto de Reemplazo / Sustituto</strong>
+                        <strong>{t("Auto de Reemplazo / Sustituto")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1185,11 +1184,10 @@ export function QuoteResults({
                               {q.coverages.replacementCar}
                             </span>
                           ) : q.coverages.replacementCar.includes(
-                              "No amparada",
+                              t("No amparada"),
                             ) ? (
                             <span className="insurance-val-badge--neutral">
-                              ✕ No amparada
-                            </span>
+                               {t("✕ No amparada")} </span>
                           ) : (
                             <span className="insurance-val-badge--good">
                               ✓ {q.coverages.replacementCar}
@@ -1200,7 +1198,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Grúa y Asistencia en Viaje</strong>
+                        <strong>{t("Grúa y Asistencia en Viaje")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1217,7 +1215,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Conductor Elegido</strong>
+                        <strong>{t("Conductor Elegido")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1229,11 +1227,10 @@ export function QuoteResults({
                           key={q.id}
                         >
                           {q.coverages.designatedDriver.includes(
-                            "No incluido",
+                            t("No incluido"),
                           ) ? (
                             <span className="insurance-val-badge--neutral">
-                              No incluido
-                            </span>
+                               {t("No incluido")} </span>
                           ) : (
                             q.coverages.designatedDriver
                           )}
@@ -1242,7 +1239,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Amparo Patrimonial & Gastos Médicos</strong>
+                        <strong>{t("Amparo Patrimonial & Gastos Médicos")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1259,7 +1256,7 @@ export function QuoteResults({
                     </tr>
                     <tr>
                       <td className="insurance-comparison__td-label">
-                        <strong>Asistencia Jurídica en Sitio 24/7</strong>
+                        <strong>{t("Asistencia Jurídica en Sitio 24/7")}</strong>
                       </td>
                       {comparedQuotesList.map((q, idx) => (
                         <td
@@ -1287,9 +1284,7 @@ export function QuoteResults({
                 ℹ
               </span>
               <span>
-                Valores expresados en Pesos Colombianos (COP) según la respuesta
-                oficial emitida por cada aseguradora en la cotización.
-              </span>
+                 {t("Valores expresados en Pesos Colombianos (COP) según la respuesta oficial emitida por cada aseguradora en la cotización.")} </span>
             </div>
           </footer>
           {actionNotice ? (
@@ -1305,7 +1300,7 @@ export function QuoteResults({
         <div
           className="insurance-results-empty"
           role="region"
-          aria-label="Sin cotización seleccionada"
+          aria-label={t("Sin cotización seleccionada")}
         >
           <span aria-hidden="true" className="insurance-results-empty__glow" />
           <div className="insurance-results-empty__icon-wrap">
@@ -1332,15 +1327,14 @@ export function QuoteResults({
             />
           </div>
           <p className="insurance-results-empty__eyebrow">
-            {showHistorySelector ? "Historial" : "Cotizaciones"}
+            {showHistorySelector ? t("Historial") : t("Cotizaciones")}
           </p>
           <h3 className="insurance-results-empty__title">
-            Ninguna cotización seleccionada
-          </h3>
+             {t("Ninguna cotización seleccionada")} </h3>
           <p className="insurance-results-empty__desc">
             {showHistorySelector && historyQuotes.length > 0
-              ? "Selecciona una cotización anterior en el menú desplegable para consultar sus ofertas cotejadas, o prepara una nueva desde el formulario."
-              : "Aún no se ha generado ninguna cotización. Completa el formulario de vehículo y tomador para consultar aseguradoras en línea."}
+              ? t("Selecciona una cotización anterior en el menú desplegable para consultar sus ofertas cotejadas, o prepara una nueva desde el formulario.")
+              : t("Aún no se ha generado ninguna cotización. Completa el formulario de vehículo y tomador para consultar aseguradoras en línea.")}
           </p>
           {onGoToForm ? (
             <button
@@ -1348,8 +1342,7 @@ export function QuoteResults({
               className="insurance-results-empty__action"
               onClick={onGoToForm}
             >
-              Preparar nueva cotización
-              <svg
+               {t("Preparar nueva cotización")} <svg
                 aria-hidden="true"
                 fill="none"
                 height="16"
@@ -1366,21 +1359,19 @@ export function QuoteResults({
             </button>
           ) : null}
           <ol
-            aria-label="Cómo empezar"
+            aria-label={t("Cómo empezar")}
             className="insurance-results-empty__steps"
           >
             <li>
               <span aria-hidden="true">1</span>
-              {showHistorySelector ? "Elige anterior" : "Completa vehículo"}
+              {showHistorySelector ? t("Elige anterior") : t("Completa vehículo")}
             </li>
             <li>
               <span aria-hidden="true">2</span>
-              Datos del tomador
-            </li>
+               {t("Datos del tomador")} </li>
             <li>
               <span aria-hidden="true">3</span>
-              Compara ofertas
-            </li>
+               {t("Compara ofertas")} </li>
           </ol>
         </div>
       ) : null}
@@ -1391,13 +1382,11 @@ export function QuoteResults({
           <summary className="insurance-batch-disclosure__summary">
             <span>
               <h2 className="insurance-batch-panel__title">
-                Solicitudes de cotización
-              </h2>
+                 {t("Solicitudes de cotización")} </h2>
               <span className="insurance-batch-disclosure__meta">
                 {quoteReference ? `Ref: ${quoteReference} · ` : ""}
-                {succeededCount} completadas · {failedCount} fallidas de{" "}
-                {effectiveBatchItems.length} productos
-              </span>
+                {succeededCount}  {t("completadas ·")} {failedCount}  {t("fallidas de")}{" "}
+                {effectiveBatchItems.length}  {t("productos")} </span>
             </span>
             <span
               aria-hidden="true"
@@ -1405,7 +1394,7 @@ export function QuoteResults({
             />
           </summary>
           <section
-            aria-label="Estado de solicitudes de cotización"
+            aria-label={t("Estado de solicitudes de cotización")}
             className="insurance-batch-panel"
           >
             <div className="insurance-batch-panel__header">
@@ -1418,7 +1407,7 @@ export function QuoteResults({
                 >
                   {retryingIds.length > 0
                     ? "Reintentando..."
-                    : `Reintentar fallidos (${failedCount})`}
+                    : t("Reintentar fallidos (%{p0})", {p0: failedCount})}
                 </button>
               ) : null}
             </div>
@@ -1427,12 +1416,11 @@ export function QuoteResults({
               <table className="insurance-batch-table">
                 <thead>
                   <tr>
-                    <th>Aseguradora / Producto</th>
-                    <th>Estado</th>
-                    <th>Detalle</th>
+                    <th>{t("Aseguradora / Producto")}</th>
+                    <th>{t("Estado")}</th>
+                    <th>{t("Detalle")}</th>
                     <th className="insurance-batch-table__th--action">
-                      Acción
-                    </th>
+                       {t("Acción")} </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1449,16 +1437,13 @@ export function QuoteResults({
                         <td>
                           {item.status === "succeeded" ? (
                             <span className="insurance-status-badge insurance-status-badge--success">
-                              ✓ Completado
-                            </span>
+                               {t("✓ Completado")} </span>
                           ) : item.status === "pending" || isRetrying ? (
                             <span className="insurance-status-badge insurance-status-badge--pending">
-                              ↻ En progreso
-                            </span>
+                               {t("↻ En progreso")} </span>
                           ) : (
                             <span className="insurance-status-badge insurance-status-badge--failed">
-                              ✕ Falló
-                            </span>
+                               {t("✕ Falló")} </span>
                           )}
                         </td>
                         <td className="insurance-batch-table__detail">
@@ -1467,22 +1452,19 @@ export function QuoteResults({
                               className="insurance-batch-error-text"
                               title={item.error}
                             >
-                              {item.error}
+                              <InsuranceNotice message={item.error} code={item.errorCode} />
                             </span>
                           ) : item.status === "succeeded" ? (
                             <span className="insurance-batch-success-text">
                               {item.quoteNumber
-                                ? `Cotización: ${item.quoteNumber}${
-                                    typeof item.premium === "number"
-                                      ? ` · ${money(item.premium)}`
-                                      : ""
-                                  }`
-                                : "Cotización generada"}
+                                ? t("Cotización: %{p0}%{p1}", {p0: item.quoteNumber, p1: typeof item.premium === "number"
+                                      ? ` · ${money(item.premium, locale)}`
+                                      : ""})
+                                : t("Cotización generada")}
                             </span>
                           ) : (
                             <span className="insurance-batch-pending-text">
-                              Consultando proveedor…
-                            </span>
+                               {t("Consultando proveedor…")} </span>
                           )}
                         </td>
                         <td className="insurance-batch-table__action">
@@ -1495,7 +1477,7 @@ export function QuoteResults({
                               }
                               type="button"
                             >
-                              {isRetrying ? "Reintentando…" : "Reintentar"}
+                              {isRetrying ? t("Reintentando…") : t("Reintentar")}
                             </button>
                           ) : null}
                         </td>
@@ -1510,7 +1492,7 @@ export function QuoteResults({
       ) : (
         productErrors.map((error) => (
           <p className="insurance-quote__error" key={error} role="alert">
-            {error}
+            <InsuranceNotice message={error} />
           </p>
         ))
       )}
@@ -1520,8 +1502,7 @@ export function QuoteResults({
       !productErrors.length &&
       !unifiedQuotes.length ? (
         <p className="insurance-quote__empty">
-          Aún no hay resultados. Completa una cotización para explorarlos aquí.
-        </p>
+           {t("Aún no hay resultados. Completa una cotización para explorarlos aquí.")} </p>
       ) : null}
     </section>
   );

@@ -23,6 +23,8 @@ export const extensionManifestSchema = z
     version: semanticVersionSchema,
     label: z.string().trim().min(1).max(100),
     description: z.string().max(1000),
+    labels: z.object({es:z.string().trim().min(1).max(100).optional(),en:z.string().trim().min(1).max(100).optional(),pt:z.string().trim().min(1).max(100).optional()}).strict().optional(),
+    descriptions: z.object({es:z.string().max(1000).optional(),en:z.string().max(1000).optional(),pt:z.string().max(1000).optional()}).strict().optional(),
     requires: z.array(solutionIdSchema).max(30).default([]),
     apiVersion: z.literal(1),
   })

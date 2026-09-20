@@ -6,6 +6,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Actividades",
   description: "Agenda operativa, responsables y seguimiento de compromisos.",
+  labels: {"en": "Activities", "pt": "Atividades"},
+  descriptions: {"en": "Operational agenda, owners and commitment tracking.", "pt": "Agenda operacional, responsáveis e acompanhamento de compromissos."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

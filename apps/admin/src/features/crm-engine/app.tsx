@@ -1,3 +1,4 @@
+import { ExtensionLocaleBridge } from "@/i18n/app-locale-provider";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import {
@@ -17,6 +18,7 @@ import React, {
   lazy,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -287,6 +289,9 @@ function App({
   search?: string;
 }) {
   const t = useMessages(automationMessages);
+  const extensionLocale = useAppLocale();
+  const extensionLocaleRef = useRef(extensionLocale);
+  extensionLocaleRef.current = extensionLocale;
 
   const activeQueryClient = useQueryClient();
   const [ready, setReady] = useState(false),
@@ -415,7 +420,7 @@ function App({
     ? contribution.Screen
     : null;
   const extensionApi = useMemo(
-    () => (contribution ? extensionApiFor(contribution, api) : null),
+    () => (contribution ? extensionApiFor(contribution, api, () => extensionLocaleRef.current) : null),
     [contribution?.extensionId],
   );
   useEffect(() => {
@@ -1844,7 +1849,7 @@ export default function Root({
         store={store}
         i18nProvider={i18nProvider}
       >
-        <App embedded={embedded} search={search} />
+        <ExtensionLocaleBridge><App embedded={embedded} search={search} /></ExtensionLocaleBridge>
       </CoreAdminContext>
     </div>
   );

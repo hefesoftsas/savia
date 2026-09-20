@@ -10,6 +10,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Contabilidad",
   description: "Prepara lotes de facturas y comprobantes balanceados.",
+  labels: {"en": "Accounting", "pt": "Contabilidade"},
+  descriptions: {"en": "Prepare balanced invoice and voucher batches.", "pt": "Prepare lotes de faturas e comprovantes balanceados."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

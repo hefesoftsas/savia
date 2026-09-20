@@ -1,4 +1,5 @@
-import { useMessages } from "@/i18n/core";
+import { resolveLocalizedContent } from "@savia/crm-shared/plugin-localization";
+import { useAppLocale, useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
 import { useMemo, type HTMLAttributes } from "react";
 import type { IFieldProps } from "@form-eng/core";
@@ -39,6 +40,7 @@ function DisplayTextBody({
 
 export function DisplayTextField(p: IFieldProps) {
   const t = useMessages(recordsMessages);
+  const locale = useAppLocale();
 
   const object = p.config?.studioObject as CrmObject | undefined;
   const recordId =
@@ -47,14 +49,26 @@ export function DisplayTextField(p: IFieldProps) {
   const values = useFormTemplateValues(object, p.fieldName);
 
   const text = useMemo(() => {
-    const content = settings?.content.trim() || p.label || "";
+    const content = resolveLocalizedContent(
+      settings?.content ?? p.label ?? "",
+      settings?.translations,
+      locale,
+    );
     if (!content) return "";
     return renderDisplayTextContent(content, {
       values,
       recordId,
       object: object ? { name: object.name, label: object.label } : undefined,
     });
-  }, [object, p.label, recordId, settings?.content, values]);
+  }, [
+    object,
+    p.label,
+    recordId,
+    settings?.content,
+    settings?.translations,
+    locale,
+    values,
+  ]);
 
   if (!settings) {
     return (

@@ -10,6 +10,8 @@ export const manifest = {
   version: "1.0.0",
   label: "Campañas",
   description: "Segmentación y ejecución con consentimiento verificable.",
+  labels: {"en": "Campaigns", "pt": "Campanhas"},
+  descriptions: {"en": "Segmentation and execution with verifiable consent.", "pt": "Segmentação e execução com consentimento verificável."},
   requires: [],
   apiVersion: 1,
 } satisfies ExtensionManifest;

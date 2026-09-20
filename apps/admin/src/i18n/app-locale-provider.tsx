@@ -1,3 +1,5 @@
+import { PluginLocaleProvider } from "@savia/crm-shared/plugin-locale-react";
+import { useAppLocale } from "./core";
 import { useMemo, type ReactNode } from "react";
 import { I18nContext, useStore } from "ra-core";
 import { defaultAppLocale, isAppLocale } from "./app-locale";
@@ -15,6 +17,11 @@ export function useAppI18nProvider() {
 export function AppLocaleProvider({ children }: { children: ReactNode }) {
   const provider = useAppI18nProvider();
   return (
-    <I18nContext.Provider value={provider}>{children}</I18nContext.Provider>
+    <I18nContext.Provider value={provider}><ExtensionLocaleBridge>{children}</ExtensionLocaleBridge></I18nContext.Provider>
   );
+}
+
+export function ExtensionLocaleBridge({children}:{children:ReactNode}) {
+  const locale=useAppLocale();
+  return <PluginLocaleProvider locale={locale}>{children}</PluginLocaleProvider>;
 }
