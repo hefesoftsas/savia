@@ -543,7 +543,9 @@ it("returns the public insurance quote presentation", async () => {
     snapshot: expect.objectContaining({ products: expect.any(Array) }),
   });
   const serialized = JSON.stringify(definition);
-  expect(serialized).not.toMatch(/snapshot|tenant_id|tenantId|extensionVersion|actionId|connectionId|providerPayload/);
+  expect(serialized).not.toMatch(
+    /snapshot|tenant_id|tenantId|extensionVersion|actionId|connectionId|providerPayload/,
+  );
   expect(definition).not.toHaveProperty("snapshot");
   // Record links remain generic.
   const recordInstance = app();

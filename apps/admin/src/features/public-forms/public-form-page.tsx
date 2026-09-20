@@ -17,9 +17,7 @@ const publicQuotePresentation = z
     renderer: z.literal("insurance-quote-wizard"),
     entry: z.enum(["wizard", "direct"]),
     products: z
-      .array(
-        z.object({ flowId: z.string(), label: z.string() }).strict(),
-      )
+      .array(z.object({ flowId: z.string(), label: z.string() }).strict())
       .min(1)
       .max(20),
   })
@@ -185,7 +183,9 @@ function SubmissionForm({
         if (field.type === "number") {
           const number = Number(value);
           if (!Number.isFinite(number)) {
-            setParseError(t("Revisa el campo %{field}.", { field: field.label }));
+            setParseError(
+              t("Revisa el campo %{field}.", { field: field.label }),
+            );
             return;
           }
           values[field.name] = number;

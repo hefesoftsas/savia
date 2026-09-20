@@ -1,4 +1,9 @@
-import { I18nContextProvider, StoreContextProvider, memoryStore, useSetLocale } from "ra-core";
+import {
+  I18nContextProvider,
+  StoreContextProvider,
+  memoryStore,
+  useSetLocale,
+} from "ra-core";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import type { ReactElement, ReactNode } from "react";
 import {
@@ -27,24 +32,122 @@ const quoteDefinition = {
     })),
   },
   fields: [
-    { name: "vehicle_plate", label: "Placa", type: "text" as const, required: true },
-    { name: "vehicle_fasecoldaCode", label: "Código Fasecolda", type: "text" as const, required: true },
-    { name: "vehicle_productionYear", label: "Año del vehículo", type: "number" as const, required: true },
-    { name: "vehicle_isNew", label: "Vehículo nuevo", type: "boolean" as const, required: false },
-    { name: "vehicle_circulationCity", label: "Código de ciudad de circulación", type: "text" as const, required: true },
-    { name: "vehicle_accessoriesValue", label: "Valor de accesorios", type: "number" as const, required: false },
-    { name: "vehicle_declaredValue", label: "Valor asegurado", type: "number" as const, required: true },
-    { name: "applicant_documentType", label: "Tipo de documento", type: "select" as const, required: true, options: [{ value: "CC", label: "Cédula de ciudadanía" }, { value: "CE", label: "Cédula de extranjería" }] },
-    { name: "applicant_documentNumber", label: "Número de documento", type: "text" as const, required: true },
-    { name: "applicant_firstName", label: "Nombres", type: "text" as const, required: true },
-    { name: "applicant_surname", label: "Primer apellido", type: "text" as const, required: true },
-    { name: "applicant_secondSurname", label: "Segundo apellido", type: "text" as const, required: false },
-    { name: "applicant_gender", label: "Sexo", type: "select" as const, required: true, options: [{ value: "F", label: "Femenino" }, { value: "M", label: "Masculino" }] },
-    { name: "applicant_birthDate", label: "Fecha de nacimiento", type: "date" as const, required: true },
-    { name: "applicant_city", label: "Código de ciudad de residencia", type: "text" as const, required: true },
-    { name: "applicant_address", label: "Dirección", type: "text" as const, required: true },
-    { name: "applicant_phone", label: "Teléfono", type: "text" as const, required: true },
-    { name: "applicant_email", label: "Correo electrónico", type: "email" as const, required: true },
+    {
+      name: "vehicle_plate",
+      label: "Placa",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "vehicle_fasecoldaCode",
+      label: "Código Fasecolda",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "vehicle_productionYear",
+      label: "Año del vehículo",
+      type: "number" as const,
+      required: true,
+    },
+    {
+      name: "vehicle_isNew",
+      label: "Vehículo nuevo",
+      type: "boolean" as const,
+      required: false,
+    },
+    {
+      name: "vehicle_circulationCity",
+      label: "Código de ciudad de circulación",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "vehicle_accessoriesValue",
+      label: "Valor de accesorios",
+      type: "number" as const,
+      required: false,
+    },
+    {
+      name: "vehicle_declaredValue",
+      label: "Valor asegurado",
+      type: "number" as const,
+      required: true,
+    },
+    {
+      name: "applicant_documentType",
+      label: "Tipo de documento",
+      type: "select" as const,
+      required: true,
+      options: [
+        { value: "CC", label: "Cédula de ciudadanía" },
+        { value: "CE", label: "Cédula de extranjería" },
+      ],
+    },
+    {
+      name: "applicant_documentNumber",
+      label: "Número de documento",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "applicant_firstName",
+      label: "Nombres",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "applicant_surname",
+      label: "Primer apellido",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "applicant_secondSurname",
+      label: "Segundo apellido",
+      type: "text" as const,
+      required: false,
+    },
+    {
+      name: "applicant_gender",
+      label: "Sexo",
+      type: "select" as const,
+      required: true,
+      options: [
+        { value: "F", label: "Femenino" },
+        { value: "M", label: "Masculino" },
+      ],
+    },
+    {
+      name: "applicant_birthDate",
+      label: "Fecha de nacimiento",
+      type: "date" as const,
+      required: true,
+    },
+    {
+      name: "applicant_city",
+      label: "Código de ciudad de residencia",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "applicant_address",
+      label: "Dirección",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "applicant_phone",
+      label: "Teléfono",
+      type: "text" as const,
+      required: true,
+    },
+    {
+      name: "applicant_email",
+      label: "Correo electrónico",
+      type: "email" as const,
+      required: true,
+    },
   ],
 };
 
@@ -55,9 +158,13 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   widget = undefined;
-  fetchMock = vi.fn().mockResolvedValue(
-    new Response(JSON.stringify({ ok: true, reference: "quote-receipt-123" })),
-  );
+  fetchMock = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: true, reference: "quote-receipt-123" }),
+      ),
+    );
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("turnstile", {
     render: vi.fn((_element, options) => {
@@ -103,8 +210,12 @@ it("renders the plugin-shaped wizard shell with products and steps", async () =>
       endpoint="https://api.test/api/public/forms/quote-token"
     />,
   );
-  expect(await screen.findByText("SEGUROS · AUTOS LIVIANOS")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: /Cotizador por pasos/ })).toBeInTheDocument();
+  expect(
+    await screen.findByText("SEGUROS · AUTOS LIVIANOS"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: /Cotizador por pasos/ }),
+  ).toBeInTheDocument();
   expect(screen.getByText("19 productos")).toBeInTheDocument();
   expect(screen.getByText("Vehículo")).toBeInTheDocument();
   expect(screen.getByText("Solicitante y conductor")).toBeInTheDocument();
@@ -129,14 +240,26 @@ it("advances on valid step and returns with Anterior", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
   expect(screen.getByLabelText(/Placa/)).toBeInTheDocument();
 
-  fireEvent.change(screen.getByLabelText(/Placa/), { target: { value: "ABC123" } });
-  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), { target: { value: "12345678" } });
-  fireEvent.change(screen.getByLabelText(/Año del vehículo/), { target: { value: "2023" } });
-  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), { target: { value: "11001" } });
-  fireEvent.change(screen.getByLabelText(/Valor asegurado/), { target: { value: "50000000" } });
+  fireEvent.change(screen.getByLabelText(/Placa/), {
+    target: { value: "ABC123" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
 
   fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
-  expect(await screen.findByLabelText(/Número de documento/)).toBeInTheDocument();
+  expect(
+    await screen.findByLabelText(/Número de documento/),
+  ).toBeInTheDocument();
   expect(screen.queryByLabelText(/Placa/)).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: /Anterior/ }));
@@ -151,25 +274,49 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
     />,
   );
   // Step 1 -> fill vehicle.
-  fireEvent.change(await screen.findByLabelText(/Placa/), { target: { value: "abc123" } });
-  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), { target: { value: "12345678" } });
-  fireEvent.change(screen.getByLabelText(/Año del vehículo/), { target: { value: "2023" } });
-  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), { target: { value: "11001" } });
-  fireEvent.change(screen.getByLabelText(/Valor asegurado/), { target: { value: "50000000" } });
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "abc123" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
   fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
 
   // Step 2 -> fill applicant.
-  fireEvent.change(await screen.findByLabelText(/Tipo de documento/), { target: { value: "CC" } });
-  fireEvent.change(screen.getByLabelText(/Número de documento/), { target: { value: "123456789" } });
-  fireEvent.change(screen.getByLabelText(/Nombres/), { target: { value: "Ada" } });
-  fireEvent.change(screen.getByLabelText(/Primer apellido/), { target: { value: "Example" } });
+  fireEvent.change(await screen.findByLabelText(/Tipo de documento/), {
+    target: { value: "CC" },
+  });
+  fireEvent.change(screen.getByLabelText(/Número de documento/), {
+    target: { value: "123456789" },
+  });
+  fireEvent.change(screen.getByLabelText(/Nombres/), {
+    target: { value: "Ada" },
+  });
+  fireEvent.change(screen.getByLabelText(/Primer apellido/), {
+    target: { value: "Example" },
+  });
   fireEvent.change(screen.getByLabelText(/Sexo/), { target: { value: "F" } });
-  fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), { target: { value: "1990-01-01" } });
+  fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), {
+    target: { value: "1990-01-01" },
+  });
   fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
 
   // Final step shows contact fields + CAPTCHA + submit.
-  expect(await screen.findByLabelText(/Correo electrónico/)).toBeInTheDocument();
-  const captchaMount = await screen.findByLabelText(/Verificación de seguridad/);
+  expect(
+    await screen.findByLabelText(/Correo electrónico/),
+  ).toBeInTheDocument();
+  const captchaMount = await screen.findByLabelText(
+    /Verificación de seguridad/,
+  );
   expect(captchaMount).toBeInTheDocument();
   expect(widget).toMatchObject({
     sitekey: "site-key",
@@ -177,12 +324,22 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
     cData: "quote-form-id",
   });
 
-  fireEvent.change(screen.getByLabelText(/Código de ciudad de residencia/), { target: { value: "11001" } });
-  fireEvent.change(screen.getByLabelText(/Dirección/), { target: { value: "Example 123" } });
-  fireEvent.change(screen.getByLabelText(/Teléfono/), { target: { value: "3001234567" } });
-  fireEvent.change(screen.getByLabelText(/Correo electrónico/), { target: { value: "ada@example.test" } });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de residencia/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Dirección/), {
+    target: { value: "Example 123" },
+  });
+  fireEvent.change(screen.getByLabelText(/Teléfono/), {
+    target: { value: "3001234567" },
+  });
+  fireEvent.change(screen.getByLabelText(/Correo electrónico/), {
+    target: { value: "ada@example.test" },
+  });
 
-  const submitButton = screen.getByRole("button", { name: /Enviar solicitud|Solicitar cotización|Cotizar/ });
+  const submitButton = screen.getByRole("button", {
+    name: /Enviar solicitud|Solicitar cotización|Cotizar/,
+  });
   expect(submitButton).toBeDisabled();
   await solve();
   fireEvent.click(submitButton);
@@ -221,16 +378,24 @@ it("keeps field names and step controls across locales with Spanish by default",
     </StoreContextProvider>,
   );
   // Spanish by default.
-  expect(await screen.findByText("SEGUROS · AUTOS LIVIANOS")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Cotizador por pasos" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("SEGUROS · AUTOS LIVIANOS"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "Cotizador por pasos" }),
+  ).toBeInTheDocument();
   expect(screen.getByText("Vehículo")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Siguiente paso" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Siguiente paso" }),
+  ).toBeInTheDocument();
   const plate = screen.getByLabelText(/Placa/);
   fireEvent.change(plate, { target: { value: "ABC123" } });
 
   fireEvent.click(screen.getByText("EN"));
   await screen.findByText("INSURANCE · LIGHT VEHICLES");
-  expect(screen.getByRole("heading", { name: "Step-by-step quote" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "Step-by-step quote" }),
+  ).toBeInTheDocument();
   expect(screen.getByText("Vehicle")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Next step" })).toBeInTheDocument();
   // Business content preserved, field names intact.

@@ -59,7 +59,10 @@ function stepsFor(
 }
 
 /** Public-only quote wizard: no PluginApi, no private collections, no history. */
-export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) {
+export function PublicQuoteForm({
+  definition,
+  endpoint,
+}: PublicQuoteFormProps) {
   const t = useMessages(publicFormsMessages);
   const controller = usePublicFormSubmission({ definition, endpoint });
   const {
@@ -134,9 +137,7 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
       } else if (field.type === "number") {
         const n = Number(raw);
         if (!Number.isFinite(n)) {
-          setParseError(
-            t("Revisa el campo %{field}.", { field: field.label }),
-          );
+          setParseError(t("Revisa el campo %{field}.", { field: field.label }));
           return;
         }
         submitValues[field.name] = n;
@@ -146,9 +147,7 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
           field.options &&
           !field.options.some((o) => o.value === String(raw))
         ) {
-          setParseError(
-            t("Revisa el campo %{field}.", { field: field.label }),
-          );
+          setParseError(t("Revisa el campo %{field}.", { field: field.label }));
           return;
         }
         submitValues[field.name] = String(raw);
@@ -178,7 +177,11 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
       >
         <p className="public-quote-eyebrow">{eyebrow}</p>
         <h1 id="public-quote-success">{t("Solicitud recibida")}</h1>
-        <p>{t("Conserva esta referencia para consultar con quien compartió el formulario.")}</p>
+        <p>
+          {t(
+            "Conserva esta referencia para consultar con quien compartió el formulario.",
+          )}
+        </p>
         <p className="public-form-reference">{receipt.reference}</p>
         <SafeResult result={receipt.result} />
         <Button type="button" variant="outline" onClick={handleStartNew}>
@@ -193,8 +196,16 @@ export function PublicQuoteForm({ definition, endpoint }: PublicQuoteFormProps) 
       <section className="public-quote-notice" role="status">
         <p className="public-quote-eyebrow">{eyebrow}</p>
         <h2>{t("Envío registrado")}</h2>
-        <p>{t("Este envío ya fue recibido o está en proceso. No lo vuelvas a enviar.")}</p>
-        <p>{t("Si necesitas confirmar el resultado, contacta a quien compartió el enlace.")}</p>
+        <p>
+          {t(
+            "Este envío ya fue recibido o está en proceso. No lo vuelvas a enviar.",
+          )}
+        </p>
+        <p>
+          {t(
+            "Si necesitas confirmar el resultado, contacta a quien compartió el enlace.",
+          )}
+        </p>
         <Button type="button" variant="outline" onClick={handleStartNew}>
           {t("Iniciar otro envío")}
         </Button>

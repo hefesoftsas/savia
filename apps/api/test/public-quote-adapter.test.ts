@@ -303,7 +303,9 @@ it("refuses lookup flows or forged private policy and executes no provider for b
 
 it("describes the public insurance quote renderer", async () => {
   const adapter = createPublicQuoteAdapter({
-    executor: { execute: async () => ({ status: "succeeded" as const, output: {} }) },
+    executor: {
+      execute: async () => ({ status: "succeeded" as const, output: {} }),
+    },
   });
   const wizardObject = { ...object, name: "cotizador_por_pasos" };
   const wizardPublished = await adapter.publish({
@@ -350,7 +352,11 @@ it("describes the public insurance quote renderer", async () => {
     "sbs-producto-10",
     "sbs-producto-8",
   ]);
-  expect(ordered.products.every((p) => typeof p.label === "string" && p.label.length > 0)).toBe(true);
+  expect(
+    ordered.products.every(
+      (p) => typeof p.label === "string" && p.label.length > 0,
+    ),
+  ).toBe(true);
 
   // An invalid/unknown flow ID is rejected by the existing policy parser.
   await expect(
@@ -362,7 +368,10 @@ it("describes the public insurance quote renderer", async () => {
   await expect(
     adapter.presentation!({
       objectName: "cotizador",
-      snapshot: { ...frozenBase, products: [{ flowId: "sura-autos-provider" }] },
+      snapshot: {
+        ...frozenBase,
+        products: [{ flowId: "sura-autos-provider" }],
+      },
     }),
   ).rejects.toThrow();
 

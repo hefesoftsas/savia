@@ -378,7 +378,9 @@ it("fails closed for an unknown presentation descriptor", async () => {
     ),
   );
   render(<PublicFormPage token="evil-token" />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("no está disponible");
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "no está disponible",
+  );
 });
 it("switches public form chrome and captcha language while preserving entered business content", async () => {
   testingRender(

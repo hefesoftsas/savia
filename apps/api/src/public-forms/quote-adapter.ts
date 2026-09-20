@@ -118,9 +118,8 @@ export function createPublicQuoteAdapter(options: {
     const frozen = policy(snapshot);
     return {
       renderer: "insurance-quote-wizard" as const,
-      entry: (objectName === "cotizador_por_pasos"
-        ? "wizard"
-        : "direct") as "wizard" | "direct",
+      entry: (objectName === "cotizador_por_pasos" ? "wizard" : "direct") as
+        "wizard" | "direct",
       products: frozen.products.map(({ flowId }) => ({
         flowId,
         label: catalog.get(flowId)!.label,
