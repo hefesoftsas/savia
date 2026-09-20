@@ -108,7 +108,27 @@ export function createPublicQuoteAdapter(options: {
         message: "La configuración cambió. Publica nuevamente el formulario.",
       });
   };
+  async function presentation({
+    objectName,
+    snapshot,
+  }: {
+    objectName: string;
+    snapshot: unknown;
+  }) {
+    const frozen = policy(snapshot);
+    return {
+      renderer: "insurance-quote-wizard" as const,
+      entry: (objectName === "cotizador_por_pasos"
+        ? "wizard"
+        : "direct") as "wizard" | "direct",
+      products: frozen.products.map(({ flowId }) => ({
+        flowId,
+        label: catalog.get(flowId)!.label,
+      })),
+    };
+  }
   return {
+    presentation,
     async publish({ db, tenant, domainId, object }) {
       if (!options.executor)
         throw new HTTPException(503, {

@@ -301,6 +301,83 @@ it("refuses lookup flows or forged private policy and executes no provider for b
   expect(execute).not.toHaveBeenCalled();
 });
 
+it("describes the public insurance quote renderer", async () => {
+  const adapter = createPublicQuoteAdapter({
+    executor: { execute: async () => ({ status: "succeeded" as const, output: {} }) },
+  });
+  const wizardObject = { ...object, name: "cotizador_por_pasos" };
+  const wizardPublished = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object: wizardObject,
+  });
+  const wizardPresentation = await adapter.presentation!({
+    objectName: "cotizador_por_pasos",
+    snapshot: wizardPublished.snapshot,
+  });
+  expect(wizardPresentation).toEqual({
+    renderer: "insurance-quote-wizard",
+    entry: "wizard",
+    products: [{ flowId: "sbs-producto-8", label: expect.any(String) }],
+  });
+  expect(wizardPresentation.products[0].label).toMatch(/SBS/);
+
+  const directPublished = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  const directPresentation = await adapter.presentation!({
+    objectName: "cotizador",
+    snapshot: directPublished.snapshot,
+  });
+  expect(directPresentation.entry).toBe("direct");
+  expect(directPresentation.renderer).toBe("insurance-quote-wizard");
+
+  // Product order follows the frozen policy, not current mutable settings.
+  const frozenBase = directPublished.snapshot as Record<string, unknown>;
+  const orderedSnapshot = {
+    ...frozenBase,
+    products: [{ flowId: "sbs-producto-10" }, { flowId: "sbs-producto-8" }],
+  };
+  const ordered = await adapter.presentation!({
+    objectName: "cotizador",
+    snapshot: orderedSnapshot,
+  });
+  expect(ordered.products.map((p) => p.flowId)).toEqual([
+    "sbs-producto-10",
+    "sbs-producto-8",
+  ]);
+  expect(ordered.products.every((p) => typeof p.label === "string" && p.label.length > 0)).toBe(true);
+
+  // An invalid/unknown flow ID is rejected by the existing policy parser.
+  await expect(
+    adapter.presentation!({
+      objectName: "cotizador",
+      snapshot: { ...frozenBase, products: [{ flowId: "unknown-flow" }] },
+    }),
+  ).rejects.toThrow();
+  await expect(
+    adapter.presentation!({
+      objectName: "cotizador",
+      snapshot: { ...frozenBase, products: [{ flowId: "sura-autos-provider" }] },
+    }),
+  ).rejects.toThrow();
+
+  // Forged client labels never change the server policy.
+  const forgedSnapshot = {
+    ...frozenBase,
+    products: [{ flowId: "sbs-producto-8", label: "Forged label" }],
+  };
+  const forged = await adapter.presentation!({
+    objectName: "cotizador",
+    snapshot: forgedSnapshot,
+  }).catch(() => undefined);
+  // Strict policy rejects extra keys, or labels are ignored in favor of the trusted catalog.
+  if (forged) expect(forged.products[0].label).not.toBe("Forged label");
+});
 it("scopes provider run receipts to the published policy, not a visitor-chosen UUID shared by other forms", async () => {
   const execute = vi.fn(async () => ({
     status: "succeeded" as const,
