@@ -225,6 +225,12 @@ function feedbackFrom(error: unknown): string {
     : "No pudimos sincronizar tus agendas.";
 }
 
+function calendarSyncFeedback(providers: CalendarProvider[]): string {
+  return `No se pudo sincronizar ${providers
+    .map(calendarProviderLabel)
+    .join(" y ")}.`;
+}
+
 export function MyDayPage({
   services,
 }: {
@@ -269,7 +275,7 @@ export function MyDayPage({
         );
         return;
       }
-      const eventsByCalendar = await Promise.all(
+      const eventResults = await Promise.allSettled(
         connectedCalendars.map(async (provider) => ({
           provider,
           events: await services.personalIntegrations.listEvents({
@@ -278,6 +284,12 @@ export function MyDayPage({
           }),
         })),
       );
+      const failedProviders = eventResults.flatMap((result, index) =>
+        result.status === "rejected" ? [connectedCalendars[index]] : [],
+      );
+      const eventsByCalendar = eventResults.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
       setEvents(
         sorted(
           eventsByCalendar.flatMap(({ provider, events }) =>
@@ -285,7 +297,11 @@ export function MyDayPage({
           ),
         ),
       );
-      setFeedback(null);
+      setFeedback(
+        failedProviders.length > 0
+          ? calendarSyncFeedback(failedProviders)
+          : null,
+      );
     } catch (error) {
       setFeedback(feedbackFrom(error));
     } finally {

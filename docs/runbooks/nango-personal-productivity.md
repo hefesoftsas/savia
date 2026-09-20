@@ -36,6 +36,7 @@ El Worker crea cada Connect session con `end_user_id`, `end_user_email` y `end_u
 ## Operación segura
 
 - **Lecturas:** el asistente puede buscar nombres de archivos, metadatos de mensajes y próximos eventos solo en una conexión activa del mismo usuario. No se copian resultados a D1.
+- **Mi día:** Google Calendar y Outlook se consultan de forma independiente. Si un proveedor no responde, los eventos del otro siguen visibles y Savia identifica qué calendario necesita sincronizarse de nuevo.
 - **Escrituras:** enviar correo, crear evento y guardar un archivo de texto nuevo generan primero una confirmación visible. La confirmación expira a los cinco minutos, está ligada al principal y solo puede ejecutarse una vez.
 - **Contenido sensible:** el cuerpo de correo o archivo de una confirmación se cifra con AES-GCM y queda ligado al principal y al id de acción. La auditoría persiste solamente proveedor, tipo, resultado, código seguro y fecha; no cuerpos, destinatarios, contenido ni tokens.
 - **Archivos:** Drive crea con multipart; OneDrive usa creación de archivo con `conflictBehavior=fail` y una precondición. Si existe un nombre igual, falla: no hay sobrescritura, edición, eliminación ni compartición.
