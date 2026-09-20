@@ -1,4 +1,5 @@
 import { solutionPackageSchema } from "@savia/crm-shared/solution-package";
+import { runtimeReleaseCatalog } from "@savia/release-catalog/runtime";
 // Generated from solutions/insurance/manifest.json by scripts/build-solution-catalog.mjs.
 export const insuranceSolution = solutionPackageSchema.parse({
   format: "savia.solution",
@@ -590,6 +591,10 @@ export const insuranceSolution = solutionPackageSchema.parse({
   },
 });
 export const solutionOptions = {
+  workflowBundles: runtimeReleaseCatalog.workflowBundles,
   solutionCatalog: [insuranceSolution],
-  availableExtensions: ["insurance.quotes"],
+  extensionRegistry: runtimeReleaseCatalog.extensionRegistry,
+  extensionSummaryProviders: runtimeReleaseCatalog.extensionSummaryProviders,
+  extensionObjectRequirements:
+    runtimeReleaseCatalog.extensionObjectRequirements,
 };
