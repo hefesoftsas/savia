@@ -5,7 +5,10 @@ Owner: Core UI team. Reviewed: 2026-09-20.
 Savia supports Spanish (`es`, default), English (`en`) and Portuguese (`pt`) in
 its built-in administration, low-code UI and shipped insurance extensions. The selected locale controls system
 copy, accessibility labels, validation and presentation of record values.
-Changing languages preserves mounted forms and unsaved edits.
+Changing languages preserves mounted forms and unsaved edits. The selection
+is stored in `localStorage` under `savia.locale` and restored on the next
+visit, so the UI language persists between sessions on the same device.
+Public forms persist independently with the same key.
 
 ## Coverage
 
