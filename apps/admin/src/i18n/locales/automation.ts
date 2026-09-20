@@ -2518,6 +2518,28 @@ export const automationMessages = {
       "Ainda não há fluxos. Crie um para definir quando inicia e quais passos executa.",
     ],
   "· borrador": ["· borrador", "· draft", "· rascunho"],
+  "· publicado": ["· publicado", "· published", "· publicado"],
+  publicado: ["publicado", "published", "publicado"],
+  borrador: ["borrador", "draft", "rascunho"],
+  Publicado: ["Publicado", "Published", "Publicado"],
+  "Sin publicar": ["Sin publicar", "Not published", "Não publicado"],
+  "Solo relaciones": ["Solo relaciones", "Relations only", "Somente relações"],
+  "%{value0} flujos": [
+    "%{value0} flujos",
+    "%{value0} workflows",
+    "%{value0} fluxos",
+  ],
+  "Cargando historial…": [
+    "Cargando historial…",
+    "Loading history…",
+    "Carregando histórico…",
+  ],
+  "Cargando…": ["Cargando…", "Loading…", "Carregando…"],
+  "Crear mi primer flujo": [
+    "Crear mi primer flujo",
+    "Create my first workflow",
+    "Criar meu primeiro fluxo",
+  ],
   "Nombre del flujo": ["Nombre del flujo", "Workflow name", "Nome do fluxo"],
   "Guardar borrador": ["Guardar borrador", "Save draft", "Salvar rascunho"],
   "Descartar cambios": [
@@ -2541,6 +2563,11 @@ export const automationMessages = {
     ". Publicar no modifica las ejecuciones anteriores.",
     ". Publishing does not modify previous executions.",
     ". Publicar não modifica as execuções anteriores.",
+  ],
+  "Publicar no modifica las ejecuciones anteriores.": [
+    "Publicar no modifica las ejecuciones anteriores.",
+    "Publishing does not modify previous executions.",
+    "Publicar não modifica as execuções anteriores.",
   ],
   "Guarda el borrador para crear la URL del webhook.": [
     "Guarda el borrador para crear la URL del webhook.",

@@ -54,10 +54,16 @@
   gap: 8px;
   padding: 12px 16px;
   font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
-  color: var(--border);
+  border-radius: 6px 6px 0 0;
+  color: var(--muted-foreground);
   cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
 }
 .op-tabs button[aria-current="page"] {
   border-bottom-color: var(--primary);
@@ -65,7 +71,12 @@
   font-weight: 600;
 }
 .op-tabs button:hover {
-  background: var(--card);
+  background: var(--muted);
+  color: var(--foreground);
+}
+.op-tabs button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .op-section {
   min-width: 0;
@@ -103,9 +114,9 @@
   padding: 0 30px 0 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: white;
+  background: var(--background);
   font-size: 13px;
-  color: var(--muted);
+  color: var(--foreground);
 }
 .op-form {
   display: grid;
@@ -192,6 +203,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+  background: var(--card);
 }
 .op-task {
   display: flex;
@@ -199,7 +211,7 @@
   gap: 10px;
   padding: 14px;
   border-bottom: 1px solid var(--border);
-  background: white;
+  background: var(--card);
 }
 .op-task:last-child {
   border-bottom: 0;
@@ -224,19 +236,19 @@
   padding: 23px;
   border: 1px dashed var(--border);
   border-radius: 8px;
-  background: var(--border);
+  background: var(--muted);
   display: flex;
   align-items: flex-start;
   gap: 15px;
   margin: 18px 0;
-  color: var(--primary);
+  color: var(--muted-foreground);
 }
 .op-upload > div {
   min-width: 0;
   flex: 1;
 }
 .op-upload input {
-  background: white;
+  background: var(--background);
   margin-top: 12px;
   max-width: 450px;
 }
@@ -264,7 +276,7 @@
 .op-stats > div {
   padding: 16px 18px;
   border: 1px solid var(--border);
-  background: white;
+  background: var(--card);
   border-radius: 7px;
   display: flex;
   flex-direction: column;
@@ -311,20 +323,25 @@
 }
 .op-badge {
   display: inline-flex;
+  align-items: center;
   padding: 3px 8px;
   border-radius: 4px;
-  background: var(--border);
-  color: var(--primary);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border: 1px solid var(--border);
   font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .op-badge-error {
-  background: var(--muted);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  border-color: color-mix(in srgb, var(--destructive) 35%, transparent);
   color: var(--destructive);
 }
 .op-badge-muted {
-  background: var(--card);
-  color: var(--muted);
+  background: var(--muted);
+  border-color: var(--border);
+  color: var(--muted-foreground);
 }
 .op-break {
   overflow-wrap: anywhere;
@@ -341,7 +358,7 @@
   display: flex;
   justify-content: space-between;
   gap: 15px;
-  background: white;
+  background: var(--card);
 }
 .op-rules h4 {
   margin-top: 9px;
@@ -605,7 +622,7 @@
   height: 9px;
   background: var(--accent);
   border-radius: 50%;
-  box-shadow: 0 0 0 4px white;
+  box-shadow: 0 0 0 4px var(--background);
 }
 .op-timeline li > div {
   display: flex;

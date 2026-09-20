@@ -5,7 +5,20 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowDown, Plus, Play, Save, GitBranch } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ArrowDown,
+  Plus,
+  Play,
+  Save,
+  GitBranch,
+  TriangleAlert,
+  RotateCcw,
+  Inbox,
+  History,
+  ChevronRight,
+  Layers,
+} from "lucide-react";
 import {
   workflowDraftSchema,
   type WorkflowDefinition,
@@ -49,6 +62,76 @@ type Run = {
   }[];
   jobs?: { node_id: string; type: string; output: unknown; attempts: number }[];
 };
+
+function errorText(error: unknown): string {
+  if (!error) return "";
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error !== null && "message" in error)
+    return String((error as { message: unknown }).message);
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function WorkflowError({
+  error,
+  retryLabel,
+  onRetry,
+}: {
+  error: unknown;
+  retryLabel?: string;
+  onRetry?: () => void;
+}) {
+  const message = errorText(error);
+  if (!message) return null;
+  return (
+    <div className="wf-error" role="alert">
+      <span className="wf-error-icon" aria-hidden="true">
+        <TriangleAlert size={16} />
+      </span>
+      <span className="wf-error-text">{message}</span>
+      {onRetry && retryLabel ? (
+        <Button size="sm" variant="outline" onClick={onRetry}>
+          <RotateCcw size={14} />
+          {retryLabel}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function runBadgeClass(status: string): string {
+  switch (status) {
+    case "completed":
+      return "wf-badge wf-badge-ok";
+    case "failed":
+    case "blocked":
+      return "wf-badge wf-badge-error";
+    case "running":
+    case "queued":
+    case "waiting":
+      return "wf-badge wf-badge-progress";
+    default:
+      return "wf-badge wf-badge-muted";
+  }
+}
+
+function FlowListSkeleton({ label }: { label: string }) {
+  return (
+    <div className="wf-skeleton-list" role="status" aria-live="polite">
+      <span className="sr-only">{label}</span>
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="wf-skeleton-item">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Workflows({ objects }: { objects: CrmObject[] }) {
   const runtime = getCrmRuntime();
@@ -205,8 +288,14 @@ function WorkspaceWorkflows({
   return (
     <section className="wf-root" aria-label={t("Flujos de trabajo")}>
       <header className="wf-toolbar">
-        <div>
-          <h2>{t("Flujos de trabajo")}</h2>
+        <div className="wf-title">
+          <h2>
+            {t("Flujos de trabajo")}
+            {typeof list.data?.data.length === "number" &&
+            list.data.data.length > 0 ? (
+              <span className="wf-count">{list.data.data.length}</span>
+            ) : null}
+          </h2>
           <p className="wf-muted">
             {t("Conecta eventos, decisiones y acciones sobre tus colecciones.")}
           </p>
@@ -216,30 +305,55 @@ function WorkspaceWorkflows({
           {t("Nuevo flujo")}
         </Button>
       </header>
-      {error || list.error ? (
-        <p role="alert" className="wf-error">
-          {error || String(list.error)}
+      <WorkflowError
+        error={error || errorText(list.error)}
+        retryLabel={t("Reintentar")}
+        onRetry={() => {
+          setError("");
+          void list.refetch();
+        }}
+      />
+      {notice ? (
+        <p role="status" className="wf-notice">
+          {notice}
         </p>
       ) : null}
-      {notice ? <p role="status">{notice}</p> : null}
-      {list.isPending ? <p role="status">{t("Cargando flujos…")}</p> : null}
+      {list.isPending ? (
+        <p role="status" className="wf-muted">
+          {t("Cargando flujos…")}
+        </p>
+      ) : null}
       {bundles.data?.data.length ? (
         <details className="wf-bundles">
-          <summary>{t("Conectar colecciones con plantillas")}</summary>
-          <p>
+          <summary>
+            <Layers size={15} aria-hidden="true" />
+            {t("Conectar colecciones con plantillas")}
+            <span className="wf-count">{bundles.data.data.length}</span>
+          </summary>
+          <p className="wf-muted">
             {t(
               "Preparar añade relaciones y borradores. Revisa y publica cada flujo para activarlo. Los flujos existentes se conservan.",
             )}
           </p>
           {bundles.data.data.map((bundle) => (
-            <article key={bundle.id}>
-              <h3>{bundle.label}</h3>
-              <p>{bundle.description}</p>
-              {bundle.missing.length ? (
-                <p>
-                  {t("Faltan colecciones:")} {bundle.missing.join(", ")}
-                </p>
-              ) : null}
+            <article key={bundle.id} className="wf-bundle">
+              <div className="wf-bundle-head">
+                <h3>{bundle.label}</h3>
+                {bundle.missing.length ? (
+                  <span className="wf-badge wf-badge-warn">
+                    {t("Faltan colecciones:")} {bundle.missing.join(", ")}
+                  </span>
+                ) : (
+                  <span className="wf-badge wf-badge-muted">
+                    {bundle.workflows.length
+                      ? t("%{value0} flujos", {
+                          value0: bundle.workflows.length,
+                        })
+                      : t("Solo relaciones")}
+                  </span>
+                )}
+              </div>
+              <p className="wf-muted">{bundle.description}</p>
               <Button
                 variant="outline"
                 disabled={busy || dirty || !!bundle.missing.length}
@@ -272,34 +386,77 @@ function WorkspaceWorkflows({
         </details>
       ) : null}
       {bundles.error ? (
-        <p role="alert">
-          {t("No se pudieron cargar las plantillas.")}{" "}
-          <button onClick={() => bundles.refetch()}>{t("Reintentar")}</button>
-        </p>
+        <WorkflowError
+          error={
+            errorText(bundles.error) ||
+            t("No se pudieron cargar las plantillas.")
+          }
+          retryLabel={t("Reintentar")}
+          onRetry={() => bundles.refetch()}
+        />
       ) : null}
       <div className="wf-workspace">
         <aside className="wf-list" aria-label={t("Flujos guardados")}>
-          {list.data?.data.length === 0 ? (
-            <p className="wf-muted">
-              {t(
-                "Aún no hay flujos. Crea uno para definir cuándo se inicia y qué pasos ejecuta.",
-              )}
-            </p>
+          <div className="wf-list-head">
+            <span className="wf-list-title">{t("Flujos guardados")}</span>
+            {typeof list.data?.data.length === "number" ? (
+              <span className="wf-count">{list.data.data.length}</span>
+            ) : null}
+          </div>
+          {list.isPending ? (
+            <FlowListSkeleton label={t("Cargando flujos…")} />
           ) : null}
-          {list.data?.data.map((flow) => (
-            <button
-              key={flow.id}
-              disabled={busy || dirty}
-              aria-current={draft?.id === flow.id ? "true" : undefined}
-              onClick={() => choose(flow)}
-            >
-              <span>{flow.name}</span>
-              <small>
-                {flow.enabled ? t("Activo") : t("Inactivo")} {t("· borrador")}{" "}
-                {flow.revision}
-              </small>
-            </button>
-          ))}
+          {!list.isPending && !list.error && list.data?.data.length === 0 ? (
+            <div className="wf-list-empty">
+              <span className="wf-list-empty-icon" aria-hidden="true">
+                <GitBranch size={18} />
+              </span>
+              <p>
+                {t(
+                  "Aún no hay flujos. Crea uno para definir cuándo se inicia y qué pasos ejecuta.",
+                )}
+              </p>
+            </div>
+          ) : null}
+          {list.data?.data.map((flow) => {
+            const active = draft?.id === flow.id;
+            return (
+              <button
+                key={flow.id}
+                disabled={busy || dirty}
+                className="wf-list-item"
+                aria-current={active ? "true" : undefined}
+                onClick={() => choose(flow)}
+              >
+                <span className="wf-list-item-main">
+                  <span className="wf-list-item-name">{flow.name}</span>
+                  <span className="wf-list-item-meta">
+                    <span
+                      className={
+                        flow.enabled
+                          ? "wf-badge wf-badge-ok"
+                          : "wf-badge wf-badge-muted"
+                      }
+                    >
+                      {flow.enabled ? t("Activo") : t("Inactivo")}
+                    </span>
+                    <span className="wf-dot" aria-hidden="true">
+                      ·
+                    </span>
+                    <span>
+                      {flow.published_version ? t("publicado") : t("borrador")}{" "}
+                      {flow.revision}
+                    </span>
+                  </span>
+                </span>
+                <ChevronRight
+                  size={16}
+                  className="wf-list-item-chevron"
+                  aria-hidden="true"
+                />
+              </button>
+            );
+          })}
         </aside>
         {draft ? (
           <div className="wf-detail">
@@ -371,10 +528,35 @@ function WorkspaceWorkflows({
                 ) : null}
               </div>
             </div>
-            <p className="wf-muted">
-              {dirty ? t("Cambios sin guardar") : t("Borrador guardado")} ·{" "}
-              {draft.enabled ? t("Versión publicada activa") : t("Inactivo")}
-              {t(". Publicar no modifica las ejecuciones anteriores.")}
+            <div className="wf-statusline">
+              <span
+                className={
+                  dirty ? "wf-badge wf-badge-warn" : "wf-badge wf-badge-muted"
+                }
+              >
+                {dirty ? t("Cambios sin guardar") : t("Borrador guardado")}
+              </span>
+              <span
+                className={
+                  draft.enabled
+                    ? "wf-badge wf-badge-ok"
+                    : "wf-badge wf-badge-muted"
+                }
+              >
+                {draft.enabled ? t("Versión publicada activa") : t("Inactivo")}
+              </span>
+              {draft.published_version ? (
+                <span className="wf-badge wf-badge-muted">
+                  {t("Publicado")}
+                </span>
+              ) : (
+                <span className="wf-badge wf-badge-muted">
+                  {t("Sin publicar")}
+                </span>
+              )}
+            </div>
+            <p className="wf-muted wf-status-hint">
+              {t("Publicar no modifica las ejecuciones anteriores.")}
             </p>
             <TriggerEditor
               definition={draft.definition}
@@ -588,38 +770,73 @@ function WorkspaceWorkflows({
             ) : null}
             {draft.id ? (
               <section className="wf-history">
-                <h3>{t("Historial de ejecuciones")}</h3>
-                {history.error ? (
-                  <p role="alert">{String(history.error)}</p>
+                <div className="wf-section-head">
+                  <h3>
+                    <History size={15} aria-hidden="true" />
+                    {t("Historial de ejecuciones")}
+                  </h3>
+                  {typeof history.data?.data.length === "number" &&
+                  history.data.data.length > 0 ? (
+                    <span className="wf-count">{history.data.data.length}</span>
+                  ) : null}
+                </div>
+                <WorkflowError
+                  error={errorText(history.error)}
+                  retryLabel={t("Reintentar")}
+                  onRetry={() => history.refetch()}
+                />
+                {history.isPending ? (
+                  <div
+                    className="wf-skeleton-list"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="sr-only">{t("Cargando historial…")}</span>
+                    {Array.from({ length: 3 }, (_, i) => (
+                      <Skeleton key={i} className="h-10 w-full" />
+                    ))}
+                  </div>
                 ) : null}
-                {history.data?.data.length === 0 ? (
+                {!history.isPending &&
+                !history.error &&
+                history.data?.data.length === 0 ? (
                   <p className="wf-muted">{t("No hay ejecuciones todavía.")}</p>
                 ) : null}
-                <ul>
+                <ul className="wf-runs">
                   {history.data?.data.map((run) => (
                     <li key={run.id}>
                       <button
+                        className="wf-run-item"
                         onClick={() => setRunId(run.id)}
                         aria-pressed={run.id === runId}
                       >
-                        <span>{statuses[run.status] ?? run.status}</span>
-                        <small>
+                        <span className={runBadgeClass(run.status)}>
+                          {statuses[run.status] ?? run.status}
+                        </span>
+                        <small className="wf-run-meta">
                           {run.created_at} · {run.id.slice(0, 8)}
                         </small>
                       </button>
                     </li>
                   ))}
                 </ul>
-                {detail.error ? (
-                  <p role="alert">{String(detail.error)}</p>
-                ) : null}
+                <WorkflowError
+                  error={errorText(detail.error)}
+                  retryLabel={t("Reintentar")}
+                  onRetry={() => detail.refetch()}
+                />
                 {detail.data ? (
                   <article className="wf-run">
-                    <h4>{statuses[detail.data.data.status]}</h4>
-                    <p className="wf-muted">
-                      {t("Versión")} {detail.data.data.version_id} {t("· Paso")}{" "}
-                      {detail.data.data.node_id ?? t("finalizado")}
-                    </p>
+                    <div className="wf-run-head">
+                      <span className={runBadgeClass(detail.data.data.status)}>
+                        {statuses[detail.data.data.status]}
+                      </span>
+                      <small className="wf-run-meta">
+                        {t("Versión")} {detail.data.data.version_id}{" "}
+                        {t("· Paso")}{" "}
+                        {detail.data.data.node_id ?? t("finalizado")}
+                      </small>
+                    </div>
                     {detail.data.data.status === "waiting" &&
                     !!detail.data.data.wake_at ? (
                       <p className="wf-muted">
@@ -630,17 +847,25 @@ function WorkspaceWorkflows({
                       </p>
                     ) : null}
                     {detail.data.data.error ? (
-                      <p role="alert">{detail.data.data.error}</p>
+                      <WorkflowError error={detail.data.data.error} />
                     ) : null}
                     {detail.data.data.deliveries?.map((attempt) => (
-                      <p key={`${attempt.node_id}:${attempt.sequence}`}>
-                        {attempt.node_id} {t("· Intento")} {attempt.sequence} ·{" "}
-                        {attempt.status
-                          ? t("HTTP %{value0}", { value0: attempt.status })
-                          : attempt.finished_at
-                            ? t("Sin respuesta")
-                            : t("Envío en curso o resultado pendiente")}
-                        {attempt.error ? ` · ${attempt.error}` : ""}
+                      <p
+                        key={`${attempt.node_id}:${attempt.sequence}`}
+                        className="wf-delivery"
+                      >
+                        <span className="wf-delivery-node">
+                          {attempt.node_id}
+                        </span>
+                        <span className="wf-muted">
+                          {t("· Intento")} {attempt.sequence} ·{" "}
+                          {attempt.status
+                            ? t("HTTP %{value0}", { value0: attempt.status })
+                            : attempt.finished_at
+                              ? t("Sin respuesta")
+                              : t("Envío en curso o resultado pendiente")}
+                          {attempt.error ? ` · ${attempt.error}` : ""}
+                        </span>
                       </p>
                     ))}
                     {detail.data.data.jobs?.map((job) => (
@@ -694,36 +919,76 @@ function WorkspaceWorkflows({
           </div>
         ) : (
           <div className="wf-empty">
-            <GitBranch size={32} />
+            <span className="wf-empty-icon" aria-hidden="true">
+              <GitBranch size={28} />
+            </span>
             <h3>{t("Un evento, una secuencia de pasos")}</h3>
-            <p>
+            <p className="wf-muted">
               {t(
                 "Selecciona un flujo o crea uno. Puedes consultar y cambiar registros, evaluar condiciones, crear tareas o enviar notificaciones internas.",
               )}
             </p>
+            <Button disabled={busy} onClick={() => choose(fresh())}>
+              <Plus size={16} />
+              {t("Crear mi primer flujo")}
+            </Button>
           </div>
         )}
       </div>
       <section className="wf-inbox">
-        <h3>{t("Mis tareas y notificaciones")}</h3>
-        {inbox.error ? <p role="alert">{String(inbox.error)}</p> : null}
-        {inbox.data?.data.length === 0 ? (
-          <p className="wf-muted">
-            {t("No tienes elementos asignados por los flujos.")}
-          </p>
+        <div className="wf-section-head">
+          <h3>
+            <Inbox size={15} aria-hidden="true" />
+            {t("Mis tareas y notificaciones")}
+          </h3>
+          {typeof inbox.data?.data.length === "number" &&
+          inbox.data.data.length > 0 ? (
+            <span className="wf-count">{inbox.data.data.length}</span>
+          ) : null}
+        </div>
+        <WorkflowError
+          error={errorText(inbox.error)}
+          retryLabel={t("Reintentar")}
+          onRetry={() => inbox.refetch()}
+        />
+        {inbox.isPending ? (
+          <div className="wf-skeleton-list" role="status" aria-live="polite">
+            <span className="sr-only">{t("Cargando…")}</span>
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
         ) : null}
-        <ul>
+        {!inbox.isPending && !inbox.error && inbox.data?.data.length === 0 ? (
+          <div className="wf-inbox-empty">
+            <p className="wf-muted">
+              {t("No tienes elementos asignados por los flujos.")}
+            </p>
+          </div>
+        ) : null}
+        <ul className="wf-inbox-list">
           {inbox.data?.data.map((item) => (
-            <li key={item.id}>
-              <span>
-                {item.title}
-                <small>
-                  {item.kind === "task" ? t("Tarea") : t("Notificación")} ·{" "}
-                  {item.status === "done" ? t("Resuelta") : t("Pendiente")}
-                </small>
+            <li key={item.id} className="wf-inbox-item">
+              <span className="wf-inbox-main">
+                <span className="wf-inbox-title">{item.title}</span>
+                <span className="wf-inbox-meta">
+                  <span className="wf-badge wf-badge-muted">
+                    {item.kind === "task" ? t("Tarea") : t("Notificación")}
+                  </span>
+                  <span
+                    className={
+                      item.status === "done"
+                        ? "wf-badge wf-badge-ok"
+                        : "wf-badge wf-badge-warn"
+                    }
+                  >
+                    {item.status === "done" ? t("Resuelta") : t("Pendiente")}
+                  </span>
+                </span>
               </span>
               {item.status !== "done" ? (
                 <Button
+                  size="sm"
                   variant="outline"
                   disabled={busy}
                   onClick={() =>
