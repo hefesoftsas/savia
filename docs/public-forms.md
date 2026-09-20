@@ -28,6 +28,13 @@ configuration requires republishing. Visitors cannot choose connections, actions
 execution mode, or provider flows. They enter vehicle and applicant information
 manually; private vehicle lookup endpoints remain protected.
 
+Quote links for `cotizador_por_pasos` render the public plugin wizard with the
+published product snapshot and three steps: vehicle, applicant and driver, and
+contact and quote. The public experience omits authenticated history, CRM
+records, provider configuration, private vehicle lookup, and admin navigation.
+Changing quote settings or enabled products still invalidates the frozen
+snapshot and requires publishing a new link.
+
 By default the response is only an acknowledgement and submission reference.
 For quotation links, administrators may explicitly enable a limited result for the
 current submission: insurer/product labels, premium, currency and supported coverage
