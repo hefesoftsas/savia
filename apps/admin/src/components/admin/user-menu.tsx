@@ -71,7 +71,7 @@ export function UserMenu({ children }: UserMenuProps) {
 
   if (!authProvider) return null;
 
-  const defaultAccountLabel = translate("savia.account.title", {
+  const defaultAccountLabel = translate("savia.account.myAccount", {
     _: "Mi cuenta",
   });
   const openMenuLabel = translate("savia.userMenu.openMenu", {

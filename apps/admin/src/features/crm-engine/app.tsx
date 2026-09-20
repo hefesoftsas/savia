@@ -1779,6 +1779,7 @@ export default function Root({
   search?: string;
 } = {}) {
   const t = useMessages(automationMessages);
+  const outerLocale = useAppLocale();
 
   const [queryClient] = useState(
     () =>
@@ -1793,7 +1794,10 @@ export default function Root({
         },
       }),
   );
-  const [store] = useState(() => memoryStore());
+  const [store] = useState(() => memoryStore({ locale: outerLocale }));
+  useEffect(() => {
+    store.setItem("locale", outerLocale);
+  }, [store, outerLocale]);
   const [authorizationError, setAuthorizationError] = useState<string>();
   useEffect(() => {
     const workspace = getCrmRuntime().localWorkspace;
