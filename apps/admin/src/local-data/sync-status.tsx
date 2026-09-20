@@ -157,6 +157,10 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
     loaded && status.lastSyncedAt
       ? `Última comprobación: ${new Date(status.lastSyncedAt).toLocaleString()}`
       : null;
+  const statusDetail = readError || status.syncError || error || null;
+  const statusTooltip = statusDetail
+    ? `${statusLabel}. ${statusDetail}`
+    : statusLabel;
   return (
     <section
       aria-label="Sincronización local"
@@ -165,8 +169,8 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
       <span
         role="status"
         aria-live="polite"
-        aria-label={statusLabel}
-        title={statusLabel}
+        aria-label={statusTooltip}
+        title={statusTooltip}
         className={cn(
           "inline-flex size-7 items-center justify-center rounded-full border",
           tone === "ok" &&
@@ -201,18 +205,13 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
             : `${status.pending} cambios pendientes`}
         </span>
       )}
-      {lastSyncedLabel && status.lastSyncedAt && (
+      {lastSyncedLabel && (
         <span
           title={lastSyncedLabel}
-          className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground/80"
+          aria-label={lastSyncedLabel}
+          className="inline-flex size-7 items-center justify-center text-muted-foreground/80"
         >
-          <Clock aria-hidden className="size-3.5 shrink-0" />
-          <time
-            dateTime={new Date(status.lastSyncedAt).toISOString()}
-            className="truncate tabular-nums"
-          >
-            {new Date(status.lastSyncedAt).toLocaleString()}
-          </time>
+          <Clock aria-hidden className="size-4" />
           <span className="sr-only">{lastSyncedLabel}</span>
         </span>
       )}
@@ -370,32 +369,10 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
           </Button>
         </details>
       )}
-      {readError && (
-        <p
-          role="alert"
-          className="inline-flex w-full items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
-        >
-          <CircleAlert aria-hidden className="size-3.5 shrink-0" />
-          {readError}
-        </p>
-      )}
-      {status.syncError && (
-        <p
-          role="alert"
-          className="inline-flex w-full items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
-        >
-          <CircleAlert aria-hidden className="size-3.5 shrink-0" />
-          {status.syncError}
-        </p>
-      )}
-      {error && (
-        <p
-          role="alert"
-          className="inline-flex w-full items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
-        >
-          <CircleAlert aria-hidden className="size-3.5 shrink-0" />
-          {error}
-        </p>
+      {statusDetail && (
+        <span role="alert" className="sr-only">
+          {statusDetail}
+        </span>
       )}
     </section>
   );

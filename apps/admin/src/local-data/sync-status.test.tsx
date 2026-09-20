@@ -193,8 +193,15 @@ it("keeps pending work visible offline and shows the last successful check", asy
   try {
     render(<LocalSyncStatus workspace={workspace} />);
     await screen.findByText("3 cambios pendientes");
-    expect(screen.getByText(/Sin conexión/)).toBeVisible();
-    expect(screen.getByText(/Última comprobación/)).toBeVisible();
+    expect(
+      screen.getByRole("status", { name: /Sin conexión/ }),
+    ).toHaveAttribute("title", expect.stringContaining("Sin conexión"));
+    const lastCheck = screen.getByText(/Última comprobación/);
+    expect(lastCheck).toHaveClass("sr-only");
+    expect(lastCheck.parentElement).toHaveAttribute(
+      "title",
+      expect.stringContaining("Última comprobación"),
+    );
     expect(screen.getByRole("button", { name: "Sincronizar" })).toBeDisabled();
   } finally {
     vi.restoreAllMocks();
@@ -229,7 +236,7 @@ it("renders a green icon-only status when local data is available", async () => 
 it("renders a red icon-only status on synchronization failure", async () => {
   render(<LocalSyncStatus workspace={statusWorkspace({ syncError: "x" })} />);
   const status = await screen.findByRole("status", {
-    name: "Sincronización interrumpida",
+    name: /Sincronización interrumpida/,
   });
   expect(status.className).toContain("border-red-500/30");
   expect(
