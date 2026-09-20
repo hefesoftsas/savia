@@ -14,22 +14,23 @@
     "@aws-sdk/s3-request-presigner": "^3.0.0",
     "@hono/node-server": "^1.19.9",
     "@savia/crm-server": "workspace:*",
+    "@savia/db": "workspace:*",
     "@savia/tenant-host": "workspace:*",
     "hono": "^4.13.5",
     "nodemailer": "^7.0.0",
+    "pg": "^8.18.0",
     "quickjs-emscripten": "^0.31.0",
     "tsx": "^4.21.0",
     "undici": "^7.29.0",
-    "ws": "^8.18.0",
-    "pg": "^8.18.0",
-    "@savia/db": "workspace:*"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^7.0.0",
+    "@types/pg": "^8.15.6",
     "@types/ws": "^8.18.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11",
-    "@types/pg": "^8.15.6"
+    "vitest": "^4.1.11"
   }
 }

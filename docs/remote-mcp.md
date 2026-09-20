@@ -190,6 +190,12 @@ MCP session. OAuth refresh is handled by the client, not by the MCP gateway.
 
 ## Local verification and troubleshooting
 
+For an isolated browser-to-MCP integration check, run `pnpm test:e2e:mcp`.
+The [disposable Docker browser suite](guides/self-hosted-docker.md#disposable-browser-mcp-integration)
+uses Playwright for actual login, MFA enrollment and OAuth consent, then verifies
+PKCE token exchange, modern tool discovery, collection reads, write-scope denial
+and token refresh. It does not require a ChatGPT account or access to preview.
+
 ### Connected account but no actions in ChatGPT
 
 OAuth consent alone does not verify MCP tool discovery. After connecting, use

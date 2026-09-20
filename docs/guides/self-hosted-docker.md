@@ -70,6 +70,42 @@ Existing Cloudflare data is not automatically copied into this installation. Mov
 
 ## Verification
 
+### Disposable browser MCP integration
+
+Run the MCP OAuth browser suite on macOS or Linux (including WSL) with Docker
+Compose, Node 22.16+, and pnpm:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @savia/self-hosted exec playwright install chromium
+pnpm test:e2e:mcp
+```
+
+The runner builds the current checkout using the existing Dockerfile and Compose
+services. Each run generates a unique `savia-mcp-e2e-*` project, image, credentials,
+loopback ports and volumes. It does not use preview, production, existing Docker
+volumes, real ChatGPT accounts, or user browser sessions. Chromium runs on the
+host; Savia, its databases and object storage run in disposable containers.
+
+Playwright exercises real browser login, administrator MFA enrollment and OAuth
+consent, then exchanges the authorization code with PKCE. It verifies modern MCP
+tool discovery, reads a seeded collection and record, checks missing/invalid
+credentials and read-only write denial, and discovers tools after token refresh.
+The suite checks Savia's protocol boundary, not ChatGPT's plugin installation UI.
+The disposable client is registered as a native public client with an HTTP
+loopback callback and PKCE. Real ChatGPT web clients still require their HTTPS
+callback; the test does not weaken that validation or impersonate ChatGPT.
+
+Normal completion and handled SIGINT/SIGTERM remove only the fixture project's
+containers and volumes. Failed runs retain private logs and Playwright traces in
+the temporary directory printed by the runner; these may contain disposable
+credentials and must not be published. SIGKILL or a Docker outage can prevent
+cleanup: inspect the exact printed project before removing its resources. Never
+run volume cleanup against the default self-hosted project.
+
+Run `pnpm test:e2e:mcp:runner` to check fixture isolation and process-tree
+cancellation without Docker.
+
 Run `pnpm --filter @savia/self-hosted test` and `pnpm --filter @savia/self-hosted typecheck`, plus the repository test lanes. The optional live S3 contract test uses `SAVIA_TEST_S3_ENDPOINT`, `SAVIA_TEST_S3_ACCESS_KEY`, and `SAVIA_TEST_S3_SECRET_KEY`, creates a temporary bucket, and removes its test data. Real composition tests exercise bootstrap login, MFA, CRUD, local synchronization and reopening persisted SQLite databases.
 
 An optional HTTP smoke test targets a disposable installation: set `SAVIA_DOCKER_TEST_ORIGIN`, `TEST_EMAIL`, `TEST_PASSWORD` and a private `SAVIA_DOCKER_TEST_STATE_FILE`, then run `pnpm --filter @savia/self-hosted exec vitest run test/docker.integration.test.ts`. It enrolls MFA for the fixture administrator and creates a tenant, collection, records, an attachment and public form; use a test installation. The state file retains the MFA secret and fixture identifiers for restart verification and must stay private.
