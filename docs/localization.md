@@ -11,8 +11,8 @@ Changing languages preserves mounted forms and unsaved edits.
 
 Module catalogs cover permissions, roles, accounts, users, tenants, branding,
 credentials, assistant settings, public forms, collection and field designers,
-record lists and details, relationships, imports, workflows and integration
-configuration. Solution package catalogs, previews and manifests resolve
+record lists and details, relationships, imports, workflows, integration
+configuration, personal connections and virtual AI employees. Solution package catalogs, previews and manifests resolve
 package, object and field labels through the same ES/EN/PT fallback while
 stored names, option values and records remain unchanged. Shared navigation,
 dialogs, pagination and basic form controls also use the selected language. Public forms have an independent language

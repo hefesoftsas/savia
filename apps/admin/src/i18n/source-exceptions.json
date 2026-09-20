@@ -258,5 +258,15 @@
     "file": "../features/crm-engine/request-page-results-editor.tsx",
     "text": "window.addEventListener(\"savia-locale-change\", render)",
     "reason": "Technical identifier or executable configuration example; translation would change its meaning."
+  },
+  {
+    "file": "../features/personal-integrations/virtual-employees-management.tsx",
+    "text": "@nombre",
+    "reason": "Example @handle placeholder shown inside a code sample; kept identical across locales."
+  },
+  {
+    "file": "../features/personal-integrations/virtual-employees-management.tsx",
+    "text": "KB •",
+    "reason": "Technical file-size unit separator shared by all supported locales."
   }
 ]

@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useMessages } from "@/i18n/core";
+import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
 import "./personal-integrations.css";
 
 export function IntegrationsPageShell({
@@ -74,11 +76,12 @@ export function IntegrationProviderIcon({
   Icon: ElementType;
   displayName: string;
 }) {
+  const t = useMessages(personalIntegrationsMessages);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          aria-label={`Logo de ${displayName}`}
+          aria-label={t("Logo de %{value}", { value: displayName })}
           className="integrations-row__icon flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground"
           role="img"
         >
@@ -185,13 +188,14 @@ export function IntegrationGroupEmpty({ message }: { message: string }) {
 }
 
 export function IntegrationGroupsSkeleton({ groups = 2 }: { groups?: number }) {
+  const t = useMessages(personalIntegrationsMessages);
   return (
     <div
       className="integrations-groups space-y-4"
       role="status"
-      aria-label="Cargando integraciones…"
+      aria-label={t("Cargando integraciones…")}
     >
-      <span className="sr-only">Cargando integraciones…</span>
+      <span className="sr-only">{t("Cargando integraciones…")}</span>
       {Array.from({ length: groups }, (_, index) => (
         <div
           key={index}

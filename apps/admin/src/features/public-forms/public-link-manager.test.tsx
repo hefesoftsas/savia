@@ -88,6 +88,75 @@ it("explains missing captcha configuration when publishing is unavailable", asyn
     "falta configurar",
   );
 });
+it("toggles the QR code and downloads it as SVG", async () => {
+  const row = {
+    id: "link-qr",
+    token: "token-qr-123",
+    path: "/public/forms/token-qr-123",
+    url: "https://public.savia.test/public/forms/token-qr-123",
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  const createObjectURL = vi.fn().mockReturnValue("blob:qr-svg");
+  const revokeObjectURL = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectURL,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeObjectURL,
+  });
+  const clickSpy = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  try {
+    render(
+      <PublicLinkManager
+        domainId="domain"
+        objectName="people"
+        kind="record"
+        request={request}
+      />,
+    );
+    const toggle = await screen.findByRole("button", { name: "Mostrar QR" });
+    expect(
+      screen.queryByRole("img", { name: "Código QR del enlace público" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(
+      await screen.findByRole("img", {
+        name: "Código QR del enlace público",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Ocultar QR" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Descargar QR en SVG" }),
+    );
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+    expect(clickSpy).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar QR" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("img", { name: "Código QR del enlace público" }),
+      ).not.toBeInTheDocument(),
+    );
+  } finally {
+    clickSpy.mockRestore();
+  }
+});
 
 function render(ui: ReactElement) {
   return testingRender(ui, {

@@ -17,6 +17,8 @@ import { CrmConnectionsPage } from "@/features/crm/crm-connections-page";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VirtualEmployeesManagement } from "./virtual-employees-management";
+import { useMessages } from "@/i18n/core";
+import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
 import {
   IntegrationGroup,
   IntegrationGroupEmpty,
@@ -80,10 +82,6 @@ const unavailableProviders: PersonalIntegrationProvider[] = [
   },
 ];
 
-const providerLoadFailure = "No pudimos cargar el estado de las integraciones.";
-const outdatedApiFailure =
-  "La API que está en ejecución aún no incluye las integraciones personales. Reinicia Savia desde la versión actual.";
-
 function eventType(event: unknown): string | undefined {
   return event &&
     typeof event === "object" &&
@@ -117,39 +115,45 @@ function providerIcon(provider: PersonalIntegrationProviderId) {
 }
 
 function providerHint(
+  t: (key: keyof typeof personalIntegrationsMessages & string, params?: Record<string, string | number>) => string,
   provider: PersonalIntegrationProvider,
   connection: PersonalIntegrationConnection | undefined,
 ): string {
   if (provider.availability === "unavailable")
-    return "El servicio está temporalmente no disponible.";
+    return t("El servicio está temporalmente no disponible.");
   if (connection?.status === "connected")
     return connection.externalAccountLabel
-      ? `Conectado como ${connection.externalAccountLabel}.`
-      : "Conexión autorizada y lista para usarse.";
+      ? t("Conectado como %{label}.", {
+          label: connection.externalAccountLabel,
+        })
+      : t("Conexión autorizada y lista para usarse.");
   if (connection?.status === "reconnect_required")
-    return "La sesión expiró. Vuelve a conectar para continuar usándola.";
+    return t("La sesión expiró. Vuelve a conectar para continuar usándola.");
   if (connection?.status === "failed")
-    return "La última sincronización falló. Intenta reconectar la cuenta.";
+    return t("La última sincronización falló. Intenta reconectar la cuenta.");
   if (connection?.status === "pending")
-    return "Finalizando la autorización en segundo plano…";
-  return "Requiere tu autorización antes de que Savia pueda interactuar con ella.";
+    return t("Finalizando la autorización en segundo plano…");
+  return t(
+    "Requiere tu autorización antes de que Savia pueda interactuar con ella.",
+  );
 }
 
 function connectionStatusLabel(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
   connection: PersonalIntegrationConnection,
 ): string {
   switch (connection.status) {
     case "connected":
-      return "Conectada";
+      return t("Conectada");
     case "reconnect_required":
-      return "Reconectar";
+      return t("Reconectar");
     case "failed":
-      return "Falló";
+      return t("Falló");
     case "pending":
-      return "Pendiente";
+      return t("Pendiente");
     case "disconnected":
     default:
-      return "Desconectada";
+      return t("Desconectada");
   }
 }
 
@@ -170,33 +174,42 @@ function connectionStatusTone(
 }
 
 function actionLabel(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
   provider: PersonalIntegrationProvider,
   connection: PersonalIntegrationConnection | undefined,
 ): string {
-  if (provider.availability !== "enabled") return "No disponible";
-  if (connection?.status === "connected") return "Desconectar";
+  if (provider.availability !== "enabled") return t("No disponible");
+  if (connection?.status === "connected") return t("Desconectar");
   if (
     connection?.status === "reconnect_required" ||
     connection?.status === "failed"
   )
-    return "Reconectar";
-  if (connection?.status === "pending") return "Reintentar";
-  return "Conectar";
+    return t("Reconectar");
+  if (connection?.status === "pending") return t("Reintentar");
+  return t("Conectar");
 }
 
-function feedbackFrom(error: unknown): string {
+function feedbackFrom(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  error: unknown,
+): string {
   if (error && typeof error === "object" && "message" in error) {
     return String((error as { message?: unknown }).message);
   }
-  return "Ocurrió un error inesperado al gestionar la integración.";
+  return t("Ocurrió un error inesperado al gestionar la integración.");
 }
 
-function providerLoadFeedback(error: unknown): string {
+function providerLoadFeedback(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  error: unknown,
+): string {
   return error &&
     typeof error === "object" &&
     (error as { status?: unknown }).status === 404
-    ? outdatedApiFailure
-    : providerLoadFailure;
+    ? t(
+        "La API que está en ejecución aún no incluye las integraciones personales. Reinicia Savia desde la versión actual.",
+      )
+    : t("No pudimos cargar el estado de las integraciones.");
 }
 
 export function PersonalIntegrationsPage({
@@ -215,6 +228,7 @@ export function PersonalIntegrationsPage({
   };
   nangoFactory?: PersonalNangoConnectFactory;
 }) {
+  const t = useMessages(personalIntegrationsMessages);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab =
     searchParams.get("tab") === "virtual-employees"
@@ -249,7 +263,7 @@ export function PersonalIntegrationsPage({
     } catch (error) {
       setProviders(unavailableProviders);
       setConnections([]);
-      setFeedback(providerLoadFeedback(error));
+      setFeedback(providerLoadFeedback(t, error));
       setProviderLoadFailed(true);
     } finally {
       setLoading(false);
@@ -274,10 +288,10 @@ export function PersonalIntegrationsPage({
   ) {
     try {
       await services.personalIntegrations.complete(provider, connectionId);
-      setFeedback("La cuenta quedó conectada de forma segura.");
+      setFeedback(t("La cuenta quedó conectada de forma segura."));
       await refresh();
     } catch (error) {
-      setFeedback(feedbackFrom(error));
+      setFeedback(feedbackFrom(t, error));
     } finally {
       setActionProvider(undefined);
     }
@@ -294,10 +308,10 @@ export function PersonalIntegrationsPage({
     if (connection?.status === "connected") {
       try {
         await services.personalIntegrations.disconnect(provider.id);
-        setFeedback("La cuenta quedó desconectada.");
+        setFeedback(t("La cuenta quedó desconectada."));
         await refresh();
       } catch (error) {
-        setFeedback(feedbackFrom(error));
+        setFeedback(feedbackFrom(t, error));
       } finally {
         setActionProvider(undefined);
       }
@@ -320,27 +334,27 @@ export function PersonalIntegrationsPage({
             terminalEventReceived = true;
             const connectionId = connectionIdFromEvent(event);
             if (!connectionId) {
-              setFeedback("Nango no informó una conexión válida.");
+              setFeedback(t("Nango no informó una conexión válida."));
               setActionProvider(undefined);
               return;
             }
             void complete(provider.id, connectionId);
           }
           if (type === "close" && !terminalEventReceived) {
-            setFeedback("La ventana de conexión se cerró sin cambios.");
+            setFeedback(t("La ventana de conexión se cerró sin cambios."));
             setActionProvider(undefined);
           }
           if (type === "error") {
             terminalEventReceived = true;
             setFeedback(
-              "No fue posible completar la autorización de la cuenta.",
+              t("No fue posible completar la autorización de la cuenta."),
             );
             setActionProvider(undefined);
           }
         },
       });
     } catch (error) {
-      setFeedback(feedbackFrom(error));
+      setFeedback(feedbackFrom(t, error));
       setActionProvider(undefined);
     }
   }
@@ -367,8 +381,10 @@ export function PersonalIntegrationsPage({
   return (
     <IntegrationsPageShell>
       <IntegrationsPageHeader
-        title="Integraciones"
-        description="Conecta tus cuentas, servicios y configura los empleados virtuales de IA para Savia."
+        title={t("Integraciones")}
+        description={t(
+          "Conecta tus cuentas, servicios y configura los empleados virtuales de IA para Savia.",
+        )}
       />
 
       <Tabs
@@ -377,9 +393,9 @@ export function PersonalIntegrationsPage({
         className="w-full space-y-6"
       >
         <TabsList className="mb-2">
-          <TabsTrigger value="connections">Cuentas y Conexiones</TabsTrigger>
+          <TabsTrigger value="connections">{t("Cuentas y Conexiones")}</TabsTrigger>
           <TabsTrigger value="virtual-employees">
-            Empleados Virtuales (IA)
+            {t("Empleados Virtuales (IA)")}
           </TabsTrigger>
         </TabsList>
 
@@ -399,7 +415,7 @@ export function PersonalIntegrationsPage({
                   disabled={loading}
                   onClick={() => void refresh()}
                 >
-                  Reintentar
+                  {t("Reintentar")}
                 </Button>
               ) : null}
             </div>
@@ -431,10 +447,10 @@ export function PersonalIntegrationsPage({
                       <IntegrationProviderRow
                         key={provider.id}
                         name={provider.displayName}
-                        hint={providerHint(provider, connection)}
+                        hint={providerHint(t, provider, connection)}
                         statusLabel={
                           connection
-                            ? connectionStatusLabel(connection)
+                            ? connectionStatusLabel(t, connection)
                             : undefined
                         }
                         statusTone={
@@ -443,7 +459,7 @@ export function PersonalIntegrationsPage({
                             : "neutral"
                         }
                         showStatus={showStatus}
-                        actionLabel={actionLabel(provider, connection)}
+                        actionLabel={actionLabel(t, provider, connection)}
                         actionVariant={connected ? "outline" : "default"}
                         busy={busy}
                         disabled={!enabled}
@@ -459,7 +475,9 @@ export function PersonalIntegrationsPage({
                     );
                   })}
                   {group.providers.length === 0 ? (
-                    <IntegrationGroupEmpty message="No hay integraciones disponibles." />
+                    <IntegrationGroupEmpty
+                      message={t("No hay integraciones disponibles.")}
+                    />
                   ) : null}
                 </IntegrationGroup>
               ))}

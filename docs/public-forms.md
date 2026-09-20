@@ -7,7 +7,9 @@ Owner: Savia platform team. Last reviewed: 2026-09-19.
 Forms remain private until a platform administrator opens a screen's configuration,
 expands **Enlaces públicos**, confirms the published snapshot, and creates a link.
 The administrator can set an expiration and a daily submission budget, copy the
-canonical public URL, and revoke each link independently. The default budget is
+canonical public URL, and revoke each link independently. Each active link can also
+show a QR code encoding the same canonical URL, with SVG and PNG download for
+print or in-person sharing. The default budget is
 25 submissions per link per UTC day. Existing links do not inherit later edits;
 review and publish a new link after changing a form. Revoke the previous link when
 replacing it.
@@ -89,7 +91,7 @@ for an active link without considering the loss of deduplication guarantees.
 API tests use real local D1 with fake captcha verification and fake quote executors.
 They cover authorization, strict projection, captcha binding, expiry/revocation,
 concurrent quota enforcement, durable idempotency, and request limits. Browser
-component tests cover publication/revocation, captcha lifecycle, bounded result
+component tests cover publication/revocation, QR toggle/download, captcha lifecycle, bounded result
 rendering, and duplicate-click/network-retry behavior. No live provider calls or
 customer forms are required for verification.
 
