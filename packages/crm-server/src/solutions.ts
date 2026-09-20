@@ -33,10 +33,13 @@ type StoredObject = {
   solution_id: string | null;
   definition: string | null;
 };
-const definition = (o: SolutionPackage["objects"][number]) => ({
+type SolutionObject = SolutionPackage["objects"][number];
+const definition = (o: SolutionObject) => ({
   name: o.name,
   label: o.label,
+  ...(o.labels ? { labels: o.labels } : {}),
   description: o.description ?? "",
+  ...(o.descriptions ? { descriptions: o.descriptions } : {}),
   config: o.config,
 });
 
@@ -120,8 +123,16 @@ async function inspect(
       row.solution_id === manifest.id &&
       installed?.version !== manifest.version
     ) {
-      const actual = definition({ ...row, config: JSON.parse(row.config) });
-      if (canonicalJson(actual) !== canonicalJson(JSON.parse(row.definition!)))
+      const stored = JSON.parse(row.definition!);
+      // Translations ride in the stored definition; columns alone cannot
+      // rebuild them, so reuse them here to avoid false customization flags.
+      const actual = definition({
+        ...row,
+        ...(stored?.labels ? { labels: stored.labels } : {}),
+        ...(stored?.descriptions ? { descriptions: stored.descriptions } : {}),
+        config: JSON.parse(row.config) as SolutionObject["config"],
+      } as SolutionObject);
+      if (canonicalJson(actual) !== canonicalJson(stored))
         conflicts.push(
           `El objeto ${object.name} tiene personalizaciones. Conserva o integra esos cambios antes de actualizar.`,
         );

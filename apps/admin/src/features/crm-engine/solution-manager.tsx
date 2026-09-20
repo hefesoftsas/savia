@@ -1,6 +1,10 @@
-import { useMessages } from "@/i18n/core";
+import { useMessages, useAppLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
-import { useEffect, useState } from "react";
+import {
+  resolveLocalizedContent,
+  type LocalizedContent,
+} from "@savia/crm-shared/plugin-localization";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileDown, RefreshCw } from "lucide-react";
 import type { CrmObject } from "@savia/crm-shared/metadata";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +25,13 @@ type Manifest = {
   version: string;
   label: string;
   description: string;
+  labels?: LocalizedContent;
+  descriptions?: LocalizedContent;
   requires: string[];
-  objects: CrmObject[];
+  objects: (CrmObject & {
+    labels?: LocalizedContent;
+    descriptions?: LocalizedContent;
+  })[];
 };
 type Entry = {
   manifest: Manifest;
@@ -57,6 +66,7 @@ export default function SolutionManager({
   onChanged: () => void | Promise<unknown>;
 }) {
   const t = useMessages(automationMessages);
+  const locale = useAppLocale();
   const actions = {
     create: t("Crear"),
     update: t("Actualizar"),
@@ -75,6 +85,20 @@ export default function SolutionManager({
   const [notice, setNotice] = useState("");
   const [candidate, setCandidate] = useState<unknown>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // The preview response carries default labels only; resolve translations
+  // from the posted candidate manifest without changing stored values.
+  const candidateObjects = useMemo(() => {
+    if (!candidate || typeof candidate !== "object") return new Map();
+    const objects = (candidate as Partial<Manifest>).objects;
+    if (!Array.isArray(objects)) return new Map();
+    return new Map(objects.map((o) => [o.name, o]));
+  }, [candidate]);
+  const previewLabel = (name: string, fallback: string) => {
+    const match = candidateObjects.get(name);
+    return match
+      ? resolveLocalizedContent(fallback, match.labels, locale)
+      : fallback;
+  };
   async function reload() {
     const response = await api<{ data: Entry[] }>("/solutions");
     setEntries(response.data);
@@ -243,8 +267,21 @@ export default function SolutionManager({
                 key={manifest.id}
                 className="flex flex-wrap items-center justify-between gap-3 py-4"
               >
+                {(() => {
+                  const label = resolveLocalizedContent(
+                    manifest.label,
+                    manifest.labels,
+                    locale,
+                  );
+                  const description = resolveLocalizedContent(
+                    manifest.description,
+                    manifest.descriptions,
+                    locale,
+                  );
+                  return (
+                    <>
                 <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
-                  <h3 className="break-words font-medium">{manifest.label}</h3>
+                  <h3 className="break-words font-medium">{label}</h3>
                   <Badge variant={installed?.enabled ? "secondary" : "outline"}>
                     {installed
                       ? installed.enabled
@@ -254,12 +291,12 @@ export default function SolutionManager({
                   </Badge>
                   <StudioHelpTooltip
                     label={t("Más información sobre %{value0}", {
-                      value0: manifest.label,
+                      value0: label,
                     })}
                     side="bottom"
                   >
                     <span className="block max-w-xs space-y-1">
-                      <span className="block">{manifest.description}</span>
+                      <span className="block">{description}</span>
                       <span className="block text-primary-foreground/75">
                         {t("Versión")} {manifest.version}
                         {installed
@@ -271,7 +308,7 @@ export default function SolutionManager({
                   {installed ? (
                     <StudioHelpTooltip
                       label={t("Qué ocurre al activar o desactivar %{value0}", {
-                        value0: manifest.label,
+                        value0: label,
                       })}
                       side="bottom"
                     >
@@ -295,14 +332,14 @@ export default function SolutionManager({
                           })
                         }
                         aria-label={t("Descargar %{value0}", {
-                          value0: manifest.label,
+                          value0: label,
                         })}
                       >
                         <Download aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      {t("Descargar")} {manifest.label}
+                      {t("Descargar")} {label}
                     </TooltipContent>
                   </Tooltip>
                   {installed && (
@@ -314,7 +351,7 @@ export default function SolutionManager({
                           className="size-8"
                           disabled={busy}
                           aria-label={t("Exportar instalado %{value0}", {
-                            value0: manifest.label,
+                            value0: label,
                           })}
                           onClick={() =>
                             void run(async () => {
@@ -341,7 +378,7 @@ export default function SolutionManager({
                       disabled={busy}
                       onClick={() => void run(() => inspect(manifest))}
                     >
-                      {t("Revisar")} {manifest.label}
+                      {t("Revisar")} {label}
                     </Button>
                   ) : null}
                   {installed && installed.version !== manifest.version ? (
@@ -351,7 +388,7 @@ export default function SolutionManager({
                       disabled={busy}
                       onClick={() => void run(() => inspect(manifest))}
                     >
-                      {t("Actualizar")} {manifest.label}
+                      {t("Actualizar")} {label}
                     </Button>
                   ) : null}
                   {installed && (
@@ -383,10 +420,13 @@ export default function SolutionManager({
                       }
                     >
                       {installed.enabled ? t("Desactivar") : t("Activar")}{" "}
-                      {manifest.label}
+                      {label}
                     </Button>
                   )}
                 </div>
+                    </>
+                  );
+                })()}
               </li>
             ))}
           </ul>
@@ -406,7 +446,9 @@ export default function SolutionManager({
                 key={object.name}
                 className="flex flex-wrap justify-between gap-2"
               >
-                <span className="break-words">{object.label}</span>
+                <span className="break-words">
+                  {previewLabel(object.name, object.label)}
+                </span>
                 <span className="text-muted-foreground">
                   {actions[object.action]}
                 </span>

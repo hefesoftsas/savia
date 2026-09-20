@@ -5,6 +5,22 @@ export const solutionIdSchema = z
   .string()
   .regex(/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/)
   .max(100);
+export const solutionLabelsSchema = z
+  .object({
+    es: z.string().trim().min(1).max(100).optional(),
+    en: z.string().trim().min(1).max(100).optional(),
+    pt: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict()
+  .optional();
+export const solutionDescriptionsSchema = z
+  .object({
+    es: z.string().max(1000).optional(),
+    en: z.string().max(1000).optional(),
+    pt: z.string().max(1000).optional(),
+  })
+  .strict()
+  .optional();
 export const solutionPackageSchema = z
   .object({
     format: z.literal("savia.solution"),
@@ -16,6 +32,8 @@ export const solutionPackageSchema = z
       .max(30),
     label: z.string().trim().min(1).max(100),
     description: z.string().max(1000),
+    labels: solutionLabelsSchema,
+    descriptions: solutionDescriptionsSchema,
     requires: z.array(solutionIdSchema).max(30).default([]),
     objects: z.array(objectSchema).max(100),
   })

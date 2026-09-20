@@ -5,7 +5,9 @@
   "version": "1.5.0",
   "label": "Seguros",
   "description": "Clientes, aseguradoras, cotizaciones, pólizas, pagos y siniestros sobre el motor low code de Savia. Las conexiones con aseguradoras se configuran por separado.",
-  "requires": ["insurance.quotes"],
+  "requires": [
+    "insurance.quotes"
+  ],
   "objects": [
     {
       "name": "clientes",
@@ -17,25 +19,54 @@
           "name": {
             "type": "Textbox",
             "label": "Nombre",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Name",
+              "pt": "Nome"
+            }
           },
           "documento": {
             "type": "Textbox",
-            "label": "Documento"
+            "label": "Documento",
+            "labels": {
+              "en": "Document",
+              "pt": "Documento"
+            }
           },
           "email": {
             "type": "Textbox",
             "label": "Correo",
             "config": {
               "format": "email"
+            },
+            "labels": {
+              "en": "Email",
+              "pt": "E-mail"
             }
           },
           "telefono": {
             "type": "Textbox",
-            "label": "Teléfono"
+            "label": "Teléfono",
+            "labels": {
+              "en": "Phone",
+              "pt": "Telefone"
+            }
           }
         },
-        "fieldOrder": ["name", "documento", "email", "telefono"]
+        "fieldOrder": [
+          "name",
+          "documento",
+          "email",
+          "telefono"
+        ]
+      },
+      "labels": {
+        "en": "Customers",
+        "pt": "Clientes"
+      },
+      "descriptions": {
+        "en": "Insured people and companies.",
+        "pt": "Pessoas e empresas seguradas."
       }
     },
     {
@@ -48,18 +79,42 @@
           "name": {
             "type": "Textbox",
             "label": "Nombre",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Name",
+              "pt": "Nome"
+            }
           },
           "codigo": {
             "type": "Textbox",
-            "label": "Código"
+            "label": "Código",
+            "labels": {
+              "en": "Code",
+              "pt": "Código"
+            }
           },
           "contacto": {
             "type": "Textbox",
-            "label": "Contacto"
+            "label": "Contacto",
+            "labels": {
+              "en": "Contact",
+              "pt": "Contato"
+            }
           }
         },
-        "fieldOrder": ["name", "codigo", "contacto"]
+        "fieldOrder": [
+          "name",
+          "codigo",
+          "contacto"
+        ]
+      },
+      "labels": {
+        "en": "Insurers",
+        "pt": "Seguradoras"
+      },
+      "descriptions": {
+        "en": "Insurance companies and business contacts.",
+        "pt": "Companhias e contatos comerciais."
       }
     },
     {
@@ -72,7 +127,11 @@
           "name": {
             "type": "Textbox",
             "label": "Nombre",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Name",
+              "pt": "Nome"
+            }
           },
           "cliente": {
             "type": "Dropdown",
@@ -80,6 +139,10 @@
             "options": [],
             "config": {
               "relation": "clientes"
+            },
+            "labels": {
+              "en": "Customer",
+              "pt": "Cliente"
             }
           },
           "aseguradora": {
@@ -88,21 +151,37 @@
             "options": [],
             "config": {
               "relation": "aseguradoras"
+            },
+            "labels": {
+              "en": "Insurer",
+              "pt": "Seguradora"
             }
           },
           "ramo": {
             "type": "Textbox",
-            "label": "Ramo"
+            "label": "Ramo",
+            "labels": {
+              "en": "Insurance line",
+              "pt": "Ramo"
+            }
           },
           "placa": {
             "type": "Textbox",
-            "label": "Placa"
+            "label": "Placa",
+            "labels": {
+              "en": "Plate",
+              "pt": "Placa"
+            }
           },
           "valor_asegurado": {
             "type": "Number",
             "label": "Valor asegurado",
             "config": {
               "format": "currency"
+            },
+            "labels": {
+              "en": "Insured value",
+              "pt": "Valor segurado"
             }
           },
           "prima": {
@@ -110,6 +189,10 @@
             "label": "Prima",
             "config": {
               "format": "currency"
+            },
+            "labels": {
+              "en": "Premium",
+              "pt": "Prêmio"
             }
           },
           "estado": {
@@ -118,25 +201,49 @@
             "options": [
               {
                 "label": "Borrador",
-                "value": "Borrador"
+                "value": "Borrador",
+                "labels": {
+                  "en": "Draft",
+                  "pt": "Rascunho"
+                }
               },
               {
                 "label": "Solicitada",
-                "value": "Solicitada"
+                "value": "Solicitada",
+                "labels": {
+                  "en": "Requested",
+                  "pt": "Solicitada"
+                }
               },
               {
                 "label": "Recibida",
-                "value": "Recibida"
+                "value": "Recibida",
+                "labels": {
+                  "en": "Received",
+                  "pt": "Recebida"
+                }
               },
               {
                 "label": "Aceptada",
-                "value": "Aceptada"
+                "value": "Aceptada",
+                "labels": {
+                  "en": "Accepted",
+                  "pt": "Aceita"
+                }
               },
               {
                 "label": "Rechazada",
-                "value": "Rechazada"
+                "value": "Rechazada",
+                "labels": {
+                  "en": "Rejected",
+                  "pt": "Rejeitada"
+                }
               }
-            ]
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
           }
         },
         "fieldOrder": [
@@ -155,6 +262,14 @@
             "icon": "file-text"
           }
         }
+      },
+      "labels": {
+        "en": "Quotes",
+        "pt": "Cotações"
+      },
+      "descriptions": {
+        "en": "Insurance requests and proposals.",
+        "pt": "Solicitações e propostas de seguro."
       }
     },
     {
@@ -167,7 +282,11 @@
           "name": {
             "type": "Textbox",
             "label": "Referencia",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Reference",
+              "pt": "Referência"
+            }
           },
           "cotizacion": {
             "type": "Dropdown",
@@ -175,15 +294,27 @@
             "options": [],
             "config": {
               "relation": "cotizaciones"
+            },
+            "labels": {
+              "en": "Quote",
+              "pt": "Cotação"
             }
           },
           "aseguradora": {
             "type": "Textbox",
-            "label": "Aseguradora"
+            "label": "Aseguradora",
+            "labels": {
+              "en": "Insurer",
+              "pt": "Seguradora"
+            }
           },
           "producto": {
             "type": "Textbox",
-            "label": "Producto"
+            "label": "Producto",
+            "labels": {
+              "en": "Product",
+              "pt": "Produto"
+            }
           },
           "flow_id": {
             "type": "Textbox",
@@ -195,36 +326,68 @@
             "options": [
               {
                 "label": "Solicitada",
-                "value": "Solicitada"
+                "value": "Solicitada",
+                "labels": {
+                  "en": "Requested",
+                  "pt": "Solicitada"
+                }
               },
               {
                 "label": "Recibida",
-                "value": "Recibida"
+                "value": "Recibida",
+                "labels": {
+                  "en": "Received",
+                  "pt": "Recebida"
+                }
               },
               {
                 "label": "Error",
-                "value": "Error"
+                "value": "Error",
+                "labels": {
+                  "en": "Error",
+                  "pt": "Erro"
+                }
               }
-            ]
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
           },
           "prima": {
             "type": "Number",
             "label": "Prima",
             "config": {
               "format": "currency"
+            },
+            "labels": {
+              "en": "Premium",
+              "pt": "Prêmio"
             }
           },
           "numero_cotizacion": {
             "type": "Textbox",
-            "label": "Número de cotización"
+            "label": "Número de cotización",
+            "labels": {
+              "en": "Quote number",
+              "pt": "Número da cotação"
+            }
           },
           "error_mensaje": {
             "type": "Textarea",
-            "label": "Mensaje de error"
+            "label": "Mensaje de error",
+            "labels": {
+              "en": "Error message",
+              "pt": "Mensagem de erro"
+            }
           },
           "run_id": {
             "type": "Textbox",
-            "label": "ID de ejecución"
+            "label": "ID de ejecución",
+            "labels": {
+              "en": "Run ID",
+              "pt": "ID de execução"
+            }
           }
         },
         "fieldOrder": [
@@ -245,6 +408,14 @@
             "icon": "files"
           }
         }
+      },
+      "labels": {
+        "en": "Quote details",
+        "pt": "Detalhes da cotação"
+      },
+      "descriptions": {
+        "en": "Individual proposals and responses per insurer and product.",
+        "pt": "Propostas e respostas individuais por seguradora e produto."
       }
     },
     {
@@ -257,7 +428,11 @@
           "name": {
             "type": "Textbox",
             "label": "Número de póliza",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Policy number",
+              "pt": "Número da apólice"
+            }
           },
           "cliente": {
             "type": "Dropdown",
@@ -265,6 +440,10 @@
             "options": [],
             "config": {
               "relation": "clientes"
+            },
+            "labels": {
+              "en": "Customer",
+              "pt": "Cliente"
             }
           },
           "aseguradora": {
@@ -273,6 +452,10 @@
             "options": [],
             "config": {
               "relation": "aseguradoras"
+            },
+            "labels": {
+              "en": "Insurer",
+              "pt": "Seguradora"
             }
           },
           "cotizacion": {
@@ -281,21 +464,37 @@
             "options": [],
             "config": {
               "relation": "cotizaciones"
+            },
+            "labels": {
+              "en": "Quote",
+              "pt": "Cotação"
             }
           },
           "inicio": {
             "type": "DateControl",
-            "label": "Inicio de vigencia"
+            "label": "Inicio de vigencia",
+            "labels": {
+              "en": "Coverage start",
+              "pt": "Início da vigência"
+            }
           },
           "fin": {
             "type": "DateControl",
-            "label": "Fin de vigencia"
+            "label": "Fin de vigencia",
+            "labels": {
+              "en": "Coverage end",
+              "pt": "Fim da vigência"
+            }
           },
           "prima": {
             "type": "Number",
             "label": "Prima",
             "config": {
               "format": "currency"
+            },
+            "labels": {
+              "en": "Premium",
+              "pt": "Prêmio"
             }
           },
           "estado": {
@@ -304,17 +503,33 @@
             "options": [
               {
                 "label": "Vigente",
-                "value": "Vigente"
+                "value": "Vigente",
+                "labels": {
+                  "en": "Active",
+                  "pt": "Vigente"
+                }
               },
               {
                 "label": "Vencida",
-                "value": "Vencida"
+                "value": "Vencida",
+                "labels": {
+                  "en": "Expired",
+                  "pt": "Vencida"
+                }
               },
               {
                 "label": "Cancelada",
-                "value": "Cancelada"
+                "value": "Cancelada",
+                "labels": {
+                  "en": "Cancelled",
+                  "pt": "Cancelada"
+                }
               }
-            ]
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
           }
         },
         "fieldOrder": [
@@ -327,6 +542,14 @@
           "prima",
           "estado"
         ]
+      },
+      "labels": {
+        "en": "Policies",
+        "pt": "Apólices"
+      },
+      "descriptions": {
+        "en": "Policy terms and contract conditions.",
+        "pt": "Vigências e condições dos contratos."
       }
     },
     {
@@ -339,7 +562,11 @@
           "name": {
             "type": "Textbox",
             "label": "Referencia",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Reference",
+              "pt": "Referência"
+            }
           },
           "poliza": {
             "type": "Dropdown",
@@ -347,6 +574,10 @@
             "options": [],
             "config": {
               "relation": "polizas"
+            },
+            "labels": {
+              "en": "Policy",
+              "pt": "Apólice"
             }
           },
           "valor": {
@@ -354,11 +585,19 @@
             "label": "Valor",
             "config": {
               "format": "currency"
+            },
+            "labels": {
+              "en": "Amount",
+              "pt": "Valor"
             }
           },
           "fecha": {
             "type": "DateControl",
-            "label": "Fecha"
+            "label": "Fecha",
+            "labels": {
+              "en": "Date",
+              "pt": "Data"
+            }
           },
           "estado": {
             "type": "Dropdown",
@@ -366,20 +605,50 @@
             "options": [
               {
                 "label": "Pendiente",
-                "value": "Pendiente"
+                "value": "Pendiente",
+                "labels": {
+                  "en": "Pending",
+                  "pt": "Pendente"
+                }
               },
               {
                 "label": "Pagado",
-                "value": "Pagado"
+                "value": "Pagado",
+                "labels": {
+                  "en": "Paid",
+                  "pt": "Pago"
+                }
               },
               {
                 "label": "Anulado",
-                "value": "Anulado"
+                "value": "Anulado",
+                "labels": {
+                  "en": "Void",
+                  "pt": "Anulado"
+                }
               }
-            ]
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
           }
         },
-        "fieldOrder": ["name", "poliza", "valor", "fecha", "estado"]
+        "fieldOrder": [
+          "name",
+          "poliza",
+          "valor",
+          "fecha",
+          "estado"
+        ]
+      },
+      "labels": {
+        "en": "Payments",
+        "pt": "Pagamentos"
+      },
+      "descriptions": {
+        "en": "Per-policy collection tracking.",
+        "pt": "Acompanhamento de recebimentos por apólice."
       }
     },
     {
@@ -392,7 +661,11 @@
           "name": {
             "type": "Textbox",
             "label": "Referencia",
-            "required": true
+            "required": true,
+            "labels": {
+              "en": "Reference",
+              "pt": "Referência"
+            }
           },
           "poliza": {
             "type": "Dropdown",
@@ -400,21 +673,37 @@
             "options": [],
             "config": {
               "relation": "polizas"
+            },
+            "labels": {
+              "en": "Policy",
+              "pt": "Apólice"
             }
           },
           "fecha": {
             "type": "DateControl",
-            "label": "Fecha del siniestro"
+            "label": "Fecha del siniestro",
+            "labels": {
+              "en": "Claim date",
+              "pt": "Data do sinistro"
+            }
           },
           "descripcion": {
             "type": "Textarea",
-            "label": "Descripción"
+            "label": "Descripción",
+            "labels": {
+              "en": "Description",
+              "pt": "Descrição"
+            }
           },
           "valor": {
             "type": "Number",
             "label": "Valor reclamado",
             "config": {
               "format": "currency"
+            },
+            "labels": {
+              "en": "Claimed amount",
+              "pt": "Valor reclamado"
             }
           },
           "estado": {
@@ -423,25 +712,49 @@
             "options": [
               {
                 "label": "Reportado",
-                "value": "Reportado"
+                "value": "Reportado",
+                "labels": {
+                  "en": "Reported",
+                  "pt": "Reportado"
+                }
               },
               {
                 "label": "En estudio",
-                "value": "En estudio"
+                "value": "En estudio",
+                "labels": {
+                  "en": "Under review",
+                  "pt": "Em análise"
+                }
               },
               {
                 "label": "Aprobado",
-                "value": "Aprobado"
+                "value": "Aprobado",
+                "labels": {
+                  "en": "Approved",
+                  "pt": "Aprovado"
+                }
               },
               {
                 "label": "Rechazado",
-                "value": "Rechazado"
+                "value": "Rechazado",
+                "labels": {
+                  "en": "Rejected",
+                  "pt": "Rejeitado"
+                }
               },
               {
                 "label": "Cerrado",
-                "value": "Cerrado"
+                "value": "Cerrado",
+                "labels": {
+                  "en": "Closed",
+                  "pt": "Encerrado"
+                }
               }
-            ]
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
           }
         },
         "fieldOrder": [
@@ -452,6 +765,14 @@
           "valor",
           "estado"
         ]
+      },
+      "labels": {
+        "en": "Claims",
+        "pt": "Sinistros"
+      },
+      "descriptions": {
+        "en": "Claim notices and follow-up.",
+        "pt": "Avisos e acompanhamento de sinistros."
       }
     },
     {
@@ -464,16 +785,30 @@
           "extension_surface": {
             "type": "Textbox",
             "label": "Superficie de extensión",
-            "hidden": true
+            "hidden": true,
+            "labels": {
+              "en": "Extension surface",
+              "pt": "Superfície da extensão"
+            }
           }
         },
-        "fieldOrder": ["extension_surface"],
+        "fieldOrder": [
+          "extension_surface"
+        ],
         "studio": {
           "screen": {
             "section": "operation",
             "icon": "calculator"
           }
         }
+      },
+      "labels": {
+        "en": "Quote tool",
+        "pt": "Cotador"
+      },
+      "descriptions": {
+        "en": "Quotes light-vehicle insurance.",
+        "pt": "Cota seguros de veículos leves."
       }
     },
     {
@@ -486,7 +821,11 @@
           "extension_surface": {
             "type": "Textbox",
             "label": "Superficie de extensión",
-            "hidden": true
+            "hidden": true,
+            "labels": {
+              "en": "Extension surface",
+              "pt": "Superfície da extensão"
+            }
           }
         },
         "studio": {
@@ -495,7 +834,17 @@
             "icon": "list-ordered"
           }
         },
-        "fieldOrder": ["extension_surface"]
+        "fieldOrder": [
+          "extension_surface"
+        ]
+      },
+      "labels": {
+        "en": "Step-by-step quote tool",
+        "pt": "Cotador por etapas"
+      },
+      "descriptions": {
+        "en": "Quotes insurance through guided steps.",
+        "pt": "Cota seguros guiando o processo passo a passo."
       }
     },
     {
@@ -508,17 +857,39 @@
           "extension_surface": {
             "type": "Textbox",
             "label": "Superficie de extensión",
-            "hidden": true
+            "hidden": true,
+            "labels": {
+              "en": "Extension surface",
+              "pt": "Superfície da extensão"
+            }
           }
         },
-        "fieldOrder": ["extension_surface"],
+        "fieldOrder": [
+          "extension_surface"
+        ],
         "studio": {
           "screen": {
             "section": "administration",
             "icon": "settings-2"
           }
         }
+      },
+      "labels": {
+        "en": "Manage Insurance",
+        "pt": "Administrar seguros"
+      },
+      "descriptions": {
+        "en": "Configures the Insurance package experiences and products.",
+        "pt": "Configura as experiências e produtos do pacote de Seguros."
       }
     }
-  ]
+  ],
+  "labels": {
+    "en": "Insurance",
+    "pt": "Seguros"
+  },
+  "descriptions": {
+    "en": "Customers, insurers, quotes, policies, payments and claims on the Savia low-code engine. Insurer connections are configured separately.",
+    "pt": "Clientes, seguradoras, cotações, apólices, pagamentos e sinistros no motor low-code da Savia. As conexões com as seguradoras são configuradas separadamente."
+  }
 }

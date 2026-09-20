@@ -795,7 +795,23 @@ export const configSchema = z
 export const objectSchema = z.object({
   name: identifier,
   label: z.string().min(1).max(80),
+  labels: z
+    .object({
+      es: z.string().trim().min(1).max(80).optional(),
+      en: z.string().trim().min(1).max(80).optional(),
+      pt: z.string().trim().min(1).max(80).optional(),
+    })
+    .strict()
+    .optional(),
   description: z.string().max(500).default(""),
+  descriptions: z
+    .object({
+      es: z.string().max(500).optional(),
+      en: z.string().max(500).optional(),
+      pt: z.string().max(500).optional(),
+    })
+    .strict()
+    .optional(),
   config: configSchema,
   version: z.number().int().positive().optional(),
 });

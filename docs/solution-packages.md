@@ -61,6 +61,44 @@ adaptadores con código se registran en el despliegue. Los flujos externos,
 sus conexiones y secretos se configuran por separado; este formato no exporta
 automatizaciones guardadas ni servicios externos completos.
 
+## Etiquetas localizadas (ES/EN/PT)
+
+El paquete, sus objetos y sus campos aceptan traducciones opcionales sin
+migración de datos:
+
+```json
+{
+  "label": "Seguros",
+  "labels": { "en": "Insurance", "pt": "Seguros" },
+  "description": "Clientes y pólizas.",
+  "descriptions": { "en": "Customers and policies." },
+  "objects": [
+    {
+      "name": "clientes",
+      "label": "Clientes",
+      "labels": { "en": "Customers", "pt": "Clientes" },
+      "config": {
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Nombre",
+            "labels": { "en": "Name", "pt": "Nome" }
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+Las claves ausentes o vacías usan el valor predeterminado en español; los
+nombres de objeto, valores de opción y registros guardados nunca cambian.
+La interfaz resuelve estas etiquetas según el idioma seleccionado al mostrar
+el catálogo y la vista previa, que conserva los valores estables. Una
+actualización que modifique campos existentes (incluidas sus etiquetas)
+sigue la política habitual: requiere una migración específica en lugar de
+sobrescribir personalizaciones.
+
 ## Extensiones TypeScript confiables
 
 Una extensión con código usa un manifiesto `savia.extension` versionado, pero
