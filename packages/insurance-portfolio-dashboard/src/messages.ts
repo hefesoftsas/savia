@@ -302,7 +302,7 @@ export const insuranceMessages = {
   ],
   "Matriz Detallada de Coberturas Frente a Frente": [
     "Matriz Detallada de Coberturas Frente a Frente",
-    "Detailed side-by-side coverage matrix",
+    "Detailed side-by-side coverage comparison",
     "Matriz detalhada de coberturas lado a lado"
   ],
   "Comparativa técnica cláusula por cláusula para asesoría fiduciaria al cliente": [
