@@ -168,6 +168,17 @@ it("publishes a safe immutable definition and creates only the server-selected c
     ).status,
   ).toBe(422);
 });
+it("verifies captchas with worker-supported fetch options", async () => {
+  const instance = app();
+  const link = await publish(instance, await object());
+  const calls = verify.mock.calls.length;
+  const response = await submit(instance, link, { name: "Visitor" });
+  expect(response.status).toBe(200);
+  const init = verify.mock.calls[calls][1] as RequestInit;
+  // The Workers runtime only supports "follow"/"manual": "error" throws
+  // TypeError and breaks every anonymous submission.
+  expect(init.redirect ?? "follow").not.toBe("error");
+});
 it("requires administrator management and blocks anonymous methods, expired links and revoked links", async () => {
   const instance = app();
   const name = await object();

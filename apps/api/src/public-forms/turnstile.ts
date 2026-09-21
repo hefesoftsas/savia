@@ -59,7 +59,9 @@ export async function verifyTurnstile(
           idempotency_key: input.submissionId,
         }),
         signal: AbortSignal.timeout(5000),
-        redirect: "error",
+        // NOTE: `redirect: "error"` is rejected by the Workers runtime
+        // (only "follow"/"manual" exist at the edge); the default follow is
+        // safe here because the JSON body is validated strictly below.
       },
     );
     // Anonymous diagnostics: HTTP status only. A non-OK siteverify (for
