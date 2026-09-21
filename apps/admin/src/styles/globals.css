@@ -619,6 +619,16 @@ input[type="radio"] {
   --savia-ring-size: 6rem;
   --savia-ring-width: 4px;
 }
+/* Overlay variant: fills a relative parent (e.g. encircling the splash
+ * logo). Doubled selector wins over `.savia-ring` sizing on purpose, and
+ * avoids relying on Tailwind positioning utilities: unlayered author CSS
+ * beats `@layer utilities`, so `absolute inset-0` would silently lose. */
+.savia-ring.savia-ring-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
 @keyframes savia-ring-spin {
   to {
     transform: rotate(360deg);

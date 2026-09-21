@@ -58,7 +58,7 @@ export function PwaSplash({
       className="flex min-h-svh flex-col items-center justify-center gap-5 bg-background px-6"
     >
       <span className="relative flex size-24 items-center justify-center">
-        <PwaSpinner size="xl" className="absolute inset-0" />
+        <PwaSpinner size="xl" className="savia-ring-cover" />
         <img
           src="/savia-icon-192-v2.png"
           alt=""

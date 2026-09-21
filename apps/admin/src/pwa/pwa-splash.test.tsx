@@ -21,6 +21,16 @@ describe("PwaSplash", () => {
       screen.getByRole("status", { name: "Cargando…" }),
     ).toBeInTheDocument();
   });
+
+  it("overlays the ring on the logo instead of laying it out beside it", () => {
+    render(<PwaSplash />);
+
+    // Regression: Tailwind `absolute` loses against the unlayered
+    // `.savia-ring` position, so the overlay must use savia-ring-cover.
+    const spinner = screen.getByTestId("pwa-spinner");
+    expect(spinner.classList.contains("savia-ring-cover")).toBe(true);
+    expect(spinner.classList.contains("absolute")).toBe(false);
+  });
 });
 
 describe("PwaSpinner", () => {

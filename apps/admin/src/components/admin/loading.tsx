@@ -21,7 +21,7 @@ export const Loading = (props: LoadingProps) => {
   return oneSecondHasPassed ? (
     <div className="flex flex-col justify-center items-center h-full" {...rest}>
       <div className="text-center font-sans color-muted pt-1 pb-1">
-        <PwaSpinner size="lg" className="width-9 height-9" />
+        <PwaSpinner size="lg" />
         <h5 className="mt-3 text-2xl text-secondary-foreground">
           <Translate i18nKey={loadingPrimary}>{loadingPrimary}</Translate>
         </h5>
