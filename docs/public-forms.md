@@ -93,6 +93,13 @@ unconfigured. The public page reports `captchaProvider: "disabled"`, mounts no
 widget, and submits immediately. Never set `SAVIA_DISABLE_CAPTCHA` outside local
 development.
 
+For the same reason, `pnpm dev` sets `SAVIA_MOCK_QUOTES=1` (override with
+`SAVIA_MOCK_QUOTES=0`): quote execution and the demo plate `TESTCAR` return
+fixed simulation data instead of calling providers, so the whole public flow
+can be exercised without credentials. Availability, policy, and validation
+checks still run; only provider I/O is faked. Never set `SAVIA_MOCK_QUOTES`
+outside local development.
+
 ## Security and reliability boundary
 
 The public page loads independently of the administrative app: no session bootstrap,
