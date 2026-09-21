@@ -1,5 +1,6 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { isModuleLoadError, reloadApplication } from "./deployment-recovery";
+import { PwaSpinner } from "./pwa-splash";
 
 function ReloadButton() {
   const [busy, setBusy] = useState(false);
@@ -7,8 +8,9 @@ function ReloadButton() {
   return (
     <div className="grid gap-2">
       <button
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         disabled={busy}
+        aria-busy={busy}
         onClick={async () => {
           setBusy(true);
           setError("");
@@ -24,7 +26,14 @@ function ReloadButton() {
           }
         }}
       >
-        {busy ? "Buscando la nueva versión…" : "Actualizar y recargar"}
+        {busy ? (
+          <>
+            <PwaSpinner size="xs" />
+            Buscando la nueva versión…
+          </>
+        ) : (
+          "Actualizar y recargar"
+        )}
       </button>
       {error && (
         <p role="alert" className="text-sm">
