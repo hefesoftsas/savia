@@ -12,7 +12,9 @@ show a QR code encoding the same canonical URL, with SVG and PNG download for
 print or in-person sharing. The default budget is
 25 submissions per link per UTC day. Existing links do not inherit later edits;
 review and publish a new link after changing a form. Revoke the previous link when
-replacing it.
+replacing it. A revoked link stays visible until it is deleted permanently with
+the **Eliminar enlace** action, which also removes its submissions; deleted
+links no longer appear in the list.
 
 Native collections support plain text, numeric, email, date, boolean, and static
 select fields. Hidden, read-only, computed, secret, relational, remote-option,

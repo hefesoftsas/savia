@@ -135,16 +135,33 @@ export function registerPublicFormRoutes(
       path: "/v1/public-forms/{id}",
       tags: ["Public forms"],
       request: { params: z.object({ id: z.string().uuid() }) },
-      responses: { 200: jsonResponse },
+      responses: { 200: jsonResponse, 404: jsonResponse },
     }),
     async (c) => {
-      await db
-        .prepare(
-          "UPDATE public_forms SET revoked_at=? WHERE id=? AND revoked_at IS NULL",
-        )
-        .bind(new Date().toISOString(), c.req.valid("param").id)
-        .run();
-      return c.json({ ok: true }, 200);
+      const id = c.req.valid("param").id;
+      const row = await db
+        .prepare("SELECT revoked_at FROM public_forms WHERE id=?")
+        .bind(id)
+        .first<{ revoked_at: string | null }>();
+      if (!row) return c.json({ error: "Public form not found." }, 404);
+      if (!row.revoked_at) {
+        await db
+          .prepare(
+            "UPDATE public_forms SET revoked_at=? WHERE id=? AND revoked_at IS NULL",
+          )
+          .bind(new Date().toISOString(), id)
+          .run();
+        return c.json({ ok: true, deleted: false }, 200);
+      }
+      // A revoked link can be deleted permanently: its submissions only exist
+      // for quota and replay checks, so they are removed with the form.
+      await db.batch([
+        db
+          .prepare("DELETE FROM public_form_submissions WHERE form_id=?")
+          .bind(id),
+        db.prepare("DELETE FROM public_forms WHERE id=?").bind(id),
+      ]);
+      return c.json({ ok: true, deleted: true }, 200);
     },
   );
   app.openapi(

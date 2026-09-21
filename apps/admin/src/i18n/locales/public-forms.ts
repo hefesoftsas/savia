@@ -202,6 +202,7 @@ export const publicFormsMessages = {
     "Link revoked. It no longer accepts new submissions.",
     "Link revogado. Ele não aceita mais novos envios.",
   ],
+  "Enlace eliminado.": ["Enlace eliminado.", "Link deleted.", "Link excluído."],
   "Enlace copiado.": ["Enlace copiado.", "Link copied.", "Link copiado."],
   "No se pudo copiar. Selecciona el enlace y cópialo manualmente.": [
     "No se pudo copiar. Selecciona el enlace y cópialo manualmente.",
@@ -271,6 +272,8 @@ export const publicFormsMessages = {
   "Copiar enlace": ["Copiar enlace", "Copy link", "Copiar link"],
   "Revocando…": ["Revocando…", "Revoking…", "Revogando…"],
   "Revocar enlace": ["Revocar enlace", "Revoke link", "Revogar link"],
+  "Eliminando…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  "Eliminar enlace": ["Eliminar enlace", "Delete link", "Excluir link"],
   "Mostrar QR": ["Mostrar QR", "Show QR", "Mostrar QR"],
   "Ocultar QR": ["Ocultar QR", "Hide QR", "Ocultar QR"],
   "Código QR del enlace público": [

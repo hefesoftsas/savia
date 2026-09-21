@@ -25,7 +25,12 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
     .fn()
     .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })))
     .mockResolvedValueOnce(new Response(JSON.stringify({ data: row })))
-    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true, deleted: false })),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true, deleted: true })),
+    );
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -64,6 +69,13 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
   fireEvent.click(screen.getByRole("button", { name: "Revocar enlace" }));
   expect(await screen.findByText("Revocado")).toBeInTheDocument();
   expect(request.mock.calls[2]).toEqual([
+    "/v1/public-forms/link-id",
+    { method: "DELETE" },
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Eliminar enlace" }));
+  expect(await screen.findByText(/Aún no hay enlaces/)).toBeInTheDocument();
+  expect(screen.queryByText("Revocado")).not.toBeInTheDocument();
+  expect(request.mock.calls[3]).toEqual([
     "/v1/public-forms/link-id",
     { method: "DELETE" },
   ]);

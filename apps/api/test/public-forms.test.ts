@@ -196,6 +196,53 @@ it("requires administrator management and blocks anonymous methods, expired link
   ).toBe(200);
   expect((await submit(instance, link, { name: "Visitor" })).status).toBe(404);
 });
+it("revokes on first delete and permanently removes revoked links on second delete", async () => {
+  const instance = app();
+  const name = await object();
+  const link = await publish(instance, name);
+  expect((await submit(instance, link, { name: "Visitor" })).status).toBe(200);
+  const revoke = await instance.request(
+    "https://api.test/v1/public-forms/" + link.id,
+    { method: "DELETE" },
+  );
+  expect(revoke.status).toBe(200);
+  expect(await revoke.json()).toEqual({ ok: true, deleted: false });
+  const listed = (await (
+    await instance.request(
+      "https://api.test/v1/public-forms?domainId=demo&objectName=" + name,
+    )
+  ).json()) as any;
+  expect(listed.data).toHaveLength(1);
+  expect(listed.data[0].revokedAt).toBeTruthy();
+  expect((await submit(instance, link, { name: "Visitor" })).status).toBe(404);
+  const remove = await instance.request(
+    "https://api.test/v1/public-forms/" + link.id,
+    { method: "DELETE" },
+  );
+  expect(remove.status).toBe(200);
+  expect(await remove.json()).toEqual({ ok: true, deleted: true });
+  const relisted = (await (
+    await instance.request(
+      "https://api.test/v1/public-forms?domainId=demo&objectName=" + name,
+    )
+  ).json()) as any;
+  expect(relisted.data).toEqual([]);
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) n FROM public_form_submissions WHERE form_id=?",
+    )
+      .bind(link.id)
+      .first("n"),
+  ).toBe(0);
+  expect(
+    (
+      await instance.request(
+        "https://api.test/v1/public-forms/" + crypto.randomUUID(),
+        { method: "DELETE" },
+      )
+    ).status,
+  ).toBe(404);
+});
 it("atomically caps concurrent submissions and replays only the original proof without duplicate writes", async () => {
   const instance = app();
   const name = await object();

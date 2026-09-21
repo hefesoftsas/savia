@@ -17,6 +17,10 @@ const linkSchema = z.object({
   revokedAt: z.string().nullable().optional(),
   dailyLimit: z.number(),
 });
+const destroyResult = z.object({
+  ok: z.boolean(),
+  deleted: z.boolean().optional(),
+});
 type PublicLink = z.infer<typeof linkSchema>;
 type Props = {
   domainId: string;
@@ -146,15 +150,48 @@ export function PublicLinkManager({
         { method: "DELETE" },
       );
       if (!response.ok) throw new Error(managementError(response.status));
+      const body = destroyResult.parse(await response.json());
       if (current === generation.current) {
-        setLinks((previous) =>
-          previous.map((item) =>
-            item.id === link.id
-              ? { ...item, revokedAt: new Date().toISOString() }
-              : item,
-          ),
-        );
-        setNotice("Enlace revocado. Ya no admite nuevos envíos.");
+        if (body.deleted) {
+          setLinks((previous) =>
+            previous.filter((item) => item.id !== link.id),
+          );
+          setNotice("Enlace eliminado.");
+        } else {
+          setLinks((previous) =>
+            previous.map((item) =>
+              item.id === link.id
+                ? { ...item, revokedAt: new Date().toISOString() }
+                : item,
+            ),
+          );
+          setNotice("Enlace revocado. Ya no admite nuevos envíos.");
+        }
+      }
+    } catch (cause) {
+      if (current === generation.current)
+        setError(cause instanceof Error ? cause.message : managementError(500));
+    } finally {
+      busy.current = false;
+      if (current === generation.current) setPending(undefined);
+    }
+  }
+  async function remove(link: PublicLink) {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(link.id);
+    setError("");
+    setNotice("");
+    const current = generation.current;
+    try {
+      const response = await request(
+        `/v1/public-forms/${encodeURIComponent(link.id)}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) throw new Error(managementError(response.status));
+      if (current === generation.current) {
+        setLinks((previous) => previous.filter((item) => item.id !== link.id));
+        setNotice("Enlace eliminado.");
       }
     } catch (cause) {
       if (current === generation.current)
@@ -321,16 +358,29 @@ export function PublicLinkManager({
                   >
                     {showingQr ? t("Ocultar QR") : t("Mostrar QR")}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => void revoke(link)}
-                    disabled={unavailable || !!pending}
-                  >
-                    {pending === link.id
-                      ? t("Revocando…")
-                      : t("Revocar enlace")}
-                  </Button>
+                  {link.revokedAt ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void remove(link)}
+                      disabled={!!pending}
+                    >
+                      {pending === link.id
+                        ? t("Eliminando…")
+                        : t("Eliminar enlace")}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void revoke(link)}
+                      disabled={unavailable || !!pending}
+                    >
+                      {pending === link.id
+                        ? t("Revocando…")
+                        : t("Revocar enlace")}
+                    </Button>
+                  )}
                 </div>
                 {showingQr && <PublicLinkQr url={url} fileBase={fileBase} />}
               </li>
