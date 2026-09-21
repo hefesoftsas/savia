@@ -60,7 +60,7 @@ export function PwaSplash({
       <span className="relative flex size-24 items-center justify-center">
         <PwaSpinner size="xl" className="savia-ring-cover" />
         <img
-          src="/savia-icon-192-v2.png"
+          src="/savia-icon-192-v3.png"
           alt=""
           width={64}
           height={64}

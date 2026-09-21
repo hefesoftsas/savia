@@ -15,25 +15,25 @@
   "categories": ["business", "productivity", "finance"],
   "icons": [
     {
-      "src": "/savia-icon-192-v2.png",
+      "src": "/savia-icon-192-v3.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/savia-maskable-192-v2.png",
+      "src": "/savia-maskable-192-v3.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/savia-icon-512-v2.png",
+      "src": "/savia-icon-512-v3.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/savia-maskable-512-v2.png",
+      "src": "/savia-maskable-512-v3.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -47,7 +47,7 @@
       "url": "/#/my-day",
       "icons": [
         {
-          "src": "/savia-icon-192-v2.png",
+          "src": "/savia-icon-192-v3.png",
           "sizes": "192x192"
         }
       ]
@@ -59,7 +59,7 @@
       "url": "/#/crm",
       "icons": [
         {
-          "src": "/savia-icon-192-v2.png",
+          "src": "/savia-icon-192-v3.png",
           "sizes": "192x192"
         }
       ]
@@ -71,7 +71,7 @@
       "url": "/#/savia-request",
       "icons": [
         {
-          "src": "/savia-icon-192-v2.png",
+          "src": "/savia-icon-192-v3.png",
           "sizes": "192x192"
         }
       ]

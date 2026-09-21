@@ -16,7 +16,7 @@ const mark = source.replace(/<svg[^>]*>/, "").replace("</svg>", "");
 function iconSvg(maskable = false) {
   const scale = maskable ? 0.6 : 0.96;
   const inset = (64 - 64 * scale) / 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#ffffff"/><g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g transform="translate(${inset} ${inset}) scale(${scale})">${mark}</g></svg>`;
 }
 
 function createIco(pngBuffers) {
@@ -51,14 +51,14 @@ function createIco(pngBuffers) {
 
 export async function generateFavicons() {
   const targets = [
-    ["favicon-16-v2.png", 16, false],
-    ["favicon-32-v2.png", 32, false],
-    ["favicon-48-v2.png", 48, false],
-    ["apple-touch-icon-v2.png", 180, false],
-    ["savia-icon-192-v2.png", 192, false],
-    ["savia-icon-512-v2.png", 512, false],
-    ["savia-maskable-192-v2.png", 192, true],
-    ["savia-maskable-512-v2.png", 512, true],
+    ["favicon-16-v3.png", 16, false],
+    ["favicon-32-v3.png", 32, false],
+    ["favicon-48-v3.png", 48, false],
+    ["apple-touch-icon-v3.png", 180, false],
+    ["savia-icon-192-v3.png", 192, false],
+    ["savia-icon-512-v3.png", 512, false],
+    ["savia-maskable-192-v3.png", 192, true],
+    ["savia-maskable-512-v3.png", 512, true],
   ];
   for (const [name, size, maskable] of targets) {
     await sharp(Buffer.from(iconSvg(maskable)), { density: 384 })
@@ -72,7 +72,7 @@ export async function generateFavicons() {
     [16, 32, 48].map((size) => ({
       width: size,
       height: size,
-      buffer: readFileSync(join(publicDir, `favicon-${size}-v2.png`)),
+      buffer: readFileSync(join(publicDir, `favicon-${size}-v3.png`)),
     })),
   );
   writeFileSync(join(publicDir, "favicon.ico"), ico);
