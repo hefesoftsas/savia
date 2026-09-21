@@ -277,6 +277,104 @@
   display: grid;
   gap: 0.75rem;
 }
+.public-quote-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.public-quote-chips > button {
+  min-height: 2.25rem;
+  font-size: 0.875rem;
+}
+.public-quote-cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+.public-quote-card {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  background: var(--card, #ffffff);
+}
+.public-quote-card.is-best {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.public-quote-ribbon {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+}
+.public-quote-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.public-quote-logo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+.public-quote-heading {
+  min-width: 0;
+}
+.public-quote-copy {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.public-quote-copy:hover,
+.public-quote-copy:focus-visible {
+  background: var(--muted);
+  color: var(--foreground);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.public-quote-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.375rem;
+  font-size: 0.9375rem;
+}
+.public-quote-bullets span[aria-hidden="true"] {
+  color: var(--primary);
+  font-weight: 700;
+}
+@media (max-width: 480px) {
+  .public-quote-card {
+    padding: 1rem;
+  }
+  .public-quote-price {
+    font-size: 1.375rem;
+  }
+}
 .public-quote-heading h4 {
   font-weight: 600;
 }

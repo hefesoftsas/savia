@@ -2,6 +2,7 @@ import { useAppLocale, useMessages, intlLocale } from "@/i18n/core";
 import { publicFormsMessages } from "@/i18n/locales/public-forms";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
 import { mountAltcha } from "./altcha-widget";
 
 export type PublicSubmissionDefinition = {
@@ -341,43 +342,162 @@ const quoteProjection = z.object({
 export function SafeResult({ result }: { result: unknown }) {
   const t = useMessages(publicFormsMessages);
   const locale = useAppLocale();
+  const [insurerFilter, setInsurerFilter] = useState<string | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
   const projection = quoteProjection.safeParse(result);
   if (projection.success) {
     const { quotes, unavailable } = projection.data;
     const money = new Intl.NumberFormat(intlLocale(locale), {
       style: "currency",
       currency: "COP",
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 0,
     });
+    // Cheapest first, unknown prices last — same ranking language as the
+    // embedded comparator, computed only from the public projection.
+    const ranked = [...quotes].sort((a, b) => {
+      if (a.premiumTotal === null) return 1;
+      if (b.premiumTotal === null) return -1;
+      return a.premiumTotal - b.premiumTotal;
+    });
+    const bestIndex = ranked.findIndex((quote) => quote.premiumTotal !== null);
+    const insurers = [...new Set(ranked.map((quote) => quote.insurer))];
+    const visible = insurerFilter
+      ? ranked.filter((quote) => quote.insurer === insurerFilter)
+      : ranked;
+    async function copyQuote(quote: (typeof ranked)[number], index: number) {
+      const price =
+        quote.premiumTotal === null
+          ? t("Valor por confirmar")
+          : `${money.format(quote.premiumTotal)} COP`;
+      try {
+        await navigator.clipboard.writeText(
+          `${quote.insurer} — ${quote.product}: ${price}`,
+        );
+        setCopied(index);
+        window.setTimeout(() => {
+          setCopied((current) => (current === index ? null : current));
+        }, 2500);
+      } catch {
+        setCopied(null);
+      }
+    }
     return (
       <section
         className="public-quote-results"
         aria-label={t("Resultados de cotización")}
       >
         <h3>{t("Resultados de cotización")}</h3>
-        {quotes.length ? (
-          <ul>
-            {quotes.map((quote, index) => (
-              <li key={index}>
-                <div className="public-quote-heading">
-                  <h4>{quote.insurer}</h4>
-                  <p>{quote.product}</p>
-                </div>
-                <p className="public-quote-price">
-                  {quote.premiumTotal === null
-                    ? t("Valor por confirmar")
-                    : money.format(quote.premiumTotal)}
-                  {quote.premiumTotal !== null && <span> COP</span>}
-                </p>
-                {quote.coverages.length > 0 && (
-                  <ul aria-label={t("Coberturas")}>
-                    {quote.coverages.map((coverage, coverageIndex) => (
-                      <li key={coverageIndex}>{coverage}</li>
-                    ))}
-                  </ul>
-                )}
-              </li>
+        {insurers.length > 1 && (
+          <div className="public-quote-chips" role="group">
+            <Button
+              type="button"
+              variant={insurerFilter === null ? "default" : "outline"}
+              onClick={() => setInsurerFilter(null)}
+              aria-pressed={insurerFilter === null}
+            >
+              {t("Todas las aseguradoras")} ({ranked.length})
+            </Button>
+            {insurers.map((insurer) => (
+              <Button
+                type="button"
+                key={insurer}
+                variant={insurerFilter === insurer ? "default" : "outline"}
+                onClick={() =>
+                  setInsurerFilter((current) =>
+                    current === insurer ? null : insurer,
+                  )
+                }
+                aria-pressed={insurerFilter === insurer}
+              >
+                {insurer} (
+                {ranked.filter((quote) => quote.insurer === insurer).length})
+              </Button>
             ))}
+          </div>
+        )}
+        {visible.length ? (
+          <ul className="public-quote-cards">
+            {visible.map((quote) => {
+              const index = ranked.indexOf(quote);
+              const isBest = index === bestIndex && bestIndex >= 0;
+              return (
+                <li
+                  key={`${quote.insurer}-${quote.product}-${index}`}
+                  className={`public-quote-card${isBest ? " is-best" : ""}`}
+                >
+                  {isBest && (
+                    <p className="public-quote-ribbon">
+                      {`★ ${t("Mejor precio")}`}
+                    </p>
+                  )}
+                  <div className="public-quote-brand">
+                    <span className="public-quote-logo" aria-hidden="true">
+                      {quote.insurer.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="public-quote-heading">
+                      <h4>{quote.insurer}</h4>
+                      <p>{quote.product}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="public-quote-copy"
+                      aria-label={
+                        copied === index
+                          ? t("¡Copiado!")
+                          : t("Copiar cotización")
+                      }
+                      title={
+                        copied === index
+                          ? t("¡Copiado!")
+                          : t("Copiar cotización")
+                      }
+                      onClick={() => void copyQuote(quote, index)}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        height="16"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                        width="16"
+                      >
+                        {copied === index ? (
+                          <polyline points="20 6 9 17 4 12" />
+                        ) : (
+                          <>
+                            <rect height="14" rx="2" width="12" x="8" y="7" />
+                            <path d="M16 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+                          </>
+                        )}
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="public-quote-price">
+                    {quote.premiumTotal === null
+                      ? t("Valor por confirmar")
+                      : money.format(quote.premiumTotal)}
+                    {quote.premiumTotal !== null && (
+                      <span> {t("COP / año")}</span>
+                    )}
+                  </p>
+                  {quote.coverages.length > 0 && (
+                    <ul
+                      className="public-quote-bullets"
+                      aria-label={t("Coberturas")}
+                    >
+                      {quote.coverages.map((coverage, coverageIndex) => (
+                        <li key={coverageIndex}>
+                          <span aria-hidden="true">✓</span> {coverage}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p>

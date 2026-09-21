@@ -385,6 +385,15 @@ export const publicFormsMessages = {
     "Suggested cities",
     "Cidades sugeridas",
   ],
+  "COP / año": ["COP / año", "COP / year", "COP / ano"],
+  "Todas las aseguradoras": [
+    "Todas las aseguradoras",
+    "All insurers",
+    "Todas as seguradoras",
+  ],
+  "Mejor precio": ["Mejor precio", "Best price", "Melhor preço"],
+  "Copiar cotización": ["Copiar cotización", "Copy quote", "Copiar cotação"],
+  "¡Copiado!": ["¡Copiado!", "Copied!", "Copiado!"],
   "No se encontraron ciudades.": [
     "No se encontraron ciudades.",
     "No cities found.",
