@@ -10,6 +10,7 @@ import {
   ensureInsuranceAutoLightBundle,
   getFlow,
   getVariables,
+  importVariables,
   saveVariables,
   seedOnce,
 } from "./store";
@@ -272,6 +273,100 @@ app.put("/api/flows/:id/variables", async (c) => {
   if (!flow) return c.json({ error: "Flow no encontrado." }, 404);
   await saveVariables(c.env, flow.id, rows);
   return c.json({ ok: true });
+});
+/** Single-request bulk transfer so moving secrets between environments is fast. */
+app.get("/api/variables/export", async (c) => {
+  await seedOnce(c.env);
+  const dialect = dialectFor(c.env.DB);
+  const visible = dialect.jsonCompare("definition", "$.deleted", "eq", 0);
+  const absent = dialect.jsonCompare("definition", "$.deleted", "eq", null);
+  const rows = await c.env.DB.prepare(
+    `SELECT id FROM flows WHERE (${visible.sql}) OR (${absent.sql}) ORDER BY id`,
+  )
+    .bind(...visible.parameters, ...absent.parameters)
+    .all<{ id: string }>();
+  const flows = [];
+  for (const row of rows.results) {
+    const variables = await getVariables(c.env, row.id, true);
+    if (variables.length)
+      flows.push({
+        flowId: row.id,
+        variables: variables
+          .map((variable) => ({
+            key: variable.key,
+            value: variable.value,
+            secret: variable.secret,
+          }))
+          .sort((left, right) => left.key.localeCompare(right.key)),
+      });
+  }
+  return c.json({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    flows,
+  });
+});
+app.post("/api/variables/import", async (c) => {
+  const body = await c.req.json();
+  const incoming = Array.isArray(body) ? body : body?.flows;
+  if (!Array.isArray(incoming) || !incoming.length || incoming.length > 200)
+    return c.json({ error: "Archivo de secretos inválido." }, 400);
+  const seen = new Set<string>();
+  const parsed: { flowId: string; variables: Variable[] }[] = [];
+  for (const flow of incoming) {
+    if (
+      !flow ||
+      typeof flow.flowId !== "string" ||
+      !flow.flowId ||
+      seen.has(flow.flowId) ||
+      !Array.isArray(flow.variables) ||
+      flow.variables.length > 150
+    )
+      return c.json({ error: "Archivo de secretos inválido." }, 400);
+    seen.add(flow.flowId);
+    const variables: Variable[] = [];
+    for (const variable of flow.variables) {
+      if (
+        !variable ||
+        !/^[\w.-]{1,120}$/.test(variable.key) ||
+        typeof variable.value !== "string" ||
+        typeof variable.secret !== "boolean"
+      )
+        return c.json({ error: `Variable inválida en «${flow.flowId}».` }, 400);
+      variables.push({
+        key: variable.key,
+        value: variable.value,
+        secret: variable.secret,
+      });
+    }
+    if (new Set(variables.map((v) => v.key)).size !== variables.length)
+      return c.json({ error: `Claves duplicadas en «${flow.flowId}».` }, 400);
+    parsed.push({ flowId: flow.flowId, variables });
+  }
+  const results = [];
+  for (const flow of parsed) {
+    if (!(await getFlow(c.env, flow.flowId))) {
+      results.push({
+        flowId: flow.flowId,
+        applied: 0,
+        skipped: 0,
+        status: "unknown",
+      });
+      continue;
+    }
+    const { applied, skipped } = await importVariables(
+      c.env,
+      flow.flowId,
+      flow.variables,
+    );
+    results.push({
+      flowId: flow.flowId,
+      applied,
+      skipped,
+      status: applied ? "updated" : "unchanged",
+    });
+  }
+  return c.json({ results });
 });
 app.post("/api/flows/:id/publish", async (c) => {
   const flow = await getFlow(c.env, c.req.param("id"));

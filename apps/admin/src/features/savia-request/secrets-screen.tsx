@@ -17,17 +17,13 @@ import { Download, KeyRound, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSaviaRequestWorkspace } from "./savia-request-provider";
-import type { SaviaRequestApi } from "./savia-request-api";
 import {
   buildSecretsFile,
   downloadJsonFile,
-  mergeVariables,
   parseSecretsFile,
   transferFileName,
   type SecretsFile,
-  type TransferFlow,
 } from "./secrets-transfer";
-import type { RequestVariable } from "./types";
 
 type Message = { kind: "status" | "alert"; text: string } | null;
 
@@ -48,31 +44,6 @@ type ImportResult = {
   error?: string;
 };
 
-async function resolveVariables(
-  api: SaviaRequestApi,
-  flowId: string,
-  variables: RequestVariable[],
-): Promise<TransferFlow> {
-  const resolved = [];
-  for (const variable of variables) {
-    if (variable.secret && !variable.value && variable.configured) {
-      const revealed = await api.revealVariable(flowId, variable.key);
-      resolved.push({
-        key: variable.key,
-        value: revealed.value,
-        secret: variable.secret,
-      });
-    } else {
-      resolved.push({
-        key: variable.key,
-        value: variable.value,
-        secret: variable.secret,
-      });
-    }
-  }
-  return { flowId, variables: resolved };
-}
-
 export function SecretsScreen() {
   const { api, busy: parentBusy, dirty } = useSaviaRequestWorkspace();
   const [busy, setBusy] = useState(false);
@@ -88,27 +59,23 @@ export function SecretsScreen() {
     setBusy(true);
     setMessage(null);
     setResults(null);
+    setProgress("Exportando secretos…");
     try {
-      const summaries = await api.listFlows();
-      const entries: TransferFlow[] = [];
-      for (const [index, summary] of summaries.entries()) {
-        setProgress(`Exportando ${index + 1} de ${summaries.length} flows…`);
-        const detail = await api.readFlow(summary.id);
-        if (detail.variables.length)
-          entries.push(
-            await resolveVariables(api, summary.id, detail.variables),
-          );
-      }
-      if (!entries.length) throw new Error("No hay variables para exportar.");
-      const withValue = entries.reduce(
+      const exported = await api.exportSecrets();
+      if (!exported.flows.length)
+        throw new Error("No hay variables para exportar.");
+      const withValue = exported.flows.reduce(
         (total, entry) =>
           total + entry.variables.filter((variable) => variable.value).length,
         0,
       );
-      downloadJsonFile(transferFileName("todos"), buildSecretsFile(entries));
+      downloadJsonFile(
+        transferFileName("todos", exported.exportedAt),
+        buildSecretsFile(exported.flows, exported.exportedAt),
+      );
       setMessage({
         kind: "status",
-        text: `Secretos de ${entries.length} flow(s) exportados (${withValue} con valor). Guárdalos en un lugar seguro.`,
+        text: `Secretos de ${exported.flows.length} flow(s) exportados (${withValue} con valor). Guárdalos en un lugar seguro.`,
       });
     } catch (exception) {
       setMessage({
@@ -163,48 +130,19 @@ export function SecretsScreen() {
     setBusy(true);
     setMessage(null);
     setResults(null);
+    setProgress("Aplicando importación…");
     try {
-      const outcomes: ImportResult[] = [];
-      const known = previewEntries.filter((entry) => entry.known);
-      for (const [index, entry] of known.entries()) {
-        setProgress(`Aplicando ${index + 1} de ${known.length} flows…`);
-        const fileEntry = preview.flows.find(
-          (candidate) => candidate.flowId === entry.flowId,
-        )!;
-        try {
-          const current = await api.readFlow(entry.flowId);
-          const merged = mergeVariables(current.variables, fileEntry.variables);
-          if (merged.applied)
-            await api.saveVariables(entry.flowId, merged.merged);
-          outcomes.push({
-            flowId: entry.flowId,
-            name: entry.name,
-            applied: merged.applied,
-            skipped: merged.skippedEmpty,
-            status: merged.applied ? "updated" : "unchanged",
-          });
-        } catch (exception) {
-          outcomes.push({
-            flowId: entry.flowId,
-            name: entry.name,
-            applied: 0,
-            skipped: 0,
-            status: "error",
-            error:
-              exception instanceof Error
-                ? exception.message
-                : "No se pudo aplicar.",
-          });
-        }
-      }
-      for (const entry of previewEntries.filter((item) => !item.known))
-        outcomes.push({
-          flowId: entry.flowId,
-          name: entry.name,
-          applied: 0,
-          skipped: 0,
-          status: "unknown",
-        });
+      const names = new Map(
+        previewEntries.map((entry) => [entry.flowId, entry.name]),
+      );
+      const { results: imported } = await api.importSecrets(preview);
+      const outcomes: ImportResult[] = imported.map((result) => ({
+        flowId: result.flowId,
+        name: names.get(result.flowId) ?? result.flowId,
+        applied: result.applied,
+        skipped: result.skipped,
+        status: result.status,
+      }));
       setResults(outcomes);
       const applied = outcomes.reduce((total, item) => total + item.applied, 0);
       const errors = outcomes.filter((item) => item.status === "error").length;

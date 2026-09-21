@@ -185,3 +185,32 @@ export async function saveVariables(env: Env, id: string, rows: Variable[]) {
       );
   if (statements.length) await env.DB.batch(statements);
 }
+/**
+ * Merges transferred variables without deleting anything: nonempty file
+ * values win (sealed when secret); empty values keep the stored value.
+ */
+export async function importVariables(
+  env: Env,
+  id: string,
+  rows: Variable[],
+): Promise<{ applied: number; skipped: number }> {
+  const statements = [];
+  let applied = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    if (!row.value) {
+      skipped += 1;
+      continue;
+    }
+    const value =
+      row.secret && row.value ? await seal(env, row.value) : row.value;
+    statements.push(
+      env.DB.prepare(
+        "INSERT INTO flow_variables(flow_id,key,value,secret) VALUES(?,?,?,?) ON CONFLICT(flow_id,key) DO UPDATE SET value=excluded.value,secret=excluded.secret",
+      ).bind(id, row.key, value, row.secret ? 1 : 0),
+    );
+    applied += 1;
+  }
+  if (statements.length) await env.DB.batch(statements);
+  return { applied, skipped };
+}
