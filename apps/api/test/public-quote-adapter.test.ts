@@ -442,7 +442,7 @@ it("looks up vehicle data with the fixed trusted flow and projects only safe fie
       type: "vehicle_lookup",
       data: {
         vehicle: {
-          plate: "ABC123",
+          plate: "TESTCAR",
           fasecoldaCode: "12345678",
           productionYear: 2023,
           declaredValue: 50000000,
@@ -466,10 +466,10 @@ it("looks up vehicle data with the fixed trusted flow and projects only safe fie
     domainId: "test",
     objectName: object.name,
     snapshot,
-    plate: "abc123",
+    plate: "testcar",
   });
   expect(found).toEqual({
-    plate: "ABC123",
+    plate: "TESTCAR",
     fasecoldaCode: "12345678",
     productionYear: 2023,
     declaredValue: 50000000,
@@ -487,7 +487,7 @@ it("looks up vehicle data with the fixed trusted flow and projects only safe fie
     {
       mode: "live",
       flowId: "sura-autos-provider",
-      quoteInput: { vehicle: { plate: "ABC123" } },
+      quoteInput: { vehicle: { plate: "TESTCAR" } },
     },
   ]);
   const runs = await env.DB.prepare(
@@ -517,7 +517,7 @@ it("fails the public lookup closed for bad plates, missing vehicles, provider er
     domainId: "test",
     objectName: object.name,
     snapshot,
-    plate: "ABC123",
+    plate: "TESTCAR",
   };
   await expect(
     adapter.lookupVehicle!({ ...input, plate: "!!" }),
