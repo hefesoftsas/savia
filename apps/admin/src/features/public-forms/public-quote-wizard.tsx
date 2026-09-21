@@ -41,6 +41,92 @@ const CONTACT_STEP_NAMES = new Set([
   "applicant_email",
 ]);
 
+type FieldErrors = Record<string, string>;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Client mirror of the server quote validation so the wizard names the exact
+ * failing field instead of showing the generic submission error. The server
+ * remains the final validator.
+ */
+function validateWizardFields(
+  fields: QuoteField[],
+  values: Record<string, string | boolean>,
+  t: (key: "Revisa el campo %{field}.", params: { field: string }) => string,
+  now: Date = new Date(),
+): FieldErrors {
+  const errors: FieldErrors = {};
+  const fail = (field: QuoteField) => {
+    errors[field.name] = t("Revisa el campo %{field}.", {
+      field: field.label,
+    });
+  };
+  for (const field of fields) {
+    const raw = values[field.name];
+    if (field.type === "boolean") {
+      if (field.required && raw !== "true" && raw !== "false") fail(field);
+      continue;
+    }
+    if (raw === undefined || raw === "") {
+      if (field.required) fail(field);
+      continue;
+    }
+    if (field.type === "number") {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) {
+        fail(field);
+        continue;
+      }
+      if (field.name === "vehicle_productionYear") {
+        const year = n;
+        if (
+          !Number.isInteger(year) ||
+          year < 1900 ||
+          year > now.getFullYear() + 1
+        )
+          fail(field);
+      } else if (field.name === "vehicle_declaredValue") {
+        if (n <= 0 || Math.abs(n) > 1e12) fail(field);
+      } else if (field.name === "vehicle_accessoriesValue") {
+        if (n < 0 || Math.abs(n) > 1e12) fail(field);
+      }
+      continue;
+    }
+    const text = String(raw);
+    if (text.length > 200) {
+      fail(field);
+      continue;
+    }
+    if (
+      field.type === "select" &&
+      field.options &&
+      !field.options.some((option) => option.value === text)
+    ) {
+      fail(field);
+      continue;
+    }
+    if (field.type === "email" && !EMAIL_PATTERN.test(text)) fail(field);
+    if (field.name === "applicant_birthDate") {
+      const birth = new Date(text);
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(text) ||
+        !Number.isFinite(birth.getTime()) ||
+        birth.toISOString().slice(0, 10) !== text ||
+        birth.getTime() > now.getTime()
+      ) {
+        fail(field);
+        continue;
+      }
+      let age = now.getFullYear() - birth.getFullYear();
+      const month = now.getMonth() - birth.getMonth();
+      if (month < 0 || (month === 0 && now.getDate() < birth.getDate())) age--;
+      if (age <= 15) fail(field);
+    }
+  }
+  return errors;
+}
+
 function stepsFor(
   fields: QuoteField[],
   titles: { vehicle: string; applicant: string; contact: string },
@@ -88,11 +174,13 @@ function CityAutocomplete({
   value,
   endpoint,
   onChange,
+  error,
 }: {
   field: QuoteField;
   value: string;
   endpoint: string;
   onChange: (value: string) => void;
+  error?: string;
 }) {
   const t = useMessages(publicFormsMessages);
   const [suggestions, setSuggestions] = useState<CityMatch[]>([]);
@@ -169,6 +257,8 @@ function CityAutocomplete({
         required={field.required}
         autoComplete="off"
         value={value}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `quote-${field.name}-error` : undefined}
         onChange={(e) => search(e.target.value)}
         onFocus={() => {
           if (suggestions.length) setOpen(true);
@@ -184,6 +274,15 @@ function CityAutocomplete({
         aria-expanded={open}
         aria-controls={listId}
       />
+      {error && (
+        <p
+          id={`quote-${field.name}-error`}
+          role="alert"
+          className="public-quote-field-error"
+        >
+          {error}
+        </p>
+      )}
       {loading && (
         <p role="status" className="public-form-help">
           {t("Consultando…")}
@@ -207,7 +306,12 @@ function CityAutocomplete({
                   setOpen(false);
                 }}
               >
-                {suggestion.city} ({suggestion.department})
+                <span>
+                  {suggestion.city} ({suggestion.department})
+                </span>
+                <span className="public-quote-suggestion-code">
+                  {suggestion.code}
+                </span>
               </button>
             </li>
           ))}
@@ -259,13 +363,29 @@ export function PublicQuoteForm({
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [parseError, setParseError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupFields, setLookupFields] = useState<string[]>([]);
+
+  function focusFirstError(errors: FieldErrors, fields: QuoteField[]) {
+    const first = fields.find((field) => errors[field.name]);
+    if (first) document.getElementById(`quote-${first.name}`)?.focus();
+  }
+
+  function clearFieldError(name: string) {
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }
   const [lookupNotice, setLookupNotice] = useState("");
   const lastLookedUpPlate = useRef("");
 
   function update(name: string, value: string | boolean) {
     setValues((prev) => ({ ...prev, [name]: value }));
+    clearFieldError(name);
     // A manually edited field is no longer considered autofilled.
     setLookupFields((prev) =>
       prev.includes(name) ? prev.filter((field) => field !== name) : prev,
@@ -286,6 +406,7 @@ export function PublicQuoteForm({
     });
     setLookupFields([]);
     setLookupNotice("");
+    clearFieldError("vehicle_plate");
   }
 
   async function lookupPlate() {
@@ -376,6 +497,13 @@ export function PublicQuoteForm({
 
   function goNext() {
     if (!formRef.current?.reportValidity()) return;
+    const current = steps[step] ?? steps[0];
+    const errors = validateWizardFields(current.fields, values, t);
+    if (Object.keys(errors).length) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }));
+      focusFirstError(errors, current.fields);
+      return;
+    }
     setParseError("");
     setStep((s) => Math.min(s + 1, steps.length - 1));
   }
@@ -389,6 +517,7 @@ export function PublicQuoteForm({
     setStep(0);
     setValues({});
     setParseError("");
+    setFieldErrors({});
     setLookingUp(false);
     setLookupFields([]);
     setLookupNotice("");
@@ -399,6 +528,16 @@ export function PublicQuoteForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!formRef.current?.reportValidity()) return;
+    const errors = validateWizardFields(definition.fields, values, t);
+    if (Object.keys(errors).length) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }));
+      const firstStep = steps.findIndex((s) =>
+        s.fields.some((field) => errors[field.name]),
+      );
+      if (firstStep >= 0) setStep(firstStep);
+      focusFirstError(errors, definition.fields);
+      return;
+    }
     const submitValues: PublicSubmissionValues = {};
     for (const field of definition.fields) {
       const raw = values[field.name];
@@ -526,151 +665,178 @@ export function PublicQuoteForm({
           </p>
           <fieldset disabled={pending || uncertain || lookingUp}>
             <div className="public-quote-grid">
-              {current.fields.map((field) => (
-                <div className="public-form-field" key={field.name}>
-                  <label htmlFor={`quote-${field.name}`}>
-                    {field.label}
-                    {field.required ? " *" : ""}
-                    {lookupFields.includes(field.name) && (
-                      <span className="public-quote-synced">
-                        {t("✓ Autocompletado")}
-                      </span>
-                    )}
-                    {lookingUp &&
-                      [
-                        "vehicle_fasecoldaCode",
-                        "vehicle_productionYear",
-                        "vehicle_declaredValue",
-                        "vehicle_accessoriesValue",
-                      ].includes(field.name) && (
-                        <span className="public-quote-syncing">
-                          {t("Consultando…")}
+              {current.fields.map((field) => {
+                const error = fieldErrors[field.name];
+                const errorId = `quote-${field.name}-error`;
+                const invalidProps = {
+                  "aria-invalid": error ? true : undefined,
+                  "aria-describedby": error ? errorId : undefined,
+                } as const;
+                return (
+                  <div className="public-form-field" key={field.name}>
+                    <label htmlFor={`quote-${field.name}`}>
+                      {field.label}
+                      {field.required ? " *" : ""}
+                      {lookupFields.includes(field.name) && (
+                        <span className="public-quote-synced">
+                          {t("✓ Autocompletado")}
                         </span>
                       )}
-                  </label>
-                  {field.name === "vehicle_plate" ? (
-                    <div className="public-quote-plate">
+                      {lookingUp &&
+                        [
+                          "vehicle_fasecoldaCode",
+                          "vehicle_productionYear",
+                          "vehicle_declaredValue",
+                          "vehicle_accessoriesValue",
+                        ].includes(field.name) && (
+                          <span className="public-quote-syncing">
+                            {t("Consultando…")}
+                          </span>
+                        )}
+                    </label>
+                    {field.name === "vehicle_plate" ? (
+                      <div className="public-quote-plate">
+                        <Input
+                          id={`quote-${field.name}`}
+                          name={field.name}
+                          type="text"
+                          required={field.required}
+                          autoComplete="off"
+                          value={String(values[field.name] ?? "")}
+                          {...invalidProps}
+                          onChange={(e) => updatePlate(e.target.value)}
+                          onBlur={autoLookupPlate}
+                          onKeyDown={lookupPlateOnEnter}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          aria-label={t("Consultar placa")}
+                          title={t("Consultar placa")}
+                          disabled={
+                            lookingUp ||
+                            !String(values[field.name] ?? "").trim()
+                          }
+                          onClick={() => void lookupPlate()}
+                          className="public-quote-plate-button"
+                        >
+                          {lookingUp ? (
+                            <span
+                              aria-hidden="true"
+                              className="public-quote-spinner"
+                            />
+                          ) : (
+                            <svg
+                              aria-hidden="true"
+                              fill="none"
+                              height="15"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2.2"
+                              viewBox="0 0 24 24"
+                              width="15"
+                            >
+                              <circle cx="11" cy="11" r="8" />
+                              <line x1="21" x2="16.65" y1="21" y2="16.65" />
+                            </svg>
+                          )}
+                        </Button>
+                      </div>
+                    ) : CITY_FIELDS.has(field.name) ? (
+                      <CityAutocomplete
+                        field={field}
+                        value={String(values[field.name] ?? "")}
+                        endpoint={endpoint}
+                        onChange={(next) => update(field.name, next)}
+                        error={error}
+                      />
+                    ) : field.type === "number" &&
+                      CURRENCY_FIELDS.has(field.name) ? (
+                      <div className="public-quote-currency">
+                        <span aria-hidden="true">$</span>
+                        <Input
+                          id={`quote-${field.name}`}
+                          name={field.name}
+                          type="text"
+                          inputMode="numeric"
+                          required={field.required}
+                          autoComplete="off"
+                          value={formatCurrency(
+                            String(values[field.name] ?? ""),
+                          )}
+                          {...invalidProps}
+                          onChange={(e) =>
+                            update(
+                              field.name,
+                              e.target.value.replace(/[^0-9]/g, ""),
+                            )
+                          }
+                        />
+                      </div>
+                    ) : field.type === "boolean" && field.required ? (
+                      <select
+                        id={`quote-${field.name}`}
+                        name={field.name}
+                        required
+                        value={String(values[field.name] ?? "")}
+                        {...invalidProps}
+                        onChange={(e) => update(field.name, e.target.value)}
+                      >
+                        <option value="">{t("Selecciona una opción")}</option>
+                        <option value="true">{t("Sí")}</option>
+                        <option value="false">{t("No")}</option>
+                      </select>
+                    ) : field.type === "boolean" ? (
+                      <input
+                        id={`quote-${field.name}`}
+                        name={field.name}
+                        type="checkbox"
+                        checked={Boolean(values[field.name])}
+                        {...invalidProps}
+                        onChange={(e) => update(field.name, e.target.checked)}
+                      />
+                    ) : field.type === "select" ? (
+                      <select
+                        id={`quote-${field.name}`}
+                        name={field.name}
+                        required={field.required}
+                        value={String(values[field.name] ?? "")}
+                        {...invalidProps}
+                        onChange={(e) => update(field.name, e.target.value)}
+                      >
+                        <option value="">{t("Selecciona una opción")}</option>
+                        {field.options?.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
                       <Input
                         id={`quote-${field.name}`}
                         name={field.name}
-                        type="text"
+                        type={field.type}
                         required={field.required}
+                        step={field.type === "number" ? "any" : undefined}
                         autoComplete="off"
                         value={String(values[field.name] ?? "")}
-                        onChange={(e) => updatePlate(e.target.value)}
-                        onBlur={autoLookupPlate}
-                        onKeyDown={lookupPlateOnEnter}
+                        {...invalidProps}
+                        onChange={(e) => update(field.name, e.target.value)}
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        aria-label={t("Consultar placa")}
-                        title={t("Consultar placa")}
-                        disabled={
-                          lookingUp || !String(values[field.name] ?? "").trim()
-                        }
-                        onClick={() => void lookupPlate()}
-                        className="public-quote-plate-button"
+                    )}
+                    {!CITY_FIELDS.has(field.name) && error && (
+                      <p
+                        id={errorId}
+                        role="alert"
+                        className="public-quote-field-error"
                       >
-                        {lookingUp ? (
-                          <span
-                            aria-hidden="true"
-                            className="public-quote-spinner"
-                          />
-                        ) : (
-                          <svg
-                            aria-hidden="true"
-                            fill="none"
-                            height="15"
-                            stroke="currentColor"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2.2"
-                            viewBox="0 0 24 24"
-                            width="15"
-                          >
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" x2="16.65" y1="21" y2="16.65" />
-                          </svg>
-                        )}
-                      </Button>
-                    </div>
-                  ) : CITY_FIELDS.has(field.name) ? (
-                    <CityAutocomplete
-                      field={field}
-                      value={String(values[field.name] ?? "")}
-                      endpoint={endpoint}
-                      onChange={(next) => update(field.name, next)}
-                    />
-                  ) : field.type === "number" &&
-                    CURRENCY_FIELDS.has(field.name) ? (
-                    <div className="public-quote-currency">
-                      <span aria-hidden="true">$</span>
-                      <Input
-                        id={`quote-${field.name}`}
-                        name={field.name}
-                        type="text"
-                        inputMode="numeric"
-                        required={field.required}
-                        autoComplete="off"
-                        value={formatCurrency(String(values[field.name] ?? ""))}
-                        onChange={(e) =>
-                          update(
-                            field.name,
-                            e.target.value.replace(/[^0-9]/g, ""),
-                          )
-                        }
-                      />
-                    </div>
-                  ) : field.type === "boolean" && field.required ? (
-                    <select
-                      id={`quote-${field.name}`}
-                      name={field.name}
-                      required
-                      value={String(values[field.name] ?? "")}
-                      onChange={(e) => update(field.name, e.target.value)}
-                    >
-                      <option value="">{t("Selecciona una opción")}</option>
-                      <option value="true">{t("Sí")}</option>
-                      <option value="false">{t("No")}</option>
-                    </select>
-                  ) : field.type === "boolean" ? (
-                    <input
-                      id={`quote-${field.name}`}
-                      name={field.name}
-                      type="checkbox"
-                      checked={Boolean(values[field.name])}
-                      onChange={(e) => update(field.name, e.target.checked)}
-                    />
-                  ) : field.type === "select" ? (
-                    <select
-                      id={`quote-${field.name}`}
-                      name={field.name}
-                      required={field.required}
-                      value={String(values[field.name] ?? "")}
-                      onChange={(e) => update(field.name, e.target.value)}
-                    >
-                      <option value="">{t("Selecciona una opción")}</option>
-                      {field.options?.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <Input
-                      id={`quote-${field.name}`}
-                      name={field.name}
-                      type={field.type}
-                      required={field.required}
-                      step={field.type === "number" ? "any" : undefined}
-                      autoComplete="off"
-                      value={String(values[field.name] ?? "")}
-                      onChange={(e) => update(field.name, e.target.value)}
-                    />
-                  )}
-                </div>
-              ))}
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </fieldset>
           {step === 0 && lookupNotice && (
