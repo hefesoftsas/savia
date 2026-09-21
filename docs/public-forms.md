@@ -60,7 +60,9 @@ capability remains authenticated-only.
 By default the response is only an acknowledgement and submission reference.
 For quotation links, administrators may explicitly enable a limited result for the
 current submission: insurer/product labels, premium, currency and supported coverage
-labels. Raw provider responses, credentials and customer identifiers are never
+labels. The public results render the same comparator language as the embedded
+wizard (insurer cards ranked cheapest-first, insurer filter, coverage bullets),
+without quote numbers, history, retry actions, or PDF export. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost
 scales with the number of enabled products. Daily budgets count submissions, not
 provider calls; start with a small budget for public quotations.
