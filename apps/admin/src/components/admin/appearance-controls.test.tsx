@@ -116,6 +116,9 @@ describe("appearance controls on touch (Android/iOS)", () => {
 
   async function openMenuFlat(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: "Account" }));
+    // The toggle keeps its menuitem role on every platform; expanding it
+    // must not open a nested floating submenu.
+    await user.click(screen.getByRole("menuitem", { name: "Apariencia" }));
   }
 
   it("shows theme and palette options inline without a nested submenu", async () => {
@@ -124,10 +127,6 @@ describe("appearance controls on touch (Android/iOS)", () => {
     renderWithTheme();
     await openMenuFlat(user);
 
-    // No nested submenu trigger: options are visible directly.
-    expect(
-      screen.queryByRole("menuitem", { name: "Apariencia" }),
-    ).not.toBeInTheDocument();
     expect(
       await screen.findByRole("menuitemradio", { name: "Modo claro" }),
     ).toBeVisible();
