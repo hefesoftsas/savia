@@ -381,7 +381,7 @@ it("looks up the plate and autofills vehicle fields like the embedded wizard", a
   expect(await screen.findAllByText("✓ Autocompletado")).not.toHaveLength(0);
   expect(screen.getByLabelText(/Código Fasecolda/)).toHaveValue("12345678");
   expect(screen.getByLabelText(/Año del vehículo/)).toHaveValue(2023);
-  expect(screen.getByLabelText(/Valor asegurado/)).toHaveValue(50000000);
+  expect(screen.getByLabelText(/Valor asegurado/)).toHaveValue("50.000.000");
   expect(fetchMock).toHaveBeenCalledTimes(1);
   const [url, init] = fetchMock.mock.calls[0];
   expect(String(url)).toContain("/vehicle-lookup");
@@ -443,6 +443,20 @@ it("suggests DANE cities and stores the selected code", async () => {
   const [url, init] = fetchMock.mock.calls[0];
   expect(String(url)).toContain("/cities?search=bog");
   expect(init.credentials).toBe("omit");
+});
+
+it("formats currency fields with thousands separators but submits raw numbers", async () => {
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  const input = await screen.findByLabelText(/Valor asegurado/);
+  fireEvent.change(input, { target: { value: "50000000" } });
+  expect(input).toHaveValue("50.000.000");
+  fireEvent.change(input, { target: { value: "50.000.000" } });
+  expect(input).toHaveValue("50.000.000");
 });
 
 function LocaleSwitcher() {

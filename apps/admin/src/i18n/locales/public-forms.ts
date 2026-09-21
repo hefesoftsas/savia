@@ -360,6 +360,12 @@ export const publicFormsMessages = {
     "The plate could not be looked up.",
     "Não foi possível consultar a placa.",
   ],
+  "No se pudo completar la cotización. Intenta más tarde o contacta a quien compartió el enlace.":
+    [
+      "No se pudo completar la cotización. Intenta más tarde o contacta a quien compartió el enlace.",
+      "The quote could not be completed. Try later or contact the person who shared the link.",
+      "Não foi possível concluir a cotação. Tente mais tarde ou entre em contato com quem compartilhou o link.",
+    ],
   "Ciudades sugeridas": [
     "Ciudades sugeridas",
     "Suggested cities",

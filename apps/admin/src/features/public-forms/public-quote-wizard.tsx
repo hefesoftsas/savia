@@ -68,6 +68,17 @@ type CityMatch = { code: string; city: string; department: string };
 
 const CITY_FIELDS = new Set(["vehicle_circulationCity", "applicant_city"]);
 
+const CURRENCY_FIELDS = new Set([
+  "vehicle_accessoriesValue",
+  "vehicle_declaredValue",
+]);
+
+function formatCurrency(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "").slice(0, 12);
+  if (!digits) return "";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 /**
  * DANE city autocomplete over public reference data. Selecting a suggestion
  * stores the city code; free text is still accepted and validated server-side.
@@ -591,6 +602,26 @@ export function PublicQuoteForm({
                       endpoint={endpoint}
                       onChange={(next) => update(field.name, next)}
                     />
+                  ) : field.type === "number" &&
+                    CURRENCY_FIELDS.has(field.name) ? (
+                    <div className="public-quote-currency">
+                      <span aria-hidden="true">$</span>
+                      <Input
+                        id={`quote-${field.name}`}
+                        name={field.name}
+                        type="text"
+                        inputMode="numeric"
+                        required={field.required}
+                        autoComplete="off"
+                        value={formatCurrency(String(values[field.name] ?? ""))}
+                        onChange={(e) =>
+                          update(
+                            field.name,
+                            e.target.value.replace(/[^0-9]/g, ""),
+                          )
+                        }
+                      />
+                    </div>
                   ) : field.type === "boolean" && field.required ? (
                     <select
                       id={`quote-${field.name}`}

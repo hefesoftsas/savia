@@ -73,6 +73,8 @@ export function loadCaptcha(): Promise<TurnstileApi> {
 }
 
 export function publicError(status: number) {
+  if (status === 502)
+    return "No se pudo completar la cotización. Intenta más tarde o contacta a quien compartió el enlace.";
   if (status === 503)
     return "Este formulario no está disponible temporalmente. Inténtalo más tarde o contacta a quien compartió el enlace.";
   if (status === 404 || status === 410)
