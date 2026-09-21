@@ -568,6 +568,124 @@ it("shows a live waiting state with timer and skeletons while quoting", async ()
   );
 });
 
+it("rejects a malformed plate before calling the lookup", async () => {
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "AB" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Consultar placa" }));
+  const error = await screen.findByText(/Revisa el campo/);
+  expect(error.textContent).toContain("Placa");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("auto-triggers the lookup on blur for short plates", async () => {
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "ABC" },
+  });
+  fireEvent.blur(screen.getByLabelText(/Placa/));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toContain("/vehicle-lookup");
+  expect(JSON.parse(init.body)).toEqual({ plate: "ABC" });
+});
+
+it("selects the first city with Enter and clears it", async () => {
+  fetchMock.mockResolvedValueOnce(
+    Response.json({
+      matches: [
+        { code: "11001", city: "Bogotá", department: "Bogotá D.C." },
+        { code: "05001", city: "Medellín", department: "Antioquia" },
+      ],
+    }),
+  );
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  const input = await screen.findByLabelText(/Código de ciudad de circulación/);
+  fireEvent.change(input, { target: { value: "bog" } });
+  expect(await screen.findByText("Bogotá (Bogotá D.C.)")).toBeInTheDocument();
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(screen.getByLabelText(/Código de ciudad de circulación/)).toHaveValue(
+    "11001",
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Limpiar ciudad seleccionada" }),
+  );
+  expect(screen.getByLabelText(/Código de ciudad de circulación/)).toHaveValue(
+    "",
+  );
+});
+
+it("keeps future unknown fields visible in the final step", async () => {
+  const extended = {
+    ...quoteDefinition,
+    fields: [
+      ...quoteDefinition.fields,
+      {
+        name: "custom_notes",
+        label: "Notas adicionales",
+        type: "text" as const,
+        required: false,
+      },
+    ],
+  };
+  render(
+    <PublicQuoteForm
+      definition={extended}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "TESTCAR" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  fireEvent.change(await screen.findByLabelText(/Tipo de documento/), {
+    target: { value: "CC" },
+  });
+  fireEvent.change(screen.getByLabelText(/Número de documento/), {
+    target: { value: "123456789" },
+  });
+  fireEvent.change(screen.getByLabelText(/Nombres/), {
+    target: { value: "Ada" },
+  });
+  fireEvent.change(screen.getByLabelText(/Primer apellido/), {
+    target: { value: "Example" },
+  });
+  fireEvent.change(screen.getByLabelText(/Sexo/), { target: { value: "F" } });
+  fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), {
+    target: { value: "1990-01-01" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  expect(await screen.findByLabelText(/Notas adicionales/)).toBeInTheDocument();
+});
+
 function LocaleSwitcher() {
   const setLocale = useSetLocale();
   return (

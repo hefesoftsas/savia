@@ -416,4 +416,10 @@ export const publicFormsMessages = {
     "No cities found.",
     "Nenhuma cidade encontrada.",
   ],
+  "Limpiar ciudad seleccionada": [
+    "Limpiar ciudad seleccionada",
+    "Clear selected city",
+    "Limpar cidade selecionada",
+  ],
+  Limpiar: ["Limpiar", "Clear", "Limpar"],
 } as const;

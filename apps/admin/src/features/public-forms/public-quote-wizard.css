@@ -184,6 +184,42 @@
 
 .public-quote-city {
   position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.public-quote-city > input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.public-quote-city > p,
+.public-quote-city > ul {
+  flex: 1 1 100%;
+}
+
+.public-quote-city-clear {
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.public-quote-city-clear:hover,
+.public-quote-city-clear:focus-visible {
+  background: var(--muted);
+  color: var(--foreground);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
 .public-quote-suggestions {
@@ -241,105 +277,105 @@
   color: var(--destructive);
 }
 
+.public-quote-waiting {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  background: var(--card, #ffffff);
+}
+
+.public-quote-waiting-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.public-quote-waiting-head p {
+  margin: 0 0 0.25rem;
+  line-height: 1.5;
+}
+
+.public-quote-spinner--md {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.125rem;
+  flex: 0 0 auto;
+}
+
+.public-quote-progress {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.public-quote-progress-bar {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--primary);
+  animation: public-quote-slide 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes public-quote-slide {
+  from {
+    margin-inline-start: -40%;
+  }
+  to {
+    margin-inline-start: 100%;
+  }
+}
+
+.public-quote-skeletons {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+.public-quote-skeleton-card {
+  display: grid;
+  gap: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.public-quote-skeleton {
+  border-radius: 0.375rem;
+  background: var(--muted);
+  animation: public-quote-pulse 1.6s ease-in-out infinite;
+}
+
+.public-quote-skeleton--title {
+  height: 1rem;
+  width: 55%;
+}
+
+.public-quote-skeleton--price {
+  height: 1.75rem;
+  width: 45%;
+}
+
+.public-quote-skeleton--line {
+  height: 0.75rem;
+  width: 80%;
+}
+
+@keyframes public-quote-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
 @media (max-width: 640px) {
   .public-quote-grid {
     grid-template-columns: 1fr;
-  }
-
-  .public-quote-waiting {
-    display: grid;
-    gap: 1rem;
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 1.25rem;
-    background: var(--card, #ffffff);
-  }
-
-  .public-quote-waiting-head {
-    display: flex;
-    gap: 0.75rem;
-    align-items: flex-start;
-  }
-
-  .public-quote-waiting-head p {
-    margin: 0 0 0.25rem;
-    line-height: 1.5;
-  }
-
-  .public-quote-spinner--md {
-    width: 1.5rem;
-    height: 1.5rem;
-    margin-top: 0.125rem;
-    flex: 0 0 auto;
-  }
-
-  .public-quote-progress {
-    height: 0.5rem;
-    border-radius: 999px;
-    background: var(--muted);
-    overflow: hidden;
-  }
-
-  .public-quote-progress-bar {
-    height: 100%;
-    width: 40%;
-    border-radius: 999px;
-    background: var(--primary);
-    animation: public-quote-slide 1.4s ease-in-out infinite alternate;
-  }
-
-  @keyframes public-quote-slide {
-    from {
-      margin-inline-start: -40%;
-    }
-    to {
-      margin-inline-start: 100%;
-    }
-  }
-
-  .public-quote-skeletons {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  }
-
-  .public-quote-skeleton-card {
-    display: grid;
-    gap: 0.625rem;
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 1.25rem;
-  }
-
-  .public-quote-skeleton {
-    border-radius: 0.375rem;
-    background: var(--muted);
-    animation: public-quote-pulse 1.6s ease-in-out infinite;
-  }
-
-  .public-quote-skeleton--title {
-    height: 1rem;
-    width: 55%;
-  }
-
-  .public-quote-skeleton--price {
-    height: 1.75rem;
-    width: 45%;
-  }
-
-  .public-quote-skeleton--line {
-    height: 0.75rem;
-    width: 80%;
-  }
-
-  @keyframes public-quote-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.45;
-    }
   }
 
   .public-quote-actions {

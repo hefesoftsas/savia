@@ -40,9 +40,11 @@ snapshot and requires publishing a new link.
 
 The public wizard preloads vehicle data from the plate through
 `POST /api/public/forms/:token/vehicle-lookup`, mirroring the embedded plate
-lookup: typing the plate and pressing the search button (or leaving the field)
-fills the Fasecolda code, production year, and declared values, marking them
-as autocompleted. The server runs the fixed plate-lookup
+lookup: typing the plate and pressing the search button (or leaving the field
+with at least 3 characters) fills the Fasecolda code, production year, and
+declared values, marking them
+as autocompleted. A malformed plate names the exact field instead of calling
+the lookup. The server runs the fixed plate-lookup
 flow from the current trusted settings — visitors can never select actions,
 connections, or flows — and returns only the plate plus those fixed vehicle
 fields; raw provider output stays hidden. The lookup needs no CAPTCHA because
@@ -51,7 +53,8 @@ rate limiter and strict plate format instead of submission quotas.
 
 City fields offer DANE autocomplete through
 `GET /api/public/forms/:token/cities?search=`, scoped to the same quote link.
-DANE codes are public reference data, so the endpoint returns a bounded list
+Pressing Enter selects the first suggestion and the clear button resets the
+field. DANE codes are public reference data, so the endpoint returns a bounded list
 of code/city/department triples with no upstream internals and no provider
 cost. Applicant identity fields stay manual: looking up CRM records by
 document number would disclose personal data to anyone typing an ID, so that

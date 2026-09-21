@@ -131,21 +131,30 @@ function stepsFor(
   fields: QuoteField[],
   titles: { vehicle: string; applicant: string; contact: string },
 ) {
+  const vehicle = fields.filter((f) => f.name.startsWith("vehicle_"));
+  const applicant = fields.filter((f) => APPLICANT_STEP_NAMES.has(f.name));
+  const contact = fields.filter((f) => CONTACT_STEP_NAMES.has(f.name));
+  // Future definition fields outside the known sets stay visible in the
+  // final step instead of failing validation invisibly.
+  const known = new Set(
+    [...vehicle, ...applicant, ...contact].map((f) => f.name),
+  );
+  const extra = fields.filter((f) => !known.has(f.name));
   return [
     {
       id: "vehicle",
       title: titles.vehicle,
-      fields: fields.filter((f) => f.name.startsWith("vehicle_")),
+      fields: vehicle,
     },
     {
       id: "applicant",
       title: titles.applicant,
-      fields: fields.filter((f) => APPLICANT_STEP_NAMES.has(f.name)),
+      fields: applicant,
     },
     {
       id: "contact",
       title: titles.contact,
-      fields: fields.filter((f) => CONTACT_STEP_NAMES.has(f.name)),
+      fields: [...contact, ...extra],
     },
   ];
 }
@@ -270,10 +279,37 @@ function CityAutocomplete({
         }}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
+          else if (
+            e.key === "Enter" &&
+            suggestions.length > 0 &&
+            suggestions[0]
+          ) {
+            e.preventDefault();
+            onChange(suggestions[0].code);
+            setSuggestions([]);
+            setOpen(false);
+          }
         }}
         aria-expanded={open}
         aria-controls={listId}
+        aria-autocomplete="list"
       />
+      {value && (
+        <button
+          type="button"
+          className="public-quote-city-clear"
+          aria-label={t("Limpiar ciudad seleccionada")}
+          title={t("Limpiar")}
+          onClick={() => {
+            onChange("");
+            setSuggestions([]);
+            setOpen(false);
+            document.getElementById(`quote-${field.name}`)?.focus();
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      )}
       {error && (
         <p
           id={`quote-${field.name}-error`}
@@ -417,6 +453,7 @@ export function PublicQuoteForm({
     });
     setLookupFields([]);
     setLookupNotice("");
+    lastLookedUpPlate.current = "";
     clearFieldError("vehicle_plate");
   }
 
@@ -425,6 +462,17 @@ export function PublicQuoteForm({
       .trim()
       .toUpperCase();
     if (!rawPlate || lookingUp) return;
+    // Mirror the server plate format so a typo names the field instead of
+    // showing the generic lookup failure.
+    if (!/^[A-Z0-9]{3,10}$/.test(rawPlate)) {
+      const label =
+        definition.fields.find((f) => f.name === "vehicle_plate")?.label ??
+        "Placa";
+      const message = t("Revisa el campo %{field}.", { field: label });
+      setFieldErrors((prev) => ({ ...prev, vehicle_plate: message }));
+      document.getElementById("quote-vehicle_plate")?.focus();
+      return;
+    }
     setLookingUp(true);
     setLookupNotice("");
     try {
@@ -488,11 +536,13 @@ export function PublicQuoteForm({
   }
 
   function autoLookupPlate() {
-    const plate = String(values["vehicle_plate"] ?? "").trim();
+    const plate = String(values["vehicle_plate"] ?? "")
+      .trim()
+      .toUpperCase();
     if (
       plate &&
-      plate.length >= 5 &&
-      plate.toUpperCase() !== lastLookedUpPlate.current &&
+      plate.length >= 3 &&
+      plate !== lastLookedUpPlate.current &&
       !lookingUp
     ) {
       void lookupPlate();
