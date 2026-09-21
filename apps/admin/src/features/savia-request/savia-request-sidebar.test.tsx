@@ -179,6 +179,21 @@ describe("SaviaRequestSidebar", () => {
     expect(await screen.findByRole("button", { name: "Vacías" })).toBeVisible();
   });
 
+  it("opens the secretos screen from the sidebar", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+
+    await user.click(await screen.findByRole("button", { name: "Secretos" }));
+
+    expect(await screen.findByTestId("selection")).toHaveTextContent(
+      "?view=secretos",
+    );
+    expect(screen.getByRole("button", { name: "Secretos" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("deletes an empty folder after confirmation", async () => {
     const user = userEvent.setup();
     const { request } = renderSidebar({

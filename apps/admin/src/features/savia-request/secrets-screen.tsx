@@ -1,0 +1,439 @@
+/*
+ * Direction contract — Secrets screen (Operate, incumbent admin world).
+ * THESIS: secret migration belongs to no single flow; one screen moves every
+ * flow at once, and nothing applies before the admin reviews the preview.
+ * OWN-WORLD: established admin chrome (max-w-6xl canvas, shadcn Card/Button,
+ * muted descriptions, status/alert message roles, KeyRound motif). No new
+ * visual language, no hero metrics, no decorative motion.
+ * STORY: the admin opens Secretos in the sidebar, exports one JSON for the
+ * whole environment, imports it in the other one, and reviews per-flow
+ * results. Empty file values never overwrite saved values.
+ * FIRST VIEWPORT: header with task description, then two task cards side by
+ * side (Exportar / Importar); import grows into preview and results below.
+ * FORM: bulk-only transfer; per-flow editing stays in the flow workspace.
+ */
+import { useRef, useState } from "react";
+import { Download, KeyRound, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSaviaRequestWorkspace } from "./savia-request-provider";
+import type { SaviaRequestApi } from "./savia-request-api";
+import {
+  buildSecretsFile,
+  downloadJsonFile,
+  mergeVariables,
+  parseSecretsFile,
+  transferFileName,
+  type SecretsFile,
+  type TransferFlow,
+} from "./secrets-transfer";
+import type { RequestVariable } from "./types";
+
+type Message = { kind: "status" | "alert"; text: string } | null;
+
+type PreviewEntry = {
+  flowId: string;
+  name: string;
+  known: boolean;
+  withValue: number;
+  empty: number;
+};
+
+type ImportResult = {
+  flowId: string;
+  name: string;
+  applied: number;
+  skipped: number;
+  status: "updated" | "unchanged" | "unknown" | "error";
+  error?: string;
+};
+
+async function resolveVariables(
+  api: SaviaRequestApi,
+  flowId: string,
+  variables: RequestVariable[],
+): Promise<TransferFlow> {
+  const resolved = [];
+  for (const variable of variables) {
+    if (variable.secret && !variable.value && variable.configured) {
+      const revealed = await api.revealVariable(flowId, variable.key);
+      resolved.push({
+        key: variable.key,
+        value: revealed.value,
+        secret: variable.secret,
+      });
+    } else {
+      resolved.push({
+        key: variable.key,
+        value: variable.value,
+        secret: variable.secret,
+      });
+    }
+  }
+  return { flowId, variables: resolved };
+}
+
+export function SecretsScreen() {
+  const { api, busy: parentBusy, dirty } = useSaviaRequestWorkspace();
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [message, setMessage] = useState<Message>(null);
+  const [preview, setPreview] = useState<SecretsFile | null>(null);
+  const [previewEntries, setPreviewEntries] = useState<PreviewEntry[]>([]);
+  const [results, setResults] = useState<ImportResult[] | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const disabled = parentBusy || busy || dirty;
+
+  const exportAll = async () => {
+    setBusy(true);
+    setMessage(null);
+    setResults(null);
+    try {
+      const summaries = await api.listFlows();
+      const entries: TransferFlow[] = [];
+      for (const [index, summary] of summaries.entries()) {
+        setProgress(`Exportando ${index + 1} de ${summaries.length} flows…`);
+        const detail = await api.readFlow(summary.id);
+        if (detail.variables.length)
+          entries.push(
+            await resolveVariables(api, summary.id, detail.variables),
+          );
+      }
+      if (!entries.length) throw new Error("No hay variables para exportar.");
+      const withValue = entries.reduce(
+        (total, entry) =>
+          total + entry.variables.filter((variable) => variable.value).length,
+        0,
+      );
+      downloadJsonFile(transferFileName("todos"), buildSecretsFile(entries));
+      setMessage({
+        kind: "status",
+        text: `Secretos de ${entries.length} flow(s) exportados (${withValue} con valor). Guárdalos en un lugar seguro.`,
+      });
+    } catch (exception) {
+      setMessage({
+        kind: "alert",
+        text:
+          exception instanceof Error
+            ? exception.message
+            : "No pudimos exportar los secretos.",
+      });
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  const previewFile = async (file: File) => {
+    setBusy(true);
+    setMessage(null);
+    setResults(null);
+    try {
+      const parsed = parseSecretsFile(await file.text());
+      const summaries = await api.listFlows();
+      const names = new Map(summaries.map((flow) => [flow.id, flow.name]));
+      setPreviewEntries(
+        parsed.flows.map((entry) => ({
+          flowId: entry.flowId,
+          name: names.get(entry.flowId) ?? entry.flowId,
+          known: names.has(entry.flowId),
+          withValue: entry.variables.filter((variable) => variable.value)
+            .length,
+          empty: entry.variables.filter((variable) => !variable.value).length,
+        })),
+      );
+      setPreview(parsed);
+    } catch (exception) {
+      setPreview(null);
+      setPreviewEntries([]);
+      setMessage({
+        kind: "alert",
+        text:
+          exception instanceof Error
+            ? exception.message
+            : "No pudimos leer el archivo.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applyImport = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setMessage(null);
+    setResults(null);
+    try {
+      const outcomes: ImportResult[] = [];
+      const known = previewEntries.filter((entry) => entry.known);
+      for (const [index, entry] of known.entries()) {
+        setProgress(`Aplicando ${index + 1} de ${known.length} flows…`);
+        const fileEntry = preview.flows.find(
+          (candidate) => candidate.flowId === entry.flowId,
+        )!;
+        try {
+          const current = await api.readFlow(entry.flowId);
+          const merged = mergeVariables(current.variables, fileEntry.variables);
+          if (merged.applied)
+            await api.saveVariables(entry.flowId, merged.merged);
+          outcomes.push({
+            flowId: entry.flowId,
+            name: entry.name,
+            applied: merged.applied,
+            skipped: merged.skippedEmpty,
+            status: merged.applied ? "updated" : "unchanged",
+          });
+        } catch (exception) {
+          outcomes.push({
+            flowId: entry.flowId,
+            name: entry.name,
+            applied: 0,
+            skipped: 0,
+            status: "error",
+            error:
+              exception instanceof Error
+                ? exception.message
+                : "No se pudo aplicar.",
+          });
+        }
+      }
+      for (const entry of previewEntries.filter((item) => !item.known))
+        outcomes.push({
+          flowId: entry.flowId,
+          name: entry.name,
+          applied: 0,
+          skipped: 0,
+          status: "unknown",
+        });
+      setResults(outcomes);
+      const applied = outcomes.reduce((total, item) => total + item.applied, 0);
+      const errors = outcomes.filter((item) => item.status === "error").length;
+      if (!applied && !errors)
+        throw new Error("El archivo no trae valores para importar.");
+      setMessage({
+        kind: errors ? "alert" : "status",
+        text:
+          `Importación completa: ${applied} valor(es) en ` +
+          `${outcomes.filter((item) => item.status === "updated").length} flow(s)` +
+          (errors ? ` · ${errors} flow(s) con error` : "") +
+          ".",
+      });
+      setPreview(null);
+      setPreviewEntries([]);
+    } catch (exception) {
+      setMessage({
+        kind: "alert",
+        text:
+          exception instanceof Error
+            ? exception.message
+            : "No pudimos importar los secretos.",
+      });
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  return (
+    <main className="mx-auto w-full max-w-6xl pb-10">
+      <header className="py-6">
+        <div className="flex items-center gap-2 text-sm font-medium text-primary">
+          <KeyRound className="size-4" aria-hidden="true" />
+          Administración
+        </div>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Secretos</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Mueve los secretos de todos los flows entre ambientes con un único
+          archivo. Exporta en el ambiente origen e impórtalo en el destino.
+        </p>
+      </header>
+
+      {dirty ? (
+        <p
+          className="mb-5 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          Tienes cambios sin guardar en un flow. Guárdalos antes de exportar o
+          importar para trabajar sobre lo guardado.
+        </p>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Exportar todo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Descarga un archivo JSON con las variables de todos los flows,
+              incluyendo los valores de los secretos.
+            </p>
+            <Button
+              className="mt-4"
+              disabled={disabled}
+              onClick={() => void exportAll()}
+              type="button"
+            >
+              <Download />
+              {progress ?? "Exportar todos los secretos"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Importar todo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Sube el archivo exportado en el otro ambiente. Revisa el resumen y
+              aplica la importación a todos los flows a la vez.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                disabled={disabled}
+                onClick={() => fileInput.current?.click()}
+                type="button"
+                variant="outline"
+              >
+                <Upload /> Seleccionar archivo
+              </Button>
+              {preview ? (
+                <>
+                  <Button
+                    disabled={disabled}
+                    onClick={() => void applyImport()}
+                    type="button"
+                  >
+                    {progress ?? "Aplicar importación"}
+                  </Button>
+                  <Button
+                    disabled={disabled}
+                    onClick={() => {
+                      setPreview(null);
+                      setPreviewEntries([]);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    Descartar
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            <input
+              accept=".json,application/json"
+              aria-label="Archivo de secretos"
+              className="hidden"
+              disabled={disabled}
+              onChange={(event) => {
+                const [file] = event.target.files ?? [];
+                event.target.value = "";
+                if (file) void previewFile(file);
+              }}
+              ref={fileInput}
+              type="file"
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      <p className="mt-5 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+        Los archivos contienen secretos en texto plano. Guárdalos en un lugar
+        seguro, elimínalos después de importarlos y nunca los subas a Git. Los
+        valores vacíos nunca sobrescriben lo ya guardado en el destino.
+      </p>
+
+      {message ? (
+        <p
+          className={
+            message.kind === "status"
+              ? "mt-4 rounded-md bg-primary/8 px-3 py-2 text-sm text-primary"
+              : "mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          }
+          role={message.kind}
+        >
+          {message.text}
+        </p>
+      ) : null}
+
+      {preview ? (
+        <section
+          aria-label="Resumen del archivo"
+          className="mt-5 rounded-lg border p-4"
+        >
+          <h2 className="text-base font-semibold">Revisa antes de aplicar</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {preview.flows.length} flow(s) en el archivo. Nada se ha guardado
+            todavía.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-150 text-sm">
+              <thead className="border-b text-left text-muted-foreground">
+                <tr>
+                  <th className="pb-2 pr-3 font-medium">Flow</th>
+                  <th className="pb-2 pr-3 font-medium">Con valor</th>
+                  <th className="pb-2 pr-3 font-medium">Vacíos</th>
+                  <th className="pb-2 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewEntries.map((entry) => (
+                  <tr className="border-b last:border-0" key={entry.flowId}>
+                    <td className="py-2 pr-3 font-medium">{entry.name}</td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {entry.withValue}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">{entry.empty}</td>
+                    <td className="py-2">
+                      {entry.known ? "Listo" : "Desconocido · se omitirá"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      {results ? (
+        <section
+          aria-label="Resultado de la importación"
+          className="mt-5 rounded-lg border p-4"
+        >
+          <h2 className="text-base font-semibold">Resultado</h2>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-150 text-sm">
+              <thead className="border-b text-left text-muted-foreground">
+                <tr>
+                  <th className="pb-2 pr-3 font-medium">Flow</th>
+                  <th className="pb-2 pr-3 font-medium">Aplicados</th>
+                  <th className="pb-2 pr-3 font-medium">Omitidos</th>
+                  <th className="pb-2 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((result) => (
+                  <tr className="border-b last:border-0" key={result.flowId}>
+                    <td className="py-2 pr-3 font-medium">{result.name}</td>
+                    <td className="py-2 pr-3 tabular-nums">{result.applied}</td>
+                    <td className="py-2 pr-3 tabular-nums">{result.skipped}</td>
+                    <td className="py-2">
+                      {result.status === "updated"
+                        ? "Actualizado"
+                        : result.status === "unchanged"
+                          ? "Sin cambios"
+                          : result.status === "unknown"
+                            ? "Omitido · no existe aquí"
+                            : (result.error ?? "Error")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+    </main>
+  );
+}

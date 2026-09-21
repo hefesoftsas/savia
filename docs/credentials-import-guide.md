@@ -8,13 +8,12 @@ También cubre cómo mover secretos ya configurados entre ambientes (por ejemplo
 
 ## 0. Mover secretos entre ambientes desde la UI
 
-En Savia Request, pestaña **Variables**, la sección **Mover secretos entre ambientes** permite exportar e importar secretos sin usar la terminal. Requiere rol de administrador de plataforma.
+En el menú lateral de Savia Request, la sección **Secretos** abre una pantalla dedicada que exporta e importa los secretos de todos los flows a la vez, sin usar la terminal. Requiere rol de administrador de plataforma.
 
-1. En el ambiente origen, abre el flow y su pestaña **Variables**.
-2. Usa **Exportar flow** para descargar solo ese flow, o **Exportar todos** para descargar todos los flows con variables en un único archivo `savia-request-secretos-*.json`.
-3. En el ambiente destino, abre la misma pantalla y usa **Importar al flow** o **Importar todos** con ese archivo.
-4. La importación al flow actual queda en el borrador: revisa los valores y pulsa **Guardar** para aplicarlos. La importación masiva guarda directamente los demás flows.
-5. Elimina el archivo una vez completada la migración.
+1. En el ambiente origen, abre **Secretos** y pulsa **Exportar todos los secretos** para descargar un único archivo `savia-request-secretos-*.json` con todos los flows.
+2. En el ambiente destino, abre **Secretos**, pulsa **Seleccionar archivo** y revisa el resumen (flows, valores con contenido y flows desconocidos que se omitirán).
+3. Pulsa **Aplicar importación** y revisa el resultado por flow.
+4. Elimina el archivo una vez completada la migración.
 
 Reglas de la transferencia:
 
