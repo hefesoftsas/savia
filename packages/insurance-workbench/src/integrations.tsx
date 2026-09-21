@@ -63,14 +63,15 @@ export function History({
             </thead>
             <tbody>
               {runs.map((run) => {
-                const receipt = run.output as Partial<IntegrationReceipt> | null;
+                const receipt =
+                  run.output as Partial<IntegrationReceipt> | null;
                 return (
                   <tr key={run.runId}>
                     <td>{new Date(run.createdAt).toLocaleString("es-CO")}</td>
                     <td>{run.actionId}</td>
                     <td>
                       {receipt?.state
-                        ? stateLabels[receipt.state] ?? receipt.state
+                        ? (stateLabels[receipt.state] ?? receipt.state)
                         : run.status === "failed"
                           ? t("No confirmado / revisar")
                           : run.status === "pending"

@@ -78,8 +78,17 @@ and remain subject to the platform's standard collection access rules.
 ## Development and release
 
 Each package owns its manifest, collection requirements, domain rules and screen
-configuration. `@savia/insurance-workbench` shares only sector UI/date/currency
-helpers. `@savia/release-catalog` assembles the contributions; platform hosts do
+configuration. `@savia/insurance-workbench` is the shared UI layer for the whole
+solution: sector date/currency helpers, the record editor (opened as a right-side
+drawer over the worklist), and three shells that every screen must render in —
+the operational workbench (`.iw-workbench` via `Workbench`), the provider
+integration shell (`@savia/insurance-workbench/integrations`: `Shell`,
+`History`, `IntegrationStatus`, `loadAll`) and the finance shell
+(`.iw-finance` styles in `@savia/insurance-workbench/workbench.css`). All three
+resolve the same `--iw-*` token aliases from host theme values; integration and
+finance plugins use them instead of owning stylesheets. The quote wizard keeps
+its own print-style screen CSS on top of the host tokens.
+`@savia/release-catalog` assembles the contributions; platform hosts do
 not import the sector packages directly.
 
 ```sh

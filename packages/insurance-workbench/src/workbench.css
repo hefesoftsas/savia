@@ -1,4 +1,6 @@
-.iw-workbench {
+.iw-workbench,
+.insurance-integration,
+.iw-finance {
   --iw-bg: var(--background, #fff);
   --iw-ink: var(--foreground, #172624);
   --iw-muted: var(--muted-foreground, #53645e);
@@ -9,6 +11,8 @@
   --iw-danger: var(--destructive, #a62a30);
   --iw-warning: #81520d;
   --iw-success: #236444;
+}
+.iw-workbench {
   color: var(--iw-ink);
   background: var(--iw-bg);
   font-family: inherit;
@@ -626,7 +630,7 @@
 /* Integration shell — shared screens for provider-connected plugins. */
 .insurance-integration {
   font: inherit;
-  color: var(--foreground);
+  color: var(--iw-ink);
   padding: 1.5rem;
   max-width: 100rem;
   display: grid;
@@ -665,11 +669,11 @@
 .insurance-integration button {
   font: inherit;
   min-height: 40px;
-  border: 1px solid var(--border, #dce4df);
+  border: 1px solid var(--iw-line);
   border-radius: 7px;
   padding: 0.55rem 0.7rem;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--iw-bg);
+  color: var(--iw-ink);
 }
 .insurance-integration textarea {
   min-height: 100px;
@@ -680,15 +684,15 @@
   width: fit-content;
 }
 .insurance-integration button[type="submit"] {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--iw-accent);
+  color: var(--iw-on-accent);
 }
 .insurance-integration button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .insurance-integration :is(button, input, select, textarea):focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--iw-accent);
   outline-offset: 3px;
 }
 .insurance-integration button:hover:not(:disabled) {
@@ -709,7 +713,7 @@
 .insurance-integration td,
 .insurance-integration th {
   padding: 0.75rem;
-  border-bottom: 1px solid var(--border, #dce4df);
+  border-bottom: 1px solid var(--iw-line);
   vertical-align: top;
 }
 .insurance-integration pre {
@@ -717,11 +721,11 @@
   overflow-wrap: anywhere;
   font: inherit;
   padding: 1rem;
-  background: var(--muted);
+  background: var(--iw-soft);
   border-radius: 7px;
 }
 .insurance-integration [role="alert"] {
-  color: var(--destructive, #a62a30);
+  color: var(--iw-danger);
 }
 .integration-actions {
   display: flex;
@@ -759,7 +763,7 @@
   max-width: 90rem;
   margin: auto;
   padding: 1.5rem;
-  color: var(--foreground, #172624);
+  color: var(--iw-ink);
   font: inherit;
 }
 .iw-finance header {
@@ -777,10 +781,10 @@
 .iw-finance p {
   max-width: 72ch;
   line-height: 1.6;
-  color: var(--muted-foreground, #53645e);
+  color: var(--iw-muted);
 }
 .iw-finance section {
-  border-top: 1px solid var(--border, #dce4df);
+  border-top: 1px solid var(--iw-line);
   padding-block: 1.5rem;
 }
 .iw-finance h2 {
@@ -795,10 +799,10 @@
 .iw-finance :is(input, select, textarea, button) {
   font: inherit;
   min-height: 44px;
-  border: 1px solid var(--border, #dce4df);
-  border-radius: 6px;
+  border: 1px solid var(--iw-line);
+  border-radius: 7px;
   padding: 0.6rem;
-  background: var(--background, #fff);
+  background: var(--iw-bg);
   color: inherit;
 }
 .iw-finance textarea {
@@ -813,10 +817,10 @@
   cursor: not-allowed;
 }
 .iw-finance button:hover:not(:disabled) {
-  background: var(--muted, #f3f6f4);
+  background: var(--iw-soft);
 }
 .iw-finance :focus-visible {
-  outline: 2px solid var(--primary, #21604b);
+  outline: 2px solid var(--iw-accent);
   outline-offset: 3px;
 }
 .iw-finance .iw-controls {
@@ -841,20 +845,20 @@
 .iw-finance th,
 .iw-finance td {
   padding: 0.75rem;
-  border-bottom: 1px solid var(--border, #dce4df);
+  border-bottom: 1px solid var(--iw-line);
   white-space: nowrap;
 }
 .iw-finance th {
   font-weight: 600;
 }
 .iw-finance [role="alert"] {
-  color: var(--destructive, #a62a30);
+  color: var(--iw-danger);
   padding: 1rem;
   border: 1px solid currentColor;
 }
 .iw-finance .iw-primary {
-  background: var(--primary, #21604b);
-  color: var(--primary-foreground, #fff);
+  background: var(--iw-accent);
+  color: var(--iw-on-accent);
 }
 .iw-finance small {
   display: block;

@@ -647,9 +647,10 @@ export function QuoteResults({
                 style={{
                   background: "var(--primary)",
                   height: "100%",
-                  width: `${progressPercent}%`,
-                  transition: "width 300ms ease",
-                  borderRadius: "999px",
+                  width: "100%",
+                  transform: `scaleX(${progressPercent / 100})`,
+                  transformOrigin: "left",
+                  transition: "transform 300ms ease",
                 }}
               />
             ) : (
