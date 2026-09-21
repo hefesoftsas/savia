@@ -241,7 +241,7 @@ it("advances on valid step and returns with Anterior", async () => {
   expect(screen.getByLabelText(/Placa/)).toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText(/Placa/), {
-    target: { value: "ABC123" },
+    target: { value: "TESTCAR" },
   });
   fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
     target: { value: "12345678" },
@@ -275,7 +275,7 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
   );
   // Step 1 -> fill vehicle.
   fireEvent.change(await screen.findByLabelText(/Placa/), {
-    target: { value: "abc123" },
+    target: { value: "testcar" },
   });
   fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
     target: { value: "12345678" },
@@ -348,7 +348,7 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
   const [, init] = fetchMock.mock.calls[0];
   expect(init.credentials).toBe("omit");
   const payload = JSON.parse(init.body);
-  expect(payload.values.vehicle_plate).toBe("ABC123");
+  expect(payload.values.vehicle_plate).toBe("TESTCAR");
   expect(payload.values.applicant_email).toBe("ada@example.test");
   expect(payload.values).not.toHaveProperty("flowId");
   expect(payload.values).not.toHaveProperty("actionId");
@@ -359,7 +359,7 @@ it("looks up the plate and autofills vehicle fields like the embedded wizard", a
   fetchMock.mockResolvedValueOnce(
     new Response(
       JSON.stringify({
-        plate: "ABC123",
+        plate: "TESTCAR",
         fasecoldaCode: "12345678",
         productionYear: 2023,
         declaredValue: 50000000,
@@ -373,10 +373,10 @@ it("looks up the plate and autofills vehicle fields like the embedded wizard", a
     />,
   );
   fireEvent.change(await screen.findByLabelText(/Placa/), {
-    target: { value: "abc123" },
+    target: { value: "testcar" },
   });
   // The typed plate is normalized to uppercase.
-  expect(screen.getByLabelText(/Placa/)).toHaveValue("ABC123");
+  expect(screen.getByLabelText(/Placa/)).toHaveValue("TESTCAR");
   fireEvent.click(screen.getByRole("button", { name: "Consultar placa" }));
   expect(await screen.findAllByText("✓ Autocompletado")).not.toHaveLength(0);
   expect(screen.getByLabelText(/Código Fasecolda/)).toHaveValue("12345678");
@@ -386,10 +386,10 @@ it("looks up the plate and autofills vehicle fields like the embedded wizard", a
   const [url, init] = fetchMock.mock.calls[0];
   expect(String(url)).toContain("/vehicle-lookup");
   expect(init.credentials).toBe("omit");
-  expect(JSON.parse(init.body)).toEqual({ plate: "ABC123" });
+  expect(JSON.parse(init.body)).toEqual({ plate: "TESTCAR" });
   // Editing the plate clears the autofilled values.
   fireEvent.change(screen.getByLabelText(/Placa/), {
-    target: { value: "XYZ999" },
+    target: { value: "DEMOCAR" },
   });
   expect(screen.getByLabelText(/Código Fasecolda/)).toHaveValue("");
   expect(screen.queryByText("✓ Autocompletado")).not.toBeInTheDocument();
@@ -404,7 +404,7 @@ it("auto-triggers the lookup on blur and reports an empty result", async () => {
     />,
   );
   fireEvent.change(await screen.findByLabelText(/Placa/), {
-    target: { value: "ZZZ000" },
+    target: { value: "SINCAR" },
   });
   fireEvent.blur(screen.getByLabelText(/Placa/));
   expect(
@@ -447,7 +447,7 @@ it("keeps field names and step controls across locales with Spanish by default",
     screen.getByRole("button", { name: "Siguiente paso" }),
   ).toBeInTheDocument();
   const plate = screen.getByLabelText(/Placa/);
-  fireEvent.change(plate, { target: { value: "ABC123" } });
+  fireEvent.change(plate, { target: { value: "TESTCAR" } });
 
   fireEvent.click(screen.getByText("EN"));
   await screen.findByText("INSURANCE · LIGHT VEHICLES");
@@ -457,6 +457,6 @@ it("keeps field names and step controls across locales with Spanish by default",
   expect(screen.getByText("Vehicle")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Next step" })).toBeInTheDocument();
   // Business content preserved, field names intact.
-  expect(screen.getByLabelText(/Placa/)).toHaveValue("ABC123");
+  expect(screen.getByLabelText(/Placa/)).toHaveValue("TESTCAR");
   expect(widget?.language).toBe("en");
 });

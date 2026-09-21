@@ -598,7 +598,7 @@ it("ignores the bypass flag outside localhost origins", async () => {
 });
 it("serves the public plate lookup only for quote links with a lookup adapter", async () => {
   const lookupVehicle = vi.fn(async () => ({
-    plate: "ABC123",
+    plate: "TESTCAR",
     fasecoldaCode: "12345678",
     productionYear: 2023,
   }));
@@ -627,7 +627,7 @@ it("serves the public plate lookup only for quote links with a lookup adapter", 
   );
   expect(found.status).toBe(200);
   expect(await found.json()).toEqual({
-    plate: "ABC123",
+    plate: "TESTCAR",
     fasecoldaCode: "12345678",
     productionYear: 2023,
   });
@@ -647,7 +647,7 @@ it("serves the public plate lookup only for quote links with a lookup adapter", 
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ plate: "ABC123" }),
+          body: JSON.stringify({ plate: "TESTCAR" }),
         },
       )
     ).status,
@@ -659,7 +659,7 @@ it("serves the public plate lookup only for quote links with a lookup adapter", 
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ plate: "ABC123" }),
+          body: JSON.stringify({ plate: "TESTCAR" }),
         },
       )
     ).status,
