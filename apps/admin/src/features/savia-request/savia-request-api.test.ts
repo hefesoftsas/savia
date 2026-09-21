@@ -50,7 +50,9 @@ describe("createSaviaRequestApi", () => {
       .mockResolvedValueOnce(jsonResponse({ ok: true }))
       .mockResolvedValueOnce(jsonResponse({ ok: true }))
       .mockResolvedValueOnce(jsonResponse({ id: "version" }))
-      .mockResolvedValueOnce(jsonResponse({ value: "secret" }));
+      .mockResolvedValueOnce(jsonResponse({ value: "secret" }))
+      .mockResolvedValueOnce(jsonResponse({ version: 1, flows: [] }))
+      .mockResolvedValueOnce(jsonResponse({ results: [] }));
     const api = createSaviaRequestApi(createClient(fetcher));
 
     await api.createFolder("Cotizaciones");
@@ -62,6 +64,8 @@ describe("createSaviaRequestApi", () => {
     ]);
     await api.publish("autos");
     await api.revealVariable("autos", "token");
+    await api.exportSecrets();
+    await api.importSecrets({ version: 1, exportedAt: "hoy", flows: [] });
 
     expect(
       fetcher.mock.calls.map(([url, init]) => [
@@ -104,6 +108,16 @@ describe("createSaviaRequestApi", () => {
         "https://admin.test/v1/savia-request/api/flows/autos/variables/reveal",
         "POST",
         '{"key":"token"}',
+      ],
+      [
+        "https://admin.test/v1/savia-request/api/variables/export",
+        "GET",
+        undefined,
+      ],
+      [
+        "https://admin.test/v1/savia-request/api/variables/import",
+        "POST",
+        '{"version":1,"exportedAt":"hoy","flows":[]}',
       ],
     ]);
   });

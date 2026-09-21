@@ -6,56 +6,72 @@ import type { AppServices } from "@/app-services";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { SaviaRequestProvider } from "./savia-request-provider";
 import { SecretsScreen } from "./secrets-screen";
-import type { RequestFlow } from "./types";
 
 vi.mock("ra-core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("ra-core")>()),
   useCanAccess: () => ({ canAccess: true, isPending: false }),
 }));
 
-const autos: RequestFlow = {
-  id: "autos",
-  name: "Autos",
-  folderPath: "Cotizaciones",
-  description: "",
-  input: {},
-  variables: [
-    { key: "api_token", value: "", secret: true, configured: true },
-    { key: "endpoint", value: "https://provider.test", secret: false },
-  ],
-  versions: [],
-  steps: [],
-};
-
-const hogar: RequestFlow = {
-  ...autos,
-  id: "hogar",
-  name: "Hogar",
-  variables: [{ key: "hogar_key", value: "guardado", secret: true }],
-};
-
 function renderSecretsScreen() {
   const get = vi.fn(async (path: string) => {
-    if (path.endsWith("/flows")) {
-      return [autos, hogar].map(({ id, name, folderPath, steps }) => ({
-        id,
-        name,
-        folderPath,
-        steps,
-      }));
-    }
+    if (path.endsWith("/flows"))
+      return [
+        { id: "autos", name: "Autos", folderPath: "Cotizaciones", steps: [] },
+        { id: "hogar", name: "Hogar", folderPath: "Cotizaciones", steps: [] },
+      ];
     if (path.endsWith("/folders")) return ["Cotizaciones"];
-    if (path.endsWith("/flows/autos")) return autos;
-    if (path.endsWith("/flows/hogar")) return hogar;
+    if (path.endsWith("/variables/export"))
+      return {
+        version: 1,
+        exportedAt: "2026-09-20T00:00:00.000Z",
+        flows: [
+          {
+            flowId: "autos",
+            variables: [
+              { key: "api_token", value: "super-secreto", secret: true },
+              {
+                key: "endpoint",
+                value: "https://provider.test",
+                secret: false,
+              },
+            ],
+          },
+          {
+            flowId: "hogar",
+            variables: [{ key: "hogar_key", value: "guardado", secret: true }],
+          },
+        ],
+      };
     throw new Error(`Ruta inesperada: ${path}`);
   });
-  const put = vi.fn().mockResolvedValue({ ok: true });
   const post = vi.fn(async (path: string) => {
-    if (path.endsWith("/variables/reveal")) return { value: "super-secreto" };
+    if (path.endsWith("/variables/import"))
+      return {
+        results: [
+          {
+            flowId: "autos",
+            applied: 1,
+            skipped: 1,
+            status: "updated",
+          },
+          {
+            flowId: "desconocido",
+            applied: 0,
+            skipped: 0,
+            status: "unknown",
+          },
+        ],
+      };
     throw new Error(`Ruta inesperada: ${path}`);
   });
   const services = {
-    apiClient: { get, put, post, delete: vi.fn(), request: vi.fn() },
+    apiClient: {
+      get,
+      put: vi.fn(),
+      post,
+      delete: vi.fn(),
+      request: vi.fn(),
+    },
     requestResults: { read: vi.fn() },
   } as unknown as AppServices;
   render(
@@ -67,7 +83,7 @@ function renderSecretsScreen() {
       </AppServicesProvider>
     </MemoryRouter>,
   );
-  return { get, put, post };
+  return { get, post };
 }
 
 function mockDownload() {
@@ -102,8 +118,8 @@ afterEach(() => {
 });
 
 describe("SecretsScreen", () => {
-  it("exports every flow at once revealing masked secrets", async () => {
-    const { post } = renderSecretsScreen();
+  it("exports every flow with a single request", async () => {
+    const { get } = renderSecretsScreen();
     const user = userEvent.setup();
     const download = mockDownload();
     try {
@@ -113,15 +129,14 @@ describe("SecretsScreen", () => {
         }),
       );
       await waitFor(() =>
-        expect(post).toHaveBeenCalledWith(
-          "/v1/savia-request/api/flows/autos/variables/reveal",
-          { key: "api_token" },
+        expect(get).toHaveBeenCalledWith(
+          "/v1/savia-request/api/variables/export",
         ),
       );
       await waitFor(() => expect(download.blobs).toHaveLength(1));
       expect(JSON.parse(await download.blobs[0]!.text())).toEqual({
         version: 1,
-        exportedAt: expect.any(String),
+        exportedAt: "2026-09-20T00:00:00.000Z",
         flows: [
           {
             flowId: "autos",
@@ -148,8 +163,8 @@ describe("SecretsScreen", () => {
     }
   });
 
-  it("previews an import file and applies it to every flow at once", async () => {
-    const { put } = renderSecretsScreen();
+  it("previews an import file and applies it with a single request", async () => {
+    const { post } = renderSecretsScreen();
     const user = userEvent.setup();
     await user.upload(
       await screen.findByLabelText("Archivo de secretos"),
@@ -185,15 +200,13 @@ describe("SecretsScreen", () => {
       screen.getByRole("button", { name: "Aplicar importación" }),
     );
     await waitFor(() =>
-      expect(put).toHaveBeenCalledWith(
-        "/v1/savia-request/api/flows/autos/variables",
-        expect.arrayContaining([
-          expect.objectContaining({ key: "api_token", value: "importado" }),
-          expect.objectContaining({
-            key: "endpoint",
-            value: "https://provider.test",
-          }),
-        ]),
+      expect(post).toHaveBeenCalledWith(
+        "/v1/savia-request/api/variables/import",
+        expect.objectContaining({
+          flows: expect.arrayContaining([
+            expect.objectContaining({ flowId: "autos" }),
+          ]),
+        }),
       ),
     );
     expect(
@@ -202,6 +215,7 @@ describe("SecretsScreen", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       /1 valor\(es\) en 1 flow/,
     );
+    expect(screen.getByText("Omitido · no existe aquí")).toBeVisible();
   });
 
   it("rejects invalid import files with an actionable message", async () => {
