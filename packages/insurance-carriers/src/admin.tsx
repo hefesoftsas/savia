@@ -5,10 +5,10 @@ import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
   Shell,
   History,
-  useIntegration,
   IntegrationStatus,
   loadAll,
-} from "@savia/insurance-communications/ui";
+} from "@savia/insurance-workbench/integrations";
+import { useIntegration } from "@savia/insurance-communications/ui";
 import {
   saveIntegrationRecord,
   type IntegrationRecord,
@@ -238,7 +238,7 @@ export function CarriersScreen({ savia }: { savia: PluginApi }) {
         }}
       >
         {t("Actualizar historial")}</button>
-      <History runs={state.runs} />
+      <History runs={state.runs} stateLabels={stateLabels} />
     </Shell>
   );
 }

@@ -11,6 +11,7 @@
     "./types": "./src/types.ts",
     "./case-config": "./src/case-config.tsx",
     "./attachments": "./src/attachments.tsx",
+    "./integrations": "./src/integrations.tsx",
     "./workbench.css": "./src/workbench.css"
   },
   "scripts": {

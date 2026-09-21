@@ -5,11 +5,14 @@ import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
   Shell,
   History,
-  useIntegration,
   IntegrationStatus,
   loadAll,
-} from "@savia/insurance-communications/ui";
-import { renderTemplate } from "@savia/insurance-communications/domain";
+} from "@savia/insurance-workbench/integrations";
+import { useIntegration } from "@savia/insurance-communications/ui";
+import {
+  renderTemplate,
+  stateLabels,
+} from "@savia/insurance-communications/domain";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { recipients } from "./domain";
@@ -244,7 +247,7 @@ export function CampaignsScreen({ savia }: { savia: PluginApi }) {
         </section>
       ) : null}
       <p role="status">{notice}</p>
-      <History runs={state.runs} />
+      <History runs={state.runs} stateLabels={stateLabels} />
     </Shell>
   );
 }
