@@ -2,6 +2,27 @@
 
 Esta guía explica cómo importar de manera segura, rápida e idempotente las credenciales reales de aseguradoras desde una exportación de Bitwarden tanto en el **entorno de desarrollo local** como en **producción**.
 
+También cubre cómo mover secretos ya configurados entre ambientes (por ejemplo, de local a producción) exportando e importando un archivo JSON desde la UI de Savia Request.
+
+---
+
+## 0. Mover secretos entre ambientes desde la UI
+
+En Savia Request, pestaña **Variables**, la sección **Mover secretos entre ambientes** permite exportar e importar secretos sin usar la terminal. Requiere rol de administrador de plataforma.
+
+1. En el ambiente origen, abre el flow y su pestaña **Variables**.
+2. Usa **Exportar flow** para descargar solo ese flow, o **Exportar todos** para descargar todos los flows con variables en un único archivo `savia-request-secretos-*.json`.
+3. En el ambiente destino, abre la misma pantalla y usa **Importar al flow** o **Importar todos** con ese archivo.
+4. La importación al flow actual queda en el borrador: revisa los valores y pulsa **Guardar** para aplicarlos. La importación masiva guarda directamente los demás flows.
+5. Elimina el archivo una vez completada la migración.
+
+Reglas de la transferencia:
+
+- El archivo contiene `{ version, exportedAt, flows: [{ flowId, variables: [{ key, value, secret }] }] }`.
+- Los valores no vacíos del archivo ganan; los valores vacíos nunca sobrescriben lo ya guardado en el destino.
+- Los flows del archivo que no existen en el destino se omiten y se reportan.
+- Los archivos contienen secretos en texto plano: guárdalos en un lugar seguro, elimínalos después de usarlos y nunca los subas a Git.
+
 ---
 
 ## 1. Origen de las Credenciales

@@ -33,6 +33,7 @@ import type {
 } from "./types";
 import { CodeEditor } from "./editor/code-editor";
 import { DeleteDialog, type DeleteAction } from "./editor/delete-dialog";
+import { SecretsTransferPanel } from "./secrets-transfer-panel";
 import { VariableAccessContext } from "./editor/variable-context";
 import { VariableInput } from "./editor/variable-input";
 import { VariableNames } from "./editor/variable-completion";
@@ -606,6 +607,15 @@ export function SaviaRequestWorkspace() {
           ) : null}
 
           {tab === "variables" ? (
+            <div className="space-y-5">
+            <SecretsTransferPanel
+              api={api}
+              flow={flow}
+              onMergeCurrent={(variables) =>
+                updateDraft({ ...flow, variables })
+              }
+              working={working}
+            />
             <VariablesEditor
               flow={flow}
               onReveal={async (index) => {
@@ -653,6 +663,7 @@ export function SaviaRequestWorkspace() {
               revealed={revealed}
               working={working}
             />
+            </div>
           ) : null}
 
           {tab === "run" ? (
