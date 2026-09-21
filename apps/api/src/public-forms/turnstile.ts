@@ -75,14 +75,16 @@ export async function verifyTurnstile(
       throw Error();
     }
     result = await response.json();
-  } catch {
+  } catch (error) {
     // Network, timeout, and payload failures land here (the non-OK branch
-    // already logged above).
+    // already logged above). The constructor name alone carries no PII.
     if (!logged)
       console.error(
         JSON.stringify({
           event: "public-form-turnstile-siteverify",
           siteverifyStatus: "exception",
+          errorName:
+            error instanceof Error ? error.constructor.name : "unknown",
         }),
       );
     throw new HTTPException(503, {
