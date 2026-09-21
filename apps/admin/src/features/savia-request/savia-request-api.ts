@@ -6,6 +6,14 @@ import type {
   RequestRunDetail,
   RequestVariable,
 } from "./types";
+import type { SecretsFile } from "./secrets-transfer";
+
+export type SecretsImportResult = {
+  flowId: string;
+  applied: number;
+  skipped: number;
+  status: "updated" | "unchanged" | "unknown" | "error";
+};
 
 const apiRoot = "/v1/savia-request/api";
 
@@ -59,6 +67,13 @@ export function createSaviaRequestApi(apiClient: ApiClient) {
       apiClient.get<Record<string, string>>(`${apiRoot}/demo-input`),
     publish: (id: string) =>
       apiClient.post<{ id: string }>(`${apiRoot}/flows/${id}/publish`),
+    exportSecrets: () =>
+      apiClient.get<SecretsFile>(`${apiRoot}/variables/export`),
+    importSecrets: (file: SecretsFile) =>
+      apiClient.post<{ results: SecretsImportResult[] }>(
+        `${apiRoot}/variables/import`,
+        file,
+      ),
   };
 }
 
