@@ -172,9 +172,11 @@ export function createPublicQuoteAdapter(options: {
         message:
           "La consulta de placa no está disponible. Completa los datos manualmente.",
       });
-    // Local simulation for the documented demo plate only; every other plate
-    // still goes through the real provider flow.
-    if (options.mockProviders && normalized === "TESTCAR")
+    // Local simulation: every valid plate resolves to fixed fixture data so
+    // the lookup UX can be exercised without provider credentials. The
+    // fixture is intentionally constant — it can never be mistaken for a
+    // real provider response.
+    if (options.mockProviders)
       return {
         plate: normalized,
         fasecoldaCode: "00000000",

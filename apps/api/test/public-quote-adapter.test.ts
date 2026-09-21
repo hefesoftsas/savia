@@ -570,9 +570,13 @@ it("simulates providers locally without touching the executor", async () => {
     declaredValue: 50000000,
     accessoriesValue: 0,
   });
-  await expect(
-    adapter.lookupVehicle!({ ...base, plate: "TESTBUS" }),
-  ).rejects.toThrow();
+  expect(await adapter.lookupVehicle!({ ...base, plate: "TESTBUS" })).toEqual({
+    plate: "TESTBUS",
+    fasecoldaCode: "00000000",
+    productionYear: 2024,
+    declaredValue: 50000000,
+    accessoriesValue: 0,
+  });
   const result = (await adapter.execute({
     ...base,
     submissionId: "mock-submission",
@@ -601,6 +605,6 @@ it("simulates providers locally without touching the executor", async () => {
       returnResult: true,
     }),
   ).rejects.toThrow();
-  // Only the non-demo plate reached the executor; every mock path skipped it.
-  expect(execute).toHaveBeenCalledTimes(1);
+  // No mock path touches the executor.
+  expect(execute).not.toHaveBeenCalled();
 });

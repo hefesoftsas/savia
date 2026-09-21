@@ -94,11 +94,12 @@ widget, and submits immediately. Never set `SAVIA_DISABLE_CAPTCHA` outside local
 development.
 
 For the same reason, `pnpm dev` sets `SAVIA_MOCK_QUOTES=1` (override with
-`SAVIA_MOCK_QUOTES=0`): quote execution and the demo plate `TESTCAR` return
-fixed simulation data instead of calling providers, so the whole public flow
-can be exercised without credentials. Availability, policy, and validation
-checks still run; only provider I/O is faked. Never set `SAVIA_MOCK_QUOTES`
-outside local development.
+`SAVIA_MOCK_QUOTES=0`): quote execution and plate lookup return fixed
+simulation data instead of calling providers, so the whole public flow can be
+exercised without credentials. Availability, policy, and validation checks
+still run; only provider I/O is faked, and the fixture is constant on purpose
+so it can never pass as a real provider response. Never set
+`SAVIA_MOCK_QUOTES` outside local development.
 
 ## Security and reliability boundary
 
