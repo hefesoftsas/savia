@@ -390,6 +390,16 @@ it("submits without a captcha widget when verification is disabled locally", asy
     ),
   ).toBe(true);
 });
+it("explains provider failures with the quote-specific message", async () => {
+  render(<PublicFormPage token="public-token" />);
+  await fill();
+  await solve();
+  fetchMock.mockResolvedValueOnce(new Response("{}", { status: 502 }));
+  fireEvent.click(screen.getByRole("button", { name: "Enviar solicitud" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "No se pudo completar la cotización",
+  );
+});
 it("keeps the generic form for record definitions without a presentation descriptor", async () => {
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(definition)));
   render(<PublicFormPage token="record-token" />);

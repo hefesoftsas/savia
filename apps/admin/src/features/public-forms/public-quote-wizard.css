@@ -157,6 +157,23 @@
   flex: 1 1 10rem;
 }
 
+.public-quote-currency {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.public-quote-currency > span {
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.public-quote-currency > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .public-quote-notice {
   display: grid;
   gap: 1rem;
@@ -211,8 +228,15 @@
   }
 
   .public-quote-actions {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+  }
+
+  .public-quote-actions > button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 2.5rem;
+    font-size: 0.9375rem;
+    padding-inline: 0.5rem;
   }
 
   .public-quote-steps {

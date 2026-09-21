@@ -113,7 +113,9 @@ limited to 32 KiB; only declared primitive field values are accepted.
 
 Repeated submission identifiers never re-execute side effects. An exact replay with
 the original captcha proof can return its saved acknowledgement; a changed proof or
-incomplete attempt returns a conflict. The browser retains the submission identifier
+incomplete attempt returns a conflict. Failed submissions keep their safe server
+status (validation, provider, or policy messages) instead of a generic error;
+only unexpected failures stay a sanitized 503 with no provider details. The browser retains the submission identifier
 after an uncertain response and does not silently start a new request. Revocation
 blocks new reservations; it cannot undo provider calls already started.
 

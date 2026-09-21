@@ -609,13 +609,17 @@ export async function submitPublicForm(
       .bind(JSON.stringify(response), link.id, input.submissionId)
       .run();
     return response;
-  } catch {
+  } catch (error) {
     await db
       .prepare(
         "UPDATE public_form_submissions SET state='failed' WHERE form_id=? AND submission_id=?",
       )
       .bind(link.id, input.submissionId)
       .run();
+    // Curated HTTP statuses keep their meaning (validation, provider, policy):
+    // every message thrown in this flow is a safe, fixed string. Anything
+    // else (raw provider errors) stays a sanitized 503.
+    if (error instanceof HTTPException) throw error;
     reject(
       "Submission could not be completed. Contact the form owner before trying again.",
       503,

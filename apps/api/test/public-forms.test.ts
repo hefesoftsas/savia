@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { HTTPException } from "hono/http-exception";
 import { beforeAll, expect, it, vi } from "vitest";
 import { makeConfig } from "@savia/crm-shared/metadata";
 import { authenticationMiddleware } from "../src/auth/middleware";
@@ -735,6 +736,32 @@ it("serves bounded city suggestions for quote links without upstream internals",
       )
     ).status,
   ).toBe(503);
+});
+it("preserves safe provider failures instead of masking them as 503", async () => {
+  const execute = vi.fn(async () => {
+    throw new HTTPException(502, {
+      message: "No se pudo completar la cotización. Intenta más tarde.",
+    });
+  });
+  const quote = {
+    publish: async () => ({
+      fields: [
+        { name: "name", label: "Name", type: "text" as const, required: true },
+      ],
+      snapshot: { frozen: "policy" },
+    }),
+    validate: async ({ values }: any) => values,
+    execute,
+  };
+  const instance = app({ quote });
+  const link = await publish(instance, await object(), {
+    kind: "quote",
+    returnResult: true,
+  });
+  const response = await submit(instance, link, { name: "One" });
+  expect(response.status).toBe(502);
+  expect(await response.text()).toContain("cotización");
+  expect(execute).toHaveBeenCalledTimes(1);
 });
 it("closes links when their domain disappears and rejects metadata-only remote collections", async () => {
   const instance = app();
