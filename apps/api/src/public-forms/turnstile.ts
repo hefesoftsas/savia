@@ -34,7 +34,8 @@ export function turnstileConfiguration(options: TurnstileOptions) {
     });
   return {
     siteKey: options.siteKey,
-    secretKey: options.secretKey,
+    // Pasted secrets sometimes carry whitespace that siteverify rejects.
+    secretKey: options.secretKey.trim(),
     hostname: origin.hostname,
   };
 }
@@ -44,6 +45,7 @@ export async function verifyTurnstile(
 ) {
   const config = turnstileConfiguration(options);
   let result: any;
+  let logged = false;
   try {
     const response = await (options.fetch ?? fetch)(
       "https://challenges.cloudflare.com/turnstile/v0/siteverify",
@@ -60,9 +62,29 @@ export async function verifyTurnstile(
         redirect: "error",
       },
     );
-    if (!response.ok) throw Error();
+    // Anonymous diagnostics: HTTP status only. A non-OK siteverify (for
+    // example a mismatched secret) is a configuration problem, not downtime.
+    if (!response.ok) {
+      console.error(
+        JSON.stringify({
+          event: "public-form-turnstile-siteverify",
+          siteverifyStatus: response.status,
+        }),
+      );
+      logged = true;
+      throw Error();
+    }
     result = await response.json();
   } catch {
+    // Network, timeout, and payload failures land here (the non-OK branch
+    // already logged above).
+    if (!logged)
+      console.error(
+        JSON.stringify({
+          event: "public-form-turnstile-siteverify",
+          siteverifyStatus: "exception",
+        }),
+      );
     throw new HTTPException(503, {
       message: "Verification is temporarily unavailable.",
     });
