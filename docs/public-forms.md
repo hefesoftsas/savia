@@ -7,7 +7,9 @@ Owner: Savia platform team. Last reviewed: 2026-09-19.
 Forms remain private until a platform administrator opens a screen's configuration,
 expands **Enlaces públicos**, confirms the published snapshot, and creates a link.
 The administrator can set an expiration and a daily submission budget, copy the
-canonical public URL, and revoke each link independently. Each active link can also
+canonical public URL, and revoke each link independently. Revoked or expired
+links can be permanently deleted with their submission history; active links
+must be revoked first so in-flight deduplication is never dropped silently. Each active link can also
 show a QR code encoding the same canonical URL, with SVG and PNG download for
 print or in-person sharing. The default budget is
 25 submissions per link per UTC day. Existing links do not inherit later edits;

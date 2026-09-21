@@ -134,15 +134,43 @@ export function registerPublicFormRoutes(
       method: "delete",
       path: "/v1/public-forms/{id}",
       tags: ["Public forms"],
-      request: { params: z.object({ id: z.string().uuid() }) },
+      request: {
+        params: z.object({ id: z.string().uuid() }),
+        query: z.object({ hard: z.string().optional() }),
+      },
       responses: { 200: jsonResponse },
     }),
     async (c) => {
+      const id = c.req.valid("param").id;
+      // Hard deletion is only for dead links: removing an active link would
+      // silently drop its deduplication reservations. Revoke first.
+      if (c.req.valid("query").hard === "true") {
+        const row = await db
+          .prepare("SELECT revoked_at,expires_at FROM public_forms WHERE id=?")
+          .bind(id)
+          .first<{ revoked_at: string | null; expires_at: string | null }>();
+        if (!row) return c.json({ ok: true }, 200);
+        const dead =
+          row.revoked_at !== null ||
+          (row.expires_at !== null &&
+            row.expires_at <= new Date().toISOString());
+        if (!dead)
+          throw new HTTPException(409, {
+            message: "Revoca el enlace antes de eliminarlo.",
+          });
+        await db.batch([
+          db
+            .prepare("DELETE FROM public_form_submissions WHERE form_id=?")
+            .bind(id),
+          db.prepare("DELETE FROM public_forms WHERE id=?").bind(id),
+        ]);
+        return c.json({ ok: true }, 200);
+      }
       await db
         .prepare(
           "UPDATE public_forms SET revoked_at=? WHERE id=? AND revoked_at IS NULL",
         )
-        .bind(new Date().toISOString(), c.req.valid("param").id)
+        .bind(new Date().toISOString(), id)
         .run();
       return c.json({ ok: true }, 200);
     },
