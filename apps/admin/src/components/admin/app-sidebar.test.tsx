@@ -425,23 +425,32 @@ describe("AppSidebar navigation preferences", () => {
   it("shows page administration under Construir with the current domain", async () => {
     render(<App services={createServices()} />);
     await screen.findByRole("link", { name: /^Empresas/ });
-    expect(
-      within(sidebarGroup("Construir")).getByRole("link", {
-        name: "Pantallas",
-      }),
-    ).toHaveAttribute(
-      "href",
-      "#/crm?domain=platform&object=account&view=admin",
+    // The scoped destinations gain the current object once the CRM object
+    // catalog resolves; the link renders first without it.
+    await waitFor(() =>
+      expect(
+        within(sidebarGroup("Construir")).getByRole("link", {
+          name: "Pantallas",
+        }),
+      ).toHaveAttribute(
+        "href",
+        "#/crm?domain=platform&object=account&view=admin",
+      ),
     );
   });
 
   it("exposes scoped building destinations and keeps users beside roles", async () => {
     render(<App services={createServices()} />);
-    expect(
-      await screen.findByRole("link", { name: "Flujos de trabajo" }),
-    ).toHaveAttribute(
-      "href",
-      "#/crm?domain=platform&object=account&view=operations&tab=workflows",
+    // The scoped destinations gain the current object once the CRM object
+    // catalog resolves; the link renders first without it.
+    const workflows = await screen.findByRole("link", {
+      name: "Flujos de trabajo",
+    });
+    await waitFor(() =>
+      expect(workflows).toHaveAttribute(
+        "href",
+        "#/crm?domain=platform&object=account&view=operations&tab=workflows",
+      ),
     );
     expect(screen.getByRole("link", { name: "Empleados IA" })).toHaveAttribute(
       "href",
