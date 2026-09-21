@@ -277,6 +277,55 @@
   color: var(--destructive);
 }
 
+.public-quote-age {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+
+.public-quote-age-label {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.public-quote-age-label strong {
+  color: var(--foreground);
+}
+
+.public-quote-age-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.public-quote-age-chip {
+  min-height: 2rem;
+  min-width: 2.75rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.public-quote-age-chip:hover,
+.public-quote-age-chip:focus-visible {
+  background: var(--muted);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.public-quote-age-chip[data-selected="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 700;
+}
+
 .public-quote-waiting {
   display: grid;
   gap: 1rem;

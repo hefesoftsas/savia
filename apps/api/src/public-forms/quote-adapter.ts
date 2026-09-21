@@ -48,6 +48,33 @@ function policy(value: unknown): Policy {
     });
   return parsed.data;
 }
+/**
+ * Bounded parallel map preserving input order. Provider calls are
+ * independent (each keeps its own run receipt), so concurrency only
+ * shortens the visitor wait instead of changing the result.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(limit, items.length)) },
+    async () => {
+      while (true) {
+        const index = next;
+        next += 1;
+        const item = items[index];
+        if (item === undefined) break;
+        results[index] = await task(item, index);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
 export function createPublicQuoteAdapter(options: {
   executor?: ExtensionActionExecutor;
   encryptionKey?: string;
@@ -340,49 +367,59 @@ export function createPublicQuoteAdapter(options: {
         isExtensionActive: (tenant, id) =>
           isExtensionAvailable(input.db, tenant, id, registry),
       });
-      const quotes: ReturnType<typeof contribution.projectResult>[] = [];
-      let unavailable = 0;
-      for (const product of frozen.products) {
-        const context = {
-          tenantId: input.tenant,
-          principalId: `public-form:${submission}`,
-          extensionId,
-          actionId: contribution.actionId,
-          connectionId: frozen.connectionId,
-          runId: `public:${frozen.publicationId}:${submission}:${product.flowId}`,
-        };
-        const actionInput = contribution.actionInput(product.flowId, values);
-        await runs.startRun(context, actionInput);
-        try {
-          const result = await options.executor.execute(context, actionInput);
-          if (result.status !== "succeeded") {
-            // Executor failure codes come from a fixed public set; safe to log.
-            const output = result.output as { code?: unknown } | undefined;
-            console.error(
-              JSON.stringify({
-                event: "public-form-quote-product-failed",
-                tenant: input.tenant,
-                submission,
-                flowId: product.flowId,
-                code:
-                  typeof output?.code === "string"
-                    ? output.code
-                    : "CONNECTOR_EXECUTION_FAILED",
-              }),
+      // The guard above narrows options.executor for straight-line code;
+      // capture it so the parallel closure below stays typed as defined.
+      const executor = options.executor;
+      const outcomes = await mapWithConcurrency(
+        frozen.products,
+        5,
+        async (product) => {
+          const context = {
+            tenantId: input.tenant,
+            principalId: `public-form:${submission}`,
+            extensionId,
+            actionId: contribution.actionId,
+            connectionId: frozen.connectionId,
+            runId: `public:${frozen.publicationId}:${submission}:${product.flowId}`,
+          };
+          const actionInput = contribution.actionInput(product.flowId, values);
+          await runs.startRun(context, actionInput);
+          try {
+            const result = await executor.execute(context, actionInput);
+            if (result.status !== "succeeded") {
+              // Executor failure codes come from a fixed public set; safe to log.
+              const output = result.output as { code?: unknown } | undefined;
+              console.error(
+                JSON.stringify({
+                  event: "public-form-quote-product-failed",
+                  tenant: input.tenant,
+                  submission,
+                  flowId: product.flowId,
+                  code:
+                    typeof output?.code === "string"
+                      ? output.code
+                      : "CONNECTOR_EXECUTION_FAILED",
+                }),
+              );
+              throw new Error("Quote unavailable");
+            }
+            const safe = contribution.projectResult(
+              product.flowId,
+              result.output,
             );
-            throw new Error("Quote unavailable");
+            await runs.completeRun(context, safe);
+            return safe;
+          } catch {
+            await runs.failRun(context, "CONNECTOR_EXECUTION_FAILED");
+            return null;
           }
-          const safe = contribution.projectResult(
-            product.flowId,
-            result.output,
-          );
-          await runs.completeRun(context, safe);
-          quotes.push(safe);
-        } catch {
-          await runs.failRun(context, "CONNECTOR_EXECUTION_FAILED");
-          unavailable++;
-        }
-      }
+        },
+      );
+      const quotes = outcomes.filter(
+        (quote): quote is NonNullable<(typeof outcomes)[number]> =>
+          quote !== null,
+      );
+      const unavailable = outcomes.length - quotes.length;
       if (!quotes.length)
         throw new HTTPException(502, {
           message: "No se pudo completar la cotización. Intenta más tarde.",

@@ -541,6 +541,124 @@ it("fails the public lookup closed for bad plates, missing vehicles, provider er
   await enableVehicleLookup(true);
 });
 
+it("quotes enabled providers concurrently while preserving frozen product order", async () => {
+  const flowIds = [
+    "sbs-producto-8",
+    "sbs-producto-10",
+    "sbs-producto-11",
+    "equidad-basico-quote",
+    "equidad-full-quote",
+    "equidad-ligero-quote",
+    "equidad-rce-quote",
+  ];
+  const CONCURRENCY = 5;
+  const stored = await env.DB.prepare(
+    "SELECT value FROM extension_settings WHERE tenant_id=? AND extension_id='insurance.quotes'",
+  )
+    .bind(tenant)
+    .first<{ value: string }>();
+  const original = stored!.value;
+  try {
+    const next = JSON.parse(original);
+    next.products = flowIds.map((id, index) => ({
+      id,
+      label: `Admin ${id}`,
+      enabled: true,
+      rank: index + 1,
+    }));
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(JSON.stringify(next), tenant)
+      .run();
+    const resolvers = new Map<
+      string,
+      (value: { status: "succeeded"; output: unknown }) => void
+    >();
+    const execute = vi.fn(
+      (
+        _context: unknown,
+        input: Record<string, unknown>,
+      ): Promise<{ status: "succeeded"; output: unknown }> =>
+        new Promise((resolve) => {
+          resolvers.set(input["flowId"] as string, resolve);
+        }),
+    );
+    const adapter = createPublicQuoteAdapter({ executor: { execute } });
+    const { snapshot } = await adapter.publish({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      object,
+    });
+    const pending = adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "concurrent-submission",
+      snapshot,
+      values,
+      returnResult: true,
+    });
+    // The first wave fills every slot before any finishes: sequential
+    // execution would only ever keep one call in flight.
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(CONCURRENCY), {
+      timeout: 15000,
+    });
+    // Blocked tasks wait for a free slot: the bound holds.
+    expect(execute).toHaveBeenCalledTimes(CONCURRENCY);
+    const started = () =>
+      execute.mock.calls.map((call) => call[1]["flowId"] as string);
+    // Release the first wave in reverse; the remaining tasks start as slots free up.
+    for (const flowId of [...started()].reverse()) {
+      resolvers.get(flowId)!({
+        status: "succeeded",
+        output: {
+          type: "quote",
+          data: { premiumTotal: 1000 + flowIds.indexOf(flowId) },
+        },
+      });
+      resolvers.delete(flowId);
+    }
+    await vi.waitFor(
+      () => expect(execute).toHaveBeenCalledTimes(flowIds.length),
+      { timeout: 15000 },
+    );
+    const runIds = execute.mock.calls.map(
+      (call) => (call[0] as { runId: string }).runId,
+    );
+    expect(new Set(runIds).size).toBe(flowIds.length);
+    // Resolve the rest in reverse order; the result must still follow frozen order.
+    await vi.waitFor(
+      () => expect(resolvers.size).toBe(flowIds.length - CONCURRENCY),
+      { timeout: 15000 },
+    );
+    for (const flowId of [...resolvers.keys()].reverse()) {
+      resolvers.get(flowId)?.({
+        status: "succeeded",
+        output: {
+          type: "quote",
+          data: { premiumTotal: 1000 + flowIds.indexOf(flowId) },
+        },
+      });
+    }
+    const result = (await pending) as {
+      quotes: { premiumTotal: number }[];
+      unavailable: number;
+    };
+    expect(result.unavailable).toBe(0);
+    expect(result.quotes.map((quote) => quote.premiumTotal)).toEqual(
+      flowIds.map((_, index) => 1000 + index),
+    );
+  } finally {
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(original, tenant)
+      .run();
+  }
+});
 it("simulates providers locally without touching the executor", async () => {
   await enableVehicleLookup(true);
   const execute = vi.fn(async () => {

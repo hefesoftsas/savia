@@ -32,7 +32,8 @@ manually; private vehicle lookup endpoints remain protected.
 
 Quote links for `cotizador_por_pasos` render the public plugin wizard with the
 published product snapshot and three steps: vehicle, applicant and driver, and
-contact and quote. The public experience omits authenticated history, CRM
+contact and quote. The birth date offers quick age presets mirroring the
+embedded wizard. The public experience omits authenticated history, CRM
 records, provider configuration, and admin navigation; the private vehicle
 lookup endpoints stay protected and only the safe projection above is public.
 Changing quote settings or enabled products still invalidates the frozen
@@ -70,7 +71,8 @@ results to PDF from the browser; the print stylesheet keeps only the reference
 and the quotes. While providers respond, the wizard shows a live waiting state
 with elapsed time instead of a bare spinner. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost
-scales with the number of enabled products. Daily budgets count submissions, not
+scales with the number of enabled products. Provider calls run with bounded
+concurrency (5 at a time) so the visitor wait stays flat as products grow. Daily budgets count submissions, not
 provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration
