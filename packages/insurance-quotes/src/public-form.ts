@@ -205,6 +205,34 @@ export function publicValuesToQuoteInput(values: Record<string, unknown>) {
 const catalog = new Map<string, (typeof insuranceQuoteFlowCatalog)[number]>(
   insuranceQuoteFlowCatalog.map((product) => [product.id, product]),
 );
+
+export type PublicInsuranceQuotePresentation = {
+  renderer: "insurance-quote-wizard";
+  entry: "wizard" | "direct";
+  products: Array<{ flowId: string; label: string }>;
+};
+
+/** Trusted product labels for the public quote renderer; never accept labels from the browser. */
+export function getInsuranceQuoteProductLabel(flowId: string): string {
+  const product = catalog.get(flowId);
+  if (!product) throw new Error("Unsupported quote product");
+  return product.label;
+}
+
+/** Trusted public presentation derived from frozen product IDs and the object name. */
+export function describePublicInsuranceQuotePresentation(
+  objectName: string,
+  flowIds: string[],
+): PublicInsuranceQuotePresentation {
+  return {
+    renderer: "insurance-quote-wizard",
+    entry: objectName === "cotizador_por_pasos" ? "wizard" : "direct",
+    products: flowIds.map((flowId) => ({
+      flowId,
+      label: getInsuranceQuoteProductLabel(flowId),
+    })),
+  };
+}
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -269,6 +297,14 @@ export const insurancePublicQuoteContribution = {
           ? settings.quotePages.direct
           : settings.quotePages.wizard,
       products: settings.products,
+    };
+  },
+  /** Trusted plate-lookup configuration; the visitor never selects the flow. */
+  readVehicleLookup(value: unknown) {
+    const settings = insurancePackageSettingsSchema.parse(value);
+    return {
+      enabled: settings.vehicleLookup.enabled,
+      flowId: settings.vehicleLookup.flowId,
     };
   },
   validateValues: validatePublicQuoteValues,

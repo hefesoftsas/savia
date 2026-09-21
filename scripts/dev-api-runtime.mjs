@@ -21,6 +21,7 @@ const permitted = (name) =>
     "CRM_INTEGRATION_KEY",
     "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
     "SAVIA_PUBLIC_ORIGIN",
+    "SAVIA_DISABLE_CAPTCHA",
     "SQL_BRIDGE_URL",
     "SQL_BRIDGE_SECRET",
   ].includes(name);

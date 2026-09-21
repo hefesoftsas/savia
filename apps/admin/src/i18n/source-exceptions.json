@@ -215,6 +215,11 @@
     "reason": "ISO currency code, preserved independently of the interface language."
   },
   {
+    "file": "../features/public-forms/public-form-submission.tsx",
+    "text": "COP",
+    "reason": "ISO currency code, preserved independently of the interface language."
+  },
+  {
     "file": "../components/admin/app-sidebar.tsx",
     "text": "Savia",
     "reason": "Product brand name remains unchanged in every locale."

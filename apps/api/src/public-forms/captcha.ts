@@ -11,10 +11,35 @@ import {
 export type CaptchaOptions = TurnstileOptions & {
   captchaProvider?: "turnstile" | "altcha";
   altchaSecret?: string;
+  /**
+   * Local-development bypass for anonymous verification. Honored only when
+   * `publicOrigin` is a localhost origin; anywhere else the flag is ignored
+   * and the normal provider configuration applies (fail closed).
+   */
+  disableCaptcha?: boolean;
   rateLimiter?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
 };
+
+function isLocalPublicOrigin(publicOrigin: string | undefined): boolean {
+  if (!publicOrigin) return false;
+  try {
+    const origin = new URL(publicOrigin);
+    return (
+      (origin.protocol === "http:" || origin.protocol === "https:") &&
+      ["localhost", "127.0.0.1", "::1"].includes(origin.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isCaptchaDisabled(options: CaptchaOptions): boolean {
+  return (
+    options.disableCaptcha === true && isLocalPublicOrigin(options.publicOrigin)
+  );
+}
 const unavailable = () =>
   new HTTPException(503, { message: "Public forms are not configured." });
 const invalid = () =>
@@ -22,6 +47,8 @@ const invalid = () =>
     message: "Verification failed. Complete the challenge again.",
   });
 export function captchaConfiguration(options: CaptchaOptions) {
+  if (isCaptchaDisabled(options))
+    return { provider: "disabled" as const, secretKey: "local-captcha-bypass" };
   if (
     options.captchaProvider === undefined ||
     options.captchaProvider === "turnstile"
@@ -119,7 +146,8 @@ export async function publicFormChallenge(
 }
 /** Unique proof identity is independent of JSON/base64 encoding and solver timing. */
 export function captchaIdentity(options: CaptchaOptions, token: string) {
-  if (captchaConfiguration(options).provider === "turnstile")
+  const provider = captchaConfiguration(options).provider;
+  if (provider === "turnstile" || provider === "disabled")
     return { key: token, proof: undefined };
   const { challenge, solution } = decodeProof(token);
   // zod emits keys in schema order. Include the complete proof in the request
@@ -137,6 +165,7 @@ export async function verifyCaptcha(
   input: { token: string; submissionId: string; formId: string; ip: string },
 ) {
   const config = captchaConfiguration(options);
+  if (config.provider === "disabled") return;
   if (config.provider === "turnstile") return verifyTurnstile(options, input);
   const { challenge, solution } = decodeProof(input.token);
   if (

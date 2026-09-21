@@ -173,16 +173,24 @@ export function registerPublicFormRoutes(
     async (c) => {
       const config = captchaConfiguration(options);
       const row = await activePublicForm(db, c.req.valid("param").token);
+      let presentation: unknown;
       if (row.kind === "quote") {
         if (!options.quote)
           throw new HTTPException(503, { message: "Public form unavailable." });
+        const snapshot = JSON.parse(row.snapshot);
         await options.quote.assertAvailable?.({
           db,
           tenant: row.tenant_id,
           domainId: row.domain_id,
           objectName: row.object_name,
-          snapshot: JSON.parse(row.snapshot),
+          snapshot,
         });
+        if (options.quote.presentation) {
+          presentation = await options.quote.presentation({
+            objectName: row.object_name,
+            snapshot,
+          });
+        }
       }
       return c.json(
         {
@@ -191,11 +199,57 @@ export function registerPublicFormRoutes(
           ...(row.description ? { description: row.description } : {}),
           kind: row.kind,
           fields: JSON.parse(row.fields),
+          ...(presentation !== undefined ? { presentation } : {}),
           captchaProvider: config.provider,
           ...(config.provider === "turnstile"
             ? { siteKey: config.siteKey }
             : {}),
         },
+        200,
+      );
+    },
+  );
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/public/forms/{token}/vehicle-lookup",
+      security: [],
+      tags: ["Public forms"],
+      request: {
+        params: z.object({ token: z.string() }),
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({ plate: z.string().min(1).max(20) }).strict(),
+            },
+          },
+        },
+      },
+      responses: { 200: jsonResponse },
+    }),
+    async (c) => {
+      const row = await activePublicForm(db, c.req.valid("param").token);
+      if (row.kind !== "quote")
+        throw new HTTPException(404, { message: "Public form unavailable." });
+      if (!options.quote?.lookupVehicle)
+        throw new HTTPException(503, { message: "Public form unavailable." });
+      await options.quote.assertAvailable?.({
+        db,
+        tenant: row.tenant_id,
+        domainId: row.domain_id,
+        objectName: row.object_name,
+        snapshot: JSON.parse(row.snapshot),
+      });
+      return c.json(
+        await options.quote.lookupVehicle({
+          db,
+          tenant: row.tenant_id,
+          domainId: row.domain_id,
+          objectName: row.object_name,
+          snapshot: JSON.parse(row.snapshot),
+          plate: c.req.valid("json").plate,
+        }),
         200,
       );
     },

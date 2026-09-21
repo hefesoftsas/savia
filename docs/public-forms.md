@@ -28,6 +28,25 @@ configuration requires republishing. Visitors cannot choose connections, actions
 execution mode, or provider flows. They enter vehicle and applicant information
 manually; private vehicle lookup endpoints remain protected.
 
+Quote links for `cotizador_por_pasos` render the public plugin wizard with the
+published product snapshot and three steps: vehicle, applicant and driver, and
+contact and quote. The public experience omits authenticated history, CRM
+records, provider configuration, and admin navigation; the private vehicle
+lookup endpoints stay protected and only the safe projection above is public.
+Changing quote settings or enabled products still invalidates the frozen
+snapshot and requires publishing a new link.
+
+The public wizard preloads vehicle data from the plate through
+`POST /api/public/forms/:token/vehicle-lookup`, mirroring the embedded plate
+lookup: typing the plate and pressing the search button (or leaving the field)
+fills the Fasecolda code, production year, and declared values, marking them
+as autocompleted. The server runs the fixed plate-lookup
+flow from the current trusted settings — visitors can never select actions,
+connections, or flows — and returns only the plate plus those fixed vehicle
+fields; raw provider output stays hidden. The lookup needs no CAPTCHA because
+it happens before the final verification step, so it is bounded by the burst
+rate limiter and strict plate format instead of submission quotas.
+
 By default the response is only an acknowledgement and submission reference.
 For quotation links, administrators may explicitly enable a limited result for the
 current submission: insurer/product labels, premium, currency and supported coverage
@@ -52,6 +71,17 @@ Missing configuration fails closed. Public-host deployments reject Turnstile tes
 keys; fake Siteverify responses are injected only by tests. Captcha validation uses
 Cloudflare's server-side verification, checks hostname, `public_submit` action and
 link identifier, and has a timeout. Browser-only captcha validation is insufficient.
+
+## Local development
+
+The local stack (`pnpm dev`) sets `SAVIA_DISABLE_CAPTCHA=1`, which skips
+anonymous verification so links can be published and submitted without Turnstile
+credentials. The bypass is honored only when `SAVIA_PUBLIC_ORIGIN` is a localhost
+origin; with any other origin the flag is ignored and the normal provider
+configuration applies. Preview and production therefore always fail closed when
+unconfigured. The public page reports `captchaProvider: "disabled"`, mounts no
+widget, and submits immediately. Never set `SAVIA_DISABLE_CAPTCHA` outside local
+development.
 
 ## Security and reliability boundary
 

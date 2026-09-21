@@ -16,6 +16,21 @@ export type PublicFormField = {
   required: boolean;
   options?: { value: string; label: string }[];
 };
+export type PublicQuotePresentation = {
+  renderer: "insurance-quote-wizard";
+  entry: "wizard" | "direct";
+  products: Array<{ flowId: string; label: string }>;
+};
+
+/** Safe plate-lookup projection: fixed vehicle fields, never raw provider output. */
+export type PublicVehicleLookup = {
+  plate: string;
+  fasecoldaCode?: string;
+  productionYear?: number;
+  declaredValue?: number;
+  accessoriesValue?: number;
+};
+
 export interface PublicQuoteAdapter {
   publish(input: {
     db: D1Database;
@@ -44,6 +59,18 @@ export interface PublicQuoteAdapter {
     objectName: string;
     snapshot: unknown;
   }): Promise<void>;
+  presentation?(input: {
+    objectName: string;
+    snapshot: unknown;
+  }): Promise<PublicQuotePresentation>;
+  lookupVehicle?(input: {
+    db: D1Database;
+    tenant: string;
+    domainId: string;
+    objectName: string;
+    snapshot: unknown;
+    plate: string;
+  }): Promise<PublicVehicleLookup>;
 }
 export type PublicFormOptions = CaptchaOptions & {
   quote?: PublicQuoteAdapter;

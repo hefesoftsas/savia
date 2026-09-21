@@ -305,4 +305,59 @@ export const publicFormsMessages = {
     "The public link is invalid.",
     "O link público é inválido.",
   ],
+  "SEGUROS · AUTOS LIVIANOS": [
+    "SEGUROS · AUTOS LIVIANOS",
+    "INSURANCE · LIGHT VEHICLES",
+    "SEGUROS · VEÍCULOS LEVES",
+  ],
+  "Cotizador por pasos": [
+    "Cotizador por pasos",
+    "Step-by-step quote",
+    "Cotação passo a passo",
+  ],
+  "Cotizador de seguros": [
+    "Cotizador de seguros",
+    "Insurance quote",
+    "Cotador de seguros",
+  ],
+  Vehículo: ["Vehículo", "Vehicle", "Veículo"],
+  "Solicitante y conductor": [
+    "Solicitante y conductor",
+    "Applicant and driver",
+    "Solicitante e condutor",
+  ],
+  "Contacto y cotización": [
+    "Contacto y cotización",
+    "Contact and quote",
+    "Contato e cotação",
+  ],
+  Anterior: ["Anterior", "Back", "Anterior"],
+  "Siguiente paso": ["Siguiente paso", "Next step", "Próxima etapa"],
+  "%{count} producto": [
+    "%{count} producto",
+    "%{count} product",
+    "%{count} produto",
+  ],
+  "%{count} productos": [
+    "%{count} productos",
+    "%{count} products",
+    "%{count} produtos",
+  ],
+  "Consultar placa": ["Consultar placa", "Look up plate", "Consultar placa"],
+  "Consultando…": ["Consultando…", "Looking up…", "Consultando…"],
+  "✓ Autocompletado": [
+    "✓ Autocompletado",
+    "✓ Autocompleted",
+    "✓ Preenchido automaticamente",
+  ],
+  "No se encontraron datos para esa placa.": [
+    "No se encontraron datos para esa placa.",
+    "No data was found for that plate.",
+    "Nenhum dado encontrado para essa placa.",
+  ],
+  "No se pudo consultar la placa.": [
+    "No se pudo consultar la placa.",
+    "The plate could not be looked up.",
+    "Não foi possível consultar a placa.",
+  ],
 } as const;
