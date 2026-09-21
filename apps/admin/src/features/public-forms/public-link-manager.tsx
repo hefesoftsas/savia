@@ -53,6 +53,7 @@ export function PublicLinkManager({
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<string>();
   const [confirmed, setConfirmed] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [dailyLimit, setDailyLimit] = useState(25);
   const [expiresAt, setExpiresAt] = useState("");
   const [returnResult, setReturnResult] = useState(false);
@@ -66,6 +67,7 @@ export function PublicLinkManager({
     setLinks([]);
     setNotice("");
     setConfirmed(false);
+    setConfirming(null);
     void request(
       `/v1/public-forms?${new URLSearchParams({ domainId, objectName })}`,
     )
@@ -155,6 +157,32 @@ export function PublicLinkManager({
           ),
         );
         setNotice("Enlace revocado. Ya no admite nuevos envíos.");
+      }
+    } catch (cause) {
+      if (current === generation.current)
+        setError(cause instanceof Error ? cause.message : managementError(500));
+    } finally {
+      busy.current = false;
+      if (current === generation.current) setPending(undefined);
+    }
+  }
+  async function remove(link: PublicLink) {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(link.id);
+    setError("");
+    setNotice("");
+    const current = generation.current;
+    try {
+      const response = await request(
+        `/v1/public-forms/${encodeURIComponent(link.id)}?hard=true`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) throw new Error(managementError(response.status));
+      if (current === generation.current) {
+        setLinks((previous) => previous.filter((item) => item.id !== link.id));
+        setConfirming(null);
+        setNotice("Enlace eliminado.");
       }
     } catch (cause) {
       if (current === generation.current)
@@ -331,7 +359,44 @@ export function PublicLinkManager({
                       ? t("Revocando…")
                       : t("Revocar enlace")}
                   </Button>
+                  {unavailable && confirming !== link.id && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setConfirming(link.id)}
+                      disabled={!!pending}
+                    >
+                      {t("Eliminar enlace")}
+                    </Button>
+                  )}
                 </div>
+                {unavailable && confirming === link.id && (
+                  <div className="public-link-confirm-remove" role="group">
+                    <p>
+                      {t("¿Eliminar este enlace y su historial de envíos?")}
+                    </p>
+                    <div className="public-link-actions">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => void remove(link)}
+                        disabled={!!pending}
+                      >
+                        {pending === link.id
+                          ? t("Eliminando…")
+                          : t("Eliminar enlace")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setConfirming(null)}
+                        disabled={!!pending}
+                      >
+                        {t("Cancelar")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {showingQr && <PublicLinkQr url={url} fileBase={fileBase} />}
               </li>
             );

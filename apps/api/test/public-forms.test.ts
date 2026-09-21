@@ -197,6 +197,36 @@ it("requires administrator management and blocks anonymous methods, expired link
   ).toBe(200);
   expect((await submit(instance, link, { name: "Visitor" })).status).toBe(404);
 });
+it("hard-deletes only dead links and refuses active ones", async () => {
+  const instance = app();
+  const name = await object();
+  const link = await publish(instance, name);
+  const remove = (id: string, hard: boolean) =>
+    instance.request(
+      `https://api.test/v1/public-forms/${id}${hard ? "?hard=true" : ""}`,
+      { method: "DELETE" },
+    );
+  expect((await remove(link.id, true)).status).toBe(409);
+  expect((await submit(instance, link, { name: "Still alive" })).status).toBe(
+    200,
+  );
+  expect((await remove(link.id, false)).status).toBe(200);
+  expect((await submit(instance, link, { name: "Revoked" })).status).toBe(404);
+  expect((await remove(link.id, true)).status).toBe(200);
+  expect(
+    await env.DB.prepare("SELECT count(*) n FROM public_forms WHERE id=?")
+      .bind(link.id)
+      .first("n"),
+  ).toBe(0);
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) n FROM public_form_submissions WHERE form_id=?",
+    )
+      .bind(link.id)
+      .first("n"),
+  ).toBe(0);
+  expect((await remove(link.id, true)).status).toBe(200);
+});
 it("atomically caps concurrent submissions and replays only the original proof without duplicate writes", async () => {
   const instance = app();
   const name = await object();

@@ -366,6 +366,20 @@ export const publicFormsMessages = {
       "The quote could not be completed. Try later or contact the person who shared the link.",
       "Não foi possível concluir a cotação. Tente mais tarde ou entre em contato com quem compartilhou o link.",
     ],
+  "Eliminar enlace": ["Eliminar enlace", "Delete link", "Excluir link"],
+  "Eliminando…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  "Enlace eliminado.": ["Enlace eliminado.", "Link deleted.", "Link excluído."],
+  Cancelar: ["Cancelar", "Cancel", "Cancelar"],
+  "¿Eliminar este enlace y su historial de envíos?": [
+    "¿Eliminar este enlace y su historial de envíos?",
+    "Delete this link and its submission history?",
+    "Excluir este link e seu histórico de envios?",
+  ],
+  "Revoca el enlace antes de eliminarlo.": [
+    "Revoca el enlace antes de eliminarlo.",
+    "Revoke the link before deleting it.",
+    "Revogue o link antes de excluí-lo.",
+  ],
   "Ciudades sugeridas": [
     "Ciudades sugeridas",
     "Suggested cities",
