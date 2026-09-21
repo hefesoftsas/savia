@@ -32,7 +32,8 @@ manually; private vehicle lookup endpoints remain protected.
 
 Quote links for `cotizador_por_pasos` render the public plugin wizard with the
 published product snapshot and three steps: vehicle, applicant and driver, and
-contact and quote. The public experience omits authenticated history, CRM
+contact and quote. The birth date offers quick age presets mirroring the
+embedded wizard. The public experience omits authenticated history, CRM
 records, provider configuration, and admin navigation; the private vehicle
 lookup endpoints stay protected and only the safe projection above is public.
 Changing quote settings or enabled products still invalidates the frozen
@@ -40,9 +41,11 @@ snapshot and requires publishing a new link.
 
 The public wizard preloads vehicle data from the plate through
 `POST /api/public/forms/:token/vehicle-lookup`, mirroring the embedded plate
-lookup: typing the plate and pressing the search button (or leaving the field)
-fills the Fasecolda code, production year, and declared values, marking them
-as autocompleted. The server runs the fixed plate-lookup
+lookup: typing the plate and pressing the search button (or leaving the field
+with at least 3 characters) fills the Fasecolda code, production year, and
+declared values, marking them
+as autocompleted. A malformed plate names the exact field instead of calling
+the lookup. The server runs the fixed plate-lookup
 flow from the current trusted settings — visitors can never select actions,
 connections, or flows — and returns only the plate plus those fixed vehicle
 fields; raw provider output stays hidden. The lookup needs no CAPTCHA because
@@ -51,7 +54,8 @@ rate limiter and strict plate format instead of submission quotas.
 
 City fields offer DANE autocomplete through
 `GET /api/public/forms/:token/cities?search=`, scoped to the same quote link.
-DANE codes are public reference data, so the endpoint returns a bounded list
+Pressing Enter selects the first suggestion and the clear button resets the
+field. DANE codes are public reference data, so the endpoint returns a bounded list
 of code/city/department triples with no upstream internals and no provider
 cost. Applicant identity fields stay manual: looking up CRM records by
 document number would disclose personal data to anyone typing an ID, so that
@@ -67,7 +71,8 @@ results to PDF from the browser; the print stylesheet keeps only the reference
 and the quotes. While providers respond, the wizard shows a live waiting state
 with elapsed time instead of a bare spinner. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost
-scales with the number of enabled products. Daily budgets count submissions, not
+scales with the number of enabled products. Provider calls run with bounded
+concurrency (5 at a time) so the visitor wait stays flat as products grow. Daily budgets count submissions, not
 provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration

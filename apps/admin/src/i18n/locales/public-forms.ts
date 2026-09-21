@@ -416,4 +416,13 @@ export const publicFormsMessages = {
     "No cities found.",
     "Nenhuma cidade encontrada.",
   ],
+  "Limpiar ciudad seleccionada": [
+    "Limpiar ciudad seleccionada",
+    "Clear selected city",
+    "Limpar cidade selecionada",
+  ],
+  Limpiar: ["Limpiar", "Clear", "Limpar"],
+  "Edad:": ["Edad:", "Age:", "Idade:"],
+  "%{p0} años": ["%{p0} años", "%{p0} years old", "%{p0} anos"],
+  Seleccionar: ["Seleccionar", "Select", "Selecionar"],
 } as const;

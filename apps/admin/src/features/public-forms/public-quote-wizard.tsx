@@ -131,21 +131,30 @@ function stepsFor(
   fields: QuoteField[],
   titles: { vehicle: string; applicant: string; contact: string },
 ) {
+  const vehicle = fields.filter((f) => f.name.startsWith("vehicle_"));
+  const applicant = fields.filter((f) => APPLICANT_STEP_NAMES.has(f.name));
+  const contact = fields.filter((f) => CONTACT_STEP_NAMES.has(f.name));
+  // Future definition fields outside the known sets stay visible in the
+  // final step instead of failing validation invisibly.
+  const known = new Set(
+    [...vehicle, ...applicant, ...contact].map((f) => f.name),
+  );
+  const extra = fields.filter((f) => !known.has(f.name));
   return [
     {
       id: "vehicle",
       title: titles.vehicle,
-      fields: fields.filter((f) => f.name.startsWith("vehicle_")),
+      fields: vehicle,
     },
     {
       id: "applicant",
       title: titles.applicant,
-      fields: fields.filter((f) => APPLICANT_STEP_NAMES.has(f.name)),
+      fields: applicant,
     },
     {
       id: "contact",
       title: titles.contact,
-      fields: fields.filter((f) => CONTACT_STEP_NAMES.has(f.name)),
+      fields: [...contact, ...extra],
     },
   ];
 }
@@ -175,12 +184,14 @@ function CityAutocomplete({
   endpoint,
   onChange,
   error,
+  disabled,
 }: {
   field: QuoteField;
   value: string;
   endpoint: string;
   onChange: (value: string) => void;
   error?: string;
+  disabled?: boolean;
 }) {
   const t = useMessages(publicFormsMessages);
   const [suggestions, setSuggestions] = useState<CityMatch[]>([]);
@@ -195,6 +206,11 @@ function CityAutocomplete({
       window.clearTimeout(timer.current);
     };
   }, []);
+  // A stale dropdown must never linger over the waiting state or receipt:
+  // the whole step is disabled while quoting.
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   const listId = `quote-${field.name}-cities`;
 
   function search(next: string) {
@@ -261,7 +277,7 @@ function CityAutocomplete({
         aria-describedby={error ? `quote-${field.name}-error` : undefined}
         onChange={(e) => search(e.target.value)}
         onFocus={() => {
-          if (suggestions.length) setOpen(true);
+          if (!disabled && suggestions.length) setOpen(true);
         }}
         onBlur={() => {
           window.setTimeout(() => {
@@ -270,10 +286,37 @@ function CityAutocomplete({
         }}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
+          else if (
+            e.key === "Enter" &&
+            suggestions.length > 0 &&
+            suggestions[0]
+          ) {
+            e.preventDefault();
+            onChange(suggestions[0].code);
+            setSuggestions([]);
+            setOpen(false);
+          }
         }}
         aria-expanded={open}
         aria-controls={listId}
+        aria-autocomplete="list"
       />
+      {value && (
+        <button
+          type="button"
+          className="public-quote-city-clear"
+          aria-label={t("Limpiar ciudad seleccionada")}
+          title={t("Limpiar")}
+          onClick={() => {
+            onChange("");
+            setSuggestions([]);
+            setOpen(false);
+            document.getElementById(`quote-${field.name}`)?.focus();
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      )}
       {error && (
         <p
           id={`quote-${field.name}-error`}
@@ -288,7 +331,7 @@ function CityAutocomplete({
           {t("Consultando…")}
         </p>
       )}
-      {open && !loading && suggestions.length > 0 && (
+      {open && !disabled && !loading && suggestions.length > 0 && (
         <ul
           id={listId}
           role="listbox"
@@ -317,11 +360,71 @@ function CityAutocomplete({
           ))}
         </ul>
       )}
-      {open && !loading && suggestions.length === 0 && (
+      {open && !disabled && !loading && suggestions.length === 0 && (
         <p role="status" className="public-form-help">
           {t("No se encontraron ciudades.")}
         </p>
       )}
+    </div>
+  );
+}
+
+const AGE_PRESETS = [20, 25, 30, 35, 45, 55, 65];
+
+function ageOf(birth: string, now: Date = new Date()): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birth)) return null;
+  const date = new Date(birth);
+  if (
+    !Number.isFinite(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== birth
+  )
+    return null;
+  let age = now.getFullYear() - date.getFullYear();
+  const month = now.getMonth() - date.getMonth();
+  if (month < 0 || (month === 0 && now.getDate() < date.getDate())) age--;
+  return age >= 0 ? age : null;
+}
+
+function birthDateFromAge(age: number, now: Date = new Date()): string {
+  return `${now.getFullYear() - age}-06-15`;
+}
+
+/**
+ * Age quick presets mirroring the embedded quote wizard: picking a chip
+ * fills the birth date instead of typing it.
+ */
+function BirthAgeChips({
+  value,
+  onPick,
+}: {
+  value: string;
+  onPick: (isoDate: string) => void;
+}) {
+  const t = useMessages(publicFormsMessages);
+  const age = ageOf(value);
+  const label = t("Edad:");
+  return (
+    <div className="public-quote-age">
+      <p className="public-quote-age-label">
+        {label}{" "}
+        <strong>
+          {age !== null ? t("%{p0} años", { p0: age }) : t("Seleccionar")}
+        </strong>
+      </p>
+      <div className="public-quote-age-chips" role="group" aria-label={label}>
+        {AGE_PRESETS.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            className="public-quote-age-chip"
+            data-selected={age === preset}
+            aria-pressed={age === preset}
+            onClick={() => onPick(birthDateFromAge(preset))}
+          >
+            {preset}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -417,6 +520,7 @@ export function PublicQuoteForm({
     });
     setLookupFields([]);
     setLookupNotice("");
+    lastLookedUpPlate.current = "";
     clearFieldError("vehicle_plate");
   }
 
@@ -425,6 +529,17 @@ export function PublicQuoteForm({
       .trim()
       .toUpperCase();
     if (!rawPlate || lookingUp) return;
+    // Mirror the server plate format so a typo names the field instead of
+    // showing the generic lookup failure.
+    if (!/^[A-Z0-9]{3,10}$/.test(rawPlate)) {
+      const label =
+        definition.fields.find((f) => f.name === "vehicle_plate")?.label ??
+        "Placa";
+      const message = t("Revisa el campo %{field}.", { field: label });
+      setFieldErrors((prev) => ({ ...prev, vehicle_plate: message }));
+      document.getElementById("quote-vehicle_plate")?.focus();
+      return;
+    }
     setLookingUp(true);
     setLookupNotice("");
     try {
@@ -488,11 +603,13 @@ export function PublicQuoteForm({
   }
 
   function autoLookupPlate() {
-    const plate = String(values["vehicle_plate"] ?? "").trim();
+    const plate = String(values["vehicle_plate"] ?? "")
+      .trim()
+      .toUpperCase();
     if (
       plate &&
-      plate.length >= 5 &&
-      plate.toUpperCase() !== lastLookedUpPlate.current &&
+      plate.length >= 3 &&
+      plate !== lastLookedUpPlate.current &&
       !lookingUp
     ) {
       void lookupPlate();
@@ -761,6 +878,7 @@ export function PublicQuoteForm({
                         endpoint={endpoint}
                         onChange={(next) => update(field.name, next)}
                         error={error}
+                        disabled={pending || uncertain || lookingUp}
                       />
                     ) : field.type === "number" &&
                       CURRENCY_FIELDS.has(field.name) ? (
@@ -834,6 +952,12 @@ export function PublicQuoteForm({
                         value={String(values[field.name] ?? "")}
                         {...invalidProps}
                         onChange={(e) => update(field.name, e.target.value)}
+                      />
+                    )}
+                    {field.name === "applicant_birthDate" && (
+                      <BirthAgeChips
+                        value={String(values[field.name] ?? "")}
+                        onPick={(iso) => update(field.name, iso)}
                       />
                     )}
                     {!CITY_FIELDS.has(field.name) && error && (
