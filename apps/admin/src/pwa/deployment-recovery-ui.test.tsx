@@ -65,3 +65,23 @@ it("announces a replacement worker without reloading or discarding an open app",
   expect(screen.getByLabelText("Draft")).toHaveValue("Unsaved");
   expect(reloadApplication).not.toHaveBeenCalled();
 });
+it("shows a spinner while the update is being installed", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.mocked(reloadApplication).mockImplementation(() => new Promise(() => {}));
+  const Broken = (): never => {
+    throw new TypeError("Failed to fetch dynamically imported module: old.js");
+  };
+  render(
+    <DeploymentBoundary>
+      <Broken />
+    </DeploymentBoundary>,
+  );
+  const button = screen.getByRole("button", { name: "Actualizar y recargar" });
+  fireEvent.click(button);
+  expect(
+    await screen.findByText("Buscando la nueva versión…"),
+  ).toBeInTheDocument();
+  expect(screen.getByTestId("pwa-spinner")).toBeInTheDocument();
+  expect(button).toBeDisabled();
+  expect(button).toHaveAttribute("aria-busy", "true");
+});

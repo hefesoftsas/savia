@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import type { RequestResult } from "../../../../api/src/request-results/contracts";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { StandardResult } from "./standard-result";
+import { SecretsScreen } from "./secrets-screen";
 import { useSaviaRequestWorkspace } from "./savia-request-provider";
 import type {
   RequestFlow,
@@ -33,7 +34,6 @@ import type {
 } from "./types";
 import { CodeEditor } from "./editor/code-editor";
 import { DeleteDialog, type DeleteAction } from "./editor/delete-dialog";
-import { SecretsTransferPanel } from "./secrets-transfer-panel";
 import { VariableAccessContext } from "./editor/variable-context";
 import { VariableInput } from "./editor/variable-input";
 import { VariableNames } from "./editor/variable-completion";
@@ -141,6 +141,7 @@ export function SaviaRequestWorkspace() {
     selectFlow,
     stepIndex,
     updateDraft,
+    view,
   } = useSaviaRequestWorkspace();
   const [tab, setTab] = useState<WorkspaceTab>("steps");
   const [editor, setEditor] = useState<EditorPane>("body");
@@ -288,6 +289,10 @@ export function SaviaRequestWorkspace() {
       },
     });
   };
+
+  if (view === "secretos") {
+    return <SecretsScreen />;
+  }
 
   if (!flow) {
     return (
@@ -607,15 +612,6 @@ export function SaviaRequestWorkspace() {
           ) : null}
 
           {tab === "variables" ? (
-            <div className="space-y-5">
-            <SecretsTransferPanel
-              api={api}
-              flow={flow}
-              onMergeCurrent={(variables) =>
-                updateDraft({ ...flow, variables })
-              }
-              working={working}
-            />
             <VariablesEditor
               flow={flow}
               onReveal={async (index) => {
@@ -663,7 +659,6 @@ export function SaviaRequestWorkspace() {
               revealed={revealed}
               working={working}
             />
-            </div>
           ) : null}
 
           {tab === "run" ? (

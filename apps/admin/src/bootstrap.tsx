@@ -12,6 +12,7 @@ import { useMessages, useAppLocale, translateMessage } from "./i18n/core";
 import { publicFormsMessages } from "./i18n/locales/public-forms";
 import { lazy, Suspense, useMemo } from "react";
 import { registerPwaServiceWorker } from "./pwa/register-service-worker";
+import { PwaSplash } from "./pwa/pwa-splash";
 
 const PrivateApp = lazy(async () => {
   registerPwaServiceWorker();
@@ -39,9 +40,13 @@ export function ApplicationRoot({
   return (
     <Suspense
       fallback={
-        <main className="p-6" role="status">
-          {translateMessage(publicFormsMessages, "Cargando…", defaultAppLocale)}
-        </main>
+        <PwaSplash
+          message={translateMessage(
+            publicFormsMessages,
+            "Cargando…",
+            defaultAppLocale,
+          )}
+        />
       }
     >
       <PrivateApp />
@@ -91,13 +96,7 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
           </select>
         </label>
       </div>
-      <Suspense
-        fallback={
-          <main className="p-6" role="status">
-            {t("Cargando…")}
-          </main>
-        }
-      >
+      <Suspense fallback={<PwaSplash message={t("Cargando…")} />}>
         {match ? (
           <PublicForm token={match[1]} />
         ) : (

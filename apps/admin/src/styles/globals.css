@@ -563,3 +563,69 @@ input[type="checkbox"],
 input[type="radio"] {
   accent-color: var(--primary);
 }
+
+/* Branded PWA ring spinner: static track + rotating brand arc.
+ * Pure CSS so it can also be inlined in index.html for first paint. */
+.savia-ring {
+  --savia-ring-size: 2rem;
+  --savia-ring-width: 3px;
+  --savia-ring-arc: #0d9488;
+  --savia-ring-track: color-mix(in oklch, var(--primary) 16%, transparent);
+  --savia-ring-donut: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--savia-ring-width) - 0.5px),
+    #000 calc(100% - var(--savia-ring-width))
+  );
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--savia-ring-size);
+  height: var(--savia-ring-size);
+  border-radius: 9999px;
+}
+.savia-ring::before,
+.savia-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  -webkit-mask: var(--savia-ring-donut);
+  mask: var(--savia-ring-donut);
+}
+.savia-ring::before {
+  background: var(--savia-ring-track);
+}
+.savia-ring::after {
+  background: conic-gradient(
+    from 0deg,
+    var(--savia-ring-arc) 0 26%,
+    transparent 26% 100%
+  );
+  animation: savia-ring-spin 0.9s linear infinite;
+}
+.savia-ring-xs {
+  --savia-ring-size: 1rem;
+  --savia-ring-width: 2px;
+}
+.savia-ring-sm {
+  --savia-ring-size: 1.25rem;
+  --savia-ring-width: 2px;
+}
+.savia-ring-lg {
+  --savia-ring-size: 3rem;
+  --savia-ring-width: 4px;
+}
+.savia-ring-xl {
+  --savia-ring-size: 6rem;
+  --savia-ring-width: 4px;
+}
+@keyframes savia-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .savia-ring::after {
+    animation: none;
+  }
+}
