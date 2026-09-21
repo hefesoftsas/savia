@@ -68,6 +68,53 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
     { method: "DELETE" },
   ]);
 });
+it("deletes a revoked link only after inline confirmation", async () => {
+  const row = {
+    id: "dead-link",
+    token: "dead-token",
+    path: "/public/forms/dead-token",
+    url: "https://public.savia.test/public/forms/dead-token",
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: "2026-09-20T00:00:00.000Z",
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })));
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+  await screen.findByText("Revocado");
+  expect(screen.getByRole("button", { name: "Revocar enlace" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Eliminar enlace" }));
+  expect(
+    screen.getByText("¿Eliminar este enlace y su historial de envíos?"),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+  expect(
+    screen.queryByText("¿Eliminar este enlace y su historial de envíos?"),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Eliminar enlace" }));
+  // The trigger is replaced by the inline confirmation: a single delete left.
+  fireEvent.click(screen.getByRole("button", { name: "Eliminar enlace" }));
+  expect(request.mock.calls[1]).toEqual([
+    "/v1/public-forms/dead-link?hard=true",
+    { method: "DELETE" },
+  ]);
+  await waitFor(() =>
+    expect(screen.getByText("Enlace eliminado.")).toBeInTheDocument(),
+  );
+  expect(
+    screen.queryByText("https://public.savia.test/public/forms/dead-token"),
+  ).not.toBeInTheDocument();
+});
 it("explains missing captcha configuration when publishing is unavailable", async () => {
   const request = vi
     .fn()
