@@ -52,6 +52,12 @@ export function createPublicQuoteAdapter(options: {
   executor?: ExtensionActionExecutor;
   encryptionKey?: string;
   registry?: ExtensionRegistry;
+  /**
+   * Local-development simulation with fixture data (no provider calls, no
+   * run receipts). The caller must only enable it for localhost origins;
+   * preview and production never set it.
+   */
+  mockProviders?: boolean;
 }): PublicQuoteAdapter {
   const registry = options.registry ?? solutionOptions.extensionRegistry;
   const current = async (
@@ -166,6 +172,16 @@ export function createPublicQuoteAdapter(options: {
         message:
           "La consulta de placa no está disponible. Completa los datos manualmente.",
       });
+    // Local simulation for the documented demo plate only; every other plate
+    // still goes through the real provider flow.
+    if (options.mockProviders && normalized === "TESTCAR")
+      return {
+        plate: normalized,
+        fasecoldaCode: "00000000",
+        productionYear: 2024,
+        declaredValue: 50000000,
+        accessoriesValue: 0,
+      };
     if (!options.executor)
       throw new HTTPException(503, {
         message: "El servicio de cotización no está disponible.",
@@ -279,6 +295,28 @@ export function createPublicQuoteAdapter(options: {
     async execute(input) {
       await assertAvailable(input);
       const frozen = policy(input.snapshot);
+      // Local simulation: fixture result derived from the frozen products, so
+      // the full submit/receipt flow can be exercised without providers.
+      if (options.mockProviders) {
+        try {
+          contribution.validateValues(input.values);
+        } catch {
+          throw new HTTPException(422, {
+            message: "Revisa los datos del vehículo y del solicitante.",
+          });
+        }
+        const quotes = frozen.products.map(({ flowId }) => {
+          const label = catalog.get(flowId)!.label;
+          return {
+            insurer: label.split(" · ")[0],
+            product: label,
+            premiumTotal: 1250000,
+            currency: "COP" as const,
+            coverages: ["Responsabilidad civil", "Asistencia en carretera"],
+          };
+        });
+        return input.returnResult ? { quotes, unavailable: 0 } : undefined;
+      }
       if (!options.executor)
         throw new HTTPException(503, {
           message: "El servicio de cotización no está disponible.",

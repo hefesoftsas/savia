@@ -22,6 +22,7 @@ const permitted = (name) =>
     "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
     "SAVIA_PUBLIC_ORIGIN",
     "SAVIA_DISABLE_CAPTCHA",
+    "SAVIA_MOCK_QUOTES",
     "SQL_BRIDGE_URL",
     "SQL_BRIDGE_SECRET",
   ].includes(name);
