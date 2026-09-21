@@ -210,3 +210,165 @@ it("defaults the DANE reference service to live without a failing simulation", a
     ),
   );
 });
+
+describe("SecretsTransferPanel", () => {
+  const secretsFlow: RequestFlow = {
+    ...autos,
+    variables: [
+      { key: "api_token", value: "", secret: true, configured: true },
+      { key: "endpoint", value: "https://provider.test", secret: false },
+    ],
+  };
+
+  function renderTransfer() {
+    const get = vi.fn(async (path: string) => {
+      if (path.endsWith("/flows")) {
+        return [{ id: "autos", name: "Autos", folderPath: "Cotizaciones", steps: secretsFlow.steps }];
+      }
+      if (path.endsWith("/folders")) return ["Cotizaciones"];
+      if (path.endsWith("/flows/autos/runs")) return [];
+      if (path.endsWith("/flows/autos")) return secretsFlow;
+      throw new Error(`Ruta inesperada: ${path}`);
+    });
+    const put = vi.fn().mockResolvedValue({ ok: true });
+    const post = vi.fn(async (path: string) => {
+      if (path.endsWith("/variables/reveal")) return { value: "super-secreto" };
+      return run;
+    });
+    const services = {
+      apiClient: { get, put, post, delete: vi.fn(), request: vi.fn() },
+      requestResults: { read: vi.fn().mockRejectedValue(new Error("not normalized")) },
+    } as unknown as AppServices;
+    render(
+      <MemoryRouter initialEntries={["/savia-request?flow=autos&step=0"]}>
+        <AppServicesProvider services={services}>
+          <SaviaRequestProvider>
+            <SaviaRequestWorkspace />
+          </SaviaRequestProvider>
+        </AppServicesProvider>
+      </MemoryRouter>,
+    );
+    return { get, put, post };
+  }
+
+  async function openVariablesTab() {
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Autos" });
+    await user.click(screen.getByRole("tab", { name: "Variables" }));
+    return user;
+  }
+
+  function mockDownload() {
+    const blobs: Blob[] = [];
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    Object.assign(URL, {
+      createObjectURL: vi.fn((blob: Blob) => {
+        blobs.push(blob);
+        return "blob:mock";
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    return {
+      blobs,
+      restore() {
+        click.mockRestore();
+        Object.assign(URL, {
+          createObjectURL: originalCreate,
+          revokeObjectURL: originalRevoke,
+        });
+      },
+    };
+  }
+
+  it("exports the flow secrets revealing masked values", async () => {
+    const { post } = renderTransfer();
+    const user = await openVariablesTab();
+    const download = mockDownload();
+    try {
+      expect(
+        screen.getByRole("button", { name: "Exportar flow" }),
+      ).toBeVisible();
+      await user.click(screen.getByRole("button", { name: "Exportar flow" }));
+      await waitFor(() =>
+        expect(post).toHaveBeenCalledWith(
+          "/v1/savia-request/api/flows/autos/variables/reveal",
+          { key: "api_token" },
+        ),
+      );
+      await waitFor(() => expect(download.blobs).toHaveLength(1));
+      const text = await download.blobs[0]!.text();
+      expect(JSON.parse(text)).toEqual({
+        version: 1,
+        exportedAt: expect.any(String),
+        flows: [
+          {
+            flowId: "autos",
+            variables: [
+              { key: "api_token", value: "super-secreto", secret: true },
+              { key: "endpoint", value: "https://provider.test", secret: false },
+            ],
+          },
+        ],
+      });
+      expect(await screen.findByRole("status")).toHaveTextContent(/exportados/);
+    } finally {
+      download.restore();
+    }
+  });
+
+  it("imports a file into the draft without overwriting with empty values", async () => {
+    const { put } = renderTransfer();
+    const user = await openVariablesTab();
+    const file = new File(
+      [
+        JSON.stringify({
+          version: 1,
+          exportedAt: "2026-09-20T00:00:00.000Z",
+          flows: [
+            {
+              flowId: "autos",
+              variables: [
+                { key: "api_token", value: "importado", secret: true },
+                { key: "endpoint", value: "", secret: false },
+              ],
+            },
+          ],
+        }),
+      ],
+      "secretos.json",
+      { type: "application/json" },
+    );
+    await user.click(screen.getByRole("button", { name: "Importar al flow" }));
+    await user.upload(screen.getByLabelText("Archivo de secretos"), file);
+    expect(await screen.findByRole("status")).toHaveTextContent(/Guarda los cambios/);
+    expect(screen.getByLabelText("Valor de api_token")).toHaveValue("importado");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith(
+        "/v1/savia-request/api/flows/autos/variables",
+        expect.arrayContaining([
+          expect.objectContaining({ key: "api_token", value: "importado" }),
+          expect.objectContaining({
+            key: "endpoint",
+            value: "https://provider.test",
+          }),
+        ]),
+      ),
+    );
+  });
+
+  it("rejects invalid import files with an actionable message", async () => {
+    renderTransfer();
+    const user = await openVariablesTab();
+    await user.click(screen.getByRole("button", { name: "Importar al flow" }));
+    await user.upload(
+      screen.getByLabelText("Archivo de secretos"),
+      new File(["no-json"], "secretos.json", { type: "application/json" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no es un JSON válido/);
+  });
+});
