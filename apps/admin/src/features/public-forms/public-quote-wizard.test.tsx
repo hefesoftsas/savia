@@ -413,6 +413,38 @@ it("auto-triggers the lookup on blur and reports an empty result", async () => {
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
+it("suggests DANE cities and stores the selected code", async () => {
+  fetchMock.mockResolvedValueOnce(
+    Response.json({
+      matches: [
+        { code: "11001", city: "Bogotá", department: "Bogotá D.C.", junk: 1 },
+        { code: "05001", city: "Medellín", department: "Antioquia" },
+      ],
+    }),
+  );
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(
+    await screen.findByLabelText(/Código de ciudad de circulación/),
+    {
+      target: { value: "bog" },
+    },
+  );
+  expect(await screen.findByText("Bogotá (Bogotá D.C.)")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Bogotá (Bogotá D.C.)"));
+  expect(screen.getByLabelText(/Código de ciudad de circulación/)).toHaveValue(
+    "11001",
+  );
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toContain("/cities?search=bog");
+  expect(init.credentials).toBe("omit");
+});
+
 function LocaleSwitcher() {
   const setLocale = useSetLocale();
   return (

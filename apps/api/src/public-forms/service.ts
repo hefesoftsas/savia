@@ -74,6 +74,9 @@ export interface PublicQuoteAdapter {
 }
 export type PublicFormOptions = CaptchaOptions & {
   quote?: PublicQuoteAdapter;
+  saviaRequest?: {
+    fetch(request: Request): Promise<Response> | Response;
+  };
   rateLimiter?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };

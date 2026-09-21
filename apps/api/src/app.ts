@@ -125,6 +125,7 @@ export function createApp(
   });
   registerPublicFormRoutes(app, db, {
     ...publicForms,
+    saviaRequest: publicForms?.saviaRequest ?? saviaRequestService,
     quote:
       publicForms?.quote ??
       createPublicQuoteAdapter({

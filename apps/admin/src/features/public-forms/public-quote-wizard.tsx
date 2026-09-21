@@ -1,6 +1,12 @@
 import { useMessages } from "@/i18n/core";
 import { publicFormsMessages } from "@/i18n/locales/public-forms";
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -56,6 +62,153 @@ function stepsFor(
       fields: fields.filter((f) => CONTACT_STEP_NAMES.has(f.name)),
     },
   ];
+}
+
+type CityMatch = { code: string; city: string; department: string };
+
+const CITY_FIELDS = new Set(["vehicle_circulationCity", "applicant_city"]);
+
+/**
+ * DANE city autocomplete over public reference data. Selecting a suggestion
+ * stores the city code; free text is still accepted and validated server-side.
+ */
+function CityAutocomplete({
+  field,
+  value,
+  endpoint,
+  onChange,
+}: {
+  field: QuoteField;
+  value: string;
+  endpoint: string;
+  onChange: (value: string) => void;
+}) {
+  const t = useMessages(publicFormsMessages);
+  const [suggestions, setSuggestions] = useState<CityMatch[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const alive = useRef(true);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      window.clearTimeout(timer.current);
+    };
+  }, []);
+  const listId = `quote-${field.name}-cities`;
+
+  function search(next: string) {
+    onChange(next);
+    window.clearTimeout(timer.current);
+    // A digit-only value is already a city code: keep it verbatim instead of
+    // searching it as a name fragment.
+    if (next.trim().length < 2 || /^\d+$/.test(next.trim())) {
+      setSuggestions([]);
+      setOpen(false);
+      return;
+    }
+    timer.current = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(
+          `${endpoint}/cities?search=${encodeURIComponent(next.trim())}`,
+          { credentials: "omit", cache: "no-store" },
+        );
+        if (!alive.current) return;
+        if (response.ok) {
+          const data = (await response.json()) as { matches?: unknown };
+          const matches = Array.isArray(data.matches)
+            ? (data.matches as Record<string, unknown>[])
+                .filter(
+                  (match) =>
+                    typeof match.code === "string" &&
+                    typeof match.city === "string" &&
+                    match.code &&
+                    match.city,
+                )
+                .slice(0, 20)
+                .map((match) => ({
+                  code: String(match.code),
+                  city: String(match.city),
+                  department:
+                    typeof match.department === "string"
+                      ? String(match.department)
+                      : "",
+                }))
+            : [];
+          if (!alive.current) return;
+          setSuggestions(matches);
+          setOpen(true);
+        }
+      } catch {
+        // City codes stay manual when the reference lookup is unreachable.
+      } finally {
+        if (alive.current) setLoading(false);
+      }
+    }, 300);
+  }
+
+  return (
+    <div className="public-quote-city">
+      <Input
+        id={`quote-${field.name}`}
+        name={field.name}
+        type="text"
+        required={field.required}
+        autoComplete="off"
+        value={value}
+        onChange={(e) => search(e.target.value)}
+        onFocus={() => {
+          if (suggestions.length) setOpen(true);
+        }}
+        onBlur={() => {
+          window.setTimeout(() => {
+            if (alive.current) setOpen(false);
+          }, 150);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(false);
+        }}
+        aria-expanded={open}
+        aria-controls={listId}
+      />
+      {loading && (
+        <p role="status" className="public-form-help">
+          {t("Consultando…")}
+        </p>
+      )}
+      {open && !loading && suggestions.length > 0 && (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={t("Ciudades sugeridas")}
+          className="public-quote-suggestions"
+        >
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.code} role="option" aria-selected="false">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(suggestion.code);
+                  setSuggestions([]);
+                  setOpen(false);
+                }}
+              >
+                {suggestion.city} ({suggestion.department})
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && !loading && suggestions.length === 0 && (
+        <p role="status" className="public-form-help">
+          {t("No se encontraron ciudades.")}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** Public-only quote wizard: no PluginApi, no private collections, no history. */
@@ -431,6 +584,13 @@ export function PublicQuoteForm({
                         )}
                       </Button>
                     </div>
+                  ) : CITY_FIELDS.has(field.name) ? (
+                    <CityAutocomplete
+                      field={field}
+                      value={String(values[field.name] ?? "")}
+                      endpoint={endpoint}
+                      onChange={(next) => update(field.name, next)}
+                    />
                   ) : field.type === "boolean" && field.required ? (
                     <select
                       id={`quote-${field.name}`}

@@ -360,4 +360,14 @@ export const publicFormsMessages = {
     "The plate could not be looked up.",
     "Não foi possível consultar a placa.",
   ],
+  "Ciudades sugeridas": [
+    "Ciudades sugeridas",
+    "Suggested cities",
+    "Cidades sugeridas",
+  ],
+  "No se encontraron ciudades.": [
+    "No se encontraron ciudades.",
+    "No cities found.",
+    "Nenhuma cidade encontrada.",
+  ],
 } as const;

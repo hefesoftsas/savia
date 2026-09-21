@@ -622,7 +622,7 @@ it("serves the public plate lookup only for quote links with a lookup adapter", 
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ plate: "abc123" }),
+      body: JSON.stringify({ plate: "testcar" }),
     },
   );
   expect(found.status).toBe(200);
@@ -634,7 +634,7 @@ it("serves the public plate lookup only for quote links with a lookup adapter", 
   expect(lookupVehicle).toHaveBeenCalledWith(
     expect.objectContaining({
       objectName: expect.any(String),
-      plate: "abc123",
+      plate: "testcar",
     }),
   );
   const recordLink = await publish(app(), await object());
@@ -661,6 +661,77 @@ it("serves the public plate lookup only for quote links with a lookup adapter", 
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ plate: "TESTCAR" }),
         },
+      )
+    ).status,
+  ).toBe(503);
+});
+it("serves bounded city suggestions for quote links without upstream internals", async () => {
+  const upstream = vi.fn(async () =>
+    Response.json({
+      status: "ok",
+      matches: Array.from({ length: 25 }, (_, index) => ({
+        code: `11${String(index).padStart(3, "0")}`,
+        city: `Ciudad ${index}`,
+        department: "Departamento",
+        internalScore: index,
+        secret: "never-public",
+      })),
+    }),
+  );
+  const quote = {
+    publish: async () => ({
+      fields: [
+        { name: "name", label: "Name", type: "text" as const, required: true },
+      ],
+      snapshot: { frozen: "policy" },
+    }),
+    validate: async ({ values }: any) => values,
+    execute: async () => undefined,
+  };
+  const instance = app({
+    quote,
+    saviaRequest: { fetch: upstream as unknown as typeof fetch },
+  });
+  const link = await publish(instance, await object(), { kind: "quote" });
+  const found = await instance.request(
+    "https://api.test/api/public/forms/" + link.token + "/cities?search=bog",
+  );
+  expect(found.status).toBe(200);
+  const body = (await found.json()) as any;
+  expect(body.matches).toHaveLength(20);
+  expect(body.matches[0]).toEqual({
+    code: expect.any(String),
+    city: expect.any(String),
+    department: expect.any(String),
+  });
+  expect(JSON.stringify(body)).not.toMatch(/secret|internalScore/);
+  expect(upstream).toHaveBeenCalledTimes(1);
+  expect(String(upstream.mock.calls[0][0].url)).toContain(
+    "/api/lookups/dane?city=bog",
+  );
+  const recordLink = await publish(app(), await object());
+  expect(
+    (
+      await instance.request(
+        "https://api.test/api/public/forms/" +
+          recordLink.token +
+          "/cities?search=bog",
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await instance.request(
+        "https://api.test/api/public/forms/" + link.token + "/cities?search=x",
+      )
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await app({ quote }).request(
+        "https://api.test/api/public/forms/" +
+          link.token +
+          "/cities?search=bog",
       )
     ).status,
   ).toBe(503);
