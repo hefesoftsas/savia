@@ -1,7 +1,12 @@
 import { ChevronDown, Moon, Palette, Sun } from "lucide-react";
 import { useState } from "react";
 import { useTranslate } from "ra-core";
-import { colorThemes, colorThemeSwatches, type ColorTheme } from "@/color-theme";
+import {
+  colorThemes,
+  colorThemeLabel,
+  colorThemeSwatches,
+  type ColorTheme,
+} from "@/color-theme";
 import { useTheme } from "@/components/admin/use-theme";
 import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
 import {
@@ -10,6 +15,12 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
+
+/** Selected state for the compact option buttons (checked is still announced). */
+const checkedButtonClassName =
+  "data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground data-[state=checked]:ring-1 data-[state=checked]:ring-ring";
+/** The default radio dot has no room in the compact buttons; ring shows state. */
+const hideIndicatorClassName = "[&>span:first-child]:hidden";
 
 /**
  * Personal appearance preferences, persisted through the existing theme provider.
@@ -48,53 +59,68 @@ export function AppearancePanel() {
       </DropdownMenuItem>
       {open ? (
         <>
-          <DropdownMenuRadioGroup
-            value={theme}
-            onValueChange={(value) => {
-              if (value === "light" || value === "dark") setTheme(value);
-            }}
-          >
-            <DropdownMenuRadioItem
-              value="light"
-              className="min-h-11 gap-2.5 py-2.5"
+          <div className="px-1">
+            <DropdownMenuRadioGroup
+              value={theme}
+              onValueChange={(value) => {
+                if (value === "light" || value === "dark") setTheme(value);
+              }}
+              className="grid grid-cols-2 gap-1"
             >
-              <Sun
-                aria-hidden="true"
-                className="size-4 text-muted-foreground"
-              />
-              {translate("savia.appearance.lightMode")}
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem
-              value="dark"
-              className="min-h-11 gap-2.5 py-2.5"
-            >
-              <Moon
-                aria-hidden="true"
-                className="size-4 text-muted-foreground"
-              />
-              {translate("savia.appearance.darkMode")}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+              <DropdownMenuRadioItem
+                value="light"
+                className={`min-h-11 justify-center gap-1.5 rounded-lg px-2 py-2 ${checkedButtonClassName} ${hideIndicatorClassName}`}
+              >
+                <Sun
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+                <span className="truncate">
+                  {translate("savia.appearance.lightMode")}
+                </span>
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem
+                value="dark"
+                className={`min-h-11 justify-center gap-1.5 rounded-lg px-2 py-2 ${checkedButtonClassName} ${hideIndicatorClassName}`}
+              >
+                <Moon
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+                <span className="truncate">
+                  {translate("savia.appearance.darkMode")}
+                </span>
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </div>
           {!branding && (
             <>
-              <DropdownMenuLabel>
-                {translate("savia.appearance.palette")}
+              <DropdownMenuLabel className="flex items-baseline justify-between gap-2">
+                <span>{translate("savia.appearance.palette")}</span>
+                <span className="truncate text-xs font-normal text-muted-foreground">
+                  {colorThemeLabel(colorTheme)}
+                </span>
               </DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={colorTheme}
-                onValueChange={(value) => setColorTheme(value as ColorTheme)}
-              >
-                {colorThemes.map((option) => (
-                  <DropdownMenuRadioItem
-                    key={option.id}
-                    value={option.id}
-                    className="min-h-11 gap-2.5 py-2.5"
-                  >
-                    <PalettePreview theme={option.id} />
-                    <span className="truncate">{option.label}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
+              <div className="px-1 pb-1">
+                <DropdownMenuRadioGroup
+                  value={colorTheme}
+                  onValueChange={(value) => setColorTheme(value as ColorTheme)}
+                  className="grid grid-cols-4 gap-1"
+                >
+                  {colorThemes.map((option) => (
+                    <DropdownMenuRadioItem
+                      key={option.id}
+                      value={option.id}
+                      title={option.label}
+                      aria-label={option.label}
+                      className={`size-11 min-h-11 justify-center rounded-lg p-0 ${checkedButtonClassName} ${hideIndicatorClassName}`}
+                    >
+                      <PalettePreview theme={option.id} />
+                      <span className="sr-only">{option.label}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </div>
             </>
           )}
         </>
