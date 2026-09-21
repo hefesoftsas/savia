@@ -60,6 +60,9 @@ vi.mock("@/features/savia-request/savia-request-provider", () => ({
     <>{children}</>
   ),
 }));
+vi.mock("@/pwa", () => ({
+  PwaInstallBanner: () => <div data-testid="pwa-install-banner" />,
+}));
 
 afterEach(cleanup);
 
@@ -99,6 +102,7 @@ describe("admin layout", () => {
     expect(
       screen.queryByRole("button", { name: /Instalar|Install/i }),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId("pwa-install-banner")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Volver" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Adelante" })).toBeDisabled();
   });

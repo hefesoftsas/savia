@@ -1,4 +1,5 @@
 import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
+import { PwaInstallBanner } from "@/pwa";
 import type { ErrorInfo } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -172,7 +173,7 @@ export const Layout = (props: CoreLayoutProps) => {
               className="flex min-w-0 shrink-0 items-center gap-1"
             />
           </header>
-        <DeploymentUpdateNotice />
+          <DeploymentUpdateNotice />
           <ErrorBoundary
             onError={handleError}
             fallbackRender={({ error, resetErrorBoundary }) => (
@@ -192,6 +193,7 @@ export const Layout = (props: CoreLayoutProps) => {
         </main>
       </SaviaRequestProvider>
       <Notification />
+      <PwaInstallBanner />
       <Suspense fallback={null}>
         <AssistantBar />
       </Suspense>

@@ -1,10 +1,10 @@
-import { useCallback, useState } from "react";
 import { Download } from "lucide-react";
 import { useTranslate } from "ra-core";
 import { Button } from "@/components/ui/button";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { usePwaInstall } from "./use-pwa-install";
+import { usePwaInstallAction } from "./use-pwa-install-action";
 import { PwaInstallDialog } from "./pwa-install-dialog";
 import { cn } from "@/lib/utils";
 
@@ -20,23 +20,12 @@ export function PwaInstallButton({
   onAction,
 }: PwaInstallButtonProps) {
   const translate = useTranslate();
-  const { isInstalled, hasNativePrompt, platform, promptInstall } =
-    usePwaInstall();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { isInstalled, isInstallable } = usePwaInstall();
+  const { platform, dialogOpen, setDialogOpen, handleInstall } =
+    usePwaInstallAction({ onAction });
 
-  const handleClick = useCallback(async () => {
-    onAction?.();
-    if (hasNativePrompt) {
-      const accepted = await promptInstall();
-      if (!accepted) {
-        setDialogOpen(true);
-      }
-    } else {
-      setDialogOpen(true);
-    }
-  }, [hasNativePrompt, onAction, promptInstall]);
-
-  if (isInstalled) {
+  // Single source of truth for visibility: never render once installed.
+  if (isInstalled || !isInstallable) {
     return null;
   }
 
@@ -54,7 +43,7 @@ export function PwaInstallButton({
           type="button"
           variant="outline"
           size="sm"
-          onClick={handleClick}
+          onClick={handleInstall}
           title={label}
           aria-label={label}
           className={cn(
@@ -71,7 +60,7 @@ export function PwaInstallButton({
         <SidebarMenuButton
           type="button"
           size="default"
-          onClick={handleClick}
+          onClick={handleInstall}
           tooltip={label}
           aria-label={label}
           className={cn(
@@ -88,7 +77,7 @@ export function PwaInstallButton({
 
       {variant === "menu" && (
         <DropdownMenuItem
-          onClick={handleClick}
+          onClick={handleInstall}
           className={cn(
             "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium",
             className,
