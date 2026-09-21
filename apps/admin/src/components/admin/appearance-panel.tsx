@@ -83,23 +83,23 @@ export function AppearancePanel() {
             <DropdownMenuLabel>
               {translate("savia.appearance.palette")}
             </DropdownMenuLabel>
-            <div className="max-h-64 overflow-y-auto overscroll-contain">
-              <DropdownMenuRadioGroup
-                value={colorTheme}
-                onValueChange={(value) => setColorTheme(value as ColorTheme)}
-              >
-                {colorThemes.map((option) => (
-                  <DropdownMenuRadioItem
-                    key={option.id}
-                    value={option.id}
-                    className="min-h-11 gap-2.5 py-2.5"
-                  >
-                    <PalettePreview theme={option.id} />
-                    <span className="truncate">{option.label}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </div>
+            {/* Single scroll container: the parent menu already scrolls.
+                A nested overflow box traps the touch gesture on Android/iOS. */}
+            <DropdownMenuRadioGroup
+              value={colorTheme}
+              onValueChange={(value) => setColorTheme(value as ColorTheme)}
+            >
+              {colorThemes.map((option) => (
+                <DropdownMenuRadioItem
+                  key={option.id}
+                  value={option.id}
+                  className="min-h-11 gap-2.5 py-2.5"
+                >
+                  <PalettePreview theme={option.id} />
+                  <span className="truncate">{option.label}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
           </>
         )}
       </>
