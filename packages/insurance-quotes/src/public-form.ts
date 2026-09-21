@@ -299,6 +299,14 @@ export const insurancePublicQuoteContribution = {
       products: settings.products,
     };
   },
+  /** Trusted plate-lookup configuration; the visitor never selects the flow. */
+  readVehicleLookup(value: unknown) {
+    const settings = insurancePackageSettingsSchema.parse(value);
+    return {
+      enabled: settings.vehicleLookup.enabled,
+      flowId: settings.vehicleLookup.flowId,
+    };
+  },
   validateValues: validatePublicQuoteValues,
   actionInput(
     flowId: string,

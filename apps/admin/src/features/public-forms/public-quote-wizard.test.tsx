@@ -355,6 +355,64 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
   expect(JSON.stringify(payload)).not.toMatch(/provider|secret|credential/i);
 });
 
+it("looks up the plate and autofills vehicle fields like the embedded wizard", async () => {
+  fetchMock.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        plate: "ABC123",
+        fasecoldaCode: "12345678",
+        productionYear: 2023,
+        declaredValue: 50000000,
+      }),
+    ),
+  );
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "abc123" },
+  });
+  // The typed plate is normalized to uppercase.
+  expect(screen.getByLabelText(/Placa/)).toHaveValue("ABC123");
+  fireEvent.click(screen.getByRole("button", { name: "Consultar placa" }));
+  expect(await screen.findAllByText("✓ Autocompletado")).not.toHaveLength(0);
+  expect(screen.getByLabelText(/Código Fasecolda/)).toHaveValue("12345678");
+  expect(screen.getByLabelText(/Año del vehículo/)).toHaveValue(2023);
+  expect(screen.getByLabelText(/Valor asegurado/)).toHaveValue(50000000);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toContain("/vehicle-lookup");
+  expect(init.credentials).toBe("omit");
+  expect(JSON.parse(init.body)).toEqual({ plate: "ABC123" });
+  // Editing the plate clears the autofilled values.
+  fireEvent.change(screen.getByLabelText(/Placa/), {
+    target: { value: "XYZ999" },
+  });
+  expect(screen.getByLabelText(/Código Fasecolda/)).toHaveValue("");
+  expect(screen.queryByText("✓ Autocompletado")).not.toBeInTheDocument();
+});
+
+it("auto-triggers the lookup on blur and reports an empty result", async () => {
+  fetchMock.mockResolvedValueOnce(new Response("{}", { status: 404 }));
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "ZZZ000" },
+  });
+  fireEvent.blur(screen.getByLabelText(/Placa/));
+  expect(
+    await screen.findByText("No se encontraron datos para esa placa."),
+  ).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 function LocaleSwitcher() {
   const setLocale = useSetLocale();
   return (

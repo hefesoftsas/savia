@@ -343,4 +343,21 @@ export const publicFormsMessages = {
     "%{count} products",
     "%{count} produtos",
   ],
+  "Consultar placa": ["Consultar placa", "Look up plate", "Consultar placa"],
+  "Consultando…": ["Consultando…", "Looking up…", "Consultando…"],
+  "✓ Autocompletado": [
+    "✓ Autocompletado",
+    "✓ Autocompleted",
+    "✓ Preenchido automaticamente",
+  ],
+  "No se encontraron datos para esa placa.": [
+    "No se encontraron datos para esa placa.",
+    "No data was found for that plate.",
+    "Nenhum dado encontrado para essa placa.",
+  ],
+  "No se pudo consultar la placa.": [
+    "No se pudo consultar la placa.",
+    "The plate could not be looked up.",
+    "Não foi possível consultar a placa.",
+  ],
 } as const;

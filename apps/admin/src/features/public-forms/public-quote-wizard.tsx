@@ -1,6 +1,6 @@
 import { useMessages } from "@/i18n/core";
 import { publicFormsMessages } from "@/i18n/locales/public-forms";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -95,9 +95,119 @@ export function PublicQuoteForm({
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [parseError, setParseError] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupFields, setLookupFields] = useState<string[]>([]);
+  const [lookupNotice, setLookupNotice] = useState("");
+  const lastLookedUpPlate = useRef("");
 
   function update(name: string, value: string | boolean) {
     setValues((prev) => ({ ...prev, [name]: value }));
+    // A manually edited field is no longer considered autofilled.
+    setLookupFields((prev) =>
+      prev.includes(name) ? prev.filter((field) => field !== name) : prev,
+    );
+  }
+
+  function updatePlate(value: string) {
+    const upper = value.toUpperCase();
+    // Changing the plate invalidates previously autofilled vehicle data,
+    // mirroring the embedded quote wizard.
+    setValues((prev) => {
+      const next: Record<string, string | boolean> = {
+        ...prev,
+        vehicle_plate: upper,
+      };
+      for (const name of lookupFields) delete next[name];
+      return next;
+    });
+    setLookupFields([]);
+    setLookupNotice("");
+  }
+
+  async function lookupPlate() {
+    const rawPlate = String(values["vehicle_plate"] ?? "")
+      .trim()
+      .toUpperCase();
+    if (!rawPlate || lookingUp) return;
+    setLookingUp(true);
+    setLookupNotice("");
+    try {
+      const response = await fetch(`${endpoint}/vehicle-lookup`, {
+        method: "POST",
+        credentials: "omit",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plate: rawPlate }),
+      });
+      if (!response.ok) {
+        setLookupNotice(
+          response.status === 404
+            ? t("No se encontraron datos para esa placa.")
+            : t("No se pudo consultar la placa."),
+        );
+        return;
+      }
+      const data = (await response.json()) as {
+        plate?: unknown;
+        fasecoldaCode?: unknown;
+        productionYear?: unknown;
+        declaredValue?: unknown;
+        accessoriesValue?: unknown;
+      };
+      if (data.plate !== rawPlate) {
+        setLookupNotice(t("No se encontraron datos para esa placa."));
+        return;
+      }
+      const filled: Array<[string, unknown]> = [
+        ["vehicle_fasecoldaCode", data.fasecoldaCode],
+        ["vehicle_productionYear", data.productionYear],
+        ["vehicle_declaredValue", data.declaredValue],
+        ["vehicle_accessoriesValue", data.accessoriesValue],
+      ];
+      const names: string[] = [];
+      setValues((prev) => {
+        const next: Record<string, string | boolean> = {
+          ...prev,
+          vehicle_plate: rawPlate,
+        };
+        for (const [name, value] of filled) {
+          if (
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ""
+          ) {
+            next[name] = String(value);
+            names.push(name);
+          }
+        }
+        return next;
+      });
+      setLookupFields(names);
+      lastLookedUpPlate.current = rawPlate;
+    } catch {
+      setLookupNotice(t("No se pudo consultar la placa."));
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
+  function autoLookupPlate() {
+    const plate = String(values["vehicle_plate"] ?? "").trim();
+    if (
+      plate &&
+      plate.length >= 5 &&
+      plate.toUpperCase() !== lastLookedUpPlate.current &&
+      !lookingUp
+    ) {
+      void lookupPlate();
+    }
+  }
+
+  function lookupPlateOnEnter(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter" && String(values["vehicle_plate"] ?? "")) {
+      event.preventDefault();
+      void lookupPlate();
+    }
   }
 
   function goNext() {
@@ -115,6 +225,10 @@ export function PublicQuoteForm({
     setStep(0);
     setValues({});
     setParseError("");
+    setLookingUp(false);
+    setLookupFields([]);
+    setLookupNotice("");
+    lastLookedUpPlate.current = "";
     controller.startNew();
   }
 
@@ -246,15 +360,78 @@ export function PublicQuoteForm({
           <p className="public-form-help">
             {t("Los campos marcados con * son obligatorios.")}
           </p>
-          <fieldset disabled={pending || uncertain}>
+          <fieldset disabled={pending || uncertain || lookingUp}>
             <div className="public-quote-grid">
               {current.fields.map((field) => (
                 <div className="public-form-field" key={field.name}>
                   <label htmlFor={`quote-${field.name}`}>
                     {field.label}
                     {field.required ? " *" : ""}
+                    {lookupFields.includes(field.name) && (
+                      <span className="public-quote-synced">
+                        {t("✓ Autocompletado")}
+                      </span>
+                    )}
+                    {lookingUp &&
+                      [
+                        "vehicle_fasecoldaCode",
+                        "vehicle_productionYear",
+                        "vehicle_declaredValue",
+                        "vehicle_accessoriesValue",
+                      ].includes(field.name) && (
+                        <span className="public-quote-syncing">
+                          {t("Consultando…")}
+                        </span>
+                      )}
                   </label>
-                  {field.type === "boolean" && field.required ? (
+                  {field.name === "vehicle_plate" ? (
+                    <div className="public-quote-plate">
+                      <Input
+                        id={`quote-${field.name}`}
+                        name={field.name}
+                        type="text"
+                        required={field.required}
+                        autoComplete="off"
+                        value={String(values[field.name] ?? "")}
+                        onChange={(e) => updatePlate(e.target.value)}
+                        onBlur={autoLookupPlate}
+                        onKeyDown={lookupPlateOnEnter}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        aria-label={t("Consultar placa")}
+                        title={t("Consultar placa")}
+                        disabled={
+                          lookingUp || !String(values[field.name] ?? "").trim()
+                        }
+                        onClick={() => void lookupPlate()}
+                        className="public-quote-plate-button"
+                      >
+                        {lookingUp ? (
+                          <span
+                            aria-hidden="true"
+                            className="public-quote-spinner"
+                          />
+                        ) : (
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="15"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2.2"
+                            viewBox="0 0 24 24"
+                            width="15"
+                          >
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" x2="16.65" y1="21" y2="16.65" />
+                          </svg>
+                        )}
+                      </Button>
+                    </div>
+                  ) : field.type === "boolean" && field.required ? (
                     <select
                       id={`quote-${field.name}`}
                       name={field.name}
@@ -305,6 +482,11 @@ export function PublicQuoteForm({
               ))}
             </div>
           </fieldset>
+          {step === 0 && lookupNotice && (
+            <p role="status" className="public-form-help">
+              {lookupNotice}
+            </p>
+          )}
 
           <div
             ref={captchaElementRef}

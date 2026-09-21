@@ -126,8 +126,117 @@ export function createPublicQuoteAdapter(options: {
       })),
     };
   }
+  async function lookupVehicle({
+    db,
+    tenant,
+    domainId,
+    objectName,
+    snapshot,
+    plate,
+  }: {
+    db: D1Database;
+    tenant: string;
+    domainId: string;
+    objectName: string;
+    snapshot: unknown;
+    plate: string;
+  }) {
+    const frozen = policy(snapshot);
+    if (
+      frozen.tenant !== tenant ||
+      frozen.domainId !== domainId ||
+      frozen.objectName !== objectName
+    )
+      throw new HTTPException(404, {
+        message: "El cotizador no está disponible.",
+      });
+    const normalized = plate.trim().toUpperCase();
+    if (!/^[A-Z0-9]{3,10}$/.test(normalized))
+      throw new HTTPException(422, { message: "Revisa la placa." });
+    // The lookup flow follows the current trusted settings, not visitor input:
+    // visitors can never select actions, connections, or flows.
+    const { stored } = await current(db, tenant, objectName);
+    if (frozen.settingsVersion !== stored.version)
+      throw new HTTPException(409, {
+        message: "La configuración cambió. Publica nuevamente el formulario.",
+      });
+    const vehicleLookup = contribution.readVehicleLookup(stored.value);
+    if (!vehicleLookup.enabled)
+      throw new HTTPException(409, {
+        message:
+          "La consulta de placa no está disponible. Completa los datos manualmente.",
+      });
+    if (!options.executor)
+      throw new HTTPException(503, {
+        message: "El servicio de cotización no está disponible.",
+      });
+    const context = {
+      tenantId: tenant,
+      principalId: "public-form:vehicle-lookup",
+      extensionId,
+      actionId: contribution.actionId,
+      connectionId: contribution.connectionId,
+      // Lookups are idempotent reads without a submission identity, so each
+      // call gets a unique run receipt for audit instead of colliding.
+      runId: `public:${frozen.publicationId}:lookup:${normalized}:${crypto.randomUUID()}`,
+    };
+    const actionInput = {
+      mode: "live",
+      flowId: vehicleLookup.flowId,
+      quoteInput: { vehicle: { plate: normalized } },
+    };
+    const runs = new ExtensionConnectionRepository(db, {
+      encryptionKey: options.encryptionKey,
+      isExtensionActive: (activeTenant, id) =>
+        isExtensionAvailable(db, activeTenant, id, registry),
+    });
+    await runs.startRun(context, actionInput);
+    try {
+      const result = await options.executor.execute(context, actionInput);
+      if (result.status !== "succeeded") throw new Error("Lookup unavailable");
+      const vehicle = (result.output as { data?: { vehicle?: unknown } })?.data
+        ?.vehicle;
+      if (!vehicle || typeof vehicle !== "object" || Array.isArray(vehicle))
+        throw new HTTPException(404, {
+          message: "No se encontraron datos para esa placa.",
+        });
+      const record = vehicle as Record<string, unknown>;
+      if (record.plate !== normalized)
+        throw new HTTPException(404, {
+          message: "No se encontraron datos para esa placa.",
+        });
+      // Only fixed vehicle fields are projected; raw provider output stays hidden.
+      const safe = {
+        plate: normalized,
+        ...(typeof record.fasecoldaCode === "string" && record.fasecoldaCode
+          ? { fasecoldaCode: record.fasecoldaCode }
+          : {}),
+        ...(typeof record.productionYear === "number"
+          ? { productionYear: record.productionYear }
+          : {}),
+        ...(typeof record.declaredValue === "number"
+          ? { declaredValue: record.declaredValue }
+          : {}),
+        ...(typeof record.accessoriesValue === "number"
+          ? { accessoriesValue: record.accessoriesValue }
+          : {}),
+      };
+      await runs.completeRun(context, safe);
+      return safe;
+    } catch (error) {
+      if (error instanceof HTTPException && error.status === 404) {
+        await runs.failRun(context, "CONNECTOR_EXECUTION_FAILED");
+        throw error;
+      }
+      await runs.failRun(context, "CONNECTOR_EXECUTION_FAILED");
+      throw new HTTPException(502, {
+        message: "No se pudo consultar la placa. Intenta más tarde.",
+      });
+    }
+  }
   return {
     presentation,
+    lookupVehicle,
     async publish({ db, tenant, domainId, object }) {
       if (!options.executor)
         throw new HTTPException(503, {

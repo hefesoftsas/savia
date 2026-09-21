@@ -418,3 +418,125 @@ it("scopes provider run receipts to the published policy, not a visitor-chosen U
     });
   expect(execute).toHaveBeenCalledTimes(2);
 });
+
+async function enableVehicleLookup(enabled: boolean) {
+  const row = await env.DB.prepare(
+    "SELECT value FROM extension_settings WHERE tenant_id=? AND extension_id='insurance.quotes'",
+  )
+    .bind(tenant)
+    .first<{ value: string }>();
+  const value = JSON.parse(row!.value);
+  value.vehicleLookup = { enabled, flowId: "sura-autos-provider" };
+  await env.DB.prepare(
+    "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+  )
+    .bind(JSON.stringify(value), tenant)
+    .run();
+}
+
+it("looks up vehicle data with the fixed trusted flow and projects only safe fields", async () => {
+  await enableVehicleLookup(true);
+  const execute = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: {
+      type: "vehicle_lookup",
+      data: {
+        vehicle: {
+          plate: "ABC123",
+          fasecoldaCode: "12345678",
+          productionYear: 2023,
+          declaredValue: 50000000,
+          accessoriesValue: 0,
+          ownerDocument: "secret",
+          credentials: { password: "secret" },
+        },
+      },
+    },
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute } });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  const found = await adapter.lookupVehicle!({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    objectName: object.name,
+    snapshot,
+    plate: "abc123",
+  });
+  expect(found).toEqual({
+    plate: "ABC123",
+    fasecoldaCode: "12345678",
+    productionYear: 2023,
+    declaredValue: 50000000,
+    accessoriesValue: 0,
+  });
+  expect(JSON.stringify(found)).not.toMatch(/secret|password|owner/);
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(execute.mock.calls[0]).toMatchObject([
+    {
+      tenantId: tenant,
+      principalId: "public-form:vehicle-lookup",
+      extensionId: "insurance.quotes",
+      actionId: "quote",
+    },
+    {
+      mode: "live",
+      flowId: "sura-autos-provider",
+      quoteInput: { vehicle: { plate: "ABC123" } },
+    },
+  ]);
+  const runs = await env.DB.prepare(
+    "SELECT count(*) n FROM extension_action_runs WHERE tenant_id=? AND principal_id='public-form:vehicle-lookup'",
+  )
+    .bind(tenant)
+    .first<{ n: number }>();
+  expect(runs?.n).toBeGreaterThan(0);
+});
+
+it("fails the public lookup closed for bad plates, missing vehicles, provider errors, and disabled lookup", async () => {
+  await enableVehicleLookup(true);
+  const execute = vi.fn(async () => ({
+    status: "succeeded" as const,
+    output: { type: "vehicle_lookup", data: {} },
+  }));
+  const adapter = createPublicQuoteAdapter({ executor: { execute } });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  const input = {
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    objectName: object.name,
+    snapshot,
+    plate: "ABC123",
+  };
+  await expect(
+    adapter.lookupVehicle!({ ...input, plate: "!!" }),
+  ).rejects.toThrow();
+  expect(execute).not.toHaveBeenCalled();
+  await expect(adapter.lookupVehicle!(input)).rejects.toThrow(
+    "No se encontraron datos para esa placa.",
+  );
+  const failing = createPublicQuoteAdapter({
+    executor: {
+      execute: async () => {
+        throw new Error("password=provider-secret");
+      },
+    },
+  });
+  await expect(failing.lookupVehicle!(input)).rejects.toThrow(
+    "No se pudo consultar la placa.",
+  );
+  await enableVehicleLookup(false);
+  await expect(adapter.lookupVehicle!(input)).rejects.toThrow();
+  await enableVehicleLookup(true);
+});

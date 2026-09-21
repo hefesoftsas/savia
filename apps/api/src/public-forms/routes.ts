@@ -212,6 +212,51 @@ export function registerPublicFormRoutes(
   app.openapi(
     createRoute({
       method: "post",
+      path: "/api/public/forms/{token}/vehicle-lookup",
+      security: [],
+      tags: ["Public forms"],
+      request: {
+        params: z.object({ token: z.string() }),
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({ plate: z.string().min(1).max(20) }).strict(),
+            },
+          },
+        },
+      },
+      responses: { 200: jsonResponse },
+    }),
+    async (c) => {
+      const row = await activePublicForm(db, c.req.valid("param").token);
+      if (row.kind !== "quote")
+        throw new HTTPException(404, { message: "Public form unavailable." });
+      if (!options.quote?.lookupVehicle)
+        throw new HTTPException(503, { message: "Public form unavailable." });
+      await options.quote.assertAvailable?.({
+        db,
+        tenant: row.tenant_id,
+        domainId: row.domain_id,
+        objectName: row.object_name,
+        snapshot: JSON.parse(row.snapshot),
+      });
+      return c.json(
+        await options.quote.lookupVehicle({
+          db,
+          tenant: row.tenant_id,
+          domainId: row.domain_id,
+          objectName: row.object_name,
+          snapshot: JSON.parse(row.snapshot),
+          plate: c.req.valid("json").plate,
+        }),
+        200,
+      );
+    },
+  );
+  app.openapi(
+    createRoute({
+      method: "post",
       path: "/api/public/forms/{token}",
       security: [],
       tags: ["Public forms"],

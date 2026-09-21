@@ -596,6 +596,75 @@ it("ignores the bypass flag outside localhost origins", async () => {
   });
   expect(response.status).toBe(503);
 });
+it("serves the public plate lookup only for quote links with a lookup adapter", async () => {
+  const lookupVehicle = vi.fn(async () => ({
+    plate: "ABC123",
+    fasecoldaCode: "12345678",
+    productionYear: 2023,
+  }));
+  const quote = {
+    publish: async () => ({
+      fields: [
+        { name: "name", label: "Name", type: "text" as const, required: true },
+      ],
+      snapshot: { frozen: "policy" },
+    }),
+    validate: async ({ values }: any) => values,
+    execute: async () => undefined,
+    assertAvailable: async () => {},
+    lookupVehicle,
+  };
+  const instance = app({ quote });
+  const name = await object();
+  const link = await publish(instance, name, { kind: "quote" });
+  const found = await instance.request(
+    "https://api.test/api/public/forms/" + link.token + "/vehicle-lookup",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plate: "abc123" }),
+    },
+  );
+  expect(found.status).toBe(200);
+  expect(await found.json()).toEqual({
+    plate: "ABC123",
+    fasecoldaCode: "12345678",
+    productionYear: 2023,
+  });
+  expect(lookupVehicle).toHaveBeenCalledWith(
+    expect.objectContaining({
+      objectName: expect.any(String),
+      plate: "abc123",
+    }),
+  );
+  const recordLink = await publish(app(), await object());
+  expect(
+    (
+      await app({ quote }).request(
+        "https://api.test/api/public/forms/" +
+          recordLink.token +
+          "/vehicle-lookup",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ plate: "ABC123" }),
+        },
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await app().request(
+        "https://api.test/api/public/forms/" + link.token + "/vehicle-lookup",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ plate: "ABC123" }),
+        },
+      )
+    ).status,
+  ).toBe(503);
+});
 it("closes links when their domain disappears and rejects metadata-only remote collections", async () => {
   const instance = app();
   const name = await object(undefined, "retired");
