@@ -91,7 +91,7 @@ function playFlip(
     element.style.transition = "none";
     element.style.transform = `translate(${dx}px, ${dy}px)`;
     requestAnimationFrame(() => {
-      element.style.transition = `transform ${flipDurationMs}ms cubic-bezier(0.34, 1.25, 0.64, 1)`;
+      element.style.transition = `transform ${flipDurationMs}ms cubic-bezier(0.16, 1, 0.3, 1)`;
       element.style.transform = "";
       const onEnd = () => {
         element.style.transition = "";

@@ -15,6 +15,38 @@ colors:
   conversation-surface: "#fbfcf9"
   conversation-ink: "#244431"
   conversation-soft: "#5c6e61"
+  shadow-ink: "rgb(15 50 65)"
+  neutral-shadow: "rgba(0, 0, 0, 0.12)"
+  sage-line: "#cfd8ce"
+  sage-strong: "#8a968d"
+  sage-ink: "#556258"
+  sage-deep: "#49544c"
+  sage-night: "#3b4d41"
+  success-surface: "#f0fdf4"
+  success-ink: "#166534"
+  success-border: "#bbf7d0"
+  info-surface: "#eff6ff"
+  info-ink: "#1e40af"
+  info-border: "#bfdbfe"
+  warning-surface: "#fff4ce"
+  warning-ink: "#8a6900"
+  warning-strong: "#b45309"
+  warning-accent: "#fbbf24"
+  danger-ink: "#be0037"
+  danger-strong: "#a00020"
+  olive-line: "#8c906d"
+  olive-ink: "#817249"
+  olive-strong: "#937c44"
+  olive-deep: "#7d672f"
+  lilac-surface: "#f5f3f8"
+  lilac-mid: "#8a6d88"
+  lilac-ink: "#775874"
+  graphite-bright: "#666666"
+  graphite-mid: "#595963"
+  graphite-zinc: "#52525b"
+  graphite-rule: "#d4d4d4"
+  graphite-ink: "#20212a"
+  graphite-night: "#1e1e1e"
 typography:
   headline:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -40,10 +72,32 @@ typography:
   label:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
     fontSize: "12px"
+  scale:
+    micro: "10px"
+    caption: "11px"
+    dense: "13px"
+    body-lg: "15px"
+    ui: "16px"
+    ui-lg: "17px"
+    subtitle: "19px"
+    section: "20px"
+    section-lg: "21px"
+    answer: "22px"
+    display-sm: "24px"
+    metric: "26px"
+    metric-lg: "27px"
+    question-mobile: "28px"
+    display-lg: "30px"
 rounded:
+  hairline: "2px"
   sm: "4px"
   md: "6px"
   lg: "8px"
+  xl: "10px"
+  2xl: "12px"
+  tile: "14px"
+  sheet: "20px"
+  pill: "999px"
 spacing:
   sm: "8px"
   md: "12px"
@@ -135,6 +189,8 @@ La cabecera del CRM aporta jerarquía editorial a una superficie compacta. La ca
 - **Body:** párrafos generales. Las instrucciones de captura aumentan a (15px), con interlínea (1.65) y longitud máxima (55ch); en móvil vuelven a (14px).
 - **Label:** etiquetas de campos y contexto de captura. Las respuestas de revisión son mayores (16px) y conservan los saltos de línea.
 
+Además de los roles nombrados, la superficie compacta del Studio usa la rampa densa del frontmatter (`scale`): 10px para micro-etiquetas y contadores, 11px para leyendas de tabla y chips, 13px para texto denso de diseñador y listas, y 15–17px para títulos intermedios. Los pasos 19–30px quedan reservados a métricas, cabeceras de resultado y preguntas móviles. Ninguna superficie nueva debe introducir tamaños fuera de esta rampa; 8px y 9px se elevaron a 10px como suelo de legibilidad.
+
 **The Pregunta dominante Rule.** En la captura conversacional, el encabezado de la pregunta tiene mayor jerarquía que el nombre del objeto, la sección y el contador.
 
 ## Layout
@@ -157,7 +213,9 @@ La profundidad se apoya principalmente en fondos tonales, bordes finos y espacio
 
 ## Shapes
 
-Esquinas suavemente redondeadas en controles y tarjetas, bordes finos y figuras circulares para avatares e indicadores. La escala compartida convive con los radios heredados de shadcn; sus controles medianos resuelven el radio base menos dos píxeles. La captura repite esquinas de la escala grande en campos, opciones y acción principal; las marcas numéricas y la etiqueta opcional usan la escala pequeña. El contenedor móvil de captura llega a los bordes del viewport sin radio exterior.
+Esquinas suavemente redondeadas en controles y tarjetas, bordes finos y figuras circulares para avatares e indicadores. La escala completa del frontmatter (`hairline` 2px para correcciones `calc(var(--radius) - 2px)`, sm 4 / md 6 / lg 8 para controles, xl 10 / 2xl 12 para tarjetas y paneles, tile 14 y sheet 20 para superficies amplias, pill 999px para chips, barras de progreso e indicadores) es la única fuente de radios; los valores 3, 5, 7 y 9px se normalizaron a los pasos pares de esta escala. La escala compartida convive con los radios heredados de shadcn; sus controles medianos resuelven el radio base menos dos píxeles. La captura repite esquinas de la escala grande en campos, opciones y acción principal; las marcas numéricas y la etiqueta opcional usan la escala pequeña. El contenedor móvil de captura llega a los bordes del viewport sin radio exterior.
+
+Los colores del frontmatter más allá de la paleta base son tokens normativos de estado: superficies y bordes de éxito, info y aviso, tintes olivo y lila para categorías de configuración, la escala salve de acentos secundarios, la escala grafito para texto técnico y ejemplos de resultado, y `shadow-ink`/`neutral-shadow` para sombras y veladuras.
 
 ## Components
 
