@@ -1173,7 +1173,7 @@ export function CollectionImportWizard({
                       <div className="wizard-progress-track">
                         <div
                           className="wizard-progress-bar"
-                          style={{ width: `${importProgress}%` }}
+                          style={{ transform: `scaleX(${importProgress / 100})` }}
                         />
                       </div>
                     </div>
