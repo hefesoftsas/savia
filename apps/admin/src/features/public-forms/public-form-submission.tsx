@@ -386,7 +386,16 @@ export function SafeResult({ result }: { result: unknown }) {
         className="public-quote-results"
         aria-label={t("Resultados de cotización")}
       >
-        <h3>{t("Resultados de cotización")}</h3>
+        <div className="public-quote-results-head">
+          <h3>{t("Resultados de cotización")}</h3>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => window.print()}
+          >
+            {t("Descargar PDF")}
+          </Button>
+        </div>
         {insurers.length > 1 && (
           <div className="public-quote-chips" role="group">
             <Button

@@ -74,6 +74,16 @@ it("ranks cheapest first with a best-price ribbon and insurer filter chips", asy
   expect(screen.queryByText("PRIVATE")).not.toBeInTheDocument();
 });
 
+it("prints the results through the PDF button", async () => {
+  const print = vi.fn();
+  Object.defineProperty(window, "print", {
+    configurable: true,
+    value: print,
+  });
+  render(<SafeResult result={result} />);
+  fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
+  expect(print).toHaveBeenCalledTimes(1);
+});
 it("copies the quote summary and reports unavailable products", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {

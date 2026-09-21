@@ -364,6 +364,17 @@ export function PublicQuoteForm({
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [parseError, setParseError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [elapsed, setElapsed] = useState(0);
+  const lastStep = step === steps.length - 1;
+
+  useEffect(() => {
+    if (!controller.pending || !lastStep) return;
+    setElapsed(0);
+    const timer = window.setInterval(() => {
+      setElapsed((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [controller.pending, lastStep]);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupFields, setLookupFields] = useState<string[]>([]);
 
@@ -863,6 +874,48 @@ export function PublicQuoteForm({
                 ? t(visibleError as keyof typeof publicFormsMessages)
                 : visibleError}
             </p>
+          )}
+
+          {lastStep && pending && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="public-quote-waiting"
+            >
+              <div className="public-quote-waiting-head">
+                <span
+                  aria-hidden="true"
+                  className="public-quote-spinner public-quote-spinner--md"
+                />
+                <div>
+                  <p>
+                    <strong>{t("Cotizando con aseguradoras en vivo…")}</strong>
+                  </p>
+                  <p className="public-form-help">
+                    {t(
+                      "Estamos consultando las %{count} aseguradoras. Esto puede tardar unos minutos, no cierres ni recargues la página.",
+                      { count: products.length },
+                    )}
+                  </p>
+                  <p className="public-form-help">
+                    {t("Han pasado %{count} segundos.", { count: elapsed })}
+                  </p>
+                </div>
+              </div>
+              <div aria-hidden="true" className="public-quote-progress">
+                <div className="public-quote-progress-bar" />
+              </div>
+              <div aria-hidden="true" className="public-quote-skeletons">
+                {[0, 1, 2].map((skeleton) => (
+                  <div key={skeleton} className="public-quote-skeleton-card">
+                    <div className="public-quote-skeleton public-quote-skeleton--title" />
+                    <div className="public-quote-skeleton public-quote-skeleton--price" />
+                    <div className="public-quote-skeleton public-quote-skeleton--line" />
+                    <div className="public-quote-skeleton public-quote-skeleton--line" />
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           <div className="public-quote-actions">

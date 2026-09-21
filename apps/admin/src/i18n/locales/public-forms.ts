@@ -394,6 +394,23 @@ export const publicFormsMessages = {
   "Mejor precio": ["Mejor precio", "Best price", "Melhor preço"],
   "Copiar cotización": ["Copiar cotización", "Copy quote", "Copiar cotação"],
   "¡Copiado!": ["¡Copiado!", "Copied!", "Copiado!"],
+  "Descargar PDF": ["Descargar PDF", "Download PDF", "Baixar PDF"],
+  "Cotizando con aseguradoras en vivo…": [
+    "Cotizando con aseguradoras en vivo…",
+    "Quoting live with insurers…",
+    "Cotando ao vivo com as seguradoras…",
+  ],
+  "Estamos consultando las %{count} aseguradoras. Esto puede tardar unos minutos, no cierres ni recargues la página.":
+    [
+      "Estamos consultando las %{count} aseguradoras. Esto puede tardar unos minutos, no cierres ni recargues la página.",
+      "We're checking %{count} insurers. This may take a few minutes; don't close or reload this page.",
+      "Estamos consultando %{count} seguradoras. Pode levar alguns minutos; não feche nem recarregue a página.",
+    ],
+  "Han pasado %{count} segundos.": [
+    "Han pasado %{count} segundos.",
+    "%{count} seconds elapsed.",
+    "Passaram-se %{count} segundos.",
+  ],
   "No se encontraron ciudades.": [
     "No se encontraron ciudades.",
     "No cities found.",
