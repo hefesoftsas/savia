@@ -504,12 +504,24 @@ export async function submitPublicForm(
     .bind(link.id, input.submissionId)
     .first<SubmissionRow>();
   if (existing) return replay(existing, fingerprint, captchaHash);
-  await verifyCaptcha(options, {
-    token: input.token,
-    submissionId: input.submissionId,
-    formId: link.id,
-    ip,
-  });
+  try {
+    await verifyCaptcha(options, {
+      token: input.token,
+      submissionId: input.submissionId,
+      formId: link.id,
+      ip,
+    });
+  } catch (error) {
+    // Anonymous diagnostics: form id and status only, never tokens or values.
+    console.error(
+      JSON.stringify({
+        event: "public-form-captcha-failed",
+        formId: link.id,
+        status: error instanceof HTTPException ? error.status : "unexpected",
+      }),
+    );
+    throw error;
+  }
   const now = new Date().toISOString(),
     day = now.slice(0, 10),
     ipHash = await digest(configuration.secretKey + ":" + ip);
@@ -616,6 +628,15 @@ export async function submitPublicForm(
       )
       .bind(link.id, input.submissionId)
       .run();
+    // Anonymous diagnostics: form id, kind, and status only.
+    console.error(
+      JSON.stringify({
+        event: "public-form-submit-failed",
+        formId: link.id,
+        kind: link.kind,
+        status: error instanceof HTTPException ? error.status : "unexpected",
+      }),
+    );
     // Curated HTTP statuses keep their meaning (validation, provider, policy):
     // every message thrown in this flow is a safe, fixed string. Anything
     // else (raw provider errors) stays a sanitized 503.

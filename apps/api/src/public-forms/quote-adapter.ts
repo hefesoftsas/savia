@@ -353,8 +353,23 @@ export function createPublicQuoteAdapter(options: {
         await runs.startRun(context, actionInput);
         try {
           const result = await options.executor.execute(context, actionInput);
-          if (result.status !== "succeeded")
+          if (result.status !== "succeeded") {
+            // Executor failure codes come from a fixed public set; safe to log.
+            const output = result.output as { code?: unknown } | undefined;
+            console.error(
+              JSON.stringify({
+                event: "public-form-quote-product-failed",
+                tenant: input.tenant,
+                submission,
+                flowId: product.flowId,
+                code:
+                  typeof output?.code === "string"
+                    ? output.code
+                    : "CONNECTOR_EXECUTION_FAILED",
+              }),
+            );
             throw new Error("Quote unavailable");
+          }
           const safe = contribution.projectResult(
             product.flowId,
             result.output,
