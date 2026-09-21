@@ -459,6 +459,48 @@ it("formats currency fields with thousands separators but submits raw numbers", 
   expect(input).toHaveValue("50.000.000");
 });
 
+it("names the failing field instead of showing the generic submit error", async () => {
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "TESTCAR" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "1800" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  const error = await screen.findByText(/Revisa el campo/);
+  expect(error.textContent).toContain("Año del vehículo");
+  // Still on the vehicle step, focused on the failing field.
+  expect(screen.getByLabelText(/Placa/)).toBeInTheDocument();
+  expect(document.activeElement).toBe(
+    screen.getByLabelText(/Año del vehículo/),
+  );
+  expect(fetchMock).not.toHaveBeenCalled();
+  // Fixing the value clears the error and advances.
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  expect(screen.queryByText(/Revisa el campo/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  expect(
+    await screen.findByLabelText(/Número de documento/),
+  ).toBeInTheDocument();
+});
+
 function LocaleSwitcher() {
   const setLocale = useSetLocale();
   return (
