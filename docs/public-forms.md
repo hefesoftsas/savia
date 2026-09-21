@@ -62,7 +62,10 @@ For quotation links, administrators may explicitly enable a limited result for t
 current submission: insurer/product labels, premium, currency and supported coverage
 labels. The public results render the same comparator language as the embedded
 wizard (insurer cards ranked cheapest-first, insurer filter, coverage bullets),
-without quote numbers, history, retry actions, or PDF export. Raw provider responses, credentials and customer identifiers are never
+without quote numbers, history, or retry actions. Visitors can print the
+results to PDF from the browser; the print stylesheet keeps only the reference
+and the quotes. While providers respond, the wizard shows a live waiting state
+with elapsed time instead of a bare spinner. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost
 scales with the number of enabled products. Daily budgets count submissions, not
 provider calls; start with a small budget for public quotations.

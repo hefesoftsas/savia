@@ -501,6 +501,73 @@ it("names the failing field instead of showing the generic submit error", async 
   ).toBeInTheDocument();
 });
 
+it("shows a live waiting state with timer and skeletons while quoting", async () => {
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "TESTCAR" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  fireEvent.change(await screen.findByLabelText(/Tipo de documento/), {
+    target: { value: "CC" },
+  });
+  fireEvent.change(screen.getByLabelText(/Número de documento/), {
+    target: { value: "123456789" },
+  });
+  fireEvent.change(screen.getByLabelText(/Nombres/), {
+    target: { value: "Ada" },
+  });
+  fireEvent.change(screen.getByLabelText(/Primer apellido/), {
+    target: { value: "Example" },
+  });
+  fireEvent.change(screen.getByLabelText(/Sexo/), { target: { value: "F" } });
+  fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), {
+    target: { value: "1990-01-01" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  fireEvent.change(
+    await screen.findByLabelText(/Código de ciudad de residencia/),
+    {
+      target: { value: "11001" },
+    },
+  );
+  fireEvent.change(screen.getByLabelText(/Dirección/), {
+    target: { value: "Example 123" },
+  });
+  fireEvent.change(screen.getByLabelText(/Teléfono/), {
+    target: { value: "3001234567" },
+  });
+  fireEvent.change(screen.getByLabelText(/Correo electrónico/), {
+    target: { value: "ada@example.test" },
+  });
+  await solve();
+  fetchMock.mockImplementationOnce(() => new Promise(() => {}));
+  fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud/ }));
+  expect(
+    await screen.findByText(/Cotizando con aseguradoras/),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/no cierres ni recargues/)).toBeInTheDocument();
+  expect(document.querySelectorAll(".public-quote-skeleton-card")).toHaveLength(
+    3,
+  );
+});
+
 function LocaleSwitcher() {
   const setLocale = useSetLocale();
   return (

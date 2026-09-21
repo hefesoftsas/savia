@@ -266,6 +266,57 @@
 .public-quote-results h3 {
   font-weight: 650;
 }
+.public-quote-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.public-quote-results-head > button {
+  min-height: 2.5rem;
+}
+/* Savia emerald identity for the whole public experience. */
+.public-form-page {
+  --primary: oklch(0.508 0.118 165.612);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.979 0.021 166.113);
+  --secondary-foreground: oklch(0.262 0.051 172.552);
+  --muted: oklch(0.979 0.021 166.113);
+  --muted-foreground: oklch(0.378 0.077 168.94);
+  --accent: oklch(0.95 0.052 163.051);
+  --accent-foreground: oklch(0.262 0.051 172.552);
+  --ring: oklch(0.696 0.17 162.48);
+}
+.dark .public-form-page {
+  --primary: oklch(0.845 0.143 164.978);
+  --primary-foreground: oklch(0.262 0.051 172.552);
+  --secondary: oklch(0.378 0.077 168.94);
+  --secondary-foreground: oklch(0.95 0.052 163.051);
+  --muted: oklch(0.378 0.077 168.94);
+  --muted-foreground: oklch(0.845 0.143 164.978);
+  --accent: oklch(0.432 0.095 166.913);
+  --accent-foreground: oklch(0.95 0.052 163.051);
+  --ring: oklch(0.765 0.177 163.223);
+}
+@media print {
+  .public-form-brand,
+  .public-form-footer,
+  .public-quote-actions,
+  .public-quote-chips,
+  .public-quote-copy,
+  .public-quote-results-head > button,
+  .public-quote-notice > button {
+    display: none !important;
+  }
+  .public-form-page {
+    padding: 0;
+  }
+  .public-quote-card {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}
 .public-quote-results > ul {
   list-style: none;
   margin: 0;
