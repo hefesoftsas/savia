@@ -211,6 +211,65 @@ export function registerPublicFormRoutes(
   );
   app.openapi(
     createRoute({
+      method: "get",
+      path: "/api/public/forms/{token}/cities",
+      security: [],
+      tags: ["Public forms"],
+      request: {
+        params: z.object({ token: z.string() }),
+        query: z.object({ search: z.string().min(2).max(100) }),
+      },
+      responses: { 200: jsonResponse },
+    }),
+    async (c) => {
+      const row = await activePublicForm(db, c.req.valid("param").token);
+      if (row.kind !== "quote")
+        throw new HTTPException(404, { message: "Public form unavailable." });
+      if (!options.saviaRequest)
+        throw new HTTPException(503, { message: "Public form unavailable." });
+      await options.quote?.assertAvailable?.({
+        db,
+        tenant: row.tenant_id,
+        domainId: row.domain_id,
+        objectName: row.object_name,
+        snapshot: JSON.parse(row.snapshot),
+      });
+      const search = c.req.valid("query").search.trim();
+      if (search.length < 2)
+        throw new HTTPException(400, { message: "Indica una ciudad válida." });
+      const upstream = await options.saviaRequest.fetch(
+        new Request(
+          "https://savia-request.internal/api/lookups/dane?city=" +
+            encodeURIComponent(search.slice(0, 100)),
+          { method: "GET", headers: { "content-type": "application/json" } },
+        ),
+      );
+      if (!upstream.ok)
+        throw new HTTPException(503, { message: "Public form unavailable." });
+      const body = (await upstream.json().catch(() => undefined)) as
+        { matches?: unknown } | undefined;
+      // DANE codes are public reference data: project a bounded list with
+      // only code/city/department, never upstream internals.
+      const matches = Array.isArray(body?.matches)
+        ? body.matches
+            .filter(
+              (match): match is Record<string, unknown> =>
+                !!match && typeof match === "object" && !Array.isArray(match),
+            )
+            .map((match) => ({
+              code: typeof match.code === "string" ? match.code : "",
+              city: typeof match.city === "string" ? match.city : "",
+              department:
+                typeof match.department === "string" ? match.department : "",
+            }))
+            .filter((match) => match.code && match.city)
+            .slice(0, 20)
+        : [];
+      return c.json({ matches }, 200);
+    },
+  );
+  app.openapi(
+    createRoute({
       method: "post",
       path: "/api/public/forms/{token}/vehicle-lookup",
       security: [],

@@ -47,6 +47,14 @@ fields; raw provider output stays hidden. The lookup needs no CAPTCHA because
 it happens before the final verification step, so it is bounded by the burst
 rate limiter and strict plate format instead of submission quotas.
 
+City fields offer DANE autocomplete through
+`GET /api/public/forms/:token/cities?search=`, scoped to the same quote link.
+DANE codes are public reference data, so the endpoint returns a bounded list
+of code/city/department triples with no upstream internals and no provider
+cost. Applicant identity fields stay manual: looking up CRM records by
+document number would disclose personal data to anyone typing an ID, so that
+capability remains authenticated-only.
+
 By default the response is only an acknowledgement and submission reference.
 For quotation links, administrators may explicitly enable a limited result for the
 current submission: insurer/product labels, premium, currency and supported coverage
