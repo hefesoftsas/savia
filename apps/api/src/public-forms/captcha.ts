@@ -22,7 +22,7 @@ export type CaptchaOptions = TurnstileOptions & {
   };
 };
 
-function isLocalPublicOrigin(publicOrigin: string | undefined): boolean {
+export function isLocalPublicOrigin(publicOrigin: string | undefined): boolean {
   if (!publicOrigin) return false;
   try {
     const origin = new URL(publicOrigin);

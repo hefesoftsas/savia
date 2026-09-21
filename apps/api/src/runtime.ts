@@ -29,6 +29,8 @@ import {
   extensionConnectionsEncryptionKeyFromEnvironment,
   type ConnectorGatewayEnvironment,
 } from "./crm/connector-executor";
+import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
+import { isLocalPublicOrigin } from "./public-forms/captcha";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
 export { oauthResourceAuthenticator } from "./auth/runtime";
 export {
@@ -72,6 +74,7 @@ export type RuntimeEnvironment = {
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
   SAVIA_DISABLE_CAPTCHA?: string;
+  SAVIA_MOCK_QUOTES?: string;
   PUBLIC_FORMS_RATE_LIMITER?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
@@ -255,6 +258,20 @@ const runtime = {
         publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
         disableCaptcha: environment.SAVIA_DISABLE_CAPTCHA === "1",
         rateLimiter: environment.PUBLIC_FORMS_RATE_LIMITER,
+        // Local-only provider simulation (fixture data, no provider calls).
+        // The localhost gate keeps preview and production untouched even if
+        // the flag ever leaks into another environment.
+        ...(environment.SAVIA_MOCK_QUOTES === "1" &&
+        isLocalPublicOrigin(environment.SAVIA_PUBLIC_ORIGIN)
+          ? {
+              quote: createPublicQuoteAdapter({
+                executor: connectorExecutorFromEnvironment(environment),
+                encryptionKey:
+                  extensionConnectionsEncryptionKeyFromEnvironment(environment),
+                mockProviders: true,
+              }),
+            }
+          : {}),
         ...overrides.publicForms,
       },
       overrides.collectionGatewayFactory,

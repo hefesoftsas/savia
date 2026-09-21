@@ -5,6 +5,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  KeyRound,
   Search,
   Trash2,
 } from "lucide-react";
@@ -101,6 +102,8 @@ export function SaviaRequestSidebar({
     folders,
     refreshNavigation,
     selectFlow,
+    openSecrets,
+    view,
   } = useSaviaRequestWorkspace();
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -146,6 +149,10 @@ export function SaviaRequestSidebar({
 
   const select = async (id: string) => {
     await selectFlow(id, 0);
+    onNavigate?.();
+  };
+  const openSecretsScreen = () => {
+    openSecrets();
     onNavigate?.();
   };
   const toggle = (path: string) =>
@@ -317,7 +324,7 @@ export function SaviaRequestSidebar({
                   flow={item}
                   key={item.id}
                   onSelect={select}
-                  selected={flow?.id === item.id}
+                  selected={view === "flow" && flow?.id === item.id}
                 />
               ))}
               {tree.children.map((node) => (
@@ -329,13 +336,34 @@ export function SaviaRequestSidebar({
                   onRemove={removeFolder}
                   onSelect={select}
                   onToggle={toggle}
-                  selectedFlowId={flow?.id}
+                  selectedFlowId={view === "flow" ? flow?.id : undefined}
                 />
               ))}
             </SidebarMenu>
           )}
         </nav>
       </SidebarGroupContent>
+      <div
+        className={cn(
+          "mt-2 border-sidebar-border/70 border-t px-2 pt-2",
+          nested && "px-1.5",
+        )}
+      >
+        <SidebarMenu className="gap-0.5">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-current={view === "secretos" ? "page" : undefined}
+              className="h-8"
+              isActive={view === "secretos"}
+              onClick={openSecretsScreen}
+              type="button"
+            >
+              <KeyRound />
+              <span className="truncate">Secretos</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </div>
       {deletion ? (
         <DeleteDialog action={deletion} onClose={() => setDeletion(null)} />
       ) : null}

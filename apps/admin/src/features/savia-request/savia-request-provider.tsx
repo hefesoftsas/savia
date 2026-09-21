@@ -19,6 +19,7 @@ import type { FlowSummary, RequestFlow } from "./types";
 
 type WorkspaceValue = {
   active: boolean;
+  view: SaviaRequestView;
   flows: FlowSummary[];
   folders: string[];
   flow: RequestFlow | null;
@@ -28,6 +29,7 @@ type WorkspaceValue = {
   error: string | null;
   api: SaviaRequestApi;
   selectFlow(id: string, stepIndex?: number): Promise<void>;
+  openSecrets(): void;
   saveDraft(): Promise<boolean>;
   updateDraft(next: RequestFlow): void;
   discardDraft(): void;
@@ -37,6 +39,14 @@ type WorkspaceValue = {
 
 const SaviaRequestWorkspaceContext = createContext<WorkspaceValue | null>(null);
 
+export type SaviaRequestView = "flow" | "secretos";
+
+function requestedView(search: string): SaviaRequestView {
+  return new URLSearchParams(search).get("view") === "secretos"
+    ? "secretos"
+    : "flow";
+}
+
 function requestedStep(search: string): number {
   const value = Number(new URLSearchParams(search).get("step") ?? "0");
   return Number.isInteger(value) && value >= 0 ? value : 0;
@@ -44,6 +54,10 @@ function requestedStep(search: string): number {
 
 function flowSelection(id: string, step: number) {
   return `/savia-request?flow=${encodeURIComponent(id)}&step=${step}`;
+}
+
+function secretsSelection() {
+  return "/savia-request?view=secretos";
 }
 
 function safeStepIndex(flow: RequestFlow, step: number) {
@@ -66,6 +80,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     Boolean(canAccess) &&
     !isPending &&
     location.pathname.startsWith("/savia-request");
+  const view = requestedView(location.search);
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
   const [flow, setFlow] = useState<RequestFlow | null>(null);
@@ -140,7 +155,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       if (id === draftRef.current?.id) {
         const current = draftRef.current;
         const nextStep = safeStepIndex(current, requested);
-        if (nextStep === stepIndex) return;
+        if (nextStep === stepIndex && view === "flow") return;
         setStepIndex(nextStep);
         navigate(flowSelection(id, nextStep));
         return;
@@ -148,8 +163,12 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       if (!(await saveDraft())) return;
       navigate(flowSelection(id, requested));
     },
-    [navigate, saveDraft, stepIndex],
+    [navigate, saveDraft, stepIndex, view],
   );
+
+  const openSecrets = useCallback(() => {
+    navigate(secretsSelection());
+  }, [navigate]);
 
   useEffect(() => {
     if (!active) {
@@ -176,6 +195,35 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     }
     setBusy(true);
     setError(null);
+
+    if (view === "secretos") {
+      // La pantalla de secretos es independiente del flow: solo carga la
+      // navegación y conserva intacto cualquier borrador en curso.
+      void (async () => {
+        try {
+          const [nextFlows, nextFolders] = await Promise.all([
+            api.listFlows(),
+            api.listFolders(),
+          ]);
+          if (cancelled) return;
+          setFlows(nextFlows);
+          setFolders(nextFolders);
+        } catch (exception) {
+          if (cancelled) return;
+          setError(
+            exception instanceof Error
+              ? exception.message
+              : "No pudimos cargar los flows.",
+          );
+        } finally {
+          if (!cancelled) setBusy(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     void (async () => {
       try {
@@ -240,11 +288,13 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     replaceFlow,
     saveDraft,
     stepIndex,
+    view,
   ]);
 
   const value = useMemo<WorkspaceValue>(
     () => ({
       active,
+      view,
       flows,
       folders,
       flow,
@@ -254,6 +304,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       error,
       api,
       selectFlow,
+      openSecrets,
       saveDraft,
       updateDraft,
       discardDraft,
@@ -262,6 +313,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     }),
     [
       active,
+      view,
       api,
       busy,
       error,
@@ -271,6 +323,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       refreshNavigation,
       saveDraft,
       selectFlow,
+      openSecrets,
       stepIndex,
       dirty,
       updateDraft,

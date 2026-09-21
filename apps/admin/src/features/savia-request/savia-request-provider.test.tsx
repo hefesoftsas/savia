@@ -54,13 +54,14 @@ const hogar: RequestFlow = {
 };
 
 function WorkspaceProbe() {
-  const { flow, stepIndex, selectFlow, updateDraft } =
+  const { flow, stepIndex, selectFlow, openSecrets, updateDraft, view } =
     useSaviaRequestWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
   return (
     <>
       <p data-testid="active-flow">{flow?.name ?? "sin flow"}</p>
+      <p data-testid="active-view">{view}</p>
       <p data-testid="active-step">{stepIndex}</p>
       <p data-testid="selection-url">{location.pathname + location.search}</p>
       <button
@@ -73,6 +74,9 @@ function WorkspaceProbe() {
       </button>
       <button onClick={() => void selectFlow("hogar")} type="button">
         Seleccionar hogar
+      </button>
+      <button onClick={openSecrets} type="button">
+        Abrir secretos
       </button>
       <button
         onClick={() => navigate("/savia-request?flow=hogar&step=0")}
@@ -164,5 +168,42 @@ describe("SaviaRequestProvider", () => {
       ),
     );
     expect(await screen.findByTestId("active-flow")).toHaveTextContent("Hogar");
+  });
+
+  it("keeps the secretos view without selecting a flow", async () => {
+    const { get } = renderProvider("/savia-request?view=secretos");
+
+    expect(await screen.findByTestId("active-view")).toHaveTextContent(
+      "secretos",
+    );
+    expect(screen.getByTestId("active-flow")).toHaveTextContent("sin flow");
+    expect(screen.getByTestId("selection-url")).toHaveTextContent(
+      "/savia-request?view=secretos",
+    );
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith(expect.stringContaining("/flows")),
+    );
+    expect(get).not.toHaveBeenCalledWith(
+      expect.stringMatching(/\/flows\/(autos|hogar)$/),
+    );
+  });
+
+  it("opens the secretos view keeping the in-progress draft", async () => {
+    const user = userEvent.setup();
+    renderProvider("/savia-request?flow=autos&step=0");
+
+    await screen.findByText("Autos");
+    await user.click(screen.getByRole("button", { name: "Editar autos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir secretos" }));
+
+    expect(await screen.findByTestId("active-view")).toHaveTextContent(
+      "secretos",
+    );
+    expect(screen.getByTestId("selection-url")).toHaveTextContent(
+      "/savia-request?view=secretos",
+    );
+    expect(screen.getByTestId("active-flow")).toHaveTextContent(
+      "Autos editado",
+    );
   });
 });

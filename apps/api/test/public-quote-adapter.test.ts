@@ -540,3 +540,67 @@ it("fails the public lookup closed for bad plates, missing vehicles, provider er
   await expect(adapter.lookupVehicle!(input)).rejects.toThrow();
   await enableVehicleLookup(true);
 });
+
+it("simulates providers locally without touching the executor", async () => {
+  await enableVehicleLookup(true);
+  const execute = vi.fn(async () => {
+    throw new Error("must not be called");
+  });
+  const adapter = createPublicQuoteAdapter({
+    executor: { execute },
+    mockProviders: true,
+  });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    object,
+  });
+  const base = {
+    db: env.DB,
+    tenant,
+    domainId: "test",
+    objectName: object.name,
+    snapshot,
+  };
+  expect(await adapter.lookupVehicle!({ ...base, plate: "testcar" })).toEqual({
+    plate: "TESTCAR",
+    fasecoldaCode: "00000000",
+    productionYear: 2024,
+    declaredValue: 50000000,
+    accessoriesValue: 0,
+  });
+  await expect(
+    adapter.lookupVehicle!({ ...base, plate: "TESTBUS" }),
+  ).rejects.toThrow();
+  const result = (await adapter.execute({
+    ...base,
+    submissionId: "mock-submission",
+    values,
+    returnResult: true,
+  })) as any;
+  expect(result.quotes).toHaveLength(1);
+  expect(result.quotes[0]).toMatchObject({
+    insurer: "SBS",
+    currency: "COP",
+  });
+  expect(result.unavailable).toBe(0);
+  expect(
+    await adapter.execute({
+      ...base,
+      submissionId: "mock-ack",
+      values,
+      returnResult: false,
+    }),
+  ).toBeUndefined();
+  await expect(
+    adapter.execute({
+      ...base,
+      submissionId: "mock-bad",
+      values: { ...values, applicant_email: "bad" },
+      returnResult: true,
+    }),
+  ).rejects.toThrow();
+  // Only the non-demo plate reached the executor; every mock path skipped it.
+  expect(execute).toHaveBeenCalledTimes(1);
+});
