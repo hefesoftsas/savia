@@ -92,3 +92,77 @@ describe("appearance controls", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+function mockCoarsePointer(matches: boolean) {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: query.includes("pointer: coarse") ? matches : false,
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  );
+}
+
+describe("appearance controls on touch (Android/iOS)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function openMenuFlat(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Account" }));
+  }
+
+  it("shows theme and palette options inline without a nested submenu", async () => {
+    mockCoarsePointer(true);
+    const user = userEvent.setup();
+    renderWithTheme();
+    await openMenuFlat(user);
+
+    // No nested submenu trigger: options are visible directly.
+    expect(
+      screen.queryByRole("menuitem", { name: "Apariencia" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("menuitemradio", { name: "Modo claro" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Modo oscuro" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Emerald" }),
+    ).toBeVisible();
+  });
+
+  it("switches theme mode from the inline touch options", async () => {
+    mockCoarsePointer(true);
+    const user = userEvent.setup();
+    const theme = renderWithTheme({ theme: "light" });
+    await openMenuFlat(user);
+
+    screen.getByRole("menuitemradio", { name: "Modo oscuro" }).focus();
+    await user.keyboard("{Enter}");
+    expect(theme.setTheme).toHaveBeenCalledWith("dark");
+  });
+
+  it("selects a palette from the inline touch options with 44px targets", async () => {
+    mockCoarsePointer(true);
+    const user = userEvent.setup();
+    const theme = renderWithTheme();
+    await openMenuFlat(user);
+
+    const mauve = await screen.findByRole("menuitemradio", { name: "Mauve" });
+    expect(mauve).toHaveClass("min-h-11");
+    expect(
+      screen.getByRole("menuitemradio", { name: "Modo claro" }),
+    ).toHaveClass("min-h-11");
+    mauve.focus();
+    await user.keyboard("{Enter}");
+    expect(theme.setColorTheme).toHaveBeenCalledWith("mauve");
+  });
+});
