@@ -9,10 +9,10 @@ import { renderTemplate, stateLabels, newMessage } from "./domain";
 import {
   Shell,
   History,
-  useIntegration,
   IntegrationStatus,
   loadAll,
-} from "./ui";
+} from "@savia/insurance-workbench/integrations";
+import { useIntegration } from "./ui";
 export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
  const t = usePluginMessages(integrationMessages);
   const state = useIntegration(savia);
@@ -224,7 +224,7 @@ export function CommunicationsScreen({ savia }: { savia: PluginApi }) {
           {t("Consultar entrega")}</button>
         <button onClick={state.refresh}>{t("Actualizar historial")}</button>
       </div>
-      <History runs={state.runs} />
+      <History runs={state.runs} stateLabels={stateLabels} />
     </Shell>
   );
 }

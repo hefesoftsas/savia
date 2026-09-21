@@ -1,4 +1,6 @@
-.iw-workbench {
+.iw-workbench,
+.insurance-integration,
+.iw-finance {
   --iw-bg: var(--background, #fff);
   --iw-ink: var(--foreground, #172624);
   --iw-muted: var(--muted-foreground, #53645e);
@@ -6,6 +8,11 @@
   --iw-soft: var(--muted, #f3f6f4);
   --iw-accent: var(--primary, #21604b);
   --iw-on-accent: var(--primary-foreground, #fff);
+  --iw-danger: var(--destructive, #a62a30);
+  --iw-warning: #81520d;
+  --iw-success: #236444;
+}
+.iw-workbench {
   color: var(--iw-ink);
   background: var(--iw-bg);
   font-family: inherit;
@@ -114,9 +121,6 @@
   display: grid;
   gap: 1.5rem;
   align-items: start;
-}
-.iw-with-editor {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
 }
 .iw-list {
   min-width: 0;
@@ -232,28 +236,16 @@
   background: currentColor;
 }
 .iw-badge[data-tone="danger"] {
-  color: #a62a30;
-  background: #fff0f0;
+  color: color-mix(in oklab, var(--iw-danger) 72%, var(--iw-ink));
+  background: color-mix(in oklab, var(--iw-danger) 12%, var(--iw-bg));
 }
 .iw-badge[data-tone="warning"] {
-  color: #81520d;
-  background: #fff5de;
+  color: color-mix(in oklab, var(--iw-warning) 72%, var(--iw-ink));
+  background: color-mix(in oklab, var(--iw-warning) 12%, var(--iw-bg));
 }
 .iw-badge[data-tone="success"] {
-  color: #236444;
-  background: #eaf5ef;
-}
-.dark .iw-badge[data-tone="danger"] {
-  color: #ffb6b9;
-  background: #4b2428;
-}
-.dark .iw-badge[data-tone="warning"] {
-  color: #f7d488;
-  background: #45391e;
-}
-.dark .iw-badge[data-tone="success"] {
-  color: #a9dfbf;
-  background: #213e30;
+  color: color-mix(in oklab, var(--iw-success) 72%, var(--iw-ink));
+  background: color-mix(in oklab, var(--iw-success) 12%, var(--iw-bg));
 }
 .iw-pagination {
   display: flex;
@@ -270,10 +262,36 @@
   align-items: center;
   gap: 0.8rem;
 }
-.iw-editor {
-  border: 1px solid var(--iw-line);
-  border-radius: 12px;
-  overflow: hidden;
+.iw-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+}
+.iw-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--iw-ink) 28%, transparent);
+}
+.iw-drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--iw-bg);
+  color: var(--iw-ink);
+  border-inline-start: 1px solid var(--iw-line);
+  box-shadow: -18px 0 48px color-mix(in oklab, var(--iw-ink) 18%, transparent);
+  animation: iw-drawer-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes iw-drawer-in {
+  from {
+    transform: translateX(28px);
+    opacity: 0.4;
+  }
 }
 .iw-editor-heading {
   display: flex;
@@ -282,6 +300,9 @@
   padding: 1.1rem;
   background: var(--iw-soft);
   gap: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .iw-editor-heading p {
   margin: 0 0 0.2rem;
@@ -293,10 +314,10 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
-.iw-editor form {
+.iw-drawer form {
   padding: 1.1rem;
 }
-.iw-editor fieldset {
+.iw-drawer fieldset {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
@@ -305,23 +326,23 @@
   border: 0;
   min-width: 0;
 }
-.iw-editor label {
+.iw-drawer form label {
   display: block;
   font-size: 0.8rem;
   font-weight: 550;
 }
-.iw-editor fieldset :is(input, select, textarea) {
+.iw-drawer fieldset :is(input, select, textarea) {
   display: block;
   margin-top: 0.3rem;
   font-weight: 400;
 }
-.iw-editor small {
+.iw-drawer small {
   display: block;
   color: var(--iw-muted);
   font-weight: 400;
   margin-top: 0.25rem;
 }
-.iw-editor textarea {
+.iw-drawer textarea {
   resize: vertical;
 }
 .iw-editor-footer {
@@ -361,7 +382,8 @@
   font-size: 0.8rem;
 }
 .iw-error {
-  border: 1px solid var(--destructive, #a62a30);
+  border: 1px solid color-mix(in oklab, var(--iw-danger) 45%, var(--iw-line));
+  background: color-mix(in oklab, var(--iw-danger) 7%, var(--iw-bg));
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -410,15 +432,6 @@
   white-space: nowrap;
 }
 @media (max-width: 1100px) {
-  .iw-with-editor {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .iw-editor {
-    grid-row: 1;
-  }
-  .iw-editor fieldset {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .iw-wide {
     grid-column: 1 / -1;
   }
@@ -459,8 +472,8 @@
   .iw-toolbar select {
     max-width: none;
   }
-  .iw-editor fieldset {
-    grid-template-columns: 1fr;
+  .iw-drawer {
+    width: 100%;
   }
   .iw-editor-footer button {
     flex: 1;
@@ -469,6 +482,9 @@
 @media (prefers-reduced-motion: reduce) {
   .iw-workbench * {
     transition: none !important;
+  }
+  .iw-drawer {
+    animation: none;
   }
 }
 
@@ -609,4 +625,268 @@
 
 .iw-tool-fields label {
   align-content: start;
+}
+
+/* Integration shell — shared screens for provider-connected plugins. */
+.insurance-integration {
+  font: inherit;
+  color: var(--iw-ink);
+  padding: 1.5rem;
+  max-width: 100rem;
+  display: grid;
+  gap: 1.5rem;
+}
+.insurance-integration h1 {
+  font-size: 1.85rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.insurance-integration h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 0.8rem;
+}
+.insurance-integration p {
+  max-width: 70ch;
+  line-height: 1.5;
+}
+.insurance-integration form,
+.integration-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  max-width: 70rem;
+}
+.insurance-integration label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 550;
+}
+.insurance-integration input,
+.insurance-integration textarea,
+.insurance-integration select,
+.insurance-integration button {
+  font: inherit;
+  min-height: 40px;
+  border: 1px solid var(--iw-line);
+  border-radius: 7px;
+  padding: 0.55rem 0.7rem;
+  background: var(--iw-bg);
+  color: var(--iw-ink);
+}
+.insurance-integration textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.insurance-integration button {
+  cursor: pointer;
+  width: fit-content;
+}
+.insurance-integration button[type="submit"] {
+  background: var(--iw-accent);
+  color: var(--iw-on-accent);
+}
+.insurance-integration button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.insurance-integration :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--iw-accent);
+  outline-offset: 3px;
+}
+.insurance-integration button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+.integration-wide {
+  grid-column: 1/-1;
+}
+.integration-table {
+  overflow: auto;
+  max-width: 100%;
+}
+.insurance-integration table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.insurance-integration td,
+.insurance-integration th {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--iw-line);
+  vertical-align: top;
+}
+.insurance-integration pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  padding: 1rem;
+  background: var(--iw-soft);
+  border-radius: 7px;
+}
+.insurance-integration [role="alert"] {
+  color: var(--iw-danger);
+}
+.integration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+}
+.insurance-integration label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+}
+.insurance-integration input[type="checkbox"] {
+  min-height: 20px;
+  width: 20px;
+}
+@media (max-width: 640px) {
+  .insurance-integration {
+    padding: 1rem 0.5rem;
+  }
+  .insurance-integration form,
+  .integration-fields {
+    grid-template-columns: 1fr;
+  }
+  .insurance-integration h1 {
+    font-size: 1.6rem;
+  }
+  .insurance-integration td,
+  .insurance-integration th {
+    padding: 0.5rem;
+  }
+}
+
+/* Finance shell — accounting, payments, settlements and customer portal. */
+.iw-finance {
+  max-width: 90rem;
+  margin: auto;
+  padding: 1.5rem;
+  color: var(--iw-ink);
+  font: inherit;
+}
+.iw-finance header {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+.iw-finance h1 {
+  font-size: 1.85rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+}
+.iw-finance p {
+  max-width: 72ch;
+  line-height: 1.6;
+  color: var(--iw-muted);
+}
+.iw-finance section {
+  border-top: 1px solid var(--iw-line);
+  padding-block: 1.5rem;
+}
+.iw-finance h2 {
+  font-size: 1.15rem;
+  margin: 0 0 1rem;
+}
+.iw-finance label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.iw-finance :is(input, select, textarea, button) {
+  font: inherit;
+  min-height: 44px;
+  border: 1px solid var(--iw-line);
+  border-radius: 7px;
+  padding: 0.6rem;
+  background: var(--iw-bg);
+  color: inherit;
+}
+.iw-finance textarea {
+  width: 100%;
+  min-height: 10rem;
+}
+.iw-finance button {
+  cursor: pointer;
+}
+.iw-finance button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.iw-finance button:hover:not(:disabled) {
+  background: var(--iw-soft);
+}
+.iw-finance :focus-visible {
+  outline: 2px solid var(--iw-accent);
+  outline-offset: 3px;
+}
+.iw-finance .iw-controls {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.iw-finance .iw-controls > label {
+  flex: 1;
+  min-width: 12rem;
+}
+.iw-finance .iw-table {
+  overflow: auto;
+}
+.iw-finance table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.iw-finance th,
+.iw-finance td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--iw-line);
+  white-space: nowrap;
+}
+.iw-finance th {
+  font-weight: 600;
+}
+.iw-finance [role="alert"] {
+  color: var(--iw-danger);
+  padding: 1rem;
+  border: 1px solid currentColor;
+}
+.iw-finance .iw-primary {
+  background: var(--iw-accent);
+  color: var(--iw-on-accent);
+}
+.iw-finance small {
+  display: block;
+  max-width: 72ch;
+  line-height: 1.6;
+}
+.iw-finance input[type="checkbox"] {
+  min-height: 24px;
+  min-width: 24px;
+}
+.iw-finance output {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .iw-finance {
+    padding: 1rem;
+  }
+  .iw-finance header {
+    align-items: start;
+    flex-direction: column;
+  }
+  .iw-finance .iw-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .iw-finance .iw-controls > label {
+    min-width: 0;
+    width: 100%;
+  }
 }

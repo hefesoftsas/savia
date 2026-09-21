@@ -1,6 +1,7 @@
 import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
 import { useWorkbenchMessages } from "./localization";
 import { Attachments } from "./attachments";
+import { Drawer } from "./drawer";
 import { linkedFields } from "./linked-fields";
 import { validateFields } from "./schema";
 import type { Field } from "./types";
@@ -109,7 +110,10 @@ const t = useWorkbenchMessages(config.messages);
     }
   }
   return (
-    <aside className="iw-editor" aria-labelledby="iw-editor-title">
+    <Drawer
+      labelledBy="iw-editor-title"
+      onClose={busy ? () => {} : onClose}
+    >
        <header className="iw-editor-heading">
          <div>
            <p>{record ? t("Gestión del registro") : t("Nuevo registro")}</p>
@@ -297,6 +301,6 @@ const t = useWorkbenchMessages(config.messages);
           recordId={record.id}
         />
       )}
-     </aside>
+    </Drawer>
   );
 }

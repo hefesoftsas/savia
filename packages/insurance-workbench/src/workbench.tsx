@@ -148,7 +148,7 @@ const t = useWorkbenchMessages(config.messages);
            </div>
         ))}
        </dl>
-       <div className={`iw-layout${editor ? " iw-with-editor" : ""}`}>
+       <div className="iw-layout">
          <div className="iw-list">
            <nav className="iw-filters" aria-label={t("Prioridad")}>
              {config.filters.map((item) => (

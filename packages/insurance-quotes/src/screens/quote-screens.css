@@ -1,4 +1,15 @@
 .insurance-quote {
+  --iq-success: #059669;
+  --iq-success-strong: #10b981;
+  --iq-cta: #e11d48;
+  --iq-cta-hover: #be123c;
+  --iq-on-cta: #ffffff;
+  --iq-brand-sura: #004f9e;
+  --iq-plate-liberty: #f8fafc;
+  --iq-plate-equidad: #f6fbf3;
+  --iq-plate-mapfre: #fff8f8;
+  --iq-plate-previsora: #f4faf7;
+  --iq-plate-neutral: #ffffff;
   color: var(--foreground);
   margin: 0 auto;
   max-width: 960px;
@@ -1733,15 +1744,10 @@
   color: var(--foreground);
 }
 .insurance-comparator__chip.is-active {
-  background: #0f172a;
-  border-color: #0f172a;
-  color: #ffffff;
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
   font-weight: 650;
-}
-:root.dark .insurance-comparator__chip.is-active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-foreground);
 }
 .insurance-comparator__selection-bar {
   align-items: center;
@@ -1920,7 +1926,7 @@
 .insurance-card__ribbon {
   align-items: center;
   background: var(--primary);
-  color: #ffffff;
+  color: var(--primary-foreground);
   display: flex;
   font-size: 0.75rem;
   font-weight: 650;
@@ -1976,26 +1982,26 @@
   width: 100%;
 }
 .insurance-provider-logo--sura {
-  background: #004f9e;
-  border-color: #004f9e;
+  background: var(--iq-brand-sura);
+  border-color: var(--iq-brand-sura);
 }
 .insurance-provider-logo--liberty {
-  background: #f8fafc;
+  background: var(--iq-plate-liberty);
 }
 .insurance-provider-logo--equidad {
-  background: #f6fbf3;
+  background: var(--iq-plate-equidad);
 }
 .insurance-provider-logo--mapfre {
-  background: #fff8f8;
+  background: var(--iq-plate-mapfre);
 }
 .insurance-provider-logo--qualitas {
-  background: #fff;
+  background: var(--iq-plate-neutral);
 }
 .insurance-provider-logo--previsora {
-  background: #f4faf7;
+  background: var(--iq-plate-previsora);
 }
 .insurance-provider-logo--sbs {
-  background: #fff;
+  background: var(--iq-plate-neutral);
 }
 .insurance-provider-logo--fallback {
   background: color-mix(in oklab, var(--primary) 10%, var(--background));
@@ -2055,16 +2061,13 @@
   margin: 4px 0 12px;
 }
 .insurance-card__price {
-  color: #0f172a;
+  color: var(--foreground);
   font-feature-settings: "tnum";
   font-size: 1.625rem;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1;
-}
-:root.dark .insurance-card__price {
-  color: #f8fafc;
 }
 .insurance-card__period {
   color: var(--muted-foreground);
@@ -2578,14 +2581,11 @@
   font-weight: 600;
 }
 .insurance-comparison__val-accent {
-  color: #0f172a;
+  color: var(--foreground);
   font-weight: 700;
 }
-:root.dark .insurance-comparison__val-accent {
-  color: #f8fafc;
-}
 .insurance-val-badge--good {
-  color: #059669;
+  color: var(--iq-success);
   font-weight: 600;
 }
 .insurance-val-badge--neutral {
@@ -2648,10 +2648,10 @@
 }
 .insurance-button-proposal {
   align-items: center;
-  background: #e11d48;
-  border: 1px solid #e11d48;
+  background: var(--iq-cta);
+  border: 1px solid var(--iq-cta);
   border-radius: 8px;
-  color: #ffffff;
+  color: var(--iq-on-cta);
   cursor: pointer;
   display: inline-flex;
   font: inherit;
@@ -2663,13 +2663,13 @@
   transition: all 140ms ease;
 }
 .insurance-button-proposal:hover {
-  background: #be123c;
+  background: var(--iq-cta-hover);
 }
 .insurance-action-toast {
   animation: insurance-fade-in 180ms ease;
-  background: #0f172a;
+  background: var(--foreground);
   border-radius: 8px;
-  color: #ffffff;
+  color: var(--background);
   font-size: 0.8125rem;
   font-weight: 600;
   margin: 0;
@@ -2762,9 +2762,9 @@
   padding: 1px 7px;
 }
 .insurance-field-synced {
-  background: color-mix(in oklab, #10b981 12%, var(--background));
+  background: color-mix(in oklab, var(--iq-success-strong) 12%, var(--background));
   border-radius: 999px;
-  color: #059669;
+  color: var(--iq-success);
   font-size: 0.6875rem;
   font-weight: 650;
   padding: 1px 7px;

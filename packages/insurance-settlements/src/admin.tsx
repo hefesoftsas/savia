@@ -8,7 +8,7 @@ import { requirement } from "./object";
 import { settle, addBatch, type Batch } from "./domain";
 import { useFinance } from "./use-finance";
 import { decimal, download } from "./support";
-import "./finance.css";
+import "@savia/insurance-workbench/workbench.css";
 export function Screen({ savia }: { savia: PluginApi }) {
  const t = usePluginMessages(integrationMessages);
   const f = useFinance(savia);
@@ -60,7 +60,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
     ]);
   }
   return (
-    <main className="if-finance">
+    <main className="iw-finance">
       <header>
         <div>
           <h1>{manifest.label}</h1>
@@ -87,7 +87,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
           <p>
             {t("No hay comisiones pendientes de liquidar. Registra primero una comisión.")}</p>
         ) : (
-          <div className="if-table">
+          <div className="iw-table">
             <table>
               <thead>
                 <tr>
@@ -127,7 +127,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
       </section>
       <section>
         <h2>{t("Calcular liquidación")}</h2>
-        <div className="if-controls">
+        <div className="iw-controls">
           <label>
             {t("Participación (%)")}<input
               inputMode="decimal"
@@ -157,7 +157,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         {problem && <p role="alert">{problem}</p>}
         {preview && (
           <>
-            <div className="if-table">
+            <div className="iw-table">
               <table>
                 <thead>
                   <tr>
@@ -182,7 +182,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               <output>{money(decimal(preview.total))}</output>
             </p>
             <button
-              className="if-primary"
+              className="iw-primary"
               disabled={f.busy}
               onClick={() =>
                 void f.act(async () => {
@@ -222,7 +222,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         {!f.state.batches.length ? (
           <p>{t("Aún no hay liquidaciones confirmadas.")}</p>
         ) : (
-          <div className="if-table">
+          <div className="iw-table">
             <table>
               <thead>
                 <tr>

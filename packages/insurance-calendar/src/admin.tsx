@@ -5,10 +5,11 @@ import type { PluginApi } from "@savia/crm-shared/plugin-api";
 import {
   Shell,
   History,
-  useIntegration,
   IntegrationStatus,
   loadAll,
-} from "@savia/insurance-communications/ui";
+} from "@savia/insurance-workbench/integrations";
+import { useIntegration } from "@savia/insurance-communications/ui";
+import { stateLabels } from "@savia/insurance-communications/domain";
 import { saveIntegrationRecord } from "@savia/insurance-communications/persistence";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
@@ -262,7 +263,7 @@ export function CalendarScreen({ savia }: { savia: PluginApi }) {
           ))
         )}
       </section>
-      <History runs={state.runs} />
+      <History runs={state.runs} stateLabels={stateLabels} />
     </Shell>
   );
 }

@@ -5,10 +5,11 @@ import type { PluginApi, PluginFile } from "@savia/crm-shared/plugin-api";
 import {
   Shell,
   History,
-  useIntegration,
   IntegrationStatus,
   loadAll,
-} from "@savia/insurance-communications/ui";
+} from "@savia/insurance-workbench/integrations";
+import { useIntegration } from "@savia/insurance-communications/ui";
+import { stateLabels } from "@savia/insurance-communications/domain";
 import { manifest } from "./manifest";
 import { requirement } from "./object";
 import { interpolate, templateVariables } from "./domain";
@@ -394,7 +395,7 @@ export function DocumentGenerationScreen({ savia }: { savia: PluginApi }) {
         </section>
       ) : null}
       <p role="status">{notice}</p>
-      <History runs={integration.runs} />
+      <History runs={integration.runs} stateLabels={stateLabels} />
     </Shell>
   );
 }

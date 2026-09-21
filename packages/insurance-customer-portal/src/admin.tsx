@@ -19,7 +19,7 @@ import {
   collection,
   statusLabels,
 } from "./domain";
-import "./portal.css";
+import "@savia/insurance-workbench/workbench.css";
 export function Screen({ savia }: { savia: PluginApi }) {
  const t = usePluginMessages(integrationMessages);
   const [customer, setCustomer] = useState(""),
@@ -117,7 +117,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
     }
   }
   return (
-    <main className="ic-portal">
+    <main className="iw-finance">
       <header>
         <div>
           <h1>{t("Tu portal de seguros")}</h1>
@@ -139,7 +139,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
             <summary>{t("Guía para quien administra el acceso")}</summary>
             <p>
               {t("Descarga una propuesta validada de permisos y aplícala en Roles y permisos. No concede acceso por sí sola. Usa una cuenta de cliente sin rol administrador ni permisos adicionales. Consulta la guía de instalación del portal antes de asignar el rol.")}</p>
-            <div className="ic-controls">
+            <div className="iw-controls">
               <label>
                 {t("Identificador exacto del cliente")}<input
                   value={setupId}
@@ -161,7 +161,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                 <p>
                   {t("No tienes pólizas disponibles en este portal. Puedes enviar una consulta a tu asesor.")}</p>
               ) : (
-                <div className="ic-table">
+                <div className="iw-table">
                   <table>
                     <thead>
                       <tr>
@@ -216,7 +216,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                   });
                 }}
               >
-                <div className="ic-controls">
+                <div className="iw-controls">
                   <label>
                     {t("Asunto")}<input
                       required
@@ -261,7 +261,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
                     onChange={(e) => setDetails(e.target.value)}
                   />
                 </label>
-                <button className="ic-primary" disabled={busy} type="submit">
+                <button className="iw-primary" disabled={busy} type="submit">
                   {t("Enviar solicitud")}</button>
               </form>
             </section>
@@ -270,7 +270,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               {!requests.length ? (
                 <p>{t("Aún no has enviado solicitudes.")}</p>
               ) : (
-                <div className="ic-table">
+                <div className="iw-table">
                   <table>
                     <thead>
                       <tr>

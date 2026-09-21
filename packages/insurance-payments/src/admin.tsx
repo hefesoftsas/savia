@@ -19,7 +19,7 @@ import {
 } from "./domain";
 import { useFinance } from "./use-finance";
 import { decimal, download } from "./support";
-import "./finance.css";
+import "@savia/insurance-workbench/workbench.css";
 export function Screen({ savia }: { savia: PluginApi }) {
  const t = usePluginMessages(integrationMessages);
   const f = useFinance(savia);
@@ -48,7 +48,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
       Number(text(a.policy_reference) === current?.reference),
   );
   return (
-    <main className="if-finance">
+    <main className="iw-finance">
       <header>
         <div>
           <h1>{manifest.label}</h1>
@@ -67,7 +67,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         <h2>{t("Importar extracto")}</h2>
         <p>
           {t("CSV de recaudos positivos: id,date,reference,amount. Fecha AAAA-MM-DD, punto decimal y un identificador bancario estable por movimiento. Máximo 200 movimientos acumulados.")}</p>
-        <div className="if-controls">
+        <div className="iw-controls">
           <label>
             {t("Cuenta bancaria")}<input
               value={account}
@@ -110,7 +110,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
         {previewError && <p role="alert">{previewError}</p>}
         {preview.length > 0 && (
           <>
-            <div className="if-table">
+            <div className="iw-table">
               <table>
                 <thead>
                   <tr>
@@ -133,7 +133,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               </table>
             </div>
             <button
-              className="if-primary"
+              className="iw-primary"
               disabled={f.busy}
               onClick={() =>
                 void f.act(async () => {
@@ -149,7 +149,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
       </section>
       <section>
         <h2>{t("Asignar recaudo")}</h2>
-        <div className="if-controls">
+        <div className="iw-controls">
           <label>
             {t("Movimiento")}<select
               value={transaction}
@@ -229,7 +229,7 @@ export function Screen({ savia }: { savia: PluginApi }) {
               }
             >
               {t("Exportar conciliación")}</button>
-            <div className="if-table">
+            <div className="iw-table">
               <table>
                 <thead>
                   <tr>

@@ -47,9 +47,16 @@ typography:
     fontSize: 1.45rem
     fontWeight: 650
     letterSpacing: -0.02em
+  scale:
+    micro: "11px"
+    ui: "16px"
+    ui-lg: "18px"
+    subtitle: "19px"
+    display: "26px"
 rounded:
   badge: 5px
   control: 7px
+  callout: 8px
   editor: 12px
 spacing:
   compact: 0.5rem
@@ -91,7 +98,7 @@ components:
 
 **Creative North Star: "The Operational Worklist"**
 
-This package extends Savia's established administrative interface with a shared worklist and inline editor. It belongs to optional insurance solutions; it does not define a new application identity or impose an insurance identity on the platform. Theme colors and the font family come from the host.
+This package extends Savia's established administrative interface with a shared worklist and a drawer editor. It also hosts the shared shells reused by every insurance screen: the operational workbench (`.iw-workbench`), the provider integration shell (`.insurance-integration`) and the finance shell (`.iw-finance`). All three define the same `--iw-*` token aliases on their root and resolve them from host theme roles. It belongs to optional insurance solutions; it does not define a new application identity or impose an insurance identity on the platform. Theme colors and the font family come from the host.
 
 The visual language is compact, direct and quiet: readable record identities, tabular figures, thin rules and explicit action states. The shipped source is the authority for this record, including the compact mobile metrics and stacked table rows. This is an inherited system capture, not a new visual concept.
 
@@ -100,7 +107,7 @@ The visual language is compact, direct and quiet: readable record identities, ta
 - Host-controlled theme and typography.
 - Flat, rule-separated operational information.
 - Compact figures and explicit text states.
-- Responsive worklist with an inline editor.
+- Responsive worklist with a right-side drawer editor.
 
 ## Colors
 
@@ -124,7 +131,7 @@ Semantic danger, warning and success pairs are used for text-labelled status bad
 
 **Body Font:** Inherited from the Savia host, including controls. No additional display or monospace family is introduced.
 
-The hierarchy uses a compact body, small contextual labels and moderately larger operational headings. Headline, title, body, field-label, label and metric roles are recorded in the frontmatter. The title role covers editor and empty-state headings; their weights differ in source and are not standardized here.
+The hierarchy uses a compact body, small contextual labels and moderately larger operational headings. Headline, title, body, field-label, label and metric roles are recorded in the frontmatter. The `scale` map is the normative type ramp for all three shells; sizes not tied to a named role resolve to the nearest step (micro 11px, ui 16px, ui-lg 18px, subtitle 19px, display 26px). The title role covers editor and empty-state headings; their weights differ in source and are not standardized here.
 
 Metric values and numeric table cells use tabular figures. Identity text is semibold, with supporting customer or policy information below it. Descriptions allow up to (65ch); empty-state guidance allows (48ch). Mobile headlines reduce to (1.6rem), metric values to (1.2rem), and metric labels use the small label role.
 
@@ -134,23 +141,23 @@ Metric values and numeric table cells use tabular figures. Identity text is semi
 
 The workbench is centered with a maximum width of (100rem), desktop padding of (1.5rem) and a main grid gap of (1.5rem). A four-column metric strip uses top and bottom rules plus internal vertical separators. Filters and tools wrap naturally.
 
-When open, the desktop editor occupies a (320px–390px) side column beside a flexible list. At widths up to (1100px), the editor moves above the list and its fields use two columns, with long text fields spanning the grid.
+When open, the editor slides in from the right as a modal drawer: up to (560px) wide, full viewport height, over a dimmed backdrop. The worklist keeps its layout; nothing reflows or resizes behind the drawer. The heading stays pinned at the top while the body scrolls.
 
 At widths up to (640px), outer padding becomes (1rem 0.5rem), the heading stacks, fields return to one column and footer buttons share the available width. Metrics become a compact two-column strip with gaps of (0.75rem 0.5rem), vertical padding of (0.8rem) and no supplemental detail lines. Labels and values remain visible. Search and stage filters occupy full rows.
 
 On mobile, each table record becomes a two-column grid. Identity and action span both columns; the action button fills its row. Other cells show their column label above their value, and long content wraps. The table header is visually hidden. Preserve table markup, caption and column headings alongside these visual labels.
 
-**The Context Retained Rule.** Keep the editor in the worklist layout, moving it above the list when the side-by-side composition no longer fits.
+**The Context Retained Rule.** Keep the worklist visible and unmoved while editing; the editor overlays it as a drawer instead of competing for horizontal space.
 
 ## Elevation & Depth
 
-The package adds no box shadows. Thin borders and muted surfaces distinguish sections, selection and editing context. Keyboard focus is an accent outline (2px) with an offset of (3px), not an elevation effect.
+The package adds no shadows to inline content. Thin borders and muted surfaces distinguish sections, selection and editing context. The only elevation is the drawer: a side shadow and a dimmed backdrop that mark it as modal above the worklist. Keyboard focus is an accent outline (2px) with an offset of (3px), not an elevation effect.
 
 **The Quiet Separation Rule.** Separate dense information with rules, spacing and tonal surfaces before adding another container.
 
 ## Shapes
 
-Controls use softly rounded corners, status badges use a tighter radius, and the editor uses the largest recurring radius. The worklist itself is a ruled table, not a grid of elevated cards. Badges include a circular current-color dot; their written labels carry meaning independently of color.
+Controls use softly rounded corners (control 7px, shared by workbench, integration and finance shells), status badges use a tighter radius (5px), callouts and error notices use (8px), and the editor drawer uses the largest recurring radius (12px). The worklist itself is a ruled table, not a grid of elevated cards. Badges include a circular current-color dot; their written labels carry meaning independently of color.
 
 ## Components
 
@@ -176,7 +183,7 @@ Small badges pair a dot with a text label. Semantic tones describe urgency or co
 
 ### Cards / Containers
 
-The inline editor is a bordered, rounded container with a muted heading and consistent inner padding (1.1rem). Its footer is separated by a rule. It is an aside with a labelled heading: opening focuses that heading and closing restores focus to the initiating button.
+The editor is a labelled modal drawer with a bordered, rounded container, a muted sticky heading and consistent inner padding (1.1rem). Its footer is separated by a rule. Opening moves focus into the panel and traps it there; Escape closes it and restores focus to the initiating button. The entry animation slides the panel in over (280ms) with easing (cubic-bezier(0.16, 1, 0.3, 1)); reduced-motion preference drops the animation and the panel becomes static, full-width on narrow viewports.
 
 ### Operational Worklist
 

@@ -486,5 +486,85 @@ export const messages = {
     "%{field}: revisa la longitud del texto.",
     "%{field}: check the text length.",
     "%{field}: revise o tamanho do texto."
+  ],
+  "Historial de operaciones": [
+    "Historial de operaciones",
+    "Operation history",
+    "Histórico de operações"
+  ],
+  "No hay operaciones registradas.": [
+    "No hay operaciones registradas.",
+    "No recorded operations.",
+    "Não há operações registradas."
+  ],
+  "Fecha": [
+    "Fecha",
+    "Date",
+    "Data"
+  ],
+  "Operación": [
+    "Operación",
+    "Operation",
+    "Operação"
+  ],
+  "Resultado": [
+    "Resultado",
+    "Result",
+    "Resultado"
+  ],
+  "Referencia": [
+    "Referencia",
+    "Reference",
+    "Referência"
+  ],
+  "No confirmado / revisar": [
+    "No confirmado / revisar",
+    "Unconfirmed / review",
+    "Não confirmado / revisar"
+  ],
+  "Procesando": [
+    "Procesando",
+    "Processing",
+    "Processando"
+  ],
+  "Consultar referencia": [
+    "Consultar referencia",
+    "Look up reference",
+    "Consultar referência"
+  ],
+  "Cargando conexiones…": [
+    "Cargando conexiones…",
+    "Loading connections…",
+    "Carregando conexões…"
+  ],
+  "Sin conexión configurada. Registra una conexión cifrada con un destino autorizado por el administrador.": [
+    "Sin conexión configurada. Registra una conexión cifrada con un destino autorizado por el administrador.",
+    "No connection configured. Register an encrypted connection with a destination authorized by the administrator.",
+    "Nenhuma conexão configurada. Registre uma conexão criptografada com um destino autorizado pelo administrador."
+  ],
+  "Conexión disponible:": [
+    "Conexión disponible:",
+    "Available connection:",
+    "Conexão disponível:"
+  ],
+  "Configurar conexión de integración": [
+    "Configurar conexión de integración",
+    "Configure integration connection",
+    "Configurar conexão de integração"
+  ],
+  "Endpoint HTTPS autorizado": [
+    "Endpoint HTTPS autorizado",
+    "Authorized HTTPS endpoint",
+    "Endpoint HTTPS autorizado"
+  ],
+  "Token secreto": [
+    "Token secreto",
+    "Secret token",
+    "Token secreto"
+  ],
+  "Guardar conexión cifrada": [
+    "Guardar conexión cifrada",
+    "Save encrypted connection",
+    "Salvar conexão criptografada"
   ]
 } as const satisfies PluginMessages;
