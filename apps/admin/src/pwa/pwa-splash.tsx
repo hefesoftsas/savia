@@ -38,11 +38,18 @@ export const PWA_SPLASH_MESSAGE = "Cargando Savia…";
  * Full-screen branded boot splash for PWA cold start and lazy
  * bootstrap fallbacks. Mirrors the static splash inlined in
  * `index.html` so first paint and React takeover look identical.
+ *
+ * It also doubles as the admin `loading` page during the auth check:
+ * `loadingPrimary`/`loadingSecondary` are accepted for
+ * `LoadingComponent` compatibility and intentionally ignored so the
+ * boot sequence keeps a single continuous visual.
  */
 export function PwaSplash({
   message = PWA_SPLASH_MESSAGE,
 }: {
   message?: string;
+  loadingPrimary?: string;
+  loadingSecondary?: string;
 }) {
   return (
     <main

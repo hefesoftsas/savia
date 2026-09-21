@@ -25,6 +25,7 @@ import { Admin } from "@/components/admin";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { resolveInitialAppLocale } from "@/i18n/locale-storage";
 import { OfflineBanner } from "@/offline/offline-banner";
+import { PwaSplash } from "@/pwa/pwa-splash";
 import { Button } from "@/components/ui/button";
 import { RouteLoading } from "@/components/admin/route-loading";
 import { TenantHostMismatchError } from "@/components/admin/tenant-mismatch-error";
@@ -266,6 +267,9 @@ function AppContent({ services }: { services?: AppServices } = {}) {
           dataProvider={appServices.dataProvider}
           disableTelemetry
           error={TenantHostMismatchError}
+          // Same branded splash as the boot sequence: cold start shows a
+          // single continuous visual through the auth check.
+          loading={PwaSplash}
           requireAuth
           queryClient={queryClient}
           store={adminStore}
