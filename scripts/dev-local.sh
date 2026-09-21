@@ -91,7 +91,7 @@ CI=1 pnpm --filter @savia/request run migrate:local
 start_process pnpm --filter @savia/request exec wrangler dev --local \
   --ip 127.0.0.1 --port 8797 --inspector-port 9232 --config wrangler.jsonc
 
-start_process env "SAVIA_PUBLIC_ORIGIN=$admin_origin" pnpm exec node scripts/dev-api-runtime.mjs
+start_process env "SAVIA_PUBLIC_ORIGIN=$admin_origin" "SAVIA_DISABLE_CAPTCHA=1" pnpm exec node scripts/dev-api-runtime.mjs
 start_process pnpm exec node scripts/crm-sync-local-scheduler.mjs
 start_process pnpm --filter @savia/admin exec vite --host "${SAVIA_DEV_HOST:-127.0.0.1}" \
   --port "$admin_port" --strictPort

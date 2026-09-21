@@ -6,9 +6,12 @@ import { mountAltcha } from "./altcha-widget";
 
 export type PublicSubmissionDefinition = {
   id: string;
-  captchaProvider: "turnstile" | "altcha";
+  captchaProvider: "turnstile" | "altcha" | "disabled";
   siteKey?: string;
 };
+
+/** Token sent when the API runs with local CAPTCHA bypass (never in preview/production). */
+export const LOCAL_CAPTCHA_TOKEN = "local-bypass";
 
 export type PublicSubmissionValues = Record<string, string | number | boolean>;
 
@@ -125,6 +128,14 @@ export function usePublicFormSubmission({
     if (receipt || duplicate) return;
     if (!retryProof.current) setCaptcha("");
     let active = true;
+    if (definition.captchaProvider === "disabled") {
+      // Local development bypass: the API skips verification, so no widget
+      // is mounted and the submit action is available immediately.
+      if (active) setCaptcha(LOCAL_CAPTCHA_TOKEN);
+      return () => {
+        active = false;
+      };
+    }
     if (definition.captchaProvider === "altcha") {
       if (captchaElement.current)
         void mountAltcha(
@@ -272,7 +283,9 @@ export function usePublicFormSubmission({
         setPending(false);
         retryProof.current =
           definition.captchaProvider === "altcha" && keepProof;
-        if (retryProof.current) setCaptcha(captcha);
+        if (definition.captchaProvider === "disabled")
+          setCaptcha(LOCAL_CAPTCHA_TOKEN);
+        else if (retryProof.current) setCaptcha(captcha);
         else {
           setCaptcha("");
           altchaWidget.current?.reset();

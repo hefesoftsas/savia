@@ -558,6 +558,44 @@ it("returns the public insurance quote presentation", async () => {
   ).json()) as any;
   expect(recordDefinition).not.toHaveProperty("presentation");
 });
+it("skips captcha verification for the local development bypass", async () => {
+  const instance = app({
+    disableCaptcha: true,
+    publicOrigin: "http://127.0.0.1:5173",
+    siteKey: undefined,
+    secretKey: undefined,
+  });
+  const name = await object();
+  const link = await publish(instance, name);
+  const calls = verify.mock.calls.length;
+  const definition = (await (
+    await instance.request("https://api.test/api/public/forms/" + link.token)
+  ).json()) as any;
+  expect(definition.captchaProvider).toBe("disabled");
+  expect(definition).not.toHaveProperty("siteKey");
+  const response = await submit(instance, link, { name: "Local" });
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({ ok: true });
+  expect(verify.mock.calls.length).toBe(calls);
+});
+it("ignores the bypass flag outside localhost origins", async () => {
+  const instance = app({
+    disableCaptcha: true,
+    siteKey: undefined,
+    secretKey: undefined,
+  });
+  const name = await object();
+  const response = await instance.request("https://api.test/v1/public-forms", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      domainId: "demo",
+      objectName: name,
+      kind: "record",
+    }),
+  });
+  expect(response.status).toBe(503);
+});
 it("closes links when their domain disappears and rejects metadata-only remote collections", async () => {
   const instance = app();
   const name = await object(undefined, "retired");

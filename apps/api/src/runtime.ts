@@ -71,6 +71,7 @@ export type RuntimeEnvironment = {
   };
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  SAVIA_DISABLE_CAPTCHA?: string;
   PUBLIC_FORMS_RATE_LIMITER?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
@@ -252,6 +253,7 @@ const runtime = {
         siteKey: environment.TURNSTILE_SITE_KEY,
         secretKey: environment.TURNSTILE_SECRET_KEY,
         publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
+        disableCaptcha: environment.SAVIA_DISABLE_CAPTCHA === "1",
         rateLimiter: environment.PUBLIC_FORMS_RATE_LIMITER,
         ...overrides.publicForms,
       },

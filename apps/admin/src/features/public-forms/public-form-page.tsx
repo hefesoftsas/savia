@@ -29,7 +29,9 @@ const publicDefinition = z
     title: z.string().min(1),
     description: z.string().optional(),
     kind: z.enum(["record", "quote"]),
-    captchaProvider: z.enum(["turnstile", "altcha"]).default("turnstile"),
+    captchaProvider: z
+      .enum(["turnstile", "altcha", "disabled"])
+      .default("turnstile"),
     siteKey: z.string().min(1).optional(),
     presentation: publicQuotePresentation.optional(),
     fields: z
@@ -64,7 +66,10 @@ const publicDefinition = z
       ),
   })
   .refine(
-    (value) => value.captchaProvider === "altcha" || Boolean(value.siteKey),
+    (value) =>
+      value.captchaProvider === "altcha" ||
+      value.captchaProvider === "disabled" ||
+      Boolean(value.siteKey),
   );
 export type PublicFormDefinition = z.infer<typeof publicDefinition>;
 type Definition = PublicFormDefinition;

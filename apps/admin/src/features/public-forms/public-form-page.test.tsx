@@ -357,6 +357,39 @@ it("selects the public quote wizard for quote definitions with a presentation de
   expect(await screen.findByText(/Cotizador por pasos/)).toBeInTheDocument();
   expect(screen.queryByLabelText(/Nombre/)).not.toBeInTheDocument();
 });
+it("submits without a captcha widget when verification is disabled locally", async () => {
+  fetchMock.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        ...definition,
+        siteKey: undefined,
+        captchaProvider: "disabled",
+      }),
+    ),
+  );
+  render(<PublicFormPage token="local-token" />);
+  fireEvent.change(await screen.findByLabelText(/Nombre/), {
+    target: { value: "Ana" },
+  });
+  fireEvent.change(screen.getByLabelText(/Acepto/), {
+    target: { value: "true" },
+  });
+  const button = screen.getByRole("button", { name: "Enviar solicitud" });
+  await waitFor(() => expect(button).toBeEnabled());
+  expect(window.turnstile?.render).not.toHaveBeenCalled();
+  fetchMock.mockResolvedValueOnce(
+    new Response(JSON.stringify({ ok: true, reference: "local-123" })),
+  );
+  fireEvent.click(button);
+  expect(await screen.findByText("local-123")).toBeInTheDocument();
+  const payload = JSON.parse(fetchMock.mock.calls[1][1].body);
+  expect(payload.token).toBe("local-bypass");
+  expect(
+    fetchMock.mock.calls.every(
+      ([url]) => !String(url).includes("cloudflare.com"),
+    ),
+  ).toBe(true);
+});
 it("keeps the generic form for record definitions without a presentation descriptor", async () => {
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(definition)));
   render(<PublicFormPage token="record-token" />);

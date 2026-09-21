@@ -60,6 +60,17 @@ keys; fake Siteverify responses are injected only by tests. Captcha validation u
 Cloudflare's server-side verification, checks hostname, `public_submit` action and
 link identifier, and has a timeout. Browser-only captcha validation is insufficient.
 
+## Local development
+
+The local stack (`pnpm dev`) sets `SAVIA_DISABLE_CAPTCHA=1`, which skips
+anonymous verification so links can be published and submitted without Turnstile
+credentials. The bypass is honored only when `SAVIA_PUBLIC_ORIGIN` is a localhost
+origin; with any other origin the flag is ignored and the normal provider
+configuration applies. Preview and production therefore always fail closed when
+unconfigured. The public page reports `captchaProvider: "disabled"`, mounts no
+widget, and submits immediately. Never set `SAVIA_DISABLE_CAPTCHA` outside local
+development.
+
 ## Security and reliability boundary
 
 The public page loads independently of the administrative app: no session bootstrap,
