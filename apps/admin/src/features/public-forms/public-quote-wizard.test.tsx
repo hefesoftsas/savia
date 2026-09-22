@@ -846,6 +846,96 @@ it("fills the birth date from the age presets", async () => {
   );
 });
 
+it("shows example placeholders mirroring the embedded wizard", async () => {
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  expect(await screen.findByLabelText(/Placa/)).toHaveAttribute(
+    "placeholder",
+    "Ej. TESTCAR",
+  );
+  expect(screen.getByLabelText(/Código Fasecolda/)).toHaveAttribute(
+    "placeholder",
+    "Ej. 123456",
+  );
+  expect(screen.getByLabelText(/Año del vehículo/)).toHaveAttribute(
+    "placeholder",
+    "Ej. 2024",
+  );
+  expect(
+    screen.getByLabelText(/Código de ciudad de circulación/),
+  ).toHaveAttribute(
+    "placeholder",
+    "Buscar ciudad (ej. Bogotá, Medellín, Cali)...",
+  );
+  expect(screen.getByLabelText(/Valor asegurado/)).toHaveAttribute(
+    "placeholder",
+    "Ej. 50000000",
+  );
+  fireEvent.change(screen.getByLabelText(/Placa/), {
+    target: { value: "TESTCAR" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  expect(await screen.findByLabelText(/Número de documento/)).toHaveAttribute(
+    "placeholder",
+    "Ej. 12345678",
+  );
+  expect(screen.getByLabelText(/Nombres/)).toHaveAttribute(
+    "placeholder",
+    "Ej. Ana",
+  );
+  fireEvent.change(screen.getByLabelText(/Tipo de documento/), {
+    target: { value: "CC" },
+  });
+  fireEvent.change(screen.getByLabelText(/Número de documento/), {
+    target: { value: "123456789" },
+  });
+  fireEvent.change(screen.getByLabelText(/Nombres/), {
+    target: { value: "Ada" },
+  });
+  fireEvent.change(screen.getByLabelText(/Primer apellido/), {
+    target: { value: "Example" },
+  });
+  fireEvent.change(screen.getByLabelText(/Sexo/), { target: { value: "F" } });
+  fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), {
+    target: { value: "1990-01-01" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  expect(
+    await screen.findByLabelText(/Código de ciudad de residencia/),
+  ).toHaveAttribute(
+    "placeholder",
+    "Buscar ciudad (ej. Bogotá, Medellín, Cali)...",
+  );
+  expect(screen.getByLabelText(/Dirección/)).toHaveAttribute(
+    "placeholder",
+    "Ej. Calle 1 # 2-3",
+  );
+  expect(screen.getByLabelText(/Teléfono/)).toHaveAttribute(
+    "placeholder",
+    "Ej. 3001234567",
+  );
+  expect(screen.getByLabelText(/Correo electrónico/)).toHaveAttribute(
+    "placeholder",
+    "ejemplo@correo.com",
+  );
+});
+
 it("hides the city suggestions while the quote is pending", async () => {
   fetchMock.mockResolvedValueOnce(
     Response.json({

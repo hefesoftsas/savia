@@ -305,6 +305,7 @@ function CityAutocomplete({
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        placeholder={t("Buscar ciudad (ej. Bogotá, Medellín, Cali)...")}
       />
       {value && (
         <button
@@ -659,6 +660,36 @@ export function PublicQuoteForm({
     }
   }
 
+  /** Example placeholders mirroring the embedded quote wizard. */
+  function placeholderFor(field: QuoteField): string | undefined {
+    if (lookingUp && field.name === "vehicle_fasecoldaCode")
+      return t("Consultando Fasecolda…");
+    if (lookingUp && field.name === "vehicle_productionYear")
+      return t("Consultando…");
+    switch (field.name) {
+      case "vehicle_fasecoldaCode":
+        return t("Ej. 123456");
+      case "vehicle_productionYear":
+        return t("Ej. 2024");
+      case "applicant_documentNumber":
+        return t("Ej. 12345678");
+      case "applicant_firstName":
+        return t("Ej. Ana");
+      case "applicant_surname":
+        return t("Ej. Pérez");
+      case "applicant_secondSurname":
+        return t("Opcional");
+      case "applicant_address":
+        return t("Ej. Calle 1 # 2-3");
+      case "applicant_phone":
+        return t("Ej. 3001234567");
+      case "applicant_email":
+        return t("ejemplo@correo.com");
+      default:
+        return undefined;
+    }
+  }
+
   function goNext() {
     if (!formRef.current?.reportValidity()) return;
     const current = steps[step] ?? steps[0];
@@ -877,6 +908,7 @@ export function PublicQuoteForm({
                           required={field.required}
                           autoComplete="off"
                           value={String(values[field.name] ?? "")}
+                          placeholder={t("Ej. TESTCAR")}
                           {...invalidProps}
                           onChange={(e) => updatePlate(e.target.value)}
                           onBlur={autoLookupPlate}
@@ -940,6 +972,13 @@ export function PublicQuoteForm({
                           value={formatCurrency(
                             String(values[field.name] ?? ""),
                           )}
+                          placeholder={
+                            field.name === "vehicle_accessoriesValue"
+                              ? "0"
+                              : lookingUp
+                                ? t("Consultando…")
+                                : t("Ej. 50000000")
+                          }
                           {...invalidProps}
                           onChange={(e) =>
                             update(
@@ -996,6 +1035,7 @@ export function PublicQuoteForm({
                         step={field.type === "number" ? "any" : undefined}
                         autoComplete="off"
                         value={String(values[field.name] ?? "")}
+                        placeholder={placeholderFor(field)}
                         {...invalidProps}
                         onChange={(e) => update(field.name, e.target.value)}
                       />
