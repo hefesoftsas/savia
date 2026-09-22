@@ -7,7 +7,10 @@ export const myDayWidgetKinds = [
   "actions",
 ] as const;
 
+export const myDaySystemWidgetKinds = ["agenda", "quick_task"] as const;
+
 export type MyDayWidgetKind = (typeof myDayWidgetKinds)[number];
+export type MyDaySystemWidgetKind = (typeof myDaySystemWidgetKinds)[number];
 
 /** Plugin widgets use `plugin:<extensionId>:<widgetId>`; reserved for phase 3. */
 const pluginKindPattern = /^plugin:[a-z0-9_.-]{1,64}:[a-z0-9_-]{1,64}$/;
@@ -49,7 +52,7 @@ export const myDayWidgetConfigSchema = z
   .strict()
   .optional();
 
-export const myDayWidgetSchema = z
+export const myDayCollectionWidgetSchema = z
   .object({
     id: widgetIdSchema,
     apiBasePath: apiBasePathSchema,
@@ -63,6 +66,20 @@ export const myDayWidgetSchema = z
     size: z.enum(["sm", "md", "lg"]).optional(),
   })
   .strict();
+
+export const myDaySystemWidgetSchema = z
+  .object({
+    id: widgetIdSchema,
+    kind: z.enum(myDaySystemWidgetKinds),
+    title: z.string().trim().min(1).max(80).optional(),
+    size: z.enum(["sm", "md", "lg"]).optional(),
+  })
+  .strict();
+
+export const myDayWidgetSchema = z.union([
+  myDayCollectionWidgetSchema,
+  myDaySystemWidgetSchema,
+]);
 
 export type MyDayWidgetConfig = z.infer<typeof myDayWidgetSchema>;
 
@@ -86,7 +103,13 @@ export class MyDayWidgetsError extends Error {
 }
 
 export function defaultMyDayWidgets(): MyDayWidgetsLayout {
-  return { version: 1, widgets: [] };
+  return {
+    version: 1,
+    widgets: [
+      { id: "agenda", kind: "agenda", size: "lg" },
+      { id: "quick_task", kind: "quick_task", size: "md" },
+    ],
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,16 +133,21 @@ export function parseMyDayWidgets(value: unknown): MyDayWidgetsLayout {
   }
   return {
     version: 1,
-    widgets: parsed.data.widgets.map((widget) => ({
-      ...widget,
-      size: widget.size ?? "md",
-      config: {
-        limit: 5,
-        sort: "updated_at",
-        order: "DESC" as const,
-        ...widget.config,
-      },
-    })),
+    widgets: parsed.data.widgets.map((widget) => {
+      if (!("apiBasePath" in widget) || !("collection" in widget)) {
+        return { ...widget, size: widget.size ?? "md" };
+      }
+      return {
+        ...widget,
+        size: widget.size ?? "md",
+        config: {
+          limit: 5,
+          sort: "updated_at",
+          order: "DESC" as const,
+          ...widget.config,
+        },
+      };
+    }),
   };
 }
 
@@ -129,4 +157,16 @@ export function createMyDayWidgetId(): string {
   let suffix = "";
   for (const byte of bytes) suffix += alphabet[byte % alphabet.length];
   return `w_${suffix}`;
+}
+
+export function isMyDaySystemWidget(
+  widget: MyDayWidget,
+): widget is z.infer<typeof myDaySystemWidgetSchema> {
+  return widget.kind === "agenda" || widget.kind === "quick_task";
+}
+
+export function isMyDayCollectionWidget(
+  widget: MyDayWidget,
+): widget is z.infer<typeof myDayCollectionWidgetSchema> {
+  return !isMyDaySystemWidget(widget);
 }

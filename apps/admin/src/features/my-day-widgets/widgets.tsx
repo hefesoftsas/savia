@@ -38,6 +38,7 @@ import {
 } from "./summarize";
 import { PluginWidgetBody } from "./plugin-widget";
 import { parsePluginKind, pluginWidgetTitle } from "./plugins";
+import { AgendaWidgetBody, QuickTaskWidgetBody } from "./agenda-widget";
 import type { WidgetCollectionSchema } from "./types";
 
 function WidgetError({
@@ -73,7 +74,7 @@ function WidgetSkeleton() {
 
 function useWidgetSchema(
   apiClient: ApiClient | undefined,
-  widget: MyDayWidget,
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>,
 ) {
   const [schema, setSchema] = useState<WidgetCollectionSchema | null>(null);
   const [missing, setMissing] = useState(false);
@@ -106,7 +107,7 @@ export function SummaryWidgetBody({
   widget,
 }: {
   apiClient: ApiClient | undefined;
-  widget: MyDayWidget;
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
   const [total, setTotal] = useState<number | null>(null);
   const [groups, setGroups] = useState<
@@ -207,7 +208,7 @@ export function ItemsWidgetBody({
   widget,
 }: {
   apiClient: ApiClient | undefined;
-  widget: MyDayWidget;
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
   const [records, setRecords] = useState<
     { id: string; title: string; status?: string; date?: string }[] | null
@@ -286,7 +287,7 @@ export function ChartWidgetBody({
   widget,
 }: {
   apiClient: ApiClient | undefined;
-  widget: MyDayWidget;
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
   const [groups, setGroups] = useState<
     { value: string; count: number; amount: number }[] | null
@@ -382,7 +383,7 @@ export function ActionsWidgetBody({
   widget,
 }: {
   apiClient: ApiClient | undefined;
-  widget: MyDayWidget;
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
   const [items, setItems] = useState<
     | {
@@ -494,11 +495,13 @@ export function ActionsWidgetBody({
   );
 }
 
-const widgetKindLabels: Record<MyDayWidget["kind"], string> = {
+const widgetKindLabels: Record<string, string> = {
   summary: "Resumen",
   items: "Elementos",
   chart: "Gráfica",
   actions: "Acciones",
+  agenda: "Agenda",
+  quick_task: "Tarea rápida",
 };
 
 function isBuiltInWidget(widget: MyDayWidget): boolean {
@@ -510,42 +513,65 @@ function isBuiltInWidget(widget: MyDayWidget): boolean {
   );
 }
 
+function isCollectionWidget(
+  widget: MyDayWidget,
+): widget is Extract<MyDayWidget, { apiBasePath: string }> {
+  return "apiBasePath" in widget && "collection" in widget;
+}
+
 export function WidgetCard({
   apiClient,
   widget,
   collectionLabel,
+  agenda,
+  quickTask,
   onRemove,
   onMove,
   isFirst,
   isLast,
   disabled,
+  dragHandle,
 }: {
   apiClient: ApiClient | undefined;
   widget: MyDayWidget;
   collectionLabel: string;
+  agenda?: React.ComponentProps<typeof AgendaWidgetBody>;
+  quickTask?: React.ComponentProps<typeof QuickTaskWidgetBody>;
   onRemove: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   isFirst: boolean;
   isLast: boolean;
   disabled: boolean;
+  dragHandle?: React.ReactNode;
 }) {
   const title = widget.title ?? collectionLabel;
-  const pluginTitle = pluginWidgetTitle(widget.kind);
-  const isPlugin = parsePluginKind(widget.kind) !== null;
-  const supported = isBuiltInWidget(widget) || pluginTitle !== undefined;
+  const pluginTitle =
+    typeof widget.kind === "string"
+      ? pluginWidgetTitle(widget.kind)
+      : undefined;
+  const isPlugin =
+    typeof widget.kind === "string" && parsePluginKind(widget.kind) !== null;
+  const isSystem = widget.kind === "agenda" || widget.kind === "quick_task";
+  const supported =
+    isBuiltInWidget(widget) || isSystem || pluginTitle !== undefined;
 
   return (
-    <Card data-testid={`my-day-widget-${widget.id}`}>
-      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardTitle className="truncate text-base">{title}</CardTitle>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {collectionLabel} ·{" "}
-            {pluginTitle ??
-              (isBuiltInWidget(widget)
-                ? widgetKindLabels[widget.kind]
-                : "Vista previa")}
-          </p>
+    <Card
+      data-testid={`my-day-widget-${widget.id}`}
+      className="rounded-2xl border-border/60 shadow-sm transition-shadow hover:shadow-md"
+    >
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+        <div className="flex min-w-0 items-start gap-1.5">
+          {dragHandle}
+          <div className="min-w-0">
+            <CardTitle className="truncate text-[15px] font-semibold tracking-tight">
+              {title}
+            </CardTitle>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {collectionLabel} ·{" "}
+              {pluginTitle ?? widgetKindLabels[widget.kind] ?? "Vista previa"}
+            </p>
+          </div>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -553,7 +579,7 @@ export function WidgetCard({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
               aria-label={`Opciones del widget ${title}`}
               disabled={disabled}
             >
@@ -561,20 +587,22 @@ export function WidgetCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <a href={widgetDeepLink(widget)}>Abrir colección</a>
-            </DropdownMenuItem>
+            {isCollectionWidget(widget) ? (
+              <DropdownMenuItem asChild>
+                <a href={widgetDeepLink(widget)}>Abrir colección</a>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem
               disabled={isFirst}
               onSelect={() => onMove(widget.id, -1)}
             >
-              Mover a la izquierda
+              Mover antes
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={isLast}
               onSelect={() => onMove(widget.id, 1)}
             >
-              Mover a la derecha
+              Mover después
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => onRemove(widget.id)}
@@ -585,33 +613,58 @@ export function WidgetCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         {!supported ? (
           <p className="text-sm text-muted-foreground">
             Este tipo de widget estará disponible próximamente. Mientras tanto
             puedes abrir la colección completa.
           </p>
-        ) : isPlugin ? (
+        ) : widget.kind === "agenda" ? (
+          agenda ? (
+            <AgendaWidgetBody agenda={agenda.agenda} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Conecta tu calendario para ver tu agenda aquí.
+            </p>
+          )
+        ) : widget.kind === "quick_task" ? (
+          quickTask ? (
+            <QuickTaskWidgetBody
+              agenda={quickTask.agenda}
+              personalIntegrations={quickTask.personalIntegrations}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Conecta tu calendario para crear tareas aquí.
+            </p>
+          )
+        ) : isPlugin && isCollectionWidget(widget) ? (
           <PluginWidgetBody apiClient={apiClient} widget={widget} />
-        ) : widget.kind === "summary" ? (
+        ) : widget.kind === "summary" && isCollectionWidget(widget) ? (
           <SummaryWidgetBody apiClient={apiClient} widget={widget} />
-        ) : widget.kind === "items" ? (
+        ) : widget.kind === "items" && isCollectionWidget(widget) ? (
           <ItemsWidgetBody apiClient={apiClient} widget={widget} />
-        ) : widget.kind === "chart" ? (
+        ) : widget.kind === "chart" && isCollectionWidget(widget) ? (
           <ChartWidgetBody apiClient={apiClient} widget={widget} />
-        ) : (
+        ) : isCollectionWidget(widget) ? (
           <ActionsWidgetBody apiClient={apiClient} widget={widget} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No pudimos mostrar este widget.
+          </p>
         )}
       </CardContent>
-      <CardFooter>
-        <a
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          href={widgetDeepLink(widget)}
-          aria-label={`Ver ${collectionLabel} completa`}
-        >
-          Ver todo <ExternalLink className="size-3.5" />
-        </a>
-      </CardFooter>
+      {isCollectionWidget(widget) ? (
+        <CardFooter className="pt-1">
+          <a
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            href={widgetDeepLink(widget)}
+            aria-label={`Ver ${collectionLabel} completa`}
+          >
+            Ver todo <ExternalLink className="size-3.5" />
+          </a>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }

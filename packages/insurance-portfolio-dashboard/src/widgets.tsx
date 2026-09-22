@@ -48,7 +48,10 @@ export function InsurancePortfolioSummaryWidget({
     () => savia.collections.collection<Policy>("polizas"),
     [savia],
   );
-  const limit = widget.config?.limit ?? perPageFallback;
+  const limit =
+    "config" in widget
+      ? (widget.config?.limit ?? perPageFallback)
+      : perPageFallback;
 
   const reload = useCallback(async () => {
     setLoading(true);

@@ -238,9 +238,7 @@ describe("MyDayWidgetsSection", () => {
     await user.click(
       screen.getByRole("button", { name: "Opciones del widget Widget A" }),
     );
-    await user.click(
-      screen.getByRole("menuitem", { name: "Mover a la derecha" }),
-    );
+    await user.click(screen.getByRole("menuitem", { name: "Mover después" }));
 
     await waitFor(() =>
       expect(preferences.saveMyDayWidgets).toHaveBeenCalledWith({
@@ -283,5 +281,54 @@ describe("MyDayWidgetsSection", () => {
       }),
     );
     expect(await screen.findByTestId("my-day-widgets-empty")).toBeVisible();
+  });
+
+  it("renders the agenda system widget with a drag handle", async () => {
+    const preferences = createPreferences([{ id: "agenda", kind: "agenda" }]);
+    render(
+      <MyDayWidgetsSection
+        apiClient={createApiClient() as never}
+        userPreferences={preferences as never}
+        personalIntegrations={
+          {
+            listConnections: async () => [],
+            listEvents: async () => [],
+            createCalendarEvent: async () => {
+              throw new Error("not used");
+            },
+          } as never
+        }
+      />,
+    );
+
+    const card = await screen.findByTestId("my-day-widget-agenda");
+    expect(card).toHaveTextContent("Agenda");
+    expect(
+      screen.getByRole("button", { name: "Arrastrar widget Agenda" }),
+    ).toBeVisible();
+  });
+
+  it("removes the agenda widget and persists the layout", async () => {
+    const user = userEvent.setup();
+    const preferences = createPreferences([{ id: "agenda", kind: "agenda" }]);
+    render(
+      <MyDayWidgetsSection
+        apiClient={createApiClient() as never}
+        userPreferences={preferences as never}
+      />,
+    );
+
+    await screen.findByTestId("my-day-widget-agenda");
+    await user.click(
+      screen.getByRole("button", { name: "Opciones del widget Agenda" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Quitar widget" }));
+
+    await waitFor(() =>
+      expect(preferences.saveMyDayWidgets).toHaveBeenCalledWith({
+        version: 1,
+        widgets: [],
+      }),
+    );
   });
 });

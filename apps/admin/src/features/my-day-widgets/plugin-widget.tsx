@@ -61,7 +61,7 @@ export function PluginWidgetBody({
   widget,
 }: {
   apiClient: ApiClient | undefined;
-  widget: MyDayWidget;
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>;
 }) {
   const [extensions, setExtensions] = useState<
     ExtensionInstallation[] | undefined

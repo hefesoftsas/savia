@@ -369,7 +369,13 @@ describe("user sidebar navigation preferences", () => {
     );
     expect(initial.status).toBe(200);
     await expect(initial.json()).resolves.toEqual({
-      data: { version: 1, widgets: [] },
+      data: {
+        version: 1,
+        widgets: [
+          { id: "agenda", kind: "agenda", size: "lg" },
+          { id: "quick_task", kind: "quick_task", size: "md" },
+        ],
+      },
     });
 
     const layout = {
@@ -408,7 +414,13 @@ describe("user sidebar navigation preferences", () => {
       "https://savia.test/v1/user-preferences/my-day-widgets",
     );
     await expect(otherPrincipal.json()).resolves.toEqual({
-      data: { version: 1, widgets: [] },
+      data: {
+        version: 1,
+        widgets: [
+          { id: "agenda", kind: "agenda", size: "lg" },
+          { id: "quick_task", kind: "quick_task", size: "md" },
+        ],
+      },
     });
   });
 
@@ -463,6 +475,47 @@ describe("user sidebar navigation preferences", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ data: layout });
+  });
+
+  it("persists agenda system widgets without a collection", async () => {
+    const layout = {
+      version: 1 as const,
+      widgets: [
+        { id: "agenda", kind: "agenda" as const, size: "lg" as const },
+        {
+          id: "w_clientes1",
+          apiBasePath: "/v1/dynamic-crm/101",
+          collection: "clientes",
+          kind: "items" as const,
+        },
+      ],
+    };
+    const response = await appFor("principal-a").request(
+      "https://savia.test/v1/user-preferences/my-day-widgets",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(layout),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        version: 1,
+        widgets: [
+          { id: "agenda", kind: "agenda", size: "lg" },
+          {
+            id: "w_clientes1",
+            apiBasePath: "/v1/dynamic-crm/101",
+            collection: "clientes",
+            kind: "items",
+            size: "md",
+            config: { limit: 5, sort: "updated_at", order: "DESC" },
+          },
+        ],
+      },
+    });
   });
 });
 

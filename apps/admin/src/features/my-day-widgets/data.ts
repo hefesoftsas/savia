@@ -86,6 +86,9 @@ export function normalizeSchema(
 }
 
 function recordsPath(widget: MyDayWidget): string {
+  if (!("apiBasePath" in widget) || !("collection" in widget)) {
+    throw new Error("System widgets have no records endpoint");
+  }
   return `${widget.apiBasePath}/api/records/${encodeURIComponent(widget.collection)}`;
 }
 
@@ -118,7 +121,7 @@ export async function describeWidgetCollection(
 
 export async function listWidgetRecords(
   apiClient: ApiClient,
-  widget: MyDayWidget,
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>,
   options?: { signal?: AbortSignal },
 ): Promise<WidgetRecordsPage> {
   const limit = widget.config?.limit ?? 5;
@@ -139,7 +142,7 @@ export async function listWidgetRecords(
 }
 export async function summarizeWidgetRecords(
   apiClient: ApiClient,
-  widget: MyDayWidget,
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>,
   groupField: string,
   options?: { signal?: AbortSignal },
 ): Promise<WidgetSummaryGroup[]> {
@@ -159,6 +162,7 @@ export async function summarizeWidgetRecords(
 }
 
 export function widgetDeepLink(widget: MyDayWidget): string {
+  if (!("apiBasePath" in widget) || !("collection" in widget)) return "/my-day";
   const search = new URLSearchParams();
   const domainMatch = widget.apiBasePath.match(/^\/v1\/data-domains\/(.+)$/);
   const agencyMatch = widget.apiBasePath.match(/^\/v1\/dynamic-crm\/(\d+)$/);
@@ -174,7 +178,7 @@ export function widgetDeepLink(widget: MyDayWidget): string {
  */
 export async function listWidgetRecordsForReview(
   apiClient: ApiClient,
-  widget: MyDayWidget,
+  widget: Extract<MyDayWidget, { apiBasePath: string; collection: string }>,
   dateField: string,
   options?: { signal?: AbortSignal },
 ): Promise<WidgetRecordsPage> {
@@ -187,10 +191,7 @@ export async function listWidgetRecordsForReview(
   const response = await apiClient.get<{
     data: WidgetRecord[];
     total?: number;
-  }>(
-    `${widget.apiBasePath}/api/records/${encodeURIComponent(widget.collection)}?${parameters}`,
-    { signal: options?.signal },
-  );
+  }>(`${recordsPath(widget)}?${parameters}`, { signal: options?.signal });
   return {
     data: Array.isArray(response.data) ? response.data : [],
     total: typeof response.total === "number" ? response.total : 0,

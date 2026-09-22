@@ -53,7 +53,11 @@ export function useMyDayWidgets(
 
   const persist = useCallback(
     async (next: MyDayWidgetsLayout, successMessage: string | null) => {
-      if (!userPreferences) return false;
+      if (!userPreferences) {
+        setLayout(next);
+        if (successMessage) setFeedback(successMessage);
+        return true;
+      }
       setSaving(true);
       setFeedback(null);
       try {
@@ -110,6 +114,26 @@ export function useMyDayWidgets(
     [layout, persist],
   );
 
+  const reorder = useCallback(
+    (activeId: string, overId: string) => {
+      const widgets = layout?.widgets ?? [];
+      const from = widgets.findIndex((widget) => widget.id === activeId);
+      const to = widgets.findIndex((widget) => widget.id === overId);
+      if (from < 0 || to < 0 || from === to) return Promise.resolve(false);
+      const next = [...widgets];
+      const [entry] = next.splice(from, 1);
+      next.splice(to, 0, entry);
+      return persist({ version: 1, widgets: next }, null);
+    },
+    [layout, persist],
+  );
+
+  const hasSystemWidget = useCallback(
+    (kind: "agenda" | "quick_task") =>
+      (layout?.widgets ?? []).some((widget) => widget.kind === kind),
+    [layout],
+  );
+
   return {
     layout,
     widgets: layout?.widgets ?? [],
@@ -121,6 +145,8 @@ export function useMyDayWidgets(
     add,
     remove,
     move,
+    reorder,
+    hasSystemWidget,
     reload: useCallback(async () => {
       if (!userPreferences) return;
       setLoading(true);

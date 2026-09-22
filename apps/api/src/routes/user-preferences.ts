@@ -71,7 +71,7 @@ const invalidAppearanceResponseSchema = z.object({
   }),
 });
 
-const myDayWidgetSchema = z.object({
+const myDayCollectionWidgetSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,48}$/),
   apiBasePath: z
     .string()
@@ -113,6 +113,18 @@ const myDayWidgetSchema = z.object({
     .optional(),
   size: z.enum(["sm", "md", "lg"]).optional(),
 });
+
+const myDaySystemWidgetSchema = z.object({
+  id: z.string().regex(/^[a-z0-9_-]{1,48}$/),
+  kind: z.enum(["agenda", "quick_task"]),
+  title: z.string().trim().min(1).max(80).optional(),
+  size: z.enum(["sm", "md", "lg"]).optional(),
+});
+
+const myDayWidgetSchema = z.union([
+  myDayCollectionWidgetSchema,
+  myDaySystemWidgetSchema,
+]);
 
 const myDayWidgetsLayoutSchema = z.object({
   version: z.literal(1),

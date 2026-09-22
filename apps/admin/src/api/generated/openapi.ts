@@ -2844,7 +2844,9 @@ export interface paths {
     post?: never;
     delete: {
       parameters: {
-        query?: never;
+        query?: {
+          hard?: string;
+        };
         header?: never;
         path: {
           id: string;
@@ -2998,6 +3000,46 @@ export interface paths {
         header?: never;
         path: {
           token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/forms/{token}/status/{submissionId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+          submissionId: string;
         };
         cookie?: never;
       };
@@ -5987,25 +6029,36 @@ export interface paths {
               data: {
                 /** @enum {number} */
                 version: 1;
-                widgets: {
-                  id: string;
-                  apiBasePath: string;
-                  collection: string;
-                  kind: ("summary" | "items" | "chart" | "actions") | string;
-                  title?: string;
-                  config?: {
-                    statusField?: string;
-                    amountField?: string;
-                    dateField?: string;
-                    groupField?: string;
-                    limit?: number;
-                    sort?: string;
-                    /** @enum {string} */
-                    order?: "ASC" | "DESC";
-                  };
-                  /** @enum {string} */
-                  size?: "sm" | "md" | "lg";
-                }[];
+                widgets: (
+                  | {
+                      id: string;
+                      apiBasePath: string;
+                      collection: string;
+                      kind:
+                        ("summary" | "items" | "chart" | "actions") | string;
+                      title?: string;
+                      config?: {
+                        statusField?: string;
+                        amountField?: string;
+                        dateField?: string;
+                        groupField?: string;
+                        limit?: number;
+                        sort?: string;
+                        /** @enum {string} */
+                        order?: "ASC" | "DESC";
+                      };
+                      /** @enum {string} */
+                      size?: "sm" | "md" | "lg";
+                    }
+                  | {
+                      id: string;
+                      /** @enum {string} */
+                      kind: "agenda" | "quick_task";
+                      title?: string;
+                      /** @enum {string} */
+                      size?: "sm" | "md" | "lg";
+                    }
+                )[];
               };
             };
           };
@@ -6036,25 +6089,36 @@ export interface paths {
               data: {
                 /** @enum {number} */
                 version: 1;
-                widgets: {
-                  id: string;
-                  apiBasePath: string;
-                  collection: string;
-                  kind: ("summary" | "items" | "chart" | "actions") | string;
-                  title?: string;
-                  config?: {
-                    statusField?: string;
-                    amountField?: string;
-                    dateField?: string;
-                    groupField?: string;
-                    limit?: number;
-                    sort?: string;
-                    /** @enum {string} */
-                    order?: "ASC" | "DESC";
-                  };
-                  /** @enum {string} */
-                  size?: "sm" | "md" | "lg";
-                }[];
+                widgets: (
+                  | {
+                      id: string;
+                      apiBasePath: string;
+                      collection: string;
+                      kind:
+                        ("summary" | "items" | "chart" | "actions") | string;
+                      title?: string;
+                      config?: {
+                        statusField?: string;
+                        amountField?: string;
+                        dateField?: string;
+                        groupField?: string;
+                        limit?: number;
+                        sort?: string;
+                        /** @enum {string} */
+                        order?: "ASC" | "DESC";
+                      };
+                      /** @enum {string} */
+                      size?: "sm" | "md" | "lg";
+                    }
+                  | {
+                      id: string;
+                      /** @enum {string} */
+                      kind: "agenda" | "quick_task";
+                      title?: string;
+                      /** @enum {string} */
+                      size?: "sm" | "md" | "lg";
+                    }
+                )[];
               };
             };
           };

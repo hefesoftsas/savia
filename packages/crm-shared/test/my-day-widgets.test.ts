@@ -6,8 +6,32 @@ import {
 } from "../src/my-day-widgets";
 
 describe("my-day widgets layout", () => {
-  it("defaults to an empty layout", () => {
-    expect(defaultMyDayWidgets()).toEqual({ version: 1, widgets: [] });
+  it("defaults to agenda plus quick task", () => {
+    expect(defaultMyDayWidgets()).toEqual({
+      version: 1,
+      widgets: [
+        { id: "agenda", kind: "agenda", size: "lg" },
+        { id: "quick_task", kind: "quick_task", size: "md" },
+      ],
+    });
+  });
+
+  it("accepts system widgets without a collection", () => {
+    const layout = parseMyDayWidgets({
+      version: 1,
+      widgets: [
+        { id: "agenda", kind: "agenda" },
+        {
+          id: "w_abc123",
+          apiBasePath: "/v1/data-domains/platform",
+          collection: "polizas",
+          kind: "summary",
+        },
+      ],
+    });
+    expect(layout.widgets).toHaveLength(2);
+    expect(layout.widgets[0]).toMatchObject({ id: "agenda", size: "md" });
+    expect(layout.widgets[0]).not.toHaveProperty("config");
   });
 
   it("applies per-widget defaults", () => {
