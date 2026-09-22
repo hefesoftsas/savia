@@ -879,7 +879,10 @@ function App({
             refresh();
             if (
               getCrmRuntime().domainId === "platform" &&
-              object.name === "agencias"
+              (object.name === "agencias" ||
+                object.name === "tenants" ||
+                object.name === "organizations" ||
+                object.name === "organizaciones")
             )
               window.dispatchEvent(new Event("savia-crm-domains-changed"));
           }}
