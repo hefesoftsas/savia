@@ -19,7 +19,7 @@ export type PublicComparisonItem = {
 /**
  * The embedded quote comparator reused verbatim in the anonymous context:
  * same cards, provider filter, progress track, compare-select (max 4) and
- * coverage matrix. Only safe projection data ever reaches it — no quote
+ * coverage comparison table. Only safe projection data ever reaches it — no quote
  * numbers, runs, history, vehicle info, retry handlers or PDF download —
  * so private sections stay hidden by construction, not by convention.
  */
