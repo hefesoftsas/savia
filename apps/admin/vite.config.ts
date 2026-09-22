@@ -179,9 +179,24 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:8787",
-      "/v1": "http://127.0.0.1:8787",
-      "/.well-known": "http://127.0.0.1:8787",
+      // `ws: true` is required so the realtime WebSocket
+      // (/v1/realtime/subscribe) reaches the API through the dev server
+      // instead of failing and leaving LiveIndicator stuck on connecting.
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        changeOrigin: true,
+        ws: true,
+      },
+      "/v1": {
+        target: "http://127.0.0.1:8787",
+        changeOrigin: true,
+        ws: true,
+      },
+      "/.well-known": {
+        target: "http://127.0.0.1:8787",
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   test: {

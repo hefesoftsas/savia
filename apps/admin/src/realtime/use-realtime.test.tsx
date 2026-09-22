@@ -224,10 +224,38 @@ describe("useRealtimeTopics", () => {
 });
 
 describe("LiveIndicator", () => {
-  it("shows live and connecting states", () => {
-    const { rerender } = render(<LiveIndicator status="connecting" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Conectando");
+  it("only renders when live so it never gets stuck on connecting", () => {
+    const { container, rerender, unmount } = render(
+      <LiveIndicator status="connecting" />,
+    );
+    expect(container).toBeEmptyDOMElement();
     rerender(<LiveIndicator status="live" />);
     expect(screen.getByRole("status")).toHaveTextContent("En vivo");
+    unmount();
+    const { container: unavailableContainer } = render(
+      <LiveIndicator status="unavailable" />,
+    );
+    expect(unavailableContainer).toBeEmptyDOMElement();
+  });
+
+  it("treats realtime-unavailable (503) as offline instead of retrying", async () => {
+    vi.useFakeTimers();
+    const post = vi.fn().mockRejectedValue({ status: 503 });
+    function UnavailableProbe() {
+      const { status } = useRealtimeTopics({ topics: ["users"] });
+      return <span data-testid="unavailable-status">{status}</span>;
+    }
+    render(
+      <AppServicesProvider services={servicesWith(post)}>
+        <UnavailableProbe />
+      </AppServicesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByTestId("unavailable-status")).toHaveTextContent(
+      "unavailable",
+    );
+    expect(post).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,6 +9,16 @@ export class RealtimeHubError extends HTTPException {
     });
   }
 }
+export class RealtimeUnavailableError extends HTTPException {
+  constructor(message = "Realtime is not configured.") {
+    super(503, {
+      res: Response.json(
+        { error: { code: "REALTIME_UNAVAILABLE", message } },
+        { status: 503 },
+      ),
+    });
+  }
+}
 import type { RealtimeEventInput } from "./protocol";
 
 /**
@@ -55,7 +65,7 @@ export function createRealtimeHubClient(
 
     async issue(room, grant) {
       const target = stub(namespace, room);
-      if (!target) throw new Error("Realtime hub is not configured");
+      if (!target) throw new RealtimeUnavailableError();
       const response = await target.fetch("https://realtime.internal/issue", {
         method: "POST",
         headers: { "content-type": "application/json" },

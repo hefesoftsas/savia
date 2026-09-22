@@ -2,12 +2,13 @@ import { cn } from "@/lib/utils";
 import type { RealtimeStatus } from "./use-realtime";
 
 /**
- * Small live indicator for list actions. Hidden when realtime is off
- * (offline banner already covers that state) so it never adds noise.
+ * Small live indicator for list actions. Only rendered when realtime is
+ * actually live; connecting and unavailable states render nothing so a slow
+ * or missing socket never leaves a stuck "Conectando…" pill in the actions
+ * bar (offline banner already covers offline, lists still work via refetch).
  */
 export function LiveIndicator({ status }: { status: RealtimeStatus }) {
-  if (status === "unavailable") return null;
-  const live = status === "live";
+  if (status !== "live") return null;
   return (
     <span
       role="status"
@@ -16,12 +17,9 @@ export function LiveIndicator({ status }: { status: RealtimeStatus }) {
     >
       <span
         aria-hidden
-        className={cn(
-          "size-2 rounded-full",
-          live ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/50",
-        )}
+        className={cn("size-2 animate-pulse rounded-full bg-emerald-500")}
       />
-      {live ? "En vivo" : "Conectando…"}
+      En vivo
     </span>
   );
 }

@@ -113,7 +113,10 @@ export function useRealtimeTopics({
         );
       } catch (error) {
         const status = (error as { status?: number } | null)?.status;
-        if (status && [400, 401, 403, 404, 422].includes(status)) {
+        // Permanent failures hide the indicator instead of retrying forever
+        // with a stuck "connecting" state. 503 covers REALTIME_UNAVAILABLE
+        // when the hub is not configured for this environment.
+        if (status && [400, 401, 403, 404, 422, 503].includes(status)) {
           setStatus("unavailable");
           return;
         }
