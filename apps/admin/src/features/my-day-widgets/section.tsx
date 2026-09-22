@@ -25,6 +25,7 @@ import {
   Plus,
   PlusCircle,
   RefreshCw,
+  X,
 } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import type { UserPreferencesClient } from "@/api/user-preferences-client";
@@ -34,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AddWidgetDialog } from "./add-widget-dialog";
 import {
   AgendaWidgetBody,
+  CALENDAR_CONNECT_MESSAGE,
   QuickTaskWidgetBody,
   useMyDayAgenda,
   type PersonalIntegrationsLike,
@@ -264,7 +266,28 @@ export function MyDayWidgetsSection({
 
       {agenda.feedback ? (
         <Alert className="mb-4" aria-label={agenda.feedback}>
-          <AlertDescription>{agenda.feedback}</AlertDescription>
+          <div className="col-start-2 flex items-start gap-2">
+            <AlertDescription className="flex-1">
+              {agenda.feedback}
+            </AlertDescription>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              onClick={() => {
+                if (agenda.feedback === CALENDAR_CONNECT_MESSAGE) {
+                  agenda.dismissConnectNotice();
+                } else {
+                  agenda.setFeedback(null);
+                }
+              }}
+              aria-label="Cerrar aviso"
+              title="Cerrar aviso"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
         </Alert>
       ) : null}
       {feedback ? (

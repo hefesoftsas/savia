@@ -2,9 +2,11 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MyDayWidgetsSection } from "./section";
+import { CALENDAR_CONNECT_NOTICE_KEY } from "./agenda-widget";
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -330,5 +332,59 @@ describe("MyDayWidgetsSection", () => {
         widgets: [],
       }),
     );
+  });
+
+  it("shows the calendar connect notice once and keeps it dismissed", async () => {
+    const user = userEvent.setup();
+    const integrations = {
+      listConnections: async () => [],
+      listEvents: async () => [],
+      createCalendarEvent: async () => {
+        throw new Error("not used");
+      },
+    };
+    const { unmount } = render(
+      <MyDayWidgetsSection
+        apiClient={createApiClient() as never}
+        userPreferences={createPreferences() as never}
+        personalIntegrations={integrations as never}
+      />,
+    );
+
+    const notice = await screen.findByRole("alert", {
+      name: "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
+    });
+    expect(notice).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Cerrar aviso" }));
+    expect(
+      screen.queryByRole("alert", {
+        name: "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
+      }),
+    ).not.toBeInTheDocument();
+    expect(localStorage.getItem(CALENDAR_CONNECT_NOTICE_KEY)).toBe("1");
+
+    // It does not reappear on refresh or on a new visit.
+    await user.click(screen.getByRole("button", { name: "Actualizar" }));
+    expect(
+      screen.queryByRole("alert", {
+        name: "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
+      }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <MyDayWidgetsSection
+        apiClient={createApiClient() as never}
+        userPreferences={createPreferences() as never}
+        personalIntegrations={integrations as never}
+      />,
+    );
+    await screen.findByTestId("my-day-widgets-empty");
+    expect(
+      screen.queryByRole("alert", {
+        name: "Conecta Google Calendar u Outlook desde Mi cuenta → Mis conexiones.",
+      }),
+    ).not.toBeInTheDocument();
   });
 });
