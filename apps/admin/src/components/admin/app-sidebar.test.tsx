@@ -443,13 +443,13 @@ describe("AppSidebar navigation preferences", () => {
     render(<App services={createServices()} />);
     // The scoped destinations gain the current object once the CRM object
     // catalog resolves; the link renders first without it.
-    const workflows = await screen.findByRole("link", {
-      name: "Flujos de trabajo",
+    const operations = await screen.findByRole("link", {
+      name: "Operaciones",
     });
     await waitFor(() =>
-      expect(workflows).toHaveAttribute(
+      expect(operations).toHaveAttribute(
         "href",
-        "#/crm?domain=platform&object=account&view=operations&tab=workflows",
+        "#/crm?domain=platform&object=account&view=operations",
       ),
     );
     expect(screen.getByRole("link", { name: "Empleados IA" })).toHaveAttribute(
@@ -475,9 +475,7 @@ describe("AppSidebar navigation preferences", () => {
       screen.getByRole("searchbox", { name: "Buscar en el menú" }),
       { target: { value: "automatizaciones" } },
     );
-    expect(
-      screen.getByRole("link", { name: "Flujos de trabajo" }),
-    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Operaciones" })).toBeVisible();
   });
 
   it("does not reveal denied domain tools through search", async () => {

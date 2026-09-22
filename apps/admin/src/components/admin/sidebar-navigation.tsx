@@ -18,7 +18,6 @@ import {
   KeyRound,
   ListTree,
   Database,
-  ChartNoAxesCombined,
   History,
   Package,
   Bot,
@@ -83,26 +82,12 @@ export const navigationDefinitions: Record<
     section: "productivity",
     icon: Database,
   },
-  "domain-workflows": {
-    id: "domain-workflows",
-    labelKey: "savia.sidebar.items.domain-workflows",
-    route: "/crm?view=operations&tab=workflows",
+  "domain-operations": {
+    id: "domain-operations",
+    labelKey: "savia.sidebar.items.domain-operations",
+    route: "/crm?view=operations",
     section: "productivity",
     icon: Workflow,
-  },
-  "domain-reports": {
-    id: "domain-reports",
-    labelKey: "savia.sidebar.items.domain-reports",
-    route: "/crm?view=operations&tab=reports",
-    section: "operation",
-    icon: ChartNoAxesCombined,
-  },
-  "domain-api": {
-    id: "domain-api",
-    labelKey: "savia.sidebar.items.domain-api",
-    route: "/crm?view=integrations",
-    section: "productivity",
-    icon: Link2,
   },
   "domain-history": {
     id: "domain-history",

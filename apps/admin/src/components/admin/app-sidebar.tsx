@@ -374,9 +374,7 @@ export function AppSidebar() {
       const current = new URLSearchParams(location.search);
       for (const id of [
         "domain-sources",
-        "domain-workflows",
-        "domain-reports",
-        "domain-api",
+        "domain-operations",
         "domain-history",
         "domain-packages",
       ] as const) {

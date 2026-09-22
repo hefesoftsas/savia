@@ -54,12 +54,11 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
     ...normalizeSidebarNavigationLayout({
       version: 1,
       sections: {
-        operation: ["my-day", "dashboard", "dynamic-crm", "domain-reports"],
+        operation: ["my-day", "dashboard", "dynamic-crm"],
         productivity: [
           "page-administrator",
           "domain-sources",
-          "domain-workflows",
-          "domain-api",
+          "domain-operations",
           "provider-credentials",
           "virtual-employees",
           "integrations",
@@ -379,11 +378,9 @@ export function defaultSectionForItem(
     Record<SidebarNavigationItemId, SidebarNavigationSection>
   > = {
     "domain-sources": "productivity",
-    "domain-workflows": "productivity",
-    "domain-api": "productivity",
+    "domain-operations": "productivity",
     "domain-packages": "productivity",
     "virtual-employees": "productivity",
-    "domain-reports": "operation",
     "domain-history": "administration",
     "tenant-branding": "administration",
     dashboard: "operation",
