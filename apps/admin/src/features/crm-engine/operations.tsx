@@ -20,6 +20,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import {
   Check,
   Download,
   FileSpreadsheet,
@@ -31,6 +36,7 @@ import {
   Zap,
   ChartNoAxesCombined,
   ArrowRight,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "./api";
@@ -1258,49 +1264,80 @@ function Reports() {
       maximumFractionDigits: 2,
     }).format(value);
   return (
-    <section className="op-section">
-      <div className="op-section-title">
-        <div>
-          <h3>{t("Resultados del pipeline")}</h3>
-          <p>
-            {t(
-              "Agregados de todos los registros, según la configuración de cada objeto.",
-            )}
-          </p>
+    <section className="op-section space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground">
+            {t("Resultados del pipeline")}
+          </h3>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                aria-label={t("Resultados del pipeline")}
+              >
+                <Info size={15} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              {t(
+                "Conversión = ganadas ÷ (ganadas + perdidas), usando las etapas de cierre configuradas. Las oportunidades abiertas se excluyen del denominador.",
+              )}
+            </TooltipContent>
+          </Tooltip>
         </div>
-        <Button variant="outline" onClick={() => query.refetch()}>
-          <RefreshCw size={15} /> {t("Actualizar")}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => query.refetch()}
+          disabled={query.isFetching}
+          className="gap-2 cursor-pointer shadow-2xs hover:bg-muted/80"
+        >
+          <RefreshCw
+            size={14}
+            className={query.isFetching ? "animate-spin" : ""}
+          />
+          <span>{t("Actualizar")}</span>
         </Button>
       </div>
+
       <OperationError error={query.error} retry={() => query.refetch()} />
+
       {query.isPending ? (
         <div className="space-y-4" role="status" aria-live="polite">
           <p className="text-xs font-medium text-muted-foreground">
             {t("Cargando reportes…")}
           </p>
-          <div className="rounded-xl border bg-card p-6 space-y-4">
-            <Skeleton className="h-6 w-48" />
+          <div className="rounded-2xl border bg-card p-6 space-y-6 shadow-xs">
+            <Skeleton className="h-6 w-48 rounded-lg" />
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className="space-y-2 rounded-lg border p-3">
-                  <Skeleton className="h-6 w-20" />
-                  <Skeleton className="h-3 w-28" />
+                <div
+                  key={i}
+                  className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-4"
+                >
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-7 w-28" />
                 </div>
               ))}
             </div>
-            <div className="overflow-hidden rounded-md border">
+            <div className="overflow-hidden rounded-xl border border-border/60">
               <div className="flex items-center gap-4 border-b bg-muted/40 px-4 py-3">
                 {Array.from({ length: 4 }, (_, i) => (
                   <Skeleton key={i} className="h-4 w-24" />
                 ))}
               </div>
-              <div className="divide-y">
+              <div className="divide-y divide-border/40">
                 {Array.from({ length: 3 }, (_, i) => (
-                  <div key={i} className="flex items-center gap-4 px-4 py-3">
-                    <Skeleton className="h-4 w-20" />
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-4 px-4 py-3"
+                  >
+                    <Skeleton className="h-4 w-24" />
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="h-4 w-16" />
-                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
                   </div>
                 ))}
               </div>
@@ -1308,56 +1345,114 @@ function Reports() {
           </div>
         </div>
       ) : !query.data?.data.length ? (
-        <div className="op-empty">
-          {t(
-            "Configura un pipeline en el diseñador de un objeto para ver sus resultados.",
-          )}
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card/40 py-16 px-6 text-center shadow-xs">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground ring-8 ring-muted/30 mb-3.5">
+            <ChartNoAxesCombined className="size-6" />
+          </div>
+          <h4 className="text-base font-semibold text-foreground">
+            {t("Sin resultados")}
+          </h4>
+          <p className="mt-1.5 max-w-md text-sm text-muted-foreground leading-relaxed">
+            {t(
+              "Configura un pipeline en el diseñador de un objeto para ver sus resultados.",
+            )}
+          </p>
         </div>
       ) : (
         query.data.data.map((report) => (
-          <article key={report.object} className="op-report">
-            <h4>{report.label}</h4>
-            <div className="op-stats">
-              <div>
-                <strong>{number(report.total)}</strong>
-                <span>{t("Registros")}</span>
+          <article
+            key={report.object}
+            className="rounded-2xl border bg-card p-6 shadow-xs space-y-6 mb-6"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-base font-semibold text-foreground">
+                {report.label}
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-1">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {t("Registros")}
+                </span>
+                <p className="text-2xl font-bold tracking-tight text-foreground">
+                  {number(report.total)}
+                </p>
               </div>
-              <div>
-                <strong>{number(report.amount)}</strong>
-                <span>{t("Importe total")}</span>
+
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-1">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {t("Importe total")}
+                </span>
+                <p className="text-2xl font-bold tracking-tight text-foreground">
+                  {number(report.amount)}
+                </p>
               </div>
-              <div>
-                <strong>
+
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {t("Ganadas / cerradas")}
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground cursor-pointer"
+                        aria-label={t("Ganadas / cerradas")}
+                      >
+                        <Info size={13} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs">
+                      {t(
+                        "Conversión = ganadas ÷ (ganadas + perdidas), usando las etapas de cierre configuradas. Las oportunidades abiertas se excluyen del denominador.",
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-2xl font-bold tracking-tight text-foreground">
                   {report.conversion === null
                     ? "—"
                     : `${number(report.conversion * 100)}%`}
-                </strong>
-                <span>{t("Ganadas / cerradas")}</span>
+                </p>
               </div>
-              <div>
-                <strong>
+
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-1">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {t("Ganadas / perdidas")}
+                </span>
+                <p className="text-2xl font-bold tracking-tight text-foreground">
                   {report.won} / {report.lost}
-                </strong>
-                <span>{t("Ganadas / perdidas")}</span>
+                </p>
               </div>
             </div>
-            <div className="op-table-wrap">
-              <table className="op-table">
+
+            <div className="overflow-hidden rounded-xl border border-border/60">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    <th>{t("Etapa")}</th>
-                    <th>{t("Responsable")}</th>
-                    <th>{t("Registros")}</th>
-                    <th>{t("Importe")}</th>
+                  <tr className="border-b bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 text-left">{t("Etapa")}</th>
+                    <th className="px-4 py-3 text-left">{t("Responsable")}</th>
+                    <th className="px-4 py-3 text-right">{t("Registros")}</th>
+                    <th className="px-4 py-3 text-right">{t("Importe")}</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/40">
                   {report.groups.map((group, i) => (
-                    <tr key={i}>
-                      <td>{group.stage}</td>
-                      <td>{group.owner}</td>
-                      <td>{number(group.count)}</td>
-                      <td>{number(group.amount)}</td>
+                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {group.stage}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {group.owner}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-foreground">
+                        {number(group.count)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-foreground">
+                        {number(group.amount)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1366,11 +1461,6 @@ function Reports() {
           </article>
         ))
       )}
-      <p className="op-muted">
-        {t(
-          "Conversión = ganadas ÷ (ganadas + perdidas), usando las etapas de cierre configuradas. Las oportunidades abiertas se excluyen del denominador.",
-        )}
-      </p>
     </section>
   );
 }
@@ -1404,15 +1494,7 @@ export default function Operations({
   return (
     <main className="operations-page">
       <header className="op-page-title">
-        <div>
-          <span className="eyebrow">{t("OPERACIONES")}</span>
-          <h1>{t("Trabajo y resultados")}</h1>
-          <p>
-            {t(
-              "Coordina seguimientos, mueve datos y observa cómo avanza tu negocio.",
-            )}
-          </p>
-        </div>
+        <h1>{t("Trabajo y resultados")}</h1>
       </header>
       <nav className="op-tabs" aria-label={t("Operaciones")}>
         {[
