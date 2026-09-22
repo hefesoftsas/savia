@@ -248,11 +248,6 @@ export async function initializeAuthSchema(
 
 const LOCAL_SEED_USERS = [
   {
-    email: "agency-admin-flow-20260902@savia.test",
-    name: "Agencia Administración",
-    role: "user" as const,
-  },
-  {
     email: "agency-viewer-flow-20260902@savia.test",
     name: "Agencia Consulta",
     role: "user" as const,
@@ -620,8 +615,16 @@ export function createAuthHandler(
         request.method === "GET" &&
         pathname === "/_internal/notification-events/read"
       ) {
-        if (!authNoticeBridgeAuthorized(environment.SAVIA_INTERNAL_BRIDGE_KEY, request))
-          return Response.json({ error: "Forbidden bridge access." }, { status: 403 });
+        if (
+          !authNoticeBridgeAuthorized(
+            environment.SAVIA_INTERNAL_BRIDGE_KEY,
+            request,
+          )
+        )
+          return Response.json(
+            { error: "Forbidden bridge access." },
+            { status: 403 },
+          );
         const url = new URL(request.url);
         return Response.json({
           events: await readAuthNoticeEvents(
@@ -635,9 +638,19 @@ export function createAuthHandler(
         request.method === "POST" &&
         pathname === "/_internal/notification-events/ack"
       ) {
-        if (!authNoticeBridgeAuthorized(environment.SAVIA_INTERNAL_BRIDGE_KEY, request))
-          return Response.json({ error: "Forbidden bridge access." }, { status: 403 });
-        const body = (await request.json().catch(() => ({}))) as { ids?: string[] };
+        if (
+          !authNoticeBridgeAuthorized(
+            environment.SAVIA_INTERNAL_BRIDGE_KEY,
+            request,
+          )
+        )
+          return Response.json(
+            { error: "Forbidden bridge access." },
+            { status: 403 },
+          );
+        const body = (await request.json().catch(() => ({}))) as {
+          ids?: string[];
+        };
         return Response.json({
           acknowledged: await ackAuthNoticeEvents(
             environment.AUTH_DB,

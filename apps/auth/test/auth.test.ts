@@ -592,16 +592,12 @@ describe("Savia Better Auth worker", () => {
     expect(await sessionAfterSignOut.json()).toEqual({ user: null });
   });
 
-  it("seeds the three local accounts with the bootstrap password", async () => {
+  it("seeds the local accounts with the bootstrap password", async () => {
     await authRequest("/_internal/session");
     const accounts = [
       {
         email: "savia.admin@example.test",
         role: "admin",
-      },
-      {
-        email: "agency-admin-flow-20260902@savia.test",
-        role: "user",
       },
       {
         email: "agency-viewer-flow-20260902@savia.test",
@@ -629,8 +625,7 @@ describe("Savia Better Auth worker", () => {
   });
 
   it("includes the Better Auth image in the internal session", async () => {
-    const image =
-      "https://api.savia.test/v1/account/avatar?v=avatar-version";
+    const image = "https://api.savia.test/v1/account/avatar?v=avatar-version";
     await env.AUTH_DB.prepare('UPDATE "user" SET image = ? WHERE email = ?')
       .bind(image, "savia.admin@example.test")
       .run();
@@ -706,7 +701,10 @@ describe("Savia Better Auth worker", () => {
         cookie: cookie ?? "",
         origin,
       },
-      body: JSON.stringify({ password: env.BETTER_AUTH_BOOTSTRAP_PASSWORD, method: "totp" }),
+      body: JSON.stringify({
+        password: env.BETTER_AUTH_BOOTSTRAP_PASSWORD,
+        method: "totp",
+      }),
     });
 
     expect(enrollment.status).toBe(200);
@@ -868,4 +866,3 @@ describe("Savia Better Auth worker", () => {
     expect(response.status).toBe(200);
   });
 });
-

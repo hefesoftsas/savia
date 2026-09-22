@@ -131,13 +131,12 @@ La D1 local de Miniflare incluye las siguientes cuentas para probar los
 distintos niveles de acceso. Son exclusivas del entorno local: no existen ni
 deben usarse en producción.
 
-| Usuario                   | Correo                                   | Acceso                               |
-| ------------------------- | ---------------------------------------- | ------------------------------------ |
-| Savia Local Administrator | `savia.admin@example.test`               | Administrador de plataforma          |
-| Agencia Administración    | `agency-admin-flow-20260902@savia.test`  | Administrador de las agencias 9 y 10 |
-| Agencia Consulta          | `agency-viewer-flow-20260902@savia.test` | Solo lectura en la agencia 12        |
+| Usuario                   | Correo                                   | Acceso                        |
+| ------------------------- | ---------------------------------------- | ----------------------------- |
+| Savia Local Administrator | `savia.admin@example.test`               | Administrador de plataforma   |
+| Agencia Consulta          | `agency-viewer-flow-20260902@savia.test` | Solo lectura en la agencia 12 |
 
-La contraseña temporal de las tres cuentas es `TestUser321!`. El
+La contraseña temporal de las dos cuentas es `TestUser321!`. El
 administrador de plataforma conserva MFA activo, por lo que también requiere
 el código TOTP ya enrolado. Las cuentas y su contraseña viven en el estado
 local ignorado de Miniflare; al borrar o recrear ese estado deben
