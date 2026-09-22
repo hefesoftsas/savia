@@ -10,9 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  ProgressQuoteList,
   SafeResult,
+  parseProgressItems,
   usePublicFormSubmission,
   type PublicSubmissionValues,
+  type QuoteProgressItem,
 } from "./public-form-submission";
 import type { PublicFormDefinition } from "./public-form-page";
 import "./public-quote-wizard.css";
@@ -468,6 +471,7 @@ export function PublicQuoteForm({
   const [parseError, setParseError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [elapsed, setElapsed] = useState(0);
+  const [progress, setProgress] = useState<QuoteProgressItem[] | null>(null);
   const lastStep = step === steps.length - 1;
 
   useEffect(() => {
@@ -478,6 +482,36 @@ export function PublicQuoteForm({
     }, 1000);
     return () => window.clearInterval(timer);
   }, [controller.pending, lastStep]);
+
+  // Progressive results while providers respond: poll the anonymous status
+  // endpoint (3s keeps well under the burst limiter) and paint finished
+  // insurers as cards instead of a bare spinner. The first poll waits a full
+  // interval so fast submissions never emit one. Failures keep the last
+  // known progress; the submit response stays the source of truth.
+  useEffect(() => {
+    if (!controller.pending || !lastStep || !controller.submissionId) return;
+    const submissionId = controller.submissionId;
+    let stopped = false;
+    const load = async () => {
+      try {
+        const response = await fetch(
+          `${endpoint}/status/${encodeURIComponent(submissionId)}`,
+          { credentials: "omit", cache: "no-store" },
+        );
+        if (stopped || !response.ok) return;
+        const data = (await response.json()) as { items?: unknown };
+        if (!stopped && Array.isArray(data.items))
+          setProgress(parseProgressItems(data.items));
+      } catch {
+        // Keep the previous progress; the submit lifecycle reports errors.
+      }
+    };
+    const timer = window.setInterval(load, 3000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [controller.pending, controller.submissionId, endpoint, lastStep]);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupFields, setLookupFields] = useState<string[]>([]);
 
@@ -645,6 +679,7 @@ export function PublicQuoteForm({
     setStep(0);
     setValues({});
     setParseError("");
+    setProgress(null);
     setFieldErrors({});
     setLookingUp(false);
     setLookupFields([]);
@@ -1029,16 +1064,20 @@ export function PublicQuoteForm({
               <div aria-hidden="true" className="public-quote-progress">
                 <div className="public-quote-progress-bar" />
               </div>
-              <div aria-hidden="true" className="public-quote-skeletons">
-                {[0, 1, 2].map((skeleton) => (
-                  <div key={skeleton} className="public-quote-skeleton-card">
-                    <div className="public-quote-skeleton public-quote-skeleton--title" />
-                    <div className="public-quote-skeleton public-quote-skeleton--price" />
-                    <div className="public-quote-skeleton public-quote-skeleton--line" />
-                    <div className="public-quote-skeleton public-quote-skeleton--line" />
-                  </div>
-                ))}
-              </div>
+              {progress && progress.length > 0 ? (
+                <ProgressQuoteList items={progress} />
+              ) : (
+                <div aria-hidden="true" className="public-quote-skeletons">
+                  {[0, 1, 2].map((skeleton) => (
+                    <div key={skeleton} className="public-quote-skeleton-card">
+                      <div className="public-quote-skeleton public-quote-skeleton--title" />
+                      <div className="public-quote-skeleton public-quote-skeleton--price" />
+                      <div className="public-quote-skeleton public-quote-skeleton--line" />
+                      <div className="public-quote-skeleton public-quote-skeleton--line" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

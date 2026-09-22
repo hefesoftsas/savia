@@ -686,6 +686,116 @@ it("keeps future unknown fields visible in the final step", async () => {
   expect(await screen.findByLabelText(/Notas adicionales/)).toBeInTheDocument();
 });
 
+it("paints finished insurers as cards while others keep polling", async () => {
+  fetchMock.mockImplementation((url) => {
+    if (String(url).includes("/status/"))
+      return Promise.resolve(
+        Response.json({
+          items: [
+            {
+              flowId: "flow-0",
+              label: "Insurer 0 · Product 0",
+              insurer: "Insurer 0",
+              status: "done",
+              result: {
+                insurer: "Insurer 0",
+                product: "Insurer 0 · Product 0",
+                premiumTotal: 1200000,
+                currency: "COP",
+                coverages: ["Responsabilidad civil"],
+              },
+            },
+            {
+              flowId: "flow-1",
+              label: "Insurer 1 · Product 1",
+              insurer: "Insurer 1",
+              status: "quoting",
+            },
+            {
+              flowId: "flow-2",
+              label: "Insurer 2 · Product 2",
+              insurer: "Insurer 2",
+              status: "unavailable",
+            },
+            { flowId: "", status: "done" },
+          ],
+        }),
+      );
+    return new Promise(() => {});
+  });
+  render(
+    <PublicQuoteForm
+      definition={quoteDefinition}
+      endpoint="https://api.test/api/public/forms/quote-token"
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Placa/), {
+    target: { value: "TESTCAR" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código Fasecolda/), {
+    target: { value: "12345678" },
+  });
+  fireEvent.change(screen.getByLabelText(/Año del vehículo/), {
+    target: { value: "2023" },
+  });
+  fireEvent.change(screen.getByLabelText(/Código de ciudad de circulación/), {
+    target: { value: "11001" },
+  });
+  fireEvent.change(screen.getByLabelText(/Valor asegurado/), {
+    target: { value: "50000000" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  fireEvent.change(await screen.findByLabelText(/Tipo de documento/), {
+    target: { value: "CC" },
+  });
+  fireEvent.change(screen.getByLabelText(/Número de documento/), {
+    target: { value: "123456789" },
+  });
+  fireEvent.change(screen.getByLabelText(/Nombres/), {
+    target: { value: "Ada" },
+  });
+  fireEvent.change(screen.getByLabelText(/Primer apellido/), {
+    target: { value: "Example" },
+  });
+  fireEvent.change(screen.getByLabelText(/Sexo/), { target: { value: "F" } });
+  fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), {
+    target: { value: "1990-01-01" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente paso/ }));
+  fireEvent.change(
+    await screen.findByLabelText(/Código de ciudad de residencia/),
+    { target: { value: "11001" } },
+  );
+  fireEvent.change(screen.getByLabelText(/Dirección/), {
+    target: { value: "Example 123" },
+  });
+  fireEvent.change(screen.getByLabelText(/Teléfono/), {
+    target: { value: "3001234567" },
+  });
+  fireEvent.change(screen.getByLabelText(/Correo electrónico/), {
+    target: { value: "ada@example.test" },
+  });
+  await solve();
+  fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud/ }));
+  expect(
+    await screen.findByText(/Cotizando con aseguradoras/),
+  ).toBeInTheDocument();
+  // Malformed entries never render; finished, pending and failed rows do.
+  // The first poll waits a full interval by design.
+  expect(
+    await screen.findByText("1 de 3 respuestas", {}, { timeout: 5000 }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "Insurer 0" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Responsabilidad civil")).toBeInTheDocument();
+  expect(screen.getByText("Insurer 1")).toBeInTheDocument();
+  expect(screen.getByText("Sin respuesta")).toBeInTheDocument();
+  expect(
+    fetchMock.mock.calls.some(([url]) => String(url).includes("/status/")),
+  ).toBe(true);
+});
+
 it("fills the birth date from the age presets", async () => {
   render(
     <PublicQuoteForm

@@ -422,6 +422,12 @@ export const publicFormsMessages = {
     "Limpar cidade selecionada",
   ],
   Limpiar: ["Limpiar", "Clear", "Limpar"],
+  "%{done} de %{total} respuestas": [
+    "%{done} de %{total} respuestas",
+    "%{done} of %{total} responses",
+    "%{done} de %{total} respostas",
+  ],
+  "Sin respuesta": ["Sin respuesta", "No response", "Sem resposta"],
   "Edad:": ["Edad:", "Age:", "Idade:"],
   "%{p0} años": ["%{p0} años", "%{p0} years old", "%{p0} anos"],
   Seleccionar: ["Seleccionar", "Select", "Selecionar"],
