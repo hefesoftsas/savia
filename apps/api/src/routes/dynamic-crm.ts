@@ -19,6 +19,30 @@ import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { tenantRoom } from "../realtime/protocol";
 
+export async function resolveDynamicTenantKey(
+  db: D1Database,
+  tenantId: number,
+  preferredPrefix?: "tenant" | "agency",
+): Promise<string> {
+  const hasTenant = await db
+    .prepare("SELECT 1 FROM crm_objects WHERE tenant_id=? LIMIT 1")
+    .bind(`tenant:${tenantId}`)
+    .first();
+  if (hasTenant) return `tenant:${tenantId}`;
+
+  const hasAgency = await db
+    .prepare(
+      "SELECT 1 FROM crm_objects WHERE tenant_id=? UNION ALL SELECT 1 FROM crm_solution_installations WHERE tenant_id=? LIMIT 1",
+    )
+    .bind(`agency:${tenantId}`, `agency:${tenantId}`)
+    .first();
+  if (hasAgency) return `agency:${tenantId}`;
+
+  return preferredPrefix === "tenant"
+    ? `tenant:${tenantId}`
+    : `agency:${tenantId}`;
+}
+
 export function registerDynamicCrmRoutes(
   app: OpenAPIHono,
   db: D1Database,
@@ -33,7 +57,7 @@ export function registerDynamicCrmRoutes(
   beforeInstall?: SolutionOptions["beforeInstall"],
   realtime?: RealtimeHubClient,
 ) {
-  app.all("/v1/dynamic-crm/:agencyId/api/*", async (c) => {
+  const handleDynamicCrmRequest = async (c: any) => {
     const actor = actorFromContext(c);
     const expectedPrincipal = c.req.header("X-Savia-Sync-Principal");
     if (
@@ -46,28 +70,36 @@ export function registerDynamicCrmRoutes(
         },
         403,
       );
-    const agencyId = Number(c.req.param("agencyId"));
-    if (!Number.isSafeInteger(agencyId) || agencyId <= 0)
+    const paramValue = c.req.param("tenantId") ?? c.req.param("agencyId");
+    const tenantId = Number(paramValue);
+    if (!Number.isSafeInteger(tenantId) || tenantId <= 0)
       return c.json(
         {
           error: {
-            code: "INVALID_AGENCY",
+            code: "INVALID_TENANT",
             message: "Selecciona un tenant válido.",
           },
         },
         400,
       );
-    const tenantKey = `agency:${agencyId}`;
+    const url = new URL(c.req.url);
+    const isTenantRoute = url.pathname.startsWith("/v1/tenants/");
+    const tenantKey = await resolveDynamicTenantKey(
+      db,
+      tenantId,
+      isTenantRoute ? "tenant" : "agency",
+    );
     const manager = canManageSharedCrm(actor, tenantKey);
     const accessPolicy =
       !manager &&
-      (await hasCustomAccess(db, actor.principal.id, `tenant:${agencyId}`))
-        ? await loadAccessPolicy(db, actor, `tenant:${agencyId}`)
+      (await hasCustomAccess(db, actor.principal.id, `tenant:${tenantId}`))
+        ? await loadAccessPolicy(db, actor, `tenant:${tenantId}`)
         : undefined;
     let sharedNames: Set<string> | undefined;
-    const requestedPath = new URL(c.req.url).pathname.slice(
-      `/v1/dynamic-crm/${c.req.param("agencyId")}`.length,
-    );
+    const routePrefix = isTenantRoute
+      ? `/v1/tenants/${paramValue}/crm`
+      : `/v1/dynamic-crm/${paramValue}`;
+    const requestedPath = url.pathname.slice(routePrefix.length);
     const readOnlyBootstrap =
       c.req.method === "POST" &&
       ["/api/bootstrap", "/api/business/setup"].includes(requestedPath);
@@ -113,7 +145,7 @@ export function registerDynamicCrmRoutes(
       .prepare(
         "SELECT t.id FROM tenants t WHERE t.id=? AND t.kind='commercial' AND t.is_active=1",
       )
-      .bind(agencyId)
+      .bind(tenantId)
       .first<{ id: number; agency_id: number | null }>();
     if (!tenant)
       return c.json(
@@ -137,10 +169,7 @@ export function registerDynamicCrmRoutes(
       );
     // Members use already-installed shared collections; bootstrapping must not mutate schema.
     if (!manager && readOnlyBootstrap) return c.json({ ok: true });
-    const url = new URL(c.req.url);
-    let path = url.pathname.slice(
-      `/v1/dynamic-crm/${c.req.param("agencyId")}`.length,
-    );
+    let path = requestedPath;
     if (
       c.req.method === "GET" &&
       ["/api/openapi.json", "/api/docs"].includes(path)
@@ -150,10 +179,13 @@ export function registerDynamicCrmRoutes(
           "AUTHORIZATION_FORBIDDEN",
           "Collection documentation requires administration access.",
         );
-      const document = await dynamicOpenApi(db, agencyId);
+      const document = await dynamicOpenApi(db, {
+        tenant: tenantKey,
+        apiBasePath: routePrefix,
+      });
       c.header("cache-control", "no-store");
       if (path === "/api/openapi.json") return c.json(document);
-      return dynamicScalar(c, document, agencyId);
+      return dynamicScalar(c, document, tenantId);
     }
     if (path.startsWith("/api/published/")) {
       const match =
@@ -201,7 +233,7 @@ export function registerDynamicCrmRoutes(
     const gateway = gatewayFactory({
       db,
       files,
-      tenant: `agency:${agencyId}`,
+      tenant: tenantKey,
       actor,
       accessPolicy,
       crm: dependencies,
@@ -213,7 +245,7 @@ export function registerDynamicCrmRoutes(
         ? {
             fetch: async (request: Request) => {
               const target = new URL(request.url);
-              target.pathname = `/v1/dynamic-crm/${agencyId}` + target.pathname;
+              target.pathname = routePrefix + target.pathname;
               const forwarded = new Headers(request.headers);
               for (const name of ["authorization", "cookie"]) {
                 const value = c.req.header(name);
@@ -250,7 +282,7 @@ export function registerDynamicCrmRoutes(
       await publishRecordBundleChanges({
         db,
         tenant: tenantKey,
-        room: tenantRoom(agencyId),
+        room: tenantRoom(tenantId),
         actor: actor.principal.id,
         object: decodeURIComponent(bundleMatch[1]),
         response,
@@ -299,7 +331,7 @@ export function registerDynamicCrmRoutes(
         } catch {
           collectionVersion = undefined;
         }
-        publishRealtime(realtime, tenantRoom(agencyId), {
+        publishRealtime(realtime, tenantRoom(tenantId), {
           topic: "records",
           type: mutationType,
           collection,
@@ -357,5 +389,10 @@ export function registerDynamicCrmRoutes(
       status: response.status,
       headers: responseHeaders,
     });
-  });
+  };
+
+  app.all("/v1/dynamic-crm/:agencyId/api/*", handleDynamicCrmRequest);
+  app.all("/v1/dynamic-crm/:tenantId/api/*", handleDynamicCrmRequest);
+  app.all("/v1/tenants/:tenantId/crm/api/*", handleDynamicCrmRequest);
 }
+

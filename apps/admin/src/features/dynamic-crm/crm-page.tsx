@@ -260,7 +260,7 @@ export function CrmPage({ services }: { services: AppServices }) {
     return (
       <p role="alert">
         {t(
-          "El CRM está disponible para administradores de agencia y plataforma.",
+          "El CRM está disponible para administradores de organización y plataforma.",
         )}
       </p>
     );

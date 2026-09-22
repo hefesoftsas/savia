@@ -66,6 +66,11 @@ export const settingsMessages = {
     "This list only shows people assigned to this tenant.",
     "Esta lista mostra apenas as pessoas atribuídas a este tenant.",
   ],
+  "No tienes permisos para modificar la marca de esta organización.": [
+    "No tienes permisos para modificar la marca de esta organización.",
+    "You do not have permission to change this organization's branding.",
+    "Você não tem permissão para alterar a marca desta organização.",
+  ],
   "No tienes permisos para modificar la marca de esta agencia.": [
     "No tienes permisos para modificar la marca de esta agencia.",
     "You do not have permission to change this agency's branding.",
@@ -83,6 +88,11 @@ export const settingsMessages = {
       "Unable to complete the operation. Check your connection and try again.",
       "Não foi possível concluir a operação. Verifique sua conexão e tente novamente.",
     ],
+  "Marca de tu organización": [
+    "Marca de tu organización",
+    "Your organization's branding",
+    "Marca da sua organização",
+  ],
   "Marca de tu agencia": [
     "Marca de tu agencia",
     "Your agency's branding",
@@ -92,19 +102,35 @@ export const settingsMessages = {
     [
       "Personaliza la identidad y la pantalla de acceso de tu equipo. Revisa la vista previa y guarda cuando esté lista.",
       "Customize your team's identity and sign-in screen. Check the preview and save when ready.",
-      "Personalize a identidade e a tela de acesso da sua equipe. Confira a prévia e salve quando estiver pronta.",
+      "Personalize a identidade e a tela de acesso da sua equipe. Confira a prévia e salve cuando estiver pronta.",
     ],
+  "Cargando organizaciones…": [
+    "Cargando organizaciones…",
+    "Loading organizations…",
+    "Carregando organizações…",
+  ],
   "Cargando agencias…": [
     "Cargando agencias…",
     "Loading agencies…",
     "Carregando agências…",
   ],
   "Volver a cargar": ["Volver a cargar", "Reload", "Recarregar"],
+  Organización: ["Organización", "Organization", "Organização"],
   Agencia: ["Agencia", "Agency", "Agência"],
+  "Cambiar de organización descarta los cambios que no hayas guardado.": [
+    "Cambiar de organización descarta los cambios que no hayas guardado.",
+    "Switching organizations discards unsaved changes.",
+    "Trocar de organização descarta as alterações não salvas.",
+  ],
   "Cambiar de agencia descarta los cambios que no hayas guardado.": [
     "Cambiar de agencia descarta los cambios que no hayas guardado.",
     "Switching agencies discards unsaved changes.",
     "Trocar de agência descarta as alterações não salvas.",
+  ],
+  "No hay organizaciones disponibles para esta cuenta.": [
+    "No hay organizaciones disponibles para esta cuenta.",
+    "No organizations are available for this account.",
+    "Não há organizações disponíveis para esta conta.",
   ],
   "No hay agencias disponibles para esta cuenta.": [
     "No hay agencias disponibles para esta cuenta.",
@@ -138,6 +164,12 @@ export const settingsMessages = {
     "Loading branding…",
     "Carregando marca…",
   ],
+  "Puedes consultar la marca. Solo los administradores de esta organización pueden modificarla.":
+    [
+      "Puedes consultar la marca. Solo los administradores de esta organización pueden modificarla.",
+      "You can view the branding. Only this organization's administrators can change it.",
+      "Você pode consultar a marca. Somente os administradores desta organização podem alterá-la.",
+    ],
   "Puedes consultar la marca. Solo los administradores de esta agencia pueden modificarla.":
     [
       "Puedes consultar la marca. Solo los administradores de esta agencia pueden modificarla.",
@@ -202,6 +234,11 @@ export const settingsMessages = {
     "Preview · sign-in",
     "Prévia · acesso",
   ],
+  "Portada de la organización": [
+    "Portada de la organización",
+    "Organization cover",
+    "Capa da organização",
+  ],
   "Portada de la agencia": [
     "Portada de la agencia",
     "Agency cover",
@@ -220,6 +257,11 @@ export const settingsMessages = {
     "Prévia · aplicativo",
   ],
   Inicio: ["Inicio", "Home", "Início"],
+  "Mi organización": [
+    "Mi organización",
+    "My organization",
+    "Minha organização",
+  ],
   "Mi agencia": ["Mi agencia", "My agency", "Minha agência"],
   "Credenciales globales": [
     "Credenciales globales",

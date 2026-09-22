@@ -23,7 +23,7 @@ export function ActiveAgencySelector({
         if (active) setState(next);
       },
       () => {
-        if (active) setState({ agencies: [] });
+        if (active) setState({ agencies: [], tenants: [] });
       },
     );
     return () => {
@@ -75,3 +75,7 @@ export function ActiveAgencySelector({
     </div>
   );
 }
+
+export const ActiveTenantSelector = ActiveAgencySelector;
+export type ActiveTenantClient = ActiveAgencyClient;
+

@@ -11,6 +11,7 @@ export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
   agencyId?: number;
+  tenantId?: number;
 };
 
 export type AssistantModelModalities = {
@@ -59,6 +60,7 @@ type ActiveAgencyRow = { agency_id: number };
 export type AssistantConfigurationSummary = {
   global: AssistantConfigurationSettingSummary | null;
   agencies: AssistantConfigurationSettingSummary[];
+  tenants: AssistantConfigurationSettingSummary[];
   deployment: AssistantConfigurationDeploymentSummary;
 };
 
@@ -68,6 +70,7 @@ export type AssistantConfigurationKeyState =
 export type AssistantConfigurationSettingSummary = {
   scope: AssistantSettingScope;
   agencyId?: number;
+  tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
   updatedAt: string;
@@ -138,7 +141,9 @@ function summary(
 ): AssistantConfigurationSettingSummary {
   return {
     scope: row.scope,
-    ...(row.agency_id === null ? {} : { agencyId: row.agency_id }),
+    ...(row.agency_id === null
+      ? {}
+      : { agencyId: row.agency_id, tenantId: row.agency_id }),
     keyState,
     model: row.model,
     updatedAt: row.updated_at,
@@ -283,6 +288,13 @@ export class AssistantConfigurationRepository {
     await this.save("agency", agencyId, input);
   }
 
+  async saveTenantOverride(
+    tenantId: number,
+    input: AssistantConfigurationWrite,
+  ): Promise<void> {
+    return this.saveAgencyOverride(tenantId, input);
+  }
+
   async clearAgencyOverride(agencyId: number): Promise<boolean> {
     const result = await this.database
       .prepare(
@@ -291,6 +303,10 @@ export class AssistantConfigurationRepository {
       .bind(settingId("agency", agencyId))
       .run();
     return result.meta.changes > 0;
+  }
+
+  async clearTenantOverride(tenantId: number): Promise<boolean> {
+    return this.clearAgencyOverride(tenantId);
   }
 
   async summary(): Promise<AssistantConfigurationSummary> {
@@ -311,20 +327,22 @@ export class AssistantConfigurationRepository {
     const globalKeyState = global?.api_key_ciphertext
       ? "configured"
       : deployment.keyState;
+    const agencySettings = rows.results
+      .filter((row) => row.scope === "agency")
+      .map((row) =>
+        summary(
+          row,
+          row.api_key_ciphertext
+            ? "configured"
+            : globalKeyState === "configured"
+              ? "inherited"
+              : globalKeyState,
+        ),
+      );
     return {
       global: global ? summary(global, globalKeyState) : null,
-      agencies: rows.results
-        .filter((row) => row.scope === "agency")
-        .map((row) =>
-          summary(
-            row,
-            row.api_key_ciphertext
-              ? "configured"
-              : globalKeyState === "configured"
-                ? "inherited"
-                : globalKeyState,
-          ),
-        ),
+      agencies: agencySettings,
+      tenants: agencySettings,
       deployment,
     };
   }
@@ -379,6 +397,14 @@ export class AssistantConfigurationRepository {
       .run();
   }
 
+  async setActiveTenant(
+    principalId: string,
+    tenantId: number,
+    actor: AppActor,
+  ): Promise<void> {
+    return this.setActiveAgency(principalId, tenantId, actor);
+  }
+
   async activeAgencyFor(principalId: string): Promise<number | undefined> {
     const row = await this.database
       .prepare(
@@ -405,6 +431,10 @@ export class AssistantConfigurationRepository {
       .bind(principalId)
       .first<ActiveAgencyRow>();
     return row?.agency_id;
+  }
+
+  async activeTenantFor(principalId: string): Promise<number | undefined> {
+    return this.activeAgencyFor(principalId);
   }
 
   async effectiveConfigurationFor(
@@ -437,7 +467,7 @@ export class AssistantConfigurationRepository {
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
-      ...(agencyId === undefined ? {} : { agencyId }),
+      ...(agencyId === undefined ? {} : { agencyId, tenantId: agencyId }),
     };
   }
 

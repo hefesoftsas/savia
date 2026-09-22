@@ -2698,6 +2698,11 @@ export const automationMessages = {
     ],
   "Dominio de datos": ["Dominio de datos", "Data domain", "Domínio de dados"],
   "Crear dominio": ["Crear dominio", "Create domain", "Criar domínio"],
+  "El CRM está disponible para administradores de organización y plataforma.": [
+    "El CRM está disponible para administradores de organización y plataforma.",
+    "The CRM is available to organization and platform administrators.",
+    "O CRM está disponível para administradores de organização e plataforma.",
+  ],
   "El CRM está disponible para administradores de agencia y plataforma.": [
     "El CRM está disponible para administradores de agencia y plataforma.",
     "The CRM is available to agency and platform administrators.",

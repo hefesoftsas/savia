@@ -6,10 +6,15 @@ function hasAnyRole(
   permissions: AuthPermissions,
   roles: readonly string[],
 ): boolean {
-  return permissions.memberships.some((membership) =>
-    roles.includes(
-      membership.role === "tenant_admin" ? "agency_admin" : membership.role,
+  const normalizedRoles = new Set(
+    roles.flatMap((r) =>
+      r === "agency_admin" || r === "tenant_admin"
+        ? ["tenant_admin", "agency_admin"]
+        : [r],
     ),
+  );
+  return permissions.memberships.some((membership) =>
+    normalizedRoles.has(membership.role),
   );
 }
 
@@ -59,11 +64,14 @@ export function createReactAdminAuthProvider(
       const permissions = await session.getPermissions();
       const isPlatformAdmin = permissions.canManageIdentity;
       if (resource === "access-control")
-        return isPlatformAdmin || hasAnyRole(permissions, ["agency_admin"]);
+        return (
+          isPlatformAdmin ||
+          hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
+        );
       if (resource === "dynamic-crm")
         return (
           isPlatformAdmin ||
-          hasAnyRole(permissions, ["agency_admin"]) ||
+          hasAnyRole(permissions, ["tenant_admin", "agency_admin"]) ||
           Boolean(await options?.canAccessCrm?.())
         );
       if (resource === "savia-request") return isPlatformAdmin;

@@ -196,6 +196,8 @@ export const agencyCrmConnections = sqliteTable(
   ],
 );
 
+export const tenantCrmConnections = agencyCrmConnections;
+
 export const personalIntegrationConnections = sqliteTable(
   "personal_integration_connections",
   {
@@ -372,6 +374,8 @@ export const assistantActiveAgencies = sqliteTable(
     index("assistant_active_agencies_agency_index").on(table.agencyId),
   ],
 );
+
+export const assistantActiveTenants = assistantActiveAgencies;
 
 export const requestPageRuns = sqliteTable('request_page_runs', {
   id: text('id').primaryKey().notNull(),

@@ -30,7 +30,7 @@ type Tenant = {
 type Asset = "logo" | "cover";
 function message(error: unknown): keyof typeof settingsMessages {
   if (error instanceof ApiClientError && error.status === 403)
-    return "No tienes permisos para modificar la marca de esta agencia.";
+    return "No tienes permisos para modificar la marca de esta organización.";
   if (
     error instanceof ApiClientError &&
     [400, 413, 415, 422].includes(error.status)
@@ -86,7 +86,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
   return (
     <main className="tenant-branding-page" lang="es">
       <header className="tenant-branding-heading">
-        <h1>{t("Marca de tu agencia")}</h1>
+        <h1>{t("Marca de tu organización")}</h1>
         <p>
           {t(
             "Personaliza la identidad y la pantalla de acceso de tu equipo. Revisa la vista previa y guarda cuando esté lista.",
@@ -94,7 +94,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
         </p>
       </header>
       {loading ? (
-        <p role="status">{t("Cargando agencias…")}</p>
+        <p role="status">{t("Cargando organizaciones…")}</p>
       ) : error ? (
         <div role="alert">
           <p>
@@ -103,7 +103,8 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
               : error}
           </p>
           <Button
-            variant="outline"
+            type="button"
+            variant="secondary"
             onClick={() => setAttempt((value) => value + 1)}
           >
             {t("Volver a cargar")}
@@ -115,7 +116,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
             <p className="tenant-branding-agency">{tenants[0].name}</p>
           ) : (
             <div className="tenant-branding-selector">
-              <label htmlFor="branding-tenant">{t("Agencia")}</label>
+              <label htmlFor="branding-tenant">{t("Organización")}</label>
               <select
                 id="branding-tenant"
                 value={selected}
@@ -129,7 +130,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
               </select>
               <p>
                 {t(
-                  "Cambiar de agencia descarta los cambios que no hayas guardado.",
+                  "Cambiar de organización descarta los cambios que no hayas guardado.",
                 )}
               </p>
             </div>
@@ -143,7 +144,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
           )}
         </>
       ) : (
-        <p>{t("No hay agencias disponibles para esta cuenta.")}</p>
+        <p>{t("No hay organizaciones disponibles para esta cuenta.")}</p>
       )}
     </main>
   );
@@ -363,7 +364,7 @@ function BrandingEditor({
         {!canManage && (
           <p className="tenant-branding-note">
             {t(
-              "Puedes consultar la marca. Solo los administradores de esta agencia pueden modificarla.",
+              "Puedes consultar la marca. Solo los administradores de esta organización pueden modificarla.",
             )}
           </p>
         )}
@@ -524,7 +525,7 @@ function BrandingEditor({
             <img
               className="tenant-branding-cover"
               src={previews.cover ?? draft.coverUrl!}
-              alt={t("Portada de la agencia")}
+              alt={t("Portada de la organización")}
             />
           )}
           <div className="tenant-branding-preview-form">
@@ -558,7 +559,7 @@ function BrandingEditor({
           <span className="tenant-branding-preview-selected">
             {t("Inicio")}
           </span>
-          <span>{t("Mi agencia")}</span>
+          <span>{t("Mi organización")}</span>
         </div>
       </aside>
     </div>
