@@ -26,6 +26,8 @@ export type PublicSubmissionController = {
   uncertain: boolean;
   duplicate: boolean;
   receipt?: { reference: string; result?: unknown };
+  /** Current submission identity for progress polling; null before submit. */
+  submissionId: string | null;
   submit(values: PublicSubmissionValues): Promise<void>;
   startNew(): void;
 };
@@ -115,6 +117,7 @@ export function usePublicFormSubmission({
   const [pending, setPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{
     reference: string;
     result?: unknown;
@@ -233,6 +236,7 @@ export function usePublicFormSubmission({
     if (!submission.current) {
       submission.current = { id: crypto.randomUUID(), values };
     }
+    setSubmissionId(submission.current.id);
     busy.current = true;
     setPending(true);
     setError("");
@@ -301,6 +305,7 @@ export function usePublicFormSubmission({
   function startNew() {
     retryProof.current = false;
     submission.current = null;
+    setSubmissionId(null);
     setReceipt(undefined);
     setDuplicate(false);
     setUncertain(false);
@@ -319,6 +324,7 @@ export function usePublicFormSubmission({
     uncertain,
     duplicate,
     receipt,
+    submissionId,
     submit,
     startNew,
   };
@@ -339,19 +345,112 @@ const quoteProjection = z.object({
   unavailable: z.number().int().nonnegative(),
 });
 
-export function SafeResult({ result }: { result: unknown }) {
+export type PublicQuoteCardModel = {
+  insurer: string;
+  product: string;
+  premiumTotal: number | null;
+  coverages: string[];
+};
+
+function QuoteCard({
+  quote,
+  isBest,
+}: {
+  quote: PublicQuoteCardModel;
+  isBest?: boolean;
+}) {
   const t = useMessages(publicFormsMessages);
   const locale = useAppLocale();
+  const [copied, setCopied] = useState(false);
+  const money = new Intl.NumberFormat(intlLocale(locale), {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  });
+  async function copyQuote() {
+    const price =
+      quote.premiumTotal === null
+        ? t("Valor por confirmar")
+        : `${money.format(quote.premiumTotal)} COP`;
+    try {
+      await navigator.clipboard.writeText(
+        `${quote.insurer} — ${quote.product}: ${price}`,
+      );
+      setCopied(true);
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 2500);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <li className={`public-quote-card${isBest ? " is-best" : ""}`}>
+      {isBest && (
+        <p className="public-quote-ribbon">{`★ ${t("Mejor precio")}`}</p>
+      )}
+      <div className="public-quote-brand">
+        <span className="public-quote-logo" aria-hidden="true">
+          {quote.insurer.charAt(0).toUpperCase()}
+        </span>
+        <div className="public-quote-heading">
+          <h4>{quote.insurer}</h4>
+          <p>{quote.product}</p>
+        </div>
+        <button
+          type="button"
+          className="public-quote-copy"
+          aria-label={copied ? t("¡Copiado!") : t("Copiar cotización")}
+          title={copied ? t("¡Copiado!") : t("Copiar cotización")}
+          onClick={() => void copyQuote()}
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+            viewBox="0 0 24 24"
+            width="16"
+          >
+            {copied ? (
+              <polyline points="20 6 9 17 4 12" />
+            ) : (
+              <>
+                <rect height="14" rx="2" width="12" x="8" y="7" />
+                <path d="M16 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+              </>
+            )}
+          </svg>
+        </button>
+      </div>
+      <p className="public-quote-price">
+        {quote.premiumTotal === null
+          ? t("Valor por confirmar")
+          : money.format(quote.premiumTotal)}
+        {quote.premiumTotal !== null && <span> {t("COP / año")}</span>}
+      </p>
+      {quote.coverages.length > 0 && (
+        <ul className="public-quote-bullets" aria-label={t("Coberturas")}>
+          {quote.coverages.map((coverage, coverageIndex) => (
+            <li key={coverageIndex}>
+              <span aria-hidden="true">✓</span> {coverage}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+export function SafeResult({ result }: { result: unknown }) {
+  const t = useMessages(publicFormsMessages);
   const [insurerFilter, setInsurerFilter] = useState<string | null>(null);
-  const [copied, setCopied] = useState<number | null>(null);
   const projection = quoteProjection.safeParse(result);
   if (projection.success) {
     const { quotes, unavailable } = projection.data;
-    const money = new Intl.NumberFormat(intlLocale(locale), {
-      style: "currency",
-      currency: "COP",
-      maximumFractionDigits: 0,
-    });
     // Cheapest first, unknown prices last — same ranking language as the
     // embedded comparator, computed only from the public projection.
     const ranked = [...quotes].sort((a, b) => {
@@ -364,23 +463,6 @@ export function SafeResult({ result }: { result: unknown }) {
     const visible = insurerFilter
       ? ranked.filter((quote) => quote.insurer === insurerFilter)
       : ranked;
-    async function copyQuote(quote: (typeof ranked)[number], index: number) {
-      const price =
-        quote.premiumTotal === null
-          ? t("Valor por confirmar")
-          : `${money.format(quote.premiumTotal)} COP`;
-      try {
-        await navigator.clipboard.writeText(
-          `${quote.insurer} — ${quote.product}: ${price}`,
-        );
-        setCopied(index);
-        window.setTimeout(() => {
-          setCopied((current) => (current === index ? null : current));
-        }, 2500);
-      } catch {
-        setCopied(null);
-      }
-    }
     return (
       <section
         className="public-quote-results"
@@ -428,83 +510,12 @@ export function SafeResult({ result }: { result: unknown }) {
           <ul className="public-quote-cards">
             {visible.map((quote) => {
               const index = ranked.indexOf(quote);
-              const isBest = index === bestIndex && bestIndex >= 0;
               return (
-                <li
+                <QuoteCard
                   key={`${quote.insurer}-${quote.product}-${index}`}
-                  className={`public-quote-card${isBest ? " is-best" : ""}`}
-                >
-                  {isBest && (
-                    <p className="public-quote-ribbon">
-                      {`★ ${t("Mejor precio")}`}
-                    </p>
-                  )}
-                  <div className="public-quote-brand">
-                    <span className="public-quote-logo" aria-hidden="true">
-                      {quote.insurer.charAt(0).toUpperCase()}
-                    </span>
-                    <div className="public-quote-heading">
-                      <h4>{quote.insurer}</h4>
-                      <p>{quote.product}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="public-quote-copy"
-                      aria-label={
-                        copied === index
-                          ? t("¡Copiado!")
-                          : t("Copiar cotización")
-                      }
-                      title={
-                        copied === index
-                          ? t("¡Copiado!")
-                          : t("Copiar cotización")
-                      }
-                      onClick={() => void copyQuote(quote, index)}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        fill="none"
-                        height="16"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.8"
-                        viewBox="0 0 24 24"
-                        width="16"
-                      >
-                        {copied === index ? (
-                          <polyline points="20 6 9 17 4 12" />
-                        ) : (
-                          <>
-                            <rect height="14" rx="2" width="12" x="8" y="7" />
-                            <path d="M16 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
-                          </>
-                        )}
-                      </svg>
-                    </button>
-                  </div>
-                  <p className="public-quote-price">
-                    {quote.premiumTotal === null
-                      ? t("Valor por confirmar")
-                      : money.format(quote.premiumTotal)}
-                    {quote.premiumTotal !== null && (
-                      <span> {t("COP / año")}</span>
-                    )}
-                  </p>
-                  {quote.coverages.length > 0 && (
-                    <ul
-                      className="public-quote-bullets"
-                      aria-label={t("Coberturas")}
-                    >
-                      {quote.coverages.map((coverage, coverageIndex) => (
-                        <li key={coverageIndex}>
-                          <span aria-hidden="true">✓</span> {coverage}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
+                  quote={quote}
+                  isBest={index === bestIndex && bestIndex >= 0}
+                />
               );
             })}
           </ul>
@@ -532,4 +543,107 @@ export function SafeResult({ result }: { result: unknown }) {
     return <p>{String(result)}</p>;
   // Unknown result structures stay hidden; only the public quote projection is displayed.
   return null;
+}
+
+export type QuoteProgressStatus =
+  "waiting" | "quoting" | "done" | "unavailable";
+
+export type QuoteProgressItem = {
+  flowId: string;
+  label: string;
+  insurer: string;
+  status: QuoteProgressStatus;
+  result?: PublicQuoteCardModel;
+};
+
+const progressQuote = z.object({
+  insurer: z.string(),
+  product: z.string(),
+  premiumTotal: z.number().finite().positive().max(1e12).nullable(),
+  currency: z.literal("COP"),
+  coverages: z.array(z.string()).max(50),
+});
+
+/** Defensive parse of the anonymous progress endpoint: unknown shapes stay out. */
+export function parseProgressItems(value: unknown): QuoteProgressItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: QuoteProgressItem[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.flowId !== "string" || !record.flowId) continue;
+    if (typeof record.label !== "string" || typeof record.insurer !== "string")
+      continue;
+    const status: QuoteProgressStatus =
+      record.status === "done" ||
+      record.status === "unavailable" ||
+      record.status === "quoting"
+        ? record.status
+        : "waiting";
+    const parsed =
+      status === "done" ? progressQuote.safeParse(record.result) : null;
+    items.push({
+      flowId: record.flowId,
+      label: record.label,
+      insurer: record.insurer,
+      status,
+      ...(parsed?.success ? { result: parsed.data } : {}),
+    });
+  }
+  return items;
+}
+
+/**
+ * Progressive quote results while providers respond: finished insurers
+ * render as cards immediately, the rest stay visible as pending rows so the
+ * visitor sees every product moving instead of a bare spinner.
+ */
+export function ProgressQuoteList({ items }: { items: QuoteProgressItem[] }) {
+  const t = useMessages(publicFormsMessages);
+  const done = items.filter(
+    (item): item is QuoteProgressItem & { result: PublicQuoteCardModel } =>
+      item.status === "done" && item.result !== undefined,
+  );
+  const pending = items.filter(
+    (item) => !(item.status === "done" && item.result !== undefined),
+  );
+  return (
+    <section
+      className="public-quote-results"
+      aria-label={t("Resultados de cotización")}
+    >
+      <p className="public-form-help" role="status">
+        {t("%{done} de %{total} respuestas", {
+          done: done.length,
+          total: items.length,
+        })}
+      </p>
+      {done.length > 0 && (
+        <ul className="public-quote-cards">
+          {done.map((item) => (
+            <QuoteCard key={item.flowId} quote={item.result} />
+          ))}
+        </ul>
+      )}
+      {pending.length > 0 && (
+        <ul className="public-quote-pending">
+          {pending.map((item) => (
+            <li key={item.flowId} data-status={item.status}>
+              {item.status === "unavailable" ? null : (
+                <span aria-hidden="true" className="public-quote-spinner" />
+              )}
+              <span className="public-quote-pending-insurer">
+                {item.insurer}
+              </span>
+              <span>
+                {item.status === "unavailable"
+                  ? t("Sin respuesta")
+                  : t("Consultando…")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }

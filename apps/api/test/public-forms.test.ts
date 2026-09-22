@@ -778,6 +778,109 @@ it("serves bounded city suggestions for quote links without upstream internals",
     ).status,
   ).toBe(503);
 });
+it("serves per-product quote progress for a known submission only", async () => {
+  const quoteStatus = vi.fn(async () => ({
+    items: [
+      {
+        flowId: "flow-a",
+        label: "Insurer A · Product A",
+        insurer: "Insurer A",
+        status: "quoting",
+      },
+    ],
+  }));
+  const quote = {
+    publish: async () => ({
+      fields: [
+        { name: "name", label: "Name", type: "text" as const, required: true },
+      ],
+      snapshot: { frozen: "policy" },
+    }),
+    validate: async ({ values }: any) => values,
+    execute: async () => undefined,
+    quoteStatus,
+  };
+  const instance = app({ quote });
+  const link = await publish(instance, await object(), { kind: "quote" });
+  const submissionId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO public_form_submissions(form_id,submission_id,tenant_id,ip_hash,day,fingerprint,captcha_hash,state,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+  )
+    .bind(
+      link.id,
+      submissionId,
+      "domain:demo",
+      "iphash",
+      new Date().toISOString().slice(0, 10),
+      "fingerprint",
+      "captchahash",
+      "reserved",
+      new Date().toISOString(),
+    )
+    .run();
+  const found = await instance.request(
+    "https://api.test/api/public/forms/" +
+      link.token +
+      "/status/" +
+      submissionId,
+  );
+  expect(found.status).toBe(200);
+  expect(await found.json()).toEqual({
+    items: [
+      {
+        flowId: "flow-a",
+        label: "Insurer A · Product A",
+        insurer: "Insurer A",
+        status: "quoting",
+      },
+    ],
+  });
+  expect(quoteStatus).toHaveBeenCalledWith(
+    expect.objectContaining({ submission: submissionId }),
+  );
+  // Unknown submissions 404 without revealing link state.
+  expect(
+    (
+      await instance.request(
+        "https://api.test/api/public/forms/" +
+          link.token +
+          "/status/" +
+          crypto.randomUUID(),
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await instance.request(
+        "https://api.test/api/public/forms/" +
+          link.token +
+          "/status/not-a-uuid",
+      )
+    ).status,
+  ).toBe(400);
+  // Record links never serve quote progress.
+  const recordLink = await publish(app(), await object());
+  expect(
+    (
+      await instance.request(
+        "https://api.test/api/public/forms/" +
+          recordLink.token +
+          "/status/" +
+          submissionId,
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await app().request(
+        "https://api.test/api/public/forms/" +
+          link.token +
+          "/status/" +
+          submissionId,
+      )
+    ).status,
+  ).toBe(404);
+});
 it("preserves safe provider failures instead of masking them as 503", async () => {
   const execute = vi.fn(async () => {
     throw new HTTPException(502, {

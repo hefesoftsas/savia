@@ -298,6 +298,47 @@ export function registerPublicFormRoutes(
   );
   app.openapi(
     createRoute({
+      method: "get",
+      path: "/api/public/forms/{token}/status/{submissionId}",
+      security: [],
+      tags: ["Public forms"],
+      request: {
+        params: z.object({
+          token: z.string(),
+          submissionId: z.string().uuid(),
+        }),
+      },
+      responses: { 200: jsonResponse },
+    }),
+    async (c) => {
+      const row = await activePublicForm(db, c.req.valid("param").token);
+      if (row.kind !== "quote" || !options.quote?.quoteStatus)
+        throw new HTTPException(404, { message: "Public form unavailable." });
+      // The submission id is an unguessable capability: unknown ids 404
+      // without revealing whether the link itself exists beyond the token.
+      const submission = await db
+        .prepare(
+          "SELECT 1 FROM public_form_submissions WHERE form_id=? AND submission_id=?",
+        )
+        .bind(row.id, c.req.valid("param").submissionId)
+        .first();
+      if (!submission)
+        throw new HTTPException(404, { message: "Public form unavailable." });
+      return c.json(
+        await options.quote.quoteStatus({
+          db,
+          tenant: row.tenant_id,
+          domainId: row.domain_id,
+          objectName: row.object_name,
+          snapshot: JSON.parse(row.snapshot),
+          submission: c.req.valid("param").submissionId,
+        }),
+        200,
+      );
+    },
+  );
+  app.openapi(
+    createRoute({
       method: "post",
       path: "/api/public/forms/{token}/vehicle-lookup",
       security: [],

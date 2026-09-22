@@ -415,6 +415,73 @@ export function createPublicQuoteAdapter(options: {
   return {
     presentation,
     lookupVehicle,
+    async quoteStatus({
+      db,
+      tenant,
+      domainId,
+      objectName,
+      snapshot,
+      submission,
+    }) {
+      const frozen = policy(snapshot);
+      if (
+        frozen.tenant !== tenant ||
+        frozen.domainId !== domainId ||
+        frozen.objectName !== objectName
+      )
+        throw new HTTPException(404, {
+          message: "El cotizador no está disponible.",
+        });
+      // Run receipts are the progress source: each redemption writes its own
+      // row under a distinct run id, so polling never touches provider flows.
+      // The run id prefix scopes rows to this published policy, since visitor
+      // submission ids alone are not form-scoped.
+      const prefix = `public:${frozen.publicationId}:${submission}:`;
+      const runs = await db
+        .prepare(
+          "SELECT run_id,status,output FROM extension_action_runs WHERE tenant_id=? AND principal_id=?",
+        )
+        .bind(tenant, `public-form:${submission}`)
+        .all<{ run_id: string; status: string; output: string | null }>();
+      const byFlow = new Map<string, { status: string; result?: unknown }>();
+      for (const row of runs.results ?? []) {
+        if (!row.run_id.startsWith(prefix)) continue;
+        const flowId = row.run_id.slice(prefix.length);
+        if (!flowId || flowId.includes(":")) continue;
+        let result: unknown;
+        if (row.status === "succeeded") {
+          try {
+            result = row.output ? JSON.parse(row.output) : undefined;
+          } catch {
+            result = undefined;
+          }
+        }
+        byFlow.set(flowId, {
+          status: row.status,
+          ...(result !== undefined ? { result } : {}),
+        });
+      }
+      return {
+        items: frozen.products.map(({ flowId }) => {
+          const label = catalog.get(flowId)!.label;
+          const insurer = label.split(" · ")[0] ?? "Seguros";
+          const run = byFlow.get(flowId);
+          if (!run)
+            return { flowId, label, insurer, status: "waiting" as const };
+          if (run.status === "succeeded")
+            return {
+              flowId,
+              label,
+              insurer,
+              status: "done" as const,
+              ...(run.result !== undefined ? { result: run.result } : {}),
+            };
+          if (run.status === "failed" || run.status === "expired")
+            return { flowId, label, insurer, status: "unavailable" as const };
+          return { flowId, label, insurer, status: "quoting" as const };
+        }),
+      };
+    },
     async publish({ db, tenant, domainId, object }) {
       if (!options.executor)
         throw new HTTPException(503, {

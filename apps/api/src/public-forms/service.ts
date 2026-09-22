@@ -71,6 +71,22 @@ export interface PublicQuoteAdapter {
     snapshot: unknown;
     plate: string;
   }): Promise<PublicVehicleLookup>;
+  quoteStatus?(input: {
+    db: D1Database;
+    tenant: string;
+    domainId: string;
+    objectName: string;
+    snapshot: unknown;
+    submission: string;
+  }): Promise<{
+    items: {
+      flowId: string;
+      label: string;
+      insurer: string;
+      status: "waiting" | "quoting" | "done" | "unavailable";
+      result?: unknown;
+    }[];
+  }>;
 }
 export type PublicFormOptions = CaptchaOptions & {
   quote?: PublicQuoteAdapter;

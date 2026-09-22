@@ -334,6 +334,34 @@
   color: var(--primary);
   font-weight: 700;
 }
+.public-quote-pending {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.public-quote-pending > li {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+.public-quote-pending > li[data-status="unavailable"] {
+  opacity: 0.75;
+}
+.public-quote-pending .public-quote-spinner {
+  flex: 0 0 auto;
+}
+.public-quote-pending-insurer {
+  font-weight: 600;
+  color: var(--foreground);
+}
 @media (max-width: 480px) {
   .public-quote-card {
     padding: 1rem;

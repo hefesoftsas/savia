@@ -906,6 +906,120 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
       .run();
   }
 });
+it("reports per-product progress scoped to the submission policy", async () => {
+  const flowIds = ["sbs-producto-8", "sbs-producto-10", "sbs-producto-11"];
+  const stored = await env.DB.prepare(
+    "SELECT value FROM extension_settings WHERE tenant_id=? AND extension_id='insurance.quotes'",
+  )
+    .bind(tenant)
+    .first<{ value: string }>();
+  const original = stored!.value;
+  try {
+    const next = JSON.parse(original);
+    next.products = flowIds.map((id, index) => ({
+      id,
+      label: `Admin ${id}`,
+      enabled: true,
+      rank: index + 1,
+    }));
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(JSON.stringify(next), tenant)
+      .run();
+    const resolvers = new Map<
+      string,
+      (value: { status: "succeeded" | "failed"; output: unknown }) => void
+    >();
+    const execute = vi.fn(
+      (
+        _context: unknown,
+        input: Record<string, unknown>,
+      ): Promise<{ status: "succeeded" | "failed"; output: unknown }> =>
+        new Promise((resolve) => {
+          resolvers.set(input["flowId"] as string, resolve);
+        }),
+    );
+    const adapter = createPublicQuoteAdapter({ executor: { execute } });
+    const { snapshot } = await adapter.publish({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      object,
+    });
+    const statusInput = {
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      snapshot,
+      submission: "progress-submission",
+    };
+    const pending = adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "progress-submission",
+      snapshot,
+      values,
+      returnResult: true,
+    });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(3), {
+      timeout: 15000,
+    });
+    const started = await adapter.quoteStatus!(statusInput);
+    expect(started.items.map((item) => item.status)).toEqual([
+      "quoting",
+      "quoting",
+      "quoting",
+    ]);
+    resolvers.get("sbs-producto-8")!({
+      status: "succeeded",
+      output: { type: "quote", data: { premiumTotal: 2000 } },
+    });
+    resolvers.get("sbs-producto-10")!({ status: "failed", output: {} });
+    let status = started;
+    await vi.waitFor(
+      async () => {
+        status = await adapter.quoteStatus!(statusInput);
+        expect(status.items[1].status).toBe("unavailable");
+      },
+      { timeout: 15000 },
+    );
+    expect(status.items[0]).toMatchObject({
+      flowId: "sbs-producto-8",
+      status: "done",
+    });
+    expect(status.items[0].result).toMatchObject({ premiumTotal: 2000 });
+    expect(status.items[2].status).toBe("quoting");
+    // Another submission sees no runs: rows are scoped by run id prefix.
+    const other = await adapter.quoteStatus!({
+      ...statusInput,
+      submission: "other-submission",
+    });
+    expect(other.items.every((item) => item.status === "waiting")).toBe(true);
+    await expect(
+      adapter.quoteStatus!({ ...statusInput, tenant: "other" }),
+    ).rejects.toThrow();
+    resolvers.get("sbs-producto-11")!({
+      status: "succeeded",
+      output: { type: "quote", data: { premiumTotal: 3000 } },
+    });
+    const result = (await pending) as {
+      quotes: unknown[];
+      unavailable: number;
+    };
+    expect(result.quotes).toHaveLength(2);
+    expect(result.unavailable).toBe(1);
+  } finally {
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(original, tenant)
+      .run();
+  }
+});
 it("simulates providers locally without touching the executor", async () => {
   await enableVehicleLookup(true);
   const execute = vi.fn(async () => {

@@ -71,7 +71,10 @@ wizard (insurer cards ranked cheapest-first, insurer filter, coverage bullets),
 without quote numbers, history, or retry actions. Visitors can print the
 results to PDF from the browser; the print stylesheet keeps only the reference
 and the quotes. While providers respond, the wizard shows a live waiting state
-with elapsed time instead of a bare spinner. Raw provider responses, credentials and customer identifiers are never
+with elapsed time instead of a bare spinner, and paints each finished
+insurer as a card as responses arrive: the browser polls the anonymous
+per-submission status endpoint every 3 seconds (well under the burst rate
+limit), which only exposes the same safe projection. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost
 scales with the number of enabled products. Provider calls run with bounded
 concurrency (10 at a time) so the visitor wait stays flat as products grow. Daily budgets count submissions, not
