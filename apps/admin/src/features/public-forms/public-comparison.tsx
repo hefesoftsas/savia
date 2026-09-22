@@ -4,8 +4,7 @@ import { PluginLocaleProvider } from "@savia/crm-shared/plugin-locale-react";
 import {
   QuoteResults,
   type QuoteBatchItem,
-} from "@savia/insurance-quotes/quote-results";
-import "@savia/insurance-quotes/quote-screens.css";
+} from "@savia/release-catalog/public-ui";
 import { quoteProjection } from "./public-form-submission";
 
 export type PublicComparisonItem = {

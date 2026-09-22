@@ -110,9 +110,6 @@ importers:
       '@savia/crm-shared':
         specifier: workspace:*
         version: link:../../packages/crm-shared
-      '@savia/insurance-quotes':
-        specifier: workspace:*
-        version: link:../../packages/insurance-quotes
       '@savia/provider-contracts':
         specifier: workspace:*
         version: link:../../packages/provider-contracts
