@@ -725,6 +725,187 @@ it("falls back to frozen plan highlights when providers report no coverage break
       .run();
   }
 });
+it("mirrors anonymous quotes into agency CRM records", async () => {
+  const cotizacionesConfig = {
+    version: 2,
+    fields: {
+      name: { type: "Textbox", label: "Nombre", required: true },
+      ramo: { type: "Textbox", label: "Ramo" },
+      placa: { type: "Textbox", label: "Placa" },
+      valor_asegurado: { type: "Number", label: "Valor asegurado" },
+      prima: { type: "Number", label: "Prima" },
+      estado: {
+        type: "Dropdown",
+        label: "Estado",
+        options: [
+          { label: "Solicitada", value: "Solicitada" },
+          { label: "Recibida", value: "Recibida" },
+          { label: "Rechazada", value: "Rechazada" },
+        ],
+      },
+    },
+    fieldOrder: ["name", "ramo", "placa", "valor_asegurado", "prima", "estado"],
+  };
+  const detalleConfig = {
+    version: 2,
+    fields: {
+      name: { type: "Textbox", label: "Referencia", required: true },
+      cotizacion: {
+        type: "Dropdown",
+        label: "Cotización",
+        options: [],
+        config: { relation: "cotizaciones" },
+      },
+      aseguradora: { type: "Textbox", label: "Aseguradora" },
+      producto: { type: "Textbox", label: "Producto" },
+      flow_id: { type: "Textbox", label: "Flow ID" },
+      estado: {
+        type: "Dropdown",
+        label: "Estado",
+        options: [
+          { label: "Solicitada", value: "Solicitada" },
+          { label: "Recibida", value: "Recibida" },
+          { label: "Error", value: "Error" },
+        ],
+      },
+      prima: { type: "Number", label: "Prima" },
+      error_mensaje: { type: "Textarea", label: "Mensaje de error" },
+      run_id: { type: "Textbox", label: "ID de ejecución" },
+    },
+    fieldOrder: [
+      "name",
+      "cotizacion",
+      "aseguradora",
+      "producto",
+      "flow_id",
+      "estado",
+      "prima",
+      "error_mensaje",
+      "run_id",
+    ],
+  };
+  await env.DB.prepare(
+    "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(
+      tenant,
+      "cotizaciones",
+      "Cotizaciones",
+      "",
+      JSON.stringify(cotizacionesConfig),
+      1,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(
+      tenant,
+      "cotizaciones_detalle",
+      "Detalles",
+      "",
+      JSON.stringify(detalleConfig),
+      1,
+    )
+    .run();
+  const stored = await env.DB.prepare(
+    "SELECT value FROM extension_settings WHERE tenant_id=? AND extension_id='insurance.quotes'",
+  )
+    .bind(tenant)
+    .first<{ value: string }>();
+  const original = stored!.value;
+  try {
+    const next = JSON.parse(original);
+    next.products = [
+      { id: "sbs-producto-8", label: "Admin", enabled: true, rank: 1 },
+      { id: "sbs-producto-10", label: "Admin", enabled: true, rank: 2 },
+    ];
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(JSON.stringify(next), tenant)
+      .run();
+    const execute = vi.fn(
+      async (_context: unknown, input: Record<string, unknown>) => {
+        if (input["flowId"] === "sbs-producto-10")
+          throw new Error("provider down");
+        return {
+          status: "succeeded" as const,
+          output: { type: "quote", data: { premiumTotal: 1500 } },
+        };
+      },
+    );
+    const adapter = createPublicQuoteAdapter({ executor: { execute } });
+    const { snapshot } = await adapter.publish({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      object,
+    });
+    const result = (await adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "mirror-submission",
+      snapshot,
+      values,
+      returnResult: true,
+    })) as { quotes: unknown[]; unavailable: number };
+    expect(result.quotes).toHaveLength(1);
+    expect(result.unavailable).toBe(1);
+    const masterRow = await env.DB.prepare(
+      "SELECT id, data, created_by FROM crm_records WHERE tenant_id=? AND object_name='cotizaciones'",
+    )
+      .bind(tenant)
+      .first<{ id: string; data: string; created_by: string }>();
+    const master = JSON.parse(masterRow!.data);
+    // The public reference is the master name so the agency can match it.
+    expect(master).toMatchObject({
+      name: "mirror-submission",
+      ramo: "Automóviles",
+      placa: "ABC123",
+      valor_asegurado: 50000000,
+      estado: "Recibida",
+      prima: 1500,
+    });
+    expect(masterRow!.created_by).toBe("public-form:mirror-submission");
+    const detailRows = await env.DB.prepare(
+      "SELECT data FROM crm_records WHERE tenant_id=? AND object_name='cotizaciones_detalle' ORDER BY data",
+    )
+      .bind(tenant)
+      .all<{ data: string }>();
+    expect(detailRows.results).toHaveLength(2);
+    const details = detailRows.results.map((row) => JSON.parse(row.data));
+    const received = details.find((detail) => detail.estado === "Recibida");
+    const failed = details.find((detail) => detail.estado === "Error");
+    expect(received).toMatchObject({
+      cotizacion: masterRow!.id,
+      prima: 1500,
+    });
+    expect(typeof received.run_id).toBe("string");
+    expect(failed).toMatchObject({
+      cotizacion: masterRow!.id,
+    });
+    expect(JSON.stringify(details)).not.toMatch(/provider down/);
+  } finally {
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(original, tenant)
+      .run();
+    await env.DB.prepare(
+      "DELETE FROM crm_records WHERE tenant_id=? AND object_name IN ('cotizaciones','cotizaciones_detalle')",
+    )
+      .bind(tenant)
+      .run();
+    await env.DB.prepare(
+      "DELETE FROM crm_objects WHERE tenant_id=? AND name IN ('cotizaciones','cotizaciones_detalle')",
+    )
+      .bind(tenant)
+      .run();
+  }
+});
 it("simulates providers locally without touching the executor", async () => {
   await enableVehicleLookup(true);
   const execute = vi.fn(async () => {

@@ -145,6 +145,12 @@ Submission reservations and acknowledgements are retained to preserve deduplicat
 They contain hashes instead of raw IP addresses/captcha tokens, and no native form
 values. Native values live in the protected CRM record. Quote execution inputs remain
 in protected extension-run storage; results there use the same safe projection.
+Every quote submission also mirrors one `cotizaciones` master plus one
+`cotizaciones_detalle` per enabled product into the agency CRM (same fields as
+the embedded wizard, never provider quote references), named by the public
+reference so the agency can match it. The mirror is best-effort and idempotent
+per submission: the visitor result never depends on it, and uncertain retries
+replay the same rows.
 Monitor D1 storage and provider usage as traffic grows. Do not delete reservations
 for an active link without considering the loss of deduplication guarantees.
 
