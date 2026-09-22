@@ -8,7 +8,7 @@ import {
 import { DatabaseSourceFields } from "./database-source-fields";
 import CrmWorkspacePanel from "./crm-workspace-panel";
 import CollectionOperationsPanel from "./collection-operations-panel";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   AlertCircle,
   ArrowUp,
@@ -39,12 +40,32 @@ import {
   Globe,
   Layers,
   Link2,
+  LoaderCircle,
+  Plug,
   Plus,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Trash2,
   Unlink,
 } from "lucide-react";
+import { FieldHelp } from "./field-help";
+
+const IntegrationsPanel = lazy(() => import("./integrations"));
+
+const sectionKeys = [
+  "vincular",
+  "vinculadas",
+  "sources",
+  "integrations",
+] as const;
+type SectionKey = (typeof sectionKeys)[number];
+function isSectionKey(value: unknown): value is SectionKey {
+  return (
+    typeof value === "string" &&
+    (sectionKeys as readonly string[]).includes(value)
+  );
+}
 import { getCrmRuntime } from "./runtime";
 import { fieldEntries, type CrmObject } from "@savia/crm-shared/metadata";
 import type { CollectionCapabilities } from "./collection-capabilities";
@@ -164,8 +185,12 @@ function useScopedRequest() {
 
 export default function CollectionSourcesPanel({
   onBound,
+  onImported,
+  initialSection,
 }: {
   onBound: (object: Pick<CrmObject, "name" | "label">) => void | Promise<void>;
+  onImported?: (name: string) => void;
+  initialSection?: string;
 }) {
   const t = useMessages(studioMessages);
   const errorText = (error: unknown) =>
@@ -192,9 +217,13 @@ export default function CollectionSourcesPanel({
   const [operationBinding, setOperationBinding] = useState<Binding | null>(
     null,
   );
-  const [activeSection, setActiveSection] = useState<"collections" | "sources">(
-    "collections",
+  const [activeSection, setActiveSection] = useState<SectionKey>(
+    isSectionKey(initialSection) ? initialSection : "vincular",
   );
+  useEffect(() => {
+    if (isSectionKey(initialSection)) setActiveSection(initialSection);
+  }, [initialSection]);
+  const [bindStep, setBindStep] = useState("origen");
   const [sourceOpen, setSourceOpen] = useState(false);
   const [editingSource, setEditingSource] = useState(false);
   const [removeToken, setRemoveToken] = useState(false);
@@ -550,25 +579,30 @@ export default function CollectionSourcesPanel({
   const showPostgresFields = isDatabaseKind(editingKind);
 
   return (
-    <section className="mx-auto grid w-full max-w-5xl gap-6 pb-12">
-      <header className="flex flex-col gap-1 pb-2 border-b border-border/60">
-        <div className="flex items-center gap-2">
+    <section className="mx-auto grid w-full max-w-6xl gap-6 px-4 pb-12 sm:px-6">
+      <header className="flex flex-wrap items-start gap-4 py-6">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+          <Layers className="size-5 text-primary" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
           <Badge variant="outline" className="text-xs font-normal">
             {t("Dominio ·")} {scope ?? t("Plataforma")}
           </Badge>
+          <div className="mt-2 flex items-center gap-1.5">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              {t("Fuentes y colecciones")}
+            </h1>
+            <FieldHelp label={`${t("Fuentes y colecciones")} (${t("Ayuda")})`}>
+              {t(
+                "Conecta una fuente, elige sus datos y crea una pantalla para trabajar con ellos.",
+              )}
+            </FieldHelp>
+          </div>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {t("Fuentes y colecciones")}
-        </h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          {t(
-            "Conecta una fuente, elige sus datos y crea una pantalla para trabajar con ellos.",
-          )}
-        </p>
       </header>
 
       {error && (
-        <Alert variant="destructive" className="py-2.5">
+        <Alert variant="destructive" className="rounded-2xl py-3">
           <AlertCircle className="size-4" />
           <AlertDescription className="text-xs">{error}</AlertDescription>
         </Alert>
@@ -576,7 +610,7 @@ export default function CollectionSourcesPanel({
 
       {notice && (
         <Alert
-          className="border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 py-2.5"
+          className="rounded-2xl border-emerald-500/20 bg-emerald-500/10 py-3 text-emerald-800 dark:text-emerald-300"
           role="status"
         >
           <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
@@ -589,7 +623,7 @@ export default function CollectionSourcesPanel({
       {[sources.error, catalog.error, bindings.error]
         .filter(Boolean)
         .map((cause, index) => (
-          <Alert key={index} variant="destructive" className="py-2.5">
+          <Alert key={index} variant="destructive" className="rounded-2xl py-3">
             <AlertCircle className="size-4" />
             <AlertDescription className="text-xs">
               {errorText(cause)}
@@ -605,43 +639,63 @@ export default function CollectionSourcesPanel({
 
       <Tabs
         value={activeSection}
-        onValueChange={(value) =>
-          setActiveSection(value as "collections" | "sources")
-        }
+        onValueChange={(value) => {
+          if (isSectionKey(value)) setActiveSection(value);
+        }}
         className="gap-5"
       >
-        <TabsList
-          variant="line"
-          aria-label={t("Secciones de fuentes y colecciones")}
-          className="border-b border-border/80 w-full justify-start rounded-none px-0 pb-px"
-        >
+        <TabsList aria-label={t("Secciones de fuentes y colecciones")}>
           <TabsTrigger
-            value="collections"
-            onClick={() => setActiveSection("collections")}
+            value="vincular"
+            onClick={() => setActiveSection("vincular")}
           >
-            {t("Colecciones")}
+            <Link2 className="size-3.5" aria-hidden="true" />
+            {t("Vincular")}
+          </TabsTrigger>
+          <TabsTrigger
+            value="vinculadas"
+            onClick={() => setActiveSection("vinculadas")}
+          >
+            <Layers className="size-3.5" aria-hidden="true" />
+            {t("Vinculadas")}
           </TabsTrigger>
           <TabsTrigger
             value="sources"
             onClick={() => setActiveSection("sources")}
           >
+            <Database className="size-3.5" aria-hidden="true" />
             {t("Fuentes externas")}
+          </TabsTrigger>
+          <TabsTrigger
+            value="integrations"
+            onClick={() => setActiveSection("integrations")}
+          >
+            <Plug className="size-3.5" aria-hidden="true" />
+            {t("Integraciones")}
           </TabsTrigger>
         </TabsList>
 
         {/* --- SOURCES TAB --- */}
         <TabsContent value="sources" className="mt-0 grid gap-6">
-          <Card className="shadow-xs overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between gap-4 pb-4">
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold text-foreground">
-                  {t("Fuentes configuradas")}
-                </h2>
-                <CardDescription className="text-xs leading-relaxed">
-                  {t(
-                    "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
-                  )}
-                </CardDescription>
+          <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-border/60 bg-muted/30 pb-4">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                  <Database
+                    className="size-4 text-primary"
+                    aria-hidden="true"
+                  />
+                </span>
+                <div className="space-y-1">
+                  <h2 className="text-base font-semibold text-foreground">
+                    {t("Fuentes configuradas")}
+                  </h2>
+                  <CardDescription className="text-xs leading-relaxed">
+                    {t(
+                      "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
+                    )}
+                  </CardDescription>
+                </div>
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -681,7 +735,7 @@ export default function CollectionSourcesPanel({
             </CardHeader>
 
             {sourceOpen && (
-              <div className="border-t border-b bg-muted/20 p-5">
+              <div className="border-y border-border/60 bg-muted/40 p-5 sm:p-6">
                 <form onSubmit={saveSource} className="grid gap-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-foreground">
@@ -774,9 +828,18 @@ export default function CollectionSourcesPanel({
                       </div>
 
                       <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="source-token-input">
-                          {t("Token de acceso (opcional)")}
-                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="source-token-input">
+                            {t("Token de acceso (opcional)")}
+                          </Label>
+                          <FieldHelp
+                            label={`${t("Token de acceso (opcional)")} (${t("Ayuda")})`}
+                          >
+                            {t(
+                              "El token se guarda cifrado en el servidor y no se devuelve en el catálogo.",
+                            )}
+                          </FieldHelp>
+                        </div>
                         <Input
                           id="source-token-input"
                           ref={tokenInput}
@@ -784,11 +847,6 @@ export default function CollectionSourcesPanel({
                           autoComplete="off"
                           placeholder="••••••••••••"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          {t(
-                            "El token se guarda cifrado en el servidor y no se devuelve en el catálogo.",
-                          )}
-                        </p>
                       </div>
 
                       {editingSource && (
@@ -893,6 +951,12 @@ export default function CollectionSourcesPanel({
                       {t("Cancelar")}
                     </Button>
                     <Button type="submit" size="sm" disabled={busy}>
+                      {busy ? (
+                        <LoaderCircle
+                          className="animate-spin"
+                          aria-hidden="true"
+                        />
+                      ) : null}
                       {busy ? t("Guardando…") : t("Guardar fuente")}
                     </Button>
                   </div>
@@ -900,7 +964,7 @@ export default function CollectionSourcesPanel({
               </div>
             )}
 
-            <CardContent className="p-5">
+            <CardContent className="p-5 sm:p-6">
               {sources.isPending ? (
                 <div
                   className="space-y-3"
@@ -909,13 +973,11 @@ export default function CollectionSourcesPanel({
                   aria-label={t("Cargando fuentes…")}
                 >
                   <p className="sr-only">{t("Cargando fuentes…")}</p>
-                  <div className="divide-y rounded-lg border bg-card">
+                  <div className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
                     {Array.from({ length: 2 }, (_, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-3.5"
-                      >
-                        <div className="space-y-1.5">
+                      <div key={i} className="flex items-center gap-3 p-4">
+                        <Skeleton className="size-9 shrink-0 rounded-xl" />
+                        <div className="flex-1 space-y-1.5">
                           <Skeleton className="h-4 w-32" />
                           <Skeleton className="h-3 w-56" />
                         </div>
@@ -925,51 +987,60 @@ export default function CollectionSourcesPanel({
                   </div>
                 </div>
               ) : sources.data?.length ? (
-                <ul className="divide-y rounded-lg border bg-card">
+                <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
                   {sources.data.map((source) => (
                     <li
                       key={source.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/30"
+                      className="flex flex-col gap-3 p-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-sm font-medium text-foreground">
-                            {source.label}
-                          </strong>
-                          <Badge
-                            variant="outline"
-                            className="text-xs font-normal"
-                          >
-                            {source.kind !== "jsonapi"
-                              ? databaseKinds[source.kind].label
-                              : "JSON:API"}
-                          </Badge>
-                          <Badge
-                            variant={
-                              source.kind !== "jsonapi"
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                          {source.kind !== "jsonapi" ? (
+                            <Database className="size-4" aria-hidden="true" />
+                          ) : (
+                            <Globe className="size-4" aria-hidden="true" />
+                          )}
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-sm font-medium text-foreground">
+                              {source.label}
+                            </strong>
+                            <Badge
+                              variant="outline"
+                              className="text-xs font-normal"
+                            >
+                              {source.kind !== "jsonapi"
+                                ? databaseKinds[source.kind].label
+                                : "JSON:API"}
+                            </Badge>
+                            <Badge
+                              variant={
+                                source.kind !== "jsonapi"
+                                  ? source.hasPassword
+                                    ? "secondary"
+                                    : "outline"
+                                  : source.hasToken
+                                    ? "secondary"
+                                    : "outline"
+                              }
+                              className="text-xs font-normal"
+                            >
+                              {source.kind !== "jsonapi"
                                 ? source.hasPassword
-                                  ? "secondary"
-                                  : "outline"
+                                  ? t("Con contraseña")
+                                  : t("Sin contraseña")
                                 : source.hasToken
-                                  ? "secondary"
-                                  : "outline"
-                            }
-                            className="text-xs font-normal"
-                          >
+                                  ? t("Con autenticación")
+                                  : t("Sin token")}
+                            </Badge>
+                          </div>
+                          <p className="break-all font-mono text-xs text-muted-foreground">
                             {source.kind !== "jsonapi"
-                              ? source.hasPassword
-                                ? t("Con contraseña")
-                                : t("Sin contraseña")
-                              : source.hasToken
-                                ? t("Con autenticación")
-                                : t("Sin token")}
-                          </Badge>
+                              ? `${source.host}:${source.port}/${source.database}${source.schema ? ` · ${source.schema}` : ""}`
+                              : source.baseUrl}
+                          </p>
                         </div>
-                        <p className="break-all text-xs text-muted-foreground font-mono">
-                          {source.kind !== "jsonapi"
-                            ? `${source.host}:${source.port}/${source.database}${source.schema ? ` · ${source.schema}` : ""}`
-                            : source.baseUrl}
-                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {source.kind !== "jsonapi" && (
@@ -995,6 +1066,17 @@ export default function CollectionSourcesPanel({
                               }
                             }}
                           >
+                            {busy ? (
+                              <LoaderCircle
+                                className="animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <RefreshCw
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                            )}
                             {t("Probar conexión")}
                           </Button>
                         )}
@@ -1057,6 +1139,9 @@ export default function CollectionSourcesPanel({
                                 : setConfirmRemoval(`source:${source.id}`)
                             }
                           >
+                            {confirmRemoval === `source:${source.id}` ? (
+                              <Trash2 className="size-3.5" aria-hidden="true" />
+                            ) : null}
                             {confirmRemoval === `source:${source.id}`
                               ? t("Confirmar eliminación de fuente")
                               : t("Eliminar fuente")}
@@ -1067,12 +1152,17 @@ export default function CollectionSourcesPanel({
                   ))}
                 </ul>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 p-8 text-center">
-                  <Database className="size-8 text-muted-foreground/60 mb-2" />
-                  <p className="text-sm font-medium text-foreground">
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center">
+                  <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                    <Database
+                      className="size-7 text-primary"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-foreground">
                     {t("Sin fuentes externas")}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                  <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
                     {t(
                       "Las colecciones existentes están disponibles sin configurar una fuente externa.",
                     )}
@@ -1084,373 +1174,466 @@ export default function CollectionSourcesPanel({
         </TabsContent>
 
         {/* --- COLLECTIONS TAB --- */}
-        <TabsContent value="collections" className="mt-0 grid gap-6">
-          <Card className="shadow-xs overflow-hidden">
-            <CardHeader className="pb-4 border-b">
-              <CardTitle className="text-base font-semibold">
-                {t("Vincular colección a una pantalla")}
-              </CardTitle>
-              <CardDescription className="text-xs leading-relaxed">
-                {t(
-                  "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
-                )}
-              </CardDescription>
+        {/* --- VINCULAR TAB --- */}
+        <TabsContent value="vincular" className="mt-0 grid gap-6">
+          <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/30 pb-4">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                  <Link2 className="size-4 text-primary" aria-hidden="true" />
+                </span>
+                <div className="space-y-1">
+                  <CardTitle className="text-base font-semibold">
+                    {t("Vincular colección a una pantalla")}
+                  </CardTitle>
+                  <CardDescription className="text-xs leading-relaxed">
+                    {t(
+                      "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
+                    )}
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
 
             <form onSubmit={bind}>
-              <CardContent className="space-y-4 pt-5">
-                <div className="grid gap-1.5 text-sm">
-                  <Label htmlFor="binding-mode-select">{t("Origen")}</Label>
-                  <select
-                    id="binding-mode-select"
-                    aria-label={t("Origen")}
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-                    value={mode}
-                    onChange={(e) =>
-                      setMode(
-                        e.target.value as "domain" | "jsonapi" | DatabaseKind,
-                      )
-                    }
-                  >
-                    <option value="domain">
-                      {t("Colección existente del dominio")}
-                    </option>
-                    <option value="jsonapi">
-                      {t("Recurso JSON:API externo")}
-                    </option>
-                    {Object.entries(databaseKinds).map(([kind, info]) => (
-                      <option key={kind} value={kind}>
-                        {t("Base")} {info.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {mode === "domain" ? (
-                  <div className="grid gap-1.5 text-sm">
-                    <Label htmlFor="collection-catalog-select">
-                      {t("Colección")}
-                    </Label>
-                    <select
-                      id="collection-catalog-select"
-                      required
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-                      aria-label={t("Colección")}
-                      value={selected}
-                      onChange={(e) => {
-                        setSelected(e.target.value);
-                        const entry = catalog.data?.find(
-                          (item) =>
-                            `${item.domain}/${item.collection}` ===
-                            e.target.value,
-                        );
-                        if (entry) {
-                          setLabel(entry.title);
-                          suggestName(entry.title);
-                        }
-                      }}
-                    >
-                      <option value="">{t("Selecciona una colección")}</option>
-                      {catalog.data?.map((entry) => (
-                        <option
-                          key={`${entry.domain}/${entry.collection}`}
-                          value={`${entry.domain}/${entry.collection}`}
-                        >
-                          {entry.title} · {entry.domain}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-xs text-muted-foreground">
-                      {t(
-                        "La pantalla respetará las operaciones disponibles en esta colección.",
-                      )}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
-                    <div className="grid gap-1.5 text-sm">
-                      <Label htmlFor="jsonapi-source-select">
-                        {t("Fuente")}
-                      </Label>
-                      <select
-                        id="jsonapi-source-select"
-                        required
-                        aria-label={t("Fuente")}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-                        value={remoteSource}
-                        onChange={(e) => setRemoteSource(e.target.value)}
+              <CardContent className="pt-5">
+                <div
+                  role="group"
+                  aria-label={t("Vincular colección a una pantalla")}
+                  className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/60 p-1"
+                >
+                  {(
+                    [
+                      ["origen", t("Origen")],
+                      ["datos", t("Datos")],
+                      ["pantalla", t("Pantalla")],
+                    ] as const
+                  ).map(([value, title]) => {
+                    const active = bindStep === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setBindStep(value)}
+                        className={cn(
+                          "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                          active
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
                       >
-                        <option value="">{t("Selecciona una fuente")}</option>
-                        {sources.data
-                          ?.filter((source) =>
-                            isDatabaseKind(mode)
-                              ? source.kind === mode
-                              : source.kind === "jsonapi",
+                        {title}
+                      </button>
+                    );
+                  })}
+                </div>
+                {bindStep === "origen" && (
+                  <div className="space-y-4 pt-4">
+                    <div className="grid gap-1.5 text-sm">
+                      <Label htmlFor="binding-mode-select">{t("Origen")}</Label>
+                      <select
+                        id="binding-mode-select"
+                        aria-label={t("Origen")}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+                        value={mode}
+                        onChange={(e) =>
+                          setMode(
+                            e.target.value as
+                              "domain" | "jsonapi" | DatabaseKind,
                           )
-                          .map((source) => (
-                            <option key={source.id} value={source.id}>
-                              {source.label}
-                            </option>
-                          ))}
+                        }
+                      >
+                        <option value="domain">
+                          {t("Colección existente del dominio")}
+                        </option>
+                        <option value="jsonapi">
+                          {t("Recurso JSON:API externo")}
+                        </option>
+                        {Object.entries(databaseKinds).map(([kind, info]) => (
+                          <option key={kind} value={kind}>
+                            {t("Base")} {info.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                    {mode === "domain" ? (
                       <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="remote-resource-input">
-                          {isDatabaseKind(mode)
-                            ? t("Tabla (vacío para listar)")
-                            : t("Recurso remoto")}
+                        <Label htmlFor="collection-catalog-select">
+                          {t("Colección")}
                         </Label>
-                        <Input
-                          id="remote-resource-input"
-                          aria-label={
-                            isDatabaseKind(mode)
-                              ? t("Tabla (vacío para listar)")
-                              : t("Recurso remoto")
-                          }
-                          required={!isDatabaseKind(mode)}
-                          value={resource}
+                        <select
+                          id="collection-catalog-select"
+                          required
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+                          aria-label={t("Colección")}
+                          value={selected}
                           onChange={(e) => {
-                            setResource(e.target.value);
-                            suggestName(e.target.value);
+                            setSelected(e.target.value);
+                            const entry = catalog.data?.find(
+                              (item) =>
+                                `${item.domain}/${item.collection}` ===
+                                e.target.value,
+                            );
+                            if (entry) {
+                              setLabel(entry.title);
+                              suggestName(entry.title);
+                            }
                           }}
-                          placeholder={
-                            isDatabaseKind(mode) ? "orders" : "contacts"
-                          }
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={
-                          busy ||
-                          !remoteSource ||
-                          (!isDatabaseKind(mode) && !resource.trim())
-                        }
-                        onClick={() => void inspectSource()}
-                      >
-                        <Search className="size-3.5 mr-1.5" />
-                        {busy
-                          ? t("Analizando…")
-                          : isDatabaseKind(mode)
-                            ? t("Analizar tabla")
-                            : t("Analizar recurso")}
-                      </Button>
-                    </div>
-
-                    {mode === "jsonapi" && (
-                      <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="resource-type-input">
-                          {t("Tipo de recurso JSON:API (opcional)")}
-                        </Label>
-                        <Input
-                          id="resource-type-input"
-                          aria-label={t("Tipo de recurso JSON:API (opcional)")}
-                          value={resourceType}
-                          onChange={(event) =>
-                            setResourceType(event.target.value)
-                          }
-                          placeholder="contacts"
-                        />
-                      </div>
-                    )}
-
-                    <div className="grid gap-1.5 text-sm">
-                      <Label htmlFor="fields-textarea">
-                        {t("Campos de la colección (JSON)")}
-                      </Label>
-                      <Textarea
-                        id="fields-textarea"
-                        aria-label={t("Campos de la colección (JSON)")}
-                        required
-                        rows={6}
-                        className="font-mono text-xs bg-background"
-                        value={fields}
-                        onChange={(e) => setFields(e.target.value)}
-                      />
-                    </div>
-
-                    {isDatabaseKind(mode) && (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="grid gap-1.5">
-                          <Label htmlFor="database-id-column">
-                            {t("Identificador único (opcional)")}
-                          </Label>
-                          <Input
-                            id="database-id-column"
-                            value={databaseIdColumn}
-                            onChange={(e) =>
-                              setDatabaseIdColumn(e.target.value)
-                            }
-                            placeholder={
-                              mode === "mongodb" ? "_id" : t("Clave primaria")
-                            }
-                          />
-                        </div>
-                        {mode === "mongodb" && (
-                          <div className="grid gap-1.5">
-                            <Label htmlFor="mongodb-id-type">
-                              {t("Tipo de identificador")}
-                            </Label>
-                            <select
-                              id="mongodb-id-type"
-                              className="h-9 rounded-md border bg-background px-3"
-                              value={mongoIdType}
-                              onChange={(e) =>
-                                setMongoIdType(
-                                  e.target.value as "string" | "objectId",
-                                )
-                              }
+                        >
+                          <option value="">
+                            {t("Selecciona una colección")}
+                          </option>
+                          {catalog.data?.map((entry) => (
+                            <option
+                              key={`${entry.domain}/${entry.collection}`}
+                              value={`${entry.domain}/${entry.collection}`}
                             >
-                              <option value="objectId">ObjectId</option>
-                              <option value="string">{t("Texto")}</option>
-                            </select>
-                          </div>
-                        )}
+                              {entry.title} · {entry.domain}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    )}
-                    {isDatabaseKind(mode) ? (
-                      <p className="text-xs text-muted-foreground">
+                    ) : null}
+                  </div>
+                )}
+                {bindStep === "datos" && (
+                  <div className="space-y-4 pt-4">
+                    {mode === "domain" ? (
+                      <p className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
                         {t(
-                          "Las operaciones dependen del identificador único y de los permisos de escritura de la fuente. Las vistas son de solo lectura.",
+                          "La pantalla respetará las operaciones disponibles en esta colección.",
                         )}
                       </p>
                     ) : (
-                      <div className="grid gap-1.5 text-sm">
-                        <Label htmlFor="relationships-textarea">
-                          {t("Relaciones JSON:API (JSON)")}
-                        </Label>
-                        <Textarea
-                          id="relationships-textarea"
-                          aria-label={t("Relaciones JSON:API (JSON)")}
-                          rows={3}
-                          className="font-mono text-xs bg-background"
-                          value={relationships}
-                          onChange={(event) =>
-                            setRelationships(event.target.value)
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {t(
-                            "Relaciona un campo de identificadores con su tipo remoto; por ejemplo:",
-                          )}{" "}
-                          <code>{`{"company_id":{"type":"companies"}}`}</code>
-                          {t(
-                            ". Usa multiple: true para varios identificadores.",
-                          )}
-                        </p>
-                      </div>
-                    )}
+                      <div className="space-y-4 rounded-xl border border-border/60 bg-muted/40 p-4 sm:p-5">
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="jsonapi-source-select">
+                            {t("Fuente")}
+                          </Label>
+                          <select
+                            id="jsonapi-source-select"
+                            required
+                            aria-label={t("Fuente")}
+                            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+                            value={remoteSource}
+                            onChange={(e) => setRemoteSource(e.target.value)}
+                          >
+                            <option value="">
+                              {t("Selecciona una fuente")}
+                            </option>
+                            {sources.data
+                              ?.filter((source) =>
+                                isDatabaseKind(mode)
+                                  ? source.kind === mode
+                                  : source.kind === "jsonapi",
+                              )
+                              .map((source) => (
+                                <option key={source.id} value={source.id}>
+                                  {source.label}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
 
-                    {mode === "jsonapi" && (
-                      <fieldset className="grid gap-2 border-t pt-3">
-                        <legend className="text-xs font-medium text-foreground">
-                          {t(
-                            "Operaciones de escritura admitidas por la fuente",
-                          )}
-                        </legend>
-                        <p className="text-xs text-muted-foreground">
-                          {t(
-                            "Lectura habilitada. Activa únicamente las operaciones que soporte el recurso remoto.",
-                          )}
-                        </p>
-                        <div className="flex flex-wrap gap-4 text-xs font-medium pt-1">
-                          {(
-                            [
-                              ["create", t("Crear")],
-                              ["update", t("Editar")],
-                              ["delete", t("Eliminar")],
-                            ] as const
-                          ).map(([key, title]) => (
-                            <label
-                              key={key}
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                aria-label={title}
-                                className="size-4 rounded border-input accent-primary"
-                                checked={writes[key]}
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                          <div className="grid gap-1.5 text-sm">
+                            <Label htmlFor="remote-resource-input">
+                              {isDatabaseKind(mode)
+                                ? t("Tabla (vacío para listar)")
+                                : t("Recurso remoto")}
+                            </Label>
+                            <Input
+                              id="remote-resource-input"
+                              aria-label={
+                                isDatabaseKind(mode)
+                                  ? t("Tabla (vacío para listar)")
+                                  : t("Recurso remoto")
+                              }
+                              required={!isDatabaseKind(mode)}
+                              value={resource}
+                              onChange={(e) => {
+                                setResource(e.target.value);
+                                suggestName(e.target.value);
+                              }}
+                              placeholder={
+                                isDatabaseKind(mode) ? "orders" : "contacts"
+                              }
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              busy ||
+                              !remoteSource ||
+                              (!isDatabaseKind(mode) && !resource.trim())
+                            }
+                            onClick={() => void inspectSource()}
+                          >
+                            {busy ? (
+                              <LoaderCircle
+                                className="size-3.5 animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Search className="size-3.5" aria-hidden="true" />
+                            )}
+                            {busy
+                              ? t("Analizando…")
+                              : isDatabaseKind(mode)
+                                ? t("Analizar tabla")
+                                : t("Analizar recurso")}
+                          </Button>
+                        </div>
+
+                        {mode === "jsonapi" && (
+                          <div className="grid gap-1.5 text-sm">
+                            <Label htmlFor="resource-type-input">
+                              {t("Tipo de recurso JSON:API (opcional)")}
+                            </Label>
+                            <Input
+                              id="resource-type-input"
+                              aria-label={t(
+                                "Tipo de recurso JSON:API (opcional)",
+                              )}
+                              value={resourceType}
+                              onChange={(event) =>
+                                setResourceType(event.target.value)
+                              }
+                              placeholder="contacts"
+                            />
+                          </div>
+                        )}
+
+                        <div className="grid gap-1.5 text-sm">
+                          <Label htmlFor="fields-textarea">
+                            {t("Campos de la colección (JSON)")}
+                          </Label>
+                          <Textarea
+                            id="fields-textarea"
+                            aria-label={t("Campos de la colección (JSON)")}
+                            required
+                            rows={6}
+                            className="font-mono text-xs bg-background"
+                            value={fields}
+                            onChange={(e) => setFields(e.target.value)}
+                          />
+                        </div>
+
+                        {isDatabaseKind(mode) && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-1.5">
+                              <Label htmlFor="database-id-column">
+                                {t("Identificador único (opcional)")}
+                              </Label>
+                              <Input
+                                id="database-id-column"
+                                value={databaseIdColumn}
                                 onChange={(e) =>
-                                  setWrites((previous) => ({
-                                    ...previous,
-                                    [key]: e.target.checked,
-                                  }))
+                                  setDatabaseIdColumn(e.target.value)
+                                }
+                                placeholder={
+                                  mode === "mongodb"
+                                    ? "_id"
+                                    : t("Clave primaria")
                                 }
                               />
-                              <span>{title}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
+                            </div>
+                            {mode === "mongodb" && (
+                              <div className="grid gap-1.5">
+                                <Label htmlFor="mongodb-id-type">
+                                  {t("Tipo de identificador")}
+                                </Label>
+                                <select
+                                  id="mongodb-id-type"
+                                  className="h-9 rounded-md border bg-background px-3"
+                                  value={mongoIdType}
+                                  onChange={(e) =>
+                                    setMongoIdType(
+                                      e.target.value as "string" | "objectId",
+                                    )
+                                  }
+                                >
+                                  <option value="objectId">ObjectId</option>
+                                  <option value="string">{t("Texto")}</option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {isDatabaseKind(mode) ? (
+                          <p className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                            {t(
+                              "Las operaciones dependen del identificador único y de los permisos de escritura de la fuente. Las vistas son de solo lectura.",
+                            )}
+                          </p>
+                        ) : (
+                          <div className="grid gap-1.5 text-sm">
+                            <div className="flex items-center gap-1">
+                              <Label htmlFor="relationships-textarea">
+                                {t("Relaciones JSON:API (JSON)")}
+                              </Label>
+                              <FieldHelp
+                                label={`${t("Relaciones JSON:API (JSON)")} (${t("Ayuda")})`}
+                              >
+                                {t(
+                                  "Relaciona un campo de identificadores con su tipo remoto; por ejemplo:",
+                                )}{" "}
+                                <code>{`{"company_id":{"type":"companies"}}`}</code>
+                                {t(
+                                  ". Usa multiple: true para varios identificadores.",
+                                )}
+                              </FieldHelp>
+                            </div>
+                            <Textarea
+                              id="relationships-textarea"
+                              aria-label={t("Relaciones JSON:API (JSON)")}
+                              rows={3}
+                              className="font-mono text-xs bg-background"
+                              value={relationships}
+                              onChange={(event) =>
+                                setRelationships(event.target.value)
+                              }
+                            />
+                          </div>
+                        )}
+
+                        {mode === "jsonapi" && (
+                          <fieldset className="grid gap-2 border-t border-border/60 pt-3">
+                            <legend className="flex items-center gap-1 px-1 text-xs font-medium text-foreground">
+                              {t(
+                                "Operaciones de escritura admitidas por la fuente",
+                              )}
+                              <FieldHelp
+                                label={`${t("Operaciones de escritura admitidas por la fuente")} (${t("Ayuda")})`}
+                              >
+                                {t(
+                                  "Lectura habilitada. Activa únicamente las operaciones que soporte el recurso remoto.",
+                                )}
+                              </FieldHelp>
+                            </legend>
+                            <div className="flex flex-wrap gap-4 text-xs font-medium pt-1">
+                              {(
+                                [
+                                  ["create", t("Crear")],
+                                  ["update", t("Editar")],
+                                  ["delete", t("Eliminar")],
+                                ] as const
+                              ).map(([key, title]) => (
+                                <label
+                                  key={key}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    aria-label={title}
+                                    className="size-4 rounded border-input accent-primary"
+                                    checked={writes[key]}
+                                    onChange={(e) =>
+                                      setWrites((previous) => ({
+                                        ...previous,
+                                        [key]: e.target.checked,
+                                      }))
+                                    }
+                                  />
+                                  <span>{title}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
+                {bindStep === "pantalla" && (
+                  <div className="pt-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-1.5 text-sm">
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="screen-name-input">
+                            {t("Identificador de la pantalla")}
+                          </Label>
+                          <FieldHelp
+                            label={`${t("Identificador de la pantalla")} (${t("Ayuda")})`}
+                          >
+                            {nameIsManual
+                              ? t("Identificador personalizado.")
+                              : t(
+                                  "Se propone automáticamente y puedes editarlo.",
+                                )}
+                          </FieldHelp>
+                        </div>
+                        <Input
+                          id="screen-name-input"
+                          aria-label={t("Identificador de la pantalla")}
+                          required
+                          pattern="[a-z][a-z0-9_]*"
+                          value={name}
+                          onChange={(e) => {
+                            setName(e.target.value);
+                            setNameIsManual(true);
+                          }}
+                          placeholder="contactos_externos"
+                        />
+                      </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 pt-2">
-                  <div className="grid gap-1.5 text-sm">
-                    <Label htmlFor="screen-name-input">
-                      {t("Identificador de la pantalla")}
-                    </Label>
-                    <Input
-                      id="screen-name-input"
-                      aria-label={t("Identificador de la pantalla")}
-                      required
-                      pattern="[a-z][a-z0-9_]*"
-                      value={name}
-                      onChange={(e) => {
-                        setName(e.target.value);
-                        setNameIsManual(true);
-                      }}
-                      placeholder="contactos_externos"
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {nameIsManual
-                        ? t("Identificador personalizado.")
-                        : t("Se propone automáticamente y puedes editarlo.")}
-                    </span>
+                      <div className="grid gap-1.5 text-sm">
+                        <Label htmlFor="screen-label-input">
+                          {t("Nombre de la pantalla")}
+                        </Label>
+                        <Input
+                          id="screen-label-input"
+                          aria-label={t("Nombre de la pantalla")}
+                          required
+                          value={label}
+                          onChange={(e) => setLabel(e.target.value)}
+                          placeholder={t("Contactos")}
+                        />
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="grid gap-1.5 text-sm">
-                    <Label htmlFor="screen-label-input">
-                      {t("Nombre de la pantalla")}
-                    </Label>
-                    <Input
-                      id="screen-label-input"
-                      aria-label={t("Nombre de la pantalla")}
-                      required
-                      value={label}
-                      onChange={(e) => setLabel(e.target.value)}
-                      placeholder={t("Contactos")}
-                    />
-                  </div>
-                </div>
+                )}
               </CardContent>
 
-              <CardFooter className="border-t bg-muted/20 py-3 flex justify-end">
+              <CardFooter className="flex justify-end border-t border-border/60 bg-muted/30 py-3">
                 <Button type="submit" disabled={busy}>
-                  <Link2 className="size-3.5 mr-1.5" />
+                  {busy ? (
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Link2 className="size-3.5" aria-hidden="true" />
+                  )}
                   {busy ? t("Vinculando…") : t("Vincular colección")}
                 </Button>
               </CardFooter>
             </form>
           </Card>
+        </TabsContent>
 
-          {/* Connected Collections List */}
-          <Card className="shadow-xs overflow-hidden">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base font-semibold">
-                {t("Colecciones vinculadas")}
-              </CardTitle>
-              <CardDescription className="text-xs leading-relaxed">
-                {t(
-                  "Pantallas disponibles en este dominio con su origen de datos.",
-                )}
-              </CardDescription>
+        {/* --- VINCULADAS TAB --- */}
+        <TabsContent value="vinculadas" className="mt-0 grid gap-6">
+          <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/30 pb-4">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                  <Layers className="size-4 text-primary" aria-hidden="true" />
+                </span>
+                <div className="space-y-1">
+                  <CardTitle className="text-base font-semibold">
+                    {t("Colecciones vinculadas")}
+                  </CardTitle>
+                  <CardDescription className="text-xs leading-relaxed">
+                    {t(
+                      "Pantallas disponibles en este dominio con su origen de datos.",
+                    )}
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
 
-            <CardContent className="p-5 pt-0">
+            <CardContent className="p-5 sm:p-6">
               {bindings.isPending ? (
                 <div
                   className="space-y-3"
@@ -1459,13 +1642,11 @@ export default function CollectionSourcesPanel({
                   aria-label={t("Cargando colecciones…")}
                 >
                   <p className="sr-only">{t("Cargando colecciones…")}</p>
-                  <div className="divide-y rounded-lg border bg-card">
+                  <div className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
                     {Array.from({ length: 3 }, (_, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-3.5"
-                      >
-                        <div className="space-y-1.5">
+                      <div key={i} className="flex items-center gap-3 p-4">
+                        <Skeleton className="size-9 shrink-0 rounded-xl" />
+                        <div className="flex-1 space-y-1.5">
                           <Skeleton className="h-4 w-36" />
                           <Skeleton className="h-3 w-48" />
                         </div>
@@ -1475,44 +1656,49 @@ export default function CollectionSourcesPanel({
                   </div>
                 </div>
               ) : bindings.data?.length ? (
-                <ul className="divide-y rounded-lg border bg-card">
+                <ul className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
                   {bindings.data.map((binding) => (
                     <li
                       key={binding.name}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/30"
+                      className="flex flex-col gap-3 p-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-sm font-medium text-foreground">
-                            {binding.label}
-                          </strong>
-                          <Badge
-                            variant={
-                              binding.kind === "domain"
-                                ? "secondary"
-                                : "outline"
-                            }
-                            className="text-xs font-normal"
-                          >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                          <Layers className="size-4" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-sm font-medium text-foreground">
+                              {binding.label}
+                            </strong>
+                            <Badge
+                              variant={
+                                binding.kind === "domain"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              className="text-xs font-normal"
+                            >
+                              {binding.kind === "domain"
+                                ? t("Dominio")
+                                : binding.kind === "crm"
+                                  ? "HubSpot"
+                                  : isDatabaseKind(binding.kind)
+                                    ? databaseKinds[binding.kind].label
+                                    : binding.sourceId}
+                            </Badge>
+                          </div>
+                          <span className="block break-all font-mono text-xs text-muted-foreground">
                             {binding.kind === "domain"
-                              ? t("Dominio")
+                              ? t("Colección del dominio")
                               : binding.kind === "crm"
                                 ? "HubSpot"
                                 : isDatabaseKind(binding.kind)
-                                  ? databaseKinds[binding.kind].label
-                                  : binding.sourceId}
-                          </Badge>
+                                  ? `${databaseKinds[binding.kind].label} · ${binding.sourceId}`
+                                  : binding.sourceId}{" "}
+                            · {binding.resource}
+                          </span>
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {binding.kind === "domain"
-                            ? t("Colección del dominio")
-                            : binding.kind === "crm"
-                              ? "HubSpot"
-                              : isDatabaseKind(binding.kind)
-                                ? `${databaseKinds[binding.kind].label} · ${binding.sourceId}`
-                                : binding.sourceId}{" "}
-                          · {binding.resource}
-                        </span>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
@@ -1550,6 +1736,17 @@ export default function CollectionSourcesPanel({
                               }
                             }}
                           >
+                            {busy ? (
+                              <LoaderCircle
+                                className="animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <RefreshCw
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                            )}
                             {t("Sincronizar campos")}
                           </Button>
                         )}
@@ -1561,7 +1758,10 @@ export default function CollectionSourcesPanel({
                               variant="outline"
                               onClick={() => setOperationBinding(binding)}
                             >
-                              <SlidersHorizontal className="size-3.5 mr-1.5" />
+                              <SlidersHorizontal
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
                               {t("Operaciones")}
                             </Button>
                           )}
@@ -1582,7 +1782,7 @@ export default function CollectionSourcesPanel({
                               : setConfirmRemoval(`binding:${binding.name}`)
                           }
                         >
-                          <Unlink className="size-3.5 mr-1.5" />
+                          <Unlink className="size-3.5" aria-hidden="true" />
                           {confirmRemoval === `binding:${binding.name}`
                             ? t("Confirmar desvinculación")
                             : t("Desvincular pantalla")}
@@ -1592,16 +1792,26 @@ export default function CollectionSourcesPanel({
                   ))}
                 </ul>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 p-8 text-center">
-                  <Layers className="size-8 text-muted-foreground/60 mb-2" />
-                  <p className="text-sm font-medium text-foreground">
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center">
+                  <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                    <Layers
+                      className="size-7 text-primary"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-foreground">
                     {t("Aún no hay colecciones vinculadas en este dominio.")}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                    {t(
-                      "Selecciona una colección arriba para asociarla y habilitar pantallas interactivas en tu espacio de trabajo.",
-                    )}
-                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => setActiveSection("vincular")}
+                  >
+                    <Link2 className="size-3.5" aria-hidden="true" />
+                    {t("Vincular colección")}
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -1614,6 +1824,31 @@ export default function CollectionSourcesPanel({
               onClose={() => setOperationBinding(null)}
             />
           )}
+        </TabsContent>
+
+        {/* --- INTEGRATIONS TAB --- */}
+        <TabsContent value="integrations" className="mt-0 grid gap-6">
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                aria-label={t("Integraciones")}
+                className="grid gap-3"
+              >
+                <Skeleton className="h-32 rounded-2xl" />
+                <Skeleton className="h-24 rounded-2xl" />
+              </div>
+            }
+          >
+            <IntegrationsPanel
+              onImported={
+                onImported ??
+                (() => {
+                  void client.invalidateQueries();
+                })
+              }
+            />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </section>
@@ -1781,7 +2016,7 @@ export function CollectionLayoutDesigner({
                     }));
                   }}
                 >
-                  <ArrowUp className="size-3.5 mr-1" />
+                  <ArrowUp className="size-3.5" aria-hidden="true" />
                   {t("Subir")}
                 </Button>
               </div>

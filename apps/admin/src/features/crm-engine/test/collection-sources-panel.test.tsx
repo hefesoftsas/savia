@@ -110,6 +110,7 @@ it("loads catalog without writes and binds a domain collection to a screen", asy
   fireEvent.change(screen.getByLabelText("Colección"), {
     target: { value: "customer-portfolio/customer-profiles" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
     target: { value: "original_customers" },
   });
@@ -138,18 +139,21 @@ it("proposes the next valid identifier and preserves a manual edit", async () =>
   fireEvent.change(screen.getByLabelText("Colección"), {
     target: { value: "customer-portfolio/customer-profiles" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   expect(screen.getByLabelText("Identificador de la pantalla")).toHaveValue(
     "clientes_originales_2",
   );
   fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
     target: { value: "clientes_prioritarios" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Origen" }));
   fireEvent.change(screen.getByLabelText("Colección"), {
     target: { value: "" },
   });
   fireEvent.change(screen.getByLabelText("Colección"), {
     target: { value: "customer-portfolio/customer-profiles" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   expect(screen.getByLabelText("Identificador de la pantalla")).toHaveValue(
     "clientes_prioritarios",
   );
@@ -161,10 +165,11 @@ it("separates source configuration from collection bindings without losing a dra
   await screen.findByRole("option", {
     name: "Clientes originales · customer-portfolio",
   });
-  expect(screen.getByRole("tab", { name: "Colecciones" })).toHaveAttribute(
+  expect(screen.getByRole("tab", { name: "Vincular" })).toHaveAttribute(
     "data-state",
     "active",
   );
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
     target: { value: "clientes_borrador" },
   });
@@ -177,7 +182,8 @@ it("separates source configuration from collection bindings without losing a dra
       name: "Vincular colección a una pantalla",
     }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("tab", { name: "Colecciones" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Vincular" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   expect(screen.getByLabelText("Identificador de la pantalla")).toHaveValue(
     "clientes_borrador",
   );
@@ -227,6 +233,7 @@ it("keeps remote writes disabled until explicitly selected and binds explicit fi
   fireEvent.change(screen.getByLabelText("Origen"), {
     target: { value: "jsonapi" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
   await screen.findByRole("option", { name: "CRM externo" });
   fireEvent.change(screen.getByLabelText("Fuente"), {
     target: { value: "external" },
@@ -249,12 +256,14 @@ it("keeps remote writes disabled until explicitly selected and binds explicit fi
   fireEvent.change(screen.getByLabelText("Recurso remoto"), {
     target: { value: "contacts" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
     target: { value: "external_contacts" },
   });
   fireEvent.change(screen.getByLabelText("Nombre de la pantalla"), {
     target: { value: "Contactos" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
   expect(screen.getByRole("checkbox", { name: "Crear" })).not.toBeChecked();
   fireEvent.click(screen.getByRole("checkbox", { name: "Editar" }));
   fireEvent.click(screen.getByRole("button", { name: "Vincular colección" }));
@@ -293,6 +302,7 @@ it("analyzes one remote resource and keeps the inferred binding editable", async
   fireEvent.change(screen.getByLabelText("Origen"), {
     target: { value: "jsonapi" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
   await screen.findByRole("option", { name: "CRM externo" });
   fireEvent.change(screen.getByLabelText("Fuente"), {
     target: { value: "external" },
@@ -317,6 +327,7 @@ it("analyzes one remote resource and keeps the inferred binding editable", async
   expect(
     screen.getByLabelText("Tipo de recurso JSON:API (opcional)"),
   ).toHaveValue("contacts");
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   expect(screen.getByLabelText("Identificador de la pantalla")).toHaveValue(
     "contacts",
   );
@@ -472,7 +483,7 @@ it("updates a source token explicitly and unbinds only after an inline confirmat
       }),
     ),
   );
-  fireEvent.click(screen.getByRole("tab", { name: "Colecciones" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   fireEvent.click(screen.getByRole("button", { name: "Desvincular pantalla" }));
   expect(
     transport.mock.calls.some(([, init]) => init?.method === "DELETE"),
@@ -498,6 +509,7 @@ it("identifies HubSpot bindings and hides unsupported operation configuration", 
   ]);
   setCrmRuntime({ embedded: true, domainId: "platform", transport });
   mount(<CollectionSourcesPanel onBound={vi.fn()} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(await screen.findByText("HubSpot · contacts")).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "Operaciones", exact: true }),
@@ -621,6 +633,7 @@ it("inspects a Postgres table and binds it read-only without writes", async () =
   fireEvent.change(screen.getByLabelText("Origen"), {
     target: { value: "postgres" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
   await screen.findByRole("option", { name: "ERP Postgres" });
   // Sin tabla, el análisis lista tablas disponibles.
   fireEvent.change(screen.getByLabelText("Fuente"), {
@@ -651,6 +664,7 @@ it("inspects a Postgres table and binds it read-only without writes", async () =
   expect(
     screen.queryByRole("checkbox", { name: "Crear" }),
   ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   fireEvent.change(screen.getByLabelText("Nombre de la pantalla"), {
     target: { value: "Órdenes" },
   });
@@ -703,6 +717,7 @@ it("labels Postgres bindings and hides their operation configuration", async () 
   );
   setCrmRuntime({ embedded: true, domainId: "platform", transport });
   mount(<CollectionSourcesPanel onBound={vi.fn()} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(await screen.findByText("PostgreSQL")).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "Operaciones", exact: true }),
@@ -725,4 +740,75 @@ it("offers four database engines with their connection defaults", async () => {
     fireEvent.change(kind, { target: { value } });
     expect(screen.getByLabelText("Puerto")).toHaveValue(port);
   }
+});
+
+it("splits binding into Origen, Datos and Pantalla steps", async () => {
+  const transport = mockTransport();
+  setCrmRuntime({ embedded: true, domainId: "platform", transport });
+  mount(<CollectionSourcesPanel onBound={() => {}} />);
+  await screen.findByRole("option", {
+    name: "Clientes originales · customer-portfolio",
+  });
+  for (const name of ["Origen", "Datos", "Pantalla"]) {
+    expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  }
+  expect(
+    screen.queryByLabelText("Nombre de la pantalla"),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Datos" }));
+  expect(
+    screen.getByText(
+      "La pantalla respetará las operaciones disponibles en esta colección.",
+    ),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
+  expect(screen.getByLabelText("Nombre de la pantalla")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Origen" }));
+  expect(screen.getByLabelText("Colección")).toBeVisible();
+});
+
+it("reveals secret handling guidance through a tooltip instead of inline text", async () => {
+  const transport = mockTransport();
+  setCrmRuntime({ embedded: true, domainId: "platform", transport });
+  mount(<CollectionSourcesPanel onBound={() => {}} />);
+  openSourcesTab();
+  fireEvent.click(screen.getByRole("button", { name: "Nueva fuente externa" }));
+  const help = screen.getByRole("button", {
+    name: "Token de acceso (opcional) (Ayuda)",
+  });
+  fireEvent.focus(help);
+  expect(
+    await screen.findByText(
+      "El token se guarda cifrado en el servidor y no se devuelve en el catálogo.",
+    ),
+  ).toBeVisible();
+});
+
+it("shows linked collections in their own tab with a shortcut back", async () => {
+  const transport = mockTransport();
+  setCrmRuntime({ embedded: true, domainId: "platform", transport });
+  mount(<CollectionSourcesPanel onBound={() => {}} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
+  expect(
+    await screen.findByText(
+      "Aún no hay colecciones vinculadas en este dominio.",
+    ),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Vincular colección" }));
+  expect(screen.getByLabelText("Origen")).toBeVisible();
+});
+
+it("embeds integrations as its own tab and honors the initial section", async () => {
+  const transport = mockTransport();
+  setCrmRuntime({ embedded: true, domainId: "platform", transport });
+  mount(
+    <CollectionSourcesPanel onBound={() => {}} initialSection="integrations" />,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "De API a herramienta." }),
+  ).toBeVisible();
+  expect(screen.getByRole("tab", { name: "Integraciones" })).toHaveAttribute(
+    "data-state",
+    "active",
+  );
 });

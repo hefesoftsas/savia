@@ -7,14 +7,20 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, CheckCircle2, RefreshCw, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
+import { FieldHelp } from "./field-help";
 
 type WorkspaceObject = {
   name: string;
@@ -59,6 +65,11 @@ export default function CrmWorkspacePanel({
   const inFlight = useRef(false);
   const available =
     workspace.data?.objects?.filter((object) => object.available) ?? [];
+
+  // The panel is only relevant while the CRM integration is active.
+  // A confirmed inactive connection renders nothing; query failures still
+  // surface so they can be retried.
+  if (!workspace.data?.connected && !workspace.isError) return null;
 
   async function install() {
     if (inFlight.current) return;
@@ -106,37 +117,39 @@ export default function CrmWorkspacePanel({
   return (
     <Card
       aria-labelledby="connected-crm-title"
-      className="overflow-hidden border-border/80 shadow-xs"
+      className="overflow-hidden rounded-2xl border-border/60 shadow-sm"
     >
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 border-b border-border/60 bg-muted/30 pb-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <CardTitle
               id="connected-crm-title"
               className="text-base font-semibold"
             >
               {t("CRM conectado · HubSpot")}
             </CardTitle>
+            <FieldHelp
+              label={`${t("CRM conectado · HubSpot")} (${t("Ayuda")})`}
+            >
+              {t(
+                "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.",
+              )}
+            </FieldHelp>
             {workspace.data?.connected ? (
               <Badge variant="secondary" className="text-xs font-normal">
                 {t("Conectado")}
               </Badge>
             ) : null}
           </div>
-          <CardDescription className="text-xs leading-relaxed">
-            {t(
-              "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.",
-            )}
-          </CardDescription>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4 pt-0">
+      <CardContent className="space-y-4 p-5 pt-4 sm:p-6 sm:pt-4">
         {workspace.isPending && (
           <div
             role="status"
             aria-live="polite"
-            className="space-y-3 rounded-lg border bg-muted/20 p-4"
+            className="space-y-3 rounded-xl border border-border/60 bg-muted/40 p-4"
           >
             <p className="text-xs text-muted-foreground">
               {t("Consultando la conexión y las pantallas disponibles…")}
@@ -149,7 +162,7 @@ export default function CrmWorkspacePanel({
         )}
 
         {workspace.error && (
-          <Alert variant="destructive" className="py-2.5">
+          <Alert variant="destructive" className="rounded-2xl py-3">
             <AlertCircle className="size-4" />
             <AlertDescription className="text-xs">
               {t("No se pudo consultar HubSpot:")} {workspace.error.message}
@@ -158,25 +171,37 @@ export default function CrmWorkspacePanel({
         )}
 
         {workspace.data && !workspace.data.connected && (
-          <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-xs text-muted-foreground">
-            {t(
-              "No hay una conexión HubSpot activa en este dominio. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
-            )}
+          <div className="flex items-start gap-2 rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <p>
+              {t(
+                "No hay una conexión HubSpot activa en este dominio. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
+              )}
+            </p>
           </div>
         )}
 
         {workspace.data?.connected && (
           <div className="space-y-3">
-            <p className="text-xs font-medium text-foreground">
-              {workspace.data.accountLabel || "HubSpot"} · {available.length}{" "}
-              {t("de")} {workspace.data.objects.length}{" "}
-              {t("pantallas disponibles")}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-medium text-foreground">
+                {workspace.data.accountLabel || "HubSpot"} · {available.length}{" "}
+                {t("de")} {workspace.data.objects.length}{" "}
+                {t("pantallas disponibles")}
+              </p>
+              <FieldHelp
+                label={`${t("pantallas disponibles")} (${t("Ayuda")})`}
+              >
+                {t(
+                  "Las operaciones disponibles dependen de los permisos de HubSpot. Puedes repetir la instalación sin duplicar pantallas.",
+                )}
+              </FieldHelp>
+            </div>
             <ul className="grid gap-2 sm:grid-cols-2">
               {workspace.data.objects.map((object) => (
                 <li
                   key={object.resource}
-                  className="flex flex-col justify-between rounded-lg border bg-card p-2.5 text-xs transition-colors hover:bg-muted/40"
+                  className="flex flex-col justify-between rounded-xl border border-border/60 bg-card p-2.5 text-xs transition-colors hover:bg-muted/40"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-foreground">
@@ -197,16 +222,11 @@ export default function CrmWorkspacePanel({
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "Las operaciones disponibles dependen de los permisos de HubSpot. Puedes repetir la instalación sin duplicar pantallas.",
-              )}
-            </p>
           </div>
         )}
 
         {error && (
-          <Alert variant="destructive" className="py-2.5">
+          <Alert variant="destructive" className="rounded-2xl py-3">
             <AlertCircle className="size-4" />
             <AlertDescription className="text-xs">{error}</AlertDescription>
           </Alert>
@@ -214,7 +234,7 @@ export default function CrmWorkspacePanel({
 
         {notice && (
           <Alert
-            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 py-2.5"
+            className="rounded-2xl border-emerald-500/20 bg-emerald-500/10 py-3 text-emerald-800 dark:text-emerald-300"
             role="status"
           >
             <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
@@ -225,23 +245,25 @@ export default function CrmWorkspacePanel({
         )}
       </CardContent>
 
-      <p className="px-6 pb-4 text-sm text-muted-foreground">
-        {t(
-          "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de HubSpot.",
-        )}
-      </p>
-      <CardFooter className="flex flex-wrap items-center gap-2 border-t bg-muted/20 py-3">
+      <CardFooter className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/30 py-3">
         <Button
           type="button"
           size="sm"
           disabled={busy || workspace.isFetching || !available.length}
           onClick={() => void install()}
         >
-          <Sparkles className="size-3.5 mr-1.5" />
+          <Sparkles className="size-3.5" aria-hidden="true" />
           {busy
             ? t("Instalando pantallas…")
             : t("Instalar todas las pantallas disponibles")}
         </Button>
+        <FieldHelp
+          label={`${t("Instalar todas las pantallas disponibles")} (${t("Ayuda")})`}
+        >
+          {t(
+            "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de HubSpot.",
+          )}
+        </FieldHelp>
         <Button
           type="button"
           variant="outline"
@@ -250,7 +272,8 @@ export default function CrmWorkspacePanel({
           onClick={() => void workspace.refetch()}
         >
           <RefreshCw
-            className={`size-3.5 mr-1.5 ${workspace.isFetching ? "animate-spin" : ""}`}
+            className={`size-3.5 ${workspace.isFetching ? "animate-spin" : ""}`}
+            aria-hidden="true"
           />
           {workspace.isFetching
             ? t("Consultando…")

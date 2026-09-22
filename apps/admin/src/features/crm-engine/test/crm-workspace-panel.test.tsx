@@ -67,16 +67,24 @@ it("shows availability and installs before opening a screen", async () => {
   expect(request).toHaveBeenCalledWith("/crm-workspace/install", "POST", {});
   expect(invalidate).toHaveBeenCalled();
 });
-it("disables installation without a connection", async () => {
-  mount(vi.fn(async () => ({ connected: false, objects: [] })));
+it("hides the panel without an active connection", async () => {
+  const request = vi.fn(async () => ({ connected: false, objects: [] }));
+  mount(request);
+  await waitFor(() => expect(request).toHaveBeenCalled());
   expect(
-    await screen.findByText(/No hay una conexión HubSpot activa/),
-  ).toBeVisible();
+    screen.queryByRole("heading", { name: "CRM conectado · HubSpot" }),
+  ).not.toBeInTheDocument();
   expect(
-    screen.getByRole("button", {
+    screen.queryByText(/No hay una conexión HubSpot activa/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", {
       name: "Instalar todas las pantallas disponibles",
     }),
-  ).toBeDisabled();
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Actualizar disponibilidad" }),
+  ).not.toBeInTheDocument();
 });
 it("reports failed installation without navigating or claiming success", async () => {
   const request = vi.fn(async (path: string) => {
