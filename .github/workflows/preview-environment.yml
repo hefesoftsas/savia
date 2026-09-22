@@ -1,0 +1,74 @@
+name: Preview environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy or destroy (never main)"
+        required: true
+        type: string
+      action:
+        description: "Deploy a temporary environment or destroy it"
+        required: true
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
+      confirm:
+        description: "For destroy: repeat the branch name to confirm"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savia-preview-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: Preview ${{ inputs.action }} (${{ inputs.branch }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse unconfirmed destroy
+        if: ${{ inputs.action == 'destroy' && inputs.confirm != inputs.branch }}
+        run: |
+          echo "Destroy requires confirm == branch name. Got confirm='${{ inputs.confirm }}'." >&2
+          exit 1
+
+      - name: Deploy preview environment
+        if: ${{ inputs.action == 'deploy' }}
+        run: node scripts/preview-deploy.mjs --branch "${{ inputs.branch }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Destroy preview environment
+        if: ${{ inputs.action == 'destroy' && inputs.confirm == inputs.branch }}
+        run: node scripts/preview-destroy.mjs --branch "${{ inputs.branch }}" --force
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
