@@ -531,6 +531,11 @@ export const settingsMessages = {
     "Assistente de IA: chave e modelo padrão do espaço.",
   ],
   Global: ["Global", "Global", "Global"],
+  "Por organización": [
+    "Por organización",
+    "Per organization",
+    "Por organização",
+  ],
   "Por agencia": ["Por agencia", "Per agency", "Por agência"],
   Clave: ["Clave", "Key", "Chave"],
   Modelo: ["Modelo", "Model", "Modelo"],
@@ -551,12 +556,27 @@ export const settingsMessages = {
     "No overrides.",
     "Nenhuma configuração específica.",
   ],
+  "Selecciona una organización": [
+    "Selecciona una organización",
+    "Select an organization",
+    "Selecione uma organização",
+  ],
   "Selecciona una agencia": [
     "Selecciona una agencia",
     "Select an agency",
     "Selecione uma agência",
   ],
+  "Clave de organización": [
+    "Clave de organización",
+    "Organization key",
+    "Chave da organização",
+  ],
   "Clave de agencia": ["Clave de agencia", "Agency key", "Chave da agência"],
+  "Clave de organización guardada y cifrada": [
+    "Clave de organización guardada y cifrada",
+    "Organization key saved and encrypted",
+    "Chave da organização salva e criptografada",
+  ],
   "Clave de agencia guardada y cifrada": [
     "Clave de agencia guardada y cifrada",
     "Agency key saved and encrypted",
@@ -567,10 +587,35 @@ export const settingsMessages = {
     "Inherit global key",
     "Herdar chave global",
   ],
+  "Modelo de organización": [
+    "Modelo de organización",
+    "Organization model",
+    "Modelo da organização",
+  ],
   "Modelo de agencia": [
     "Modelo de agencia",
     "Agency model",
     "Modelo da agência",
+  ],
+  "Organización activa": [
+    "Organización activa",
+    "Active organization",
+    "Organização ativa",
+  ],
+  "Agencia activa": [
+    "Agencia activa",
+    "Active agency",
+    "Agência ativa",
+  ],
+  "Elige una organización": [
+    "Elige una organización",
+    "Choose an organization",
+    "Escolha uma organização",
+  ],
+  "Elige una agencia": [
+    "Elige una agencia",
+    "Choose an agency",
+    "Escolha uma agência",
   ],
   "Hereda de global": [
     "Hereda de global",
@@ -710,6 +755,11 @@ export const settingsMessages = {
     "Runs CRM queries and function calls",
     "Executa consultas ao CRM e chamadas de funções",
   ],
+  "Organización #%{id}": [
+    "Organización #%{id}",
+    "Organization #%{id}",
+    "Organização nº %{id}",
+  ],
   "Agencia #%{id}": ["Agencia #%{id}", "Agency #%{id}", "Agência nº %{id}"],
   "Configuración de %{agency} guardada.": [
     "Configuración de %{agency} guardada.",
@@ -726,6 +776,12 @@ export const settingsMessages = {
     "Restore inheritance for %{agency}",
     "Restaurar herança em %{agency}",
   ],
+  "Se borrarán la clave y el modelo propios de %{agency}. Esta organización usará la configuración global.":
+    [
+      "Se borrarán la clave y el modelo propios de %{agency}. Esta organización usará la configuración global.",
+      "The custom key and model for %{agency} will be removed. This organization will use the global configuration.",
+      "A chave e o modelo próprios de %{agency} serão removidos. Esta organização passará a usar a configuração global.",
+    ],
   "Se borrarán la clave y el modelo propios de %{agency}. Esta agencia usará la configuración global.":
     [
       "Se borrarán la clave y el modelo propios de %{agency}. Esta agencia usará la configuración global.",

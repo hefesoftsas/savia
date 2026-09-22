@@ -1020,7 +1020,7 @@ export function VirtualEmployeesManagement({
                 onChange={setModel}
                 models={models}
                 fallbackModel=""
-                fallbackLabel={t("Hereda de la agencia o global")}
+                fallbackLabel={t("Hereda de la organización o global")}
               />
               <p className="text-xs text-muted-foreground">
                 {t(

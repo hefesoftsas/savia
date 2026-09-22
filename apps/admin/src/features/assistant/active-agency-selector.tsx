@@ -44,7 +44,7 @@ export function ActiveAgencySelector({
       setError(
         exception instanceof Error
           ? exception.message
-          : "No fue posible actualizar la agencia activa.",
+          : "No fue posible actualizar la organización activa.",
       );
     } finally {
       setSaving(false);
@@ -55,7 +55,7 @@ export function ActiveAgencySelector({
     <div className="border-b bg-muted/30 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs font-medium text-muted-foreground" htmlFor="assistant-active-agency">
-          Agencia activa
+          Organización activa
         </label>
         <select
           id="assistant-active-agency"
@@ -64,12 +64,12 @@ export function ActiveAgencySelector({
           onChange={(event) => void selectAgency(Number(event.target.value))}
           disabled={saving}
         >
-          <option value="" disabled>Elige una agencia</option>
+          <option value="" disabled>Elige una organización</option>
           {state.agencies.map((agency) => (
             <option key={agency.id} value={agency.id}>{agency.name}</option>
           ))}
         </select>
-        {saving ? <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="Guardando agencia activa" /> : null}
+        {saving ? <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="Guardando organización activa" /> : null}
       </div>
       {error ? <p className="mt-2 text-xs text-destructive" role="alert">{error}</p> : null}
     </div>
