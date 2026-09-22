@@ -936,7 +936,7 @@ export default function CollectionRelations({
                     />
                     <p className="text-sm text-muted-foreground">
                       {t(
-                        "Usa minúsculas, números y guion bajo; por ejemplo, agencia_id.",
+                        "Usa minúsculas, números y guion bajo; por ejemplo, organizacion_id.",
                       )}
                     </p>
                   </div>
@@ -1097,7 +1097,7 @@ export default function CollectionRelations({
                       onChange={(e) => setTargetLabel(e.target.value)}
                       required
                       maxLength={120}
-                      placeholder={t("Agencia")}
+                      placeholder={t("Organización")}
                     />
                   </div>
                 </div>
@@ -1266,7 +1266,7 @@ export default function CollectionRelations({
                 )}
                 <p className="text-sm text-muted-foreground">
                   {t(
-                    "Ejemplo: desde una Agencia ves «Clientes»; desde cada Cliente ves «Agencia».",
+                    "Ejemplo: desde una Organización ves «Clientes»; desde cada Cliente ves «Organización».",
                   )}
                 </p>
                 <div className="max-w-sm space-y-2">

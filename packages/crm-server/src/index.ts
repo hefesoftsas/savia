@@ -58,7 +58,7 @@ import {
   type NotificationRouteOptions,
 } from "./notifications/routes";
 export function createCrmApp(
-  agencyTenant?: string,
+  tenantKey?: string,
   options?: {
     seedObjects?: CrmObject[];
     principalId?: string;
@@ -80,10 +80,10 @@ export function createCrmApp(
   app.use("/api/*", async (c, next) => {
     c.set(
       "principalId",
-      options?.principalId ?? (agencyTenant ? "" : "local-demo"),
+      options?.principalId ?? (tenantKey ? "" : "local-demo"),
     );
-    if (agencyTenant) {
-      c.set("tenant", agencyTenant);
+    if (tenantKey) {
+      c.set("tenant", tenantKey);
       return next();
     }
     if (c.env.POC_LOCAL !== "true")
@@ -181,7 +181,7 @@ export function createCrmApp(
     return c.json({
       ok: true,
       storage: "D1 + R2",
-      mode: agencyTenant ? "savia" : "local",
+      mode: tenantKey ? "savia" : "local",
       version: "0.2",
     });
   });
@@ -193,7 +193,7 @@ export function createCrmApp(
       .bind(tenant)
       .first();
     const initialObjects =
-      options?.seedObjects ?? (agencyTenant ? [] : seedObjects);
+      options?.seedObjects ?? (tenantKey ? [] : seedObjects);
     if (!exists && initialObjects.length)
       await db.batch([
         ...initialObjects.map((o) =>
@@ -209,7 +209,7 @@ export function createCrmApp(
               JSON.stringify(o.config),
             ),
         ),
-        ...(agencyTenant ? [] : seedRecords).map((r) =>
+        ...(tenantKey ? [] : seedRecords).map((r) =>
           db
             .prepare(
               "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",

@@ -35,9 +35,17 @@ const configurationWriteSchema = z
     }
   });
 
-const activeAgencyWriteSchema = z.object({
-  agencyId: z.number().int().positive(),
-});
+const activeTenantWriteSchema = z
+  .object({
+    agencyId: z.number().int().positive().optional(),
+    tenantId: z.number().int().positive().optional(),
+  })
+  .refine(
+    (data) => data.tenantId !== undefined || data.agencyId !== undefined,
+    { message: "tenantId or agencyId is required" },
+  );
+
+const activeAgencyWriteSchema = activeTenantWriteSchema;
 
 type AgencyRow = { id: number; name: string };
 
@@ -96,7 +104,7 @@ async function activeAgencySummary(
   repository: AssistantConfigurationRepository,
   actor: AppActor,
 ) {
-  const agencies = actor.globalRoles.includes("platform_admin")
+  const tenants = actor.globalRoles.includes("platform_admin")
     ? await database
         .prepare(
           "SELECT id, name FROM tenants WHERE kind='commercial' AND is_active = 1 ORDER BY name",
@@ -115,9 +123,12 @@ async function activeAgencySummary(
         )
         .bind(actor.principal.id)
         .all<AgencyRow>();
+  const activeId = await repository.activeAgencyFor(actor.principal.id);
   return {
-    activeAgencyId: await repository.activeAgencyFor(actor.principal.id),
-    agencies: agencies.results,
+    activeTenantId: activeId,
+    activeAgencyId: activeId,
+    tenants: tenants.results,
+    agencies: tenants.results,
   };
 }
 
@@ -151,15 +162,17 @@ export function registerAssistantConfigurationRoutes(
     }
   });
 
-  app.put("/v1/assistant/configuration/agencies/:agencyId", async (context) => {
+  const handlePutTenantOverride = async (context: Context) => {
     const actor = requireConfigurationAdministrator(context);
     if (!repository) return unavailableResponse();
-    const agencyId = Number(context.req.param("agencyId"));
-    if (!Number.isInteger(agencyId) || agencyId <= 0) return invalidResponse();
+    const idParam =
+      context.req.param("tenantId") ?? context.req.param("agencyId");
+    const tenantId = Number(idParam);
+    if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
     const parsed = await parseWrite(context);
     if (!parsed.success) return invalidResponse();
     try {
-      await repository.saveAgencyOverride(agencyId, {
+      await repository.saveAgencyOverride(tenantId, {
         actorId: actor.principal.id,
         ...parsed.data,
       });
@@ -169,19 +182,33 @@ export function registerAssistantConfigurationRoutes(
       if (response) return response;
       throw error;
     }
-  });
+  };
+  app.put(
+    "/v1/assistant/configuration/agencies/:agencyId",
+    handlePutTenantOverride,
+  );
+  app.put(
+    "/v1/assistant/configuration/tenants/:tenantId",
+    handlePutTenantOverride,
+  );
 
+  const handleDeleteTenantOverride = async (context: Context) => {
+    requireConfigurationAdministrator(context);
+    if (!repository) return unavailableResponse();
+    const idParam =
+      context.req.param("tenantId") ?? context.req.param("agencyId");
+    const tenantId = Number(idParam);
+    if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
+    await repository.clearAgencyOverride(tenantId);
+    return new Response(null, { status: 204 });
+  };
   app.delete(
     "/v1/assistant/configuration/agencies/:agencyId",
-    async (context) => {
-      requireConfigurationAdministrator(context);
-      if (!repository) return unavailableResponse();
-      const agencyId = Number(context.req.param("agencyId"));
-      if (!Number.isInteger(agencyId) || agencyId <= 0)
-        return invalidResponse();
-      await repository.clearAgencyOverride(agencyId);
-      return new Response(null, { status: 204 });
-    },
+    handleDeleteTenantOverride,
+  );
+  app.delete(
+    "/v1/assistant/configuration/tenants/:tenantId",
+    handleDeleteTenantOverride,
   );
 
   app.get("/v1/assistant/models", async (context) => {
@@ -200,24 +227,23 @@ export function registerAssistantConfigurationRoutes(
     }
   });
 
-  app.get("/v1/assistant/active-agency", async (context) => {
+  const handleGetActiveTenant = async (context: Context) => {
     const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
     return context.json(await activeAgencySummary(database, repository, actor));
-  });
+  };
+  app.get("/v1/assistant/active-agency", handleGetActiveTenant);
+  app.get("/v1/assistant/active-tenant", handleGetActiveTenant);
 
-  app.put("/v1/assistant/active-agency", async (context) => {
+  const handlePutActiveTenant = async (context: Context) => {
     const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
     const body = await context.req.json().catch(() => undefined);
-    const parsed = activeAgencyWriteSchema.safeParse(body);
+    const parsed = activeTenantWriteSchema.safeParse(body);
     if (!parsed.success) return invalidResponse();
+    const targetId = parsed.data.tenantId ?? parsed.data.agencyId!;
     try {
-      await repository.setActiveAgency(
-        actor.principal.id,
-        parsed.data.agencyId,
-        actor,
-      );
+      await repository.setActiveAgency(actor.principal.id, targetId, actor);
       return context.json(
         await activeAgencySummary(database, repository, actor),
       );
@@ -226,5 +252,7 @@ export function registerAssistantConfigurationRoutes(
       if (response) return response;
       throw error;
     }
-  });
+  };
+  app.put("/v1/assistant/active-agency", handlePutActiveTenant);
+  app.put("/v1/assistant/active-tenant", handlePutActiveTenant);
 }

@@ -11,6 +11,7 @@ export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
   agencyId?: number;
+  tenantId?: number;
 };
 
 export type AssistantModelModalities = {
@@ -54,11 +55,13 @@ type AssistantSettingRow = {
   updated_by: string;
 };
 
-type ActiveAgencyRow = { agency_id: number };
+type ActiveTenantRow = { tenant_id?: number; agency_id?: number };
+type ActiveAgencyRow = ActiveTenantRow;
 
 export type AssistantConfigurationSummary = {
   global: AssistantConfigurationSettingSummary | null;
   agencies: AssistantConfigurationSettingSummary[];
+  tenants: AssistantConfigurationSettingSummary[];
   deployment: AssistantConfigurationDeploymentSummary;
 };
 
@@ -68,6 +71,7 @@ export type AssistantConfigurationKeyState =
 export type AssistantConfigurationSettingSummary = {
   scope: AssistantSettingScope;
   agencyId?: number;
+  tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
   updatedAt: string;
@@ -138,7 +142,9 @@ function summary(
 ): AssistantConfigurationSettingSummary {
   return {
     scope: row.scope,
-    ...(row.agency_id === null ? {} : { agencyId: row.agency_id }),
+    ...(row.agency_id === null
+      ? {}
+      : { agencyId: row.agency_id, tenantId: row.agency_id }),
     keyState,
     model: row.model,
     updatedAt: row.updated_at,
@@ -283,6 +289,13 @@ export class AssistantConfigurationRepository {
     await this.save("agency", agencyId, input);
   }
 
+  async saveTenantOverride(
+    tenantId: number,
+    input: AssistantConfigurationWrite,
+  ): Promise<void> {
+    return this.saveAgencyOverride(tenantId, input);
+  }
+
   async clearAgencyOverride(agencyId: number): Promise<boolean> {
     const result = await this.database
       .prepare(
@@ -291,6 +304,10 @@ export class AssistantConfigurationRepository {
       .bind(settingId("agency", agencyId))
       .run();
     return result.meta.changes > 0;
+  }
+
+  async clearTenantOverride(tenantId: number): Promise<boolean> {
+    return this.clearAgencyOverride(tenantId);
   }
 
   async summary(): Promise<AssistantConfigurationSummary> {
@@ -311,20 +328,22 @@ export class AssistantConfigurationRepository {
     const globalKeyState = global?.api_key_ciphertext
       ? "configured"
       : deployment.keyState;
+    const agencySettings = rows.results
+      .filter((row) => row.scope === "agency")
+      .map((row) =>
+        summary(
+          row,
+          row.api_key_ciphertext
+            ? "configured"
+            : globalKeyState === "configured"
+              ? "inherited"
+              : globalKeyState,
+        ),
+      );
     return {
       global: global ? summary(global, globalKeyState) : null,
-      agencies: rows.results
-        .filter((row) => row.scope === "agency")
-        .map((row) =>
-          summary(
-            row,
-            row.api_key_ciphertext
-              ? "configured"
-              : globalKeyState === "configured"
-                ? "inherited"
-                : globalKeyState,
-          ),
-        ),
+      agencies: agencySettings,
+      tenants: agencySettings,
       deployment,
     };
   }
@@ -369,22 +388,30 @@ export class AssistantConfigurationRepository {
     }
     await this.database
       .prepare(
-        `INSERT INTO assistant_active_agencies (principal_id, agency_id, updated_at)
+        `INSERT INTO assistant_active_tenants (principal_id, tenant_id, updated_at)
          VALUES (?, ?, ?)
          ON CONFLICT(principal_id) DO UPDATE SET
-           agency_id = excluded.agency_id,
+           tenant_id = excluded.tenant_id,
            updated_at = excluded.updated_at`,
       )
       .bind(principalId, agencyId, this.now().toISOString())
       .run();
   }
 
-  async activeAgencyFor(principalId: string): Promise<number | undefined> {
+  async setActiveTenant(
+    principalId: string,
+    tenantId: number,
+    actor: AppActor,
+  ): Promise<void> {
+    return this.setActiveAgency(principalId, tenantId, actor);
+  }
+
+  async activeTenantFor(principalId: string): Promise<number | undefined> {
     const row = await this.database
       .prepare(
-        `SELECT active.agency_id
-         FROM assistant_active_agencies AS active
-         INNER JOIN tenants ON tenants.id = active.agency_id
+        `SELECT active.tenant_id
+         FROM assistant_active_tenants AS active
+         INNER JOIN tenants ON tenants.id = active.tenant_id
            AND tenants.kind = 'commercial'
            AND tenants.is_active = 1
          WHERE active.principal_id = ?
@@ -392,7 +419,7 @@ export class AssistantConfigurationRepository {
              EXISTS (
                SELECT 1 FROM identity_tenant_membership AS membership
                WHERE membership.principal_id = active.principal_id
-                 AND membership.tenant_id = active.agency_id
+                 AND membership.tenant_id = active.tenant_id
                  AND membership.is_active = 1
              )
              OR EXISTS (
@@ -403,8 +430,12 @@ export class AssistantConfigurationRepository {
            )`,
       )
       .bind(principalId)
-      .first<ActiveAgencyRow>();
-    return row?.agency_id;
+      .first<{ tenant_id: number }>();
+    return row?.tenant_id;
+  }
+
+  async activeAgencyFor(principalId: string): Promise<number | undefined> {
+    return this.activeTenantFor(principalId);
   }
 
   async effectiveConfigurationFor(
@@ -437,7 +468,7 @@ export class AssistantConfigurationRepository {
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
-      ...(agencyId === undefined ? {} : { agencyId }),
+      ...(agencyId === undefined ? {} : { agencyId, tenantId: agencyId }),
     };
   }
 

@@ -30,7 +30,7 @@ describe("ActiveAgencySelector", () => {
     render(<ActiveAgencySelector client={client} />);
 
     await user.selectOptions(
-      await screen.findByLabelText("Agencia activa"),
+      await screen.findByLabelText("Organización activa"),
       "202",
     );
 
@@ -52,7 +52,7 @@ describe("ActiveAgencySelector", () => {
     const user = userEvent.setup();
 
     render(<ActiveAgencySelector client={client} />);
-    const selector = await screen.findByLabelText("Agencia activa");
+    const selector = await screen.findByLabelText("Organización activa");
     await user.selectOptions(selector, "202");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No disponible");

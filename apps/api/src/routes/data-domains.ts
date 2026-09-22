@@ -145,17 +145,18 @@ export function registerDataDomainRoutes(
         .all<{ id: string; label: string }>();
       data.push(...domains.results.map((d) => customDomain(d.id, d.label)));
     }
-    const agencies = await db
+    const commercialTenants = await db
       .prepare(
         `SELECT t.id,t.name FROM tenants t WHERE t.kind='commercial' AND t.is_active=1${platform ? "" : ` AND t.id IN (${allowed.map(() => "?").join(",")})`} ORDER BY t.name,t.id`,
       )
       .bind(...(platform ? [] : allowed))
-      .all<{ id: number; name: string; agency_id: number | null }>();
+      .all<{ id: number; name: string }>();
     data.push(
-      ...agencies.results.map((a) => ({
+      ...commercialTenants.results.map((a) => ({
         id: `tenant:${a.id}`,
         label: a.name,
         tenantId: a.id,
+        agencyId: a.id,
         kind: "tenant" as const,
         apiBasePath: `/v1/dynamic-crm/${a.id}`,
       })),

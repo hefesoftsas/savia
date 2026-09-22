@@ -57,6 +57,7 @@ export function isCrmNavigationMessage(data: unknown): data is {
 
 export function crmHref(input: {
   domain?: string;
+  tenantId?: number;
   agencyId?: number;
   object?: string;
   view?: string;
@@ -64,6 +65,7 @@ export function crmHref(input: {
 }): string {
   const search = new URLSearchParams();
   if (input.domain) search.set("domain", input.domain);
+  else if (input.tenantId) search.set("tenantId", String(input.tenantId));
   else if (input.agencyId) search.set("agencyId", String(input.agencyId));
   if (input.object) search.set("object", input.object);
   if (input.view && input.view !== "records") search.set("view", input.view);

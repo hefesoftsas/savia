@@ -66,7 +66,7 @@ import { ModelCapabilityBadges } from "@/features/assistant-configuration/model-
 import { getEmployeeAvatarIcon } from "@/features/personal-integrations/virtual-employees-management";
 import { requestAssistantAction } from "./assistant-api";
 import { useAppServices } from "./assistant-context";
-import { ActiveAgencySelector } from "./active-agency-selector";
+import { ActiveTenantSelector } from "./active-tenant-selector";
 import {
   AssistantMarkdown,
   AssistantPresentationCard,
@@ -1453,7 +1453,7 @@ function AssistantConversation({
     <AssistantRuntimeProvider runtime={runtime}>
       <RuntimeStatusSync onStatusChange={onRunningChange} />
       <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-        <ActiveAgencySelector client={assistantConfiguration} />
+        <ActiveTenantSelector client={assistantConfiguration} />
         <ThreadPrimitive.Viewport
           className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5"
           autoScroll

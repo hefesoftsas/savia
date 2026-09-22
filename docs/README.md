@@ -44,6 +44,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
+- [cookie-consent.md](cookie-consent.md) — mandatory once-per-user cookie consent banner for the SPA and public forms.
 - [permissions.md](permissions.md) — scoped roles, record and field permissions, revocation and rollout.
 
 - [local-first-collections.md](local-first-collections.md) — local replicas, synchronization, recovery and deployment.

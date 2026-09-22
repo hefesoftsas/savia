@@ -161,11 +161,11 @@ export const identityTenantMemberships = sqliteTable(
   ],
 );
 
-export const agencyCrmConnections = sqliteTable(
-  "agency_crm_connections",
+export const tenantCrmConnections = sqliteTable(
+  "tenant_crm_connections",
   {
     id: text("id").primaryKey().notNull(),
-    agencyId: bigint("agency_id")
+    tenantId: bigint("tenant_id")
       .notNull()
       .references(() => tenants.id),
     createdByPrincipalId: text("created_by_principal_id")
@@ -184,17 +184,19 @@ export const agencyCrmConnections = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("agency_crm_connections_owner_index").on(
+    index("tenant_crm_connections_owner_index").on(
       table.createdByPrincipalId,
-      table.agencyId,
+      table.tenantId,
       table.provider,
     ),
-    index("agency_crm_connections_agency_provider_index").on(
-      table.agencyId,
+    index("tenant_crm_connections_tenant_provider_index").on(
+      table.tenantId,
       table.provider,
     ),
   ],
 );
+
+export const agencyCrmConnections = tenantCrmConnections;
 
 export const personalIntegrationConnections = sqliteTable(
   "personal_integration_connections",
@@ -304,14 +306,14 @@ export const crmExtensionInstallations = sqliteTable(
   (table) => [primaryKey({ columns: [table.tenantId, table.id] })],
 );
 
-export const agencyCrmConnectionAuditEvents = sqliteTable(
-  "agency_crm_connection_audit_events",
+export const tenantCrmConnectionAuditEvents = sqliteTable(
+  "tenant_crm_connection_audit_events",
   {
     id: text("id").primaryKey().notNull(),
     connectionId: text("connection_id")
       .notNull()
-      .references(() => agencyCrmConnections.id),
-    agencyId: bigint("agency_id")
+      .references(() => tenantCrmConnections.id),
+    tenantId: bigint("tenant_id")
       .notNull()
       .references(() => tenants.id),
     principalId: text("principal_id")
@@ -324,16 +326,18 @@ export const agencyCrmConnectionAuditEvents = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (table) => [
-    index("agency_crm_connection_audit_events_connection_created_at_index").on(
+    index("tenant_crm_connection_audit_events_connection_created_at_index").on(
       table.connectionId,
       table.createdAt,
     ),
-    index("agency_crm_connection_audit_events_agency_created_at_index").on(
-      table.agencyId,
+    index("tenant_crm_connection_audit_events_tenant_created_at_index").on(
+      table.tenantId,
       table.createdAt,
     ),
   ],
 );
+
+export const agencyCrmConnectionAuditEvents = tenantCrmConnectionAuditEvents;
 
 export const assistantOpenRouterSettings = sqliteTable(
   "assistant_openrouter_settings",
@@ -356,22 +360,24 @@ export const assistantOpenRouterSettings = sqliteTable(
   ],
 );
 
-export const assistantActiveAgencies = sqliteTable(
-  "assistant_active_agencies",
+export const assistantActiveTenants = sqliteTable(
+  "assistant_active_tenants",
   {
     principalId: text("principal_id")
       .primaryKey()
       .notNull()
       .references(() => identityPrincipals.id, { onDelete: "cascade" }),
-    agencyId: bigint("agency_id")
+    tenantId: bigint("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("assistant_active_agencies_agency_index").on(table.agencyId),
+    index("assistant_active_tenants_tenant_index").on(table.tenantId),
   ],
 );
+
+export const assistantActiveAgencies = assistantActiveTenants;
 
 export const requestPageRuns = sqliteTable('request_page_runs', {
   id: text('id').primaryKey().notNull(),

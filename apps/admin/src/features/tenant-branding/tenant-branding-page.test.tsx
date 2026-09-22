@@ -101,7 +101,7 @@ it("ignores an older tenant response after selection changes", async () => {
       canManage: false,
     });
   render(<TenantBrandingPage services={service(get)} />);
-  const picker = await screen.findByLabelText("Agencia");
+  const picker = await screen.findByLabelText("Organización");
   await waitFor(() =>
     expect(get).toHaveBeenCalledWith(
       "/v1/tenants/1/branding",

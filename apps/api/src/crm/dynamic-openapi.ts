@@ -196,6 +196,9 @@ export async function dynamicOpenApi(
     typeof agencyId === "number"
       ? `/v1/dynamic-crm/${agencyId}`
       : agencyId.apiBasePath;
+  const isCommercialTenant =
+    typeof agencyId === "number" ||
+    (typeof agencyId === "object" && !agencyId.tenant.startsWith("domain:"));
   const { results } = await db
     .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
     .bind(tenant)
@@ -205,7 +208,7 @@ export async function dynamicOpenApi(
     .map(parseObject)
     .filter((object) => !disabled.has(object.name));
   const paths: Paths =
-    typeof agencyId === "number"
+    isCommercialTenant
       ? {}
       : {
           "/collection-relations": {
@@ -708,7 +711,12 @@ export async function dynamicOpenApi(
           f.defaultValue === undefined,
       )
       .map(([key]) => key);
-    const managedAgency = tenant === "domain:platform" && name === "agencias";
+    const managedAgency =
+      tenant === "domain:platform" &&
+      (name === "agencias" ||
+        name === "tenants" ||
+        name === "organizaciones" ||
+        name === "organizations");
     const managedCustomer = tenant === "domain:platform" && name === "clientes";
     const idSchema: Schema = binding
       ? { type: "string", minLength: 1, maxLength: 256 }
@@ -997,7 +1005,7 @@ export async function dynamicOpenApi(
     }
 
     if (
-      typeof agencyId === "number" &&
+      isCommercialTenant &&
       object.config.studio?.business === "customer"
     ) {
       paths[`/business/${name}/{id}/hubspot`] = {
@@ -1333,7 +1341,7 @@ export async function dynamicOpenApi(
         description: "Versioned DOCX, XLSX and PPTX attachments.",
       },
       ...objects.map((o) => ({ name: o.label, description: o.description })),
-      ...(typeof agencyId === "number"
+      ...(isCommercialTenant
         ? []
         : [
             {

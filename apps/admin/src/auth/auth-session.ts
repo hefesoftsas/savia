@@ -1,5 +1,11 @@
 import type { UserIdentity } from "ra-core";
 
+export type TenantMembershipPermission = {
+  tenantId: number;
+  agencyId?: number;
+  role: string;
+};
+
 export type AgencyMembershipPermission = {
   agencyId: number;
   tenantId?: number;
@@ -10,7 +16,7 @@ export type AuthPermissions = {
   canReadDocuments: boolean;
   canExecuteCommands: boolean;
   canManageIdentity: boolean;
-  memberships: AgencyMembershipPermission[];
+  memberships: (AgencyMembershipPermission | TenantMembershipPermission)[];
 };
 
 export type CallbackResult = {

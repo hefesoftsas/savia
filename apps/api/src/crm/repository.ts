@@ -12,7 +12,8 @@ import {
 
 type CrmConnectionRow = {
   id: string;
-  agency_id: number;
+  tenant_id?: number;
+  agency_id?: number;
   created_by_principal_id: string;
   provider: string;
   nango_connection_id: string;
@@ -51,9 +52,11 @@ function statusFromRow(value: string): CrmConnectionStatus {
 }
 
 function connectionFromRow(row: CrmConnectionRow): ActiveCrmConnection {
+  const tenantId = row.tenant_id ?? row.agency_id ?? 0;
   return {
     id: row.id,
-    agencyId: row.agency_id,
+    agencyId: tenantId,
+    tenantId,
     provider: providerFromRow(row.provider),
     status: statusFromRow(row.status),
     externalAccountLabel: row.external_account_label,
@@ -85,8 +88,8 @@ async function findActiveConnection(
 ): Promise<ActiveCrmConnection | undefined> {
   const row = await db
     .prepare(
-      `SELECT * FROM agency_crm_connections
-       WHERE agency_id = ? AND provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
+      `SELECT * FROM tenant_crm_connections
+       WHERE tenant_id = ? AND provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
        ORDER BY updated_at DESC LIMIT 1`,
     )
     .bind(agencyId, provider, principalId)
@@ -101,7 +104,7 @@ async function findActiveConnectionForPrincipal(
 ): Promise<ActiveCrmConnection | undefined> {
   const row = await db
     .prepare(
-      `SELECT * FROM agency_crm_connections
+      `SELECT * FROM tenant_crm_connections
        WHERE provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
        ORDER BY updated_at DESC LIMIT 1`,
     )
@@ -128,8 +131,8 @@ export function createCrmRepository(db: D1Database): CrmRepository {
     async listConnections(agencyId, principalId) {
       const rows = await db
         .prepare(
-          `SELECT * FROM agency_crm_connections
-           WHERE agency_id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
+          `SELECT * FROM tenant_crm_connections
+           WHERE tenant_id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
            ORDER BY created_at DESC`,
         )
         .bind(agencyId, principalId)
@@ -140,7 +143,7 @@ export function createCrmRepository(db: D1Database): CrmRepository {
     async listConnectionsForPrincipal(principalId) {
       const rows = await db
         .prepare(
-          `SELECT * FROM agency_crm_connections
+          `SELECT * FROM tenant_crm_connections
            WHERE created_by_principal_id = ? AND disconnected_at IS NULL
            ORDER BY provider ASC, updated_at DESC`,
         )
@@ -189,7 +192,7 @@ export function createCrmRepository(db: D1Database): CrmRepository {
       if (current) {
         await db
           .prepare(
-            `UPDATE agency_crm_connections
+            `UPDATE tenant_crm_connections
              SET nango_connection_id = ?, nango_integration_id = ?, status = ?,
                external_account_label = ?, external_account_id = ?, scopes = ?, last_validated_at = ?,
                updated_at = ?
@@ -211,8 +214,8 @@ export function createCrmRepository(db: D1Database): CrmRepository {
       } else {
         await db
           .prepare(
-            `INSERT INTO agency_crm_connections (
-              id, agency_id, created_by_principal_id, provider,
+            `INSERT INTO tenant_crm_connections (
+              id, tenant_id, created_by_principal_id, provider,
               nango_connection_id, nango_integration_id, status,
               external_account_label, external_account_id, scopes, last_validated_at, created_at,
               updated_at
@@ -259,9 +262,9 @@ export function createCrmRepository(db: D1Database): CrmRepository {
     ) {
       const result = await db
         .prepare(
-          `UPDATE agency_crm_connections
+          `UPDATE tenant_crm_connections
            SET status = 'disconnected', disconnected_at = ?, updated_at = ?
-           WHERE agency_id = ? AND provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
+           WHERE tenant_id = ? AND provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
         )
         .bind(now, now, agencyId, provider, principalId)
         .run();
@@ -275,7 +278,7 @@ export function createCrmRepository(db: D1Database): CrmRepository {
     ) {
       const result = await db
         .prepare(
-          `UPDATE agency_crm_connections
+          `UPDATE tenant_crm_connections
            SET status = 'reconnect_required', updated_at = ?
            WHERE id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
         )
@@ -285,18 +288,19 @@ export function createCrmRepository(db: D1Database): CrmRepository {
     },
 
     async appendAuditEvent(event: CrmAuditEvent) {
+      const tenantId = (event as any).tenantId ?? event.agencyId;
       await db
         .prepare(
-          `INSERT INTO agency_crm_connection_audit_events (
-            id, connection_id, agency_id, principal_id, provider, event_type,
+          `INSERT INTO tenant_crm_connection_audit_events (
+            id, connection_id, tenant_id, principal_id, provider, event_type,
             outcome, error_code, created_at
           ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-          WHERE EXISTS (SELECT 1 FROM agency_crm_connections WHERE id = ? AND agency_id = ? AND created_by_principal_id = ?)`,
+          WHERE EXISTS (SELECT 1 FROM tenant_crm_connections WHERE id = ? AND tenant_id = ? AND created_by_principal_id = ?)`,
         )
         .bind(
           crypto.randomUUID(),
           event.connectionId,
-          event.agencyId,
+          tenantId,
           event.principalId,
           event.provider,
           event.eventType,
@@ -304,7 +308,7 @@ export function createCrmRepository(db: D1Database): CrmRepository {
           event.errorCode ?? null,
           new Date().toISOString(),
           event.connectionId,
-          event.agencyId,
+          tenantId,
           event.principalId,
         )
         .run();

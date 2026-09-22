@@ -164,8 +164,8 @@ describe("full D1 schema projection", () => {
         "tenant_consolidation_agency_bootstraps",
         "document_ownership",
         "assistant_pending_actions",
-        "agency_crm_connections",
-        "agency_crm_connection_audit_events",
+        "tenant_crm_connections",
+        "tenant_crm_connection_audit_events",
         "personal_integration_connections",
         "personal_integration_audit_events",
         "user_navigation_preferences",
@@ -175,7 +175,7 @@ describe("full D1 schema projection", () => {
         "user_provider_credential_audit_events",
         "customer_crm_sync_records",
         "assistant_openrouter_settings",
-        "assistant_active_agencies",
+        "assistant_active_tenants",
         "auto_light_quote_requests",
         "auto_light_quote_offers",
         "notification_events",
@@ -190,12 +190,33 @@ describe("full D1 schema projection", () => {
       ]),
     );
 
+    const views = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
+    ).all<{ name: string }>();
+    const viewNames = views.results.map((view) => view.name);
+    expect(viewNames).toEqual(
+      expect.arrayContaining([
+        "agency_crm_connections",
+        "agency_crm_connection_audit_events",
+        "assistant_active_agencies",
+      ]),
+    );
+
     const crmConnectionColumns = await env.DB.prepare(
-      "PRAGMA table_info(agency_crm_connections)",
+      "PRAGMA table_info(tenant_crm_connections)",
     ).all<{ name: string }>();
     expect(crmConnectionColumns.results.map((column) => column.name)).toContain(
       "external_account_id",
     );
+    expect(crmConnectionColumns.results.map((column) => column.name)).toContain(
+      "tenant_id",
+    );
+    const legacyCrmConnectionColumns = await env.DB.prepare(
+      "PRAGMA table_info(agency_crm_connections)",
+    ).all<{ name: string }>();
+    expect(
+      legacyCrmConnectionColumns.results.map((column) => column.name),
+    ).toContain("agency_id");
     const personalConnectionIndexes = await env.DB.prepare(
       "PRAGMA index_list(personal_integration_connections)",
     ).all<IndexInfo>();

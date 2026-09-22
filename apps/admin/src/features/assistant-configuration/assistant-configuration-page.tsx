@@ -71,7 +71,7 @@ function agencyName(
 ): string {
   return (
     agencies.find((agency) => agency.id === agencyId)?.name ??
-    t("Agencia #%{id}", { id: agencyId })
+    t("Organización #%{id}", { id: agencyId })
   );
 }
 
@@ -494,7 +494,7 @@ export function AssistantConfigurationPanel({
             <TabsTrigger value="global">{t("Global")}</TabsTrigger>
             {showAgencyConfiguration ? (
               <TabsTrigger value="agency">
-                {t("Por agencia")}
+                {t("Por organización")}
                 {(summary?.agencies.length ?? 0) > 0 ? (
                   <Badge className="ml-1.5" variant="outline">
                     {summary?.agencies.length}
@@ -518,15 +518,17 @@ export function AssistantConfigurationPanel({
                 </div>
                 <Badge
                   variant={
-                    summary?.global?.keyState === "configured"
+                    globalKeyState === "configured"
                       ? "default"
-                      : "outline"
+                      : globalKeyState === "deployment_fallback"
+                        ? "secondary"
+                        : "outline"
                   }
                 >
                   {t(keyState(globalKeyState))}
                 </Badge>
               </CardHeader>
-              <CardContent>{globalForm}</CardContent>
+              <CardContent className="space-y-4">{globalForm}</CardContent>
             </Card>
           </TabsContent>
 
@@ -537,7 +539,7 @@ export function AssistantConfigurationPanel({
                   <Table>
                     <TableHeader className="bg-muted/40">
                       <TableRow>
-                        <TableHead>{t("Agencia")}</TableHead>
+                        <TableHead>{t("Organización")}</TableHead>
                         <TableHead>{t("Clave")}</TableHead>
                         <TableHead>{t("Modelo")}</TableHead>
                         <TableHead className="text-right">
@@ -611,7 +613,7 @@ export function AssistantConfigurationPanel({
                 onSubmit={saveAgency}
               >
                 <div className="grid gap-2">
-                  <Label htmlFor="assistant-agency">{t("Agencia")}</Label>
+                  <Label htmlFor="assistant-agency">{t("Organización")}</Label>
                   <select
                     id="assistant-agency"
                     className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
@@ -621,7 +623,7 @@ export function AssistantConfigurationPanel({
                     }
                   >
                     <option value="" disabled>
-                      {t("Selecciona una agencia")}
+                      {t("Selecciona una organización")}
                     </option>
                     {agencies.map((agency) => (
                       <option key={agency.id} value={agency.id}>
@@ -633,7 +635,7 @@ export function AssistantConfigurationPanel({
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="assistant-agency-key">
-                      {t("Clave de agencia")}
+                      {t("Clave de organización")}
                     </Label>
                     {selectedOverride?.keyState === "configured" &&
                     selectedOverride.updatedAt ? (
@@ -663,7 +665,7 @@ export function AssistantConfigurationPanel({
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200">
                       <span className="flex items-center gap-1.5 font-medium">
                         <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                        {t("Clave de agencia guardada y cifrada")}
+                        {t("Clave de organización guardada y cifrada")}
                       </span>
                       {selectedOverride.updatedAt ? (
                         <span className="text-emerald-700 dark:text-emerald-400">
@@ -696,7 +698,7 @@ export function AssistantConfigurationPanel({
                 </div>
                 <ModelInput
                   id="assistant-agency-model"
-                  label={t("Modelo de agencia")}
+                  label={t("Modelo de organización")}
                   value={agencyModel}
                   onChange={setAgencyModel}
                   models={models}

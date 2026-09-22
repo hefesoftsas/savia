@@ -23,9 +23,14 @@ export function selectCrmDomain(
   domains: CrmDomain[],
   domain?: string | null,
   agencyId?: number,
+  tenantId?: number,
 ): CrmDomain | undefined {
   if (domain) return domains.find((item) => item.id === domain);
-  if (agencyId) return domains.find((item) => item.agencyId === agencyId);
+  const targetId = tenantId ?? agencyId;
+  if (targetId)
+    return domains.find(
+      (item) => (item.tenantId ?? item.agencyId) === targetId,
+    );
   return (
     domains.find((item) => item.kind === "platform") ??
     (domains.length === 1 ? domains[0] : undefined)

@@ -144,7 +144,9 @@ describe("AssistantConfigurationPage", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("tab", { name: /Por agencia/i }));
+    await user.click(
+      await screen.findByRole("tab", { name: /Por organización/i }),
+    );
     await user.click(
       await screen.findByRole("button", { name: "Volver a heredar" }),
     );
@@ -246,7 +248,9 @@ describe("AssistantConfigurationPage", () => {
     });
     render(<AssistantConfigurationPage services={services} />);
 
-    await user.click(await screen.findByRole("tab", { name: /Por agencia/i }));
+    await user.click(
+      await screen.findByRole("tab", { name: /Por organización/i }),
+    );
     await screen.findByRole("button", { name: "Volver a heredar" });
     await user.click(screen.getByLabelText("Heredar clave global"));
     await user.click(

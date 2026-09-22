@@ -383,6 +383,11 @@ export const studioMessages = {
     "Field identifier",
     "Identificador do campo",
   ],
+  "Usa minúsculas, números y guion bajo; por ejemplo, organizacion_id.": [
+    "Usa minúsculas, números y guion bajo; por ejemplo, organizacion_id.",
+    "Use lowercase letters, numbers, and underscores; for example, organizacion_id.",
+    "Use letras minúsculas, números e sublinhados; por exemplo, organizacion_id.",
+  ],
   "Usa minúsculas, números y guion bajo; por ejemplo, agencia_id.": [
     "Usa minúsculas, números y guion bajo; por ejemplo, agencia_id.",
     "Use lowercase letters, numbers, and underscores; for example, agency_id.",
@@ -432,6 +437,7 @@ export const studioMessages = {
     "Name shown at target",
     "Nome visto no destino",
   ],
+  Organización: ["Organización", "Organization", "Organização"],
   Agencia: ["Agencia", "Agency", "Agência"],
   "Cómo se relacionan los registros": [
     "Cómo se relacionan los registros",
@@ -474,6 +480,12 @@ export const studioMessages = {
       "La coincidencia entre campos solo está disponible para colecciones locales de CRM. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.",
       "Field matching is only available for local CRM collections. For these collections, use manual linking or edit the existing native relationship.",
       "A correspondência entre campos só está disponível em coleções locais do CRM. Para estas coleções, use associação manual ou edite a relação nativa existente.",
+    ],
+  "Ejemplo: desde una Organización ves «Clientes»; desde cada Cliente ves «Organización».":
+    [
+      "Ejemplo: desde una Organización ves «Clientes»; desde cada Cliente ves «Organización».",
+      "Example: an Organization shows “Customers”; each Customer shows “Organization”.",
+      "Exemplo: uma Organização mostra “Clientes”; cada Cliente mostra “Organização”.",
     ],
   "Ejemplo: desde una Agencia ves «Clientes»; desde cada Cliente ves «Agencia».":
     [

@@ -1,6 +1,8 @@
 # Local workspaces and agent artifacts
 .worktrees/
 .superpowers/
+.qoder/
+
 
 # Dependencies and build output
 node_modules/

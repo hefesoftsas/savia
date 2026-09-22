@@ -202,7 +202,7 @@ describe("App", () => {
     await screen.findByRole("heading", { name: "Integraciones" });
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
 
-    expect(await screen.findByLabelText("Agencia activa")).toHaveValue("101");
+    expect(await screen.findByLabelText("Organización activa")).toHaveValue("101");
   });
 
   it("keeps the signed-in account menu in the sidebar", async () => {
@@ -388,7 +388,7 @@ describe("App", () => {
     ).toBeVisible();
     expect(screen.getByRole("tab", { name: "Globales" })).toBeVisible();
     expect(screen.getByRole("tab", { name: /Integraciones/i })).toBeVisible();
-    expect(screen.queryByRole("tab", { name: /Por agencia/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Por (organización|agencia)/i })).toBeNull();
     expect(
       await screen.findByRole("link", { name: "Claves y servicios" }),
     ).toHaveAttribute("href", "#/service-credentials");

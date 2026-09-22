@@ -93,6 +93,7 @@ export type CrmDeal = {
 export type CrmConnection = {
   id: string;
   agencyId: number;
+  tenantId?: number;
   provider: CrmProviderId;
   status: CrmConnectionStatus;
   externalAccountLabel: string | null;
@@ -111,6 +112,7 @@ export type ActiveCrmConnection = CrmConnection & {
 export type CustomerCrmSyncRecord = {
   principalId: string;
   agencyId: number;
+  tenantId?: number;
   customerProfileId: number;
   provider: CrmProviderId;
   objectKind: CustomerCrmObjectKind;

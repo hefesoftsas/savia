@@ -52,6 +52,6 @@ describe("ServiceCredentialsPage", () => {
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "OpenRouter" })).toBeVisible();
     expect(screen.getByLabelText("Clave OpenRouter")).toBeVisible();
-    expect(screen.queryByRole("tab", { name: /Por agencia/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Por (organización|agencia)/i })).toBeNull();
   });
 });

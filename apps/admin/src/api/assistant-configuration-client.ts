@@ -44,10 +44,14 @@ export type AssistantModel = {
   supportsTools?: boolean;
 };
 
-export type AssistantActiveAgency = {
+export type AssistantActiveTenant = {
+  activeTenantId?: number;
   activeAgencyId?: number;
+  tenants?: { id: number; name: string }[];
   agencies: { id: number; name: string }[];
 };
+
+export type AssistantActiveAgency = AssistantActiveTenant;
 
 export class AssistantConfigurationClient {
   constructor(private readonly apiClient: ApiClient) {}
@@ -62,20 +66,31 @@ export class AssistantConfigurationClient {
     return this.apiClient.put("/v1/assistant/configuration/global", input);
   }
 
-  saveAgencyOverride(
-    agencyId: number,
+  saveTenantOverride(
+    tenantId: number,
     input: AssistantConfigurationWrite,
   ): Promise<AssistantConfigurationSummary> {
     return this.apiClient.put(
-      `/v1/assistant/configuration/agencies/${agencyId}`,
+      `/v1/assistant/configuration/tenants/${tenantId}`,
       input,
     );
   }
 
-  clearAgencyOverride(agencyId: number): Promise<void> {
+  saveAgencyOverride(
+    agencyId: number,
+    input: AssistantConfigurationWrite,
+  ): Promise<AssistantConfigurationSummary> {
+    return this.saveTenantOverride(agencyId, input);
+  }
+
+  clearTenantOverride(tenantId: number): Promise<void> {
     return this.apiClient.delete(
-      `/v1/assistant/configuration/agencies/${agencyId}`,
+      `/v1/assistant/configuration/tenants/${tenantId}`,
     );
+  }
+
+  clearAgencyOverride(agencyId: number): Promise<void> {
+    return this.clearTenantOverride(agencyId);
   }
 
   async models(): Promise<AssistantModel[]> {
@@ -85,11 +100,20 @@ export class AssistantConfigurationClient {
     return response.models;
   }
 
+  activeTenant(): Promise<AssistantActiveTenant> {
+    return this.apiClient.get("/v1/assistant/active-tenant");
+  }
+
   activeAgency(): Promise<AssistantActiveAgency> {
-    return this.apiClient.get("/v1/assistant/active-agency");
+    return this.activeTenant();
+  }
+
+  setActiveTenant(tenantId: number): Promise<AssistantActiveTenant> {
+    return this.apiClient.put("/v1/assistant/active-tenant", { tenantId });
   }
 
   setActiveAgency(agencyId: number): Promise<AssistantActiveAgency> {
-    return this.apiClient.put("/v1/assistant/active-agency", { agencyId });
+    return this.setActiveTenant(agencyId);
   }
 }
+

@@ -376,6 +376,11 @@ export const personalIntegrationsMessages = {
     "Specific LLM Model (Optional)",
     "Modelo LLM Específico (Opcional)",
   ],
+  "Hereda de la organización o global": [
+    "Hereda de la organización o global",
+    "Inherits from organization or global",
+    "Herda da organização ou global",
+  ],
   "Hereda de la agencia o global": [
     "Hereda de la agencia o global",
     "Inherits from agency or global",

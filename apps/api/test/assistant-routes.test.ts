@@ -378,6 +378,60 @@ describe("assistant routes", () => {
     expect(deleted.status).toBe(204);
   });
 
+  it("persists a chosen active tenant via agnostic active-tenant route", async () => {
+    await seedAssistantAgencyMember(101);
+    const app = createConfigurationApp(agencyMemberAuthenticator());
+    const response = await app.request(
+      "http://api.savia.test/v1/assistant/active-tenant",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenantId: 101 }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      activeTenantId: 101,
+      activeAgencyId: 101,
+    });
+
+    const getResponse = await app.request(
+      "http://api.savia.test/v1/assistant/active-tenant",
+    );
+    expect(getResponse.status).toBe(200);
+    await expect(getResponse.json()).resolves.toMatchObject({
+      activeTenantId: 101,
+      tenants: [expect.objectContaining({ id: 101 })],
+    });
+  });
+
+  it("saves a tenant override via agnostic configuration route and deletes it", async () => {
+    await seedAssistantAgencyMember(101);
+    const app = createConfigurationApp();
+    const saved = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/101",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "openai/gpt-5" }),
+      },
+    );
+
+    expect(saved.status).toBe(200);
+    await expect(saved.json()).resolves.toMatchObject({
+      tenants: [
+        expect.objectContaining({ tenantId: 101, model: "openai/gpt-5" }),
+      ],
+    });
+
+    const deleted = await app.request(
+      "http://api.savia.test/v1/assistant/configuration/tenants/101",
+      { method: "DELETE" },
+    );
+    expect(deleted.status).toBe(204);
+  });
+
   it("returns a bounded model catalog without exposing its configuration", async () => {
     const repository = configurationRepository();
     await repository.saveGlobal({
