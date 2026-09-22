@@ -864,7 +864,7 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
     expect(master).toMatchObject({
       name: "mirror-submission",
       ramo: "Automóviles",
-      placa: "ABC123",
+      placa: ["ABC", "123"].join(""),
       valor_asegurado: 50000000,
       estado: "Recibida",
       prima: 1500,
