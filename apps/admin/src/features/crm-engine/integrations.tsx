@@ -19,6 +19,7 @@ import { api } from "./api";
 import { inspectDocument, type ApiOperation } from "@savia/crm-shared/openapi";
 import { exampleOpenApi } from "@savia/crm-shared/seed";
 import type { CrmObject } from "@savia/crm-shared/metadata";
+import { FieldHelp } from "./field-help";
 import "./integrations.css";
 const DynamicForm = lazy(() => import("./dynamic-form"));
 const defaultConnection = {
@@ -85,12 +86,14 @@ export default function Integrations({
       <div className="page-heading">
         <div>
           <p className="eyebrow">{t("Integraciones")}</p>
-          <h1>{t("De API a herramienta.")}</h1>
-          <p>
-            {t(
-              "Importa contratos, configura conexiones y convierte respuestas en registros.",
-            )}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h1>{t("De API a herramienta.")}</h1>
+            <FieldHelp label={`${t("Integraciones")} (${t("Ayuda")})`}>
+              {t(
+                "Importa contratos, configura conexiones y convierte respuestas en registros.",
+              )}
+            </FieldHelp>
+          </div>
         </div>
         <span className="neutral-badge">{t("OpenAPI 3.0 / 3.1")}</span>
       </div>

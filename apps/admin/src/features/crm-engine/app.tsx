@@ -36,6 +36,11 @@ import { ListPagination } from "@/components/admin/list-pagination";
 import { ScreenListSkeleton } from "@/components/admin/page-skeletons";
 import { i18nProvider } from "@/lib/i18nProvider";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CollectionFollow } from "@/features/notifications/collection-follow";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,6 +91,7 @@ import {
   CalendarDays,
   Check,
   Code2,
+  Info,
   X,
   FileSpreadsheet,
 } from "lucide-react";
@@ -1708,6 +1714,10 @@ function NewObject({
 function Audit({ objectName }: { objectName?: string }) {
   const t = useMessages(automationMessages);
   const locale = useAppLocale();
+  const description =
+    t("Las últimas 100 operaciones guardadas") +
+    (objectName ? t(" para esta pantalla") : t(" en el dominio")) +
+    ".";
 
   const query = useQuery({
     queryKey: ["audit", objectName],
@@ -1731,11 +1741,23 @@ function Audit({ objectName }: { objectName?: string }) {
       <div className="page-heading">
         <div>
           <p className="eyebrow">{t("Todo cambio deja una historia")}</p>
-          <h1>{t("Historial de cambios")}</h1>
-          <p>
-            {t("Las últimas 100 operaciones guardadas")}
-            {objectName ? t(" para esta pantalla") : t(" en el dominio")}.
-          </p>
+          <div className="audit-heading-title">
+            <h1>{t("Historial de cambios")}</h1>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={description}
+                >
+                  <Info className="size-3.5" aria-hidden="true" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                {description}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
         <Button variant="outline" onClick={() => query.refetch()}>
           {t("Actualizar")}

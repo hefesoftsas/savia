@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  IntegrationHelpTooltip,
   IntegrationGroup,
   IntegrationGroupEmpty,
   IntegrationProviderIcon,
@@ -363,14 +364,14 @@ function SyncPanel({ crm }: { crm: SyncClient }) {
       className="rounded-xl border bg-card p-5"
       aria-labelledby="crm-sync-heading"
     >
-      <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
         <h2 id="crm-sync-heading" className="text-sm font-semibold">
           Sincronización automática
         </h2>
-        <p className="text-xs leading-5 text-muted-foreground">
+        <IntegrationHelpTooltip label="Ayuda sobre sincronización automática">
           Envía a HubSpot clientes nuevos y actualizados después de activar un
           tenant. No importa datos históricos. No elimina registros.
-        </p>
+        </IntegrationHelpTooltip>
       </div>
       {syncError ? (
         <p className="mt-3 text-xs text-destructive" role="alert">

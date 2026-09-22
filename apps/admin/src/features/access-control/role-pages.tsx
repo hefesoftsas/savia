@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Plus, ShieldCheck } from "lucide-react";
 import { createAccessControlClient } from "@/api/access-control-client";
 import type { AppServices } from "@/app-services";
 import { RoleEditor } from "./role-editor";
@@ -117,78 +118,103 @@ export function RolePages({ services }: { services: AppServices }) {
             <TabsTrigger value="members">{t("Members")}</TabsTrigger>
             <TabsTrigger value="audit">{t("Audit")}</TabsTrigger>
           </TabsList>
-          <TabsContent
-            value="roles"
-            className="mt-6 grid gap-6 md:grid-cols-[14rem_minmax(0,1fr)]"
-          >
-            <nav aria-label={t("Roles")} className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setSelected("new");
-                  setMessage("");
-                }}
+          <TabsContent value="roles" className="mt-5">
+            <section className="grid overflow-hidden rounded-xl border bg-card shadow-xs lg:grid-cols-[15rem_minmax(0,1fr)]">
+              <nav
+                aria-label={t("Roles")}
+                className="border-b bg-muted/20 lg:border-b-0 lg:border-r"
               >
-                {t("Create role")}
-              </Button>
-              {roles.data.roles.map((r) => (
-                <button
-                  type="button"
-                  aria-current={selected === r.id ? "true" : undefined}
-                  key={r.id}
-                  className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=true]:bg-muted"
-                  onClick={() => {
-                    setSelected(r.id);
-                    setMessage("");
-                  }}
-                >
-                  <span className="block font-medium">{r.label}</span>
-                  {r.protected && (
-                    <span className="text-xs text-muted-foreground">
-                      {t("Protected role")}
+                <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h2 className="text-sm font-semibold">{t("Roles")}</h2>
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full border bg-background px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+                      {roles.data.roles.length}
                     </span>
-                  )}
-                  {!r.enabled && (
-                    <span className="text-xs text-muted-foreground">
-                      {t("Disabled")}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
-            <div>
-              {selected ? (
-                <RoleEditor
-                  key={scope + ":" + selected}
-                  scope={scope}
-                  revision={roles.data.revision}
-                  role={roles.data.roles.find((r) => r.id === selected)}
-                  catalog={catalog.data}
-                  onDelete={async (id, revision) => {
-                    await client.deleteRole(scope, id, revision);
-                    await refresh();
-                    setSelected(undefined);
-                    setMessage("Role deleted.");
-                  }}
-                  onSave={async (input, id) => {
-                    const saved = await client.saveRole(input, id);
-                    await refresh();
-                    setSelected(undefined);
-                    setMessage(
-                      "Role saved. Select it to review its current permissions.",
-                    );
-                    return saved;
-                  }}
-                />
-              ) : (
-                <p className="py-8 text-sm text-muted-foreground">
-                  {t(
-                    "Select a role to inspect its permissions, or create a role with no initial access.",
-                  )}
-                </p>
-              )}
-            </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setSelected("new");
+                      setMessage("");
+                    }}
+                  >
+                    <Plus aria-hidden="true" />
+                    {t("Create role")}
+                  </Button>
+                </div>
+                {roles.data.roles.length > 0 ? (
+                  <ul className="space-y-1 p-2">
+                    {roles.data.roles.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          aria-current={selected === r.id ? "true" : undefined}
+                          className="block w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-background aria-[current=true]:font-medium aria-[current=true]:shadow-xs"
+                          onClick={() => {
+                            setSelected(r.id);
+                            setMessage("");
+                          }}
+                        >
+                          <span className="block truncate font-medium">
+                            {r.label}
+                          </span>
+                          {(r.protected || !r.enabled) && (
+                            <span className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+                              {r.protected && (
+                                <span>{t("Protected role")}</span>
+                              )}
+                              {!r.enabled && <span>{t("Disabled")}</span>}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="px-4 py-5 text-sm leading-6 text-muted-foreground">
+                    {t("No roles have been created in this workspace yet.")}
+                  </p>
+                )}
+              </nav>
+              <div className="min-w-0 bg-background p-5 sm:p-6">
+                {selected ? (
+                  <RoleEditor
+                    key={scope + ":" + selected}
+                    scope={scope}
+                    revision={roles.data.revision}
+                    role={roles.data.roles.find((r) => r.id === selected)}
+                    catalog={catalog.data}
+                    onDelete={async (id, revision) => {
+                      await client.deleteRole(scope, id, revision);
+                      await refresh();
+                      setSelected(undefined);
+                      setMessage("Role deleted.");
+                    }}
+                    onSave={async (input, id) => {
+                      const saved = await client.saveRole(input, id);
+                      await refresh();
+                      setSelected(undefined);
+                      setMessage(
+                        "Role saved. Select it to review its current permissions.",
+                      );
+                      return saved;
+                    }}
+                  />
+                ) : (
+                  <div className="flex min-h-48 flex-col items-center justify-center px-6 py-8 text-center sm:min-h-64 sm:py-10">
+                    <div className="mb-4 flex size-12 items-center justify-center rounded-xl border bg-muted/30 text-muted-foreground">
+                      <ShieldCheck aria-hidden="true" className="size-5" />
+                    </div>
+                    <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                      {t(
+                        "Select a role to inspect its permissions, or create a role with no initial access.",
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
           </TabsContent>
           <TabsContent value="members" className="mt-6">
             <AssignmentEditor

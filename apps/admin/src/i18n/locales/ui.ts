@@ -1,5 +1,7 @@
 export const uiMessages = {
   breadcrumb: ["Ruta de navegación", "breadcrumb", "Caminho de navegação"],
+  "Abrir asistente": ["Abrir asistente", "Open assistant", "Abrir assistente"],
+  Asistente: ["Asistente", "Assistant", "Assistente"],
   More: ["Más", "More", "Mais"],
   Close: ["Cerrar", "Close", "Fechar"],
   pagination: ["Paginación", "pagination", "Paginação"],

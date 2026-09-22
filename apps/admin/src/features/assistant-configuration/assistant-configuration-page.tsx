@@ -474,6 +474,7 @@ export function AssistantConfigurationPanel({
           description={t(
             "Asistente de IA: clave y modelo predeterminado del espacio.",
           )}
+          descriptionAsTooltip
           requirement="required"
           status={
             <CredentialStatusBadge

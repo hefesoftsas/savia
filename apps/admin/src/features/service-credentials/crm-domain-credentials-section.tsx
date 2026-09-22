@@ -98,6 +98,7 @@ function GlobalCredentialsPanel({
       description={t(
         "Una clave por espacio. Solo se usa cuando activas el servicio correspondiente.",
       )}
+      descriptionAsTooltip
     >
       {globalCredentials}
       {loadingMessage}

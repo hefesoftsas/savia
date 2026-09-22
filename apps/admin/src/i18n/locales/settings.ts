@@ -132,6 +132,33 @@ export const settingsMessages = {
     "No organizations are available for this account.",
     "Não há organizações disponíveis para esta conta.",
   ],
+  "Aún no hay organizaciones comerciales": [
+    "Aún no hay organizaciones comerciales",
+    "There are no commercial organizations yet",
+    "Ainda não há organizações comerciais",
+  ],
+  "No tienes organizaciones asignadas": [
+    "No tienes organizaciones asignadas",
+    "No organizations are assigned to you",
+    "Você não tem organizações atribuídas",
+  ],
+  "Crea una organización para personalizar su identidad y su pantalla de acceso. Cuando exista, podrás elegirla aquí.":
+    [
+      "Crea una organización para personalizar su identidad y su pantalla de acceso. Cuando exista, podrás elegirla aquí.",
+      "Create an organization to customize its identity and sign-in screen. Once it exists, you can select it here.",
+      "Crie uma organização para personalizar sua identidade e tela de acesso. Quando ela existir, você poderá selecioná-la aqui.",
+    ],
+  "Pide a un administrador de plataforma que te agregue a una organización para poder editar su marca.":
+    [
+      "Pide a un administrador de plataforma que te agregue a una organización para poder editar su marca.",
+      "Ask a platform administrator to add you to an organization so you can edit its branding.",
+      "Peça a um administrador da plataforma para adicionar você a uma organização e permitir que edite sua marca.",
+    ],
+  "Crear organización": [
+    "Crear organización",
+    "Create organization",
+    "Criar organização",
+  ],
   "No hay agencias disponibles para esta cuenta.": [
     "No hay agencias disponibles para esta cuenta.",
     "No agencies are available for this account.",

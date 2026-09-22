@@ -515,6 +515,11 @@
     gap: 12px;
     align-items: center;
   }
+  .audit-heading-title {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
   .page-heading p:not(.eyebrow) {
     margin-top: 10px;
     font-size: 12px;

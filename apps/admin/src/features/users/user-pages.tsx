@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Trash2,
+  Info,
 } from "lucide-react";
 import {
   required,
@@ -59,6 +60,7 @@ import type {
 import type { AgencyAccessRole } from "@/api/identity-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButtonWithTooltip } from "@/components/admin/icon-button-with-tooltip";
 import {
   Select,
   SelectContent,
@@ -290,16 +292,19 @@ function TenantUserScope() {
   return (
     <section className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <div>
-        <p className="font-medium">
+        <p className="flex flex-wrap items-center gap-2 font-medium">
           {translate("savia.users.tenantUsers", {
             id: tenantId,
             _: `Usuarios del tenant #${tenantId}`,
           })}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "Este listado muestra únicamente las personas asignadas a este tenant.",
-          )}
+          <IconButtonWithTooltip
+            label={t(
+              "Este listado muestra únicamente las personas asignadas a este tenant.",
+            )}
+            className="size-5 p-0"
+          >
+            <Info className="size-3.5" aria-hidden="true" />
+          </IconButtonWithTooltip>
         </p>
       </div>
       <Button type="button" variant="outline" onClick={clearTenantScope}>

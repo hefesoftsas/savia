@@ -341,6 +341,11 @@ export const accessMessages = {
   Roles: ["Roles", "Roles", "Papéis"],
   Audit: ["Auditoría", "Audit", "Auditoria"],
   "Create role": ["Crear rol", "Create role", "Criar papel"],
+  "No roles have been created in this workspace yet.": [
+    "Aún no se han creado roles en este espacio de trabajo.",
+    "No roles have been created in this workspace yet.",
+    "Ainda não foram criados papéis neste espaço de trabalho.",
+  ],
   "Protected role": ["Rol protegido", "Protected role", "Papel protegido"],
   Disabled: ["Desactivado", "Disabled", "Desativado"],
   "Role deleted.": ["Rol eliminado.", "Role deleted.", "Papel excluído."],

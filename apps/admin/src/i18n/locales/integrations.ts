@@ -8,6 +8,11 @@ export const integrationMessages = {
 /** Personal integrations (connections) and virtual AI employees UI copy. Keys are the Spanish source. */
 export const personalIntegrationsMessages = {
   Integraciones: ["Integraciones", "Integrations", "Integrações"],
+  "Ayuda sobre %{v1}": [
+    "Ayuda sobre %{v1}",
+    "Help with %{v1}",
+    "Ajuda sobre %{v1}",
+  ],
   "Conecta tus cuentas, servicios y configura los empleados virtuales de IA para Savia.":
     [
       "Conecta tus cuentas, servicios y configura los empleados virtuales de IA para Savia.",
@@ -36,11 +41,6 @@ export const personalIntegrationsMessages = {
       "The running API does not include personal integrations yet. Restart Savia from the current version.",
       "A API em execução ainda não inclui integrações pessoais. Reinicie o Savia a partir da versão atual.",
     ],
-  "El servicio está temporalmente no disponible.": [
-    "El servicio está temporalmente no disponible.",
-    "The service is temporarily unavailable.",
-    "O serviço está temporariamente indisponível.",
-  ],
   "Conectado como %{label}.": [
     "Conectado como %{label}.",
     "Connected as %{label}.",

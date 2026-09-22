@@ -9,6 +9,8 @@ import {
   type FormEvent,
 } from "react";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host";
+import { Building2, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   brandingForeground,
   parseTenantBranding,
@@ -44,6 +46,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [canCreateOrganization, setCanCreateOrganization] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const dedicated = !!parseTenantSlugFromHostname(window.location.hostname);
   useEffect(() => {
@@ -62,6 +65,12 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
         const list = Array.isArray(response.data)
           ? response.data
           : [response.data];
+        // The tenant list endpoint exposes the internal platform tenant only
+        // to platform administrators. Use that server-filtered result to offer
+        // the create action only to people who can actually use it.
+        const canCreateOrganization = list.some(
+          (tenant) => tenant?.kind === "platform",
+        );
         const valid = list.filter(
           (tenant) =>
             tenant &&
@@ -73,6 +82,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
             typeof tenant.name === "string",
         );
         setTenants(valid);
+        setCanCreateOrganization(canCreateOrganization);
         setSelected(valid[0] ? String(valid[0].id) : "");
       })
       .catch((cause) => {
@@ -144,7 +154,35 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
           )}
         </>
       ) : (
-        <p>{t("No hay organizaciones disponibles para esta cuenta.")}</p>
+        <section className="tenant-branding-empty" role="status">
+          <div className="tenant-branding-empty-icon" aria-hidden="true">
+            <Building2 />
+          </div>
+          <div className="tenant-branding-empty-copy">
+            <h2>
+              {canCreateOrganization
+                ? t("Aún no hay organizaciones comerciales")
+                : t("No tienes organizaciones asignadas")}
+            </h2>
+            <p>
+              {canCreateOrganization
+                ? t(
+                    "Crea una organización para personalizar su identidad y su pantalla de acceso. Cuando exista, podrás elegirla aquí.",
+                  )
+                : t(
+                    "Pide a un administrador de plataforma que te agregue a una organización para poder editar su marca.",
+                  )}
+            </p>
+            {canCreateOrganization && (
+              <Button asChild className="tenant-branding-empty-action">
+                <Link to="/tenants/create">
+                  <Plus aria-hidden="true" />
+                  {t("Crear organización")}
+                </Link>
+              </Button>
+            )}
+          </div>
+        </section>
       )}
     </main>
   );

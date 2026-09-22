@@ -1,5 +1,5 @@
 import type { ElementType, ReactNode } from "react";
-import { CheckCircle2, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Info, LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,13 +32,47 @@ export function IntegrationsPageHeader({
   title: string;
   description?: string;
 }) {
+  const t = useMessages(personalIntegrationsMessages);
   return (
     <header className="integrations-page__header">
-      <h1 className="integrations-page__title">{title}</h1>
       {description ? (
-        <p className="integrations-page__description">{description}</p>
-      ) : null}
+        <div className="flex items-center gap-2">
+          <h1 className="integrations-page__title">{title}</h1>
+          <IntegrationHelpTooltip
+            label={t("Ayuda sobre %{v1}", { v1: title.toLowerCase() })}
+          >
+            {description}
+          </IntegrationHelpTooltip>
+        </div>
+      ) : (
+        <h1 className="integrations-page__title">{title}</h1>
+      )}
     </header>
+  );
+}
+
+export function IntegrationHelpTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={label}
+        >
+          <Info className="size-3.5" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="max-w-xs">
+        {children}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -142,9 +176,11 @@ export function IntegrationProviderRow({
           <p className="integrations-row__name truncate text-sm font-medium leading-5">
             {name}
           </p>
-          <p className="integrations-row__hint truncate text-xs leading-5 text-muted-foreground">
-            {hint}
-          </p>
+          {hint ? (
+            <p className="integrations-row__hint truncate text-xs leading-5 text-muted-foreground">
+              {hint}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="integrations-row__actions flex items-center gap-2 shrink-0">

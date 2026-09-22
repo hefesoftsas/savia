@@ -12,10 +12,15 @@
  * side (Exportar / Importar); import grows into preview and results below.
  * FORM: bulk-only transfer; per-flow editing stays in the flow workspace.
  */
-import { useRef, useState } from "react";
-import { Download, KeyRound, Upload } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { Download, Info, KeyRound, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSaviaRequestWorkspace } from "./savia-request-provider";
 import {
   buildSecretsFile,
@@ -43,6 +48,31 @@ type ImportResult = {
   status: "updated" | "unchanged" | "unknown" | "error";
   error?: string;
 };
+
+function SecretHelp({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={label}
+        >
+          <Info className="size-3.5" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        {children}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function SecretsScreen() {
   const { api, busy: parentBusy, dirty } = useSaviaRequestWorkspace();
@@ -179,11 +209,13 @@ export function SecretsScreen() {
           <KeyRound className="size-4" aria-hidden="true" />
           Administración
         </div>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Secretos</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Mueve los secretos de todos los flows entre ambientes con un único
-          archivo. Exporta en el ambiente origen e impórtalo en el destino.
-        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <h1 className="text-3xl font-semibold tracking-tight">Secretos</h1>
+          <SecretHelp label="Ayuda sobre la transferencia de secretos">
+            Mueve los secretos de todos los flows entre ambientes con un único
+            archivo. Exporta en el ambiente origen e impórtalo en el destino.
+          </SecretHelp>
+        </div>
       </header>
 
       {dirty ? (
@@ -199,15 +231,16 @@ export function SecretsScreen() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Exportar todo</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle>Exportar todo</CardTitle>
+              <SecretHelp label="Ayuda para exportar secretos">
+                Descarga un archivo JSON con las variables de todos los flows,
+                incluyendo los valores de los secretos.
+              </SecretHelp>
+            </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Descarga un archivo JSON con las variables de todos los flows,
-              incluyendo los valores de los secretos.
-            </p>
             <Button
-              className="mt-4"
               disabled={disabled}
               onClick={() => void exportAll()}
               type="button"
@@ -220,14 +253,16 @@ export function SecretsScreen() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Importar todo</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle>Importar todo</CardTitle>
+              <SecretHelp label="Ayuda para importar secretos">
+                Sube el archivo exportado en el otro ambiente. Revisa el resumen
+                y aplica la importación a todos los flows a la vez.
+              </SecretHelp>
+            </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Sube el archivo exportado en el otro ambiente. Revisa el resumen y
-              aplica la importación a todos los flows a la vez.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 disabled={disabled}
                 onClick={() => fileInput.current?.click()}
@@ -276,11 +311,17 @@ export function SecretsScreen() {
         </Card>
       </div>
 
-      <p className="mt-5 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-        Los archivos contienen secretos en texto plano. Guárdalos en un lugar
-        seguro, elimínalos después de importarlos y nunca los subas a Git. Los
-        valores vacíos nunca sobrescriben lo ya guardado en el destino.
-      </p>
+      <div
+        className="mt-5 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground"
+        role="note"
+      >
+        <span>Seguridad del archivo</span>
+        <SecretHelp label="Ayuda sobre la seguridad del archivo">
+          Los archivos contienen secretos en texto plano. Guárdalos en un lugar
+          seguro, elimínalos después de importarlos y nunca los subas a Git. Los
+          valores vacíos nunca sobrescriben lo ya guardado en el destino.
+        </SecretHelp>
+      </div>
 
       {message ? (
         <p

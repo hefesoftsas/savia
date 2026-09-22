@@ -122,8 +122,7 @@ function providerHint(
   provider: PersonalIntegrationProvider,
   connection: PersonalIntegrationConnection | undefined,
 ): string {
-  if (provider.availability === "unavailable")
-    return t("El servicio está temporalmente no disponible.");
+  if (provider.availability === "unavailable") return "";
   if (connection?.status === "connected")
     return connection.externalAccountLabel
       ? t("Conectado como %{label}.", {

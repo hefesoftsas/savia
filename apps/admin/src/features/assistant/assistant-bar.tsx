@@ -84,6 +84,8 @@ import {
   type StoredUIMessage,
 } from "./assistant-thread-storage";
 import { AssistantThreadList } from "./assistant-thread-list";
+import { useMessages } from "@/i18n/core";
+import { uiMessages } from "@/i18n/locales/ui";
 
 type PreparedAction = {
   actionId: string;
@@ -1555,6 +1557,7 @@ function AssistantConversation({
 }
 
 export function AssistantBar() {
+  const t = useMessages(uiMessages);
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"chat" | "history">("chat");
   const { authProvider } = useAppServices();
@@ -1681,10 +1684,10 @@ export function AssistantBar() {
       <SheetTrigger asChild>
         <Button
           className="fixed right-4 bottom-4 z-40 h-12 gap-2.5 rounded-full border border-primary/20 bg-primary px-4.5 font-medium text-primary-foreground shadow-xl transition-all hover:scale-[1.02] hover:bg-primary/90 active:scale-[0.98] sm:right-6 sm:bottom-6"
-          aria-label="Abrir asistente"
+          aria-label={t("Abrir asistente")}
         >
           <Sparkles className="size-4" />
-          <span>Asistente</span>
+          <span>{t("Asistente")}</span>
         </Button>
       </SheetTrigger>
       <SheetContent className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl">

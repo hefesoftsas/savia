@@ -267,7 +267,7 @@ export function CrmPage({ services }: { services: AppServices }) {
   return (
     <section className="@container min-w-0 w-full">
       {selected ? (
-        headerActions ? (
+        headerActions && params.get("view") !== "audit" ? (
           createPortal(domainContext, headerActions)
         ) : null
       ) : (

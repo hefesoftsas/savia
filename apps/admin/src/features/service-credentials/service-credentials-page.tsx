@@ -27,13 +27,12 @@ export function ServiceCredentialsPage({
               _: "Claves y servicios",
             })}
           </h1>
-          <CredentialsHelpTooltip />
+          <CredentialsHelpTooltip
+            description={translate("savia.serviceCredentials.description", {
+              _: "Administra las credenciales del espacio. Se cifran en el servidor y no se devuelven al navegador.",
+            })}
+          />
         </div>
-        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-          {translate("savia.serviceCredentials.description", {
-            _: "Administra las credenciales del espacio. Se cifran en el servidor y no se devuelven al navegador.",
-          })}
-        </p>
       </header>
 
       <CrmDomainCredentialsSection

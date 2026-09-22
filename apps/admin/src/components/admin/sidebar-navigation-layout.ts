@@ -62,7 +62,6 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
           "provider-credentials",
           "virtual-employees",
           "integrations",
-          "domain-packages",
         ],
         administration: [
           "users",

@@ -7,6 +7,9 @@ or access to application data. Open **Administración → Identidad del espacio*
 Platform administrators can configure any active commercial tenant. Active tenant
 administrators (`tenant_admin` or `agency_admin`) can configure only their own tenants.
 Other members may read the saved configuration but cannot change it or upload images.
+When no commercial organization is available, platform administrators can start tenant
+creation from this page; other users are directed to request access from a platform
+administrator.
 
 The guided editor supports a display name, logo, login cover image, welcome title,
 welcome text, primary color, and accent color. Preview changes before saving. The

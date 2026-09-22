@@ -88,7 +88,11 @@ export function CredentialStatusBadge({
   );
 }
 
-export function CredentialsHelpTooltip() {
+export function CredentialsHelpTooltip({
+  description,
+}: {
+  description?: string;
+}) {
   const translate = useTranslate();
   return (
     <Tooltip>
@@ -103,10 +107,41 @@ export function CredentialsHelpTooltip() {
           <CircleHelp className="size-4" aria-hidden="true" />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={8} className="max-w-xs">
-        {translate("savia.serviceCredentials.helpTooltipContent", {
-          _: "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Globales: una clave por espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
-        })}
+      <TooltipContent side="bottom" sideOffset={8} className="max-w-sm">
+        <div className="space-y-2">
+          {description ? <p>{description}</p> : null}
+          <p>
+            {translate("savia.serviceCredentials.helpTooltipContent", {
+              _: "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Globales: una clave por espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
+            })}
+          </p>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function CredentialDescriptionTooltip({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const translate = useTranslate();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={translate("savia.serviceCredentials.helpTooltipAria", {
+            _: "Ayuda sobre credenciales",
+          })}
+        >
+          <CircleHelp className="size-3.5" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="max-w-xs">
+        {children}
       </TooltipContent>
     </Tooltip>
   );
@@ -115,17 +150,26 @@ export function CredentialsHelpTooltip() {
 export function CredentialGroup({
   title,
   description,
+  descriptionAsTooltip = false,
   children,
 }: {
   title: string;
   description: string;
+  descriptionAsTooltip?: boolean;
   children: ReactNode;
 }) {
   return (
     <section className="credentials-group">
       <header className="credentials-group-header">
-        <h2>{title}</h2>
-        <p>{description}</p>
+        <div className="flex items-center gap-1.5">
+          <h2>{title}</h2>
+          {descriptionAsTooltip ? (
+            <CredentialDescriptionTooltip>
+              {description}
+            </CredentialDescriptionTooltip>
+          ) : null}
+        </div>
+        {!descriptionAsTooltip ? <p>{description}</p> : null}
       </header>
       <div className="credentials-group-body">{children}</div>
     </section>
@@ -135,12 +179,14 @@ export function CredentialGroup({
 export function CredentialEntry({
   title,
   description,
+  descriptionAsTooltip = false,
   requirement,
   status,
   children,
 }: {
   title: string;
   description: string;
+  descriptionAsTooltip?: boolean;
   requirement: CredentialRequirementKind;
   status?: ReactNode;
   children: ReactNode;
@@ -153,8 +199,15 @@ export function CredentialEntry({
             <CredentialRequirementBadge kind={requirement} />
             {status}
           </div>
-          <h3>{title}</h3>
-          <p>{description}</p>
+          <div className="flex items-center gap-1.5">
+            <h3>{title}</h3>
+            {descriptionAsTooltip ? (
+              <CredentialDescriptionTooltip>
+                {description}
+              </CredentialDescriptionTooltip>
+            ) : null}
+          </div>
+          {!descriptionAsTooltip ? <p>{description}</p> : null}
         </div>
       </header>
       <div className="credentials-entry-body">{children}</div>

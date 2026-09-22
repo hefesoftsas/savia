@@ -53,6 +53,7 @@ import { ModelInput } from "@/features/assistant-configuration/assistant-configu
 import { ModelCapabilityBadges } from "@/features/assistant-configuration/model-capability-badges";
 import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
+import { IntegrationHelpTooltip } from "./integration-ui";
 
 const AVATAR_ICONS: Record<string, ElementType> = {
   briefcase: Briefcase,
@@ -383,18 +384,24 @@ export function VirtualEmployeesManagement({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">
-            {t("Empleados Virtuales de IA")}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t("Digital colleagues que puedes invocar usando")}{" "}
-            <code className="bg-muted px-1 py-0.5 rounded font-mono text-xs">
-              @nombre
-            </code>{" "}
-            {t(
-              "en el chat, con acceso scoped a colecciones y base de conocimiento Cloudflare RAG.",
-            )}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-xl font-bold tracking-tight">
+              {t("Empleados Virtuales de IA")}
+            </h2>
+            <IntegrationHelpTooltip
+              label={t("Ayuda sobre %{v1}", {
+                v1: t("Empleados Virtuales de IA").toLowerCase(),
+              })}
+            >
+              {t("Digital colleagues que puedes invocar usando")}{" "}
+              <code className="bg-muted px-1 py-0.5 rounded font-mono text-xs">
+                @nombre
+              </code>{" "}
+              {t(
+                "en el chat, con acceso scoped a colecciones y base de conocimiento Cloudflare RAG.",
+              )}
+            </IntegrationHelpTooltip>
+          </div>
         </div>
         <Button onClick={openCreate} className="shrink-0 gap-1.5">
           <Plus className="size-4" />

@@ -585,10 +585,7 @@ export default function CollectionSourcesPanel({
           <Layers className="size-5 text-primary" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <Badge variant="outline" className="text-xs font-normal">
-            {t("Dominio ·")} {scope ?? t("Plataforma")}
-          </Badge>
-          <div className="mt-2 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {t("Fuentes y colecciones")}
             </h1>
@@ -687,14 +684,18 @@ export default function CollectionSourcesPanel({
                   />
                 </span>
                 <div className="space-y-1">
-                  <h2 className="text-base font-semibold text-foreground">
-                    {t("Fuentes configuradas")}
-                  </h2>
-                  <CardDescription className="text-xs leading-relaxed">
-                    {t(
-                      "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
-                    )}
-                  </CardDescription>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-semibold text-foreground">
+                      {t("Fuentes configuradas")}
+                    </h2>
+                    <FieldHelp
+                      label={`${t("Fuentes configuradas")} (${t("Ayuda")})`}
+                    >
+                      {t(
+                        "Conexiones a servicios web JSON:API y a bases de datos externas con permisos de lectura y escritura.",
+                      )}
+                    </FieldHelp>
+                  </div>
                 </div>
               </div>
               <Tooltip>
@@ -1159,10 +1160,10 @@ export default function CollectionSourcesPanel({
                       aria-hidden="true"
                     />
                   </div>
-                  <p className="mt-4 text-sm font-semibold text-foreground">
+                  <p className="mt-6 text-sm font-semibold text-foreground">
                     {t("Sin fuentes externas")}
                   </p>
-                  <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+                  <p className="mt-3 max-w-md text-xs leading-5 text-muted-foreground">
                     {t(
                       "Las colecciones existentes están disponibles sin configurar una fuente externa.",
                     )}
@@ -1183,14 +1184,18 @@ export default function CollectionSourcesPanel({
                   <Link2 className="size-4 text-primary" aria-hidden="true" />
                 </span>
                 <div className="space-y-1">
-                  <CardTitle className="text-base font-semibold">
-                    {t("Vincular colección a una pantalla")}
-                  </CardTitle>
-                  <CardDescription className="text-xs leading-relaxed">
-                    {t(
-                      "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
-                    )}
-                  </CardDescription>
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-base font-semibold">
+                      {t("Vincular colección a una pantalla")}
+                    </CardTitle>
+                    <FieldHelp
+                      label={`${t("Vincular colección a una pantalla")} (${t("Ayuda")})`}
+                    >
+                      {t(
+                        "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
+                      )}
+                    </FieldHelp>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -1621,14 +1626,18 @@ export default function CollectionSourcesPanel({
                   <Layers className="size-4 text-primary" aria-hidden="true" />
                 </span>
                 <div className="space-y-1">
-                  <CardTitle className="text-base font-semibold">
-                    {t("Colecciones vinculadas")}
-                  </CardTitle>
-                  <CardDescription className="text-xs leading-relaxed">
-                    {t(
-                      "Pantallas disponibles en este dominio con su origen de datos.",
-                    )}
-                  </CardDescription>
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-base font-semibold">
+                      {t("Colecciones vinculadas")}
+                    </CardTitle>
+                    <FieldHelp
+                      label={`${t("Colecciones vinculadas")} (${t("Ayuda")})`}
+                    >
+                      {t(
+                        "Pantallas disponibles en este dominio con su origen de datos.",
+                      )}
+                    </FieldHelp>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -1799,7 +1808,7 @@ export default function CollectionSourcesPanel({
                       aria-hidden="true"
                     />
                   </div>
-                  <p className="mt-4 text-sm font-semibold text-foreground">
+                  <p className="mt-6 text-sm font-semibold text-foreground">
                     {t("Aún no hay colecciones vinculadas en este dominio.")}
                   </p>
                   <Button

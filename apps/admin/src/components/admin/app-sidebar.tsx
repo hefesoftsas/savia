@@ -376,7 +376,6 @@ export function AppSidebar() {
         "domain-sources",
         "domain-operations",
         "domain-history",
-        "domain-packages",
       ] as const) {
         const definition = navigationDefinitions[id];
         const target = new URLSearchParams(definition.route.split("?")[1]);
@@ -408,8 +407,7 @@ export function AppSidebar() {
             "new-object",
             "import-spreadsheet",
             "import-request",
-          ].includes(current.get("view") ?? "") &&
-          current.get("tab") !== "packages";
+          ].includes(current.get("view") ?? "");
       }
     }
     return items;

@@ -6,7 +6,10 @@ import { CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatConfiguredDate } from "@/features/service-credentials/credential-registry";
+import {
+  CredentialDescriptionTooltip,
+  formatConfiguredDate,
+} from "@/features/service-credentials/credential-registry";
 import { api } from "./api";
 
 type GeocodingSettings = {
@@ -70,17 +73,23 @@ export function GeocodingSettingsPanel() {
             : t("Geoapify está disponible mediante configuración del servidor.")
           : t("Geoapify requiere una API key gratuita.")}
       </p>
-      <Input
-        type="password"
-        autoComplete="new-password"
-        value={apiKey}
-        placeholder={
-          settings.data?.geoapifyStored
-            ? t("•••••••••••••••• (dejar en blanco para conservar)")
-            : t("Pega tu API key de Geoapify")
-        }
-        onChange={(event) => setApiKey(event.target.value)}
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          className="min-w-0 flex-1"
+          type="password"
+          autoComplete="new-password"
+          value={apiKey}
+          placeholder={
+            settings.data?.geoapifyStored
+              ? t("•••••••••••••••• (dejar en blanco para conservar)")
+              : t("Pega tu API key de Geoapify")
+          }
+          onChange={(event) => setApiKey(event.target.value)}
+        />
+        <CredentialDescriptionTooltip>
+          {t("La clave se cifra en el servidor y no se devuelve al navegador.")}
+        </CredentialDescriptionTooltip>
+      </div>
       {settings.data?.geoapifyStored ? (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200">
           <span className="flex items-center gap-1.5 font-medium">
@@ -119,9 +128,6 @@ export function GeocodingSettingsPanel() {
           </Button>
         ) : null}
       </div>
-      <p className="studio-field-help">
-        {t("La clave se cifra en el servidor y no se devuelve al navegador.")}
-      </p>
     </fieldset>
   );
 }
