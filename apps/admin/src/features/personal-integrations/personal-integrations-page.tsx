@@ -115,7 +115,10 @@ function providerIcon(provider: PersonalIntegrationProviderId) {
 }
 
 function providerHint(
-  t: (key: keyof typeof personalIntegrationsMessages & string, params?: Record<string, string | number>) => string,
+  t: (
+    key: keyof typeof personalIntegrationsMessages & string,
+    params?: Record<string, string | number>,
+  ) => string,
   provider: PersonalIntegrationProvider,
   connection: PersonalIntegrationConnection | undefined,
 ): string {
@@ -233,7 +236,9 @@ export function PersonalIntegrationsPage({
   const activeTab =
     searchParams.get("tab") === "virtual-employees"
       ? "virtual-employees"
-      : "connections";
+      : searchParams.get("tab") === "crm"
+        ? "crm"
+        : "connections";
   const selectTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", tab);
@@ -393,7 +398,10 @@ export function PersonalIntegrationsPage({
         className="w-full space-y-6"
       >
         <TabsList className="mb-2">
-          <TabsTrigger value="connections">{t("Cuentas y Conexiones")}</TabsTrigger>
+          <TabsTrigger value="connections">
+            {t("Cuentas y Conexiones")}
+          </TabsTrigger>
+          <TabsTrigger value="crm">{t("CRM")}</TabsTrigger>
           <TabsTrigger value="virtual-employees">
             {t("Empleados Virtuales (IA)")}
           </TabsTrigger>
@@ -481,10 +489,12 @@ export function PersonalIntegrationsPage({
                   ) : null}
                 </IntegrationGroup>
               ))}
-
-              <CrmConnectionsPage embedded services={{ crm: services.crm }} />
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="crm" className="space-y-6">
+          <CrmConnectionsPage embedded services={{ crm: services.crm }} />
         </TabsContent>
 
         <TabsContent value="virtual-employees" className="space-y-6">

@@ -428,7 +428,8 @@ export function CrmDomainCredentialsSection({
                 crmHref({
                   domain: domain.id,
                   object: fallbackObject,
-                  view: "integrations",
+                  view: "collection-sources",
+                  tab: "integrations",
                 }),
               )
             }

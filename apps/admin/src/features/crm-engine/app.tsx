@@ -134,7 +134,6 @@ const RequestPage = lazy(() => import("./request-page"));
 const RequestPageGenerator = lazy(() => import("./request-page-generator"));
 const Records = lazy(() => import("./records"));
 const CollectionSourcesPanel = lazy(() => import("./collection-sources-panel"));
-const Integrations = lazy(() => import("./integrations"));
 const ServiceCredentials = lazy(() => import("./service-credentials"));
 const Operations = lazy(() => import("./operations"));
 const CollectionRelations = lazy(() => import("./collection-relations"));
@@ -423,7 +422,10 @@ function App({
     ? contribution.Screen
     : null;
   const extensionApi = useMemo(
-    () => (contribution ? extensionApiFor(contribution, api, () => extensionLocaleRef.current) : null),
+    () =>
+      contribution
+        ? extensionApiFor(contribution, api, () => extensionLocaleRef.current)
+        : null,
     [contribution?.extensionId],
   );
   useEffect(() => {
@@ -699,22 +701,16 @@ function App({
   const domainContent =
     view === "integrations" ? (
       <Suspense fallback={<Loading />}>
-        {!getCrmRuntime().apiBasePath?.startsWith("/v1/dynamic-crm/") && (
-          <div className="mb-5 flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(selected, "collection-sources")}
-            >
-              {t("Fuentes y colecciones")}
-            </Button>
-          </div>
-        )}
-        <Integrations
+        <CollectionSourcesPanel
+          onBound={async (bound) => {
+            await refresh();
+            navigate(bound.name, "admin-screen");
+          }}
           onImported={(name) => {
             refresh();
             navigate(name);
           }}
+          initialSection="integrations"
         />
       </Suspense>
     ) : view === "operations" ? (
@@ -744,6 +740,11 @@ function App({
                     await refresh();
                     navigate(bound.name, "admin-screen");
                   }}
+                  onImported={(name) => {
+                    refresh();
+                    navigate(name);
+                  }}
+                  initialSection={location.get("tab") ?? undefined}
                 />
               </Suspense>
             </>
@@ -1863,7 +1864,9 @@ export default function Root({
         store={store}
         i18nProvider={i18nProvider}
       >
-        <ExtensionLocaleBridge><App embedded={embedded} search={search} /></ExtensionLocaleBridge>
+        <ExtensionLocaleBridge>
+          <App embedded={embedded} search={search} />
+        </ExtensionLocaleBridge>
       </CoreAdminContext>
     </div>
   );

@@ -60,12 +60,14 @@ export function crmHref(input: {
   agencyId?: number;
   object?: string;
   view?: string;
+  tab?: string;
 }): string {
   const search = new URLSearchParams();
   if (input.domain) search.set("domain", input.domain);
   else if (input.agencyId) search.set("agencyId", String(input.agencyId));
   if (input.object) search.set("object", input.object);
   if (input.view && input.view !== "records") search.set("view", input.view);
+  if (input.tab) search.set("tab", input.tab);
   const query = search.toString();
   return query ? `/crm?${query}` : "/crm";
 }

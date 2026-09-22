@@ -205,7 +205,8 @@ export default function ScreenAdministration({
     {
       label: t("Integraciones y API"),
       icon: Plug,
-      view: "integrations",
+      view: "collection-sources",
+      extra: { tab: "integrations" },
       primary: false,
       visible: objects.length > 0,
     },

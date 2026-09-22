@@ -22,7 +22,11 @@ export default function ServiceCredentials({
 }: {
   selected: string;
   domainTools: boolean;
-  onNavigate: (name: string, view: string) => void;
+  onNavigate: (
+    name: string,
+    view: string,
+    extra?: Record<string, string>,
+  ) => void;
 }) {
   const t = useMessages(automationMessages);
 
@@ -130,7 +134,9 @@ export default function ServiceCredentials({
         )}
         <Button
           variant="outline"
-          onClick={() => onNavigate(selected, "integrations")}
+          onClick={() =>
+            onNavigate(selected, "collection-sources", { tab: "integrations" })
+          }
         >
           {t("Administrar integraciones")}
           <ArrowUpRight size={15} aria-hidden="true" />

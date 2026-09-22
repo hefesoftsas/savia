@@ -141,6 +141,7 @@ function createServices() {
 describe("PersonalIntegrationsPage", () => {
   it("combines personal accounts and private CRM connections in one integrations screen", async () => {
     const services = createServices();
+    const user = userEvent.setup();
 
     render(
       <MemoryRouter>
@@ -153,13 +154,18 @@ describe("PersonalIntegrationsPage", () => {
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Google" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Microsoft" })).toBeVisible();
-    expect(await screen.findByRole("heading", { name: "CRM" })).toBeVisible();
     expect(screen.getByLabelText("Logo de Google Calendar")).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "CRM" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "CRM" }));
+    expect(await screen.findByRole("heading", { name: "CRM" })).toBeVisible();
     expect(screen.getByLabelText("Logo de HubSpot")).toBeVisible();
   });
 
   it("loads user-owned CRM connections alongside personal integrations", async () => {
     const services = createServices();
+    const user = userEvent.setup();
 
     render(
       <MemoryRouter>
@@ -168,6 +174,7 @@ describe("PersonalIntegrationsPage", () => {
     );
 
     await screen.findByRole("heading", { name: "Integraciones" });
+    await user.click(screen.getByRole("tab", { name: "CRM" }));
     await waitFor(() =>
       expect(services.crm.listProviders).toHaveBeenCalledWith(),
     );
@@ -323,6 +330,14 @@ it("opens employee deep links and preserves query context and history when switc
   );
   expect(await screen.findByText("Sofía")).toBeVisible();
   await user.click(screen.getByRole("tab", { name: "Cuentas y Conexiones" }));
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "?domain=demo&tab=connections",
+  );
+  await user.click(screen.getByRole("tab", { name: "CRM" }));
+  expect(screen.getByLabelText("Current URL")).toHaveTextContent(
+    "?domain=demo&tab=crm",
+  );
+  await user.click(screen.getByRole("button", { name: "Back" }));
   expect(screen.getByLabelText("Current URL")).toHaveTextContent(
     "?domain=demo&tab=connections",
   );
