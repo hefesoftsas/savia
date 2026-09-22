@@ -1,7 +1,9 @@
 import {
   parseAppearancePreferences,
+  parseMyDayWidgets,
   parseSidebarNavigationLayout,
   type AppearancePreferences,
+  type MyDayWidgetsLayout,
   type SidebarNavigationLayout,
   type UserPreferencesRepository,
 } from "./contracts";
@@ -12,6 +14,10 @@ type UserNavigationPreferenceRow = {
 
 type UserAppearancePreferenceRow = {
   settings: string;
+};
+
+type UserMyDayWidgetsRow = {
+  layout: string;
 };
 
 function parseStoredLayout(value: string): SidebarNavigationLayout {
@@ -94,8 +100,45 @@ export function createUserPreferencesRepository(
         .bind(principalId, JSON.stringify(validated), new Date().toISOString())
         .run();
       const saved = await this.getAppearance(principalId);
-      if (!saved)
-        throw new Error("Appearance preferences were not stored");
+      if (!saved) throw new Error("Appearance preferences were not stored");
+      return saved;
+    },
+
+    async getMyDayWidgets(principalId) {
+      const row = await database
+        .prepare(
+          `SELECT layout FROM user_my_day_widgets
+           WHERE principal_id = ? LIMIT 1`,
+        )
+        .bind(principalId)
+        .first<UserMyDayWidgetsRow>();
+      if (!row) return undefined;
+      try {
+        return parseMyDayWidgets(JSON.parse(row.layout) as unknown);
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error("Stored My Day widgets layout is invalid", {
+            cause: error,
+          });
+        }
+        throw error;
+      }
+    },
+
+    async saveMyDayWidgets(principalId, layout) {
+      const validated = parseMyDayWidgets(layout);
+      await database
+        .prepare(
+          `INSERT INTO user_my_day_widgets (principal_id, layout, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(principal_id) DO UPDATE SET
+             layout = excluded.layout,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(principalId, JSON.stringify(validated), new Date().toISOString())
+        .run();
+      const saved = await this.getMyDayWidgets(principalId);
+      if (!saved) throw new Error("My Day widgets were not stored");
       return saved;
     },
   };

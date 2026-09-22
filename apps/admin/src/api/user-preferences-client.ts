@@ -1,4 +1,5 @@
 import type { ApiClient } from "./api-client";
+import type { MyDayWidgetsLayout } from "@savia/crm-shared/my-day-widgets";
 
 export const sidebarNavigationSectionIds = [
   "operation",
@@ -129,6 +130,25 @@ export class UserPreferencesClient {
       await this.api.put<{ data: AppearancePreferences }>(
         "/v1/user-preferences/appearance",
         settings,
+      )
+    ).data;
+  }
+
+  async getMyDayWidgets(): Promise<MyDayWidgetsLayout> {
+    return (
+      await this.api.get<{ data: MyDayWidgetsLayout }>(
+        "/v1/user-preferences/my-day-widgets",
+      )
+    ).data;
+  }
+
+  async saveMyDayWidgets(
+    layout: MyDayWidgetsLayout,
+  ): Promise<MyDayWidgetsLayout> {
+    return (
+      await this.api.put<{ data: MyDayWidgetsLayout }>(
+        "/v1/user-preferences/my-day-widgets",
+        layout,
       )
     ).data;
   }

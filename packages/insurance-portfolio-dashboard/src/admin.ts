@@ -23,3 +23,5 @@ export const insurancePortfolioScreens = [
 
 export type { InsurancePortfolioScreenProps } from "./screens/policies";
 export { InsurancePortfolioPoliciesScreen } from "./screens/policies";
+export { insurancePortfolioWidgets } from "./widgets";
+export type { InsurancePortfolioWidgetProps } from "./widgets";

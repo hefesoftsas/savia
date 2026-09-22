@@ -4,8 +4,11 @@ import {
   appearanceColorThemeIds,
   AppearancePreferencesError,
   defaultAppearancePreferences,
+  defaultMyDayWidgets,
   defaultSidebarNavigationLayout,
+  MyDayWidgetsError,
   parseAppearancePreferences,
+  parseMyDayWidgets,
   parseSidebarNavigationLayout,
   SidebarNavigationLayoutError,
   sidebarNavigationItemIds,
@@ -64,6 +67,65 @@ const appearanceResponseSchema = z.object({
 const invalidAppearanceResponseSchema = z.object({
   error: z.object({
     code: z.literal("INVALID_APPEARANCE_PREFERENCES"),
+    message: z.string(),
+  }),
+});
+
+const myDayWidgetSchema = z.object({
+  id: z.string().regex(/^[a-z0-9_-]{1,48}$/),
+  apiBasePath: z
+    .string()
+    .regex(
+      /^\/v1\/(data-domains\/[a-z][a-z0-9_-]{0,47}|dynamic-crm\/[1-9][0-9]*)$/,
+    ),
+  collection: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
+  kind: z.union([
+    z.enum(["summary", "items", "chart", "actions"]),
+    z.string().regex(/^plugin:[a-z0-9_.-]{1,64}:[a-z0-9_-]{1,64}$/),
+  ]),
+  title: z.string().trim().min(1).max(80).optional(),
+  config: z
+    .object({
+      statusField: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,47}$/)
+        .optional(),
+      amountField: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,47}$/)
+        .optional(),
+      dateField: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,47}$/)
+        .optional(),
+      groupField: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,47}$/)
+        .optional(),
+      limit: z.number().int().min(1).max(10).optional(),
+      sort: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,47}$/)
+        .optional(),
+      order: z.enum(["ASC", "DESC"]).optional(),
+    })
+    .strict()
+    .optional(),
+  size: z.enum(["sm", "md", "lg"]).optional(),
+});
+
+const myDayWidgetsLayoutSchema = z.object({
+  version: z.literal(1),
+  widgets: z.array(myDayWidgetSchema).max(12),
+});
+
+const myDayWidgetsResponseSchema = z.object({
+  data: myDayWidgetsLayoutSchema,
+});
+
+const invalidMyDayWidgetsResponseSchema = z.object({
+  error: z.object({
+    code: z.literal("INVALID_MY_DAY_WIDGETS"),
     message: z.string(),
   }),
 });
@@ -155,9 +217,59 @@ const saveAppearanceRoute = createRoute({
     },
     400: {
       content: {
-        "application/json": { schema: invalidAppearanceResponseSchema },
+        "application/json": {
+          schema: invalidAppearanceResponseSchema,
+        },
       },
       description: "Invalid appearance preferences",
+    },
+  },
+});
+
+const getMyDayWidgetsRoute = createRoute({
+  method: "get",
+  path: "/v1/user-preferences/my-day-widgets",
+  tags: ["User preferences"],
+  summary: "Read the caller's My Day widgets layout",
+  security: [{ oauth2: ["savia.api.read"] }],
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: myDayWidgetsResponseSchema },
+      },
+      description: "My Day widgets layout",
+    },
+  },
+});
+
+const saveMyDayWidgetsRoute = createRoute({
+  method: "put",
+  path: "/v1/user-preferences/my-day-widgets",
+  tags: ["User preferences"],
+  summary: "Save the caller's My Day widgets layout",
+  security: [{ oauth2: ["savia.api.write"] }],
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: z.unknown() },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: myDayWidgetsResponseSchema },
+      },
+      description: "Saved My Day widgets layout",
+    },
+    400: {
+      content: {
+        "application/json": {
+          schema: invalidMyDayWidgetsResponseSchema,
+        },
+      },
+      description: "Invalid My Day widgets layout",
     },
   },
 });
@@ -223,6 +335,37 @@ export function registerUserPreferenceRoutes(
             error: {
               code: "INVALID_APPEARANCE_PREFERENCES" as const,
               message: "Las preferencias de apariencia no son válidas.",
+            },
+          },
+          400,
+        );
+      }
+      throw error;
+    }
+  });
+
+  app.openapi(getMyDayWidgetsRoute, async (context) => {
+    const principalId = actorFromContext(context).principal.id;
+    const layout =
+      (await preferences.getMyDayWidgets(principalId)) ?? defaultMyDayWidgets();
+    return context.json({ data: layout }, 200);
+  });
+
+  app.openapi(saveMyDayWidgetsRoute, async (context) => {
+    try {
+      const layout = parseMyDayWidgets(context.req.valid("json"));
+      const saved = await preferences.saveMyDayWidgets(
+        actorFromContext(context).principal.id,
+        layout,
+      );
+      return context.json({ data: saved }, 200);
+    } catch (error) {
+      if (error instanceof MyDayWidgetsError) {
+        return context.json(
+          {
+            error: {
+              code: "INVALID_MY_DAY_WIDGETS" as const,
+              message: "Los widgets de Mi día no son válidos.",
             },
           },
           400,

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
+import { MyDayWidgetsSection } from "@/features/my-day-widgets/section";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -234,7 +235,8 @@ function calendarSyncFeedback(providers: CalendarProvider[]): string {
 export function MyDayPage({
   services,
 }: {
-  services: Pick<AppServices, "personalIntegrations">;
+  services: Pick<AppServices, "personalIntegrations"> &
+    Partial<Pick<AppServices, "apiClient" | "userPreferences">>;
 }) {
   const [day] = useState(() => startOfLocalDay(new Date()));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -629,6 +631,11 @@ export function MyDayPage({
           </CardContent>
         </Card>
       </div>
+
+      <MyDayWidgetsSection
+        apiClient={services.apiClient}
+        userPreferences={services.userPreferences}
+      />
 
       <Dialog
         open={pendingTask !== null}

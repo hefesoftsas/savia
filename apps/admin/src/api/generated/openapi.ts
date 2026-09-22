@@ -2983,6 +2983,92 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/public/forms/{token}/cities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          search: string;
+        };
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/public/forms/{token}/vehicle-lookup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          token: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            plate: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Public form response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/request-pages/runs": {
     parameters: {
       query?: never;
@@ -5860,6 +5946,129 @@ export interface paths {
               error: {
                 /** @enum {string} */
                 code: "INVALID_APPEARANCE_PREFERENCES";
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user-preferences/my-day-widgets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the caller's My Day widgets layout */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description My Day widgets layout */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {number} */
+                version: 1;
+                widgets: {
+                  id: string;
+                  apiBasePath: string;
+                  collection: string;
+                  kind: ("summary" | "items" | "chart" | "actions") | string;
+                  title?: string;
+                  config?: {
+                    statusField?: string;
+                    amountField?: string;
+                    dateField?: string;
+                    groupField?: string;
+                    limit?: number;
+                    sort?: string;
+                    /** @enum {string} */
+                    order?: "ASC" | "DESC";
+                  };
+                  /** @enum {string} */
+                  size?: "sm" | "md" | "lg";
+                }[];
+              };
+            };
+          };
+        };
+      };
+    };
+    /** Save the caller's My Day widgets layout */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+      responses: {
+        /** @description Saved My Day widgets layout */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {number} */
+                version: 1;
+                widgets: {
+                  id: string;
+                  apiBasePath: string;
+                  collection: string;
+                  kind: ("summary" | "items" | "chart" | "actions") | string;
+                  title?: string;
+                  config?: {
+                    statusField?: string;
+                    amountField?: string;
+                    dateField?: string;
+                    groupField?: string;
+                    limit?: number;
+                    sort?: string;
+                    /** @enum {string} */
+                    order?: "ASC" | "DESC";
+                  };
+                  /** @enum {string} */
+                  size?: "sm" | "md" | "lg";
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Invalid My Day widgets layout */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                /** @enum {string} */
+                code: "INVALID_MY_DAY_WIDGETS";
                 message: string;
               };
             };

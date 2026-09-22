@@ -83,6 +83,7 @@ describe("user sidebar navigation preferences", () => {
 
   beforeEach(async () => {
     await env.DB.exec(`
+      DELETE FROM user_my_day_widgets;
       DELETE FROM user_appearance_preferences;
       DELETE FROM user_navigation_preferences;
       DELETE FROM identity_principal WHERE id IN ('principal-a', 'principal-b');
@@ -329,6 +330,139 @@ describe("user sidebar navigation preferences", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "INVALID_SIDEBAR_NAVIGATION" },
     });
+  });
+
+  it("keeps a saved My Day widgets layout private to its principal", async () => {
+    const repository = createUserPreferencesRepository(env.DB);
+
+    await repository.saveMyDayWidgets("principal-a", {
+      version: 1,
+      widgets: [
+        {
+          id: "w_polizas1",
+          apiBasePath: "/v1/data-domains/platform",
+          collection: "polizas",
+          kind: "summary",
+        },
+      ],
+    });
+
+    expect(await repository.getMyDayWidgets("principal-a")).toMatchObject({
+      version: 1,
+      widgets: [
+        expect.objectContaining({
+          id: "w_polizas1",
+          collection: "polizas",
+          size: "md",
+        }),
+      ],
+    });
+    expect(await repository.getMyDayWidgets("principal-b")).toBeUndefined();
+  });
+
+  it("returns defaults and isolates a saved widgets layout to the authenticated principal", async () => {
+    const principalA = appFor("principal-a");
+    const principalB = appFor("principal-b");
+
+    const initial = await principalA.request(
+      "https://savia.test/v1/user-preferences/my-day-widgets",
+    );
+    expect(initial.status).toBe(200);
+    await expect(initial.json()).resolves.toEqual({
+      data: { version: 1, widgets: [] },
+    });
+
+    const layout = {
+      version: 1 as const,
+      widgets: [
+        {
+          id: "w_clientes1",
+          apiBasePath: "/v1/dynamic-crm/101",
+          collection: "clientes",
+          kind: "items" as const,
+          config: { limit: 5, sort: "updated_at", order: "DESC" as const },
+          size: "md" as const,
+        },
+      ],
+    };
+    const saved = await principalA.request(
+      "https://savia.test/v1/user-preferences/my-day-widgets",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(layout),
+      },
+    );
+    expect(saved.status).toBe(200);
+    await expect(saved.json()).resolves.toEqual({ data: layout });
+
+    expect(
+      await (
+        await principalA.request(
+          "https://savia.test/v1/user-preferences/my-day-widgets",
+        )
+      ).json(),
+    ).toEqual({ data: layout });
+
+    const otherPrincipal = await principalB.request(
+      "https://savia.test/v1/user-preferences/my-day-widgets",
+    );
+    await expect(otherPrincipal.json()).resolves.toEqual({
+      data: { version: 1, widgets: [] },
+    });
+  });
+
+  it("returns a public validation error for invalid widgets", async () => {
+    const response = await appFor("principal-a").request(
+      "https://savia.test/v1/user-preferences/my-day-widgets",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          version: 1,
+          widgets: [
+            {
+              id: "not valid!",
+              apiBasePath: "/v1/data-domains/platform",
+              collection: "polizas",
+              kind: "summary",
+            },
+          ],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "INVALID_MY_DAY_WIDGETS" },
+    });
+  });
+
+  it("persists plugin widget kinds with dotted extension ids", async () => {
+    const layout = {
+      version: 1 as const,
+      widgets: [
+        {
+          id: "w_plugin1",
+          apiBasePath: "/v1/data-domains/platform",
+          collection: "polizas",
+          kind: "plugin:insurance.portfolio-dashboard:summary",
+          config: { limit: 5, sort: "updated_at", order: "DESC" as const },
+          size: "md" as const,
+        },
+      ],
+    };
+    const response = await appFor("principal-a").request(
+      "https://savia.test/v1/user-preferences/my-day-widgets",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(layout),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: layout });
   });
 });
 

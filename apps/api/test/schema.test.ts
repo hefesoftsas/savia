@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(315);
+    expect(names).toHaveLength(316);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -170,6 +170,7 @@ describe("full D1 schema projection", () => {
         "personal_integration_audit_events",
         "user_navigation_preferences",
         "user_appearance_preferences",
+        "user_my_day_widgets",
         "user_provider_credentials",
         "user_provider_credential_audit_events",
         "customer_crm_sync_records",

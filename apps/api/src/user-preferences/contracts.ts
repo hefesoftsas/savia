@@ -1,10 +1,11 @@
+import type { MyDayWidgetsLayout } from "@savia/crm-shared/my-day-widgets";
+
 export const sidebarNavigationSectionIds = [
   "operation",
   "productivity",
   "administration",
   "management",
 ] as const;
-
 export const sidebarNavigationItemIds = [
   "dashboard",
   "dynamic-crm",
@@ -94,6 +95,11 @@ export type UserPreferencesRepository = {
     principalId: string,
     settings: AppearancePreferences,
   ): Promise<AppearancePreferences>;
+  getMyDayWidgets(principalId: string): Promise<MyDayWidgetsLayout | undefined>;
+  saveMyDayWidgets(
+    principalId: string,
+    layout: MyDayWidgetsLayout,
+  ): Promise<MyDayWidgetsLayout>;
 };
 
 export const appearanceColorThemeIds = [
@@ -388,3 +394,16 @@ export function parseSidebarNavigationLayout(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+// --- My Day widgets (schema lives in @savia/crm-shared/my-day-widgets) ---
+
+export type {
+  MyDayWidget,
+  MyDayWidgetConfig,
+  MyDayWidgetsLayout,
+} from "@savia/crm-shared/my-day-widgets";
+export {
+  defaultMyDayWidgets,
+  MyDayWidgetsError,
+  parseMyDayWidgets,
+} from "@savia/crm-shared/my-day-widgets";

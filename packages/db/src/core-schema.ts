@@ -275,6 +275,15 @@ export const userAppearancePreferences = sqliteTable(
   },
 );
 
+export const userMyDayWidgets = sqliteTable("user_my_day_widgets", {
+  principalId: text("principal_id")
+    .primaryKey()
+    .notNull()
+    .references(() => identityPrincipals.id),
+  layout: text("layout").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const crmStudioSettings = sqliteTable("crm_studio_settings", {
   tenantId: text("tenant_id").primaryKey().notNull(),
   menuLayout: text("menu_layout"),

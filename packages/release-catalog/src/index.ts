@@ -22,7 +22,9 @@ import { screens as collectionsScreens } from "@savia/insurance-collections/admi
 import { screens as renewalsScreens } from "@savia/insurance-renewals/admin";
 import type { ComponentType } from "react";
 import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
 import { insurancePortfolioScreens } from "@savia/insurance-portfolio-dashboard/admin";
+import { insurancePortfolioWidgets } from "@savia/insurance-portfolio-dashboard/admin";
 import {
   insuranceQuoteResultRenderers,
   insuranceQuoteScreens,
@@ -56,9 +58,24 @@ export type ExtensionResultRendererContribution = {
   Renderer: ComponentType<{ result: unknown }>;
 };
 
+/**
+ * Phase 3: plugins contribute My Day widgets the same way they contribute
+ * screens. The host renders `Widget` with an already-scoped `savia`
+ * object; the widget kind is persisted as
+ * `plugin:<extensionId>:<widgetId>`.
+ */
+export type ExtensionWidgetContribution = {
+  id: string;
+  extensionId: string;
+  collection: string;
+  title: { es: string; en?: string; pt?: string };
+  Widget: ComponentType<{ savia: PluginApi; widget: MyDayWidget }>;
+};
+
 export type ReleaseCatalog = RuntimeReleaseCatalog & {
   extensionScreens: readonly ExtensionScreenContribution[];
   extensionResultRenderers: readonly ExtensionResultRendererContribution[];
+  extensionWidgets: readonly ExtensionWidgetContribution[];
 };
 
 export const releaseCatalog: ReleaseCatalog = {
@@ -91,4 +108,5 @@ export const releaseCatalog: ReleaseCatalog = {
     ...serviceScreens,
   ],
   extensionResultRenderers: insuranceQuoteResultRenderers,
+  extensionWidgets: [...insurancePortfolioWidgets],
 };

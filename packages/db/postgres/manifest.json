@@ -277,6 +277,10 @@
     {
       "filename": "0059_workflow_collection_triggers.sql",
       "sha256": "19c8be7f15e970b339ac13f81d85e784fc46d59aa84ab57256652a7f32bbac92"
+    },
+    {
+      "filename": "0060_user_my_day_widgets.sql",
+      "sha256": "93742d90fefe11e91ec9ea72dd9455a6706683cbdbf9ce551a2f4d172eb228a9"
     }
   ],
   "objects": [
@@ -7194,6 +7198,11 @@
       "type": "view",
       "name": "crm_record_history_fields",
       "table": "crm_record_history_fields"
+    },
+    {
+      "type": "table",
+      "name": "user_my_day_widgets",
+      "table": "user_my_day_widgets"
     }
   ],
   "tables": [
@@ -37356,6 +37365,55 @@
       "uniqueKeys": [
         {
           "columns": ["workspace_id", "execution_id", "node_id", "sequence"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "user_my_day_widgets",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "layout",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["principal_id"],
           "origin": "pk"
         }
       ],
