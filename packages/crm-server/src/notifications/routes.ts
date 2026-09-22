@@ -58,7 +58,10 @@ const denyPolicy: NotificationPolicy = {
 function session(c: Context<Env>, options: NotificationRouteOptions) {
   const principalId = c.get("principalId") as string | undefined;
   const tenant = c.get("tenant") as string | undefined;
-  if (!principalId || !tenant) return fail("Authentication required.", 401);
+  // An empty-string tenant means "no workspace" (account scope only);
+  // only a missing tenant is unauthenticated.
+  if (!principalId || tenant === undefined)
+    return fail("Authentication required.", 401);
   return {
     principalId,
     tenant,

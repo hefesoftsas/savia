@@ -19,6 +19,7 @@ import { registerDynamicCrmRoutes } from "./routes/dynamic-crm";
 import { registerTenantRoutes } from "./routes/tenants";
 
 import { OpenAPIHono } from "@hono/zod-openapi";
+import type { Context, Next } from "hono";
 import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
 import {
   betterAuthOAuthClientAdministrator,
@@ -55,6 +56,10 @@ import {
   type PersonalIntegrationRouteDependencies,
 } from "./routes/personal-integrations";
 import { registerUserPreferenceRoutes } from "./routes/user-preferences";
+import { registerNotifications } from "@savia/crm-server/notifications/routes";
+import { createNotificationPolicy } from "./notifications";
+import { actorFromContext, authenticationMiddleware } from "./auth/middleware";
+import { betterAuthAuthenticator } from "./auth/better-auth";
 
 import { createApiShell } from "./api-shell";
 import { runtimeReleaseCatalog } from "@savia/release-catalog/runtime";
@@ -167,6 +172,31 @@ export function createApp(
   );
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
   registerUserPreferenceRoutes(app, db);
+  const notificationAuth = authenticationMiddleware(
+    db,
+    authenticator ??
+      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+  );
+  const notificationSession = async (context: Context, next: Next) => {
+    const actor = actorFromContext(context);
+    const membership = actor.memberships.find(
+      (candidate) => candidate.isActive,
+    );
+    const session = context as unknown as {
+      set(key: "principalId" | "tenant", value: string): void;
+    };
+    session.set("principalId", actor.principal.id);
+    session.set(
+      "tenant",
+      membership ? `agency:${membership.tenantId ?? membership.agencyId}` : "",
+    );
+    await next();
+  };
+  for (const path of ["/api/notifications", "/api/notifications/*"]) {
+    app.use(path, notificationAuth);
+    app.use(path, notificationSession);
+  }
+  registerNotifications(app as never, { policy: createNotificationPolicy(db) });
   registerTenantRoutes(
     app,
     db,
