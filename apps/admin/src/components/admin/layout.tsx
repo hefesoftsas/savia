@@ -1,5 +1,6 @@
 import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import { PwaInstallBanner } from "@/pwa";
+import { CookieConsentBanner } from "@/consent/cookie-consent-banner";
 import type { ErrorInfo } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -197,6 +198,7 @@ export const Layout = (props: CoreLayoutProps) => {
       </SaviaRequestProvider>
       <Notification />
       <PwaInstallBanner />
+      <CookieConsentBanner />
       <Suspense fallback={null}>
         <AssistantBar />
       </Suspense>

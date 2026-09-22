@@ -13,6 +13,7 @@ import { publicFormsMessages } from "./i18n/locales/public-forms";
 import { lazy, Suspense, useMemo } from "react";
 import { registerPwaServiceWorker } from "./pwa/register-service-worker";
 import { PwaSplash } from "./pwa/pwa-splash";
+import { CookieConsentBanner } from "./consent/cookie-consent-banner";
 
 const PrivateApp = lazy(async () => {
   registerPwaServiceWorker();
@@ -64,6 +65,7 @@ function PublicApplication({ pathname }: { pathname: string }) {
       <AppLocaleProvider>
         <LocaleHtmlSync />
         <LocalePersistenceSync />
+        <CookieConsentBanner />
         <PublicApplicationContent pathname={pathname} />
       </AppLocaleProvider>
     </StoreContextProvider>
