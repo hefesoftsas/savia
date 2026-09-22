@@ -10,13 +10,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  ProgressQuoteList,
-  SafeResult,
-  parseProgressItems,
   usePublicFormSubmission,
   type PublicSubmissionValues,
-  type QuoteProgressItem,
 } from "./public-form-submission";
+import {
+  PublicComparison,
+  PublicReceiptResult,
+  parseStatusItems,
+  type PublicComparisonItem,
+} from "./public-comparison";
 import type { PublicFormDefinition } from "./public-form-page";
 import "./public-quote-wizard.css";
 
@@ -471,7 +473,7 @@ export function PublicQuoteForm({
   const [parseError, setParseError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [elapsed, setElapsed] = useState(0);
-  const [progress, setProgress] = useState<QuoteProgressItem[] | null>(null);
+  const [progress, setProgress] = useState<PublicComparisonItem[] | null>(null);
   const lastStep = step === steps.length - 1;
 
   useEffect(() => {
@@ -501,7 +503,7 @@ export function PublicQuoteForm({
         if (stopped || !response.ok) return;
         const data = (await response.json()) as { items?: unknown };
         if (!stopped && Array.isArray(data.items))
-          setProgress(parseProgressItems(data.items));
+          setProgress(parseStatusItems(data.items));
       } catch {
         // Keep the previous progress; the submit lifecycle reports errors.
       }
@@ -763,10 +765,19 @@ export function PublicQuoteForm({
           )}
         </p>
         <p className="public-form-reference">{receipt.reference}</p>
-        <SafeResult result={receipt.result} />
-        <Button type="button" variant="outline" onClick={handleStartNew}>
-          {t("Iniciar otro envío")}
-        </Button>
+        <PublicReceiptResult result={receipt.result} />
+        <div className="public-quote-notice-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => window.print()}
+          >
+            {t("Descargar PDF")}
+          </Button>
+          <Button type="button" variant="outline" onClick={handleStartNew}>
+            {t("Iniciar otro envío")}
+          </Button>
+        </div>
       </section>
     );
   }
@@ -1065,7 +1076,7 @@ export function PublicQuoteForm({
                 <div className="public-quote-progress-bar" />
               </div>
               {progress && progress.length > 0 ? (
-                <ProgressQuoteList items={progress} />
+                <PublicComparison items={progress} />
               ) : (
                 <div aria-hidden="true" className="public-quote-skeletons">
                   {[0, 1, 2].map((skeleton) => (

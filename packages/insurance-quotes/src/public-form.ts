@@ -269,6 +269,7 @@ function projectPublicQuoteResult(flowId: string, output: unknown) {
     .filter(([key]) => source?.[key] === true)
     .map(([, label]) => label);
   return {
+    flowId,
     insurer: product.label.split(" · ")[0],
     product: product.label,
     premiumTotal:

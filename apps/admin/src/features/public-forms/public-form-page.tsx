@@ -5,11 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import "./public-forms.css";
-import {
-  SafeResult,
-  publicError,
-  usePublicFormSubmission,
-} from "./public-form-submission";
+import { publicError, usePublicFormSubmission } from "./public-form-submission";
 import { PublicQuoteForm } from "./public-quote-wizard";
 
 const publicQuotePresentation = z
@@ -231,7 +227,10 @@ function SubmissionForm({
             )}
           </p>
           <p className="public-form-reference">{receipt.reference}</p>
-          <SafeResult result={receipt.result} />
+          {typeof receipt.result === "string" ||
+          typeof receipt.result === "number" ? (
+            <p>{String(receipt.result)}</p>
+          ) : null}
           <Button type="button" variant="outline" onClick={startNew}>
             {t("Iniciar otro envío")}
           </Button>

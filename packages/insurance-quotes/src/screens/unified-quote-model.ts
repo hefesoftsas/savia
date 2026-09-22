@@ -41,10 +41,40 @@ export function formatCop(amount: number, locale: PluginLocale = "es"): string {
 function buildUnifiedComparisonQuote(
   item: QuoteBatchItem,
   run?: PluginExtensionActionRun,
+  planCatalog = false,
 ): UnifiedComparisonQuote {
   const output = run?.output as { data?: { simulated?: boolean } } | undefined;
   const isSimulation =
     run?.connectionId === "simulation" || output?.data?.simulated === true;
+  if (!isSimulation && planCatalog) {
+    // Anonymous surfaces never receive runs: enrich with static plan-catalog
+    // data while keeping the live premium. Quote references stay out.
+    const profile = defaultProfiles[item.flowId];
+    if (profile) {
+      const premium =
+        typeof item.premium === "number" && item.premium > 0 ? item.premium : 0;
+      return {
+        id: item.productId,
+        productId: item.productId,
+        flowId: item.flowId,
+        provider: item.provider || profile.provider,
+        productName: profile.productName,
+        quoteNumber: undefined,
+        premium,
+        monthlyInstallment: premium > 0 ? Math.round(premium / 12) : 0,
+        score: profile.baseScore,
+        badges: profile.badges,
+        coverages: profile.coverages,
+        highlights: profile.highlights,
+        ctaText: profile.ctaText,
+        ctaSubtext: profile.ctaSubtext,
+        status: item.status,
+        detailId: item.detailId,
+        error: item.error,
+        isSimulation: false,
+      };
+    }
+  }
   if (!isSimulation) {
     const unavailable = "No informado por la aseguradora";
     return {
@@ -141,8 +171,9 @@ export function toUnifiedComparisonQuote(
   item: QuoteBatchItem,
   run?: PluginExtensionActionRun,
   locale: PluginLocale = "es",
+  planCatalog = false,
 ): UnifiedComparisonQuote {
-  const quote = buildUnifiedComparisonQuote(item, run);
+  const quote = buildUnifiedComparisonQuote(item, run, planCatalog);
   const t = (message: string) => insuranceMessage(message, locale);
   return {
     ...quote,

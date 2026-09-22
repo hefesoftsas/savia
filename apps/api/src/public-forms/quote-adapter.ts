@@ -537,6 +537,7 @@ export function createPublicQuoteAdapter(options: {
         const quotes = frozen.products.map(({ flowId }) => {
           const label = catalog.get(flowId)!.label;
           return {
+            flowId,
             insurer: label.split(" · ")[0],
             product: label,
             premiumTotal: 1250000,
