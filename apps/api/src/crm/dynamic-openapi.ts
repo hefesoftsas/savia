@@ -1143,6 +1143,44 @@ export async function dynamicOpenApi(
     ["/workflow-inbox", "get", "Read assigned tasks and notifications", null],
     ["/workflow-inbox/{id}/resolve", "post", "Resolve assigned item", null],
   ] as const;
+  const notificationRoutes = [
+    ["/notifications", "get", "List personal notifications", null],
+    ["/notifications/count", "get", "Count personal notifications", null],
+    ["/notifications/read-all", "post", "Mark inbox as read", null],
+    ["/notifications/{id}/read", "post", "Mark notification read state", null],
+    ["/notifications/{id}/archive", "post", "Archive notification", null],
+    ["/notifications/{id}/resolve", "post", "Resolve notification action", null],
+    ["/notifications/action/{id}", "get", "Resolve notification action state", null],
+    ["/notifications/follows", "get", "List followed collections", null],
+    ["/notifications/follow", "post", "Follow a collection", null],
+    ["/notifications/follow/{collection}", "delete", "Unfollow a collection", null],
+  ] as const;
+  for (const [path, method, summary, body] of notificationRoutes) {
+    paths[path] ??= {};
+    paths[path][method] = {
+      summary,
+      tags: ["Notifications"],
+      parameters: path.includes("{id}") || path.includes("{collection}")
+        ? [
+            {
+              in: "path",
+              name: path.includes("{id}") ? "id" : "collection",
+              required: true,
+              schema: { type: "string" },
+            },
+          ]
+        : [],
+      ...(body
+        ? {
+            requestBody: {
+              required: true,
+              content: json(z.toJSONSchema(body)),
+            },
+          }
+        : {}),
+      responses: { 200: { description: "OK" }, 401: { description: "Unauthorized" } },
+    };
+  }
   for (const [path, method, summary, body] of workflowRoutes) {
     paths[path] ??= {};
     paths[path][method] = {

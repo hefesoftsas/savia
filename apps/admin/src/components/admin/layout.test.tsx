@@ -60,6 +60,9 @@ vi.mock("@/features/savia-request/savia-request-provider", () => ({
     <>{children}</>
   ),
 }));
+vi.mock("@/features/notifications/notification-bell", () => ({
+  NotificationBell: () => null,
+}));
 vi.mock("@/pwa", () => ({
   PwaInstallBanner: () => <div data-testid="pwa-install-banner" />,
 }));

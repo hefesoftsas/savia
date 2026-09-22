@@ -8,6 +8,16 @@ vi.mock("../src/crm/auto-sync", () => ({
 vi.mock("../src/workflows", () => ({
   runScheduledWorkflows: vi.fn(async () => undefined),
 }));
+vi.mock("../src/notifications", () => ({
+  runScheduledNotifications: vi.fn(async () => ({
+    claimed: 0,
+    delivered: 0,
+    skipped: 0,
+    failed: 0,
+    retried: 0,
+    recoveredLeases: 0,
+  })),
+}));
 import worker from "../src/index";
 import { runScheduledWorkflows } from "../src/workflows";
 it("continues workflows when the independent CRM synchronization fails", async () => {

@@ -165,6 +165,9 @@ remains disabled. Other hosts with cron disabled need an intentional scheduler t
   administrators can operate general data domains. Non-admin delegated authoring and
   inbox access need a future host permission policy; the engine does not bypass it.
 - Only the assigned principal can resolve an inbox item, even within a workspace.
+- Task creation also appends a personal notice (`workflow:<run>:<node>` key) in the
+  same checkpoint transaction; assignees see it in [Notifications](notifications.md)
+  as well as the workflow inbox.
 - Unexpected errors retry at most three attempts with bounded backoff. Validation and
   version conflicts fail visibly. Manual retry resumes the failed step, never prior jobs.
 - Workflows caused by workflow writes stop dispatching at depth five. Delays are stored

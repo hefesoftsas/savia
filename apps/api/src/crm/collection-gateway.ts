@@ -35,6 +35,7 @@ import {
 import { createRecordBundlesApp } from "./record-bundles";
 import type { SqlBridgeClient } from "./sql-bridge";
 import { canManageSharedCrm } from "./hubspot-access";
+import { createNotificationPolicy } from "../notifications";
 
 export type CollectionGatewayContext = {
   db: D1Database;
@@ -97,6 +98,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
   const local = () =>
     createCrmApp(tenant, {
       principalId: actor.principal.id,
+      policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
       authorizeWorkflow: async ({ workspace }) =>
         canManageSharedCrm(actor, workspace),

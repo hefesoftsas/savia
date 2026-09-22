@@ -2,6 +2,7 @@ import { dialectFor } from "@savia/db/dialect";
 import { executeWebhookNode } from "./webhook-delivery";
 import type { WebhookDependencies } from "./webhook-destinations";
 import { workflowResumeAt } from "@savia/crm-shared/workflows";
+import { workflowTaskNotice } from "../notifications/collection-events";
 import { historyDatabase } from "../record-history-storage";
 import {
   evaluateWorkflowCondition,
@@ -418,6 +419,21 @@ async function executeNode(
             node.type === "task" ? now + node.dueDays * 86400000 : null,
           ),
       );
+      if (node.type === "task") {
+        effects.push(
+          ...workflowTaskNotice(
+            db,
+            run.workspace_id,
+            run.id,
+            node.id,
+            id,
+            title.slice(0, 500),
+            "",
+            assignee,
+            now,
+          ),
+        );
+      }
       output = { id };
       break;
     }

@@ -11,7 +11,7 @@ export type Env = {
 };
 export function fail(
   message: string,
-  status: 400 | 403 | 404 | 409 | 413 | 422 | 428 | 502 = 400,
+  status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 428 | 429 | 502 = 400,
 ): never {
   throw new HTTPException(status, { message });
 }

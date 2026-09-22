@@ -946,6 +946,9 @@ function WorkspaceWorkflows({
             <span className="wf-count">{inbox.data.data.length}</span>
           ) : null}
         </div>
+        <p className="wf-muted">
+          <a href="/notifications">{t("Abrir la bandeja de notificaciones")}</a>
+        </p>
         <WorkflowError
           error={errorText(inbox.error)}
           retryLabel={t("Reintentar")}

@@ -14,6 +14,7 @@ import { AppSidebar } from "@/components/admin/app-sidebar";
 import { Error } from "@/components/admin/error";
 import { Loading } from "@/components/admin/loading";
 import { SaviaRequestProvider } from "@/features/savia-request/savia-request-provider";
+import { NotificationBell } from "@/features/notifications/notification-bell";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 const AssistantBar = lazy(async () => {
@@ -171,7 +172,9 @@ export const Layout = (props: CoreLayoutProps) => {
             <div
               id="header-actions"
               className="flex min-w-0 shrink-0 items-center gap-1"
-            />
+            >
+              <NotificationBell />
+            </div>
           </header>
           <DeploymentUpdateNotice />
           <ErrorBoundary

@@ -36,6 +36,7 @@ import { ListPagination } from "@/components/admin/list-pagination";
 import { ScreenListSkeleton } from "@/components/admin/page-skeletons";
 import { i18nProvider } from "@/lib/i18nProvider";
 import { Button } from "@/components/ui/button";
+import { CollectionFollow } from "@/features/notifications/collection-follow";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -1291,6 +1292,7 @@ function App({
                     ) && <p>{object.description}</p>}
                 </div>
                 <div className="heading-actions">
+                  <CollectionFollow collection={object.name} />
                   {capabilities.create && (
                     <Button onClick={() => editRecord("new")}>
                       <Plus size={17} />

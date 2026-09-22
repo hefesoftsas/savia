@@ -55,6 +55,10 @@ const AccountPage = lazy(async () => {
   const module = await import("@/features/account/account-page");
   return { default: module.AccountPage };
 });
+const NotificationInboxPage = lazy(async () => {
+  const module = await import("@/features/notifications/notification-inbox");
+  return { default: module.NotificationInbox };
+});
 
 const adminStore = memoryStore({ locale: resolveInitialAppLocale() });
 const SaviaRequestPage = lazy(async () => {
@@ -315,6 +319,14 @@ function AppContent({ services }: { services?: AppServices } = {}) {
             <Route
               path="/my-day"
               element={<MyDayRoute services={appServices} />}
+            />
+            <Route
+              path="/notifications"
+              element={
+                <Suspense fallback={<RouteLoading />}>
+                  <NotificationInboxPage />
+                </Suspense>
+              }
             />
             <Route
               path="/provider-credentials"

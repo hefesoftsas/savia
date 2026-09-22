@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(316);
+    expect(names).toHaveLength(324);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -178,6 +178,14 @@ describe("full D1 schema projection", () => {
         "assistant_active_agencies",
         "auto_light_quote_requests",
         "auto_light_quote_offers",
+        "notification_events",
+        "notification_deliveries",
+        "notification_recipient_retries",
+        "notification_subscriptions",
+        "notification_admin_audit",
+        "notification_send_limits",
+        "notification_scope_settings",
+        "notification_maintenance_checkpoints",
         "user_user",
       ]),
     );

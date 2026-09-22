@@ -3,6 +3,7 @@ import { maintainRecordHistory } from "@savia/crm-server/record-history-storage"
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
 import { processCrmSyncJobs } from "./crm/auto-sync";
+import { runScheduledNotifications } from "./notifications";
 import { runScheduledWorkflows } from "./workflows";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
 import { PersonalActionPayloadCipher } from "./assistant/personal-action-payload";
@@ -289,6 +290,7 @@ const runtime = {
         environment.CRM_INTEGRATION_KEY,
         overrides.workflowFetch,
       );
+      await runScheduledNotifications(environment.DB);
       return;
     }
     const results = await Promise.allSettled([
@@ -298,6 +300,7 @@ const runtime = {
         environment.CRM_INTEGRATION_KEY,
         overrides.workflowFetch,
       ),
+      runScheduledNotifications(environment.DB),
       maintainRecordHistory(environment.DB).then((report) => {
         console.info(
           JSON.stringify({ event: "record_history_cleanup", ...report }),

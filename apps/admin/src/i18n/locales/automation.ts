@@ -2663,6 +2663,11 @@ export const automationMessages = {
     "My tasks and notifications",
     "Minhas tarefas e notificações",
   ],
+  "Abrir la bandeja de notificaciones": [
+    "Abrir la bandeja de notificaciones",
+    "Open the notifications inbox",
+    "Abrir a caixa de entrada de notificações",
+  ],
   "No tienes elementos asignados por los flujos.": [
     "No tienes elementos asignados por los flujos.",
     "You have no items assigned by workflows.",

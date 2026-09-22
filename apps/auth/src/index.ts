@@ -21,6 +21,12 @@ import {
 } from "./oauth";
 import { oauthPageResponse, tenantBrandingFromHeader } from "./oauth-pages";
 import { deliverSmtpEmail, type SMTPEmail, type SMTPSettings } from "./smtp";
+import {
+  ackAuthNoticeEvents,
+  authNoticeBridgeAuthorized,
+  ensureAuthNoticeSchema,
+  readAuthNoticeEvents,
+} from "./notification-events";
 
 export type AuthWorkerEnvironment = {
   AUTH_DB: D1Database;
@@ -37,6 +43,7 @@ export type AuthWorkerEnvironment = {
   SAVIA_SMTP_USERNAME?: string;
   SAVIA_SMTP_PASSWORD?: string;
   SAVIA_SMTP_FROM?: string;
+  SAVIA_INTERNAL_BRIDGE_KEY?: string;
 };
 
 export type AuthenticatedUser = {
@@ -57,6 +64,7 @@ export type AuthDependencies = {
 };
 
 const schemaInitializations = new WeakMap<object, Promise<void>>();
+const noticeSchemaInitialized = new WeakSet<object>();
 
 function requiredValue(value: string | undefined, name: string): string {
   if (value) return value;
@@ -215,9 +223,14 @@ async function ensureSchema(
 ): Promise<void> {
   const existing = schemaInitializations.get(database);
   if (existing) return existing;
-  const initialization = getMigrations(auth.options).then(({ runMigrations }) =>
-    runMigrations(),
-  );
+  const initialization = getMigrations(auth.options)
+    .then(({ runMigrations }) => runMigrations())
+    .then(() => {
+      if (!noticeSchemaInitialized.has(database)) {
+        noticeSchemaInitialized.add(database);
+        return ensureAuthNoticeSchema(database);
+      }
+    });
   schemaInitializations.set(database, initialization);
   return initialization;
 }
@@ -603,6 +616,35 @@ export function createAuthHandler(
       if (pathname.startsWith("/api/auth/")) return auth.handler(request);
       if (request.method === "GET" && pathname === "/_internal/session")
         return internalSession(auth, request);
+      if (
+        request.method === "GET" &&
+        pathname === "/_internal/notification-events/read"
+      ) {
+        if (!authNoticeBridgeAuthorized(environment.SAVIA_INTERNAL_BRIDGE_KEY, request))
+          return Response.json({ error: "Forbidden bridge access." }, { status: 403 });
+        const url = new URL(request.url);
+        return Response.json({
+          events: await readAuthNoticeEvents(
+            environment.AUTH_DB,
+            url.searchParams.get("after"),
+            Number(url.searchParams.get("limit") ?? 100),
+          ),
+        });
+      }
+      if (
+        request.method === "POST" &&
+        pathname === "/_internal/notification-events/ack"
+      ) {
+        if (!authNoticeBridgeAuthorized(environment.SAVIA_INTERNAL_BRIDGE_KEY, request))
+          return Response.json({ error: "Forbidden bridge access." }, { status: 403 });
+        const body = (await request.json().catch(() => ({}))) as { ids?: string[] };
+        return Response.json({
+          acknowledged: await ackAuthNoticeEvents(
+            environment.AUTH_DB,
+            Array.isArray(body.ids) ? body.ids : [],
+          ),
+        });
+      }
       if (request.method === "GET" && pathname === "/_internal/users")
         return listUsers(auth, request);
       if (request.method === "POST" && pathname === "/_internal/users")
