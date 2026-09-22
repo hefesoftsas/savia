@@ -66,13 +66,15 @@ For quotation links, administrators may explicitly enable a limited result for t
 current submission: insurer/product labels, premium, currency and supported coverage
 labels. Coverage bullets come from the live provider breakdown when present;
 otherwise they fall back to the frozen plan catalog so each card still
-describes its policy (never quote numbers, raw responses, or customer data). The public results render the same comparator language as the embedded
-wizard (insurer cards ranked cheapest-first, insurer filter, coverage bullets),
-without quote numbers, history, or retry actions. Visitors can print the
+describes its policy (never quote numbers, raw responses, or customer data).
+Results render with the same shared comparator component as the embedded
+wizard (ranked cards, brand logos, plan badges, insurer filter, compare-select
+up to four policies and the coverage comparison table), with retry actions, history,
+quote numbers and PDF export hidden by props. Visitors can print the
 results to PDF from the browser; the print stylesheet keeps only the reference
 and the quotes. While providers respond, the wizard shows a live waiting state
 with elapsed time instead of a bare spinner, and paints each finished
-insurer as a card as responses arrive: the browser polls the anonymous
+insurer through the same shared comparator as responses arrive: the browser polls the anonymous
 per-submission status endpoint every 3 seconds (well under the burst rate
 limit), which only exposes the same safe projection. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost

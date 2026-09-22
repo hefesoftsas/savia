@@ -13,6 +13,7 @@ import {
   render as testingRender,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PublicQuoteForm } from "./public-quote-wizard";
@@ -353,6 +354,17 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
   expect(payload.values).not.toHaveProperty("flowId");
   expect(payload.values).not.toHaveProperty("actionId");
   expect(JSON.stringify(payload)).not.toMatch(/provider|secret|credential/i);
+  expect(
+    await screen.findByRole("heading", { name: "Solicitud recibida" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("quote-receipt-123")).toBeInTheDocument();
+  const print = vi.fn();
+  Object.defineProperty(window, "print", {
+    configurable: true,
+    value: print,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Descargar PDF" }));
+  expect(print).toHaveBeenCalledTimes(1);
 });
 
 it("looks up the plate and autofills vehicle fields like the embedded wizard", async () => {
@@ -686,35 +698,35 @@ it("keeps future unknown fields visible in the final step", async () => {
   expect(await screen.findByLabelText(/Notas adicionales/)).toBeInTheDocument();
 });
 
-it("paints finished insurers as cards while others keep polling", async () => {
+it("paints finished insurers through the shared comparator while others poll", async () => {
   fetchMock.mockImplementation((url) => {
     if (String(url).includes("/status/"))
       return Promise.resolve(
         Response.json({
           items: [
             {
-              flowId: "flow-0",
-              label: "Insurer 0 · Product 0",
-              insurer: "Insurer 0",
+              flowId: "sbs-producto-8",
+              label: "SBS · Autos Producto 8",
+              insurer: "SBS",
               status: "done",
               result: {
-                insurer: "Insurer 0",
-                product: "Insurer 0 · Product 0",
+                insurer: "SBS",
+                product: "SBS · Autos Producto 8",
                 premiumTotal: 1200000,
                 currency: "COP",
                 coverages: ["Responsabilidad civil"],
               },
             },
             {
-              flowId: "flow-1",
-              label: "Insurer 1 · Product 1",
-              insurer: "Insurer 1",
+              flowId: "liberty-full-quote",
+              label: "Liberty · Full",
+              insurer: "Liberty",
               status: "quoting",
             },
             {
-              flowId: "flow-2",
-              label: "Insurer 2 · Product 2",
-              insurer: "Insurer 2",
+              flowId: "equidad-rce-quote",
+              label: "Equidad · RCE",
+              insurer: "Equidad",
               status: "unavailable",
             },
             { flowId: "", status: "done" },
@@ -780,17 +792,20 @@ it("paints finished insurers as cards while others keep polling", async () => {
   expect(
     await screen.findByText(/Cotizando con aseguradoras/),
   ).toBeInTheDocument();
-  // Malformed entries never render; finished, pending and failed rows do.
-  // The first poll waits a full interval by design.
+  // Malformed entries never render; the shared comparator shows the
+  // finished card, pending skeletons and failed rows. The first poll waits
+  // a full interval by design.
   expect(
-    await screen.findByText("1 de 3 respuestas", {}, { timeout: 5000 }),
+    await screen.findByRole("heading", { name: "SBS" }, { timeout: 5000 }),
   ).toBeInTheDocument();
+  const cards = within(document.querySelector(".insurance-comparator__cards")!);
+  expect(cards.getByText("Autos Producto 8")).toBeInTheDocument();
   expect(
-    screen.getByRole("heading", { name: "Insurer 0" }),
+    cards.getByText("Responsabilidad Civil: $3.000 Millones"),
   ).toBeInTheDocument();
-  expect(screen.getByText("Responsabilidad civil")).toBeInTheDocument();
-  expect(screen.getByText("Insurer 1")).toBeInTheDocument();
-  expect(screen.getByText("Sin respuesta")).toBeInTheDocument();
+  // The quoting insurer stays visible in the shared status table.
+  expect(screen.getByText("Liberty · Full")).toBeInTheDocument();
+  expect(screen.getByText(/Falló/)).toBeInTheDocument();
   expect(
     fetchMock.mock.calls.some(([url]) => String(url).includes("/status/")),
   ).toBe(true);

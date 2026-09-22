@@ -136,23 +136,6 @@ export const publicFormsMessages = {
     "Complete security verification to submit.",
     "Conclua a verificação de segurança para enviar.",
   ],
-  "Resultados de cotización": [
-    "Resultados de cotización",
-    "Quote results",
-    "Resultados da cotação",
-  ],
-  "Valor por confirmar": [
-    "Valor por confirmar",
-    "Amount to be confirmed",
-    "Valor a confirmar",
-  ],
-  Coberturas: ["Coberturas", "Coverages", "Coberturas"],
-  "No hay cotizaciones disponibles en este resultado. Contacta a quien compartió el formulario.":
-    [
-      "No hay cotizaciones disponibles en este resultado. Contacta a quien compartió el formulario.",
-      "No quotes are available in this result. Contact the person who shared the form.",
-      "Não há cotações disponíveis neste resultado. Entre em contato com quem compartilhou o formulário.",
-    ],
   "%{count} resultado no está disponible.": [
     "%{count} resultado no está disponible.",
     "%{count} result is unavailable.",
@@ -385,15 +368,6 @@ export const publicFormsMessages = {
     "Suggested cities",
     "Cidades sugeridas",
   ],
-  "COP / año": ["COP / año", "COP / year", "COP / ano"],
-  "Todas las aseguradoras": [
-    "Todas las aseguradoras",
-    "All insurers",
-    "Todas as seguradoras",
-  ],
-  "Mejor precio": ["Mejor precio", "Best price", "Melhor preço"],
-  "Copiar cotización": ["Copiar cotización", "Copy quote", "Copiar cotação"],
-  "¡Copiado!": ["¡Copiado!", "Copied!", "Copiado!"],
   "Descargar PDF": ["Descargar PDF", "Download PDF", "Baixar PDF"],
   "Cotizando con aseguradoras en vivo…": [
     "Cotizando con aseguradoras en vivo…",
@@ -422,11 +396,6 @@ export const publicFormsMessages = {
     "Limpar cidade selecionada",
   ],
   Limpiar: ["Limpiar", "Clear", "Limpar"],
-  "%{done} de %{total} respuestas": [
-    "%{done} de %{total} respuestas",
-    "%{done} of %{total} responses",
-    "%{done} de %{total} respostas",
-  ],
   "Sin respuesta": ["Sin respuesta", "No response", "Sem resposta"],
   "Edad:": ["Edad:", "Age:", "Idade:"],
   "%{p0} años": ["%{p0} años", "%{p0} years old", "%{p0} anos"],

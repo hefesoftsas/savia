@@ -11,7 +11,10 @@
     "./solution": "./src/solution.ts",
     "./admin": "./src/admin.tsx",
     "./assistant-contract": "./src/assistant-contract.ts",
-    "./public-form": "./src/public-form.ts"
+    "./public-form": "./src/public-form.ts",
+    "./plan-profiles": "./src/plan-profiles.ts",
+    "./quote-results": "./src/screens/quote-results.tsx",
+    "./quote-screens.css": "./src/screens/quote-screens.css"
   },
   "scripts": {
     "test": "vitest run",

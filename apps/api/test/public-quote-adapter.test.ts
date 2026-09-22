@@ -141,7 +141,7 @@ it("freezes only quote products and validates public inputs before executing a f
     quotes: [{ insurer: "SBS", premiumTotal: 12345, currency: "COP" }],
   });
   expect(JSON.stringify(result)).not.toMatch(
-    /customer-secret|credentials|password|Ada|documentNumber|runId|flowId/,
+    /customer-secret|credentials|password|Ada|documentNumber|runId/,
   );
 });
 it("fails closed for a different tenant, disabled extension, changed policy, and invalid visitor data", async () => {
@@ -713,6 +713,7 @@ it("falls back to frozen plan highlights when providers report no coverage break
       returnResult: true,
     })) as { quotes: { coverages: string[] }[] };
     expect(result.quotes).toHaveLength(2);
+    expect(result.quotes[0]).toMatchObject({ flowId: "sbs-producto-8" });
     expect(result.quotes[0].coverages).toContain(
       "Responsabilidad Civil: $3.000 Millones",
     );

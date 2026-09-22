@@ -225,10 +225,9 @@ it("renders only the public quote projection, never provider payloads", async ()
     ),
   );
   fireEvent.click(screen.getByRole("button", { name: "Enviar solicitud" }));
-  expect(await screen.findByText("Savia aseguradora")).toBeInTheDocument();
-  expect(screen.getByText("Asistencia")).toBeInTheDocument();
-  expect(screen.getByText(/1\.234\.567/)).toBeInTheDocument();
+  expect(await screen.findByText("quote-ref")).toBeInTheDocument();
   expect(screen.queryByText("PRIVATE")).not.toBeInTheDocument();
+  expect(screen.queryByText("Savia aseguradora")).not.toBeInTheDocument();
 });
 it("accepts an explicit false answer for a required boolean", async () => {
   render(<PublicFormPage token="public-token" />);

@@ -175,23 +175,6 @@
     height: auto;
   }
 }
-.public-quote-results {
-  display: grid;
-  gap: 1rem;
-}
-.public-quote-results h3 {
-  font-weight: 650;
-}
-.public-quote-results-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.public-quote-results-head > button {
-  min-height: 2.5rem;
-}
 /* Savia emerald identity for the whole public experience. */
 .public-form-page {
   --primary: oklch(0.508 0.118 165.612);
@@ -219,175 +202,86 @@
   .public-form-brand,
   .public-form-footer,
   .public-quote-actions,
-  .public-quote-chips,
-  .public-quote-copy,
-  .public-quote-results-head > button,
-  .public-quote-notice > button {
+  .public-quote-notice-actions,
+  .insurance-comparator__filter-bar,
+  .insurance-comparator__selection-bar,
+  .insurance-comparator__btn,
+  .insurance-batch-disclosure {
     display: none !important;
   }
   .public-form-page {
     padding: 0;
   }
-  .public-quote-card {
+  .insurance-card,
+  .insurance-comparison {
     break-inside: avoid;
     box-shadow: none;
   }
 }
-.public-quote-results > ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.public-quote-results > ul > li {
-  border-top: 1px solid var(--border);
-  padding: 1.25rem 0;
-  display: grid;
-  gap: 0.75rem;
-}
-.public-quote-chips {
+.public-quote-notice-actions {
   display: flex;
+  gap: 0.75rem;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
 }
-.public-quote-chips > button {
-  min-height: 2.25rem;
-  font-size: 0.875rem;
+
+.public-quote-notice-actions > button {
+  min-height: 2.5rem;
 }
-.public-quote-cards {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+
+/* Brand tokens for the shared insurance comparator (same names as the
+   embedded workbench so one component renders identically). */
+.public-quote-embedded {
+  --iq-success: #059669;
+  --iq-success-strong: #10b981;
+  --iq-cta: #e11d48;
+  --iq-cta-hover: #be123c;
+  --iq-on-cta: #ffffff;
+  --iq-brand-sura: #004f9e;
+  --iq-plate-liberty: #f8fafc;
+  --iq-plate-equidad: #f6fbf3;
+  --iq-plate-mapfre: #fff8f8;
+  --iq-plate-previsora: #f4faf7;
+  --iq-plate-neutral: #ffffff;
 }
-.public-quote-card {
-  position: relative;
-  display: grid;
-  gap: 0.75rem;
-  align-content: start;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  background: var(--card, #ffffff);
-}
-.public-quote-card.is-best {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
-}
-.public-quote-ribbon {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--primary);
-}
-.public-quote-brand {
-  display: flex;
+
+.insurance-provider-logo {
   align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-}
-.public-quote-logo {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 999px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-weight: 700;
-  font-size: 1.125rem;
-}
-.public-quote-heading {
-  min-width: 0;
-}
-.public-quote-copy {
-  margin-left: auto;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.public-quote-copy:hover,
-.public-quote-copy:focus-visible {
-  background: var(--muted);
-  color: var(--foreground);
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
-}
-.public-quote-bullets {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.375rem;
-  font-size: 0.9375rem;
-}
-.public-quote-bullets span[aria-hidden="true"] {
-  color: var(--primary);
-  font-weight: 700;
-}
-.public-quote-pending {
-  list-style: none;
-  margin: 1rem 0 0;
-  padding: 0;
-  display: grid;
-  gap: 0.5rem;
-}
-.public-quote-pending > li {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 0.625rem;
-  padding: 0.625rem 0.875rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
   background: var(--background);
-}
-.public-quote-pending > li[data-status="unavailable"] {
-  opacity: 0.75;
-}
-.public-quote-pending .public-quote-spinner {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
   flex: 0 0 auto;
+  height: 40px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 5px 7px;
+  width: 82px;
 }
-.public-quote-pending-insurer {
-  font-weight: 600;
-  color: var(--foreground);
+.insurance-provider-logo__image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
 }
-@media (max-width: 480px) {
-  .public-quote-card {
-    padding: 1rem;
-  }
-  .public-quote-price {
-    font-size: 1.375rem;
-  }
+.insurance-provider-logo--fallback {
+  background: color-mix(in oklab, var(--primary) 10%, var(--background));
+  color: var(--primary);
 }
-.public-quote-heading h4 {
-  font-weight: 600;
+.insurance-provider-logo__fallback {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
-.public-quote-heading p {
-  color: var(--muted-foreground);
+.insurance-provider-logo--compact {
+  border-radius: 6px;
+  height: 26px;
+  padding: 3px 5px;
+  width: 50px;
 }
-.public-quote-price {
-  font-size: 1.25rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.public-quote-price span {
-  font-size: 0.875rem;
-  font-weight: 400;
-}
-.public-quote-results ul[aria-label] {
-  list-style: disc;
-  padding-left: 1.25rem;
+.insurance-provider-logo--compact .insurance-provider-logo__image {
+  height: 100%;
+  width: 100%;
 }
 @media (max-width: 360px) {
   .public-form-page {
