@@ -55,7 +55,8 @@ type AssistantSettingRow = {
   updated_by: string;
 };
 
-type ActiveAgencyRow = { agency_id: number };
+type ActiveTenantRow = { tenant_id?: number; agency_id?: number };
+type ActiveAgencyRow = ActiveTenantRow;
 
 export type AssistantConfigurationSummary = {
   global: AssistantConfigurationSettingSummary | null;
@@ -387,10 +388,10 @@ export class AssistantConfigurationRepository {
     }
     await this.database
       .prepare(
-        `INSERT INTO assistant_active_agencies (principal_id, agency_id, updated_at)
+        `INSERT INTO assistant_active_tenants (principal_id, tenant_id, updated_at)
          VALUES (?, ?, ?)
          ON CONFLICT(principal_id) DO UPDATE SET
-           agency_id = excluded.agency_id,
+           tenant_id = excluded.tenant_id,
            updated_at = excluded.updated_at`,
       )
       .bind(principalId, agencyId, this.now().toISOString())
@@ -405,12 +406,12 @@ export class AssistantConfigurationRepository {
     return this.setActiveAgency(principalId, tenantId, actor);
   }
 
-  async activeAgencyFor(principalId: string): Promise<number | undefined> {
+  async activeTenantFor(principalId: string): Promise<number | undefined> {
     const row = await this.database
       .prepare(
-        `SELECT active.agency_id
-         FROM assistant_active_agencies AS active
-         INNER JOIN tenants ON tenants.id = active.agency_id
+        `SELECT active.tenant_id
+         FROM assistant_active_tenants AS active
+         INNER JOIN tenants ON tenants.id = active.tenant_id
            AND tenants.kind = 'commercial'
            AND tenants.is_active = 1
          WHERE active.principal_id = ?
@@ -418,7 +419,7 @@ export class AssistantConfigurationRepository {
              EXISTS (
                SELECT 1 FROM identity_tenant_membership AS membership
                WHERE membership.principal_id = active.principal_id
-                 AND membership.tenant_id = active.agency_id
+                 AND membership.tenant_id = active.tenant_id
                  AND membership.is_active = 1
              )
              OR EXISTS (
@@ -429,12 +430,12 @@ export class AssistantConfigurationRepository {
            )`,
       )
       .bind(principalId)
-      .first<ActiveAgencyRow>();
-    return row?.agency_id;
+      .first<{ tenant_id: number }>();
+    return row?.tenant_id;
   }
 
-  async activeTenantFor(principalId: string): Promise<number | undefined> {
-    return this.activeAgencyFor(principalId);
+  async activeAgencyFor(principalId: string): Promise<number | undefined> {
+    return this.activeTenantFor(principalId);
   }
 
   async effectiveConfigurationFor(
