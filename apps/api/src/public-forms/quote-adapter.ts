@@ -5,6 +5,12 @@ import type { ExtensionRegistry } from "@savia/crm-shared/extension-package";
 import { isExtensionAvailable } from "@savia/crm-server/extensions";
 import { ExtensionSettingsRepository } from "@savia/crm-server/extension-settings";
 import { ExtensionConnectionRepository } from "@savia/crm-server/extension-connections";
+import {
+  createRecord,
+  getRecord,
+  updateRecord,
+} from "@savia/crm-server/services";
+import { historyDatabase } from "@savia/crm-server/record-history-storage";
 import { publicQuoteContribution as contribution } from "@savia/release-catalog/public-forms";
 import { solutionOptions } from "../solutions/catalog";
 import type { PublicQuoteAdapter } from "./service";
@@ -49,6 +55,12 @@ function policy(value: unknown): Policy {
   return parsed.data;
 }
 /**
+ * Anonymous visitors wait on a single response, so providers run in parallel.
+ * The bound keeps upstream throttling and run-receipt writes predictable;
+ * wall time is the slowest wave, not the sum of all products.
+ */
+export const PUBLIC_QUOTE_CONCURRENCY = 10;
+/**
  * Bounded parallel map preserving input order. Provider calls are
  * independent (each keeps its own run receipt), so concurrency only
  * shortens the visitor wait instead of changing the result.
@@ -74,6 +86,127 @@ async function mapWithConcurrency<T, R>(
   );
   await Promise.all(workers);
   return results;
+}
+
+type QuoteMirror = {
+  db: D1Database;
+  masterId: string;
+  masterVersion: number;
+  details: Map<string, { id: string; version: number }>;
+};
+
+function storedVersion(value: unknown): number | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const version = (value as Record<string, unknown>)._version;
+  return typeof version === "number" && Number.isInteger(version) && version > 0
+    ? version
+    : undefined;
+}
+
+function storedId(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const id = (value as Record<string, unknown>).id;
+  return typeof id === "string" && id ? id : undefined;
+}
+
+/**
+ * Agency-visible CRM mirror of an anonymous submission: one `cotizaciones`
+ * master plus one `cotizaciones_detalle` per enabled product, using the same
+ * fields as the embedded wizard so history and reports keep working. The
+ * visitor never sees these records; the public reference (submission id) is
+ * the master name so the agency can match it. Writes are best-effort and
+ * idempotent per submission: the quote still succeeds when the collections
+ * are missing, and uncertain retries replay the same rows instead of
+ * duplicating them. Provider quote references are deliberately not mirrored
+ * (they can embed plates or document numbers).
+ */
+async function createQuoteMirror(input: {
+  db: D1Database;
+  tenant: string;
+  submission: string;
+  publicationId: string;
+  values: Record<string, unknown>;
+  products: readonly { flowId: string }[];
+}): Promise<QuoteMirror | null> {
+  const { db, tenant, submission, publicationId, values, products } = input;
+  try {
+    const hdb = historyDatabase(db, tenant, {
+      kind: "public-form",
+      id: publicationId,
+      causeId: submission,
+    });
+    const createdBy = `public-form:${submission}`;
+    const masterRow = await createRecord(
+      hdb,
+      tenant,
+      "cotizaciones",
+      {
+        name: submission,
+        ramo: "Automóviles",
+        placa: values["vehicle_plate"],
+        valor_asegurado: values["vehicle_declaredValue"],
+        estado: "Solicitada",
+      },
+      {
+        idempotencyKey: `public-quote:${publicationId}:${submission}:master`,
+        createdBy,
+      },
+    );
+    const master = await getRecord(
+      hdb,
+      tenant,
+      "cotizaciones",
+      storedId(masterRow) ?? "",
+    );
+    const masterId = storedId(master);
+    const masterVersion = storedVersion(master);
+    if (!masterId || masterVersion === undefined) return null;
+    const details = new Map<string, { id: string; version: number }>();
+    for (const product of products) {
+      const label = catalog.get(product.flowId)?.label ?? product.flowId;
+      const detailRow = await createRecord(
+        hdb,
+        tenant,
+        "cotizaciones_detalle",
+        {
+          name: `${submission}-${product.flowId}`,
+          cotizacion: masterId,
+          aseguradora: label.split(" · ")[0] ?? "Seguros",
+          producto: label,
+          flow_id: product.flowId,
+          estado: "Solicitada",
+        },
+        {
+          idempotencyKey: `public-quote:${publicationId}:${submission}:${product.flowId}`,
+          createdBy,
+        },
+      );
+      const detail = await getRecord(
+        hdb,
+        tenant,
+        "cotizaciones_detalle",
+        storedId(detailRow) ?? "",
+      );
+      const detailId = storedId(detail);
+      const detailVersion = storedVersion(detail);
+      if (detailId && detailVersion !== undefined)
+        details.set(product.flowId, { id: detailId, version: detailVersion });
+    }
+    return { db: hdb, masterId, masterVersion, details };
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "public-form-quote-mirror-failed",
+        tenant,
+        submission,
+      }),
+    );
+    return null;
+  }
 }
 export function createPublicQuoteAdapter(options: {
   executor?: ExtensionActionExecutor;
@@ -370,9 +503,19 @@ export function createPublicQuoteAdapter(options: {
       // The guard above narrows options.executor for straight-line code;
       // capture it so the parallel closure below stays typed as defined.
       const executor = options.executor;
+      // Agency-visible CRM mirror (best-effort): the visitor-facing result
+      // never depends on it.
+      const mirror = await createQuoteMirror({
+        db: input.db,
+        tenant: input.tenant,
+        submission,
+        publicationId: frozen.publicationId,
+        values,
+        products: frozen.products,
+      });
       const outcomes = await mapWithConcurrency(
         frozen.products,
-        5,
+        PUBLIC_QUOTE_CONCURRENCY,
         async (product) => {
           const context = {
             tenantId: input.tenant,
@@ -384,6 +527,8 @@ export function createPublicQuoteAdapter(options: {
           };
           const actionInput = contribution.actionInput(product.flowId, values);
           await runs.startRun(context, actionInput);
+          const mirrorDetail = mirror?.details.get(product.flowId);
+          let detailVersion = mirrorDetail?.version;
           try {
             const result = await executor.execute(context, actionInput);
             if (result.status !== "succeeded") {
@@ -408,9 +553,43 @@ export function createPublicQuoteAdapter(options: {
               result.output,
             );
             await runs.completeRun(context, safe);
+            if (mirror && mirrorDetail && detailVersion !== undefined) {
+              try {
+                const updated = await updateRecord(
+                  mirror.db,
+                  input.tenant,
+                  "cotizaciones_detalle",
+                  mirrorDetail.id,
+                  {
+                    estado: "Recibida",
+                    prima: safe.premiumTotal ?? undefined,
+                    run_id: context.runId,
+                    error_mensaje: undefined,
+                  },
+                  { version: detailVersion },
+                );
+                detailVersion = storedVersion(updated) ?? detailVersion + 1;
+              } catch {}
+            }
             return safe;
           } catch {
             await runs.failRun(context, "CONNECTOR_EXECUTION_FAILED");
+            if (mirror && mirrorDetail && detailVersion !== undefined) {
+              try {
+                const updated = await updateRecord(
+                  mirror.db,
+                  input.tenant,
+                  "cotizaciones_detalle",
+                  mirrorDetail.id,
+                  {
+                    estado: "Error",
+                    error_mensaje: "El conector no pudo completar la acción.",
+                  },
+                  { version: detailVersion },
+                );
+                detailVersion = storedVersion(updated) ?? detailVersion + 1;
+              } catch {}
+            }
             return null;
           }
         },
@@ -420,6 +599,29 @@ export function createPublicQuoteAdapter(options: {
           quote !== null,
       );
       const unavailable = outcomes.length - quotes.length;
+      if (mirror) {
+        try {
+          const validPremiums = quotes
+            .map((quote) => quote.premiumTotal)
+            .filter(
+              (premium): premium is number =>
+                typeof premium === "number" && premium > 0,
+            );
+          await updateRecord(
+            mirror.db,
+            input.tenant,
+            "cotizaciones",
+            mirror.masterId,
+            {
+              estado: quotes.length ? "Recibida" : "Rechazada",
+              ...(validPremiums.length
+                ? { prima: Math.min(...validPremiums) }
+                : {}),
+            },
+            { version: mirror.masterVersion },
+          );
+        } catch {}
+      }
       if (!quotes.length)
         throw new HTTPException(502, {
           message: "No se pudo completar la cotización. Intenta más tarde.",
