@@ -1,7 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
 import { makeConfig } from "@savia/crm-shared/metadata";
-import { createPublicQuoteAdapter } from "../src/public-forms/quote-adapter";
+import {
+  PUBLIC_QUOTE_CONCURRENCY,
+  createPublicQuoteAdapter,
+} from "../src/public-forms/quote-adapter";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -550,8 +553,13 @@ it("quotes enabled providers concurrently while preserving frozen product order"
     "equidad-full-quote",
     "equidad-ligero-quote",
     "equidad-rce-quote",
+    "liberty-basico-quote",
+    "liberty-basico-pt-quote",
+    "liberty-full-quote",
+    "liberty-integral-quote",
+    "mapfre-para-la-mujer-quote",
   ];
-  const CONCURRENCY = 5;
+  const CONCURRENCY = PUBLIC_QUOTE_CONCURRENCY;
   const stored = await env.DB.prepare(
     "SELECT value FROM extension_settings WHERE tenant_id=? AND extension_id='insurance.quotes'",
   )
@@ -651,6 +659,64 @@ it("quotes enabled providers concurrently while preserving frozen product order"
     expect(result.quotes.map((quote) => quote.premiumTotal)).toEqual(
       flowIds.map((_, index) => 1000 + index),
     );
+  } finally {
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(original, tenant)
+      .run();
+  }
+});
+it("falls back to frozen plan highlights when providers report no coverage breakdown", async () => {
+  const stored = await env.DB.prepare(
+    "SELECT value FROM extension_settings WHERE tenant_id=? AND extension_id='insurance.quotes'",
+  )
+    .bind(tenant)
+    .first<{ value: string }>();
+  const original = stored!.value;
+  try {
+    const next = JSON.parse(original);
+    next.products = [
+      { id: "sbs-producto-8", label: "Admin", enabled: true, rank: 1 },
+      {
+        id: "previsora-clasica-quote",
+        label: "Admin",
+        enabled: true,
+        rank: 2,
+      },
+    ];
+    await env.DB.prepare(
+      "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",
+    )
+      .bind(JSON.stringify(next), tenant)
+      .run();
+    // No data.coverages breakdown: the cards still describe each policy.
+    const execute = vi.fn(async () => ({
+      status: "succeeded" as const,
+      output: { type: "quote", data: { premiumTotal: 2000000 } },
+    }));
+    const adapter = createPublicQuoteAdapter({ executor: { execute } });
+    const { snapshot } = await adapter.publish({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      object,
+    });
+    const result = (await adapter.execute({
+      db: env.DB,
+      tenant,
+      domainId: "test",
+      objectName: object.name,
+      submissionId: "highlights-submission",
+      snapshot,
+      values,
+      returnResult: true,
+    })) as { quotes: { coverages: string[] }[] };
+    expect(result.quotes).toHaveLength(2);
+    expect(result.quotes[0].coverages).toContain(
+      "Responsabilidad Civil: $3.000 Millones",
+    );
+    expect(result.quotes[1].coverages).toEqual(["Póliza todo riesgo autos"]);
   } finally {
     await env.DB.prepare(
       "UPDATE extension_settings SET value=? WHERE tenant_id=? AND extension_id='insurance.quotes'",

@@ -64,7 +64,9 @@ capability remains authenticated-only.
 By default the response is only an acknowledgement and submission reference.
 For quotation links, administrators may explicitly enable a limited result for the
 current submission: insurer/product labels, premium, currency and supported coverage
-labels. The public results render the same comparator language as the embedded
+labels. Coverage bullets come from the live provider breakdown when present;
+otherwise they fall back to the frozen plan catalog so each card still
+describes its policy (never quote numbers, raw responses, or customer data). The public results render the same comparator language as the embedded
 wizard (insurer cards ranked cheapest-first, insurer filter, coverage bullets),
 without quote numbers, history, or retry actions. Visitors can print the
 results to PDF from the browser; the print stylesheet keeps only the reference
@@ -72,7 +74,7 @@ and the quotes. While providers respond, the wizard shows a live waiting state
 with elapsed time instead of a bare spinner. Raw provider responses, credentials and customer identifiers are never
 returned. A single submission can call each enabled provider once, so its cost
 scales with the number of enabled products. Provider calls run with bounded
-concurrency (5 at a time) so the visitor wait stays flat as products grow. Daily budgets count submissions, not
+concurrency (10 at a time) so the visitor wait stays flat as products grow. Daily budgets count submissions, not
 provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration

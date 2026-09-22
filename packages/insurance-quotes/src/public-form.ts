@@ -9,6 +9,7 @@ import {
   toAutoLightQuoteInput,
   type QuoteFormValues,
 } from "./screens/quote-input";
+import { publicPlanHighlights } from "./plan-profiles";
 export {
   insuranceQuoteSettingsDefinition,
   insurancePackageSettingsSchema,
@@ -264,7 +265,7 @@ function projectPublicQuoteResult(flowId: string, output: unknown) {
     legalAssistance: "Asistencia jurídica",
   };
   const source = record(data?.coverages);
-  const coverages = Object.entries(coverageLabels)
+  const liveCoverages = Object.entries(coverageLabels)
     .filter(([key]) => source?.[key] === true)
     .map(([, label]) => label);
   return {
@@ -275,7 +276,10 @@ function projectPublicQuoteResult(flowId: string, output: unknown) {
         ? premium
         : null,
     currency: "COP",
-    coverages,
+    // Live providers rarely return a coverage breakdown; fall back to the
+    // frozen plan catalog so cards still describe each policy.
+    coverages:
+      liveCoverages.length > 0 ? liveCoverages : publicPlanHighlights(flowId),
   };
 }
 

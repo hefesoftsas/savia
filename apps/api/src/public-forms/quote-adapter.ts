@@ -49,6 +49,12 @@ function policy(value: unknown): Policy {
   return parsed.data;
 }
 /**
+ * Anonymous visitors wait on a single response, so providers run in parallel.
+ * The bound keeps upstream throttling and run-receipt writes predictable;
+ * wall time is the slowest wave, not the sum of all products.
+ */
+export const PUBLIC_QUOTE_CONCURRENCY = 10;
+/**
  * Bounded parallel map preserving input order. Provider calls are
  * independent (each keeps its own run receipt), so concurrency only
  * shortens the visitor wait instead of changing the result.
@@ -372,7 +378,7 @@ export function createPublicQuoteAdapter(options: {
       const executor = options.executor;
       const outcomes = await mapWithConcurrency(
         frozen.products,
-        5,
+        PUBLIC_QUOTE_CONCURRENCY,
         async (product) => {
           const context = {
             tenantId: input.tenant,
