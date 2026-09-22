@@ -599,10 +599,6 @@ describe("Savia Better Auth worker", () => {
         email: "savia.admin@example.test",
         role: "admin",
       },
-      {
-        email: "agency-viewer-flow-20260902@savia.test",
-        role: "user",
-      },
     ] as const;
 
     for (const account of accounts) {

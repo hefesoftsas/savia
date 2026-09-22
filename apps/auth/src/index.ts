@@ -246,14 +246,6 @@ export async function initializeAuthSchema(
   );
 }
 
-const LOCAL_SEED_USERS = [
-  {
-    email: "agency-viewer-flow-20260902@savia.test",
-    name: "Agencia Consulta",
-    role: "user" as const,
-  },
-];
-
 async function ensureLocalSeedUser(
   auth: ReturnType<typeof createBetterAuth>,
   environment: AuthWorkerEnvironment,
@@ -302,9 +294,6 @@ async function ensureBootstrapAdministrator(
     password,
     role: "admin",
   });
-  for (const account of LOCAL_SEED_USERS) {
-    await ensureLocalSeedUser(auth, environment, { ...account, password });
-  }
 }
 
 async function internalSession(
