@@ -193,16 +193,16 @@ it("keeps pending work visible offline and shows the last successful check", asy
   try {
     render(<LocalSyncStatus workspace={workspace} />);
     await screen.findByText("3 cambios pendientes");
-    expect(
-      screen.getByRole("status", { name: /Sin conexión/ }),
-    ).toHaveAttribute("title", expect.stringContaining("Sin conexión"));
-    const lastCheck = screen.getByText(/Última comprobación/);
-    expect(lastCheck).toHaveClass("sr-only");
-    expect(lastCheck.parentElement).toHaveAttribute(
+    const control = screen.getByRole("button", { name: /Sin conexión/ });
+    expect(control).toHaveAttribute(
+      "title",
+      expect.stringContaining("Sin conexión"),
+    );
+    expect(control).toHaveAttribute(
       "title",
       expect.stringContaining("Última comprobación"),
     );
-    expect(screen.getByRole("button", { name: "Sincronizar" })).toBeDisabled();
+    expect(control).toBeDisabled();
   } finally {
     vi.restoreAllMocks();
   }
@@ -216,7 +216,7 @@ it("retries a synchronization failure once without scheduling a second pass", as
   const workspace = statusWorkspace({ syncError: "No se pudo conectar" });
   render(<LocalSyncStatus workspace={workspace} />);
   const retry = await screen.findByRole("button", {
-    name: "Reintentar sincronización",
+    name: /Reintentar sincronización/,
   });
   fireEvent.click(retry);
   await waitFor(() => expect(workspace.syncNow).toHaveBeenCalledOnce());
@@ -224,24 +224,24 @@ it("retries a synchronization failure once without scheduling a second pass", as
 });
 it("renders a green icon-only status when local data is available", async () => {
   render(<LocalSyncStatus workspace={statusWorkspace({})} />);
-  const status = await screen.findByRole("status", {
+  await screen.findByRole("status", {
     name: "Datos locales disponibles",
   });
-  expect(status.className).toContain("border-emerald-500/30");
-  expect(status.getAttribute("title")).toBe("Datos locales disponibles");
-  const sync = screen.getByRole("button", { name: "Sincronizar" });
-  expect(sync.getAttribute("title")).toBe("Sincronizar");
+  const sync = screen.getByRole("button", { name: /Sincronizar/ });
+  expect(sync.className).toContain("border-emerald-500/30");
+  expect(sync.getAttribute("title")).toContain("Datos locales disponibles");
   expect(sync.textContent).toBe("");
 });
 it("renders a red icon-only status on synchronization failure", async () => {
   render(<LocalSyncStatus workspace={statusWorkspace({ syncError: "x" })} />);
-  const status = await screen.findByRole("status", {
+  await screen.findByRole("status", {
     name: /Sincronización interrumpida/,
   });
-  expect(status.className).toContain("border-red-500/30");
-  expect(
-    screen.getByRole("button", { name: "Reintentar sincronización" }),
-  ).toBeEnabled();
+  const retry = screen.getByRole("button", {
+    name: /Reintentar sincronización/,
+  });
+  expect(retry.className).toContain("border-red-500/30");
+  expect(retry).toBeEnabled();
 });
 function statusWorkspace(extra: Record<string, unknown>) {
   return {
@@ -270,11 +270,13 @@ it("reports local status read failures instead of silently showing success", asy
     .fn()
     .mockRejectedValue(new Error("Storage unavailable"));
   render(<LocalSyncStatus workspace={workspace} />);
-  await screen.findByText(/No se pudo leer el estado local/);
+  await screen.findByRole("alert", {
+    name: /No se pudo leer el estado local/,
+  });
   expect(
     screen.queryByText("Datos locales disponibles"),
   ).not.toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "Reintentar sincronización" }),
+    screen.getByRole("button", { name: /Reintentar sincronización/ }),
   ).toBeEnabled();
 });

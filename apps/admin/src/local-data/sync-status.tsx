@@ -2,12 +2,10 @@ import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
-  Clock,
   Cloud,
   CloudOff,
   LoaderCircle,
   Lock,
-  RefreshCw,
   WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -161,6 +159,10 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
   const statusTooltip = statusDetail
     ? `${statusLabel}. ${statusDetail}`
     : statusLabel;
+  const controlLabel = [
+    ...(syncLabel === statusLabel ? [syncLabel] : [syncLabel, statusTooltip]),
+    ...(lastSyncedLabel ? [lastSyncedLabel] : []),
+  ].join(". ");
   return (
     <section
       aria-label="Sincronización local"
@@ -170,26 +172,9 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
         role="status"
         aria-live="polite"
         aria-label={statusTooltip}
-        title={statusTooltip}
-        className={cn(
-          "inline-flex size-7 items-center justify-center rounded-full border",
-          tone === "ok" &&
-            "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-          tone === "error" &&
-            "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400",
-          tone === "warn" &&
-            "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-          tone === "sync" &&
-            "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400",
-          tone === "neutral" &&
-            "border-border bg-muted/40 text-muted-foreground",
-        )}
+        className="sr-only"
       >
-        <StatusIcon
-          aria-hidden
-          className={cn("size-4", statusSpin && "animate-spin")}
-        />
-        <span className="sr-only">{statusLabel}</span>
+        {statusTooltip}
       </span>
       {loaded && status.pending > 0 && (
         <span
@@ -205,29 +190,34 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
             : `${status.pending} cambios pendientes`}
         </span>
       )}
-      {lastSyncedLabel && (
-        <span
-          title={lastSyncedLabel}
-          aria-label={lastSyncedLabel}
-          className="inline-flex size-7 items-center justify-center text-muted-foreground/80"
-        >
-          <Clock aria-hidden className="size-4" />
-          <span className="sr-only">{lastSyncedLabel}</span>
-        </span>
-      )}
       <Button
         size="icon"
         variant="ghost"
-        aria-label={syncLabel}
-        title={syncLabel}
+        aria-label={controlLabel}
+        title={controlLabel}
         disabled={busy || Boolean(status.syncing) || !online}
         onClick={() => void act(workspace.syncNow, false)}
-        className="size-7"
+        className={cn(
+          "size-7 rounded-full border",
+          tone === "ok" &&
+            "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+          tone === "error" &&
+            "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400",
+          tone === "warn" &&
+            "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+          tone === "sync" &&
+            "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400",
+          tone === "neutral" &&
+            "border-border bg-muted/40 text-muted-foreground",
+        )}
       >
         {busy || status.syncing ? (
           <LoaderCircle aria-hidden className="size-4 animate-spin" />
         ) : (
-          <RefreshCw aria-hidden className="size-4" />
+          <StatusIcon
+            aria-hidden
+            className={cn("size-4", statusSpin && "animate-spin")}
+          />
         )}
       </Button>
       {attention > 0 && (
@@ -370,7 +360,7 @@ export function LocalSyncStatus({ workspace }: { workspace: LocalWorkspace }) {
         </details>
       )}
       {statusDetail && (
-        <span role="alert" className="sr-only">
+        <span role="alert" aria-label={statusDetail} className="sr-only">
           {statusDetail}
         </span>
       )}
