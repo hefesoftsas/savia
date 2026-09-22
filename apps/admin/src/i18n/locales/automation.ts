@@ -430,6 +430,7 @@ export const automationMessages = {
     "CRM conectado · HubSpot",
   ],
   Conectado: ["Conectado", "Connected", "Conectado"],
+  Ayuda: ["Ayuda", "Help", "Ajuda"],
   "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.":
     [
       "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.",

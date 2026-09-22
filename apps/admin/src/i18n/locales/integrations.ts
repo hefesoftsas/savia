@@ -24,6 +24,7 @@ export const personalIntegrationsMessages = {
     "Virtual Employees (AI)",
     "Funcionários Virtuais (IA)",
   ],
+  CRM: ["CRM", "CRM", "CRM"],
   "No pudimos cargar el estado de las integraciones.": [
     "No pudimos cargar el estado de las integraciones.",
     "We couldn't load the integrations status.",
@@ -72,7 +73,7 @@ export const personalIntegrationsMessages = {
   ],
   Conectada: ["Conectada", "Connected", "Conectada"],
   Reconectar: ["Reconectar", "Reconnect", "Reconectar"],
-  "Falló": ["Falló", "Failed", "Falhou"],
+  Falló: ["Falló", "Failed", "Falhou"],
   Pendiente: ["Pendiente", "Pending", "Pendente"],
   Desconectada: ["Desconectada", "Disconnected", "Desconectada"],
   "No disponible": ["No disponible", "Unavailable", "Indisponível"],
@@ -140,11 +141,7 @@ export const personalIntegrationsMessages = {
       "in chat, with scoped access to collections and the Cloudflare RAG knowledge base.",
       "no chat, com acesso com escopo a coleções e à base de conhecimento Cloudflare RAG.",
     ],
-  "Nuevo Empleado": [
-    "Nuevo Empleado",
-    "New Employee",
-    "Novo Funcionário",
-  ],
+  "Nuevo Empleado": ["Nuevo Empleado", "New Employee", "Novo Funcionário"],
   "Buscar empleado por nombre o @handle...": [
     "Buscar empleado por nombre o @handle...",
     "Search employees by name or @handle...",
@@ -166,11 +163,7 @@ export const personalIntegrationsMessages = {
       "Create your first virtual employee by assigning a role, allowed collections, and documents to boost your team.",
       "Crie seu primeiro funcionário virtual atribuindo uma função, coleções permitidas e documentos para impulsionar sua equipe.",
     ],
-  "Crear Empleado": [
-    "Crear Empleado",
-    "Create Employee",
-    "Criar Funcionário",
-  ],
+  "Crear Empleado": ["Crear Empleado", "Create Employee", "Criar Funcionário"],
   Activo: ["Activo", "Active", "Ativo"],
   Inactivo: ["Inactivo", "Inactive", "Inativo"],
   "Todas las colecciones": [
@@ -320,10 +313,10 @@ export const personalIntegrationsMessages = {
     "Loading system collections...",
     "Carregando coleções do sistema...",
   ],
-  "No se encontraron colecciones que coincidan con \"%{query}\".": [
-    "No se encontraron colecciones que coincidan con \"%{query}\".",
-    "No collections found matching \"%{query}\".",
-    "Nenhuma coleção encontrada para \"%{query}\".",
+  'No se encontraron colecciones que coincidan con "%{query}".': [
+    'No se encontraron colecciones que coincidan con "%{query}".',
+    'No collections found matching "%{query}".',
+    'Nenhuma coleção encontrada para "%{query}".',
   ],
   "No hay colecciones disponibles en este dominio. Puedes añadir una abajo.": [
     "No hay colecciones disponibles en este dominio. Puedes añadir una abajo.",
@@ -336,7 +329,7 @@ export const personalIntegrationsMessages = {
     "Adicionar coleção personalizada:",
   ],
   nombre_coleccion: ["nombre_coleccion", "collection_name", "nome_colecao"],
-  "Añadir": ["Añadir", "Add", "Adicionar"],
+  Añadir: ["Añadir", "Add", "Adicionar"],
   "Colecciones seleccionadas (%{count}):": [
     "Colecciones seleccionadas (%{count}):",
     "Selected collections (%{count}):",
@@ -364,11 +357,7 @@ export const personalIntegrationsMessages = {
     "Indexing RAG...",
     "Indexando RAG...",
   ],
-  "Subir Documento": [
-    "Subir Documento",
-    "Upload Document",
-    "Enviar Documento",
-  ],
+  "Subir Documento": ["Subir Documento", "Upload Document", "Enviar Documento"],
   "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)": [
     "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)",
     "Formats: PDF, Markdown, Text, CSV, JSON (up to 10 MB)",

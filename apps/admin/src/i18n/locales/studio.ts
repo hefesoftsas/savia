@@ -542,6 +542,9 @@ export const studioMessages = {
     "Seções de fontes e coleções",
   ],
   Colecciones: ["Colecciones", "Collections", "Coleções"],
+  Vincular: ["Vincular", "Link", "Vincular"],
+  Vinculadas: ["Vinculadas", "Linked", "Vinculadas"],
+  Integraciones: ["Integraciones", "Integrations", "Integrações"],
   "Fuentes externas": [
     "Fuentes externas",
     "External sources",
@@ -647,6 +650,7 @@ export const studioMessages = {
       "Vincule uma coleção do catálogo do domínio, um recurso JSON:API ou uma tabela ou coleção do banco para gerar visualizações do CRM.",
     ],
   Origen: ["Origen", "Source", "Origem"],
+  Datos: ["Datos", "Data", "Dados"],
   "Colección existente del dominio": [
     "Colección existente del dominio",
     "Existing domain collection",
