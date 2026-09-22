@@ -48,6 +48,9 @@ Límites: 12 widgets por usuario, 10 elementos visibles por widget. El
 orden se cambia arrastrando desde el asa de cada tarjeta (con alternativa
 de teclado y menú ⋯ mover antes/después para accesibilidad).
 
+Los avisos sobre carga, guardado y cambios del tablero se pueden cerrar con
+el botón «Cerrar aviso».
+
 ## Datos y permisos
 
 - El layout (`{ version: 1, widgets: [...] }`) es personal y privado por

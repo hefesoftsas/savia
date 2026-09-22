@@ -145,6 +145,7 @@ export function MyDayWidgetsSection({
     saving,
     feedback,
     unavailable,
+    setFeedback,
     add,
     remove,
     move,
@@ -292,7 +293,22 @@ export function MyDayWidgetsSection({
       ) : null}
       {feedback ? (
         <Alert className="mb-4" aria-label={feedback}>
-          <AlertDescription>{feedback}</AlertDescription>
+          <div className="col-start-2 flex min-w-0 items-start gap-2">
+            <AlertDescription className="min-w-0 flex-1">
+              {feedback}
+            </AlertDescription>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              onClick={() => setFeedback(null)}
+              aria-label="Cerrar aviso"
+              title="Cerrar aviso"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
         </Alert>
       ) : null}
 
