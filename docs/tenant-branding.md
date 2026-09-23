@@ -32,10 +32,12 @@ validated, encoded public identity. Authentication pages render the brand on the
 server; arbitrary HTML, scripts, CSS and third-party images are not accepted. If a
 branding lookup fails, authentication remains available with Savia's default identity.
 
-The default web login shows Savia's two short product videos in a muted, automatically
-rotating reel with a pause/resume control. The files are served from the admin site's
-public assets at `/login/`. A tenant's configured login cover image continues to take
-precedence over the reel; tenant title, welcome text, logo and colors remain unchanged.
+The default web login alternates two Savia chatbot Lottie animations with a pause/resume
+control. The Lottie player and animation JSON are served from the admin site's public
+assets at `/login/`, under the same origin as the login. Animation starts paused when
+the visitor prefers reduced motion and pauses while the tab is hidden. A tenant's
+configured login cover image takes precedence; tenant title, welcome text, logo and
+colors remain unchanged.
 
 Inside the application, a shared provider reads the public identity for the current
 host and applies its display name, logo and primary colors. Theme mode remains a

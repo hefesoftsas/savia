@@ -35,7 +35,7 @@ function Shell({
       : screen === "enroll"
         ? "Protección de cuenta"
         : "Acceso seguro";
-  const showLoginReel = screen === "login" && !branding?.coverUrl;
+  const showLoginAnimation = screen === "login" && !branding?.coverUrl;
   return (
     <div
       className="oauth-screen"
@@ -57,44 +57,35 @@ function Shell({
         <div className="oauth-form-column">{children}</div>
       </section>
       <aside
-        className={`oauth-aside${branding?.coverUrl ? " has-cover" : ""}${showLoginReel ? " has-login-reel" : ""}`}
-        aria-label={showLoginReel ? "Presentación visual de Savia" : undefined}
-        aria-hidden={showLoginReel ? undefined : "true"}
+        className={`oauth-aside${branding?.coverUrl ? " has-cover" : ""}${showLoginAnimation ? " has-login-animation" : ""}`}
+        aria-label={showLoginAnimation ? "Animación de Savia" : undefined}
+        aria-hidden={showLoginAnimation ? undefined : "true"}
       >
         {branding?.coverUrl && (
           <img className="oauth-aside-cover" src={branding.coverUrl} alt="" />
         )}
-        {showLoginReel ? (
+        {showLoginAnimation ? (
           <div
-            className="oauth-login-reel"
-            data-oauth-login-reel
+            className="oauth-login-animation"
+            data-oauth-login-animation
             data-active="0"
           >
             <SaviaMark branding={branding} />
-            <video
-              className="oauth-login-reel-video"
-              data-oauth-login-reel-video
-              autoPlay
-              muted
-              playsInline
-              preload="auto"
-              poster="/login/savia-platform-poster.jpg"
-              src="/login/savia-platform-01.mp4"
+            <div
+              className="oauth-login-animation-frame"
+              data-oauth-login-animation-frame
+              data-src="/login/chatbot-savia.json"
             />
-            <video
-              className="oauth-login-reel-video"
-              data-oauth-login-reel-video
-              muted
-              playsInline
-              preload="none"
-              poster="/login/savia-platform-poster.jpg"
-              src="/login/savia-platform-02.mp4"
+            <div
+              className="oauth-login-animation-frame"
+              data-oauth-login-animation-frame
+              data-src="/login/chatbot.json"
             />
             <button
-              className="oauth-login-reel-toggle"
+              className="oauth-login-animation-toggle"
               type="button"
-              data-oauth-login-reel-toggle
-              aria-label="Pausar vídeos"
+              data-oauth-login-animation-toggle
+              aria-label="Pausar animación"
               aria-pressed="false"
             >
               <svg
