@@ -39,7 +39,7 @@ function page(
     <link rel="stylesheet" href="/api/auth/oauth-ui.css">
   </head>
   <body${restartAttribute}>
-    <!-- THESIS: Login opens on Savia's product in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy media stage with teal accents. STORY: visitors see the product, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the 16:9 animation right; mobile puts the animation above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
+    <!-- THESIS: Login opens on Savia's identity in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy stage with teal accents. STORY: visitors see the animated logo, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the logo right; mobile puts the logo above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
     ${content}
     ${showLoginAnimation ? '<script src="/login/lottie-light.min.js" defer></script>' : ""}
     <script src="/api/auth/oauth-ui.js" defer></script>
@@ -148,70 +148,109 @@ const oauthUiScript = String.raw`(() => {
   const loginAnimation = document.querySelector("[data-oauth-login-animation]");
 
   if (loginAnimation && window.lottie) {
-    const frames = Array.from(
-      loginAnimation.querySelectorAll("[data-oauth-login-animation-frame]"),
-    );
-    const toggle = loginAnimation.querySelector(
-      "[data-oauth-login-animation-toggle]",
-    );
+    const frame = loginAnimation.querySelector("[data-oauth-login-animation-frame]");
+    const robot = loginAnimation.querySelector("[data-oauth-login-robot]");
+    const robotFrame = loginAnimation.querySelector("[data-oauth-login-robot-frame]");
+    const wordmark = loginAnimation.querySelector("[data-oauth-login-wordmark]");
+    const wordmarkAI = loginAnimation.querySelector("[data-oauth-login-wordmark-ai]");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const animations = frames.map((frame) => window.lottie.loadAnimation({
+    const animation = window.lottie.loadAnimation({
       container: frame,
       renderer: "svg",
       loop: false,
       autoplay: false,
       path: frame.dataset.src,
-    }));
-    const ready = animations.map(() => false);
-    let activeIndex = 0;
-    let paused = reducedMotion;
-
-    function updateToggle() {
-      toggle?.setAttribute("aria-pressed", String(paused));
-      toggle?.setAttribute(
-        "aria-label",
-        paused ? "Reanudar animación" : "Pausar animación",
-      );
-    }
-
-    function playActive() {
-      if (!paused && !document.hidden && ready[activeIndex]) {
-        animations[activeIndex].play();
-      }
-    }
-
-    animations.forEach((animation, index) => {
-      animation.addEventListener("DOMLoaded", () => {
-        ready[index] = true;
-        animation.goToAndStop(0, true);
-        if (index === activeIndex) {
-          loginAnimation.dataset.active = String(index);
-          loginAnimation.dataset.ready = "true";
-          playActive();
-        }
-      });
-      animation.addEventListener("complete", () => {
-        if (index !== activeIndex || paused) return;
-        activeIndex = (index + 1) % animations.length;
-        if (!ready[activeIndex]) return;
-        loginAnimation.dataset.active = String(activeIndex);
-        loginAnimation.dataset.ready = "true";
-        animations[activeIndex].goToAndStop(0, true);
-        playActive();
-      });
     });
+    const robotAnimation = reducedMotion || !robot || !robotFrame ? null : window.lottie.loadAnimation({
+      container: robotFrame,
+      renderer: "svg",
+      loop: false,
+      autoplay: false,
+      path: robotFrame.dataset.src,
+    });
+    let ready = false;
+    let finished = false;
+    let robotReady = false;
+    let robotGreetingPending = false;
+    let robotTriggerTimer;
+    let robotHideTimer;
 
-    toggle?.addEventListener("click", () => {
-      paused = !paused;
-      updateToggle();
-      if (paused) animations.forEach((animation) => animation.pause());
-      else playActive();
+    function replayClass(element, name) {
+      if (reducedMotion) return;
+      element.classList.remove(name);
+      void element.offsetWidth;
+      element.classList.add(name);
+    }
+
+    function greetWithRobot() {
+      if (!robotAnimation || !robot || document.hidden) return;
+      if (!robotReady) {
+        robotGreetingPending = true;
+        return;
+      }
+      robotGreetingPending = false;
+      clearTimeout(robotHideTimer);
+      robot.classList.remove("robot-visible");
+      void robot.offsetWidth;
+      robot.classList.add("robot-visible");
+      robotAnimation.goToAndStop(35, true);
+      robotAnimation.playSegments([35, 174], true);
+    }
+
+    function queueRobotGreeting(event) {
+      if (reducedMotion || !robotAnimation || event.pointerType === "touch" || document.hidden) return;
+      clearTimeout(robotTriggerTimer);
+      robotTriggerTimer = setTimeout(greetWithRobot, 3000);
+    }
+
+    function cancelRobotGreeting() {
+      clearTimeout(robotTriggerTimer);
+      robotGreetingPending = false;
+    }
+
+    animation.addEventListener("DOMLoaded", () => {
+      ready = true;
+      if (reducedMotion) {
+        animation.goToAndStop(animation.totalFrames - 1, true);
+        finished = true;
+      } else if (!document.hidden) animation.play();
+    });
+    animation.addEventListener("complete", () => { finished = true; });
+    robotAnimation?.addEventListener("DOMLoaded", () => {
+      robotReady = true;
+      if (robotGreetingPending) greetWithRobot();
+    });
+    robotAnimation?.addEventListener("complete", () => {
+      robotHideTimer = setTimeout(() => robot.classList.remove("robot-visible"), 1400);
+    });
+    frame.addEventListener?.("pointerenter", (event) => {
+      if (event.pointerType === "touch") return;
+      replayClass(frame, "logo-hover");
+      queueRobotGreeting(event);
+    });
+    frame.addEventListener?.("pointerleave", cancelRobotGreeting);
+    wordmark?.addEventListener("pointerenter", queueRobotGreeting);
+    wordmark?.addEventListener("pointerleave", cancelRobotGreeting);
+    wordmarkAI?.addEventListener("pointerenter", (event) => {
+      if (event.pointerType !== "touch") replayClass(wordmarkAI, "ai-hover");
+    });
+    frame.addEventListener?.("animationend", (event) => {
+      if (event.animationName === "oauth-logo-hover-pulse") frame.classList.remove("logo-hover");
+    });
+    wordmarkAI?.addEventListener("animationend", (event) => {
+      if (event.animationName === "oauth-ai-hover-pop") wordmarkAI.classList.remove("ai-hover");
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) animations.forEach((animation) => animation.pause());
-      else playActive();
+      if (document.hidden) {
+        cancelRobotGreeting();
+        clearTimeout(robotHideTimer);
+        robotAnimation?.pause();
+        robot?.classList.remove("robot-visible");
+      }
+      if (!ready || finished) return;
+      if (document.hidden) animation.pause();
+      else animation.play();
     });
-    updateToggle();
   }
 
   function signedOAuthQuery() {
