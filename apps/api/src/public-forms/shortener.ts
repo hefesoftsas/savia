@@ -120,7 +120,8 @@ export function createShlinkShortener({
             "X-Api-Key": apiKey,
           },
           body: JSON.stringify({ longUrl: destination }),
-          redirect: "error",
+          // Workers rejects "error"; "manual" keeps the API key off redirects.
+          redirect: "manual",
           signal: controller.signal,
         });
         if (!response.ok) throw new Error("Shlink request failed.");
