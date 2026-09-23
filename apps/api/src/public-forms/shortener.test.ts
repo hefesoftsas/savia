@@ -24,7 +24,7 @@ describe("Shlink shortener", () => {
     ];
     expect(url).toBe("https://go.cloud.hefesoft.com/rest/v3/short-urls");
     expect(init.method).toBe("POST");
-    expect(init.redirect).toBe("error");
+    expect(init.redirect).toBe("manual");
     expect(new Headers(init.headers).get("X-Api-Key")).toBe(apiKey);
     expect(JSON.parse(String(init.body))).toEqual({ longUrl: destination });
   });
