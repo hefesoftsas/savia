@@ -35,6 +35,13 @@ explicit environment config to `wrangler secret bulk`. Do not use the
 wrangler-action `secrets` input: it ignores the deploy command's `--config` and
 would select the application's default Worker.
 
+The API uses `SHLINK_SERVER_URL=https://go.cloud.hefesoft.com` and the
+`SHLINK_API_KEY` Worker secret to create public short links. The Savia preview
+Worker has its own Shlink API key with the author-only role; production must use
+a separately generated key. Keep both keys only in their matching API Worker
+secret stores. If a key is absent, the Savia-hosted fallback short link remains
+available.
+
 Preview began with a one-time copy of production schema and data, verified
 against the source export by table counts and complete row fingerprints. Further
 deployments preserve preview data and apply pending migrations; they never

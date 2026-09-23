@@ -267,13 +267,15 @@ it("creates a stable Savia short URL that redirects only while the form is activ
   ).toBeUndefined();
 });
 it("creates and persists an external short URL when publishing and can retry it", async () => {
-  const shorten = vi.fn(async (url: string) => `https://is.gd/abc123`);
+  const shorten = vi.fn(
+    async (url: string) => `https://go.cloud.hefesoft.com/abc123`,
+  );
   const instance = app({ shortener: { shorten } });
   const name = await object();
   const link = await publish(instance, name);
 
   expect(shorten).toHaveBeenCalledWith(link.url);
-  expect(link.shortUrl).toBe("https://is.gd/abc123");
+  expect(link.shortUrl).toBe("https://go.cloud.hefesoft.com/abc123");
 
   const listResponse = await instance.request(
     `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
@@ -282,7 +284,7 @@ it("creates and persists an external short URL when publishing and can retry it"
     data: Array<{ id: string; shortUrl?: string }>;
   };
   expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toBe(
-    "https://is.gd/abc123",
+    "https://go.cloud.hefesoft.com/abc123",
   );
 
   const retryResponse = await instance.request(
@@ -291,7 +293,7 @@ it("creates and persists an external short URL when publishing and can retry it"
   );
   expect(retryResponse.status).toBe(200);
   expect(await retryResponse.json()).toEqual({
-    data: { shortUrl: "https://is.gd/abc123" },
+    data: { shortUrl: "https://go.cloud.hefesoft.com/abc123" },
   });
   expect(shorten).toHaveBeenCalledTimes(1);
 });
@@ -304,7 +306,7 @@ it("replaces the Savia-only short URL for existing links when external shortenin
     { method: "POST" },
   );
 
-  const shorten = vi.fn(async () => "https://is.gd/existing1");
+  const shorten = vi.fn(async () => "https://go.cloud.hefesoft.com/existing1");
   const externalApp = app({ shortener: { shorten } });
   const listing = await externalApp.request(
     `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
@@ -323,7 +325,7 @@ it("replaces the Savia-only short URL for existing links when external shortenin
   expect(retry.status).toBe(200);
   expect(
     ((await retry.json()) as { data: { shortUrl: string } }).data.shortUrl,
-  ).toBe("https://is.gd/existing1");
+  ).toBe("https://go.cloud.hefesoft.com/existing1");
   expect(shorten).toHaveBeenCalledWith(link.url);
 });
 it("returns the stored winner when external shortening retries overlap", async () => {
@@ -350,16 +352,16 @@ it("returns the stored winner when external shortening retries overlap", async (
   const firstRequest = retry();
   const secondRequest = retry();
   await bothCalls;
-  resolutions[1]("https://is.gd/winner2");
+  resolutions[1]("https://go.cloud.hefesoft.com/winner2");
   const secondResponse = await secondRequest;
-  resolutions[0]("https://is.gd/loser1");
+  resolutions[0]("https://go.cloud.hefesoft.com/loser1");
   const firstResponse = await firstRequest;
 
   expect((await firstResponse.json()).data).toEqual({
-    shortUrl: "https://is.gd/winner2",
+    shortUrl: "https://go.cloud.hefesoft.com/winner2",
   });
   expect((await secondResponse.json()).data).toEqual({
-    shortUrl: "https://is.gd/winner2",
+    shortUrl: "https://go.cloud.hefesoft.com/winner2",
   });
 });
 it("keeps publishing the canonical URL when the external shortener is unavailable", async () => {
