@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { useSaviaRequestWorkspace } from "./savia-request-provider";
+import { SaviaRequestBundleRow } from "./savia-request-bundle-row";
 import { DeleteDialog, type DeleteAction } from "./editor/delete-dialog";
 import type { FlowSummary } from "./types";
 
@@ -350,6 +351,7 @@ export function SaviaRequestSidebar({
         )}
       >
         <SidebarMenu className="gap-0.5">
+          <SaviaRequestBundleRow />
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-current={view === "secretos" ? "page" : undefined}

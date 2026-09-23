@@ -193,4 +193,48 @@ describe("React Admin authentication provider", () => {
       }),
     ).resolves.toBe(true);
   });
+
+  it("exposes the Savia Request editor to platform and tenant administrators", async () => {
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn(),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn().mockResolvedValue({
+        canReadDocuments: true,
+        canExecuteCommands: false,
+        canManageIdentity: false,
+        memberships: [{ agencyId: 101, role: "agency_admin" }],
+      }),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      getAuthorizeUrl: vi.fn(),
+    };
+    const provider = createReactAdminAuthProvider(session);
+
+    await expect(
+      provider.canAccess?.({ resource: "savia-request", action: "list" }),
+    ).resolves.toBe(true);
+
+    session.getPermissions.mockResolvedValueOnce({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: false,
+      memberships: [{ agencyId: 101, role: "viewer" }],
+    });
+    await expect(
+      provider.canAccess?.({ resource: "savia-request", action: "list" }),
+    ).resolves.toBe(false);
+
+    session.getPermissions.mockResolvedValueOnce({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: true,
+      memberships: [],
+    });
+    await expect(
+      provider.canAccess?.({ resource: "savia-request", action: "list" }),
+    ).resolves.toBe(true);
+  });
 });
