@@ -35,6 +35,7 @@ function Shell({
       : screen === "enroll"
         ? "Protección de cuenta"
         : "Acceso seguro";
+  const showLoginReel = screen === "login" && !branding?.coverUrl;
   return (
     <div
       className="oauth-screen"
@@ -56,99 +57,161 @@ function Shell({
         <div className="oauth-form-column">{children}</div>
       </section>
       <aside
-        className={`oauth-aside${branding?.coverUrl ? " has-cover" : ""}`}
-        aria-hidden="true"
+        className={`oauth-aside${branding?.coverUrl ? " has-cover" : ""}${showLoginReel ? " has-login-reel" : ""}`}
+        aria-label={showLoginReel ? "Presentación visual de Savia" : undefined}
+        aria-hidden={showLoginReel ? undefined : "true"}
       >
         {branding?.coverUrl && (
           <img className="oauth-aside-cover" src={branding.coverUrl} alt="" />
         )}
-        <div className="oauth-aside-mark">
-          <SaviaMark branding={branding} />
-        </div>
-        <div className="oauth-aside-illustration">
-          <svg
-            className="oauth-insurance-ai"
-            viewBox="0 0 320 260"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+        {showLoginReel ? (
+          <div
+            className="oauth-login-reel"
+            data-oauth-login-reel
+            data-active="0"
           >
-            <path
-              className="oauth-insurance-ai-connection"
-              d="M42 72L107 106M213 70L161 104M75 204L127 163M246 201L190 163"
+            <SaviaMark branding={branding} />
+            <video
+              className="oauth-login-reel-video"
+              data-oauth-login-reel-video
+              autoPlay
+              muted
+              playsInline
+              preload="auto"
+              poster="/login/savia-platform-poster.jpg"
+              src="/login/savia-platform-01.mp4"
             />
-            <path
-              className="oauth-insurance-ai-orbit"
-              d="M85 52C106 30 137 18 169 20C215 22 254 54 266 97"
+            <video
+              className="oauth-login-reel-video"
+              data-oauth-login-reel-video
+              muted
+              playsInline
+              preload="none"
+              poster="/login/savia-platform-poster.jpg"
+              src="/login/savia-platform-02.mp4"
             />
-            <path
-              className="oauth-insurance-ai-shield"
-              d="M160 53L214 76V123C214 163 190 194 160 210C130 194 106 163 106 123V76L160 53Z"
-            />
-            <path
-              className="oauth-insurance-ai-core"
-              d="M135 111C135 97 146 87 160 87C174 87 185 97 185 111V143C185 157 174 168 160 168C146 168 135 157 135 143V111Z"
-            />
-            <path
-              className="oauth-insurance-ai-circuit"
-              d="M135 118H120V101M185 118H200V101M135 143H120V160M185 143H200V160M160 87V72M160 168V184"
-            />
-            <circle className="oauth-insurance-ai-node" cx="42" cy="72" r="7" />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="213"
-              cy="70"
-              r="7"
-            />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="75"
-              cy="204"
-              r="7"
-            />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="246"
-              cy="201"
-              r="7"
-            />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="120"
-              cy="101"
-              r="5"
-            />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="200"
-              cy="101"
-              r="5"
-            />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="120"
-              cy="160"
-              r="5"
-            />
-            <circle
-              className="oauth-insurance-ai-node"
-              cx="200"
-              cy="160"
-              r="5"
-            />
-          </svg>
-        </div>
-        <div>
-          <p className="oauth-aside-eyebrow">
-            {branding?.displayName ?? "Savia · IA para seguros"}
-          </p>
-          <p className="oauth-aside-title">
-            {branding?.loginTitle ?? "Seguros que anticipan. IA que acelera."}
-          </p>
-          <p className="oauth-aside-copy">
-            {branding?.loginDescription ??
-              "Conecta información, cobertura y decisiones para una operación más clara y ágil."}
-          </p>
-        </div>
+            <button
+              className="oauth-login-reel-toggle"
+              type="button"
+              data-oauth-login-reel-toggle
+              aria-label="Pausar vídeos"
+              aria-pressed="false"
+            >
+              <svg
+                data-reel-pause-icon
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path d="M8 5v14M16 5v14" />
+              </svg>
+              <svg
+                data-reel-play-icon
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path d="m8 5 11 7-11 7V5Z" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="oauth-aside-mark">
+              <SaviaMark branding={branding} />
+            </div>
+            <div className="oauth-aside-illustration">
+              <svg
+                className="oauth-insurance-ai"
+                viewBox="0 0 320 260"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  className="oauth-insurance-ai-connection"
+                  d="M42 72L107 106M213 70L161 104M75 204L127 163M246 201L190 163"
+                />
+                <path
+                  className="oauth-insurance-ai-orbit"
+                  d="M85 52C106 30 137 18 169 20C215 22 254 54 266 97"
+                />
+                <path
+                  className="oauth-insurance-ai-shield"
+                  d="M160 53L214 76V123C214 163 190 194 160 210C130 194 106 163 106 123V76L160 53Z"
+                />
+                <path
+                  className="oauth-insurance-ai-core"
+                  d="M135 111C135 97 146 87 160 87C174 87 185 97 185 111V143C185 157 174 168 160 168C146 168 135 157 135 143V111Z"
+                />
+                <path
+                  className="oauth-insurance-ai-circuit"
+                  d="M135 118H120V101M185 118H200V101M135 143H120V160M185 143H200V160M160 87V72M160 168V184"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="42"
+                  cy="72"
+                  r="7"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="213"
+                  cy="70"
+                  r="7"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="75"
+                  cy="204"
+                  r="7"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="246"
+                  cy="201"
+                  r="7"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="120"
+                  cy="101"
+                  r="5"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="200"
+                  cy="101"
+                  r="5"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="120"
+                  cy="160"
+                  r="5"
+                />
+                <circle
+                  className="oauth-insurance-ai-node"
+                  cx="200"
+                  cy="160"
+                  r="5"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="oauth-aside-eyebrow">
+                {branding?.displayName ?? "Savia · IA para seguros"}
+              </p>
+              <p className="oauth-aside-title">
+                {branding?.loginTitle ??
+                  "Seguros que anticipan. IA que acelera."}
+              </p>
+              <p className="oauth-aside-copy">
+                {branding?.loginDescription ??
+                  "Conecta información, cobertura y decisiones para una operación más clara y ágil."}
+              </p>
+            </div>
+          </>
+        )}
       </aside>
     </div>
   );
