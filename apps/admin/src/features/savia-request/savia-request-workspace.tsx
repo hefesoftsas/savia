@@ -7,6 +7,7 @@ import {
   History,
   Play,
   Plus,
+  RotateCcw,
   Save,
   Settings2,
   SlidersHorizontal,
@@ -25,6 +26,7 @@ import type { RequestResult } from "../../../../api/src/request-results/contract
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { StandardResult } from "./standard-result";
 import { SecretsScreen } from "./secrets-screen";
+import { SaviaRequestScopeBar } from "./savia-request-scope-bar";
 import { useSaviaRequestWorkspace } from "./savia-request-provider";
 import type {
   RequestFlow,
@@ -153,7 +155,9 @@ export function SaviaRequestWorkspace() {
     flows,
     folders,
     refreshNavigation,
+    reloadFlow,
     saveDraft,
+    scope,
     selectFlow,
     stepIndex,
     updateDraft,
@@ -306,14 +310,57 @@ export function SaviaRequestWorkspace() {
       },
     });
   };
+  const resetFlow = () => {
+    if (!flow) return;
+    setDeletion({
+      title: "Restablecer flow",
+      description: `«${flow.name}» volverá a los valores de plataforma. Los cambios sin guardar se perderán.`,
+      run: async () => {
+        await api.resetFlow(flow.id);
+        const nextFlows = await refreshNavigation();
+        if (nextFlows.some((candidate) => candidate.id === flow.id)) {
+          if (!(await reloadFlow())) return;
+        } else {
+          discardDraft();
+          if (nextFlows[0]) await selectFlow(nextFlows[0].id);
+          else clearSelection();
+        }
+        setNotice("Flow restablecido a valores de plataforma.");
+      },
+    });
+  };
+  const resetVariable = (index: number) =>
+    withSubmission(async () => {
+      if (!flow) return;
+      const variable = flow.variables[index];
+      if (!variable) return;
+      if (!(await saveAll())) return;
+      const result = await api.resetVariable(flow.id, variable.key);
+      if (await reloadFlow())
+        setNotice(
+          result.reverted
+            ? `«${variable.key}» volvió al valor de plataforma.`
+            : `«${variable.key}» ya usaba el valor de plataforma.`,
+        );
+    });
 
   if (view === "secretos") {
-    return <SecretsScreen />;
+    return (
+      <main className="mx-auto w-full max-w-6xl pb-10">
+        <div className="pt-6">
+          <SaviaRequestScopeBar />
+        </div>
+        <SecretsScreen />
+      </main>
+    );
   }
 
   if (!flow) {
     return (
       <main className="mx-auto w-full max-w-6xl pb-10">
+        <div className="pt-6">
+          <SaviaRequestScopeBar />
+        </div>
         <header className="py-6">
           <div className="flex items-center gap-2 text-sm font-medium text-primary">
             <Workflow className="size-4" aria-hidden="true" />
@@ -402,10 +449,18 @@ export function SaviaRequestWorkspace() {
     <VariableAccessContext.Provider value={access}>
       <VariableNames.Provider value={variableNames}>
         <main className="mx-auto w-full max-w-6xl pb-10">
+          <div className="pt-6">
+            <SaviaRequestScopeBar />
+          </div>
           <header className="py-6">
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <Workflow className="size-4" aria-hidden="true" />
               {flow.provider ?? "Savia request"}
+              {scope && flow.customized ? (
+                <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Personalizado
+                </span>
+              ) : null}
             </div>
             <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
@@ -446,6 +501,16 @@ export function SaviaRequestWorkspace() {
               >
                 <Trash2 /> Eliminar
               </Button>
+              {scope ? (
+                <Button
+                  disabled={working}
+                  onClick={resetFlow}
+                  type="button"
+                  variant="outline"
+                >
+                  <RotateCcw /> Restablecer
+                </Button>
+              ) : null}
               </div>
             </div>
           </header>
@@ -631,6 +696,10 @@ export function SaviaRequestWorkspace() {
           {tab === "variables" ? (
             <VariablesEditor
               flow={flow}
+              allowReset={Boolean(scope)}
+              onReset={(index) => {
+                void resetVariable(index);
+              }}
               onReveal={async (index) => {
                 const variable = flow.variables[index];
                 if (!variable) return;
@@ -1090,17 +1159,21 @@ function VariablesEditor({
   flow,
   revealed,
   working,
+  allowReset,
   onUpdate,
   onRemove,
   onReveal,
+  onReset,
   onAdd,
 }: {
   flow: RequestFlow;
   revealed: Record<string, boolean>;
   working: boolean;
+  allowReset: boolean;
   onUpdate(index: number, patch: Partial<RequestVariable>): void;
   onRemove(index: number): void;
   onReveal(index: number): Promise<void>;
+  onReset(index: number): void;
   onAdd(): void;
 }) {
   return (
@@ -1110,6 +1183,9 @@ function VariablesEditor({
           <h2 className="text-base font-semibold">Variables del flow</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Un secreto vacío conserva su valor guardado.
+            {allowReset
+              ? " Restablecer devuelve una variable al valor de plataforma."
+              : null}
           </p>
         </div>
         <Button
@@ -1193,16 +1269,31 @@ function VariablesEditor({
                   />
                 </td>
                 <td className="py-2">
-                  <Button
-                    aria-label={`Eliminar ${variable.key}`}
-                    disabled={working}
-                    onClick={() => onRemove(index)}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Trash2 />
-                  </Button>
+                  <span className="flex gap-1">
+                    {allowReset && variable.overridden ? (
+                      <Button
+                        aria-label={`Restablecer ${variable.key}`}
+                        disabled={working}
+                        onClick={() => onReset(index)}
+                        size="icon"
+                        title="Volver al valor de plataforma"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                      </Button>
+                    ) : null}
+                    <Button
+                      aria-label={`Eliminar ${variable.key}`}
+                      disabled={working}
+                      onClick={() => onRemove(index)}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </span>
                 </td>
               </tr>
             ))}

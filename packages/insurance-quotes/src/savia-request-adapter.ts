@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
-import { insuranceQuotesActionId, insuranceQuotesExtensionId } from "./connectors";
+import {
+  insuranceQuotesActionId,
+  insuranceQuotesExtensionId,
+} from "./connectors";
 import { normalizeInsuranceAction } from "./normalize";
 import {
   insuranceSaviaRequestBundle,
@@ -93,9 +96,10 @@ export function createInsuranceSaviaRequestConnectorAction(
       const request = actionInputSchema.parse(input);
       if (!isInsuranceSaviaRequestFlow(request.flowId))
         throw new Error("Flow de Seguros no permitido.");
-      const isLookup = insuranceSaviaRequestBundle.flows.find(
-        (flow) => flow.id === request.flowId,
-      )?.role === "lookup";
+      const isLookup =
+        insuranceSaviaRequestBundle.flows.find(
+          (flow) => flow.id === request.flowId,
+        )?.role === "lookup";
       const quoteInput = isLookup
         ? lookupQuoteInputSchema.parse(request.quoteInput)
         : quoteInputSchema.parse(request.quoteInput);
@@ -105,10 +109,13 @@ export function createInsuranceSaviaRequestConnectorAction(
       try {
         response = await service.fetch(
           new Request(
-            `https://savia-request.internal/api/flows/${request.flowId}/runs`,
+            `https://savia-request.internal/api/flows/${request.flowId}/runs?tenant=${encodeURIComponent(context.tenantId)}`,
             {
               method: "POST",
-              headers: { "content-type": "application/json" },
+              headers: {
+                "content-type": "application/json",
+                "x-savia-tenant": context.tenantId,
+              },
               body: JSON.stringify({
                 mode: request.mode,
                 input: toSaviaRequestInput(request.flowId, quoteInput as never),

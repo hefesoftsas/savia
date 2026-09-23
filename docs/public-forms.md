@@ -1,20 +1,28 @@
 # Public forms
 
-Owner: Savia platform team. Last reviewed: 2026-09-19.
+Owner: Savia platform team. Last reviewed: 2026-09-23.
 
 ## Publishing
 
 Forms remain private until a platform administrator opens a screen's configuration,
-expands **Enlaces públicos**, confirms the published snapshot, and creates a link.
-The administrator can set an expiration and a daily submission budget, copy the
-canonical public URL, and revoke each link independently. Revoked or expired
-links can be permanently deleted with their submission history; active links
+navigates to the dedicated **Enlace público** page, confirms the published snapshot,
+and creates a link. The administrator can set an expiration (with quick presets for 24h,
+7d, 30d, or no expiration) and a daily submission budget, copy the canonical public URL,
+generate or retry a short URL, share via the native Web Share API
+on mobile devices, open the form in a new tab to test it, and revoke each link independently.
+Revoked or expired links can be permanently deleted with their submission history; active links
 must be revoked first so in-flight deduplication is never dropped silently. Each active link can also
 show a QR code encoding the same canonical URL, with SVG and PNG download for
 print or in-person sharing. The default budget is
 25 submissions per link per UTC day. Existing links do not inherit later edits;
 review and publish a new link after changing a form. Revoke the previous link when
 replacing it.
+
+Savia keeps an internal random short code as a fallback. When Shlink is configured,
+it also creates a short URL on the self-hosted `go.cloud.hefesoft.com` domain and
+caches it with the published form. The same short URL is returned when an
+administrator requests it again. Redirects stop working when the form is revoked,
+expires, or is deleted; links are rate-limited.
 
 Native collections support plain text, numeric, email, date, boolean, and static
 select fields. Hidden, read-only, computed, secret, relational, remote-option,
@@ -84,14 +92,21 @@ provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration
 
-1. Apply D1 migration `0054_public_forms.sql` using the normal migration pipeline.
+1. Apply D1 migrations `0064_public_form_short_links.sql` and
+   `0065_public_form_external_short_url.sql` using the normal migration pipeline.
+   Active public forms receive an external short URL automatically when the
+   provider succeeds; the full link remains available if it is unavailable.
+   The provider receives the complete public URL, including its bearer token.
 2. Create a Cloudflare Turnstile widget for the canonical public hostname.
 3. Configure `TURNSTILE_SITE_KEY` and secret `TURNSTILE_SECRET_KEY` on the API worker.
    Keep the secret outside source control and frontend environment variables.
-4. Set `SAVIA_PUBLIC_ORIGIN` to the canonical HTTPS origin serving the admin gateway
+4. Set `SHLINK_SERVER_URL` to `https://go.cloud.hefesoft.com` and store
+   `SHLINK_API_KEY` as an API Worker secret. The key stays server-side. If either
+   setting is missing, the canonical URL and Savia-hosted fallback remain usable.
+5. Set `SAVIA_PUBLIC_ORIGIN` to the canonical HTTPS origin serving the admin gateway
    and public pages. Links always use this origin, even when created from an agency
    subdomain. Configure preview and production independently.
-5. Deploy API and admin together. The production configuration generator includes
+6. Deploy API and admin together. The production configuration generator includes
    the `PUBLIC_FORMS_RATE_LIMITER` binding (30 requests per minute per IP).
 
 Missing configuration fails closed. Public-host deployments reject Turnstile test
@@ -125,6 +140,11 @@ workspace replica, IndexedDB initialization, or administrative synchronization.
 Public requests omit credentials. The gateway serves the public page as an asset
 route and forwards public API requests to the API worker. API reference documentation
 is generated from the route schemas and available in Scalar.
+
+When external shortening is enabled, the Shlink server receives and stores the
+canonical URL, including the public form's bearer token. It receives no applicant
+values or CRM records. Provider failures leave Savia's canonical and internal
+fallback links usable.
 
 The anonymous API only exposes the intentionally published field definition and
 accepts submissions. It provides no collection listing, record lookup, history,

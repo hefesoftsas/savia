@@ -203,6 +203,7 @@ export function createApp(
     userAdministrator ?? betterAuthUserAdministrator(resolvedAuthService),
     realtime,
     documents,
+    saviaRequestService,
   );
   registerAccountAvatarRoutes(app, documents, resolvedAuthService);
   registerTenantBrandingRoutes(

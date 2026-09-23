@@ -3,7 +3,14 @@ import { fileURLToPath } from "node:url";
 
 // Import only missing values. Existing production values and unrelated rows win.
 // The envelope matches Savia Request's AES-GCM iv.ciphertext storage format.
-export async function importVariables({ query, flows, encryptionKey }) {
+// Without `tenant` the platform catalog (flow_variables) is targeted, exactly
+// as before. With `tenant` (e.g. "agency:101") only that tenant's overlays
+// (tenant_flow_variables) are written; flows resolve with the same
+// overlay-then-catalog fallback the worker uses, and tombstoned flows reject.
+const TENANT_PATTERN = /^[A-Za-z0-9:_.-]{1,120}$/;
+export async function importVariables({ query, flows, encryptionKey, tenant }) {
+  const scope = tenant === undefined || tenant === null ? "" : String(tenant);
+  if (scope && !TENANT_PATTERN.test(scope)) throw new Error("Invalid tenant");
   const material = Buffer.from(encryptionKey ?? "", "base64");
   if (material.length !== 32)
     throw new Error("Encryption key must contain 32 bytes");
@@ -43,20 +50,30 @@ export async function importVariables({ query, flows, encryptionKey }) {
     if (
       !(
         await query(
-          "SELECT id FROM flows WHERE id=? AND COALESCE(json_extract(definition, '$.deleted'),0)=0",
-          [flow.flowId],
+          scope
+            ? "SELECT 1 FROM tenant_flows WHERE tenant_id=? AND flow_id=? AND COALESCE(json_extract(definition, '$.deleted'),0)=0 UNION ALL SELECT 1 FROM flows WHERE id=? AND COALESCE(json_extract(definition, '$.deleted'),0)=0 AND NOT EXISTS(SELECT 1 FROM tenant_flows WHERE tenant_id=? AND flow_id=?)"
+            : "SELECT id FROM flows WHERE id=? AND COALESCE(json_extract(definition, '$.deleted'),0)=0",
+          scope
+            ? [scope, flow.flowId, flow.flowId, scope, flow.flowId]
+            : [flow.flowId],
         )
       ).length
     )
       throw new Error(`Missing flow: ${flow.flowId}`);
   }
   const summary = { flows: flows.length, imported: 0, preserved: 0 };
+  if (scope) summary.tenant = scope;
+  const now = () => new Date().toISOString();
   for (const flow of flows) {
     for (const variable of flow.variables) {
       if (!variable.value) continue;
       const [existing] = await query(
-        "SELECT value,secret FROM flow_variables WHERE flow_id=? AND key=?",
-        [flow.flowId, variable.key],
+        scope
+          ? "SELECT value,secret FROM tenant_flow_variables WHERE tenant_id=? AND flow_id=? AND key=?"
+          : "SELECT value,secret FROM flow_variables WHERE flow_id=? AND key=?",
+        scope
+          ? [scope, flow.flowId, variable.key]
+          : [flow.flowId, variable.key],
       );
       if (existing?.value) {
         summary.preserved++;
@@ -77,8 +94,12 @@ export async function importVariables({ query, flows, encryptionKey }) {
           Buffer.from(encrypted).toString("base64");
       }
       const result = await query(
-        "INSERT INTO flow_variables(flow_id,key,value,secret) VALUES(?,?,?,?) ON CONFLICT(flow_id,key) DO UPDATE SET value=excluded.value,secret=excluded.secret WHERE flow_variables.value='' RETURNING key",
-        [flow.flowId, variable.key, value, secret ? 1 : 0],
+        scope
+          ? "INSERT INTO tenant_flow_variables(tenant_id,flow_id,key,value,secret,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,flow_id,key) DO UPDATE SET value=excluded.value,secret=excluded.secret,updated_at=excluded.updated_at WHERE tenant_flow_variables.value='' RETURNING key"
+          : "INSERT INTO flow_variables(flow_id,key,value,secret) VALUES(?,?,?,?) ON CONFLICT(flow_id,key) DO UPDATE SET value=excluded.value,secret=excluded.secret WHERE flow_variables.value='' RETURNING key",
+        scope
+          ? [scope, flow.flowId, variable.key, value, secret ? 1 : 0, now()]
+          : [flow.flowId, variable.key, value, secret ? 1 : 0],
       );
       if (result.length) summary.imported++;
       else summary.preserved++;
@@ -127,6 +148,7 @@ async function main() {
         query,
         flows,
         encryptionKey: process.env.SAVIA_REQUEST_ENCRYPTION_KEY,
+        tenant: process.env.SAVIA_REQUEST_TENANT || undefined,
       }),
     ),
   );

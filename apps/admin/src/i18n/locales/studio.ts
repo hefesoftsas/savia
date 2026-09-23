@@ -2452,6 +2452,23 @@ export const studioMessages = {
     "Ocultar links públicos",
   ],
   "Enlaces públicos": ["Enlaces públicos", "Public links", "Links públicos"],
+  "Enlace público": ["Enlace público", "Public link", "Link público"],
+  "Configura y comparte accesos públicos sin iniciar sesión.": [
+    "Configura y comparte accesos públicos sin iniciar sesión.",
+    "Configure and share public access without signing in.",
+    "Configure e compartilhe acessos públicos sem iniciar sessão.",
+  ],
+  "Ayuda sobre enlaces públicos": [
+    "Ayuda sobre enlaces públicos",
+    "Help on public links",
+    "Ajuda sobre links públicos",
+  ],
+  "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.":
+    [
+      "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.",
+      "Generate secure links for external people to submit records or request quotes without signing in.",
+      "Gere links seguros para que pessoas externas enviem registros ou solicitem cotações sem iniciar sessão.",
+    ],
   "Desvincula la fuente de datos antes de eliminar esta pantalla.": [
     "Desvincula la fuente de datos antes de eliminar esta pantalla.",
     "Unlink the data source before deleting this screen.",

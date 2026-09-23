@@ -16,6 +16,7 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
     token: "token",
     path: "/public/forms/token",
     url: "https://public.savia.test/public/forms/token",
+    shortUrl: "https://go.cloud.hefesoft.com/abc123",
     kind: "record",
     dailyLimit: 25,
     expiresAt: null,
@@ -46,6 +47,10 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
   fireEvent.click(screen.getByLabelText(/versión actual/));
   fireEvent.click(screen.getByRole("button", { name: "Publicar enlace" }));
   await screen.findByRole("button", { name: "Copiar enlace" });
+  expect(
+    await screen.findByText("https://go.cloud.hefesoft.com/abc123"),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Copiar" })).toBeEnabled();
   expect(request.mock.calls[0][0]).toBe(
     "/v1/public-forms?domainId=domain&objectName=people",
   );
@@ -203,6 +208,245 @@ it("toggles the QR code and downloads it as SVG", async () => {
   } finally {
     clickSpy.mockRestore();
   }
+});
+
+it("shares the public URL when Web Share API is available", async () => {
+  const row = {
+    id: "share-link",
+    token: "token-share",
+    path: "/public/forms/token-share",
+    url: "https://public.savia.test/public/forms/token-share",
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+  const shareMock = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "share", {
+    configurable: true,
+    value: shareMock,
+  });
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+      screenTitle="Personas"
+    />,
+  );
+
+  const shareButton = await screen.findByRole("button", { name: "Compartir" });
+  fireEvent.click(shareButton);
+
+  await waitFor(() =>
+    expect(shareMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://public.savia.test/public/forms/token-share",
+        title: "Personas · Savia",
+      }),
+    ),
+  );
+});
+
+it("creates a Savia short URL through the authenticated API", async () => {
+  const row = {
+    id: "short-link",
+    token: "token-short",
+    path: "/public/forms/token-short",
+    url: "https://public.savia.test/public/forms/token-short",
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: { shortUrl: "https://public.savia.test/s/0123456789abcdef" },
+        }),
+      ),
+    );
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+
+  const shortenButton = await screen.findByRole("button", {
+    name: "Acortar URL",
+  });
+  fireEvent.click(shortenButton);
+
+  await waitFor(() =>
+    expect(
+      screen.getByText("https://public.savia.test/s/0123456789abcdef"),
+    ).toBeInTheDocument(),
+  );
+  expect(screen.getByText("Enlace corto generado.")).toBeInTheDocument();
+  expect(request.mock.calls[1]).toEqual([
+    "/v1/public-forms/short-link/short-url",
+    { method: "POST" },
+  ]);
+});
+
+it("restores a published short URL when the link list reloads", async () => {
+  const shortUrl = "https://public.savia.test/s/0123456789abcdef";
+  const row = {
+    id: "saved-short-link",
+    token: "token-saved-short",
+    path: "/public/forms/token-saved-short",
+    url: "https://public.savia.test/public/forms/token-saved-short",
+    shortUrl,
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+
+  expect(await screen.findByText(shortUrl)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Enlace corto" })).toBeDisabled();
+});
+
+it("shows the canonical and external short links together after loading", async () => {
+  const shortUrl = "https://go.cloud.hefesoft.com/abc123";
+  const row = {
+    id: "published-links",
+    token: "public-token",
+    path: "/public/forms/public-token",
+    url: "https://public.savia.test/public/forms/public-token",
+    shortUrl,
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+
+  expect(await screen.findByText(shortUrl)).toBeInTheDocument();
+  expect(
+    screen.getByRole("textbox", { name: "Dirección del enlace público" }),
+  ).toHaveValue(row.url);
+  expect(screen.getByRole("button", { name: "Copiar enlace" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Copiar" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Copiar enlace" }));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(row.url));
+  fireEvent.click(screen.getByRole("button", { name: "Copiar" }));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(shortUrl));
+});
+
+it("renders the direct open link button and back button when provided", async () => {
+  const row = {
+    id: "open-link",
+    token: "token-open",
+    path: "/public/forms/token-open",
+    url: "https://public.savia.test/public/forms/token-open",
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+  const onBack = vi.fn();
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+      onBack={onBack}
+    />,
+  );
+
+  const openLink = await screen.findByRole("link", { name: "Abrir enlace" });
+  expect(openLink).toHaveAttribute(
+    "href",
+    "https://public.savia.test/public/forms/token-open",
+  );
+  expect(openLink).toHaveAttribute("target", "_blank");
+
+  const backButton = screen.getByRole("button", {
+    name: "Volver a la configuración",
+  });
+  fireEvent.click(backButton);
+  expect(onBack).toHaveBeenCalledOnce();
+});
+
+it("applies expiration and limit presets in creation form", async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })));
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+
+  await screen.findByText(/Aún no hay enlaces/);
+
+  // Click 10 submissions preset
+  fireEvent.click(screen.getByRole("button", { name: "10" }));
+  const limitInput = screen.getByLabelText(
+    "Máximo de envíos al día",
+  ) as HTMLInputElement;
+  expect(limitInput.value).toBe("10");
+
+  // Click 7 days preset
+  fireEvent.click(screen.getByRole("button", { name: "7 días" }));
+  const expiryInput = screen.getByLabelText(
+    "Vence el (opcional)",
+  ) as HTMLInputElement;
+  expect(expiryInput.value).not.toBe("");
+
+  // Click clear preset
+  fireEvent.click(screen.getByRole("button", { name: "Sin vencimiento" }));
+  expect(expiryInput.value).toBe("");
 });
 
 function render(ui: ReactElement) {

@@ -329,7 +329,8 @@ it("requires acknowledging record deletion when a screen has data", async () => 
   );
 });
 
-it("loads public link management only when requested in screen configuration", async () => {
+it("navigates to public link management when selected in screen configuration", async () => {
+  const navigate = vi.fn();
   setStudioRuntime({
     embedded: true,
     domainId: "sales",
@@ -341,17 +342,16 @@ it("loads public link management only when requested in screen configuration", a
       selected="screen_0"
       detail
       domainTools
-      onNavigate={vi.fn()}
+      onNavigate={navigate}
       onVisibilityChange={vi.fn()}
       onMenuLayoutChange={vi.fn()}
       onDeletePermanent={vi.fn()}
     />,
   );
-  expect(
-    screen.queryByText("Public links for screen_0"),
-  ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Enlaces públicos" }));
-  expect(
-    await screen.findByText("Public links for screen_0"),
-  ).toBeInTheDocument();
+  const linkOption = screen.getByRole("button", {
+    name: "Enlace público de Proyectos",
+  });
+  expect(linkOption).toBeInTheDocument();
+  fireEvent.click(linkOption);
+  expect(navigate).toHaveBeenCalledWith("screen_0", "screen-public-link");
 });

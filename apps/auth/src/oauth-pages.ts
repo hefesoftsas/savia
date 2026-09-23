@@ -21,7 +21,12 @@ function htmlAttribute(value: string): string {
     .replace(/</g, "&lt;");
 }
 
-function page(title: string, content: string, restartUrl?: string): string {
+function page(
+  title: string,
+  content: string,
+  restartUrl?: string,
+  showLoginAnimation = false,
+): string {
   const restartAttribute = restartUrl
     ? ` data-oauth-restart-url="${htmlAttribute(restartUrl)}"`
     : "";
@@ -34,8 +39,9 @@ function page(title: string, content: string, restartUrl?: string): string {
     <link rel="stylesheet" href="/api/auth/oauth-ui.css">
   </head>
   <body${restartAttribute}>
-    <!-- THESIS: A secure OAuth step should feel like one focused workspace, not a generic identity portal. OWN-WORLD: calm Savia teal on a light operational canvas, with a deep-navy trust panel. STORY: identify the requested access, authenticate, then return to the client without losing context. FIRST VIEWPORT: login form at left, Savia assurance panel at right, action immediately below the credentials. FORM: Shadcn login-02 two-column composition, adapted for email, password and MFA. -->
+    <!-- THESIS: Login opens on Savia's product in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy media stage with teal accents. STORY: visitors see the product, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the 16:9 animation right; mobile puts the animation above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
     ${content}
+    ${showLoginAnimation ? '<script src="/login/lottie-light.min.js" defer></script>' : ""}
     <script src="/api/auth/oauth-ui.js" defer></script>
   </body>
 </html>`;
@@ -65,6 +71,7 @@ function loginPage(
       title,
       renderOAuthSurface("login", { tenantSlug, branding }),
       restartUrl,
+      !branding?.coverUrl,
     ),
   );
 }
@@ -138,6 +145,74 @@ const oauthUiScript = String.raw`(() => {
   const enrollment = document.querySelector("[data-oauth-enrollment]");
   const passwordInput = document.querySelector("#password");
   const passwordToggle = document.querySelector("[data-oauth-password-toggle]");
+  const loginAnimation = document.querySelector("[data-oauth-login-animation]");
+
+  if (loginAnimation && window.lottie) {
+    const frames = Array.from(
+      loginAnimation.querySelectorAll("[data-oauth-login-animation-frame]"),
+    );
+    const toggle = loginAnimation.querySelector(
+      "[data-oauth-login-animation-toggle]",
+    );
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animations = frames.map((frame) => window.lottie.loadAnimation({
+      container: frame,
+      renderer: "svg",
+      loop: false,
+      autoplay: false,
+      path: frame.dataset.src,
+    }));
+    const ready = animations.map(() => false);
+    let activeIndex = 0;
+    let paused = reducedMotion;
+
+    function updateToggle() {
+      toggle?.setAttribute("aria-pressed", String(paused));
+      toggle?.setAttribute(
+        "aria-label",
+        paused ? "Reanudar animación" : "Pausar animación",
+      );
+    }
+
+    function playActive() {
+      if (!paused && !document.hidden && ready[activeIndex]) {
+        animations[activeIndex].play();
+      }
+    }
+
+    animations.forEach((animation, index) => {
+      animation.addEventListener("DOMLoaded", () => {
+        ready[index] = true;
+        animation.goToAndStop(0, true);
+        if (index === activeIndex) {
+          loginAnimation.dataset.active = String(index);
+          loginAnimation.dataset.ready = "true";
+          playActive();
+        }
+      });
+      animation.addEventListener("complete", () => {
+        if (index !== activeIndex || paused) return;
+        activeIndex = (index + 1) % animations.length;
+        if (!ready[activeIndex]) return;
+        loginAnimation.dataset.active = String(activeIndex);
+        loginAnimation.dataset.ready = "true";
+        animations[activeIndex].goToAndStop(0, true);
+        playActive();
+      });
+    });
+
+    toggle?.addEventListener("click", () => {
+      paused = !paused;
+      updateToggle();
+      if (paused) animations.forEach((animation) => animation.pause());
+      else playActive();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) animations.forEach((animation) => animation.pause());
+      else playActive();
+    });
+    updateToggle();
+  }
 
   function signedOAuthQuery() {
     const source = new URLSearchParams(window.location.search);

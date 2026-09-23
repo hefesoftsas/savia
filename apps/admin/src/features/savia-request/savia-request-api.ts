@@ -1,5 +1,8 @@
 import type { ApiClient } from "@/api/api-client";
 import type {
+  BundleStatus,
+  BundleSyncInput,
+  BundleSyncResult,
   FlowSummary,
   RequestFlow,
   RequestRun,
@@ -17,66 +20,113 @@ export type SecretsImportResult = {
 
 const apiRoot = "/v1/savia-request/api";
 
-export function createSaviaRequestApi(apiClient: ApiClient) {
+export type SaviaRequestScope = { tenant?: string };
+
+function scoped(path: string, scope?: SaviaRequestScope): string {
+  if (!scope?.tenant) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}tenant=${encodeURIComponent(scope.tenant)}`;
+}
+
+export function createSaviaRequestApi(
+  apiClient: ApiClient,
+  scope?: SaviaRequestScope,
+) {
   return {
-    listFlows: () => apiClient.get<FlowSummary[]>(`${apiRoot}/flows`),
-    listFolders: () => apiClient.get<string[]>(`${apiRoot}/folders`),
+    listFlows: () =>
+      apiClient.get<FlowSummary[]>(scoped(`${apiRoot}/flows`, scope)),
+    listFolders: () =>
+      apiClient.get<string[]>(scoped(`${apiRoot}/folders`, scope)),
     readFlow: (id: string) =>
-      apiClient.get<RequestFlow>(`${apiRoot}/flows/${id}`),
+      apiClient.get<RequestFlow>(scoped(`${apiRoot}/flows/${id}`, scope)),
     saveFlow: (flow: RequestFlow) =>
-      apiClient.put<{ ok: true }>(`${apiRoot}/flows/${flow.id}`, flow),
+      apiClient.put<{ ok: true }>(
+        scoped(`${apiRoot}/flows/${flow.id}`, scope),
+        flow,
+      ),
     saveVariables: (id: string, variables: RequestVariable[]) =>
       apiClient.put<{ ok: true }>(
-        `${apiRoot}/flows/${id}/variables`,
+        scoped(`${apiRoot}/flows/${id}/variables`, scope),
         variables,
+      ),
+    resetVariable: (id: string, key: string) =>
+      apiClient.request<{ ok: true; reverted: boolean }>(
+        scoped(
+          `${apiRoot}/flows/${id}/variables/${encodeURIComponent(key)}`,
+          scope,
+        ),
+        {
+          method: "DELETE",
+          body: "{}",
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    resetFlow: (id: string) =>
+      apiClient.post<{ ok: true; reverted: boolean }>(
+        scoped(`${apiRoot}/flows/${id}/reset`, scope),
       ),
     revealVariable: (id: string, key: string) =>
       apiClient.post<{ value: string }>(
-        `${apiRoot}/flows/${id}/variables/reveal`,
+        scoped(`${apiRoot}/flows/${id}/variables/reveal`, scope),
         {
           key,
         },
       ),
     createFolder: (path: string) =>
-      apiClient.post<{ path: string }>(`${apiRoot}/folders`, { path }),
+      apiClient.post<{ path: string }>(scoped(`${apiRoot}/folders`, scope), {
+        path,
+      }),
     removeFolder: (path: string) =>
-      apiClient.request<{ ok: true }>(`${apiRoot}/folders`, {
+      apiClient.request<{ ok: true }>(scoped(`${apiRoot}/folders`, scope), {
         method: "DELETE",
         body: JSON.stringify({ path }),
         headers: { "Content-Type": "application/json" },
       }),
     duplicateFlow: (id: string) =>
       apiClient.post<{ id: string; name: string }>(
-        `${apiRoot}/flows/${id}/duplicate`,
+        scoped(`${apiRoot}/flows/${id}/duplicate`, scope),
       ),
     removeFlow: (id: string) =>
-      apiClient.delete(`${apiRoot}/flows/${id}`, {
+      apiClient.delete(scoped(`${apiRoot}/flows/${id}`, scope), {
         body: "{}",
         headers: { "Content-Type": "application/json" },
       }),
     run: (id: string, mode: "mock" | "live", input: Record<string, string>) =>
-      apiClient.post<RequestRun>(`${apiRoot}/flows/${id}/runs`, {
+      apiClient.post<RequestRun>(scoped(`${apiRoot}/flows/${id}/runs`, scope), {
         mode,
         input,
       }),
     listRuns: (id: string) =>
-      apiClient.get<RequestRun[]>(`${apiRoot}/flows/${id}/runs`),
+      apiClient.get<RequestRun[]>(scoped(`${apiRoot}/flows/${id}/runs`, scope)),
     readRun: (id: string, runId: string) =>
-      apiClient.get<RequestRunDetail>(`${apiRoot}/flows/${id}/runs/${runId}`),
+      apiClient.get<RequestRunDetail>(
+        scoped(`${apiRoot}/flows/${id}/runs/${runId}`, scope),
+      ),
     readVersion: (id: string, versionId: string) =>
       apiClient.get<RequestFlow>(
-        `${apiRoot}/flows/${id}/versions/${versionId}`,
+        scoped(`${apiRoot}/flows/${id}/versions/${versionId}`, scope),
       ),
     demoInput: () =>
       apiClient.get<Record<string, string>>(`${apiRoot}/demo-input`),
     publish: (id: string) =>
-      apiClient.post<{ id: string }>(`${apiRoot}/flows/${id}/publish`),
+      apiClient.post<{ id: string }>(
+        scoped(`${apiRoot}/flows/${id}/publish`, scope),
+      ),
     exportSecrets: () =>
-      apiClient.get<SecretsFile>(`${apiRoot}/variables/export`),
+      apiClient.get<SecretsFile>(scoped(`${apiRoot}/variables/export`, scope)),
     importSecrets: (file: SecretsFile) =>
       apiClient.post<{ results: SecretsImportResult[] }>(
-        `${apiRoot}/variables/import`,
+        scoped(`${apiRoot}/variables/import`, scope),
         file,
+      ),
+    bundleStatus: () =>
+      apiClient.get<BundleStatus>(
+        scoped(`${apiRoot}/bundles/insurance-auto-light/status`, scope),
+      ),
+    syncBundle: (input: BundleSyncInput = {}) =>
+      apiClient.post<BundleSyncResult>(
+        scoped(`${apiRoot}/bundles/insurance-auto-light/sync`, scope),
+        input,
       ),
   };
 }

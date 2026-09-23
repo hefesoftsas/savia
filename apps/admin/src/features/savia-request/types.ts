@@ -2,6 +2,7 @@ export type FlowSummary = {
   id: string;
   name: string;
   folderPath?: string;
+  customized?: boolean;
   steps: Array<{ id: string; name: string; method: string }>;
 };
 
@@ -11,6 +12,7 @@ export type RequestVariable = {
   secret: boolean;
   required?: boolean;
   configured?: boolean;
+  overridden?: boolean;
 };
 
 export type RequestStep = {
@@ -33,6 +35,7 @@ export type RequestFlow = Omit<FlowSummary, "steps"> & {
   kind?: string;
   resultPrefix?: string;
   allowedOrigins?: string[];
+  customized?: boolean;
   input: Record<string, string>;
   variables: RequestVariable[];
   versions: Array<{ id: string; created_at: string }>;
@@ -62,3 +65,27 @@ export type RequestRun = {
 };
 
 export type RequestRunDetail = { run: RequestRun; flow: RequestFlow };
+
+export type BundleFlowState =
+  "current" | "customized" | "outdated" | "hidden" | "not-installed";
+
+export type BundleStatus = {
+  id: string;
+  currentVersion: string;
+  installedVersion: string | null;
+  updateAvailable: boolean;
+  flows: Array<{ flowId: string; state: BundleFlowState }>;
+  summary: Record<BundleFlowState, number>;
+};
+
+export type BundleSyncInput = { flowIds?: string[]; force?: boolean };
+
+export type BundleSyncResult = {
+  id: string;
+  version: string;
+  updated: string[];
+  installed: string[];
+  skippedCustomized: string[];
+  hidden: string[];
+  variablesAdded: number;
+};

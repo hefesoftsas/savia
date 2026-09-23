@@ -101,6 +101,7 @@ function apiConfig({ documentsBucket, domainD1Id, publicOrigin }) {
       SAVIA_OAUTH_ISSUER: `${publicOrigin}/api/auth`,
       SAVIA_PUBLIC_ORIGIN: publicOrigin,
       SAVIA_MCP_URL: privateMcpUrl,
+      SHLINK_SERVER_URL: "https://go.cloud.hefesoft.com",
     },
     secrets: {
       required: [

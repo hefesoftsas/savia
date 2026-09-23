@@ -133,9 +133,15 @@ import {
   extensionScreenDefaultHidden,
   extensionScreenFor,
   isExtensionScreenEnabled,
+  isPluginScreen,
 } from "./extension-screens";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
 import "./screen-manager.css";
+const PublicLinkManager = lazy(() =>
+  import("../public-forms/public-link-manager").then((module) => ({
+    default: module.PublicLinkManager,
+  })),
+);
 const DynamicForm = lazy(() => import("./collection-record-form"));
 const RequestPage = lazy(() => import("./request-page"));
 const RequestPageGenerator = lazy(() => import("./request-page-generator"));
@@ -303,6 +309,7 @@ function App({
   extensionLocaleRef.current = extensionLocale;
 
   const activeQueryClient = useQueryClient();
+  const runtime = getCrmRuntime();
   const [ready, setReady] = useState(false),
     [bootError, setBootError] = useState("");
   useEffect(() => {
@@ -368,6 +375,17 @@ function App({
     return extensionScreenDefaultHidden(o.name);
   };
   const visibleObjects = sortScreens(objects.filter((o) => !isObjectHidden(o)));
+  const publishableScreens = useMemo(() => {
+    return sortScreens(
+      objects.filter((item) => {
+        const isQuote = ["cotizador", "cotizador_por_pasos"].includes(item.name);
+        return (
+          isQuote ||
+          (!isPluginScreen(item.name) && !item.config.studio?.collection)
+        );
+      }),
+    );
+  }, [objects]);
   const resolvedMenuLayout = useMemo(
     () =>
       reconcileMenuLayout(
@@ -1049,7 +1067,9 @@ function App({
                             ? t("Operaciones")
                             : view === "screens" || view === "remove-screen"
                               ? t("Pantallas")
-                              : view.startsWith("admin")
+                              : view === "screen-public-link"
+                                ? t("Enlace público")
+                                : view.startsWith("admin")
                                 ? t("Administración")
                                 : t("Historial")}
               </strong>
@@ -1290,6 +1310,71 @@ function App({
                       }}
                     />
                   </Suspense>
+                </div>
+              )}
+            </div>
+          ) : view === "screen-public-link" ? (
+            <div className="screens-page w-full">
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      className="hover:underline cursor-pointer"
+                      onClick={() => navigate(selected, "admin-screen")}
+                    >
+                      {object?.label ?? selected}
+                    </button>
+                    <span>·</span>
+                    <span>{t("Configuración")}</span>
+                  </p>
+                  <div className="page-heading-title-row">
+                    <h1>{t("Enlace público")}</h1>
+                    <StudioHelpTooltip label={t("Ayuda sobre enlaces públicos")}>
+                      {t(
+                        "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.",
+                      )}
+                    </StudioHelpTooltip>
+                  </div>
+                </div>
+                {publishableScreens.length > 1 && (
+                  <select
+                    aria-label={t("Pantalla a configurar")}
+                    className="select-input screen-presentation-picker"
+                    value={selected}
+                    onChange={(event) =>
+                      navigate(event.target.value, "screen-public-link")
+                    }
+                  >
+                    {publishableScreens.map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {runtime.domainId && runtime.publicFormTransport ? (
+                <Suspense fallback={<Loading />}>
+                  <PublicLinkManager
+                    key={`${runtime.domainId}:${selected}`}
+                    domainId={runtime.domainId}
+                    objectName={selected}
+                    kind={
+                      ["cotizador", "cotizador_por_pasos"].includes(selected)
+                        ? "quote"
+                        : "record"
+                    }
+                    request={runtime.publicFormTransport}
+                    screenTitle={object?.label}
+                    onBack={() => navigate(selected, "admin-screen")}
+                  />
+                </Suspense>
+              ) : (
+                <div className="savia-surface-card p-6 text-sm text-muted-foreground">
+                  {t(
+                    "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.",
+                  )}
                 </div>
               )}
             </div>
