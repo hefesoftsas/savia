@@ -49,9 +49,21 @@ function fakeAnimation() {
 
 async function startOAuthAnimation(reducedMotion = false) {
   const animation = fakeAnimation();
+  const robotAnimation = fakeAnimation();
   const frame = { dataset: { src: "/login/savia-logo.json" } };
+  const robot = { classList: { remove() {} } };
+  const robotFrame = { dataset: { src: "/login/savia-chatbot-hover.json" } };
+  const wordmark = { addEventListener() {} };
+  const wordmarkAI = { addEventListener() {} };
+  const elements: Record<string, object> = {
+    "[data-oauth-login-animation-frame]": frame,
+    "[data-oauth-login-robot]": robot,
+    "[data-oauth-login-robot-frame]": robotFrame,
+    "[data-oauth-login-wordmark]": wordmark,
+    "[data-oauth-login-wordmark-ai]": wordmarkAI,
+  };
   const panel = {
-    querySelector: () => frame,
+    querySelector: (selector: string) => elements[selector] ?? null,
   };
   const script = await oauthPageResponse(request("oauth-ui.js"))!.text();
   let onVisibilityChange: (() => void) | undefined;
@@ -72,7 +84,7 @@ async function startOAuthAnimation(reducedMotion = false) {
     lottie: {
       loadAnimation(options: { path: string }) {
         paths.push(options.path);
-        return animation;
+        return options.path === frame.dataset.src ? animation : robotAnimation;
       },
     },
   });
@@ -106,7 +118,10 @@ describe("tenant identity on OAuth surfaces", () => {
 
   it("plays the logo once and pauses while the tab is hidden", async () => {
     const { animation, paths, hide, show } = await startOAuthAnimation();
-    expect(paths).toEqual(["/login/savia-logo.json"]);
+    expect(paths).toEqual([
+      "/login/savia-logo.json",
+      "/login/savia-chatbot-hover.json",
+    ]);
 
     animation.emit("DOMLoaded");
     expect(animation.playCalls).toBe(1);
