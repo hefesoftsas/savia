@@ -5,10 +5,12 @@ Owner: Savia platform team. Last reviewed: 2026-09-19.
 ## Publishing
 
 Forms remain private until a platform administrator opens a screen's configuration,
-expands **Enlaces públicos**, confirms the published snapshot, and creates a link.
-The administrator can set an expiration and a daily submission budget, copy the
-canonical public URL, and revoke each link independently. Revoked or expired
-links can be permanently deleted with their submission history; active links
+navigates to the dedicated **Enlace público** page, confirms the published snapshot,
+and creates a link. The administrator can set an expiration (with quick presets for 24h,
+7d, 30d, or no expiration) and a daily submission budget, copy the canonical public URL,
+generate a short URL via a free URL service (`is.gd`), share via the native Web Share API
+on mobile devices, open the form in a new tab to test it, and revoke each link independently.
+Revoked or expired links can be permanently deleted with their submission history; active links
 must be revoked first so in-flight deduplication is never dropped silently. Each active link can also
 show a QR code encoding the same canonical URL, with SVG and PNG download for
 print or in-person sharing. The default budget is

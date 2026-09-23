@@ -276,11 +276,56 @@ export const publicFormsMessages = {
     "Unable to download the QR code. Try again.",
     "Não foi possível baixar o código QR. Tente novamente.",
   ],
+  Compartir: ["Compartir", "Share", "Compartilhar"],
+  "Compartir enlace": ["Compartir enlace", "Share link", "Compartilhar link"],
+  "Abrir enlace": ["Abrir enlace", "Open link", "Abrir link"],
+  "Acortar URL": ["Acortar URL", "Shorten URL", "Encurtar URL"],
+  "Acortando…": ["Acortando…", "Shortening…", "Encurtando…"],
+  "Enlace corto": ["Enlace corto", "Short link", "Link curto"],
+  "No se pudo acortar el enlace. Puedes usar el enlace completo.": [
+    "No se pudo acortar el enlace. Puedes usar el enlace completo.",
+    "Unable to shorten the link. You can use the full link.",
+    "Não foi possível encurtar o link. Você pode usar o link completo.",
+  ],
+  "¡Copiado!": ["¡Copiado!", "Copied!", "Copiado!"],
+  "Nuevo enlace público": [
+    "Nuevo enlace público",
+    "New public link",
+    "Novo link público",
+  ],
+  "Enlaces publicados": [
+    "Enlaces publicados",
+    "Published links",
+    "Links publicados",
+  ],
+  "24 horas": ["24 horas", "24 hours", "24 horas"],
+  "7 días": ["7 días", "7 days", "7 dias"],
+  "30 días": ["30 días", "30 days", "30 dias"],
+  "Volver a la configuración": [
+    "Volver a la configuración",
+    "Back to settings",
+    "Voltar para as configurações",
+  ],
+  "Límite diario": ["Límite diario", "Daily limit", "Limite diário"],
+  Vencimiento: ["Vencimiento", "Expiration", "Expiração"],
+  "Snapshot seguro: los cambios posteriores en la pantalla no afectarán este enlace.":
+    [
+      "Snapshot seguro: los cambios posteriores en la pantalla no afectarán este enlace.",
+      "Secure snapshot: future changes to the screen will not affect this link.",
+      "Snapshot seguro: alterações posteriores na tela não afetarão este link.",
+    ],
   "Aún no hay enlaces publicados para este formulario.": [
     "Aún no hay enlaces publicados para este formulario.",
     "No links have been published for this form yet.",
     "Ainda não há links publicados para este formulário.",
   ],
+  "Configura la vigencia y el límite de envíos arriba y haz clic en Publicar enlace para compartirlo.":
+    [
+      "Configura la vigencia y el límite de envíos arriba y haz clic en Publicar enlace para compartirlo.",
+      "Configure expiration and daily submission budget above and click Publish link to share it.",
+      "Configure a expiração e o limite de envios acima e clique em Publicar link para compartilhá-lo.",
+    ],
+  Copiar: ["Copiar", "Copy", "Copiar"],
   "Cargando…": ["Cargando…", "Loading…", "Carregando…"],
   Idioma: ["Idioma", "Language", "Idioma"],
   "El enlace público no es válido.": [

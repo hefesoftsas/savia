@@ -403,6 +403,7 @@ export function AppSidebar() {
             "screen-settings",
             "screen-relations",
             "screen-audit",
+            "screen-public-link",
             "designer",
             "new-object",
             "import-spreadsheet",
