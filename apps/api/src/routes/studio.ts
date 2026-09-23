@@ -19,7 +19,7 @@ import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { tenantRoom } from "../realtime/protocol";
 
-export async function resolveDynamicTenantKey(
+export async function resolveStudioTenantKey(
   db: D1Database,
   tenantId: number,
   preferredPrefix?: "tenant" | "agency",
@@ -57,7 +57,7 @@ export function registerStudioRoutes(
   beforeInstall?: SolutionOptions["beforeInstall"],
   realtime?: RealtimeHubClient,
 ) {
-  const handleDynamicCrmRequest = async (c: any) => {
+  const handleStudioRequest = async (c: any) => {
     const actor = actorFromContext(c);
     const expectedPrincipal = c.req.header("X-Savia-Sync-Principal");
     if (
@@ -84,7 +84,7 @@ export function registerStudioRoutes(
       );
     const url = new URL(c.req.url);
     const isTenantRoute = url.pathname.startsWith("/v1/tenants/");
-    const tenantKey = await resolveDynamicTenantKey(
+    const tenantKey = await resolveStudioTenantKey(
       db,
       tenantId,
       isTenantRoute ? "tenant" : "agency",
@@ -96,9 +96,13 @@ export function registerStudioRoutes(
         ? await loadAccessPolicy(db, actor, `tenant:${tenantId}`)
         : undefined;
     let sharedNames: Set<string> | undefined;
+    // Canonical prefix is /v1/studio; /v1/dynamic-crm stays as a legacy
+    // alias and echoes back so old clients keep working.
     const routePrefix = isTenantRoute
       ? `/v1/tenants/${paramValue}/crm`
-      : `/v1/dynamic-crm/${paramValue}`;
+      : url.pathname.startsWith("/v1/studio/")
+        ? `/v1/studio/${paramValue}`
+        : `/v1/dynamic-crm/${paramValue}`;
     const requestedPath = url.pathname.slice(routePrefix.length);
     const readOnlyBootstrap =
       c.req.method === "POST" &&
@@ -185,7 +189,7 @@ export function registerStudioRoutes(
       });
       c.header("cache-control", "no-store");
       if (path === "/api/openapi.json") return c.json(document);
-      return dynamicScalar(c, document, tenantId);
+      return dynamicScalar(c, document, routePrefix);
     }
     if (path.startsWith("/api/published/")) {
       const match =
@@ -391,8 +395,11 @@ export function registerStudioRoutes(
     });
   };
 
-  app.all("/v1/dynamic-crm/:agencyId/api/*", handleDynamicCrmRequest);
-  app.all("/v1/dynamic-crm/:tenantId/api/*", handleDynamicCrmRequest);
-  app.all("/v1/tenants/:tenantId/crm/api/*", handleDynamicCrmRequest);
+  app.all("/v1/studio/:agencyId/api/*", handleStudioRequest);
+  app.all("/v1/studio/:tenantId/api/*", handleStudioRequest);
+  // Legacy alias (Fase 1): old agency workspaces keep working.
+  app.all("/v1/dynamic-crm/:agencyId/api/*", handleStudioRequest);
+  app.all("/v1/dynamic-crm/:tenantId/api/*", handleStudioRequest);
+  app.all("/v1/tenants/:tenantId/crm/api/*", handleStudioRequest);
 }
 

@@ -186,6 +186,22 @@ describe("CRM inside Savia", () => {
     expect(result.status).toBe(200);
     expect(await result.json()).toEqual({ data: [], menuLayout: null });
   });
+  it("serves agency workspaces on the canonical /v1/studio prefix", async () => {
+    const app = admin();
+    expect(
+      (await app.request(prefix + "/bootstrap", { method: "POST" })).status,
+    ).toBe(200);
+    const canonical = await app.request("/v1/studio/101/api/objects");
+    expect(canonical.status).toBe(200);
+    const legacy = await app.request("/v1/dynamic-crm/101/api/objects");
+    expect(legacy.status).toBe(200);
+    expect(await canonical.json()).toEqual(await legacy.json());
+    const reference = await app.request("/v1/studio/101/api/openapi.json");
+    expect(reference.status).toBe(200);
+    expect(((await reference.json()) as any).servers?.[0]?.url ?? "").toContain(
+      "/v1/studio/101",
+    );
+  });
 });
 
 it("persists records across requests, checks versions, and isolates exports and attachments", async () => {

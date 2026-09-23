@@ -7,7 +7,7 @@ are the executable spec: read them before the runbooks.
   `DESIGN.md`, index in `README.md`) + `packages/studio-server/` (contract in
   `API.md`, `INTEGRATIONS.md`) + `packages/studio-shared/`.
 - **Domains and collections**: `apps/api/src/routes/data-domains.ts`,
-  `studio.ts` (`/v1/dynamic-crm/*`, `/v1/data-domains/*`),
+  `studio.ts` (`/v1/studio/*` + legacy `/v1/dynamic-crm/*`, `/v1/data-domains/*`),
   `apps/api/src/studio/collection-relations.ts`; runbooks `data-domain-studio`,
   `collection-sources`, `collection-relations`, `collection-operation-mapping`.
 - **savia-request**: `apps/savia-request/src/server/` (`index.ts` routes,

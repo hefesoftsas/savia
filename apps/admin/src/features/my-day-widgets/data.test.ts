@@ -71,7 +71,7 @@ describe("normalizeSchema", () => {
 });
 
 describe("widgetDeepLink", () => {
-  it("links data-domain widgets to the crm screen", () => {
+  it("links data-domain widgets to the studio screen", () => {
     expect(
       widgetDeepLink({
         id: "w_1",
@@ -87,6 +87,17 @@ describe("widgetDeepLink", () => {
       widgetDeepLink({
         id: "w_2",
         apiBasePath: "/v1/dynamic-crm/101",
+        collection: "clientes",
+        kind: "items",
+      } as MyDayWidget),
+    ).toBe("/studio?agencyId=101&object=clientes");
+  });
+
+  it("links agency widgets on the canonical /v1/studio base", () => {
+    expect(
+      widgetDeepLink({
+        id: "w_3",
+        apiBasePath: "/v1/studio/101",
         collection: "clientes",
         kind: "items",
       } as MyDayWidget),

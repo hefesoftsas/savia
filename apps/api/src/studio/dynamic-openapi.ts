@@ -194,7 +194,7 @@ export async function dynamicOpenApi(
     typeof agencyId === "number" ? `agency:${agencyId}` : agencyId.tenant;
   const apiBasePath =
     typeof agencyId === "number"
-      ? `/v1/dynamic-crm/${agencyId}`
+      ? `/v1/studio/${agencyId}`
       : agencyId.apiBasePath;
   const isCommercialTenant =
     typeof agencyId === "number" ||

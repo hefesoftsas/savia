@@ -306,6 +306,6 @@ La prueba de integración verifica que el catálogo y el JSON descargable coinci
 `pnpm dev` aplica la migración local; el despliegue debe aplicar las migraciones
 D1 antes de servir la nueva versión del API.
 
-Las rutas se ofrecen bajo `/v1/dynamic-crm/:tenantId/api/solutions` o
+Las rutas se ofrecen bajo `/v1/studio/:tenantId/api/solutions` (alias heredado `/v1/dynamic-crm/...`) o
 `/v1/data-domains/:domainId/api/solutions`: GET catálogo, POST `/preview`,
 POST `/install`, GET `/:id/export` y PATCH `/:id` con `{ "enabled": false }`.

@@ -11,6 +11,7 @@ import type {
 import DynamicForm, { type DynamicFormProps } from "./dynamic-form";
 import { api } from "./api";
 import { getStudioRuntime } from "./runtime";
+import { isAgencyApiBasePath } from "@/features/studio/studio-navigation";
 import type { RelatedRecordChanges } from "@savia/studio-shared/related-records";
 import { relatedRows } from "./related-record-editor";
 import { createRelatedRecordDraft } from "./related-record-drafts";
@@ -29,7 +30,10 @@ export default function CollectionRecordForm(props: DynamicFormProps) {
   const runtime = getStudioRuntime();
   if (isDatabaseKind(props.object.config.studio?.collection?.kind))
     return <DatabaseRecordForm {...props} />;
-  if (!/^\/v1\/(data-domains|dynamic-crm)\//.test(runtime.apiBasePath ?? ""))
+  if (
+    !runtime.apiBasePath?.startsWith("/v1/data-domains/") &&
+    !isAgencyApiBasePath(runtime.apiBasePath)
+  )
     return <DynamicForm {...props} />;
   return (
     <ManualRelationsForm

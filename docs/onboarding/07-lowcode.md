@@ -36,9 +36,10 @@ versioned schema. Files go to R2.
    utilities — used by both admin and API.
 
 > Fase 3 note: engine D1 tables are renamed to `studio_*`
-> (`0064_rename_engine_crm_to_studio.sql`, `studio-server/0022_...`). Still
-> keeping their old names: API paths (`/v1/dynamic-crm/*`, `/v1/crm/*` —
-> the latter is the external HubSpot integration and stays),
+> (`0064_rename_engine_crm_to_studio.sql`, `studio-server/0022_...`), and
+> agency workspaces moved to the canonical `/v1/studio/*` API prefix
+> (legacy `/v1/dynamic-crm/*` alias kept). Still keeping old names:
+> `/v1/crm/*` (external HubSpot integration, stays),
 > permission/sidebar ids (`dynamic-crm`), the `CRM_INTEGRATION_KEY`
 > secret name, collection kind `"crm"`, assistant tool names
 > (`savia_*_crm_*`, `domain: "crm"`), and the external sync tables
@@ -46,7 +47,7 @@ versioned schema. Files go to R2.
 
 ## Everything configurable generates its own API
 
-- `/v1/data-domains/:id/api/*` and `/v1/dynamic-crm/:agencyId/api/*`: per-object
+- `/v1/data-domains/:id/api/*` and `/v1/studio/:agencyId/api/*` (`/v1/dynamic-crm/*` alias kept): per-object
   CRUD, designer, **generated OpenAPI/Scalar with per-object endpoints**, and
   integrations (import an external OpenAPI schema, run operations, map results
   into the domain with per-domain isolated credentials).

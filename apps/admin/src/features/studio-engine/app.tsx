@@ -2,6 +2,7 @@ import { ExtensionLocaleBridge } from "@/i18n/app-locale-provider";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { defaultAppLocale, isAppLocale } from "@/i18n/app-locale";
 import { automationMessages } from "@/i18n/locales/automation";
+import { isAgencyApiBasePath } from "@/features/studio/studio-navigation";
 import {
   canDuplicateRecord,
   duplicateRecordValues,
@@ -1398,7 +1399,7 @@ function App({
               />
             </Suspense>
           ) : view === "collection-sources" &&
-            !getStudioRuntime().apiBasePath?.startsWith("/v1/dynamic-crm/") ? (
+            !isAgencyApiBasePath(getStudioRuntime().apiBasePath) ? (
             <Suspense fallback={<Loading />}>
               <CollectionSourcesPanel
                 onBound={async (bound) => {

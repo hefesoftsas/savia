@@ -18,7 +18,7 @@ export async function dynamicScalar(
   const rendered = await Scalar({
     content,
     persistAuth: false,
-    pageTitle: "API del CRM · Savia",
+    pageTitle: "API de Studio · Savia",
   })(c, async () => {});
   if (!rendered) throw new Error("No se pudo generar la documentación.");
   const html = (await rendered.text()).replace(
@@ -33,7 +33,7 @@ export async function dynamicScalar(
 export function scalarTransportScript(agencyId: number | string) {
   const prefix =
     typeof agencyId === "number"
-      ? `/v1/dynamic-crm/${agencyId}/api/`
+      ? `/v1/studio/${agencyId}/api/`
       : `${agencyId}/api/`;
   return `<script>
 (() => {

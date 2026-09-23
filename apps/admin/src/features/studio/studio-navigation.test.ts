@@ -6,6 +6,8 @@ import {
   isStudioNavigationMessage,
   parseStudioSearch,
   summarizeStudioObject,
+  matchAgencyApiBasePath,
+  isAgencyApiBasePath,
 } from "./studio-navigation";
 
 describe("CRM sidebar navigation", () => {
@@ -162,4 +164,16 @@ it("omits unknown collection counts while preserving explicit zero and positive 
   expect(children.find((child) => child.id === "object:clientes")?.count).toBe(
     12,
   );
+});
+
+it("matches agency API bases on the canonical path and the legacy alias", () => {
+  expect(matchAgencyApiBasePath("/v1/studio/101")).toBe("101");
+  expect(matchAgencyApiBasePath("/v1/dynamic-crm/101")).toBe("101");
+  expect(matchAgencyApiBasePath("/v1/data-domains/platform")).toBeUndefined();
+  expect(matchAgencyApiBasePath(undefined)).toBeUndefined();
+  expect(isAgencyApiBasePath("/v1/studio/12")).toBe(true);
+  expect(isAgencyApiBasePath("/v1/dynamic-crm/12")).toBe(true);
+  expect(isAgencyApiBasePath("/v1/dynamic-crm/test")).toBe(true);
+  expect(isAgencyApiBasePath("/v1/data-domains/x")).toBe(false);
+  expect(isAgencyApiBasePath(undefined)).toBe(false);
 });

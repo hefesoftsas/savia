@@ -160,7 +160,7 @@ export function registerDataDomainRoutes(
         tenantId: a.id,
         agencyId: a.id,
         kind: "tenant" as const,
-        apiBasePath: `/v1/dynamic-crm/${a.id}`,
+        apiBasePath: `/v1/studio/${a.id}`,
       })),
     );
     c.header("cache-control", "no-store");

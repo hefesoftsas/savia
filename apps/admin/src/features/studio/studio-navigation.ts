@@ -79,6 +79,28 @@ export function studioHref(input: {
   return query ? `/studio?${query}` : "/studio";
 }
 
+const AGENCY_API_ID_PATTERN = /^\/v1\/(?:studio|dynamic-crm)\/(\d+)$/;
+const AGENCY_API_PREFIX_PATTERN = /^\/v1\/(?:studio|dynamic-crm)\/.+$/;
+
+/**
+ * Numeric agency id from an agency workspace API base. Canonical is
+ * `/v1/studio/:id`; `/v1/dynamic-crm/:id` stays as a legacy alias.
+ */
+export function matchAgencyApiBasePath(
+  apiBasePath: string | undefined,
+): string | undefined {
+  if (!apiBasePath) return undefined;
+  return AGENCY_API_ID_PATTERN.exec(apiBasePath)?.[1];
+}
+
+/** Agency workspace API base (any scope id), both prefixes. */
+export function isAgencyApiBasePath(apiBasePath: string | undefined): boolean {
+  return (
+    typeof apiBasePath === "string" &&
+    AGENCY_API_PREFIX_PATTERN.test(apiBasePath)
+  );
+}
+
 export function visibleStudioObjects(
   objects: readonly StudioNavigationObject[],
 ): StudioNavigationObject[] {
