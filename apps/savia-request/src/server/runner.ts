@@ -42,7 +42,7 @@ export async function execute(env:Env,flow:Flow,input:Record<string,string>,mode
    await persist();return run;
   }
   const mockProviderQuote=mode==='mock'&&isInsuranceAutoLightQuote(flow);
-  const vars=await getVariables(env,flow.id,true,scope);const values:Record<string,string>=Object.create(null);const secretKeys=new Set(vars.filter(v=>v.secret).map(v=>v.key));
+  const vars=await getVariables(env,flow.id,true,scope,true);const values:Record<string,string>=Object.create(null);const secretKeys=new Set(vars.filter(v=>v.secret).map(v=>v.key));
   // The SBS simulator accepts placeholder product settings; they are never persisted or used live.
   for(const v of vars)values[v.key]=mode==='mock'&&v.secret?'SIMULADO':mode==='mock'&&/^sbs-producto-(8|10|11)$/.test(flow.id)&&/^sbs_product_\d+_/.test(v.key)&&v.value===''?'0':v.value;
   for(const [key,value]of Object.entries(input)){

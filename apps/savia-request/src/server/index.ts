@@ -335,7 +335,20 @@ app.put("/api/flows/:id", async (c) => {
     actor: actorOf(c.req.raw),
     action: "flow.save",
     flowId: flow.id,
-    detail: { name: flow.name },
+    detail: {
+      name: flow.name,
+      hosts: [
+        ...new Set(
+          flow.steps.map((step) => {
+            try {
+              return new URL(step.url).host;
+            } catch {
+              return "template";
+            }
+          }),
+        ),
+      ],
+    },
   });
   return c.json({ ok: true });
 });
