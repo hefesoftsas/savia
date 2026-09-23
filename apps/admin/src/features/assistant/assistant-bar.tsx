@@ -404,13 +404,33 @@ const toolDescriptorConfig: Record<
   string,
   { inProgress: string; done: string }
 > = {
+  savia_list_studio_collections: {
+    inProgress: "Explorando colecciones de Studio…",
+    done: "Colecciones de Studio consultadas",
+  },
+  savia_list_studio_records: {
+    inProgress: "Consultando registros de Studio…",
+    done: "Registros de Studio obtenidos",
+  },
+  savia_aggregate_studio_records: {
+    inProgress: "Calculando estadísticas en la base de datos…",
+    done: "Métricas calculadas",
+  },
+  savia_get_studio_record: {
+    inProgress: "Consultando detalle de registro…",
+    done: "Detalle obtenido",
+  },
+  savia_get_studio_record_links: {
+    inProgress: "Consultando relaciones…",
+    done: "Relaciones obtenidas",
+  },
   savia_list_crm_collections: {
-    inProgress: "Explorando colecciones del CRM…",
-    done: "Colecciones del CRM consultadas",
+    inProgress: "Explorando colecciones de Studio…",
+    done: "Colecciones de Studio consultadas",
   },
   savia_list_crm_records: {
-    inProgress: "Consultando registros del CRM…",
-    done: "Registros del CRM obtenidos",
+    inProgress: "Consultando registros de Studio…",
+    done: "Registros de Studio obtenidos",
   },
   savia_aggregate_crm_records: {
     inProgress: "Calculando estadísticas en la base de datos…",

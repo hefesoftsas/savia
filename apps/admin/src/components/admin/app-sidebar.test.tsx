@@ -18,7 +18,7 @@ const defaultLayout: SidebarNavigationLayout = {
   ...defaultSidebarNavigationLayout(),
   blocks: defaultSidebarNavigationLayout().blocks.map((block) =>
     block.kind === "builtin" && block.id === "operation"
-      ? { ...block, items: ["dashboard", "dynamic-crm"] }
+      ? { ...block, items: ["dashboard", "studio"] }
       : block,
   ),
 };
@@ -253,7 +253,7 @@ describe("AppSidebar navigation preferences", () => {
         {
           kind: "builtin",
           id: "operation",
-          items: ["dashboard", "dynamic-crm"],
+          items: ["dashboard", "studio"],
           collapsed: true,
         },
         {

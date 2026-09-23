@@ -18,7 +18,7 @@ import {
   type StudioSidebarChild,
 } from "./studio-navigation";
 
-export function useCrmSidebarNavigation(enabled: boolean): {
+export function useStudioSidebarNavigation(enabled: boolean): {
   agencyId?: number;
   domainId?: string;
   children: StudioSidebarChild[];

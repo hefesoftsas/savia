@@ -6,6 +6,7 @@ import {
   defaultAppearancePreferences,
   defaultMyDayWidgets,
   defaultSidebarNavigationLayout,
+  legacySidebarNavigationItemIds,
   MyDayWidgetsError,
   parseAppearancePreferences,
   parseMyDayWidgets,
@@ -17,6 +18,8 @@ import { createUserPreferencesRepository } from "../user-preferences/repository"
 
 const sidebarNavigationItemSchema = z.union([
   z.enum(sidebarNavigationItemIds),
+  // Legacy alias: stored layouts may still carry the pre-Studio item id.
+  z.enum(legacySidebarNavigationItemIds),
   z.string().regex(/^page:[a-zA-Z0-9_%.-]{1,160}:[a-z][a-z0-9_]{0,47}$/),
 ]);
 
@@ -76,7 +79,7 @@ const myDayCollectionWidgetSchema = z.object({
   apiBasePath: z
     .string()
     .regex(
-      /^\/v1\/(data-domains\/[a-z][a-z0-9_-]{0,47}|dynamic-crm\/[1-9][0-9]*)$/,
+      /^\/v1\/(data-domains\/[a-z][a-z0-9_-]{0,47}|(?:studio|dynamic-crm)\/[1-9][0-9]*)$/,
     ),
   collection: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
   kind: z.union([

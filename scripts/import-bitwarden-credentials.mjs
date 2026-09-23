@@ -16,7 +16,11 @@ export function parseBitwardenExport(jsonContent) {
 
   for (const item of items) {
     const itemName = item.name ?? "";
-    if (itemName.includes("CRM_INTEGRATION_KEY") || item.notes?.match(/^[a-f0-9]{64}$/i)) {
+    if (
+      itemName.includes("STUDIO_INTEGRATION_KEY") ||
+      itemName.includes("CRM_INTEGRATION_KEY") ||
+      item.notes?.match(/^[a-f0-9]{64}$/i)
+    ) {
       studioIntegrationKey = (item.notes ?? "").trim();
     }
 
@@ -414,7 +418,7 @@ export async function main() {
     console.error("  --apply                          Aplica los cambios (por defecto es dry-run)");
     console.error("  --audit                          Muestra resumen detallado de credenciales");
     console.error("  --export-sql <file.sql>          Exporta comandos SQL para Cloudflare D1");
-    console.error("  --export-env <file.env>          Exporta archivo .env con CRM_INTEGRATION_KEY");
+    console.error("  --export-env <file.env>          Exporta archivo .env con STUDIO_INTEGRATION_KEY");
     console.error("  --api-url <url>                  URL base de la API de Savia en producción");
     console.error("  --token <token>                  Token de Platform Administrator para producción");
     console.error("  --port <port>                    Puerto local de savia-request (def: 8797)");
@@ -427,7 +431,7 @@ export async function main() {
   console.log(`✓ Ítems parseados: ${parsed.totalItems}`);
   console.log(`✓ Variables en bruto extraídas: ${Object.keys(parsed.rawVariables).length}`);
   if (parsed.studioIntegrationKey) {
-    console.log(`✓ CRM_INTEGRATION_KEY encontrada: ${parsed.studioIntegrationKey.slice(0, 8)}... (${parsed.studioIntegrationKey.length} caracteres)`);
+    console.log(`✓ STUDIO_INTEGRATION_KEY encontrada: ${parsed.studioIntegrationKey.slice(0, 8)}... (${parsed.studioIntegrationKey.length} caracteres)`);
   }
 
   const plan = buildFlowVariablesPlan(parsed.rawVariables);
@@ -443,7 +447,7 @@ export async function main() {
     console.log(`\n📝 Guardando variables de entorno en ${args.exportEnv}...`);
     let envContent = `# Savia Production Secrets\n`;
     if (parsed.studioIntegrationKey) {
-      envContent += `CRM_INTEGRATION_KEY=${parsed.studioIntegrationKey}\n`;
+      envContent += `STUDIO_INTEGRATION_KEY=${parsed.studioIntegrationKey}\n`;
     }
     await writeFile(args.exportEnv, envContent, "utf8");
     console.log(`✓ Archivo ${args.exportEnv} escrito exitosamente.`);

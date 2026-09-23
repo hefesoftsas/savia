@@ -23,8 +23,29 @@ test("preview secrets always use explicit preview configuration and names", () =
     plans.find((x) => x.app === "savia-request").secrets.ENCRYPTION_KEY,
     values.SAVIA_REQUEST_ENCRYPTION_KEY,
   );
+  const apiSecrets = plans.find((x) => x.app === "api").secrets;
+  assert.equal(apiSecrets.STUDIO_INTEGRATION_KEY, "test-only-value");
+  assert.ok(!("CRM_INTEGRATION_KEY" in apiSecrets));
   assert.throws(() => buildSecretUploads("other", values), /environment/);
   assert.throws(() => buildSecretUploads("preview", {}), /required/);
+});
+
+test("studio integration key prefers the canonical name over the legacy alias", () => {
+  const canonical = buildSecretUploads("preview", {
+    ...Object.fromEntries(
+      [
+        "BETTER_AUTH_SECRET",
+        "SAVIA_MCP_SHARED_SECRET",
+        "SAVIA_REQUEST_ENCRYPTION_KEY",
+        "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
+        "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
+        "NANGO_API_KEY",
+      ].map((key) => [key, "test-only-value"]),
+    ),
+    STUDIO_INTEGRATION_KEY: "canonical-value",
+    CRM_INTEGRATION_KEY: "legacy-value",
+  }).find((x) => x.app === "api").secrets;
+  assert.equal(canonical.STUDIO_INTEGRATION_KEY, "canonical-value");
 });
 
 test("database bridge requires a complete HTTPS configuration", () => {

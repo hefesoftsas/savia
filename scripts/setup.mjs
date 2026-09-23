@@ -159,7 +159,7 @@ async function main() {
       BETTER_AUTH_SECRET: randomBytes(32).toString("base64"),
       ENCRYPTION_KEY: randomBytes(32).toString("base64"),
       ASSISTANT_SETTINGS_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
-      CRM_INTEGRATION_KEY: randomBytes(32).toString("base64"),
+      STUDIO_INTEGRATION_KEY: randomBytes(32).toString("base64"),
       SAVIA_MCP_SHARED_SECRET: randomBytes(32).toString("base64"),
     };
     const bootstrapPassword = randomBytes(24).toString("base64");
@@ -219,7 +219,7 @@ async function main() {
     await putSecret("savia-request", "ENCRYPTION_KEY", secrets.ENCRYPTION_KEY);
     for (const key of [
       "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
-      "CRM_INTEGRATION_KEY",
+      "STUDIO_INTEGRATION_KEY",
       "SAVIA_MCP_SHARED_SECRET",
     ]) {
       await putSecret("api", key, secrets[key]);

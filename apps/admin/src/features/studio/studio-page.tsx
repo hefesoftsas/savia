@@ -45,7 +45,7 @@ export function StudioPage({ services }: { services: AppServices }) {
   const t = useMessages(automationMessages);
 
   const { canAccess, isPending } = useCanAccess({
-    resource: "dynamic-crm",
+    resource: "studio",
     action: "list",
   });
   const [params, setParams] = useSearchParams();

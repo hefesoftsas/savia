@@ -56,6 +56,7 @@ type AuthServiceBinding = {
 };
 
 type AssistantSecrets = {
+  STUDIO_INTEGRATION_KEY?: string;
   CRM_INTEGRATION_KEY?: string;
   ASSISTANT_SETTINGS_ENCRYPTION_KEY?: string;
   SAVIA_MCP_URL?: string;
@@ -130,12 +131,29 @@ function signingCredentials(
   };
 }
 
+/**
+ * Canonical secret is STUDIO_INTEGRATION_KEY; CRM_INTEGRATION_KEY stays as
+ * a legacy alias so existing deployments keep working without rotation.
+ */
+export function studioIntegrationKeyFromEnvironment(
+  environment: Pick<
+    AssistantSecrets,
+    "STUDIO_INTEGRATION_KEY" | "CRM_INTEGRATION_KEY"
+  >,
+): string | undefined {
+  return (
+    environment.STUDIO_INTEGRATION_KEY?.trim() ||
+    environment.CRM_INTEGRATION_KEY?.trim() ||
+    undefined
+  );
+}
+
 function assistantConfigurationFromEnvironment(
   environment: Pick<RuntimeEnvironment, "DB" | "DOCUMENTS"> & AssistantSecrets,
 ): AssistantConfigurationRepository {
   const encryptionKey =
     environment.ASSISTANT_SETTINGS_ENCRYPTION_KEY?.trim() ||
-    environment.CRM_INTEGRATION_KEY?.trim() ||
+    studioIntegrationKeyFromEnvironment(environment) ||
     environment.SAVIA_MCP_SHARED_SECRET?.trim();
   return new AssistantConfigurationRepository(environment.DB, {
     encryptionKey,
@@ -250,7 +268,7 @@ const runtime = {
       undefined,
       environment.SAVIA_REQUEST,
       personalIntegrationRoutesFromEnvironment(environment),
-      environment.CRM_INTEGRATION_KEY,
+      studioIntegrationKeyFromEnvironment(environment),
       undefined,
       sqlBridgeFromEnvironment(environment),
       connectorExecutorFromEnvironment(environment),
@@ -301,7 +319,7 @@ const runtime = {
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       await runScheduledWorkflows(
         environment.DB,
-        environment.CRM_INTEGRATION_KEY,
+        studioIntegrationKeyFromEnvironment(environment),
         overrides.workflowFetch,
       );
       await runScheduledNotifications(environment.DB);
@@ -311,7 +329,7 @@ const runtime = {
       runScheduledCrmSync(environment),
       runScheduledWorkflows(
         environment.DB,
-        environment.CRM_INTEGRATION_KEY,
+        studioIntegrationKeyFromEnvironment(environment),
         overrides.workflowFetch,
       ),
       runScheduledNotifications(environment.DB),

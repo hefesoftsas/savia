@@ -8,7 +8,7 @@ export const sidebarNavigationSectionIds = [
 ] as const;
 export const sidebarNavigationItemIds = [
   "dashboard",
-  "dynamic-crm",
+  "studio",
   "my-day",
   "integrations",
   "provider-credentials",
@@ -34,6 +34,17 @@ export type StaticSidebarNavigationItemId =
   (typeof sidebarNavigationItemIds)[number];
 export type SidebarNavigationItemId =
   StaticSidebarNavigationItemId | `page:${string}:${string}`;
+
+/** Stored layouts may still carry the pre-Studio item id. */
+export const legacySidebarNavigationItemIds = ["dynamic-crm"] as const;
+
+export function migrateSidebarNavigationItemId(
+  itemId: string,
+): SidebarNavigationItemId {
+  return (
+    itemId === "dynamic-crm" ? "studio" : itemId
+  ) as SidebarNavigationItemId;
+}
 
 export type SidebarNavigationLayoutV1 = {
   version: 1;
@@ -179,7 +190,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
     ...normalizeSidebarNavigationLayout({
       version: 1,
       sections: {
-        operation: ["my-day", "dashboard", "dynamic-crm", "domain-reports"],
+        operation: ["my-day", "dashboard", "studio", "domain-reports"],
         productivity: [
           "page-administrator",
           "domain-sources",
@@ -211,19 +222,21 @@ function parseItemId(
   if (
     typeof itemId !== "string" ||
     (!(sidebarNavigationItemIds as readonly string[]).includes(itemId) &&
+      !(legacySidebarNavigationItemIds as readonly string[]).includes(itemId) &&
       !/^page:[a-zA-Z0-9_%.-]{1,160}:[a-z][a-z0-9_]{0,47}$/.test(itemId))
   ) {
     throw new SidebarNavigationLayoutError(
       "Sidebar navigation item is invalid",
     );
   }
-  if (seen.has(itemId)) {
+  const migrated = migrateSidebarNavigationItemId(itemId);
+  if (seen.has(migrated)) {
     throw new SidebarNavigationLayoutError(
       "Sidebar navigation item is duplicated",
     );
   }
-  seen.add(itemId);
-  return itemId as SidebarNavigationItemId;
+  seen.add(migrated);
+  return migrated;
 }
 
 function parseBlockItems(
@@ -246,7 +259,11 @@ export function normalizeSidebarNavigationLayout(
 ): SidebarNavigationLayout {
   const hiddenItems =
     "hiddenItems" in value && Array.isArray(value.hiddenItems)
-      ? [...value.hiddenItems]
+      ? value.hiddenItems.map((item) =>
+          typeof item === "string"
+            ? migrateSidebarNavigationItemId(item)
+            : item,
+        )
       : undefined;
   if (value.version === 2) {
     return {
@@ -259,14 +276,14 @@ export function normalizeSidebarNavigationLayout(
           ? {
               kind: "builtin",
               id: block.id,
-              items: [...block.items],
+              items: block.items.map(migrateSidebarNavigationItemId),
               collapsed: block.collapsed === true,
             }
           : {
               kind: "custom",
               id: block.id,
               label: block.label,
-              items: [...block.items],
+              items: block.items.map(migrateSidebarNavigationItemId),
               collapsed: block.collapsed === true,
             },
       ),
@@ -278,7 +295,7 @@ export function normalizeSidebarNavigationLayout(
     blocks: sidebarNavigationSectionIds.map((id) => ({
       kind: "builtin",
       id,
-      items: [...value.sections[id]],
+      items: [...value.sections[id]].map(migrateSidebarNavigationItemId),
       collapsed: false,
     })),
     ...(hiddenItems ? { hiddenItems } : {}),

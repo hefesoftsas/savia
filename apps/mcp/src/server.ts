@@ -1,6 +1,6 @@
 import { registerEmployeeTools } from "./employee-tools";
 import { createHash } from "node:crypto";
-import { FastMCP } from "@prefecthq/fastmcp-ts/server";
+import { FastMCP, type ToolConfig } from "@prefecthq/fastmcp-ts/server";
 import { z } from "zod";
 import { registerTrustedAssistantExtensions } from "./extensions/registry";
 import { readDelegatedRequestCredentials } from "./request-credentials";
@@ -81,6 +81,33 @@ export function createSaviaMcpServer(
     mcpSharedSecret
       ? getDelegatedClient(server, apiUrl, options?.apiFetch)
       : configuredClient;
+
+  /**
+   * Registers a Studio tool under its canonical name plus the legacy
+   * `*_crm_*` alias, so existing MCP clients keep working.
+   */
+  function registerStudioTool<T extends z.ZodRawShape>(
+    definition: {
+      name: string;
+      legacyName: string;
+      description: string;
+      annotations?: ToolConfig["annotations"];
+      input: z.ZodObject<T>;
+      inputSchema?: Record<string, unknown>;
+    },
+    handler: (args: z.infer<z.ZodObject<T>>) => unknown,
+  ): void {
+    const { legacyName, ...canonical } = definition;
+    server.tool(canonical, handler);
+    server.tool(
+      {
+        ...canonical,
+        name: legacyName,
+        description: `Legacy alias of ${canonical.name}. ${canonical.description}`,
+      },
+      handler,
+    );
+  }
 
   registerEmployeeTools(server, clientForRequest);
 
@@ -277,13 +304,14 @@ export function createSaviaMcpServer(
   const studioObject = nonEmptyString
     .regex(/^[A-Za-z][A-Za-z0-9_-]*$/)
     .describe(
-      "Exact installed object name returned by savia_list_crm_collections",
+      "Exact installed object name returned by savia_list_studio_collections",
     );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_list_crm_collections",
+      name: "savia_list_studio_collections",
+      legacyName: "savia_list_crm_collections",
       description:
-        "Discover authorized Savia collections (local collections, custom collections, and connected CRM providers), their labels, descriptions, record counts, and field schemas with types and dropdown options.",
+        "Discover authorized Savia Studio collections (local collections, custom collections, and connected provider collections), their labels, descriptions, record counts, and field schemas with types and dropdown options.",
       annotations: { readOnlyHint: true },
       input: z.object({
         all: z
@@ -291,18 +319,19 @@ export function createSaviaMcpServer(
           .optional()
           .default(true)
           .describe(
-            "Include all collections (local collections, custom screens, and CRM providers). Defaults to true.",
+            "Include all collections (local collections, custom screens, and provider collections). Defaults to true.",
           ),
       }),
     },
     async ({ all }) =>
-      clientForRequest().listCrmCollections({ all: all ?? true }),
+      clientForRequest().listStudioCollections({ all: all ?? true }),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_list_crm_records",
+      name: "savia_list_studio_records",
+      legacyName: "savia_list_crm_records",
       description:
-        "Query and list records in a CRM collection. Supports field sorting, pagination, free-text search, and structured field filters (eq, ne, contains, gt, in, etc.).",
+        "Query and list records in a Studio collection. Supports field sorting, pagination, free-text search, and structured field filters (eq, ne, contains, gt, in, etc.).",
       annotations: { readOnlyHint: true },
       input: z.object({
         object: studioObject,
@@ -354,7 +383,7 @@ export function createSaviaMcpServer(
       }),
     },
     async ({ object, page, perPage, query, sort, order, filters }) =>
-      clientForRequest().listCrmRecords(object, {
+      clientForRequest().listStudioRecords(object, {
         page,
         perPage,
         query,
@@ -363,11 +392,12 @@ export function createSaviaMcpServer(
         filters,
       }),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_aggregate_crm_records",
+      name: "savia_aggregate_studio_records",
+      legacyName: "savia_aggregate_crm_records",
       description:
-        "Compute metrics, counts, and statistical summaries on a CRM collection. Groups records by a field (e.g. city, status, category) and computes counts and metric sums (e.g. total premium or amount), or counts matching records with optional filters.",
+        "Compute metrics, counts, and statistical summaries on a Studio collection. Groups records by a field (e.g. city, status, category) and computes counts and metric sums (e.g. total premium or amount), or counts matching records with optional filters.",
       annotations: { readOnlyHint: true },
       input: z.object({
         object: studioObject,
@@ -413,31 +443,34 @@ export function createSaviaMcpServer(
       }),
     },
     async ({ object, groupBy, amountField, filters }) =>
-      clientForRequest().aggregateCrmRecords(object, {
+      clientForRequest().aggregateStudioRecords(object, {
         groupBy,
         amountField,
         filters,
       }),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_get_crm_record",
-      description: "Read one live record by ID from a CRM collection.",
+      name: "savia_get_studio_record",
+      legacyName: "savia_get_crm_record",
+      description: "Read one live record by ID from a Studio collection.",
       annotations: { readOnlyHint: true },
       input: z.object({ object: studioObject, id: nonEmptyString }),
     },
-    async ({ object, id }) => clientForRequest().getCrmRecord(object, id, true),
+    async ({ object, id }) =>
+      clientForRequest().getStudioRecord(object, id, true),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_create_crm_record",
+      name: "savia_create_studio_record",
+      legacyName: "savia_create_crm_record",
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
         openWorldHint: true,
       },
       description:
-        "Create a record in an installed CRM provider collection using its discovered fields. This writes to the connected CRM. Requires caller authorization and provider create capability.",
+        "Create a record in an installed Studio collection using its discovered fields. Requires caller authorization and provider create capability.",
       input: z.object({
         object: studioObject,
         data: z.record(z.string(), z.unknown()),
@@ -453,18 +486,19 @@ export function createSaviaMcpServer(
       },
     },
     async ({ object, data }) =>
-      clientForRequest().createCrmRecord(object, data, true),
+      clientForRequest().createStudioRecord(object, data, true),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_update_crm_record",
+      name: "savia_update_studio_record",
+      legacyName: "savia_update_crm_record",
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
         openWorldHint: true,
       },
       description:
-        "Update specified fields of an installed CRM provider record. This writes to the connected CRM. Read the record first and include its _version when present; provider update capability is enforced.",
+        "Update specified fields of an installed Studio record. Read the record first and include its _version when present; provider update capability is enforced.",
       input: z.object({
         object: studioObject,
         id: nonEmptyString,
@@ -482,18 +516,19 @@ export function createSaviaMcpServer(
       },
     },
     async ({ object, id, data }) =>
-      clientForRequest().updateCrmRecord(object, id, data, true),
+      clientForRequest().updateStudioRecord(object, id, data, true),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_delete_crm_record",
+      name: "savia_delete_studio_record",
+      legacyName: "savia_delete_crm_record",
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
         openWorldHint: true,
       },
       description:
-        "Delete a record by ID from a CRM collection. This permanently removes or archives the record.",
+        "Delete a record by ID from a Studio collection. This permanently removes or archives the record.",
       input: z.object({
         object: studioObject,
         id: nonEmptyString,
@@ -511,17 +546,19 @@ export function createSaviaMcpServer(
       },
     },
     async ({ object, id, version }) =>
-      clientForRequest().deleteCrmRecord(object, id, version, true),
+      clientForRequest().deleteStudioRecord(object, id, version, true),
   );
-  server.tool(
+  registerStudioTool(
     {
-      name: "savia_get_crm_record_links",
+      name: "savia_get_studio_record_links",
+      legacyName: "savia_get_crm_record_links",
       description:
-        "Read configured relations and linked records for an installed CRM collection record.",
+        "Read configured relations and linked records for an installed Studio collection record.",
       annotations: { readOnlyHint: true },
       input: z.object({ object: studioObject, id: nonEmptyString }),
     },
-    async ({ object, id }) => clientForRequest().getCrmRecordLinks(object, id),
+    async ({ object, id }) =>
+      clientForRequest().getStudioRecordLinks(object, id),
   );
 
   server.resource(
@@ -550,7 +587,7 @@ export function createSaviaMcpServer(
         "First call savia_list_domains (or read savia://domains) to select a valid domain, collection, or command.",
         "Use savia_list_documents and savia_get_document for reads.",
         "Use the savia_search_personal_* tools only for the caller's connected personal Google or Microsoft account; they return metadata only.",
-        "Use savia_execute_command for domain writes; for installed CRM providers discover savia_list_crm_collections, then use the dedicated CRM record tools with the returned object names and capabilities. Never invent collections or bypass business rules.",
+        "Use savia_execute_command for domain writes; for installed Studio collections discover savia_list_studio_collections, then use the dedicated Studio record tools with the returned object names and capabilities. Never invent collections or bypass business rules.",
         domain ? `Selected domain: ${domain}.` : undefined,
         goal ? `Requested outcome: ${goal}.` : undefined,
       ]

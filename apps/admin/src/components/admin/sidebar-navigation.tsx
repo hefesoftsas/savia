@@ -124,9 +124,9 @@ export const navigationDefinitions: Record<
     section: "administration",
     icon: KeyRound,
   },
-  "dynamic-crm": {
-    id: "dynamic-crm",
-    labelKey: "savia.sidebar.items.dynamic-crm",
+  studio: {
+    id: "studio",
+    labelKey: "savia.sidebar.items.studio",
     route: "/studio",
     section: "operation",
     icon: UsersRound,
@@ -243,7 +243,7 @@ export function useVisibleSidebarNavigation(): {
       const permissionResource =
         id === "provider-credentials" ? "savia-request" : id;
       if (id === "service-credentials")
-        return canAccess["dynamic-crm"] || canAccess["savia-request"];
+        return canAccess["studio"] || canAccess["savia-request"];
       if (id !== "provider-credentials" && !canAccess[permissionResource])
         return false;
       if (id === "dashboard") return hasDashboard;

@@ -10,7 +10,7 @@ export const sidebarNavigationSectionIds = [
 
 export const sidebarNavigationItemIds = [
   "dashboard",
-  "dynamic-crm",
+  "studio",
   "my-day",
   "integrations",
   "provider-credentials",

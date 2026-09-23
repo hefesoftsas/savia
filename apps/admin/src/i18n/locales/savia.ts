@@ -15,7 +15,7 @@ const saviaEnglish = {
         "virtual-employees": "AI employees",
         "tenant-branding": "Workspace identity",
 
-        "dynamic-crm": "Pages",
+        studio: "Pages",
         dashboard: "Home",
         "my-day": "My day",
         integrations: "Connections",
@@ -539,7 +539,7 @@ const saviaSpanish = {
         "virtual-employees": "Empleados IA",
         "tenant-branding": "Identidad del espacio",
 
-        "dynamic-crm": "Páginas",
+        studio: "Páginas",
         dashboard: "Inicio",
         "my-day": "Mi día",
         integrations: "Conexiones",
@@ -1066,7 +1066,7 @@ const saviaPortuguese = {
         "virtual-employees": "Funcionários IA",
         "tenant-branding": "Identidade do espaço",
 
-        "dynamic-crm": "Páginas",
+        studio: "Páginas",
         dashboard: "Início",
         "my-day": "Meu dia",
         integrations: "Conexões",

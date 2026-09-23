@@ -76,7 +76,7 @@ import {
 } from "@/components/ui/sidebar";
 import { isStudioChildActive } from "@/features/studio/studio-navigation";
 import { isStudioLocation } from "@/features/studio/studio-route";
-import { useCrmSidebarNavigation } from "@/features/studio/use-studio-sidebar-navigation";
+import { useStudioSidebarNavigation } from "@/features/studio/use-studio-sidebar-navigation";
 import {
   hasLucideIconLoader,
   LucideLookupIcon,
@@ -333,13 +333,13 @@ export function AppSidebar() {
     itemsById: staticItems,
   } = useVisibleSidebarNavigation();
   const location = useLocation();
-  const { children: studioChildren, domainId } = useCrmSidebarNavigation(
-    Boolean(staticItems["dynamic-crm"]),
+  const { children: studioChildren, domainId } = useStudioSidebarNavigation(
+    Boolean(staticItems["studio"]),
   );
   const pageAdmin = studioChildren.find((child) => child.id === "studio:admin");
   const itemsById = useMemo(() => {
     const items = { ...staticItems };
-    delete items["dynamic-crm"];
+    delete items["studio"];
     if (domainId)
       for (const page of studioChildren.filter(
         (child) => child.group === "objects",
