@@ -7,6 +7,7 @@ import { createCrmApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
+import { shellBootstrapJs } from "../src/plugin-store";
 
 let platform: Awaited<
   ReturnType<typeof getPlatformProxy<{ DB: D1Database; POC_LOCAL: string }>>
@@ -216,6 +217,17 @@ afterAll(async () => {
 });
 
 describe("plugin store por tenant", () => {
+  it("genera un bootstrap parseable como módulo (sin ejecutar UI).", async () => {
+    const url = `data:text/javascript,${encodeURIComponent(shellBootstrapJs())}`;
+    const failure = await import(url).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Sin window/parent en Node debe fallar en runtime, nunca en sintaxis.
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).constructor.name).not.toBe("SyntaxError");
+  });
+
   it("sirve el bootstrap del sandbox sin scripts inline ni unsafe-eval.", async () => {
     const tenant = "store-bootstrap";
     const bootstrap = await app(tenant).request(
@@ -253,6 +265,8 @@ describe("plugin store por tenant", () => {
       .find((part) => part.startsWith("script-src"));
     expect(scriptSrc).toBe("script-src 'self'");
     expect(csp).not.toContain("unsafe-eval");
+    // Sin red directa posible: el shim usa postMessage y el CSP la niega.
+    expect(csp).toContain("connect-src 'none'");
   });
 
   it("sube, instala, sirve y desactiva un plugin ZIP.", async () => {
@@ -391,6 +405,22 @@ describe("plugin store por tenant", () => {
     const installedBody = (await installed.json()) as any;
     expect(installed.status, JSON.stringify(installedBody)).toBe(200);
     expect(installedBody.data.version).toBe("1.10.0");
+  });
+
+  it("aplica cuota de 10 versiones por plugin.", async () => {
+    const tenant = "store-quota";
+    for (let minor = 0; minor < 10; minor++) {
+      const uploaded = await uploadZip(
+        tenant,
+        pluginZip({ manifest: { version: `1.${minor}.0` } }),
+      );
+      expect(uploaded.status).toBe(200);
+    }
+    const rejected = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.10.0" } }),
+    );
+    expect(rejected.status).toBe(409);
   });
 
   it("rechaza versiones duplicadas con distinto contenido.", async () => {

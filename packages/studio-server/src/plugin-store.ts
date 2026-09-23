@@ -35,6 +35,34 @@ export type PluginStoreOptions = {
   }) => Promise<boolean> | boolean;
 };
 
+/** Cuotas por tenant: 10 versiones por plugin, 20 MB agregados. */
+export const PLUGIN_STORE_MAX_VERSIONS_PER_ID = 10;
+export const PLUGIN_STORE_MAX_BYTES_PER_TENANT = 20 * 1024 * 1024;
+
+async function assertStoreQuota(
+  db: D1Database,
+  tenant: string,
+  pluginId: string,
+  sizeBytes: number,
+): Promise<void> {
+  const usage = await db
+    .prepare(
+      `SELECT coalesce(sum(case when id=? then 1 else 0 end),0) as plugin_versions,
+              coalesce(sum(size_bytes),0) as total_bytes
+       FROM plugin_store_artifacts WHERE tenant_id=?`,
+    )
+    .bind(pluginId, tenant)
+    .first<{ plugin_versions: number; total_bytes: number }>();
+  if (!usage) return;
+  if (usage.plugin_versions >= PLUGIN_STORE_MAX_VERSIONS_PER_ID)
+    fail(
+      `El plugin ya tiene ${PLUGIN_STORE_MAX_VERSIONS_PER_ID} versiones. Elimina alguna antes de subir otra.`,
+      409,
+    );
+  if (usage.total_bytes + sizeBytes > PLUGIN_STORE_MAX_BYTES_PER_TENANT)
+    fail("El espacio alcanzó la cuota de 20 MB del store.", 413);
+}
+
 export type ParsedStoreZip = {
   manifest: PluginStoreManifest;
   entryJs: string;
@@ -813,6 +841,12 @@ export function registerPluginStore(
       });
     }
     const principalId = c.get("principalId") || null;
+    await assertStoreQuota(
+      c.env.DB,
+      tenant,
+      parsed.manifest.id,
+      parsed.sizeBytes,
+    );
     let hasConfigColumn = true;
     try {
       await c.env.DB.prepare(

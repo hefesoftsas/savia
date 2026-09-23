@@ -129,6 +129,7 @@ npx esbuild src/plugin.tsx --bundle --format=esm --outfile=dist/plugin.js
 
 ## Conectores declarativos (`http`)
 
+Un `store.json` puede declarar conectores con esquema JSON propio,
 campos secretos y allowlist de hosts:
 
 ```json
@@ -178,8 +179,15 @@ literales IP ni `localhost`/`.local`/`.internal`/metadatos cloud, sin
 puertos no-443, host obligado en `allowedHosts`, sin redirects
 (`manual`), timeout de 20 s y respuesta máxima de 1 MB. Riesgo
 residual documentado: el reenlace DNS hacia IPs privadas no se puede
-resolver dentro del Worker. No pongas secretos en la query de la URL:
-viajan en claro en el `fetch` saliente.
+resolver dentro del Worker. Los secretos están prohibidos en la query
+de la URL (`{{connection.<secreto>}}` en `request.url` se rechaza en la
+subida) porque viajan en claro en el `fetch` saliente.
+
+## Cuotas
+
+Por tenant: máximo 10 versiones por plugin y 20 MB agregados en el
+store. Al superarlos la subida responde 409/413: elimina versiones
+viejas antes de publicar.
 
 ## Colecciones declaradas
 
@@ -216,11 +224,11 @@ conserva datos.
 
 ## Port de referencia: Cotizaciones UI
 
-`store-ports/quotes-ui/` monta la pantalla directa real del cotizador
-(`InsuranceQuoteWorkspaceScreen`) y delega `quote` a `insurance.quotes`
-(savia-request vía release, sin credenciales del tenant).
-Prerrequisitos del tenant: `insurance.quotes` activa + colecciones
-`clientes` (mapeo) y `savia.insurance`.
+`store-ports/quotes-ui/` monta las tres pantallas reales del cotizador
+(`Directa`, `Por pasos`, `Administrar`) y delega `quote` a
+`insurance.quotes` (savia-request vía release, sin credenciales del
+tenant). Prerrequisitos del tenant: `insurance.quotes` activa +
+colecciones `clientes` (mapeo) y `savia.insurance`.
 El test `packages/crm-server/test/store-port-quotes.test.ts` verifica
 el ZIP empaquetado de punta a punta (se omite si no está construido).
 El test `packages/crm-server/test/store-savia-request.test.ts` prueba la
@@ -234,9 +242,18 @@ connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 - Acciones simuladas y settings del store:
   `packages/crm-server/src/extension-actions.ts`.
 - Estado por tenant: `packages/crm-server/src/extensions.ts`,
-  migraciones `0064_plugin_store.sql` / `0022_plugin_store.sql` y
-  `0065_plugin_store_config.sql` / `0023_plugin_store_config.sql`.
+  migraciones `0068_plugin_store.sql` / `0022_plugin_store.sql` y
+  `0069_plugin_store_config.sql` / `0023_plugin_store_config.sql`.
 - Empaquetador: `scripts/pack-store-plugin.mjs` (`pnpm store:pack`).
-- Port de cotizaciones: `store-ports/quotes-ui/`.
-- UI: `apps/admin/src/features/crm-engine/plugin-store.tsx` y
-  `custom-plugin-frame.tsx`.
+- Ports: `store-ports/quotes-ui/`, `store-ports/http-echo/`.
+- UI: `apps/admin/src/features/crm-engine/plugin-store.tsx`,
+  `custom-plugin-frame.tsx` y `store-connections.tsx`.
+
+## Fuera de alcance (futuro)
+
+- **MCP**: los plugins del store no publican herramientas al
+  asistente. Exponerlas exige registro dinámico por tenant y
+  descripciones saneadas (riesgo de inyección de prompts), fuera de
+  esta versión.
+- **R2 para entradas grandes** si D1 rechaza filas de ~1 MB en
+  producción.

@@ -1,9 +1,9 @@
 # Port: Cotizaciones UI para el store (`custom.quotes-ui`)
 
-Pantalla directa del cotizador (`InsuranceQuoteWorkspaceScreen`) empaquetada
-como plugin del store. La acción `quote` **delega** a `insurance.quotes`
-del release, por lo que ejecuta flujos savia-request reales cuando esa
-extensión está activa en el tenant.
+Las tres pantallas del cotizador (`Directa`, `Por pasos` y `Administrar`)
+empaquetadas como plugin del store. La acción `quote` **delega** a
+`insurance.quotes` del release, por lo que ejecuta flujos savia-request
+reales cuando esa extensión está activa en el tenant.
 
 ## Archivos
 

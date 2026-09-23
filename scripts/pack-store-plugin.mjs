@@ -71,7 +71,10 @@ function assertStoreJson(store) {
     }
   }
   const secretsByConnector = new Map(
-    (store.connectors ?? []).map((c) => [c?.id, new Set(c?.secretFields ?? [])]),
+    (store.connectors ?? []).map((c) => [
+      c?.id,
+      new Set(c?.secretFields ?? []),
+    ]),
   );
   for (const action of store.actions ?? []) {
     const simulation =
