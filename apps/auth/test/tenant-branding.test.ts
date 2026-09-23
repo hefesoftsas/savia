@@ -25,6 +25,7 @@ const request = (path: string) =>
 function fakeAnimation() {
   const listeners = new Map<string, () => void>();
   return {
+    totalFrames: 120,
     playCalls: 0,
     pauseCalls: 0,
     stoppedFrames: [] as number[],
@@ -47,28 +48,10 @@ function fakeAnimation() {
 }
 
 async function startOAuthAnimation(reducedMotion = false) {
-  const animations = [fakeAnimation(), fakeAnimation()];
-  const frames = [
-    { dataset: { src: "/login/chatbot-savia.json" } },
-    { dataset: { src: "/login/chatbot.json" } },
-  ];
-  let onToggleClick: (() => void) | undefined;
-  const toggle = {
-    attributes: new Map<string, string>(),
-    addEventListener(_name: string, listener: () => void) {
-      onToggleClick = listener;
-    },
-    setAttribute(name: string, value: string) {
-      this.attributes.set(name, value);
-    },
-    click() {
-      onToggleClick?.();
-    },
-  };
+  const animation = fakeAnimation();
+  const frame = { dataset: { src: "/login/savia-logo.json" } };
   const panel = {
-    dataset: { active: "0" },
-    querySelectorAll: () => frames,
-    querySelector: () => toggle,
+    querySelector: () => frame,
   };
   const script = await oauthPageResponse(request("oauth-ui.js"))!.text();
   let onVisibilityChange: (() => void) | undefined;
@@ -89,15 +72,13 @@ async function startOAuthAnimation(reducedMotion = false) {
     lottie: {
       loadAnimation(options: { path: string }) {
         paths.push(options.path);
-        return animations[paths.length - 1];
+        return animation;
       },
     },
   });
   return {
-    animations,
-    panel,
+    animation,
     paths,
-    toggle,
     hide() {
       document.hidden = true;
       onVisibilityChange?.();
@@ -110,53 +91,43 @@ async function startOAuthAnimation(reducedMotion = false) {
 }
 
 describe("tenant identity on OAuth surfaces", () => {
-  it("renders the supplied Lottie animations with a pause control", async () => {
+  it("renders the supplied Savia logo Lottie without the old video card", async () => {
     const html = await oauthPageResponse(request("login"))!.text();
+    const css = await oauthPageResponse(request("oauth-ui.css"))!.text();
 
     expect(html).toContain('src="/login/lottie-light.min.js"');
-    expect(html).toContain('data-src="/login/chatbot-savia.json"');
-    expect(html).toContain('data-src="/login/chatbot.json"');
-    expect(html).toContain('aria-label="Pausar animación"');
+    expect(html).toContain('data-src="/login/savia-logo.json"');
+    expect(html).toContain('class="oauth-login-animation-wordmark"');
     expect(html).toContain("data-oauth-login-animation");
+    expect(html).not.toContain('class="savia-mark"');
     expect(html).not.toContain("<video");
+    expect(css).not.toContain("#071421");
   });
 
-  it("rotates both Lottie animations when each finishes", async () => {
-    const { animations, panel, paths } = await startOAuthAnimation();
-    const [first, second] = animations;
-    expect(paths).toEqual(["/login/chatbot-savia.json", "/login/chatbot.json"]);
+  it("plays the logo once and pauses while the tab is hidden", async () => {
+    const { animation, paths, hide, show } = await startOAuthAnimation();
+    expect(paths).toEqual(["/login/savia-logo.json"]);
 
-    first.emit("DOMLoaded");
-    second.emit("DOMLoaded");
-    expect(first.playCalls).toBe(1);
-
-    first.emit("complete");
-    expect(second.playCalls).toBe(1);
-    expect(panel.dataset.active).toBe("1");
-
-    second.emit("complete");
-    expect(first.playCalls).toBe(2);
-    expect(first.stoppedFrames).toEqual([0, 0]);
-    expect(second.stoppedFrames).toEqual([0, 0]);
-    expect(panel.dataset.active).toBe("0");
-  });
-
-  it("starts paused for reduced motion and pauses when hidden", async () => {
-    const { animations, toggle, hide, show } = await startOAuthAnimation(true);
-    animations[0].emit("DOMLoaded");
-    animations[1].emit("DOMLoaded");
-    expect(animations[0].playCalls).toBe(0);
-    expect(toggle.attributes.get("aria-pressed")).toBe("true");
-
-    toggle.click();
-    expect(animations[0].playCalls).toBe(1);
+    animation.emit("DOMLoaded");
+    expect(animation.playCalls).toBe(1);
     hide();
-    expect(animations[0].pauseCalls).toBe(1);
+    expect(animation.pauseCalls).toBe(1);
     show();
-    expect(animations[0].playCalls).toBe(2);
-    toggle.click();
-    expect(toggle.attributes.get("aria-pressed")).toBe("true");
-    expect(animations[0].pauseCalls).toBe(2);
+    expect(animation.playCalls).toBe(2);
+    animation.emit("complete");
+    hide();
+    show();
+    expect(animation.playCalls).toBe(2);
+  });
+
+  it("shows the completed logo without motion when requested", async () => {
+    const { animation, hide, show } = await startOAuthAnimation(true);
+    animation.emit("DOMLoaded");
+    expect(animation.playCalls).toBe(0);
+    expect(animation.stoppedFrames).toEqual([119]);
+    hide();
+    show();
+    expect(animation.playCalls).toBe(0);
   });
 
   it("passes the internal tenant header through worker HTML and stylesheet routes", async () => {
