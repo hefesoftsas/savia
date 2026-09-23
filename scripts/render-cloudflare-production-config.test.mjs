@@ -51,6 +51,7 @@ test("writes only the supported production workers and retains their runtime set
       { binding: "CONNECTOR_GATEWAY", service: "savia-connectors" },
     ]);
     assert.equal(api.vars.SAVIA_MCP_URL, "https://savia-mcp.internal/mcp");
+    assert.equal(api.vars.SHLINK_SERVER_URL, "https://go.cloud.hefesoft.com");
     assert.equal("OPENROUTER_MODEL" in api.vars, false);
     assert.deepEqual(
       Object.fromEntries(

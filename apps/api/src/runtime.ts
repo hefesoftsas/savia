@@ -32,7 +32,7 @@ import {
 } from "./crm/connector-executor";
 import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { isLocalPublicOrigin } from "./public-forms/captcha";
-import { createIsGdShortener } from "./public-forms/shortener";
+import { createShlinkShortener } from "./public-forms/shortener";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
 export { oauthResourceAuthenticator } from "./auth/runtime";
 export {
@@ -75,6 +75,8 @@ export type RuntimeEnvironment = {
   };
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  SHLINK_SERVER_URL?: string;
+  SHLINK_API_KEY?: string;
   SAVIA_DISABLE_CAPTCHA?: string;
   SAVIA_MOCK_QUOTES?: string;
   PUBLIC_FORMS_RATE_LIMITER?: {
@@ -261,8 +263,15 @@ const runtime = {
         disableCaptcha: environment.SAVIA_DISABLE_CAPTCHA === "1",
         rateLimiter: environment.PUBLIC_FORMS_RATE_LIMITER,
         ...(environment.SAVIA_PUBLIC_ORIGIN &&
-        !isLocalPublicOrigin(environment.SAVIA_PUBLIC_ORIGIN)
-          ? { shortener: createIsGdShortener() }
+        !isLocalPublicOrigin(environment.SAVIA_PUBLIC_ORIGIN) &&
+        environment.SHLINK_SERVER_URL &&
+        environment.SHLINK_API_KEY
+          ? {
+              shortener: createShlinkShortener({
+                serverUrl: environment.SHLINK_SERVER_URL,
+                apiKey: environment.SHLINK_API_KEY,
+              }),
+            }
           : {}),
         // Local-only provider simulation (fixture data, no provider calls).
         // The localhost gate keeps preview and production untouched even if
