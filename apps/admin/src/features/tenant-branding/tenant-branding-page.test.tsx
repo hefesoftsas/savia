@@ -1,4 +1,5 @@
 import { I18nContextProvider } from "ra-core";
+import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
 import {
   act,
@@ -26,8 +27,12 @@ function service(
   get: ReturnType<typeof vi.fn>,
   put = vi.fn(),
   requestResponse = vi.fn(),
+  authSession = { login: vi.fn() },
 ) {
-  return { apiClient: { get, put, requestResponse } } as unknown as AppServices;
+  return {
+    apiClient: { get, put, requestResponse },
+    authSession,
+  } as unknown as AppServices;
 }
 afterEach(() => {
   cleanup();
@@ -226,14 +231,70 @@ it("offers only active commercial tenants", async () => {
 
 function render(ui: ReactElement) {
   return testingRender(
-    <I18nContextProvider
-      value={{
-        translate: (key: string) => key,
-        changeLocale: async () => {},
-        getLocale: () => "es",
-      }}
-    >
-      {ui}
-    </I18nContextProvider>,
+    <MemoryRouter>
+      <I18nContextProvider
+        value={{
+          translate: (key: string) => key,
+          changeLocale: async () => {},
+          getLocale: () => "es",
+        }}
+      >
+        {ui}
+      </I18nContextProvider>
+    </MemoryRouter>,
   );
 }
+
+it("offers tenant creation to platform administrators without commercial organizations", async () => {
+  const get = vi.fn().mockResolvedValueOnce({
+    data: [
+      { id: 0, name: "Plataforma Savia", kind: "platform", isActive: true },
+    ],
+  });
+  render(<TenantBrandingPage services={service(get)} />);
+  expect(
+    await screen.findByText("Aún no hay organizaciones comerciales"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Crear organización" }),
+  ).toHaveAttribute("href", "/tenants/create");
+  expect(get).toHaveBeenCalledTimes(1);
+});
+
+it("directs users without organizations to request access", async () => {
+  const get = vi.fn().mockResolvedValueOnce({ data: [] });
+  render(<TenantBrandingPage services={service(get)} />);
+  expect(
+    await screen.findByText("No tienes organizaciones asignadas"),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", { name: "Crear organización" }),
+  ).not.toBeInTheDocument();
+});
+
+it("offers sign-in again when the session expires instead of a dead reload", async () => {
+  const get = vi
+    .fn()
+    .mockRejectedValueOnce(
+      new ApiClientError(401, "AUTHENTICATION_REQUIRED", "Sign in"),
+    );
+  const login = vi.fn();
+  const services = {
+    apiClient: { get, put: vi.fn(), requestResponse: vi.fn() },
+    authSession: { login },
+  } as unknown as AppServices;
+  render(<TenantBrandingPage services={services} />);
+  expect(
+    await screen.findByText(
+      "Tu sesión expiró. Inicia sesión de nuevo para continuar.",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Iniciar sesión de nuevo" }),
+  );
+  expect(login).toHaveBeenCalledTimes(1);
+  // Reload is still available for transient failures.
+  expect(
+    screen.getByRole("button", { name: "Volver a cargar" }),
+  ).toBeInTheDocument();
+});

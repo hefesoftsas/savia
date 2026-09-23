@@ -159,6 +159,16 @@ export const settingsMessages = {
     "Create organization",
     "Criar organização",
   ],
+  "Tu sesión expiró. Inicia sesión de nuevo para continuar.": [
+    "Tu sesión expiró. Inicia sesión de nuevo para continuar.",
+    "Your session expired. Sign in again to continue.",
+    "Sua sessão expirou. Entre novamente para continuar.",
+  ],
+  "Iniciar sesión de nuevo": [
+    "Iniciar sesión de nuevo",
+    "Sign in again",
+    "Entrar novamente",
+  ],
   "No hay agencias disponibles para esta cuenta.": [
     "No hay agencias disponibles para esta cuenta.",
     "No agencies are available for this account.",

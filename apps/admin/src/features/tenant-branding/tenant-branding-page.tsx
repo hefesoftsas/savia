@@ -46,6 +46,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState(0);
   const [canCreateOrganization, setCanCreateOrganization] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const dedicated = !!parseTenantSlugFromHostname(window.location.hostname);
@@ -53,44 +54,76 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
     const controller = new AbortController();
     setLoading(true);
     setError("");
+    setErrorStatus(0);
     setSelected("");
     setTenants([]);
-    void services.apiClient
-      .get<{ data: Tenant | Tenant[] }>(
-        dedicated ? "/v1/tenants/current" : "/v1/tenants",
-        { signal: controller.signal },
-      )
-      .then((response) => {
-        if (controller.signal.aborted) return;
-        const list = Array.isArray(response.data)
-          ? response.data
-          : [response.data];
-        // The tenant list endpoint exposes the internal platform tenant only
-        // to platform administrators. Use that server-filtered result to offer
-        // the create action only to people who can actually use it.
-        const canCreateOrganization = list.some(
-          (tenant) => tenant?.kind === "platform",
-        );
-        const valid = list.filter(
-          (tenant) =>
-            tenant &&
-            Number.isSafeInteger(tenant.id) &&
-            tenant.id > 0 &&
-            tenant.kind !== "platform" &&
-            tenant.isActive !== false &&
-            tenant.isActive !== 0 &&
-            typeof tenant.name === "string",
-        );
-        setTenants(valid);
-        setCanCreateOrganization(canCreateOrganization);
-        setSelected(valid[0] ? String(valid[0].id) : "");
-      })
-      .catch((cause) => {
-        if (!controller.signal.aborted) setError(message(cause));
-      })
-      .finally(() => {
+    setCanCreateOrganization(false);
+    void (async () => {
+      try {
+        if (dedicated) {
+          const response = await services.apiClient.get<{
+            data: {
+              id: unknown;
+              name: unknown;
+              kind: unknown;
+            };
+          }>("/v1/tenants/current", { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          const current = response?.data;
+          const valid =
+            current &&
+            Number.isSafeInteger(current.id) &&
+            (current.id as number) > 0 &&
+            current.kind !== "platform" &&
+            typeof current.name === "string"
+              ? [
+                  {
+                    id: current.id as number,
+                    name: current.name as string,
+                    kind: current.kind as string,
+                    isActive: true as const,
+                  },
+                ]
+              : [];
+          setTenants(valid);
+          setSelected(valid[0] ? String(valid[0].id) : "");
+        } else {
+          const response = await services.apiClient.get<{
+            data: Tenant | Tenant[];
+          }>("/v1/tenants", { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          const list = Array.isArray(response.data)
+            ? response.data
+            : [response.data];
+          // The tenant list endpoint exposes the internal platform tenant only
+          // to platform administrators. Use that server-filtered result to offer
+          // the create action only to people who can actually use it.
+          const canCreateOrganization = list.some(
+            (tenant) => tenant?.kind === "platform",
+          );
+          const valid = list.filter(
+            (tenant) =>
+              tenant &&
+              Number.isSafeInteger(tenant.id) &&
+              tenant.id > 0 &&
+              tenant.kind !== "platform" &&
+              tenant.isActive !== false &&
+              tenant.isActive !== 0 &&
+              typeof tenant.name === "string",
+          );
+          setTenants(valid);
+          setCanCreateOrganization(canCreateOrganization);
+          setSelected(valid[0] ? String(valid[0].id) : "");
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          setError(message(cause));
+          setErrorStatus(cause instanceof ApiClientError ? cause.status : 0);
+        }
+      } finally {
         if (!controller.signal.aborted) setLoading(false);
-      });
+      }
+    })();
     return () => controller.abort();
   }, [services.apiClient, dedicated, attempt]);
   return (
@@ -108,17 +141,30 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
       ) : error ? (
         <div role="alert">
           <p>
-            {error in settingsMessages
-              ? t(error as keyof typeof settingsMessages)
-              : error}
+            {errorStatus === 401
+              ? t("Tu sesión expiró. Inicia sesión de nuevo para continuar.")
+              : error in settingsMessages
+                ? t(error as keyof typeof settingsMessages)
+                : error}
           </p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setAttempt((value) => value + 1)}
-          >
-            {t("Volver a cargar")}
-          </Button>
+          <div className="tenant-branding-actions">
+            {errorStatus === 401 ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void services.authSession.login()}
+              >
+                {t("Iniciar sesión de nuevo")}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              {t("Volver a cargar")}
+            </Button>
+          </div>
         </div>
       ) : tenants.length ? (
         <>
