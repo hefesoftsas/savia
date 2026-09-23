@@ -1481,7 +1481,7 @@ function AssistantConversation({
               </h3>
               <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
                 {t(
-                  "Browse collections, search for customers, analyze metrics, and create interactive charts from your CRM data.",
+                  "Browse collections, search for customers, analyze metrics, and create interactive charts from your Studio data.",
                 )}
               </p>
 

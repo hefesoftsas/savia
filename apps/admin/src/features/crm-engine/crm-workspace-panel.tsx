@@ -132,7 +132,7 @@ export default function CrmWorkspacePanel({
               label={`${t("CRM conectado · HubSpot")} (${t("Ayuda")})`}
             >
               {t(
-                "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.",
+                "Crea las pantallas de Studio para trabajar con los registros y sus relaciones desde Savia.",
               )}
             </FieldHelp>
             {workspace.data?.connected ? (

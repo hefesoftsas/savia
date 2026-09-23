@@ -96,7 +96,7 @@ export function DistributionSettings({
         onClearSection={onClearSection}
       />
       <details className="studio-settings-nested">
-        <summary>{t("Pipeline CRM (opcional)")}</summary>
+        <summary>{t("Pipeline de Studio (opcional)")}</summary>
         <div className="studio-two">
           <Control label={t("Campo de etapa del pipeline")}>
             <Choice

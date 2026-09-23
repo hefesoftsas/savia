@@ -169,7 +169,8 @@ export function widgetDeepLink(widget: MyDayWidget): string {
   if (domainMatch) search.set("domain", domainMatch[1]);
   else if (agencyMatch) search.set("agencyId", agencyMatch[1]);
   search.set("object", widget.collection);
-  return `/crm?${search.toString()}`;
+  // Fase 1: canónica #/studio; #/crm sigue como alias legacy.
+  return `/studio?${search.toString()}`;
 }
 
 /**

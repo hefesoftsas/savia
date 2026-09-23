@@ -71,7 +71,8 @@ export function crmHref(input: {
   if (input.view && input.view !== "records") search.set("view", input.view);
   if (input.tab) search.set("tab", input.tab);
   const query = search.toString();
-  return query ? `/crm?${query}` : "/crm";
+  // Fase 1: ruta canónica #/studio; #/crm se mantiene como alias legacy.
+  return query ? `/studio?${query}` : "/studio";
 }
 
 export function visibleCrmObjects(

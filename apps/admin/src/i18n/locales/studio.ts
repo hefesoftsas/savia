@@ -262,11 +262,11 @@ export const studioMessages = {
   ],
   "Creando...": ["Creando...", "Creating...", "Criando..."],
   "Operaciones ·": ["Operaciones ·", "Operations ·", "Operações ·"],
-  "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en el CRM.":
+  "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en Studio.":
     [
-      "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en el CRM.",
-      "Choose an endpoint for each action. Actions without an endpoint are disabled in the CRM.",
-      "Escolha o endpoint de cada ação. Ações sem endpoint ficam desativadas no CRM.",
+      "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en Studio.",
+      "Choose an endpoint for each action. Actions without an endpoint are disabled in Studio.",
+      "Escolha o endpoint de cada ação. Ações sem endpoint ficam desativadas no Studio.",
     ],
   "Cargando operaciones…": [
     "Cargando operaciones…",
@@ -475,11 +475,11 @@ export const studioMessages = {
     "No form field",
     "Sem campo no formulário",
   ],
-  "La coincidencia entre campos solo está disponible para colecciones locales de CRM. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.":
+  "La coincidencia entre campos solo está disponible para colecciones locales de Studio. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.":
     [
-      "La coincidencia entre campos solo está disponible para colecciones locales de CRM. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.",
-      "Field matching is only available for local CRM collections. For these collections, use manual linking or edit the existing native relationship.",
-      "A correspondência entre campos só está disponível em coleções locais do CRM. Para estas coleções, use associação manual ou edite a relação nativa existente.",
+      "La coincidencia entre campos solo está disponible para colecciones locales de Studio. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.",
+      "Field matching is only available for local Studio collections. For these collections, use manual linking or edit the existing native relationship.",
+      "A correspondência entre campos só está disponível em coleções locais do Studio. Para estas coleções, use associação manual ou edite a relação nativa existente.",
     ],
   "Ejemplo: desde una Organización ves «Clientes»; desde cada Cliente ves «Organización».":
     [
@@ -655,11 +655,11 @@ export const studioMessages = {
     "Link collection to a screen",
     "Vincular coleção a uma tela",
   ],
-  "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.":
+  "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de Studio.":
     [
-      "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
-      "Link a domain catalog collection, a JSON:API resource, or a database table or collection to generate CRM views.",
-      "Vincule uma coleção do catálogo do domínio, um recurso JSON:API ou uma tabela ou coleção do banco para gerar visualizações do CRM.",
+      "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de Studio.",
+      "Link a domain catalog collection, a JSON:API resource, or a database table or collection to generate Studio views.",
+      "Vincule uma coleção do catálogo do domínio, um recurso JSON:API ou uma tabela ou coleção do banco para gerar visualizações do Studio.",
     ],
   Origen: ["Origen", "Source", "Origem"],
   Datos: ["Datos", "Data", "Dados"],
@@ -1267,10 +1267,10 @@ export const studioMessages = {
     "records will change",
     "registros serão alterados",
   ],
-  "Pipeline CRM (opcional)": [
-    "Pipeline CRM (opcional)",
-    "CRM pipeline (optional)",
-    "Pipeline CRM (opcional)",
+  "Pipeline de Studio (opcional)": [
+    "Pipeline de Studio (opcional)",
+    "Studio pipeline (optional)",
+    "Pipeline do Studio (opcional)",
   ],
   "Campo de etapa del pipeline": [
     "Campo de etapa del pipeline",
@@ -1830,11 +1830,11 @@ export const studioMessages = {
     "Fields, response, and pagination",
     "Campos, resposta e paginação",
   ],
-  "requestFields relaciona cada campo del CRM con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.":
+  "requestFields relaciona cada campo de Studio con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.":
     [
-      "requestFields relaciona cada campo del CRM con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.",
-      "requestFields maps each CRM field to its command parameter. The adapter preserves the domain response and pagination.",
-      "requestFields relaciona cada campo do CRM ao parâmetro do comando. O adaptador preserva a resposta e a paginação do domínio.",
+      "requestFields relaciona cada campo de Studio con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.",
+      "requestFields maps each Studio field to its command parameter. The adapter preserves the domain response and pagination.",
+      "requestFields relaciona cada campo do Studio ao parâmetro do comando. O adaptador preserva a resposta e a paginação do domínio.",
     ],
   "Guardar operaciones": [
     "Guardar operaciones",
@@ -2910,10 +2910,10 @@ export const studioMessages = {
     "Screen provided by a plugin / extension",
     "Tela fornecida por plugin / extensão",
   ],
-  "requestFields mapea campos del CRM a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.":
+  "requestFields mapea campos de Studio a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.":
     [
-      "requestFields mapea campos del CRM a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.",
-      "requestFields maps CRM fields to API parameters. responseFields uses JSON paths such as /name. dataPointer locates records, idPointer their identifier, and idBodyField the ID parameter for commands without {id} in the path. pageParameter, sizeParameter, and searchParameter name query parameters.",
-      "requestFields mapeia campos do CRM para parâmetros da API. responseFields usa caminhos JSON como /nome. dataPointer localiza os registros, idPointer seu identificador e idBodyField o parâmetro de ID em comandos sem {id} na rota. pageParameter, sizeParameter e searchParameter nomeiam os parâmetros de consulta.",
+      "requestFields mapea campos de Studio a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.",
+      "requestFields maps Studio fields to API parameters. responseFields uses JSON paths such as /name. dataPointer locates records, idPointer their identifier, and idBodyField the ID parameter for commands without {id} in the path. pageParameter, sizeParameter, and searchParameter name query parameters.",
+      "requestFields mapeia campos do Studio para parâmetros da API. responseFields usa caminhos JSON como /nome. dataPointer localiza os registros, idPointer seu identificador e idBodyField o parâmetro de ID em comandos sem {id} na rota. pageParameter, sizeParameter e searchParameter nomeiam os parâmetros de consulta.",
     ],
 } as const;

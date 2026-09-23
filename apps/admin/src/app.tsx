@@ -295,6 +295,11 @@ function AppContent({ services }: { services?: AppServices } = {}) {
               }
             />
             <Route path="/" element={<Navigate to="/my-day" replace />} />
+            <Route
+              path="/studio"
+              element={<CrmRoute services={appServices} />}
+            />
+            {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
             <Route path="/crm" element={<CrmRoute services={appServices} />} />
             <Route
               path="/savia-request"

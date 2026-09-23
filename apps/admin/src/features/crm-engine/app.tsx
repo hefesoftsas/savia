@@ -697,7 +697,7 @@ function App({
     return (
       <div className="fatal">
         <Leaf />
-        <h1>{t("No pudimos conectar con el CRM")}</h1>
+        <h1>{t("No pudimos conectar con Studio")}</h1>
         <p>{bootError}</p>
         <Button onClick={() => window.location.reload()}>
           {t("Reintentar")}
@@ -919,7 +919,7 @@ function App({
               {t("savia")}
               <span className="brand-dot">.</span>
             </span>
-            <span className="studio-label">{t("CRM Studio")}</span>
+            <span className="studio-label">{t("Studio")}</span>
           </a>
           <div className="workspace-switch">
             <span className="workspace-icon">S</span>
@@ -930,7 +930,7 @@ function App({
             <span className="workspace-status" />
           </div>
           <p className="nav-caption">{t("Tu negocio")}</p>
-          <nav aria-label={t("Módulos del CRM")}>
+          <nav aria-label={t("Módulos de Studio")}>
             {menuBlocks.map((block) => (
               <Fragment key={block.kind === "section" ? block.id : "ungrouped"}>
                 {block.kind === "section" ? (
@@ -1332,7 +1332,7 @@ function App({
             <>
               <div className="page-heading">
                 <div>
-                  <p className="eyebrow">{t("Tu CRM, a tu manera")}</p>
+                  <p className="eyebrow">{t("Tu Studio, a tu manera")}</p>
                   <h1>{t("Diseña una vez. Úsalo siempre.")}</h1>
                 </div>
                 <select
@@ -1414,7 +1414,7 @@ function App({
         </div>
         {!embedded ? (
           <footer className="app-footer">
-            <span>{t("Savia CRM Studio")}</span>
+            <span>{t("Savia Studio")}</span>
             <span>{t("Entorno local · Guardado en el servidor")}</span>
           </footer>
         ) : null}

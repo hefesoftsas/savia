@@ -26,12 +26,12 @@ describe("CRM sidebar navigation", () => {
       "Administrar",
     ]);
     expect(children[0]).toMatchObject({
-      route: "/crm?agencyId=101&object=account",
+      route: "/studio?agencyId=101&object=account",
       count: 0,
-      removeRoute: "/crm?agencyId=101&object=account&view=remove-screen",
+      removeRoute: "/studio?agencyId=101&object=account&view=remove-screen",
     });
     expect(children.find((child) => child.id === "studio:admin")?.route).toBe(
-      "/crm?agencyId=101&object=contact&view=admin",
+      "/studio?agencyId=101&object=contact&view=admin",
     );
   });
 
@@ -69,7 +69,7 @@ describe("CRM sidebar navigation", () => {
       children.filter((child) => child.id === "object:clientes"),
     ).toHaveLength(1);
     expect(children[0]).toMatchObject({
-      route: "/crm?agencyId=12&object=clientes",
+      route: "/studio?agencyId=12&object=clientes",
       count: 3,
     });
   });
@@ -82,7 +82,7 @@ describe("CRM sidebar navigation", () => {
       view: "create",
     });
     expect(crmHref({ agencyId: 12, object: "task" })).toBe(
-      "/crm?agencyId=12&object=task",
+      "/studio?agencyId=12&object=task",
     );
   });
 
@@ -136,7 +136,7 @@ it("keeps domain scope and distinguishes identical objects across domains", () =
     [{ name: "agencias", label: "Agencias", count: 1, hidden: false }],
     "platform",
   )[0];
-  expect(child.route).toBe("/crm?domain=platform&object=agencias");
+  expect(child.route).toBe("/studio?domain=platform&object=agencias");
   expect(isCrmChildActive(child, "domain=custom&object=agencias")).toBe(false);
 });
 

@@ -153,7 +153,7 @@ export function ModelCapabilityBadges({
                 "inline-flex items-center rounded-md border border-purple-500/30 bg-purple-500/10 font-medium text-purple-700 dark:text-purple-300",
                 containerClass,
               )}
-              aria-label={t("Herramientas CRM")}
+              aria-label={t("Herramientas de Studio")}
             >
               <Wrench className={iconClass} />
               <span className="hidden sm:inline">{t("Herramientas")}</span>
@@ -161,10 +161,10 @@ export function ModelCapabilityBadges({
           </TooltipTrigger>
           <TooltipContent side="top">
             <p className="font-semibold text-purple-600 dark:text-purple-400">
-              {t("Herramientas CRM")}
+              {t("Herramientas de Studio")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {t("Ejecuta consultas al CRM y llamadas a funciones")}
+              {t("Ejecuta consultas en Studio y llamadas a funciones")}
             </p>
           </TooltipContent>
         </Tooltip>

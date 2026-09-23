@@ -281,7 +281,7 @@ export function CrmDomainCredentialsSection({
             loadingMessage={
               <p className="credentials-muted">
                 {t(
-                  "No hay dominios de datos disponibles para Geoapify o integraciones del CRM.",
+                  "No hay dominios de datos disponibles para Geoapify o integraciones de Studio.",
                 )}
               </p>
             }
@@ -342,7 +342,7 @@ export function CrmDomainCredentialsSection({
       )}
     >
       <CredentialEntry
-        title={t("Integraciones OpenAPI del CRM")}
+        title={t("Integraciones OpenAPI de Studio")}
         description={t(
           "Revisa qué conexiones externas ya tienen credencial y cuáles siguen pendientes.",
         )}

@@ -396,12 +396,12 @@ describe("AppSidebar navigation preferences", () => {
     );
   });
 
-  it("shows dynamic pages as direct menu links without synthetic agencies or CRM group", async () => {
+  it("shows dynamic pages as direct menu links without synthetic agencies or Studio group", async () => {
     render(<App services={createServices()} />);
     const companies = await screen.findByRole("link", { name: /^Empresas/ });
     expect(companies).toHaveAttribute(
       "href",
-      "#/crm?domain=platform&object=account",
+      "#/studio?domain=platform&object=account",
     );
     expect(companies.closest("li")?.parentElement).toHaveAttribute(
       "data-slot",
@@ -425,7 +425,7 @@ describe("AppSidebar navigation preferences", () => {
   it("shows page administration under Construir with the current domain", async () => {
     render(<App services={createServices()} />);
     await screen.findByRole("link", { name: /^Empresas/ });
-    // The scoped destinations gain the current object once the CRM object
+    // The scoped destinations gain the current object once the Studio object
     // catalog resolves; the link renders first without it.
     await waitFor(() =>
       expect(
@@ -434,14 +434,14 @@ describe("AppSidebar navigation preferences", () => {
         }),
       ).toHaveAttribute(
         "href",
-        "#/crm?domain=platform&object=account&view=admin",
+        "#/studio?domain=platform&object=account&view=admin",
       ),
     );
   });
 
   it("exposes scoped building destinations and keeps users beside roles", async () => {
     render(<App services={createServices()} />);
-    // The scoped destinations gain the current object once the CRM object
+    // The scoped destinations gain the current object once the Studio object
     // catalog resolves; the link renders first without it.
     const operations = await screen.findByRole("link", {
       name: "Operaciones",
@@ -449,7 +449,7 @@ describe("AppSidebar navigation preferences", () => {
     await waitFor(() =>
       expect(operations).toHaveAttribute(
         "href",
-        "#/crm?domain=platform&object=account&view=operations",
+        "#/studio?domain=platform&object=account&view=operations",
       ),
     );
     expect(screen.getByRole("link", { name: "Empleados IA" })).toHaveAttribute(
@@ -521,7 +521,7 @@ describe("AppSidebar navigation preferences", () => {
     );
     expect(
       await screen.findByRole("link", { name: /^Empresas/ }),
-    ).toHaveAttribute("href", "#/crm?domain=platform&object=account");
+    ).toHaveAttribute("href", "#/studio?domain=platform&object=account");
     expect(screen.getByText("Oculta de mi menú")).toBeVisible();
     expect(
       services.userPreferences.saveSidebarNavigation,
@@ -531,7 +531,7 @@ describe("AppSidebar navigation preferences", () => {
     ).toBeVisible();
   });
 
-  it("finds a CRM object when searching the menu", async () => {
+  it("finds a Studio object when searching the menu", async () => {
     const user = userEvent.setup();
     render(<App services={createServices()} />);
 

@@ -78,28 +78,28 @@ export const navigationDefinitions: Record<
   "domain-sources": {
     id: "domain-sources",
     labelKey: "savia.sidebar.items.domain-sources",
-    route: "/crm?view=collection-sources",
+    route: "/studio?view=collection-sources",
     section: "productivity",
     icon: Database,
   },
   "domain-operations": {
     id: "domain-operations",
     labelKey: "savia.sidebar.items.domain-operations",
-    route: "/crm?view=operations",
+    route: "/studio?view=operations",
     section: "productivity",
     icon: Workflow,
   },
   "domain-history": {
     id: "domain-history",
     labelKey: "savia.sidebar.items.domain-history",
-    route: "/crm?view=audit",
+    route: "/studio?view=audit",
     section: "administration",
     icon: History,
   },
   "domain-packages": {
     id: "domain-packages",
     labelKey: "savia.sidebar.items.domain-packages",
-    route: "/crm?view=admin&tab=packages",
+    route: "/studio?view=admin&tab=packages",
     section: "productivity",
     icon: Package,
   },
@@ -127,7 +127,7 @@ export const navigationDefinitions: Record<
   "dynamic-crm": {
     id: "dynamic-crm",
     labelKey: "savia.sidebar.items.dynamic-crm",
-    route: "/crm",
+    route: "/studio",
     section: "operation",
     icon: UsersRound,
   },
@@ -190,7 +190,7 @@ export const navigationDefinitions: Record<
   "page-administrator": {
     id: "page-administrator",
     labelKey: "savia.sidebar.items.page-administrator",
-    route: "/crm",
+    route: "/studio",
     section: "productivity",
     icon: ListTree,
   },
@@ -267,7 +267,10 @@ export function useVisibleSidebarNavigation(): {
                     "virtual-employees"
                       ? id === "virtual-employees"
                       : id === "integrations")
-                  : location.pathname.startsWith(definition.route),
+                  : definition.route.startsWith("/studio")
+                    ? location.pathname === "/studio" ||
+                      location.pathname === "/crm"
+                    : location.pathname.startsWith(definition.route),
           },
         ];
       }),

@@ -1192,7 +1192,7 @@ export default function CollectionSourcesPanel({
                       label={`${t("Vincular colección a una pantalla")} (${t("Ayuda")})`}
                     >
                       {t(
-                        "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de CRM.",
+                        "Asocia una colección del catálogo de dominio, un recurso JSON:API o una tabla o colección de base de datos para generar vistas de Studio.",
                       )}
                     </FieldHelp>
                   </div>

@@ -1260,7 +1260,7 @@ export default function CollectionRelations({
                 {fieldsUnavailable && !native && (
                   <p role="status" className="text-sm text-muted-foreground">
                     {t(
-                      "La coincidencia entre campos solo está disponible para colecciones locales de CRM. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.",
+                      "La coincidencia entre campos solo está disponible para colecciones locales de Studio. Para estas colecciones, usa una asociación manual o edita su relación nativa existente.",
                     )}
                   </p>
                 )}

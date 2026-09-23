@@ -79,7 +79,7 @@ describe("widgetDeepLink", () => {
         collection: "polizas",
         kind: "summary",
       } as MyDayWidget),
-    ).toBe("/crm?domain=platform&object=polizas");
+    ).toBe("/studio?domain=platform&object=polizas");
   });
 
   it("links agency widgets with agencyId", () => {
@@ -90,6 +90,6 @@ describe("widgetDeepLink", () => {
         collection: "clientes",
         kind: "items",
       } as MyDayWidget),
-    ).toBe("/crm?agencyId=101&object=clientes");
+    ).toBe("/studio?agencyId=101&object=clientes");
   });
 });

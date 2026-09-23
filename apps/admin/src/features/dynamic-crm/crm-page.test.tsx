@@ -68,7 +68,7 @@ function servicesFor(domains: unknown[], admin = false): AppServices {
     apiClient: { get: vi.fn(async () => ({ data: domains })), post: vi.fn() },
   } as unknown as AppServices;
 }
-function mount(services: AppServices, route = "/crm") {
+function mount(services: AppServices, route = "/studio") {
   return render(
     <MemoryRouter initialEntries={[route]}>
       <div id="header-actions" />
@@ -76,9 +76,12 @@ function mount(services: AppServices, route = "/crm") {
     </MemoryRouter>,
   );
 }
-describe("CRM domain integration", () => {
+describe("Studio domain integration", () => {
   it("opens the platform designer without an agency", async () => {
-    mount(servicesFor([platform], true), "/crm?view=designer&object=agencias");
+    mount(
+      servicesFor([platform], true),
+      "/studio?view=designer&object=agencias",
+    );
     expect(await screen.findByText(/Espacio CRM/)).toHaveTextContent(
       "domain=platform",
     );
@@ -93,7 +96,7 @@ describe("CRM domain integration", () => {
   it("shows the active domain name in its contextual control", async () => {
     mount(
       servicesFor([platform], true),
-      "/crm?domain=platform&object=agency_profiles&view=records",
+      "/studio?domain=platform&object=agency_profiles&view=records",
     );
     await screen.findByText(/Espacio CRM/);
     expect(document.querySelector("#crm-domain")).not.toBeInTheDocument();
@@ -116,7 +119,7 @@ describe("CRM domain integration", () => {
   it("converts legacy agency links to a domain while preserving the requested tool", async () => {
     mount(
       servicesFor([agency]),
-      "/crm?agencyId=101&object=clientes&view=designer",
+      "/studio?agencyId=101&object=clientes&view=designer",
     );
     expect(await screen.findByText(/Espacio CRM/)).toHaveTextContent(
       "domain=agency%3A101",
@@ -128,7 +131,7 @@ describe("CRM domain integration", () => {
     ).not.toBeInTheDocument();
   });
   it("does not fall back to a different domain for an unauthorized URL", async () => {
-    mount(servicesFor([agency]), "/crm?domain=platform");
+    mount(servicesFor([agency]), "/studio?domain=platform");
     expect(
       await screen.findByText(/Selecciona un dominio de datos disponible/),
     ).toBeVisible();
@@ -137,7 +140,7 @@ describe("CRM domain integration", () => {
   it("clears the previous domain object when switching domains", async () => {
     mount(
       servicesFor([platform, agency], true),
-      "/crm?domain=platform&view=admin",
+      "/studio?domain=platform&view=admin",
     );
     await screen.findByText(/Espacio CRM/);
     const user = userEvent.setup();
@@ -194,7 +197,7 @@ describe("CRM domain integration", () => {
     vi.mocked(services.apiClient.get)
       .mockResolvedValueOnce({ data: [platform] })
       .mockResolvedValue({ data: [platform, agency] });
-    mount(services, "/crm?domain=platform&view=admin");
+    mount(services, "/studio?domain=platform&view=admin");
     await screen.findByText(/Espacio CRM/);
     await userEvent.setup().click(
       screen.getByRole("button", {

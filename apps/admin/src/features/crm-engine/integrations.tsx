@@ -730,7 +730,7 @@ function Execution({
             </Button>
             {result.run.status === "succeeded" && (
               <div className="integration-mapping">
-                <h3>{t("Guardar respuesta en el CRM")}</h3>
+                <h3>{t("Guardar respuesta en Studio")}</h3>
                 <Label htmlFor="response-target">
                   {t("Objeto de destino")}
                 </Label>

@@ -75,6 +75,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { isCrmChildActive } from "@/features/dynamic-crm/crm-navigation";
+import { isStudioLocation } from "@/features/dynamic-crm/studio-route";
 import { useCrmSidebarNavigation } from "@/features/dynamic-crm/use-crm-sidebar-navigation";
 import {
   hasLucideIconLoader,
@@ -352,7 +353,7 @@ export function AppSidebar() {
           icon: page.icon ?? FileText,
           count: page.count,
           active:
-            location.pathname === "/crm" &&
+            isStudioLocation(location.pathname) &&
             isCrmChildActive(page, location.search),
         };
       }
@@ -365,7 +366,7 @@ export function AppSidebar() {
         section: "productivity",
         icon: ListTree,
         active:
-          location.pathname === "/crm" &&
+          isStudioLocation(location.pathname) &&
           isCrmChildActive(pageAdmin, location.search),
       };
     }
@@ -382,20 +383,20 @@ export function AppSidebar() {
         const params = new URLSearchParams(base);
         for (const [key, value] of target) params.set(key, value);
         const active =
-          location.pathname === "/crm" &&
+          isStudioLocation(location.pathname) &&
           current.get("view") === target.get("view") &&
           (target.has("tab") ? current.get("tab") === target.get("tab") : true);
         items[id] = {
           ...definition,
           label: translate(definition.labelKey),
-          route: `/crm?${params}`,
+          route: `/studio?${params}`,
           active,
           searchTerms: translate(`savia.sidebar.searchTerms.${id}`),
         };
       }
       if (items["page-administrator"]) {
         items["page-administrator"].active =
-          location.pathname === "/crm" &&
+          isStudioLocation(location.pathname) &&
           [
             "admin",
             "admin-screen",

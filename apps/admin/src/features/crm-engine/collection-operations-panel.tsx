@@ -80,7 +80,7 @@ export default function CollectionOperationsPanel({
           </SheetTitle>
           <SheetDescription>
             {t(
-              "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en el CRM.",
+              "Elige el endpoint para cada acción. Una acción sin endpoint queda deshabilitada en Studio.",
             )}
           </SheetDescription>
         </SheetHeader>
@@ -362,10 +362,10 @@ function OperationForm({
                   <p className="text-sm text-muted-foreground">
                     {settings.kind === "domain"
                       ? t(
-                          "requestFields relaciona cada campo del CRM con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.",
+                          "requestFields relaciona cada campo de Studio con el parámetro del comando. El adaptador conserva la respuesta y la paginación del dominio.",
                         )
                       : t(
-                          "requestFields mapea campos del CRM a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.",
+                          "requestFields mapea campos de Studio a parámetros del API. responseFields usa rutas JSON como /nombre. dataPointer localiza los registros, idPointer su identificador e idBodyField el parámetro de ID en comandos sin {id} en la ruta. pageParameter, sizeParameter y searchParameter nombran los parámetros de consulta.",
                         )}
                   </p>
                   <Textarea

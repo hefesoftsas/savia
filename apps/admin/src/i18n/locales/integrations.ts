@@ -271,16 +271,16 @@ export const personalIntegrationsMessages = {
       "Tip: clearly delimit the employee's scope so it doesn't answer outside its specialty.",
       "Dica: delimite claramente o escopo do funcionário para que ele não responda fora de sua especialidade.",
     ],
-  "Acceso a Todas las Colecciones CRM": [
-    "Acceso a Todas las Colecciones CRM",
-    "Access to All CRM Collections",
-    "Acesso a Todas as Coleções do CRM",
+  "Acceso a Todas las Colecciones de Studio": [
+    "Acceso a Todas las Colecciones de Studio",
+    "Access to All Studio Collections",
+    "Acesso a Todas as Coleções do Studio",
   ],
-  "Si está activo, el empleado puede consultar cualquier colección del CRM sin restricciones.":
+  "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.":
     [
-      "Si está activo, el empleado puede consultar cualquier colección del CRM sin restricciones.",
-      "When enabled, the employee can query any CRM collection without restrictions.",
-      "Quando ativo, o funcionário pode consultar qualquer coleção do CRM sem restrições.",
+      "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.",
+      "When enabled, the employee can query any Studio collection without restrictions.",
+      "Quando ativo, o funcionário pode consultar qualquer coleção do Studio sem restrições.",
     ],
   "Colecciones Permitidas (Acceso Scoped)": [
     "Colecciones Permitidas (Acceso Scoped)",

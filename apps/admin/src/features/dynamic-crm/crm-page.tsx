@@ -186,7 +186,7 @@ export function CrmPage({ services }: { services: AppServices }) {
             </p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {t(
-                "El dominio define qué formularios y registros ves en el CRM. Cambia de entorno aquí sin salir de esta pantalla.",
+                "El dominio define qué formularios y registros ves en Studio. Cambia de entorno aquí sin salir de esta pantalla.",
               )}
             </p>
           </div>
@@ -260,7 +260,7 @@ export function CrmPage({ services }: { services: AppServices }) {
     return (
       <p role="alert">
         {t(
-          "El CRM está disponible para administradores de organización y plataforma.",
+          "Studio está disponible para administradores de organización y plataforma.",
         )}
       </p>
     );
@@ -273,7 +273,7 @@ export function CrmPage({ services }: { services: AppServices }) {
       ) : (
         <>
           <header className="mb-2 flex flex-col gap-3 @min-[36rem]:flex-row @min-[36rem]:items-center">
-            <h1 className="sr-only">{t("CRM")}</h1>
+            <h1 className="sr-only">{t("Studio")}</h1>
             <div className="grid min-w-0 flex-1 gap-1.5">
               <Label htmlFor="crm-domain">{t("Dominio de datos")}</Label>
               <select
