@@ -52,7 +52,7 @@ import {
   X,
 } from "lucide-react";
 import { api, downloadCrm } from "./api";
-import { getListObjectsQueryKey } from "./generated/crm";
+import { getListObjectsQueryKey } from "./generated/studio";
 import { getStudioRuntime } from "./runtime";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {

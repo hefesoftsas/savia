@@ -104,7 +104,7 @@ import {
   uploadTemporaryR2Attachment,
 } from "./r2-attachment-upload";
 import { getStudioRuntime } from "./runtime";
-import { useListObjects, getListObjectsQueryKey } from "./generated/crm";
+import { useListObjects, getListObjectsQueryKey } from "./generated/studio";
 import {
   fieldEntries,
   makeConfig,
@@ -309,7 +309,7 @@ function App({
   extensionLocaleRef.current = extensionLocale;
 
   const activeQueryClient = useQueryClient();
-  const runtime = getCrmRuntime();
+  const runtime = getStudioRuntime();
   const [ready, setReady] = useState(false),
     [bootError, setBootError] = useState("");
   useEffect(() => {

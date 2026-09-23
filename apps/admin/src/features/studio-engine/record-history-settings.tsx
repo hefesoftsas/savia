@@ -2,7 +2,7 @@ import { useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
 import { RecordHistoryUsage } from "./record-history-usage";
 import { useEffect, useState } from "react";
-import { getListObjectsQueryKey } from "./generated/crm";
+import { getListObjectsQueryKey } from "./generated/studio";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioObject } from "@savia/studio-shared/metadata";
 import {

@@ -17,7 +17,7 @@ const state = vi.hoisted(() => ({
   source: { id: "source", name: "Original", email: "unique", _version: 7 },
   form: undefined as any,
 }));
-vi.mock("../generated/crm", () => ({
+vi.mock("../generated/studio", () => ({
   useListObjects: () => ({ data: { data: [state.object] } }),
   getListObjectsQueryKey: () => ["objects"],
 }));
