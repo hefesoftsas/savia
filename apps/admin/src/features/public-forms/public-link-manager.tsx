@@ -369,7 +369,7 @@ export function PublicLinkManager({
           <div className="flex items-center gap-2 self-start sm:self-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <ShieldCheck className="size-3.5" aria-hidden="true" />
-              <span>CAPTCHA / Turnstile</span>
+              <span>{t("Verificación de seguridad")}</span>
             </span>
           </div>
         </div>
@@ -576,7 +576,7 @@ export function PublicLinkManager({
           </span>
           {links.length > 0 && (
             <span className="text-xs font-normal text-muted-foreground">
-              {links.length} {links.length === 1 ? "enlace" : "enlaces"}
+              {links.length}
             </span>
           )}
         </h3>
