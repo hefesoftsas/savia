@@ -73,7 +73,7 @@ async function defineObject() {
 
 async function versionRow() {
   return env.DB.prepare(
-    "SELECT version FROM crm_collection_versions WHERE tenant_id=? AND collection=?",
+    "SELECT version FROM studio_collection_versions WHERE tenant_id=? AND collection=?",
   )
     .bind("agency:101", "delta_widgets")
     .first<{ version: number }>();

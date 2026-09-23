@@ -70,13 +70,13 @@ async function object(
   domain = "demo",
 ) {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO crm_data_domains(id,label,created_by) VALUES(?,?,?)",
+    "INSERT OR IGNORE INTO studio_data_domains(id,label,created_by) VALUES(?,?,?)",
   )
     .bind(domain, domain, "test")
     .run();
   const name = "form_" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
   )
     .bind(
       "domain:" + domain,
@@ -154,7 +154,7 @@ it("publishes a safe immutable definition and creates only the server-selected c
   expect(await response.json()).toMatchObject({ ok: true });
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
       .bind("domain:demo", name)
       .first("n"),
@@ -260,7 +260,7 @@ it("atomically caps concurrent submissions and replays only the original proof w
   }
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
       .bind("domain:demo", name)
       .first("n"),
@@ -309,7 +309,7 @@ it("keeps fields frozen, rejects required private fields, expired links, and for
   const name = await object();
   const link = await publish(instance, name);
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(
       JSON.stringify(
@@ -911,7 +911,7 @@ it("closes links when their domain disappears and rejects metadata-only remote c
   const instance = app();
   const name = await object(undefined, "retired");
   const link = await publish(instance, name, { domainId: "retired" });
-  await env.DB.prepare("DELETE FROM crm_data_domains WHERE id=?")
+  await env.DB.prepare("DELETE FROM studio_data_domains WHERE id=?")
     .bind("retired")
     .run();
   expect((await submit(instance, link, { name: "One" })).status).toBe(404);
@@ -919,7 +919,7 @@ it("closes links when their domain disappears and rejects metadata-only remote c
   const config = makeConfig({ name: { type: "Textbox", label: "Name" } });
   config.studio = { business: "customer" };
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(JSON.stringify(config), "domain:demo", remote)
     .run();
@@ -988,7 +988,7 @@ it("binds tenant links to active commercial tenants and closes them after deacti
     .bind(880012, "public-form-tenant", "Form tenant", 1, now, now)
     .run();
   await env.DB.prepare(
-    "UPDATE crm_objects SET tenant_id=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET tenant_id=? WHERE tenant_id=? AND name=?",
   )
     .bind("agency:880012", "domain:demo", name)
     .run();
@@ -998,7 +998,7 @@ it("binds tenant links to active commercial tenants and closes them after deacti
   ).toBe(200);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
       .bind("agency:880012", name)
       .first("n"),
@@ -1033,7 +1033,7 @@ it("excludes conditional section fields and rejects required fields in those sec
     ],
   };
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(JSON.stringify(config), "domain:demo", name)
     .run();
@@ -1048,7 +1048,7 @@ it("excludes conditional section fields and rejects required fields in those sec
   ).toBe(422);
   config.fields.conditional.required = true;
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(JSON.stringify(config), "domain:demo", name)
     .run();
@@ -1190,7 +1190,7 @@ it("verifies self-hosted proof, preserves exact idempotent retries and rejects r
   );
   expect(replay.status).toBe(429);
   const count = await env.DB.prepare(
-    "SELECT count(*) AS n FROM crm_records WHERE object_name=?",
+    "SELECT count(*) AS n FROM studio_records WHERE object_name=?",
   )
     .bind(name)
     .first<{ n: number }>();

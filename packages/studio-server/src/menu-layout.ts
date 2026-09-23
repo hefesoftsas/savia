@@ -16,7 +16,7 @@ export async function getMenuLayout(
   tenant: string,
 ): Promise<ScreenMenuLayout | null> {
   const row = await db
-    .prepare("SELECT menu_layout FROM crm_studio_settings WHERE tenant_id=?")
+    .prepare("SELECT menu_layout FROM studio_settings WHERE tenant_id=?")
     .bind(tenant)
     .first<{ menu_layout: string | null }>();
   if (!row?.menu_layout) return null;
@@ -41,7 +41,7 @@ export async function saveMenuLayout(
   const parsed = screenMenuLayoutSchema.parse(layout);
   await db
     .prepare(
-      `INSERT INTO crm_studio_settings (tenant_id, menu_layout, updated_at)
+      `INSERT INTO studio_settings (tenant_id, menu_layout, updated_at)
        VALUES (?, ?, ${dialectFor(db).utcNow()})
        ON CONFLICT(tenant_id) DO UPDATE SET
          menu_layout=excluded.menu_layout,
@@ -54,7 +54,7 @@ export async function saveMenuLayout(
 
 export async function listActiveScreenNames(db: D1Database, tenant: string) {
   const { results } = await db
-    .prepare("SELECT name, config FROM crm_objects WHERE tenant_id=?")
+    .prepare("SELECT name, config FROM studio_objects WHERE tenant_id=?")
     .bind(tenant)
     .all<{ name: string; config: string }>();
   return results

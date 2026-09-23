@@ -50,7 +50,7 @@ beforeAll(async () => {
   for (const scope of [tenant, "domain:other"]) {
     await db
       .prepare(
-        "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
       )
       .bind(
         scope,
@@ -149,7 +149,7 @@ describe("general workflows on real D1", () => {
     await deleteRecord(db, tenant, "requests", record.id, { version: 1 });
     expect(await repo.executions(id)).toHaveLength(1);
     await db
-      .prepare("DELETE FROM crm_records WHERE tenant_id=? AND id=?")
+      .prepare("DELETE FROM studio_records WHERE tenant_id=? AND id=?")
       .bind(tenant, record.id)
       .run();
     expect(await repo.executions(id)).toHaveLength(1);
@@ -165,7 +165,7 @@ describe("general workflows on real D1", () => {
       status: "approved",
     });
     await db
-      .prepare("DELETE FROM crm_records WHERE tenant_id=? AND id=?")
+      .prepare("DELETE FROM studio_records WHERE tenant_id=? AND id=?")
       .bind(tenant, hard.id)
       .run();
     expect(await repo.executions(id)).toHaveLength(2);
@@ -240,7 +240,7 @@ describe("general workflows on real D1", () => {
       for (const value of [...test.yes, ...test.no]) {
         await db
           .prepare(
-            "INSERT INTO crm_records(tenant_id,object_name,id,data) VALUES (?,?,?,?)",
+            "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES (?,?,?,?)",
           )
           .bind(
             tenant,
@@ -313,7 +313,7 @@ describe("general workflows on real D1", () => {
       db.batch([
         db
           .prepare(
-            "UPDATE crm_records SET deleted_at='now' WHERE tenant_id=? AND id=?",
+            "UPDATE studio_records SET deleted_at='now' WHERE tenant_id=? AND id=?",
           )
           .bind(tenant, record.id),
         db
@@ -352,7 +352,7 @@ describe("general workflows on real D1", () => {
       (
         await db
           .prepare(
-            "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND json_extract(data,'$.title')='Must not be written'",
+            "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND json_extract(data,'$.title')='Must not be written'",
           )
           .bind(tenant)
           .first<{ n: number }>()
@@ -441,7 +441,7 @@ describe("general workflows on real D1", () => {
       (
         await db
           .prepare(
-            "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND json_extract(data,'$.title')='Restart checkpoint'",
+            "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND json_extract(data,'$.title')='Restart checkpoint'",
           )
           .bind(tenant)
           .first<{ n: number }>()
@@ -562,11 +562,11 @@ describe("general workflows on real D1", () => {
       db.batch([
         db
           .prepare(
-            "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES ('rollback',?,'requests','{}')",
+            "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES ('rollback',?,'requests','{}')",
           )
           .bind(tenant),
         db.prepare(
-          "INSERT INTO crm_write_guards(id,valid) VALUES ('invalid-workflow',0)",
+          "INSERT INTO studio_write_guards(id,valid) VALUES ('invalid-workflow',0)",
         ),
       ]),
     ).rejects.toThrow();
@@ -626,7 +626,7 @@ describe("general workflows on real D1", () => {
     );
     const count = await db
       .prepare(
-        "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND json_extract(data,'$.title')='Generated'",
+        "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND json_extract(data,'$.title')='Generated'",
       )
       .bind(tenant)
       .first<{ n: number }>();

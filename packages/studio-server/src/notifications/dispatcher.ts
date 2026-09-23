@@ -293,7 +293,7 @@ async function processEvent(
   try {
     await db.batch([lease.start, ...statements, lease.end]);
   } catch (error) {
-    if (String(error).includes("crm_write_guards")) return usedAttempts;
+    if (String(error).includes("studio_write_guards")) return usedAttempts;
     throw error;
   }
   report.delivered += local.delivered;

@@ -78,7 +78,7 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
       return c.json({ ok: true });
     if (path === "/api/objects" && method === "GET") {
       const rows = await db
-        .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
+        .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
         .bind(tenant)
         .all();
       const disabled = await disabledSolutionObjects(db, tenant);
@@ -108,7 +108,7 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
         );
         const count = await db
           .prepare(
-            `SELECT count(*) AS n FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${where.sql}`,
+            `SELECT count(*) AS n FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${where.sql}`,
           )
           .bind(tenant, object.name, ...where.bindings)
           .first<{ n: number }>();
@@ -143,7 +143,7 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
     if (fileMatch) {
       const file = await db
         .prepare(
-          "SELECT object_name,record_id,field_name FROM crm_files WHERE tenant_id=? AND id=?",
+          "SELECT object_name,record_id,field_name FROM studio_files WHERE tenant_id=? AND id=?",
         )
         .bind(tenant, decodeURIComponent(fileMatch[1]))
         .first<{
@@ -339,7 +339,7 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
         );
       const rows = await db
         .prepare(
-          `SELECT * FROM crm_records WHERE ${read.where} AND ${exp.sql} ORDER BY id LIMIT 10001`,
+          `SELECT * FROM studio_records WHERE ${read.where} AND ${exp.sql} ORDER BY id LIMIT 10001`,
         )
         .bind(...read.args, ...exp.bindings)
         .all();

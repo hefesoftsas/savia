@@ -112,7 +112,7 @@ export function createCollectionOperationsApp(
   async function read(name: string) {
     const row = await db
       .prepare(
-        "SELECT b.config,o.config object_config,o.version FROM crm_collection_bindings b JOIN crm_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? AND b.object_name=?",
+        "SELECT b.config,o.config object_config,o.version FROM crm_collection_bindings b JOIN studio_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? AND b.object_name=?",
       )
       .bind(tenant, name)
       .first<{ config: string; object_config: string; version: number }>();
@@ -346,7 +346,7 @@ export function createCollectionOperationsApp(
     };
     const g = guard(
       db,
-      "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
       [input.version, tenant, name],
     );
     await transaction(db, [
@@ -358,7 +358,7 @@ export function createCollectionOperationsApp(
         .bind(JSON.stringify(config), tenant, name),
       db
         .prepare(
-          "UPDATE crm_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
+          "UPDATE studio_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
         )
         .bind(JSON.stringify(row.object), tenant, name),
       audit(db, tenant, "collection.operations.updated", name, null, {

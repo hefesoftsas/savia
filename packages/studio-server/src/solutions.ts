@@ -55,20 +55,20 @@ async function inspect(
   const manifest = solutionPackageSchema.parse(input);
   const installed = await db
     .prepare(
-      "SELECT id,version,enabled,manifest FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+      "SELECT id,version,enabled,manifest FROM studio_solution_installations WHERE tenant_id=? AND id=?",
     )
     .bind(tenant, manifest.id)
     .first<Installation>();
   const { results: rows } = await db
     .prepare(
-      "SELECT o.name,o.label,o.description,o.config,o.version,p.solution_id,p.definition FROM crm_objects o LEFT JOIN crm_solution_objects p ON p.tenant_id=o.tenant_id AND p.object_name=o.name WHERE o.tenant_id=?",
+      "SELECT o.name,o.label,o.description,o.config,o.version,p.solution_id,p.definition FROM studio_objects o LEFT JOIN studio_solution_objects p ON p.tenant_id=o.tenant_id AND p.object_name=o.name WHERE o.tenant_id=?",
     )
     .bind(tenant)
     .all<StoredObject>();
   const current = new Map(rows.map((row) => [row.name, row]));
   const { results: ownershipRows } = await db
     .prepare(
-      "SELECT object_name,solution_id FROM crm_solution_objects WHERE tenant_id=?",
+      "SELECT object_name,solution_id FROM studio_solution_objects WHERE tenant_id=?",
     )
     .bind(tenant)
     .all<{ object_name: string; solution_id: string }>();
@@ -224,15 +224,15 @@ export async function installSolution(
   };
   addGuard(
     installed
-      ? "SELECT manifest=? AND enabled=? FROM crm_solution_installations WHERE tenant_id=? AND id=?"
-      : "SELECT count(*)=0 FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+      ? "SELECT manifest=? AND enabled=? FROM studio_solution_installations WHERE tenant_id=? AND id=?"
+      : "SELECT count(*)=0 FROM studio_solution_installations WHERE tenant_id=? AND id=?",
     installed
       ? [installed.manifest, installed.enabled, tenant, manifest.id]
       : [tenant, manifest.id],
   );
   for (const id of dependencies)
     addGuard(
-      "SELECT enabled=1 FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+      "SELECT enabled=1 FROM studio_solution_installations WHERE tenant_id=? AND id=?",
       [tenant, id],
     );
   for (const id of manifest.requires)
@@ -241,13 +241,13 @@ export async function installSolution(
       !options.extensionRegistry.isBuiltIn(id)
     )
       addGuard(
-        "SELECT enabled=1 FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+        "SELECT enabled=1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
         [tenant, id],
       );
   statements.push(
     db
       .prepare(
-        `INSERT INTO crm_solution_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,manifest=excluded.manifest,updated_at=${dialectFor(db).utcNow()}`,
+        `INSERT INTO studio_solution_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,manifest=excluded.manifest,updated_at=${dialectFor(db).utcNow()}`,
       )
       .bind(tenant, manifest.id, manifest.version, JSON.stringify(manifest)),
   );
@@ -257,17 +257,17 @@ export async function installSolution(
     if (entry.action === "keep") continue;
     if (row)
       addGuard(
-        "SELECT solution_id=? FROM crm_solution_objects WHERE tenant_id=? AND object_name=?",
+        "SELECT solution_id=? FROM studio_solution_objects WHERE tenant_id=? AND object_name=?",
         [manifest.id, tenant, entry.name],
       );
     else
       addGuard(
-        "SELECT count(*)=0 FROM crm_solution_objects WHERE tenant_id=? AND object_name=?",
+        "SELECT count(*)=0 FROM studio_solution_objects WHERE tenant_id=? AND object_name=?",
         [tenant, entry.name],
       );
     if (row)
       addGuard(
-        "SELECT version=? AND config=? AND label=? AND description=? FROM crm_objects WHERE tenant_id=? AND name=?",
+        "SELECT version=? AND config=? AND label=? AND description=? FROM studio_objects WHERE tenant_id=? AND name=?",
         [
           row.version,
           row.config,
@@ -279,14 +279,14 @@ export async function installSolution(
       );
     else
       addGuard(
-        "SELECT count(*)=0 FROM crm_objects WHERE tenant_id=? AND name=?",
+        "SELECT count(*)=0 FROM studio_objects WHERE tenant_id=? AND name=?",
         [tenant, entry.name],
       );
     const version = (row?.version ?? 0) + 1;
     statements.push(
       db
         .prepare(
-          "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?) ON CONFLICT(tenant_id,name) DO UPDATE SET label=excluded.label,description=excluded.description,config=excluded.config,version=excluded.version",
+          "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?) ON CONFLICT(tenant_id,name) DO UPDATE SET label=excluded.label,description=excluded.description,config=excluded.config,version=excluded.version",
         )
         .bind(
           tenant,
@@ -300,7 +300,7 @@ export async function installSolution(
     statements.push(
       db
         .prepare(
-          "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
+          "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
         )
         .bind(
           tenant,
@@ -312,7 +312,7 @@ export async function installSolution(
     statements.push(
       db
         .prepare(
-          "INSERT INTO crm_solution_objects(tenant_id,solution_id,object_name,definition) VALUES (?,?,?,?) ON CONFLICT(tenant_id,object_name) DO UPDATE SET definition=excluded.definition",
+          "INSERT INTO studio_solution_objects(tenant_id,solution_id,object_name,definition) VALUES (?,?,?,?) ON CONFLICT(tenant_id,object_name) DO UPDATE SET definition=excluded.definition",
         )
         .bind(
           tenant,
@@ -354,7 +354,7 @@ export function registerSolutions(
   );
   app.get("/api/solutions", async (c) => {
     const { results } = await c.env.DB.prepare(
-      "SELECT id,version,enabled,manifest FROM crm_solution_installations WHERE tenant_id=? ORDER BY id",
+      "SELECT id,version,enabled,manifest FROM studio_solution_installations WHERE tenant_id=? ORDER BY id",
     )
       .bind(c.get("tenant"))
       .all<Installation>();
@@ -397,7 +397,7 @@ export function registerSolutions(
   );
   app.get("/api/solutions/:id/export", async (c) => {
     const row = await c.env.DB.prepare(
-      "SELECT manifest FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+      "SELECT manifest FROM studio_solution_installations WHERE tenant_id=? AND id=?",
     )
       .bind(c.get("tenant"), c.req.param("id"))
       .first<{ manifest: string }>();
@@ -419,7 +419,7 @@ export function registerSolutions(
       id = c.req.param("id");
     const row = await db
       .prepare(
-        "SELECT id,version,enabled,manifest FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+        "SELECT id,version,enabled,manifest FROM studio_solution_installations WHERE tenant_id=? AND id=?",
       )
       .bind(tenant, id)
       .first<Installation>();
@@ -440,7 +440,7 @@ export function registerSolutions(
     if (!enabled) {
       const dependent = await db
         .prepare(
-          `SELECT s.id FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=? LIMIT 1`,
+          `SELECT s.id FROM studio_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=? LIMIT 1`,
         )
         .bind(tenant, id, id)
         .first<{ id: string }>();
@@ -453,7 +453,7 @@ export function registerSolutions(
     const checks = [
       guard(
         db,
-        "SELECT manifest=? AND enabled=? FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+        "SELECT manifest=? AND enabled=? FROM studio_solution_installations WHERE tenant_id=? AND id=?",
         [row.manifest, row.enabled, tenant, id],
       ),
     ];
@@ -464,7 +464,7 @@ export function registerSolutions(
           checks.push(
             guard(
               db,
-              "SELECT enabled=1 FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+              "SELECT enabled=1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
               [tenant, dependency],
             ),
           );
@@ -479,7 +479,7 @@ export function registerSolutions(
           checks.push(
             guard(
               db,
-              "SELECT enabled=1 FROM crm_solution_installations WHERE tenant_id=? AND id=?",
+              "SELECT enabled=1 FROM studio_solution_installations WHERE tenant_id=? AND id=?",
               [tenant, dependency],
             ),
           );
@@ -488,7 +488,7 @@ export function registerSolutions(
       checks.push(
         guard(
           db,
-          `SELECT count(*)=0 FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=?`,
+          `SELECT count(*)=0 FROM studio_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND s.id!=? AND d.value=?`,
           [tenant, id, id],
         ),
       );
@@ -496,7 +496,7 @@ export function registerSolutions(
       ...checks.map((g) => g.start),
       db
         .prepare(
-          `UPDATE crm_solution_installations SET enabled=?,updated_at=${dialectFor(db).utcNow()} WHERE tenant_id=? AND id=?`,
+          `UPDATE studio_solution_installations SET enabled=?,updated_at=${dialectFor(db).utcNow()} WHERE tenant_id=? AND id=?`,
         )
         .bind(enabled ? 1 : 0, tenant, id),
       audit(

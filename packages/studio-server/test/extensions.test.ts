@@ -147,7 +147,7 @@ async function json(
 async function seedPortfolio(tenant: string) {
   await platform.env.DB.batch([
     platform.env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
     ).bind(
       tenant,
       "polizas",
@@ -170,7 +170,7 @@ async function seedPortfolio(tenant: string) {
       },
     ].map(({ id, data }) =>
       platform.env.DB.prepare(
-        "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+        "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
       ).bind(id, tenant, "polizas", JSON.stringify(data)),
     ),
   ]);
@@ -178,7 +178,7 @@ async function seedPortfolio(tenant: string) {
 
 async function seedObject(tenant: string, name: string, config: unknown) {
   await platform.env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
   )
     .bind(tenant, name, name, `${name} description`, JSON.stringify(config))
     .run();
@@ -186,7 +186,7 @@ async function seedObject(tenant: string, name: string, config: unknown) {
 
 async function storedObject(tenant: string, name: string) {
   return platform.env.DB.prepare(
-    "SELECT name,label,description,config,version FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT name,label,description,config,version FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind(tenant, name)
     .first<{
@@ -245,7 +245,7 @@ describe("tenant extension installations", () => {
     );
     expect(
       await platform.env.DB.prepare(
-        "SELECT version FROM crm_schema_versions WHERE tenant_id=? AND object_name=?",
+        "SELECT version FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
       )
         .bind(tenant, "polizas")
         .first<{ version: number }>(),
@@ -262,7 +262,7 @@ describe("tenant extension installations", () => {
     expect(await storedObject(tenant, "polizas")).toEqual(before);
     expect(
       await platform.env.DB.prepare(
-        "SELECT count(*) as count FROM crm_records WHERE tenant_id=? AND object_name=?",
+        "SELECT count(*) as count FROM studio_records WHERE tenant_id=? AND object_name=?",
       )
         .bind(tenant, "polizas")
         .first<{ count: number }>(),
@@ -290,7 +290,7 @@ describe("tenant extension installations", () => {
     });
     expect(
       await platform.env.DB.prepare(
-        "SELECT count(*) as count FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+        "SELECT count(*) as count FROM studio_extension_installations WHERE tenant_id=? AND id=?",
       )
         .bind(tenant, "example.portfolio")
         .first<{ count: number }>(),
@@ -312,7 +312,7 @@ describe("tenant extension installations", () => {
     const tenant = "portfolio-removed";
     await json(tenant, "/extensions/example.portfolio/install", "POST");
     await platform.env.DB.prepare(
-      "DELETE FROM crm_objects WHERE tenant_id=? AND name=?",
+      "DELETE FROM studio_objects WHERE tenant_id=? AND name=?",
     )
       .bind(tenant, "polizas")
       .run();
@@ -353,7 +353,7 @@ describe("tenant extension installations", () => {
     });
     expect(
       await platform.env.DB.prepare(
-        "SELECT count(*) as count FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+        "SELECT count(*) as count FROM studio_extension_installations WHERE tenant_id=? AND id=?",
       )
         .bind(tenant, "example.portfolio")
         .first<{ count: number }>(),

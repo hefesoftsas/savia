@@ -200,7 +200,7 @@ export async function dynamicOpenApi(
     typeof agencyId === "number" ||
     (typeof agencyId === "object" && !agencyId.tenant.startsWith("domain:"));
   const { results } = await db
-    .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
+    .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
     .bind(tenant)
     .all();
   const disabled = await disabledSolutionObjects(db, tenant);

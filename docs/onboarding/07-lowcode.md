@@ -35,11 +35,14 @@ versioned schema. Files go to R2.
 3. **Shared metadata** (`packages/studio-shared`): zod schemas, validation,
    utilities — used by both admin and API.
 
-> Fase 2 note: code, folders, packages and the generated client are renamed
-> to Studio. Still keeping their old names (Fase 3): D1 tables (`crm_*`),
-> API paths (`/v1/dynamic-crm/*`, `/v1/crm/*` — the latter is the external
-> HubSpot integration and stays), permission/sidebar ids (`dynamic-crm`),
-> the `CRM_INTEGRATION_KEY` secret name, and collection kind `"crm"`.
+> Fase 3 note: engine D1 tables are renamed to `studio_*`
+> (`0064_rename_engine_crm_to_studio.sql`, `studio-server/0022_...`). Still
+> keeping their old names: API paths (`/v1/dynamic-crm/*`, `/v1/crm/*` —
+> the latter is the external HubSpot integration and stays),
+> permission/sidebar ids (`dynamic-crm`), the `CRM_INTEGRATION_KEY`
+> secret name, collection kind `"crm"`, assistant tool names
+> (`savia_*_crm_*`, `domain: "crm"`), and the external sync tables
+> (`crm_connections`, `crm_sync_*`, `crm_collection_bindings`).
 
 ## Everything configurable generates its own API
 

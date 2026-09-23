@@ -308,7 +308,7 @@ it("encrypts integration credentials using the configured Savia CRM key", async 
   expect(saved.status).toBe(200);
   expect(await saved.text()).not.toContain("test-private-value");
   const row = await env.DB.prepare(
-    "SELECT encrypted_secret FROM crm_integrations WHERE id=?",
+    "SELECT encrypted_secret FROM studio_integrations WHERE id=?",
   )
     .bind(id)
     .first<{ encrypted_secret: string }>();

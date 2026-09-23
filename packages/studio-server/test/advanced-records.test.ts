@@ -191,7 +191,7 @@ it("combines numeric filters and groups across 1000 records with complete pagina
       Array.from({ length: 100 }, (_, j) => {
         const n = offset + j;
         return platform.env.DB.prepare(
-          "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+          "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
         ).bind(
           `volume-${String(n).padStart(4, "0")}`,
           "demo",

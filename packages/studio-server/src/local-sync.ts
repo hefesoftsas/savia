@@ -84,7 +84,7 @@ export function registerLocalSync(
       db = c.env.DB,
       disabled = await disabledSolutionObjects(db, tenant);
     const { results } = await db
-      .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
+      .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
       .bind(tenant)
       .all();
     const { results: sequenceResults } = await db
@@ -225,7 +225,7 @@ export function registerLocalSync(
       }
       const delivered = await db
         .prepare(
-          "SELECT 1 FROM crm_access_deliveries WHERE principal_id=? AND scope=? AND revision=? AND object_name=? AND record_id=?",
+          "SELECT 1 FROM studio_access_deliveries WHERE principal_id=? AND scope=? AND revision=? AND object_name=? AND record_id=?",
         )
         .bind(
           policy.principalId,
@@ -243,7 +243,7 @@ export function registerLocalSync(
         await db.batch([
           db
             .prepare(
-              "INSERT INTO crm_access_deliveries(principal_id,scope,revision,object_name,record_id) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING",
+              "INSERT INTO studio_access_deliveries(principal_id,scope,revision,object_name,record_id) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(
               policy.principalId,
@@ -324,7 +324,7 @@ export function registerLocalSync(
       const currentRow = policy
         ? await db
             .prepare(
-              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+              "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
             )
             .bind(tenant, name, mutation.id)
             .first()
@@ -375,7 +375,7 @@ export function registerLocalSync(
           db
             .prepare(
               `INSERT INTO crm_sync_receipts(tenant_id,principal_id,mutation_id,fingerprint,before_state,response)
-   SELECT ?,?,?,?,?,${dialectFor(db).name === "postgres" ? "json_build_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by)::text" : "json_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by)"} FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?`,
+   SELECT ?,?,?,?,?,${dialectFor(db).name === "postgres" ? "json_build_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by)::text" : "json_object('id',id,'data',data,'version',version,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'created_by',created_by)"} FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?`,
             )
             .bind(
               tenant,

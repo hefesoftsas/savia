@@ -38,12 +38,12 @@ export function historyDatabase(
     const result = await db.batch<T>([
       db
         .prepare(
-          "INSERT INTO crm_record_history_context(tenant_id,actor_kind,actor_id,cause_id) VALUES (?,?,?,?)",
+          "INSERT INTO studio_record_history_context(tenant_id,actor_kind,actor_id,cause_id) VALUES (?,?,?,?)",
         )
         .bind(tenant, actor.kind, actor.id, actor.causeId ?? null),
       ...raw,
       db
-        .prepare("DELETE FROM crm_record_history_context WHERE tenant_id=?")
+        .prepare("DELETE FROM studio_record_history_context WHERE tenant_id=?")
         .bind(tenant),
     ]);
     return result.slice(1, -1);
@@ -86,7 +86,7 @@ export function historyDatabase(
             target.prepare(sql),
             !/^(?:\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)*(?:SELECT|EXPLAIN)\b/i.test(
               sql,
-            ) && /\bcrm_records\b/i.test(sql),
+            ) && /\bstudio_records\b/i.test(sql),
           );
       const value = Reflect.get(target, key, target);
       return typeof value === "function" ? value.bind(target) : value;
@@ -106,7 +106,7 @@ export async function purgeExpiredRecordHistory(db: D1Database, limit = 500) {
   );
   return db
     .prepare(
-      `DELETE FROM crm_record_history WHERE (tenant_id,object_name,record_id,version) IN (SELECT tenant_id,object_name,record_id,version FROM crm_record_history WHERE expires_at<=${dialectFor(db).utcNow()} ORDER BY expires_at LIMIT ?)`,
+      `DELETE FROM studio_record_history WHERE (tenant_id,object_name,record_id,version) IN (SELECT tenant_id,object_name,record_id,version FROM studio_record_history WHERE expires_at<=${dialectFor(db).utcNow()} ORDER BY expires_at LIMIT ?)`,
     )
     .bind(bounded)
     .run();
@@ -117,7 +117,7 @@ export async function maintainRecordHistory(db: D1Database, limit = 500) {
   const result = await purgeExpiredRecordHistory(db, limit);
   const row = await db
     .prepare(
-      `SELECT expires_at FROM crm_record_history WHERE expires_at<=${dialectFor(db).utcNow()} ORDER BY expires_at LIMIT 1`,
+      `SELECT expires_at FROM studio_record_history WHERE expires_at<=${dialectFor(db).utcNow()} ORDER BY expires_at LIMIT 1`,
     )
     .first<{ expires_at: string }>();
   return {

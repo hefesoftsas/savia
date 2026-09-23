@@ -156,7 +156,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
         if (match) {
           const row = await db
             .prepare(
-              "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+              "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
             )
             .bind(tenant, decodeURIComponent(match[1]))
             .first<{ config: string }>();
@@ -253,7 +253,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       const row = match
         ? await db
             .prepare(
-              "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+              "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
             )
             .bind(tenant, decodeURIComponent(match[1]))
             .first<{ config: string }>()

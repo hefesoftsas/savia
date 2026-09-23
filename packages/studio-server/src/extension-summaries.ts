@@ -74,7 +74,7 @@ export function registerExtensionSummaries(
       );
     else await getObject(c.env.DB, c.get("tenant"), provider.objectName);
     const rows = await c.env.DB.prepare(
-      "SELECT data FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL",
+      "SELECT data FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL",
     )
       .bind(c.get("tenant"), provider.objectName)
       .all<{ data: string }>();

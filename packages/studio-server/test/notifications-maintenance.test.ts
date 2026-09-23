@@ -19,7 +19,7 @@ beforeAll(async () => {
   fixture = await notificationFixture();
   await fixture.db
     .prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
     )
     .bind(
       tenant,

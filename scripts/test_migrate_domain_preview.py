@@ -30,9 +30,9 @@ CREATE TABLE agency_crm_connections(id TEXT PRIMARY KEY, agency_id INTEGER REFER
 CREATE TABLE customer_crm_sync_records(agency_id INTEGER REFERENCES agencies(id), customer_profile_id INTEGER REFERENCES customer_clientagency(id), external_object_id TEXT);
 CREATE TABLE personal_integration_connections(id TEXT PRIMARY KEY, secret TEXT);
 CREATE TABLE user_user(id INTEGER PRIMARY KEY, password TEXT);
-CREATE TABLE crm_objects(tenant_id TEXT,name TEXT, PRIMARY KEY(tenant_id,name));
-CREATE TABLE crm_records(id TEXT,tenant_id TEXT,object_name TEXT,data TEXT,PRIMARY KEY(tenant_id,id), FOREIGN KEY(tenant_id,object_name) REFERENCES crm_objects(tenant_id,name));
-CREATE TABLE crm_data_domains(id TEXT PRIMARY KEY,label TEXT);
+CREATE TABLE studio_objects(tenant_id TEXT,name TEXT, PRIMARY KEY(tenant_id,name));
+CREATE TABLE studio_records(id TEXT,tenant_id TEXT,object_name TEXT,data TEXT,PRIMARY KEY(tenant_id,id), FOREIGN KEY(tenant_id,object_name) REFERENCES studio_objects(tenant_id,name));
+CREATE TABLE studio_data_domains(id TEXT PRIMARY KEY,label TEXT);
 CREATE TABLE server_id_sequences(resource TEXT PRIMARY KEY,next_id INTEGER);
 '''
 
@@ -59,9 +59,9 @@ class MigrationTest(unittest.TestCase):
             INSERT INTO agencies VALUES(1,'Demo','demo');
             INSERT INTO identity_principal VALUES('local','local-login','local-subject','local@example.test','Local',1,'2020','2020');
             INSERT INTO identity_global_role VALUES('local','platform_admin');
-            INSERT INTO crm_data_domains VALUES('projects','Projects');
-            INSERT INTO crm_objects VALUES('domain:projects','projects'),('domain:platform','agencias'),('agency:1','clients');
-            INSERT INTO crm_records VALUES('project','domain:projects','projects','{}'),('1','domain:platform','agencias','{"demo":true}'),('demo','agency:1','clients','{}');
+            INSERT INTO studio_data_domains VALUES('projects','Projects');
+            INSERT INTO studio_objects VALUES('domain:projects','projects'),('domain:platform','agencias'),('agency:1','clients');
+            INSERT INTO studio_records VALUES('project','domain:projects','projects','{}'),('1','domain:platform','agencias','{"demo":true}'),('demo','agency:1','clients','{}');
             """)
     def tearDown(self): self.tmp.cleanup()
     def run_migration(self):
@@ -72,7 +72,7 @@ class MigrationTest(unittest.TestCase):
         with connection(self.root/'output.db') as c:
             self.assertEqual(c.execute('SELECT id,name FROM agencies').fetchall(),[(1,'Real')])
             self.assertEqual(c.execute('SELECT * FROM customer_clientagency').fetchall(),[(88,55,1)])
-            self.assertEqual(c.execute('SELECT id FROM crm_records').fetchall(),[('project',)])
+            self.assertEqual(c.execute('SELECT id FROM studio_records').fetchall(),[('project',)])
             self.assertEqual(c.execute('SELECT * FROM identity_global_role').fetchall(),[('local','platform_admin')])
             self.assertEqual(c.execute("SELECT issuer,is_active FROM identity_principal WHERE id='source'").fetchone(),('urn:savia:local-import',0))
             self.assertEqual(c.execute('SELECT count(*) FROM personal_integration_connections').fetchone()[0],0)

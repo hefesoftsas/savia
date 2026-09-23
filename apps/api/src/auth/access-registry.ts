@@ -47,7 +47,7 @@ export async function accessCatalog(
 ): Promise<AccessCatalogEntry[]> {
   const tenant = studioTenantForScope(scope);
   const rows = await db
-    .prepare("SELECT name,label,config FROM crm_objects WHERE tenant_id=?")
+    .prepare("SELECT name,label,config FROM studio_objects WHERE tenant_id=?")
     .bind(tenant)
     .all<{ name: string; label: string; config: string }>();
   const bindings = await db
@@ -58,8 +58,8 @@ export async function accessCatalog(
     .all<{ object_name: string }>();
   const bound = new Set(bindings.results.map((r) => r.object_name));
   const columns = await db
-    .prepare(dialectFor(db).tableColumns("crm_records").sql)
-    .bind(...dialectFor(db).tableColumns("crm_records").parameters)
+    .prepare(dialectFor(db).tableColumns("studio_records").sql)
+    .bind(...dialectFor(db).tableColumns("studio_records").parameters)
     .all<{ name: string }>();
   const collections: AccessCatalogEntry[] = rows.results.map((row) => {
     const config = JSON.parse(row.config),

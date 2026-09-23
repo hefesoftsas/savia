@@ -63,7 +63,7 @@ async function storedObject(
 ): Promise<StoredObject | null> {
   return db
     .prepare(
-      "SELECT name,label,description,config,version FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT name,label,description,config,version FROM studio_objects WHERE tenant_id=? AND name=?",
     )
     .bind(tenant, name)
     .first<StoredObject>();
@@ -97,7 +97,7 @@ export async function prepareExtensionObjectProvisioning(
       );
     const unchanged = guard(
       db,
-      "SELECT version=? AND label=? AND description=? AND config=? FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT version=? AND label=? AND description=? AND config=? FROM studio_objects WHERE tenant_id=? AND name=?",
       [
         existing.version,
         existing.label,
@@ -112,7 +112,7 @@ export async function prepareExtensionObjectProvisioning(
   const object = { ...requirement.object, version: 1 };
   const absent = guard(
     db,
-    "SELECT count(*)=0 FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT count(*)=0 FROM studio_objects WHERE tenant_id=? AND name=?",
     [tenant, object.name],
   );
   return {
@@ -120,7 +120,7 @@ export async function prepareExtensionObjectProvisioning(
     writes: [
       db
         .prepare(
-          "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+          "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
         )
         .bind(
           tenant,
@@ -131,7 +131,7 @@ export async function prepareExtensionObjectProvisioning(
         ),
       db
         .prepare(
-          "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,1,?)",
+          "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,1,?)",
         )
         .bind(tenant, object.name, JSON.stringify(object)),
       audit(db, tenant, "extension.collection.provisioned", object.name, null, {

@@ -26,7 +26,7 @@ export async function getObject(db: D1Database, tenant: string, name: string) {
   if ((await disabledSolutionObjects(db, tenant)).has(name))
     return fail("El paquete de esta colección está desactivado.", 404);
   const row = await db
-    .prepare("SELECT * FROM crm_objects WHERE tenant_id=? AND name=?")
+    .prepare("SELECT * FROM studio_objects WHERE tenant_id=? AND name=?")
     .bind(tenant, name)
     .first();
   if (!row) return fail("El objeto no existe.", 404);
@@ -42,7 +42,7 @@ export async function getRecord(
   await getObject(db, tenant, object);
   const row = await db
     .prepare(
-      "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+      "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
     )
     .bind(tenant, object, id)
     .first();
@@ -61,7 +61,7 @@ export function audit(
 ) {
   return db
     .prepare(
-      "INSERT INTO crm_audit(id,tenant_id,action,object_name,record_id,detail) VALUES (?,?,?,?,?,?)",
+      "INSERT INTO studio_audit(id,tenant_id,action,object_name,record_id,detail) VALUES (?,?,?,?,?,?)",
     )
     .bind(
       crypto.randomUUID(),
@@ -77,10 +77,10 @@ export function guard(db: D1Database, query: string, args: any[]) {
   return {
     start: db
       .prepare(
-        `INSERT INTO crm_write_guards(id,valid) VALUES (?,COALESCE(${dialectFor(db).booleanInteger(`(${query})`)},0))`,
+        `INSERT INTO studio_write_guards(id,valid) VALUES (?,COALESCE(${dialectFor(db).booleanInteger(`(${query})`)},0))`,
       )
       .bind(id, ...args),
-    end: db.prepare("DELETE FROM crm_write_guards WHERE id=?").bind(id),
+    end: db.prepare("DELETE FROM studio_write_guards WHERE id=?").bind(id),
   };
 }
 export async function transaction(
@@ -91,14 +91,14 @@ export async function transaction(
     return await db.batch(statements);
   } catch (e) {
     const message = String(e);
-    if (message.includes("crm_unique_values"))
+    if (message.includes("studio_unique_values"))
       return fail(
         "Ya existe un registro con el mismo valor en un campo único.",
         409,
       );
     if (
       message.includes("CHECK constraint") ||
-      message.includes("crm_write_guards")
+      message.includes("studio_write_guards")
     )
       return fail(
         "Los datos cambiaron durante la operación. Recarga y vuelve a intentarlo.",
@@ -145,7 +145,7 @@ export function uniqueStatements(
       return [
         db
           .prepare(
-            "INSERT INTO crm_unique_values(tenant_id,object_name,field_name,value,record_id) VALUES (?,?,?,?,?)",
+            "INSERT INTO studio_unique_values(tenant_id,object_name,field_name,value,record_id) VALUES (?,?,?,?,?)",
           )
           .bind(tenant, object.name, field, normalized, id),
       ];
@@ -170,7 +170,7 @@ export async function checkRelations(
           await getRecord(db, tenant, String(field.config.relation), id);
         const row = await db
           .prepare(
-            "SELECT version FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+            "SELECT version FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
           )
           .bind(tenant, field.config.relation, id)
           .first<{ version: number }>();
@@ -181,7 +181,7 @@ export async function checkRelations(
           );
         const g = guard(
           db,
-          "SELECT EXISTS(SELECT 1 FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL)",
+          "SELECT EXISTS(SELECT 1 FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL)",
           [tenant, field.config.relation, id],
         );
         checks.push(g.start, g.end);
@@ -241,7 +241,7 @@ export async function createRecord(
     const previous = key
       ? await db
           .prepare(
-            "SELECT fingerprint,response FROM crm_requests WHERE tenant_id=? AND request_key=?",
+            "SELECT fingerprint,response FROM studio_requests WHERE tenant_id=? AND request_key=?",
           )
           .bind(tenant, key)
           .first<{ fingerprint: string; response: string }>()
@@ -272,7 +272,7 @@ export async function createRecord(
   requireWriteAccess(db, name, "create", null, result, Object.keys(input));
   const schemaGuard = guard(
     db,
-    "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
     [object.version ?? 1, tenant, name],
   );
   const statements = [
@@ -281,7 +281,7 @@ export async function createRecord(
     ...(await checkRelations(db, tenant, object, data)),
     db
       .prepare(
-        "INSERT INTO crm_records(id,tenant_id,object_name,data,created_at,updated_at,created_by) VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,created_by) VALUES (?,?,?,?,?,?,?)",
       )
       .bind(
         id,
@@ -300,7 +300,7 @@ export async function createRecord(
     statements.push(
       db
         .prepare(
-          "INSERT INTO crm_requests(tenant_id,request_key,fingerprint,response) VALUES (?,?,?,?)",
+          "INSERT INTO studio_requests(tenant_id,request_key,fingerprint,response) VALUES (?,?,?,?)",
         )
         .bind(tenant, key, hash, JSON.stringify(result)),
     );
@@ -352,12 +352,12 @@ export async function updateRecord(
     return fail(Object.values(errors).join(". "), 422);
   const schemaGuard = guard(
     db,
-    "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
     [object.version ?? 1, tenant, name],
   );
   const recordGuard = guard(
     db,
-    "SELECT version=? AND deleted_at IS NULL FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+    "SELECT version=? AND deleted_at IS NULL FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
     [options.version, tenant, name, id],
   );
   const now = new Date().toISOString();
@@ -377,12 +377,12 @@ export async function updateRecord(
     ...(await checkRelations(db, tenant, object, data)),
     db
       .prepare(
-        "UPDATE crm_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
+        "UPDATE studio_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
       )
       .bind(JSON.stringify(data), now, tenant, id),
     db
       .prepare(
-        "DELETE FROM crm_unique_values WHERE tenant_id=? AND record_id=?",
+        "DELETE FROM studio_unique_values WHERE tenant_id=? AND record_id=?",
       )
       .bind(tenant, id),
     ...uniqueStatements(db, tenant, object, id, data),
@@ -410,20 +410,20 @@ export async function deleteRecord(
   if (record._version !== options.version)
     return fail("El registro cambió; recarga antes de eliminar.", 409);
   const { results } = await db
-    .prepare("SELECT * FROM crm_objects WHERE tenant_id=?")
+    .prepare("SELECT * FROM studio_objects WHERE tenant_id=?")
     .bind(tenant)
     .all();
   const objects = results.map(parseObject);
   // Freeze the set of schemas as well as their versions: a new relation can be added
   // by a schema publication or by creating an object during the incoming scan.
   const guards = [
-    guard(db, "SELECT count(*)=? FROM crm_objects WHERE tenant_id=?", [
+    guard(db, "SELECT count(*)=? FROM studio_objects WHERE tenant_id=?", [
       objects.length,
       tenant,
     ]),
     guard(
       db,
-      "SELECT version=? AND deleted_at IS NULL FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+      "SELECT version=? AND deleted_at IS NULL FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
       [options.version, tenant, name, id],
     ),
   ];
@@ -440,7 +440,7 @@ export async function deleteRecord(
     guards.push(
       guard(
         db,
-        "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+        "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
         [object.version ?? 1, tenant, object.name],
       ),
     );
@@ -452,11 +452,11 @@ export async function deleteRecord(
         const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND id<>? AND ${condition}`;
         const args = [tenant, object.name, id, id];
         const { results: references } = await db
-          .prepare(`SELECT * FROM crm_records WHERE ${where}`)
+          .prepare(`SELECT * FROM studio_records WHERE ${where}`)
           .bind(...args)
           .all<any>();
         guards.push(
-          guard(db, `SELECT count(*)=? FROM crm_records WHERE ${where}`, [
+          guard(db, `SELECT count(*)=? FROM studio_records WHERE ${where}`, [
             references.length,
             ...args,
           ]),
@@ -499,7 +499,7 @@ export async function deleteRecord(
     guards.push(
       guard(
         db,
-        "SELECT version=? AND deleted_at IS NULL FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+        "SELECT version=? AND deleted_at IS NULL FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
         [row.version, tenant, object.name, row.id],
       ),
     );
@@ -509,12 +509,12 @@ export async function deleteRecord(
     statements.push(
       db
         .prepare(
-          "UPDATE crm_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
+          "UPDATE studio_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
         )
         .bind(JSON.stringify(check.data), now, tenant, row.id),
       db
         .prepare(
-          "DELETE FROM crm_unique_values WHERE tenant_id=? AND record_id=?",
+          "DELETE FROM studio_unique_values WHERE tenant_id=? AND record_id=?",
         )
         .bind(tenant, row.id),
       ...uniqueStatements(db, tenant, object, row.id, check.data),
@@ -526,14 +526,14 @@ export async function deleteRecord(
   }
   // Older CRM installations may not have collection relation metadata yet.
   const hasCollectionRelations = await db
-    .prepare(dialectFor(db).tableExists("crm_record_links").sql)
-    .bind(...dialectFor(db).tableExists("crm_record_links").parameters)
+    .prepare(dialectFor(db).tableExists("studio_record_links").sql)
+    .bind(...dialectFor(db).tableExists("studio_record_links").parameters)
     .first();
   if (hasCollectionRelations)
     statements.push(
       db
         .prepare(
-          "DELETE FROM crm_record_links WHERE tenant_id=? AND ((source_id=? AND relation_id IN (SELECT id FROM crm_collection_relations WHERE tenant_id=? AND source_object=?)) OR (target_id=? AND relation_id IN (SELECT id FROM crm_collection_relations WHERE tenant_id=? AND target_object=?)))",
+          "DELETE FROM studio_record_links WHERE tenant_id=? AND ((source_id=? AND relation_id IN (SELECT id FROM studio_collection_relations WHERE tenant_id=? AND source_object=?)) OR (target_id=? AND relation_id IN (SELECT id FROM studio_collection_relations WHERE tenant_id=? AND target_object=?)))",
         )
         .bind(tenant, id, tenant, name, id, tenant, name),
     );
@@ -544,12 +544,12 @@ export async function deleteRecord(
     ...statements,
     db
       .prepare(
-        "UPDATE crm_records SET deleted_at=?,updated_at=?,version=version+1 WHERE tenant_id=? AND id=?",
+        "UPDATE studio_records SET deleted_at=?,updated_at=?,version=version+1 WHERE tenant_id=? AND id=?",
       )
       .bind(now, now, tenant, id),
     db
       .prepare(
-        "DELETE FROM crm_unique_values WHERE tenant_id=? AND record_id=?",
+        "DELETE FROM studio_unique_values WHERE tenant_id=? AND record_id=?",
       )
       .bind(tenant, id),
     audit(db, tenant, "record.deleted", name, id, record),
@@ -569,7 +569,7 @@ export async function restoreRecord(
     return fail("Se necesita la versión del registro.", 428);
   const row = await db
     .prepare(
-      "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NOT NULL",
+      "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NOT NULL",
     )
     .bind(tenant, name, id)
     .first<any>();
@@ -585,12 +585,12 @@ export async function restoreRecord(
     );
   const g = guard(
     db,
-    "SELECT version=? AND deleted_at IS NOT NULL FROM crm_records WHERE tenant_id=? AND id=?",
+    "SELECT version=? AND deleted_at IS NOT NULL FROM studio_records WHERE tenant_id=? AND id=?",
     [version, tenant, id],
   );
   const schemaGuard = guard(
     db,
-    "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
     [object.version ?? 1, tenant, name],
   );
   await transaction(db, [
@@ -600,7 +600,7 @@ export async function restoreRecord(
     ...uniqueStatements(db, tenant, object, id, data),
     db
       .prepare(
-        "UPDATE crm_records SET deleted_at=NULL,data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
+        "UPDATE studio_records SET deleted_at=NULL,data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
       )
       .bind(JSON.stringify(data), new Date().toISOString(), tenant, id),
     audit(db, tenant, "record.restored", name, id, {}),

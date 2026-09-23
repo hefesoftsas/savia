@@ -704,7 +704,7 @@ export function createCollectionSourceApp(
   app.get("/api/sources", async (c) => {
     const rows = await db
       .prepare(
-        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND owner_principal_id=? ORDER BY label,id",
+        "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND owner_principal_id=? ORDER BY label,id",
       )
       .bind(tenant, principalId)
       .all<SourceRow>();
@@ -725,7 +725,7 @@ export function createCollectionSourceApp(
       try {
         await db
           .prepare(
-            "INSERT INTO crm_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO studio_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,?,?,?,?)",
           )
           .bind(
             tenant,
@@ -775,7 +775,7 @@ export function createCollectionSourceApp(
     const config = JSON.stringify({ baseUrl, options });
     await db
       .prepare(
-        "INSERT INTO crm_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,'jsonapi',?,?,?)",
+        "INSERT INTO studio_collection_sources(tenant_id,id,label,kind,config,encrypted_secret,owner_principal_id) VALUES (?,?,?,'jsonapi',?,?,?)",
       )
       .bind(tenant, input.id, input.label, config, encrypted, principalId)
       .run();
@@ -804,7 +804,7 @@ export function createCollectionSourceApp(
       .parse(await c.req.json());
     const row = await db
       .prepare(
-        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
       )
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
@@ -836,7 +836,7 @@ export function createCollectionSourceApp(
     const changes: D1PreparedStatement[] = [
       db
         .prepare(
-          "UPDATE crm_collection_sources SET config=?,label=?,encrypted_secret=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+          "UPDATE studio_collection_sources SET config=?,label=?,encrypted_secret=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
         )
         .bind(
           storedConfig,
@@ -850,7 +850,7 @@ export function createCollectionSourceApp(
     if (isDatabaseKind(row.kind) && input.writeEnabled !== undefined) {
       const linked = await db
         .prepare(
-          "SELECT b.object_name,b.config,o.config AS object_config,o.version FROM crm_collection_bindings b JOIN crm_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? AND b.source_id=?",
+          "SELECT b.object_name,b.config,o.config AS object_config,o.version FROM crm_collection_bindings b JOIN studio_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? AND b.source_id=?",
         )
         .bind(tenant, row.id)
         .all<{
@@ -884,7 +884,7 @@ export function createCollectionSourceApp(
         };
         const g = guard(
           db,
-          "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+          "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
           [linkedRow.version, tenant, linkedRow.object_name],
         );
         changes.push(
@@ -896,7 +896,7 @@ export function createCollectionSourceApp(
             .bind(JSON.stringify(config), tenant, linkedRow.object_name),
           db
             .prepare(
-              "UPDATE crm_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
+              "UPDATE studio_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
             )
             .bind(JSON.stringify(definition), tenant, linkedRow.object_name),
           g.end,
@@ -916,7 +916,7 @@ export function createCollectionSourceApp(
   app.post("/api/sources/:id/test", async (c) => {
     const row = await db
       .prepare(
-        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
       )
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
@@ -930,7 +930,7 @@ export function createCollectionSourceApp(
     const input = sourceInspectionSchema.parse(await c.req.json());
     const row = await db
       .prepare(
-        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
       )
       .bind(tenant, c.req.param("id"), principalId)
       .first<SourceRow>();
@@ -987,7 +987,7 @@ export function createCollectionSourceApp(
     const id = c.req.param("id");
     const owned = await db
       .prepare(
-        "SELECT 1 FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        "SELECT 1 FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
       )
       .bind(tenant, id, principalId)
       .first();
@@ -1001,7 +1001,7 @@ export function createCollectionSourceApp(
       g.start,
       db
         .prepare(
-          "DELETE FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+          "DELETE FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
         )
         .bind(tenant, id, principalId),
       g.end,
@@ -1014,7 +1014,7 @@ export function createCollectionSourceApp(
     if (!row) fail("Enlace no encontrado.", 404);
     const empty = guard(
       db,
-      "SELECT count(*)=0 FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*)=0 FROM studio_records WHERE tenant_id=? AND object_name=?",
       [tenant, name],
     );
     await transaction(db, [
@@ -1026,14 +1026,14 @@ export function createCollectionSourceApp(
         .bind(tenant, name),
       db
         .prepare(
-          "DELETE FROM crm_schema_versions WHERE tenant_id=? AND object_name=?",
+          "DELETE FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
         )
         .bind(tenant, name),
       db
-        .prepare("DELETE FROM crm_views WHERE tenant_id=? AND object_name=?")
+        .prepare("DELETE FROM studio_views WHERE tenant_id=? AND object_name=?")
         .bind(tenant, name),
       db
-        .prepare("DELETE FROM crm_objects WHERE tenant_id=? AND name=?")
+        .prepare("DELETE FROM studio_objects WHERE tenant_id=? AND name=?")
         .bind(tenant, name),
       audit(db, tenant, "collection.unbound", name, null, {
         sourceId: row.source_id,
@@ -1103,7 +1103,7 @@ export function createCollectionSourceApp(
   app.get("/api/collection-bindings", async (c) => {
     const rows = await db
       .prepare(
-        "SELECT b.*,o.label FROM crm_collection_bindings b JOIN crm_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? ORDER BY o.label",
+        "SELECT b.*,o.label FROM crm_collection_bindings b JOIN studio_objects o ON o.tenant_id=b.tenant_id AND o.name=b.object_name WHERE b.tenant_id=? ORDER BY o.label",
       )
       .bind(tenant)
       .all<BindingRow & { label: string }>();
@@ -1119,7 +1119,7 @@ export function createCollectionSourceApp(
     const input = bindingSchema.parse(await c.req.json());
     if (
       await db
-        .prepare("SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=?")
+        .prepare("SELECT 1 FROM studio_objects WHERE tenant_id=? AND name=?")
         .bind(tenant, input.name)
         .first()
     )
@@ -1191,7 +1191,7 @@ export function createCollectionSourceApp(
         fail("Selecciona fuente, recurso y campos explícitos.");
       const storedSource = await db
         .prepare(
-          "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+          "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
         )
         .bind(tenant, input.sourceId, principalId)
         .first<SourceRow>();
@@ -1377,7 +1377,7 @@ export function createCollectionSourceApp(
       config.kind === "jsonapi" || isDatabaseKind(config.kind)
         ? guard(
             db,
-            "SELECT 1 FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+            "SELECT 1 FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
             [tenant, config.sourceId, principalId],
           )
         : undefined;
@@ -1385,7 +1385,7 @@ export function createCollectionSourceApp(
       ...(sourceGuard ? [sourceGuard.start] : []),
       db
         .prepare(
-          "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+          "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
         )
         .bind(
           tenant,
@@ -1407,7 +1407,7 @@ export function createCollectionSourceApp(
         ),
       db
         .prepare(
-          "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,1,?)",
+          "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,1,?)",
         )
         .bind(
           tenant,
@@ -1440,7 +1440,7 @@ export function createCollectionSourceApp(
       fail("Source not available.", 404);
     const source = await db
       .prepare(
-        "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+        "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
       )
       .bind(tenant, config.sourceId, principalId)
       .first<SourceRow>();
@@ -1510,7 +1510,7 @@ export function createCollectionSourceApp(
     };
     const g = guard(
       db,
-      "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
       [input.version, tenant, name],
     );
     await transaction(db, [
@@ -1522,7 +1522,7 @@ export function createCollectionSourceApp(
         .bind(JSON.stringify(next), tenant, name),
       db
         .prepare(
-          "UPDATE crm_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
+          "UPDATE studio_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
         )
         .bind(JSON.stringify(object.config), tenant, name),
       audit(db, tenant, "collection.metadata.synced", name, null, { issues }),
@@ -1559,7 +1559,7 @@ export function createCollectionSourceApp(
         fail("Source not available.", 404);
       const source = await db
         .prepare(
-          "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+          "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
         )
         .bind(tenant, config.sourceId, principalId)
         .first<SourceRow>();
@@ -1638,14 +1638,14 @@ export function createCollectionSourceApp(
         const definition = { ...next, version: (object.version ?? 1) + 1 };
         const g = guard(
           db,
-          "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+          "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
           [object.version, tenant, name],
         );
         await transaction(db, [
           g.start,
           db
             .prepare(
-              "UPDATE crm_objects SET label=?,description=?,config=?,version=? WHERE tenant_id=? AND name=?",
+              "UPDATE studio_objects SET label=?,description=?,config=?,version=? WHERE tenant_id=? AND name=?",
             )
             .bind(
               next.label,
@@ -1657,7 +1657,7 @@ export function createCollectionSourceApp(
             ),
           db
             .prepare(
-              "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
+              "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
             )
             .bind(tenant, name, definition.version, JSON.stringify(definition)),
           g.end,
@@ -1869,7 +1869,7 @@ export function createCollectionSourceApp(
       if (isDatabaseKind(config.kind) && databaseBridge) {
         const source = await db
           .prepare(
-            "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+            "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
           )
           .bind(tenant, config.sourceId, principalId)
           .first<SourceRow>();
@@ -1919,7 +1919,7 @@ export function createCollectionSourceApp(
       } else if (config.kind === "postgres") {
         const source = await db
           .prepare(
-            "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+            "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
           )
           .bind(tenant, config.sourceId, principalId)
           .first<SourceRow>();
@@ -2003,7 +2003,7 @@ export function createCollectionSourceApp(
       } else {
         const source = await db
           .prepare(
-            "SELECT * FROM crm_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+            "SELECT * FROM studio_collection_sources WHERE tenant_id=? AND id=? AND owner_principal_id=?",
           )
           .bind(tenant, config.sourceId, principalId)
           .first<SourceRow>();
@@ -2139,7 +2139,7 @@ export function createCollectionSourceApp(
           if (key.length > 200) fail("Clave de idempotencia demasiado larga.");
           const prior = await db
             .prepare(
-              "SELECT fingerprint,state,response FROM crm_collection_requests WHERE tenant_id=? AND request_key=?",
+              "SELECT fingerprint,state,response FROM studio_collection_requests WHERE tenant_id=? AND request_key=?",
             )
             .bind(tenant, JSON.stringify([principalId, key]))
             .first<{
@@ -2159,7 +2159,7 @@ export function createCollectionSourceApp(
           }
           await db
             .prepare(
-              "INSERT INTO crm_collection_requests(tenant_id,request_key,fingerprint,state) VALUES (?,?,?,'pending')",
+              "INSERT INTO studio_collection_requests(tenant_id,request_key,fingerprint,state) VALUES (?,?,?,'pending')",
             )
             .bind(tenant, JSON.stringify([principalId, key]), fingerprint)
             .run();
@@ -2211,7 +2211,7 @@ export function createCollectionSourceApp(
         if (key)
           await db
             .prepare(
-              "UPDATE crm_collection_requests SET state='success',response=? WHERE tenant_id=? AND request_key=?",
+              "UPDATE studio_collection_requests SET state='success',response=? WHERE tenant_id=? AND request_key=?",
             )
             .bind(
               JSON.stringify({ data: result.data }),

@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { getPlatformProxy } from "wrangler";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -102,25 +102,15 @@ beforeAll(async () => {
     configPath: "wrangler.jsonc",
     persist: false,
   });
-  for (const name of [
-    "0001_crm.sql",
-    "0002_records.sql",
-    "0004_operations.sql",
-    "0006_r2_attachment_fields.sql",
-    "0007_temporary_r2_attachments.sql",
-    "0011_solutions.sql",
-    "0016_office_revisions.sql",
-    "0017_record_history.sql",
-  ])
+  for (const name of readdirSync("migrations")
+    .filter((file) => file.endsWith(".sql"))
+    .sort())
     for (const sql of readFileSync(`migrations/${name}`, "utf8")
       .split(/;(?!(?:\s*END\b))/i)
       .filter((sql) => sql.trim()))
       await platform.env.DB.prepare(sql).run();
   await platform.env.DB.prepare(
-    "ALTER TABLE crm_records ADD COLUMN created_by TEXT",
-  ).run();
-  await platform.env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
   )
     .bind("demo", object.name, object.label, "", JSON.stringify(object.config))
     .run();
@@ -183,7 +173,7 @@ describe("Operations with real D1 and R2", () => {
     expect(
       (
         await platform.env.DB.prepare(
-          "SELECT count(*) AS total FROM crm_records WHERE object_name=?",
+          "SELECT count(*) AS total FROM studio_records WHERE object_name=?",
         )
           .bind(object.name)
           .first<any>()
@@ -200,7 +190,7 @@ describe("Operations with real D1 and R2", () => {
       },
     });
     await platform.env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
     )
       .bind(
         "demo",
@@ -212,7 +202,7 @@ describe("Operations with real D1 and R2", () => {
     await platform.env.DB.batch(
       Array.from({ length: 26 }, (_, i) =>
         platform.env.DB.prepare(
-          "INSERT INTO crm_records(id,tenant_id,object_name,data,deleted_at) VALUES (?,?,?,?,?)",
+          "INSERT INTO studio_records(id,tenant_id,object_name,data,deleted_at) VALUES (?,?,?,?,?)",
         ).bind(
           `related-${i}`,
           "demo",
@@ -297,7 +287,7 @@ describe("Operations with real D1 and R2", () => {
 
     const target = { id: "temporary-target-9" };
     await platform.env.DB.prepare(
-      "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+      "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
     )
       .bind(
         target.id,
@@ -353,7 +343,7 @@ describe("Operations with real D1 and R2", () => {
     );
     await json(`/file/${temporary.data.id}`, "DELETE", { version: 2 });
     await platform.env.DB.prepare(
-      "DELETE FROM crm_records WHERE tenant_id=? AND id=?",
+      "DELETE FROM studio_records WHERE tenant_id=? AND id=?",
     )
       .bind("demo", target.id)
       .run();
@@ -421,7 +411,7 @@ describe("Operations with real D1 and R2", () => {
     await platform.env.DB.batch(
       Array.from({ length: 205 }, (_, i) =>
         platform.env.DB.prepare(
-          "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+          "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
         ).bind(
           `export-${i.toString().padStart(3, "0")}`,
           "demo",

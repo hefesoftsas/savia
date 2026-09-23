@@ -71,7 +71,7 @@ export async function isExtensionAvailable(
   return Boolean(
     await db
       .prepare(
-        "SELECT 1 FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+        "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
       )
       .bind(tenant, id)
       .first(),
@@ -86,7 +86,7 @@ export async function enabledExtensionIds(
   const resolvedRegistry = registryFor({ extensionRegistry: registry });
   const rows = await db
     .prepare(
-      "SELECT id FROM crm_extension_installations WHERE tenant_id=? AND enabled=1 ORDER BY id",
+      "SELECT id FROM studio_extension_installations WHERE tenant_id=? AND enabled=1 ORDER BY id",
     )
     .bind(tenant)
     .all<{ id: string }>();
@@ -107,7 +107,7 @@ async function installation(
 ): Promise<StoredInstallation | null> {
   return db
     .prepare(
-      "SELECT id,version,enabled,manifest FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+      "SELECT id,version,enabled,manifest FROM studio_extension_installations WHERE tenant_id=? AND id=?",
     )
     .bind(tenant, id)
     .first<StoredInstallation>();
@@ -127,7 +127,7 @@ async function assertDependencies(
 async function assertCanDisable(db: D1Database, tenant: string, id: string) {
   const dependentExtension = await db
     .prepare(
-      `SELECT e.id FROM crm_extension_installations e,${dialectFor(db).jsonEach("e.manifest", "$.requires", "d")} WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=? LIMIT 1`,
+      `SELECT e.id FROM studio_extension_installations e,${dialectFor(db).jsonEach("e.manifest", "$.requires", "d")} WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=? LIMIT 1`,
     )
     .bind(tenant, id, id)
     .first<{ id: string }>();
@@ -138,7 +138,7 @@ async function assertCanDisable(db: D1Database, tenant: string, id: string) {
     );
   const dependentSolution = await db
     .prepare(
-      `SELECT s.id FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND d.value=? LIMIT 1`,
+      `SELECT s.id FROM studio_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND d.value=? LIMIT 1`,
     )
     .bind(tenant, id)
     .first<{ id: string }>();
@@ -160,7 +160,7 @@ function activeDependencyGuards(
     .map((id) =>
       guard(
         db,
-        "SELECT enabled=1 FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+        "SELECT enabled=1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
         [tenant, id],
       ),
     );
@@ -170,12 +170,12 @@ function noActiveDependentsGuards(db: D1Database, tenant: string, id: string) {
   return [
     guard(
       db,
-      `SELECT count(*)=0 FROM crm_extension_installations e,${dialectFor(db).jsonEach("e.manifest", "$.requires", "d")} WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=?`,
+      `SELECT count(*)=0 FROM studio_extension_installations e,${dialectFor(db).jsonEach("e.manifest", "$.requires", "d")} WHERE e.tenant_id=? AND e.enabled=1 AND e.id!=? AND d.value=?`,
       [tenant, id, id],
     ),
     guard(
       db,
-      `SELECT count(*)=0 FROM crm_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND d.value=?`,
+      `SELECT count(*)=0 FROM studio_solution_installations s,${dialectFor(db).jsonEach("s.manifest", "$.requires", "d")} WHERE s.tenant_id=? AND s.enabled=1 AND d.value=?`,
       [tenant, id],
     ),
   ];
@@ -196,7 +196,7 @@ export function registerExtensions(
   app.get("/api/extensions", async (c) => {
     const tenant = c.get("tenant");
     const rows = await c.env.DB.prepare(
-      "SELECT id,version,enabled,manifest FROM crm_extension_installations WHERE tenant_id=?",
+      "SELECT id,version,enabled,manifest FROM studio_extension_installations WHERE tenant_id=?",
     )
       .bind(tenant)
       .all<StoredInstallation>();
@@ -267,12 +267,12 @@ export function registerExtensions(
     const currentGuard = current
       ? guard(
           c.env.DB,
-          "SELECT version=? AND enabled=? AND manifest=? FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+          "SELECT version=? AND enabled=? AND manifest=? FROM studio_extension_installations WHERE tenant_id=? AND id=?",
           [current.version, current.enabled, current.manifest, tenant, id],
         )
       : guard(
           c.env.DB,
-          "SELECT count(*)=0 FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+          "SELECT count(*)=0 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
           [tenant, id],
         );
     const dependencyGuards = activeDependencyGuards(
@@ -293,7 +293,7 @@ export function registerExtensions(
       ...provisioning.starts,
       ...provisioning.writes,
       c.env.DB.prepare(
-        `INSERT INTO crm_extension_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,enabled=1,manifest=excluded.manifest,updated_at=${dialectFor(c.env.DB).utcNow()}`,
+        `INSERT INTO studio_extension_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?) ON CONFLICT(tenant_id,id) DO UPDATE SET version=excluded.version,enabled=1,manifest=excluded.manifest,updated_at=${dialectFor(c.env.DB).utcNow()}`,
       ).bind(tenant, id, extension.manifest.version, manifest),
       audit(
         c.env.DB,
@@ -353,7 +353,7 @@ export function registerExtensions(
       });
     const currentGuard = guard(
       c.env.DB,
-      "SELECT version=? AND enabled=? AND manifest=? FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+      "SELECT version=? AND enabled=? AND manifest=? FROM studio_extension_installations WHERE tenant_id=? AND id=?",
       [current.version, current.enabled, current.manifest, tenant, id],
     );
     const stateGuards = input.enabled
@@ -363,7 +363,7 @@ export function registerExtensions(
       currentGuard.start,
       ...stateGuards.map((state) => state.start),
       c.env.DB.prepare(
-        `UPDATE crm_extension_installations SET enabled=?,updated_at=${dialectFor(c.env.DB).utcNow()} WHERE tenant_id=? AND id=?`,
+        `UPDATE studio_extension_installations SET enabled=?,updated_at=${dialectFor(c.env.DB).utcNow()} WHERE tenant_id=? AND id=?`,
       ).bind(input.enabled ? 1 : 0, tenant, id),
       audit(
         c.env.DB,

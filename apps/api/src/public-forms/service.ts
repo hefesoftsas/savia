@@ -197,7 +197,7 @@ export async function availableObject(
         .first()
     : tenant === "domain:platform" ||
       (await db
-        .prepare("SELECT 1 FROM crm_data_domains WHERE id=?")
+        .prepare("SELECT 1 FROM studio_data_domains WHERE id=?")
         .bind(tenant.slice(7))
         .first());
   if (!active) reject("Public form unavailable.", 404);

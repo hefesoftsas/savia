@@ -79,7 +79,7 @@ export function createConnectorApp(options: ConnectorAppOptions) {
       Boolean(
         await options.database
           .prepare(
-            "SELECT 1 FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+            "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
           )
           .bind(tenantId, extensionId)
           .first(),

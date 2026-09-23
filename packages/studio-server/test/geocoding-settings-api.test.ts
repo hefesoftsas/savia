@@ -14,17 +14,17 @@ function createEnv(extra: Record<string, unknown> = {}) {
       prepare: (sql: string) => ({
         bind: (...args: unknown[]) => ({
           first: async () => {
-            if (sql.includes("FROM crm_geocoding_settings")) {
+            if (sql.includes("FROM studio_geocoding_settings")) {
               const encrypted = geocodingRows.get(String(args[0]));
               return encrypted ? { encrypted_geoapify_key: encrypted } : null;
             }
             return null;
           },
           run: async () => {
-            if (sql.includes("INSERT INTO crm_geocoding_settings")) {
+            if (sql.includes("INSERT INTO studio_geocoding_settings")) {
               geocodingRows.set(String(args[0]), String(args[1]));
             }
-            if (sql.includes("DELETE FROM crm_geocoding_settings")) {
+            if (sql.includes("DELETE FROM studio_geocoding_settings")) {
               geocodingRows.delete(String(args[0]));
             }
             return {};

@@ -223,7 +223,7 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
     const statements: D1PreparedStatement[] = [];
     for (const item of discovered.filter((x) => x.available)) {
       const existing = await db
-        .prepare("SELECT name FROM crm_objects WHERE tenant_id=? AND name=?")
+        .prepare("SELECT name FROM studio_objects WHERE tenant_id=? AND name=?")
         .bind(tenant, item.name)
         .first();
       if (existing) {
@@ -449,7 +449,7 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
         statements.push(
           db
             .prepare(
-              "UPDATE crm_objects SET config=?,version=? WHERE tenant_id=? AND name=? AND version=?",
+              "UPDATE studio_objects SET config=?,version=? WHERE tenant_id=? AND name=? AND version=?",
             )
             .bind(
               JSON.stringify(next.config),
@@ -465,7 +465,7 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
             .bind(JSON.stringify(binding), tenant, item.name),
           db
             .prepare(
-              "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES(?,?,?,?)",
+              "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES(?,?,?,?)",
             )
             .bind(tenant, item.name, next.version, JSON.stringify(next)),
         );
@@ -475,7 +475,7 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
       statements.push(
         db
           .prepare(
-            "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES(?,?,?,?,?,1)",
+            "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES(?,?,?,?,?,1)",
           )
           .bind(
             tenant,
@@ -491,7 +491,7 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
           .bind(tenant, item.name, item.resource, JSON.stringify(binding)),
         db
           .prepare(
-            "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES(?,?,1,?)",
+            "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES(?,?,1,?)",
           )
           .bind(
             tenant,

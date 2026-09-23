@@ -230,7 +230,7 @@ async function getIntegration(
 ): Promise<any> {
   const row = await db
     .prepare(
-      "SELECT * FROM crm_integrations WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+      "SELECT * FROM studio_integrations WHERE tenant_id=? AND id=? AND owner_principal_id=?",
     )
     .bind(tenant, id, principalId)
     .first<any>();
@@ -265,7 +265,7 @@ export function registerIntegrations(
   });
   app.get("/api/integrations", async (c) => {
     const { results } = await c.env.DB.prepare(
-      "SELECT * FROM crm_integrations WHERE tenant_id=? AND owner_principal_id=? ORDER BY created_at DESC",
+      "SELECT * FROM studio_integrations WHERE tenant_id=? AND owner_principal_id=? ORDER BY created_at DESC",
     )
       .bind(c.get("tenant"), c.get("principalId"))
       .all<any>();
@@ -302,7 +302,7 @@ export function registerIntegrations(
     }
     const id = crypto.randomUUID();
     await c.env.DB.prepare(
-      "INSERT INTO crm_integrations (id,tenant_id,owner_principal_id,name,document) VALUES (?,?,?,?,?)",
+      "INSERT INTO studio_integrations (id,tenant_id,owner_principal_id,name,document) VALUES (?,?,?,?,?)",
     )
       .bind(
         id,
@@ -356,7 +356,7 @@ export function registerIntegrations(
     if (config.authType !== "none" && !encrypted)
       return fail("Introduce una credencial para esta conexión.", 422);
     await c.env.DB.prepare(
-      "UPDATE crm_integrations SET connection=?,encrypted_secret=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
+      "UPDATE studio_integrations SET connection=?,encrypted_secret=? WHERE tenant_id=? AND id=? AND owner_principal_id=?",
     )
       .bind(
         JSON.stringify(config),
@@ -407,7 +407,7 @@ export function registerIntegrations(
       c.get("principalId"),
     );
     const { results } = await c.env.DB.prepare(
-      "SELECT id,operation_id,method,status,http_status,attempts,duration_ms,error,created_at FROM crm_integration_runs WHERE tenant_id=? AND integration_id=? ORDER BY created_at DESC LIMIT 100",
+      "SELECT id,operation_id,method,status,http_status,attempts,duration_ms,error,created_at FROM studio_integration_runs WHERE tenant_id=? AND integration_id=? ORDER BY created_at DESC LIMIT 100",
     )
       .bind(c.get("tenant"), c.req.param("id"))
       .all();
@@ -551,7 +551,7 @@ export function registerIntegrations(
     if (key) {
       const old = await db
         .prepare(
-          "SELECT * FROM crm_integration_runs WHERE tenant_id=? AND integration_id=? AND operation_id=? AND idempotency_key=?",
+          "SELECT * FROM studio_integration_runs WHERE tenant_id=? AND integration_id=? AND operation_id=? AND idempotency_key=?",
         )
         .bind(tenant, row.id, op.id, key)
         .first<any>();
@@ -585,7 +585,7 @@ export function registerIntegrations(
     try {
       await db
         .prepare(
-          "INSERT INTO crm_integration_runs (id,tenant_id,integration_id,operation_id,method,status,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO studio_integration_runs (id,tenant_id,integration_id,operation_id,method,status,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?)",
         )
         .bind(
           runId,
@@ -689,7 +689,7 @@ export function registerIntegrations(
     const durationMs = Date.now() - started;
     await db
       .prepare(
-        "UPDATE crm_integration_runs SET status=?,http_status=?,attempts=?,duration_ms=?,error=?,response=? WHERE id=? AND tenant_id=?",
+        "UPDATE studio_integration_runs SET status=?,http_status=?,attempts=?,duration_ms=?,error=?,response=? WHERE id=? AND tenant_id=?",
       )
       .bind(
         status,
@@ -726,7 +726,7 @@ export function registerIntegrations(
       })
       .parse(await c.req.json());
     const row = await c.env.DB.prepare(
-      "SELECT response,status FROM crm_integration_runs WHERE tenant_id=? AND integration_id=? AND id=?",
+      "SELECT response,status FROM studio_integration_runs WHERE tenant_id=? AND integration_id=? AND id=?",
     )
       .bind(c.get("tenant"), c.req.param("id"), c.req.param("run"))
       .first<any>();

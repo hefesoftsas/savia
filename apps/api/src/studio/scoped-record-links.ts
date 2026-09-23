@@ -50,7 +50,7 @@ export async function scopedRecordLinks(
     ).fields;
     const definitions = await db
       .prepare(
-        "SELECT * FROM crm_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?)",
+        "SELECT * FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?)",
       )
       .bind(tenant, name, name)
       .all<any>();
@@ -85,13 +85,13 @@ export async function scopedRecordLinks(
         accessDenied();
       const rows = await db
         .prepare(
-          `SELECT r.* FROM crm_record_links l JOIN crm_records r ON r.tenant_id=l.tenant_id AND r.id=l.${outgoing ? "target_id" : "source_id"} AND r.object_name=? WHERE l.tenant_id=? AND l.relation_id=? AND l.${outgoing ? "source_id" : "target_id"}=? LIMIT 10001`,
+          `SELECT r.* FROM studio_record_links l JOIN studio_records r ON r.tenant_id=l.tenant_id AND r.id=l.${outgoing ? "target_id" : "source_id"} AND r.object_name=? WHERE l.tenant_id=? AND l.relation_id=? AND l.${outgoing ? "source_id" : "target_id"}=? LIMIT 10001`,
         )
         .bind(target, tenant, definition.id, id)
         .all();
       const count = await db
         .prepare(
-          `SELECT count(*) n FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${outgoing ? "source_id" : "target_id"}=?`,
+          `SELECT count(*) n FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${outgoing ? "source_id" : "target_id"}=?`,
         )
         .bind(tenant, definition.id, id)
         .first<{ n: number }>();
@@ -149,7 +149,7 @@ export async function scopedRelationDefinitions(
 ): Promise<Response> {
   const rows = await db
     .prepare(
-      'SELECT id,source_object AS "sourceObject",target_object AS "targetObject",source_label AS "sourceLabel",target_label AS "targetLabel",cardinality,source_field AS "sourceField",target_field AS "targetField",source_display_field AS "sourceDisplayField",target_display_field AS "targetDisplayField",storage,version FROM crm_collection_relations WHERE tenant_id=? AND storage=\'local\' ORDER BY id LIMIT 501',
+      'SELECT id,source_object AS "sourceObject",target_object AS "targetObject",source_label AS "sourceLabel",target_label AS "targetLabel",cardinality,source_field AS "sourceField",target_field AS "targetField",source_display_field AS "sourceDisplayField",target_display_field AS "targetDisplayField",storage,version FROM studio_collection_relations WHERE tenant_id=? AND storage=\'local\' ORDER BY id LIMIT 501',
     )
     .bind(tenant)
     .all<any>();

@@ -187,7 +187,7 @@ describe("industry packages on real D1", () => {
         .status,
     ).toBe(409);
     await platform.env.DB.prepare(
-      "UPDATE crm_objects SET label='Personalizado' WHERE tenant_id='upgrade' AND name='appointments'",
+      "UPDATE studio_objects SET label='Personalizado' WHERE tenant_id='upgrade' AND name='appointments'",
     ).run();
     expect(
       (
@@ -314,7 +314,7 @@ it("serializes dependent installation against disabling its dependency", async (
     expect(statuses.filter((status) => status < 300)).toHaveLength(1);
     expect(statuses).toContain(409);
     const { results } = await platform.env.DB.prepare(
-      "SELECT id,enabled FROM crm_solution_installations WHERE tenant_id=?",
+      "SELECT id,enabled FROM studio_solution_installations WHERE tenant_id=?",
     )
       .bind(tenant)
       .all<{ id: string; enabled: number }>();
@@ -344,7 +344,7 @@ it("leaves every object and installation untouched when one object collides", as
   ).toBe(404);
   expect(
     await platform.env.DB.prepare(
-      "SELECT count(*) AS n FROM crm_solution_objects WHERE tenant_id=?",
+      "SELECT count(*) AS n FROM studio_solution_objects WHERE tenant_id=?",
     )
       .bind(tenant)
       .first("n"),
@@ -476,12 +476,12 @@ it("requires restoring a missing owned object and prevents another package takin
   const tenant = "orphan-ownership";
   await json(tenant, "/solutions/install", "POST", manifest);
   await platform.env.DB.prepare(
-    "DELETE FROM crm_objects WHERE tenant_id=? AND name=?",
+    "DELETE FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind(tenant, "appointments")
     .run();
   const before = await platform.env.DB.prepare(
-    "SELECT * FROM crm_solution_objects WHERE tenant_id=?",
+    "SELECT * FROM studio_solution_objects WHERE tenant_id=?",
   )
     .bind(tenant)
     .all();
@@ -509,7 +509,7 @@ it("requires restoring a missing owned object and prevents another package takin
   expect(
     (
       await platform.env.DB.prepare(
-        "SELECT * FROM crm_solution_objects WHERE tenant_id=?",
+        "SELECT * FROM studio_solution_objects WHERE tenant_id=?",
       )
         .bind(tenant)
         .all()

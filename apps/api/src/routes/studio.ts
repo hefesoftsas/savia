@@ -25,14 +25,14 @@ export async function resolveDynamicTenantKey(
   preferredPrefix?: "tenant" | "agency",
 ): Promise<string> {
   const hasTenant = await db
-    .prepare("SELECT 1 FROM crm_objects WHERE tenant_id=? LIMIT 1")
+    .prepare("SELECT 1 FROM studio_objects WHERE tenant_id=? LIMIT 1")
     .bind(`tenant:${tenantId}`)
     .first();
   if (hasTenant) return `tenant:${tenantId}`;
 
   const hasAgency = await db
     .prepare(
-      "SELECT 1 FROM crm_objects WHERE tenant_id=? UNION ALL SELECT 1 FROM crm_solution_installations WHERE tenant_id=? LIMIT 1",
+      "SELECT 1 FROM studio_objects WHERE tenant_id=? UNION ALL SELECT 1 FROM studio_solution_installations WHERE tenant_id=? LIMIT 1",
     )
     .bind(`agency:${tenantId}`, `agency:${tenantId}`)
     .first();
@@ -320,7 +320,7 @@ export function registerStudioRoutes(
         try {
           const bumped = await db
             .prepare(
-              `INSERT INTO crm_collection_versions(tenant_id, collection, version, updated_at)
+              `INSERT INTO studio_collection_versions(tenant_id, collection, version, updated_at)
                VALUES(?, ?, 1, ?)
                ON CONFLICT(tenant_id, collection) DO UPDATE SET version = version + 1, updated_at = excluded.updated_at
                RETURNING version`,

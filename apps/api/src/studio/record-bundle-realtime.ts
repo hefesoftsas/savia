@@ -25,7 +25,7 @@ export async function publishRecordBundleChanges(options: {
       if (typeof group?.relationId !== "string") continue;
       const relation = await db
         .prepare(
-          "SELECT source_object,target_object FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+          "SELECT source_object,target_object FROM studio_collection_relations WHERE tenant_id=? AND id=?",
         )
         .bind(tenant, group.relationId)
         .first<{ source_object: string; target_object: string }>();
@@ -39,7 +39,7 @@ export async function publishRecordBundleChanges(options: {
       try {
         const bumped = await db
           .prepare(
-            `INSERT INTO crm_collection_versions(tenant_id, collection, version, updated_at)
+            `INSERT INTO studio_collection_versions(tenant_id, collection, version, updated_at)
           VALUES(?, ?, 1, ?) ON CONFLICT(tenant_id, collection) DO UPDATE
           SET version=version+1, updated_at=excluded.updated_at RETURNING version`,
           )

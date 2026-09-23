@@ -93,14 +93,14 @@ describe("Record and metadata integrity under interleaved writes", () => {
     });
     const unique = await db
       .prepare(
-        "SELECT field_name,value FROM crm_unique_values WHERE record_id=?",
+        "SELECT field_name,value FROM studio_unique_values WHERE record_id=?",
       )
       .bind(source.id)
       .all<any>();
     expect(unique.results).toEqual([{ field_name: "name", value: "origen" }]);
     const audits = await db
       .prepare(
-        "SELECT count(*) as count FROM crm_audit WHERE record_id=? AND action='relation.cleared'",
+        "SELECT count(*) as count FROM studio_audit WHERE record_id=? AND action='relation.cleared'",
       )
       .bind(source.id)
       .first<{ count: number }>();
@@ -253,7 +253,7 @@ describe("Record and metadata integrity under interleaved writes", () => {
       ),
     ).rejects.toThrow("Los datos cambiaron");
     const stored = await db
-      .prepare("SELECT deleted_at,version FROM crm_records WHERE id=?")
+      .prepare("SELECT deleted_at,version FROM studio_records WHERE id=?")
       .bind(record.id)
       .first<any>();
     expect(stored.deleted_at).toBeTruthy();

@@ -14,7 +14,7 @@ it('accepts duplicates but rejects a changed event payload',async()=>{
  await expect(repository.accept({...input,title:'Changed'})).rejects.toMatchObject({status:409});
 });
 it('rolls event capture back with the enclosing transaction',async()=>{
- await expect(fixture.db.batch([...repository.eventStatements({...input,key:'rollback'}),fixture.db.prepare('INSERT INTO crm_write_guards(id,valid) VALUES (?,0)').bind('bad')])).rejects.toThrow();
+ await expect(fixture.db.batch([...repository.eventStatements({...input,key:'rollback'}),fixture.db.prepare('INSERT INTO studio_write_guards(id,valid) VALUES (?,0)').bind('bad')])).rejects.toThrow();
  expect(await fixture.db.prepare("SELECT count(*) AS n FROM notification_events WHERE event_key='rollback'").first('n')).toBe(0);
 });
 it('pages equal timestamps without overlap and isolates recipients',async()=>{

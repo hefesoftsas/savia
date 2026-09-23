@@ -137,7 +137,7 @@ beforeEach(async () => {
   await platform.env.DB.exec("DELETE FROM extension_connection_audit_events");
   await platform.env.DB.exec("DELETE FROM extension_connections");
   await platform.env.DB.exec("DELETE FROM extension_settings");
-  await platform.env.DB.exec("DELETE FROM crm_extension_installations");
+  await platform.env.DB.exec("DELETE FROM studio_extension_installations");
 });
 
 afterAll(async () => {

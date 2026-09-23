@@ -20,7 +20,7 @@ export async function prepareWorkflowBundle(
     if (
       patch.optional &&
       !(await db
-        .prepare("SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=?")
+        .prepare("SELECT 1 FROM studio_objects WHERE tenant_id=? AND name=?")
         .bind(workspace, patch.collection)
         .first())
     )

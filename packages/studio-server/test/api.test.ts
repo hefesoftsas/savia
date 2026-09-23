@@ -50,7 +50,7 @@ describe("Hono + real isolated D1", () => {
     await json("/bootstrap", "POST");
     expect((await json("/objects")).data).toHaveLength(5);
     await platform.env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
     )
       .bind(
         "other",
@@ -215,7 +215,7 @@ describe("Hono + real isolated D1", () => {
       (
         await request(
           "/records/opportunity?sort=" +
-            encodeURIComponent("name'); DROP TABLE crm_records; --"),
+            encodeURIComponent("name'); DROP TABLE studio_records; --"),
         )
       ).status,
     ).toBe(400);

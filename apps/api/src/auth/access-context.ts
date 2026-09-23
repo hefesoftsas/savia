@@ -47,7 +47,7 @@ export async function accessAuthority(
   } else if (
     scope !== "platform" &&
     !(await db
-      .prepare("SELECT id FROM crm_data_domains WHERE id=?")
+      .prepare("SELECT id FROM studio_data_domains WHERE id=?")
       .bind(scope.slice(7))
       .first())
   )

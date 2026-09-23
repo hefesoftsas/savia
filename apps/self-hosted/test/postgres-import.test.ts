@@ -69,11 +69,11 @@ it("maps native authentication values explicitly", () => {
 it("provides safe CLI-compatible Unicode diagnostics", () => {
   const error = new ImportTextCompatibilityError(
     "savia_core",
-    "crm_records",
+    "studio_records",
     "data",
   );
   expect(error.message).toBe(
-    "Unsupported PostgreSQL text in savia_core.crm_records.data.",
+    "Unsupported PostgreSQL text in savia_core.studio_records.data.",
   );
 });
 it("requires PostgreSQL when explicitly selected", () => {
@@ -342,7 +342,7 @@ it.skipIf(!postgresTestUrl)(
         }
         for (const [schema, table] of [
           ["savia_auth", "user"],
-          ["savia_core", "crm_records"],
+          ["savia_core", "studio_records"],
           ["savia_request", "flows"],
         ]) {
           expect(

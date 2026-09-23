@@ -612,7 +612,7 @@ export function registerTenantRoutes(
       return c.json(conflict, 409);
     const linked = await db
       .prepare(
-        "SELECT 1 FROM identity_tenant_membership WHERE tenant_id=? UNION ALL SELECT 1 FROM crm_objects WHERE tenant_id=? LIMIT 1",
+        "SELECT 1 FROM identity_tenant_membership WHERE tenant_id=? UNION ALL SELECT 1 FROM studio_objects WHERE tenant_id=? LIMIT 1",
       )
       .bind(id, `agency:${id}`)
       .first();
@@ -623,11 +623,11 @@ export function registerTenantRoutes(
         : (
             await db
               .prepare(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' AND sql LIKE '%tenant_id%'",
+                "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'crm_%' OR name LIKE 'studio_%') AND sql LIKE '%tenant_id%'",
               )
               .all<{ name: string }>()
           ).results.map((row) => row.name);
-    const names = tables.filter((name) => /^crm_[a-z_]+$/.test(name));
+    const names = tables.filter((name) => /^(crm|studio)_[a-z_]+$/.test(name));
     if (names.length) {
       const remaining = await db.batch(
         names.map((name) =>

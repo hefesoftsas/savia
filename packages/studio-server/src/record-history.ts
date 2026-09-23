@@ -54,7 +54,7 @@ async function historyAccess(
   const object = await getObject(db, tenant, name);
   const row = await db
     .prepare(
-      "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+      "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
     )
     .bind(tenant, name, id)
     .first();
@@ -168,7 +168,7 @@ export function registerRecordHistory(
       COALESCE(sum(expired),0) AS "expiredEvents", min(CASE WHEN expired=1 THEN expires_at ELSE NULL END) AS "oldestExpiredAt"
       FROM (SELECT ${dialectFor(db).name === "postgres" ? "octet_length(changes)" : "length(CAST(changes AS BLOB))"} AS bytes, expires_at,
         ${dialectFor(db).booleanInteger(`expires_at<=${dialectFor(db).utcNow()}`)} AS expired
-        FROM crm_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1000) AS history_usage`,
+        FROM studio_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1000) AS history_usage`,
       )
       .bind(tenant, name)
       .first<{
@@ -179,7 +179,7 @@ export function registerRecordHistory(
       }>();
     const more = await db
       .prepare(
-        "SELECT 1 FROM crm_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1 OFFSET 1000",
+        "SELECT 1 FROM studio_record_history WHERE tenant_id=? AND object_name=? ORDER BY record_id,version LIMIT 1 OFFSET 1000",
       )
       .bind(tenant, name)
       .first();
@@ -213,7 +213,7 @@ export function registerRecordHistory(
     requireRecordAccess(db, name, "update", record);
     const row = await db
       .prepare(
-        `SELECT changes FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND ${retentionWhere(db)}`,
+        `SELECT changes FROM studio_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND ${retentionWhere(db)}`,
       )
       .bind(tenant, name, id, version)
       .first<{ changes: string }>();
@@ -279,7 +279,7 @@ export function registerRecordHistory(
     );
     const sourceGuard = guard(
       db,
-      `SELECT EXISTS(SELECT 1 FROM crm_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND changes=? AND ${retentionWhere(db)}) AND EXISTS(SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=? AND version=?)`,
+      `SELECT EXISTS(SELECT 1 FROM studio_record_history h WHERE tenant_id=? AND object_name=? AND record_id=? AND version=? AND changes=? AND ${retentionWhere(db)}) AND EXISTS(SELECT 1 FROM studio_objects WHERE tenant_id=? AND name=? AND version=?)`,
       [
         tenant,
         name,
@@ -355,14 +355,14 @@ export function registerRecordHistory(
     });
     const g = guard(
       db,
-      "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
       [version, tenant, name],
     );
     await transaction(db, [
       g.start,
       db
         .prepare(
-          "UPDATE crm_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
+          "UPDATE studio_objects SET config=?,version=version+1 WHERE tenant_id=? AND name=?",
         )
         .bind(JSON.stringify(config), tenant, name),
       audit(db, tenant, "object.history_configured", name, null, {
@@ -411,7 +411,7 @@ export function registerRecordHistory(
     }
     const rows = await db
       .prepare(
-        `SELECT ${columns(db)} FROM crm_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version<? AND ${retentionWhere(db)} ORDER BY h.version DESC LIMIT ?`,
+        `SELECT ${columns(db)} FROM studio_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version<? AND ${retentionWhere(db)} ORDER BY h.version DESC LIMIT ?`,
       )
       .bind(tenant, name, id, version, q.limit + 1)
       .all<Row>();
@@ -442,7 +442,7 @@ export function registerRecordHistory(
     const { fields, settings } = await historyAccess(db, tenant, name, id);
     const row = await db
       .prepare(
-        `SELECT ${columns(db)},h.changes FROM crm_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version=? AND ${retentionWhere(db)}`,
+        `SELECT ${columns(db)},h.changes FROM studio_record_history h WHERE h.tenant_id=? AND h.object_name=? AND h.record_id=? AND h.version=? AND ${retentionWhere(db)}`,
       )
       .bind(tenant, name, id, version)
       .first<Row>();

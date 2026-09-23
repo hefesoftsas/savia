@@ -240,7 +240,7 @@ it("rejects incompatible multiple relation fields before installing any draft", 
   const { prepareWorkflowBundle } =
     await import("@savia/studio-server/workflows/bundles");
   const tenant = await env.DB.prepare(
-    "SELECT tenant_id FROM crm_objects WHERE name='polizas' LIMIT 1",
+    "SELECT tenant_id FROM studio_objects WHERE name='polizas' LIMIT 1",
   ).first<{ tenant_id: string }>();
   await expect(
     prepareWorkflowBundle(env.DB, tenant!.tenant_id, "owner", {

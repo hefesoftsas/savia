@@ -42,11 +42,13 @@ export function accessDatabase(db: D1Database, policy: AccessPolicy) {
           const result = await target.batch([
             target
               .prepare(
-                `INSERT INTO crm_write_guards(id,valid) SELECT ?,COALESCE((SELECT ${dialectFor(db).booleanInteger("revision=?")} FROM access_revisions WHERE scope=?),0)`,
+                `INSERT INTO studio_write_guards(id,valid) SELECT ?,COALESCE((SELECT ${dialectFor(db).booleanInteger("revision=?")} FROM access_revisions WHERE scope=?),0)`,
               )
               .bind(id, policy.revision, policy.scope),
             ...statements,
-            target.prepare("DELETE FROM crm_write_guards WHERE id=?").bind(id),
+            target
+              .prepare("DELETE FROM studio_write_guards WHERE id=?")
+              .bind(id),
           ]);
           return result.slice(1, -1);
         };

@@ -117,7 +117,7 @@ export function createNotificationPolicy(db: D1Database): NotificationPolicy {
         if (source.kind === "record") {
           const row = await db
             .prepare(
-              "SELECT 1 AS ok FROM crm_objects WHERE tenant_id=? AND name=?",
+              "SELECT 1 AS ok FROM studio_objects WHERE tenant_id=? AND name=?",
             )
             .bind(scope.id, source.collection)
             .first<number>("ok");

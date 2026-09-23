@@ -170,7 +170,7 @@ describe("Operational integrations with isolated D1", () => {
       secret: token,
     });
     const stored = await platform.env.DB.prepare(
-      "SELECT encrypted_secret FROM crm_integrations WHERE id=?",
+      "SELECT encrypted_secret FROM studio_integrations WHERE id=?",
     )
       .bind(item.id)
       .first();

@@ -100,7 +100,7 @@ beforeAll(async () => {
       .filter(Boolean))
       await env.DB.exec(statement);
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
   )
     .bind(
       "domain:platform",
@@ -216,7 +216,7 @@ it("keeps request results generic across solution installations", async () => {
     "agency:914",
   ]) {
     await env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
     )
       .bind(
         scope,

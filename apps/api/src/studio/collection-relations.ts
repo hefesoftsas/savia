@@ -113,7 +113,7 @@ export function createCollectionRelationsApp({
   async function object(name: string) {
     const row = await db
       .prepare(
-        "SELECT name,label,config FROM crm_objects WHERE tenant_id=? AND name=?",
+        "SELECT name,label,config FROM studio_objects WHERE tenant_id=? AND name=?",
       )
       .bind(tenant, name)
       .first<{ name: string; label: string; config: string }>();
@@ -138,7 +138,7 @@ export function createCollectionRelationsApp({
   async function definitions(): Promise<RelationDefinition[]> {
     const rows = await db
       .prepare(
-        'SELECT id,source_object AS "sourceObject",target_object AS "targetObject",source_label AS "sourceLabel",target_label AS "targetLabel",cardinality,source_field AS "sourceField",target_field AS "targetField",source_display_field AS "sourceDisplayField",target_display_field AS "targetDisplayField",storage,version FROM crm_collection_relations WHERE tenant_id=? ORDER BY id LIMIT 501',
+        'SELECT id,source_object AS "sourceObject",target_object AS "targetObject",source_label AS "sourceLabel",target_label AS "targetLabel",cardinality,source_field AS "sourceField",target_field AS "targetField",source_display_field AS "sourceDisplayField",target_display_field AS "targetDisplayField",storage,version FROM studio_collection_relations WHERE tenant_id=? ORDER BY id LIMIT 501',
       )
       .bind(tenant)
       .all<RelationDefinition>();
@@ -272,7 +272,7 @@ export function createCollectionRelationsApp({
       });
       const result = await db
         .prepare(
-          "INSERT INTO crm_native_relation_overrides(tenant_id,id,config,version) VALUES(?,?,?,2) ON CONFLICT(tenant_id,id) DO UPDATE SET config=excluded.config,version=crm_native_relation_overrides.version+1 WHERE crm_native_relation_overrides.version=?",
+          "INSERT INTO studio_native_relation_overrides(tenant_id,id,config,version) VALUES(?,?,?,2) ON CONFLICT(tenant_id,id) DO UPDATE SET config=excluded.config,version=studio_native_relation_overrides.version+1 WHERE studio_native_relation_overrides.version=?",
         )
         .bind(tenant, old.id, config, body.version)
         .run();
@@ -283,7 +283,7 @@ export function createCollectionRelationsApp({
       try {
         const result = await db
           .prepare(
-            "UPDATE crm_collection_relations SET source_label=?,target_label=?,cardinality=?,source_field=?,target_field=?,source_display_field=?,target_display_field=?,storage=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
+            "UPDATE studio_collection_relations SET source_label=?,target_label=?,cardinality=?,source_field=?,target_field=?,source_display_field=?,target_display_field=?,storage=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
           )
           .bind(
             value.sourceLabel,
@@ -332,7 +332,7 @@ export function createCollectionRelationsApp({
     await validate(value);
     const count = await db
       .prepare(
-        "SELECT COUNT(*) total FROM crm_collection_relations WHERE tenant_id=?",
+        "SELECT COUNT(*) total FROM studio_collection_relations WHERE tenant_id=?",
       )
       .bind(tenant)
       .first<{ total: number }>();
@@ -341,7 +341,7 @@ export function createCollectionRelationsApp({
     const id = crypto.randomUUID();
     await db
       .prepare(
-        "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality,source_field,target_field,source_display_field,target_display_field,storage) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality,source_field,target_field,source_display_field,target_display_field,storage) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
       )
       .bind(
         tenant,
@@ -369,7 +369,7 @@ export function createCollectionRelationsApp({
     if (!definition) fail("Relación no encontrada.", 404);
     await db
       .prepare(
-        "DELETE FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+        "DELETE FROM studio_collection_relations WHERE tenant_id=? AND id=?",
       )
       .bind(tenant, definition.id)
       .run();
@@ -450,7 +450,7 @@ export function createCollectionRelationsApp({
               (
                 await db
                   .prepare(
-                    `SELECT count(*) total FROM crm_records WHERE ${where}`,
+                    `SELECT count(*) total FROM studio_records WHERE ${where}`,
                   )
                   .bind(...params)
                   .first<{ total: number }>()
@@ -459,7 +459,7 @@ export function createCollectionRelationsApp({
               ids = (
                 await db
                   .prepare(
-                    `SELECT id FROM crm_records WHERE ${where} ORDER BY id LIMIT ? OFFSET ?`,
+                    `SELECT id FROM studio_records WHERE ${where} ORDER BY id LIMIT ? OFFSET ?`,
                   )
                   .bind(...params, perPage, (page - 1) * perPage)
                   .all<{ id: string }>()
@@ -472,7 +472,7 @@ export function createCollectionRelationsApp({
             (
               await db
                 .prepare(
-                  `SELECT count(*) total FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=?`,
+                  `SELECT count(*) total FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=?`,
                 )
                 .bind(tenant, definition.id, id)
                 .first<{ total: number }>()
@@ -481,7 +481,7 @@ export function createCollectionRelationsApp({
             ids = (
               await db
                 .prepare(
-                  `SELECT ${other} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other} LIMIT ? OFFSET ?`,
+                  `SELECT ${other} id FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other} LIMIT ? OFFSET ?`,
                 )
                 .bind(tenant, definition.id, id, perPage, (page - 1) * perPage)
                 .all<{ id: string }>()
@@ -582,7 +582,7 @@ export function createCollectionRelationsApp({
       if (c.req.method === "DELETE")
         await db
           .prepare(
-            "DELETE FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND source_id=? AND target_id=?",
+            "DELETE FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND source_id=? AND target_id=?",
           )
           .bind(tenant, relationId, sourceId, targetId)
           .run();
@@ -590,7 +590,7 @@ export function createCollectionRelationsApp({
         try {
           await db
             .prepare(
-              "INSERT INTO crm_record_links(tenant_id,relation_id,source_id,target_id) VALUES(?,?,?,?) ON CONFLICT DO NOTHING",
+              "INSERT INTO studio_record_links(tenant_id,relation_id,source_id,target_id) VALUES(?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(tenant, relationId, sourceId, targetId)
             .run();

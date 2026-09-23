@@ -214,7 +214,7 @@ export function registerRequestPageRoutes(
       : "domain:" + body.domainId;
     const stored = await db
       .prepare(
-        "SELECT name,label,description,config FROM crm_objects WHERE tenant_id=? AND name=?",
+        "SELECT name,label,description,config FROM studio_objects WHERE tenant_id=? AND name=?",
       )
       .bind(tenant, body.pageName)
       .first<{

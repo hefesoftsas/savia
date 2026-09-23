@@ -188,7 +188,7 @@ export function createRecordBundlesApp({
       if (await deliver(saved.events ?? [], saved.rules ?? {})) {
         await db
           .prepare(
-            "UPDATE crm_requests SET response=? WHERE tenant_id=? AND request_key=? AND fingerprint=?",
+            "UPDATE studio_requests SET response=? WHERE tenant_id=? AND request_key=? AND fingerprint=?",
           )
           .bind(
             JSON.stringify({ ...saved, deliveryComplete: true }),
@@ -207,7 +207,7 @@ export function createRecordBundlesApp({
       const authorize = async (objectName: string, record: StudioRecord) => {
         const current = await db
           .prepare(
-            "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+            "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
           )
           .bind(tenant, objectName, record.id)
           .first();
@@ -219,7 +219,7 @@ export function createRecordBundlesApp({
       for (const group of result.related) {
         const definition = await db
           .prepare(
-            "SELECT source_object,target_object FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+            "SELECT source_object,target_object FROM studio_collection_relations WHERE tenant_id=? AND id=?",
           )
           .bind(tenant, group.relationId)
           .first<{ source_object: string; target_object: string }>();
@@ -244,7 +244,7 @@ export function createRecordBundlesApp({
       for (const group of result.related) {
         const definition = await db
           .prepare(
-            "SELECT source_object,target_object FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+            "SELECT source_object,target_object FROM studio_collection_relations WHERE tenant_id=? AND id=?",
           )
           .bind(tenant, group.relationId)
           .first<{ source_object: string; target_object: string }>();
@@ -265,7 +265,7 @@ export function createRecordBundlesApp({
     const replay = async () => {
       const old = await db
         .prepare(
-          "SELECT fingerprint,response FROM crm_requests WHERE tenant_id=? AND request_key=?",
+          "SELECT fingerprint,response FROM studio_requests WHERE tenant_id=? AND request_key=?",
         )
         .bind(tenant, key)
         .first<{ fingerprint: string; response: string }>();
@@ -323,7 +323,7 @@ export function createRecordBundlesApp({
       guards.push(
         guard(
           db,
-          "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+          "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
           [object.version ?? 1, tenant, objectName],
         ),
       );
@@ -337,7 +337,7 @@ export function createRecordBundlesApp({
       guards.push(
         guard(
           db,
-          "SELECT NOT EXISTS(SELECT 1 FROM crm_solution_objects o JOIN crm_solution_installations s ON s.tenant_id=o.tenant_id AND s.id=o.solution_id WHERE o.tenant_id=? AND o.object_name=? AND s.enabled=0)",
+          "SELECT NOT EXISTS(SELECT 1 FROM studio_solution_objects o JOIN studio_solution_installations s ON s.tenant_id=o.tenant_id AND s.id=o.solution_id WHERE o.tenant_id=? AND o.object_name=? AND s.enabled=0)",
           [tenant, objectName],
         ),
       );
@@ -358,7 +358,7 @@ export function createRecordBundlesApp({
       const existing = row.id
         ? await db
             .prepare(
-              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+              "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
             )
             .bind(tenant, objectName, row.id)
             .first()
@@ -370,7 +370,7 @@ export function createRecordBundlesApp({
         guards.push(
           guard(
             db,
-            "SELECT version=? AND deleted_at IS NULL FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+            "SELECT version=? AND deleted_at IS NULL FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
             [before._version, tenant, objectName, row.id],
           ),
         );
@@ -453,12 +453,12 @@ export function createRecordBundlesApp({
         writes.push(
           db
             .prepare(
-              "UPDATE crm_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND object_name=? AND id=?",
+              "UPDATE studio_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND object_name=? AND id=?",
             )
             .bind(JSON.stringify(data), now, tenant, objectName, id),
           db
             .prepare(
-              "DELETE FROM crm_unique_values WHERE tenant_id=? AND record_id=?",
+              "DELETE FROM studio_unique_values WHERE tenant_id=? AND record_id=?",
             )
             .bind(tenant, id),
         );
@@ -466,7 +466,7 @@ export function createRecordBundlesApp({
         if (
           row.clientId &&
           (await db
-            .prepare("SELECT 1 FROM crm_records WHERE tenant_id=? AND id=?")
+            .prepare("SELECT 1 FROM studio_records WHERE tenant_id=? AND id=?")
             .bind(tenant, id)
             .first())
         )
@@ -474,7 +474,7 @@ export function createRecordBundlesApp({
         writes.push(
           db
             .prepare(
-              "INSERT INTO crm_records(id,tenant_id,object_name,data,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?)",
+              "INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?)",
             )
             .bind(
               id,
@@ -523,7 +523,7 @@ export function createRecordBundlesApp({
     for (const group of input.relations) {
       const relation = await db
         .prepare(
-          "SELECT source_object,target_object FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+          "SELECT source_object,target_object FROM studio_collection_relations WHERE tenant_id=? AND id=?",
         )
         .bind(tenant, group.relationId)
         .first<{ source_object: string; target_object: string }>();
@@ -547,7 +547,7 @@ export function createRecordBundlesApp({
       try {
         const relation = await db
           .prepare(
-            "SELECT * FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+            "SELECT * FROM studio_collection_relations WHERE tenant_id=? AND id=?",
           )
           .bind(tenant, group.relationId)
           .first<any>();
@@ -561,7 +561,7 @@ export function createRecordBundlesApp({
         guards.push(
           guard(
             db,
-            "SELECT version=? AND storage='local' FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+            "SELECT version=? AND storage='local' FROM studio_collection_relations WHERE tenant_id=? AND id=?",
             [relation.version, tenant, group.relationId],
           ),
         );
@@ -573,7 +573,7 @@ export function createRecordBundlesApp({
         const ids = (
           await db
             .prepare(
-              `SELECT ${other} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other}`,
+              `SELECT ${other} id FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other}`,
             )
             .bind(tenant, group.relationId, parent.id)
             .all<{ id: string }>()
@@ -589,7 +589,7 @@ export function createRecordBundlesApp({
         guards.push(
           guard(
             db,
-            `SELECT ${dialectFor(db).name === "postgres" ? "COALESCE(jsonb_agg(id),'[]'::jsonb)=?::jsonb" : "COALESCE(json_group_array(id),'[]')=?"} FROM (SELECT ${other} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other})`,
+            `SELECT ${dialectFor(db).name === "postgres" ? "COALESCE(jsonb_agg(id),'[]'::jsonb)=?::jsonb" : "COALESCE(json_group_array(id),'[]')=?"} FROM (SELECT ${other} id FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=? ORDER BY ${other})`,
             [JSON.stringify(ids), tenant, group.relationId, parent.id],
           ),
         );
@@ -644,7 +644,7 @@ export function createRecordBundlesApp({
         for (const id of ids) {
           const previous = await db
             .prepare(
-              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
+              "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND id=? AND deleted_at IS NULL",
             )
             .bind(tenant, target, id)
             .first();
@@ -655,7 +655,7 @@ export function createRecordBundlesApp({
               guards.push(
                 guard(
                   db,
-                  "SELECT version=? AND deleted_at IS NULL FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+                  "SELECT version=? AND deleted_at IS NULL FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
                   [parseRecord(previous)._version, tenant, target, id],
                 ),
               );
@@ -676,7 +676,7 @@ export function createRecordBundlesApp({
         writes.push(
           db
             .prepare(
-              `DELETE FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=?`,
+              `DELETE FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${field}=?`,
             )
             .bind(tenant, group.relationId, parent.id),
         );
@@ -684,7 +684,7 @@ export function createRecordBundlesApp({
           writes.push(
             db
               .prepare(
-                "INSERT INTO crm_record_links(tenant_id,relation_id,source_id,target_id) VALUES(?,?,?,?)",
+                "INSERT INTO studio_record_links(tenant_id,relation_id,source_id,target_id) VALUES(?,?,?,?)",
               )
               .bind(
                 tenant,
@@ -723,7 +723,7 @@ export function createRecordBundlesApp({
         if (!selected) {
           const definition = await db
             .prepare(
-              "SELECT * FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+              "SELECT * FROM studio_collection_relations WHERE tenant_id=? AND id=?",
             )
             .bind(tenant, relationId)
             .first<any>();
@@ -735,7 +735,7 @@ export function createRecordBundlesApp({
           guards.push(
             guard(
               db,
-              "SELECT version=? FROM crm_collection_relations WHERE tenant_id=? AND id=?",
+              "SELECT version=? FROM studio_collection_relations WHERE tenant_id=? AND id=?",
               [definition.version, tenant, relationId],
             ),
           );
@@ -746,7 +746,7 @@ export function createRecordBundlesApp({
           selected = (
             await db
               .prepare(
-                `SELECT ${otherName} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${fieldName}=? ORDER BY ${otherName}`,
+                `SELECT ${otherName} id FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${fieldName}=? ORDER BY ${otherName}`,
               )
               .bind(tenant, relationId, parent.id)
               .all<{ id: string }>()
@@ -754,7 +754,7 @@ export function createRecordBundlesApp({
           guards.push(
             guard(
               db,
-              `SELECT ${dialectFor(db).name === "postgres" ? "COALESCE(jsonb_agg(id),'[]'::jsonb)=?::jsonb" : "COALESCE(json_group_array(id),'[]')=?"} FROM (SELECT ${otherName} id FROM crm_record_links WHERE tenant_id=? AND relation_id=? AND ${fieldName}=? ORDER BY ${otherName})`,
+              `SELECT ${dialectFor(db).name === "postgres" ? "COALESCE(jsonb_agg(id),'[]'::jsonb)=?::jsonb" : "COALESCE(json_group_array(id),'[]')=?"} FROM (SELECT ${otherName} id FROM studio_record_links WHERE tenant_id=? AND relation_id=? AND ${fieldName}=? ORDER BY ${otherName})`,
               [JSON.stringify(selected), tenant, relationId, parent.id],
             ),
           );
@@ -772,7 +772,7 @@ export function createRecordBundlesApp({
       rules[objectName] = (
         await db
           .prepare(
-            "SELECT id,version,name,config FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id",
+            "SELECT id,version,name,config FROM studio_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id",
           )
           .bind(tenant, objectName)
           .all<AutomationRuleSnapshot>()
@@ -781,8 +781,8 @@ export function createRecordBundlesApp({
         guard(
           db,
           dialectFor(db).name === "postgres"
-            ? "SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'version',version)), '[]'::jsonb)=?::jsonb FROM (SELECT id,version FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)"
-            : "SELECT COALESCE(json_group_array(json_object('id',id,'version',version)), '[]')=? FROM (SELECT id,version FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)",
+            ? "SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'version',version)), '[]'::jsonb)=?::jsonb FROM (SELECT id,version FROM studio_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)"
+            : "SELECT COALESCE(json_group_array(json_object('id',id,'version',version)), '[]')=? FROM (SELECT id,version FROM studio_automations WHERE tenant_id=? AND object_name=? AND enabled=1 ORDER BY id)",
           [
             JSON.stringify(
               rules[objectName].map(({ id, version }) => ({ id, version })),
@@ -801,14 +801,14 @@ export function createRecordBundlesApp({
         ...guards.map((g) => g.end),
         db
           .prepare(
-            "INSERT INTO crm_requests(tenant_id,request_key,fingerprint,response) VALUES(?,?,?,?)",
+            "INSERT INTO studio_requests(tenant_id,request_key,fingerprint,response) VALUES(?,?,?,?)",
           )
           .bind(tenant, key, hash, JSON.stringify(saved)),
       ]);
     } catch (error) {
       const saved = await replay();
       if (saved) return c.json(saved);
-      if (String(error).includes("UNIQUE constraint failed: crm_records"))
+      if (String(error).includes("UNIQUE constraint failed: studio_records"))
         fail("The client-generated record ID already exists.", 409);
       if (String(error).includes("relation_cardinality_conflict"))
         fail("Relation cardinality does not allow this selection.", 409);

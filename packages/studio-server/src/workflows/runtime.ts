@@ -290,7 +290,7 @@ async function executeNode(
         throw new Error("Matched creation requires a nonempty text key");
       const row = await db
         .prepare(
-          "SELECT record_id FROM crm_unique_values WHERE tenant_id=? AND object_name=? AND field_name=? AND value=?",
+          "SELECT record_id FROM studio_unique_values WHERE tenant_id=? AND object_name=? AND field_name=? AND value=?",
         )
         .bind(
           run.workspace_id,
@@ -374,7 +374,7 @@ async function executeNode(
             );
       const rows = await db
         .prepare(
-          `SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${comparison.sql} LIMIT ?`,
+          `SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${comparison.sql} LIMIT ?`,
         )
         .bind(
           run.workspace_id,

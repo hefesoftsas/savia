@@ -189,7 +189,7 @@ export function createStudioApp(
     const db = c.env.DB,
       tenant = c.get("tenant");
     const exists = await db
-      .prepare("SELECT name FROM crm_objects WHERE tenant_id=? LIMIT 1")
+      .prepare("SELECT name FROM studio_objects WHERE tenant_id=? LIMIT 1")
       .bind(tenant)
       .first();
     const initialObjects =
@@ -199,7 +199,7 @@ export function createStudioApp(
         ...initialObjects.map((o) =>
           db
             .prepare(
-              "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
+              "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(
               tenant,
@@ -212,14 +212,14 @@ export function createStudioApp(
         ...(tenantKey ? [] : seedRecords).map((r) =>
           db
             .prepare(
-              "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
+              "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
             )
             .bind(r.id, tenant, r.object, JSON.stringify(r.data)),
         ),
       ]);
     await db
       .prepare(
-        `INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) SELECT tenant_id,name,version,${dialectFor(db).name === "postgres" ? "json_build_object('name',name,'label',label,'description',description,'config',config::json,'version',version)::text" : "json_object('name',name,'label',label,'description',description,'config',json(config),'version',version)"} FROM crm_objects WHERE tenant_id=? ON CONFLICT DO NOTHING`,
+        `INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) SELECT tenant_id,name,version,${dialectFor(db).name === "postgres" ? "json_build_object('name',name,'label',label,'description',description,'config',config::json,'version',version)::text" : "json_object('name',name,'label',label,'description',description,'config',json(config),'version',version)"} FROM studio_objects WHERE tenant_id=? ON CONFLICT DO NOTHING`,
       )
       .bind(tenant)
       .run();
@@ -228,7 +228,7 @@ export function createStudioApp(
   app.get("/api/objects", async (c) => {
     const disabled = await disabledSolutionObjects(c.env.DB, c.get("tenant"));
     const { results } = await c.env.DB.prepare(
-      "SELECT o.*,(SELECT count(*) FROM crm_records r WHERE r.tenant_id=o.tenant_id AND r.object_name=o.name AND deleted_at IS NULL) AS count FROM crm_objects o WHERE tenant_id=? ORDER BY created_at,name",
+      "SELECT o.*,(SELECT count(*) FROM studio_records r WHERE r.tenant_id=o.tenant_id AND r.object_name=o.name AND deleted_at IS NULL) AS count FROM studio_objects o WHERE tenant_id=? ORDER BY created_at,name",
     )
       .bind(c.get("tenant"))
       .all();
@@ -263,7 +263,7 @@ export function createStudioApp(
   app.get("/api/objects/:name/versions", async (c) => {
     await getObject(c.env.DB, c.get("tenant"), c.req.param("name"));
     const { results } = await c.env.DB.prepare(
-      "SELECT * FROM crm_schema_versions WHERE tenant_id=? AND object_name=? ORDER BY version DESC",
+      "SELECT * FROM studio_schema_versions WHERE tenant_id=? AND object_name=? ORDER BY version DESC",
     )
       .bind(c.get("tenant"), c.req.param("name"))
       .all<any>();
@@ -339,7 +339,7 @@ export function createStudioApp(
       })
       .parse(await c.req.json());
     const row = await c.env.DB.prepare(
-      "SELECT definition FROM crm_schema_versions WHERE tenant_id=? AND object_name=? AND version=?",
+      "SELECT definition FROM studio_schema_versions WHERE tenant_id=? AND object_name=? AND version=?",
     )
       .bind(c.get("tenant"), c.req.param("name"), body.targetVersion)
       .first<{ definition: string }>();
@@ -388,10 +388,10 @@ export function createStudioApp(
     // a separate network roundtrip before fetching the visible records.
     const [countResult, pageResult] = await c.env.DB.batch([
       c.env.DB.prepare(
-        `SELECT count(*) AS total FROM crm_records WHERE ${where}`,
+        `SELECT count(*) AS total FROM studio_records WHERE ${where}`,
       ).bind(...args),
       c.env.DB.prepare(
-        `SELECT * FROM crm_records WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`,
+        `SELECT * FROM studio_records WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`,
       ).bind(...args, perPage, (page - 1) * perPage),
     ]);
     return c.json({
@@ -447,7 +447,7 @@ export function createStudioApp(
         ? `CASE WHEN ${dialect.jsonType("data", `$.${group}`)} IN ('integer','real','true','false') THEN to_jsonb((${groupValue})::numeric) ELSE to_jsonb(${groupValue}) END`
         : groupValue;
     const { results } = await c.env.DB.prepare(
-      `SELECT ${groupSql} AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM crm_records WHERE ${where} GROUP BY value ORDER BY count DESC`,
+      `SELECT ${groupSql} AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM studio_records WHERE ${where} GROUP BY value ORDER BY count DESC`,
     )
       .bind(...args)
       .all();
@@ -652,7 +652,7 @@ export function createStudioApp(
     ].some((key) => !object.config.fields[key]);
   app.get("/api/views/:object", async (c) => {
     const { results } = await c.env.DB.prepare(
-      "SELECT * FROM crm_views WHERE tenant_id=? AND object_name=? ORDER BY name",
+      "SELECT * FROM studio_views WHERE tenant_id=? AND object_name=? ORDER BY name",
     )
       .bind(c.get("tenant"), c.req.param("object"))
       .all<any>();
@@ -684,7 +684,7 @@ export function createStudioApp(
       return fail("La vista incluye un campo inexistente.", 422);
     const id = crypto.randomUUID();
     await c.env.DB.prepare(
-      "INSERT INTO crm_views(id,tenant_id,object_name,name,config) VALUES (?,?,?,?,?)",
+      "INSERT INTO studio_views(id,tenant_id,object_name,name,config) VALUES (?,?,?,?,?)",
     )
       .bind(
         id,
@@ -708,18 +708,18 @@ export function createStudioApp(
     if (validatesTableFields(input.config, object))
       return fail("La vista incluye un campo inexistente.", 422);
     const existing = await c.env.DB.prepare(
-      "SELECT id FROM crm_views WHERE tenant_id=? AND object_name=? AND name=? LIMIT 1",
+      "SELECT id FROM studio_views WHERE tenant_id=? AND object_name=? AND name=? LIMIT 1",
     )
       .bind(c.get("tenant"), object.name, DEFAULT_TABLE_VIEW_NAME)
       .first<{ id: string }>();
     const config = JSON.stringify(input.config);
     if (existing)
-      await c.env.DB.prepare("UPDATE crm_views SET config=? WHERE id=?")
+      await c.env.DB.prepare("UPDATE studio_views SET config=? WHERE id=?")
         .bind(config, existing.id)
         .run();
     else
       await c.env.DB.prepare(
-        "INSERT INTO crm_views(id,tenant_id,object_name,name,config) VALUES (?,?,?,?,?)",
+        "INSERT INTO studio_views(id,tenant_id,object_name,name,config) VALUES (?,?,?,?,?)",
       )
         .bind(
           crypto.randomUUID(),
@@ -733,7 +733,7 @@ export function createStudioApp(
   });
   app.delete("/api/views/:object/:id", async (c) => {
     await c.env.DB.prepare(
-      "DELETE FROM crm_views WHERE tenant_id=? AND object_name=? AND id=?",
+      "DELETE FROM studio_views WHERE tenant_id=? AND object_name=? AND id=?",
     )
       .bind(c.get("tenant"), c.req.param("object"), c.req.param("id"))
       .run();
@@ -741,7 +741,7 @@ export function createStudioApp(
   });
   app.get("/api/audit", async (c) => {
     const { results } = await c.env.DB.prepare(
-      "SELECT id,action,object_name,record_id,created_at,detail FROM crm_audit WHERE tenant_id=? AND (CAST(? AS TEXT) IS NULL OR object_name=?) ORDER BY created_at DESC LIMIT 100",
+      "SELECT id,action,object_name,record_id,created_at,detail FROM studio_audit WHERE tenant_id=? AND (CAST(? AS TEXT) IS NULL OR object_name=?) ORDER BY created_at DESC LIMIT 100",
     )
       .bind(
         c.get("tenant"),

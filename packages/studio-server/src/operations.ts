@@ -76,7 +76,7 @@ async function purgeExpiredTemporaryAttachments(
 ) {
   const { results } = await db
     .prepare(
-      "SELECT id,storage_key FROM crm_file_drafts WHERE tenant_id=? AND expires_at<=?",
+      "SELECT id,storage_key FROM studio_file_drafts WHERE tenant_id=? AND expires_at<=?",
     )
     .bind(tenant, now())
     .all<{ id: string; storage_key: string }>();
@@ -85,7 +85,7 @@ async function purgeExpiredTemporaryAttachments(
   await db.batch(
     results.map((row) =>
       db
-        .prepare("DELETE FROM crm_file_drafts WHERE tenant_id=? AND id=?")
+        .prepare("DELETE FROM studio_file_drafts WHERE tenant_id=? AND id=?")
         .bind(tenant, row.id),
     ),
   );
@@ -114,7 +114,7 @@ export async function runAutomations(
     (
       await db
         .prepare(
-          "SELECT * FROM crm_automations WHERE tenant_id=? AND object_name=? AND enabled=1",
+          "SELECT * FROM studio_automations WHERE tenant_id=? AND object_name=? AND enabled=1",
         )
         .bind(tenant, objectName)
         .all<AutomationRuleSnapshot>()
@@ -134,7 +134,7 @@ export async function runAutomations(
     if (
       await db
         .prepare(
-          "SELECT id FROM crm_automation_runs WHERE tenant_id=? AND automation_id=? AND event_key=? AND status='success'",
+          "SELECT id FROM studio_automation_runs WHERE tenant_id=? AND automation_id=? AND event_key=? AND status='success'",
         )
         .bind(tenant, rule.id, eventKey)
         .first()
@@ -154,7 +154,7 @@ export async function runAutomations(
       await db.batch([
         db
           .prepare(
-            "INSERT INTO crm_tasks (id,tenant_id,object_name,record_id,title,owner,due_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+            "INSERT INTO studio_tasks (id,tenant_id,object_name,record_id,title,owner,due_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
           )
           .bind(
             taskId,
@@ -167,7 +167,7 @@ export async function runAutomations(
           ),
         db
           .prepare(
-            "INSERT INTO crm_automation_runs (id,tenant_id,automation_id,object_name,record_id,event_key,status,detail,task_id) VALUES (?,?,?,?,?,?,'success',?,?) ON CONFLICT(tenant_id,automation_id,event_key) DO UPDATE SET status='success',detail=excluded.detail,task_id=excluded.task_id",
+            "INSERT INTO studio_automation_runs (id,tenant_id,automation_id,object_name,record_id,event_key,status,detail,task_id) VALUES (?,?,?,?,?,?,'success',?,?) ON CONFLICT(tenant_id,automation_id,event_key) DO UPDATE SET status='success',detail=excluded.detail,task_id=excluded.task_id",
           )
           .bind(
             crypto.randomUUID(),
@@ -188,7 +188,7 @@ export async function runAutomations(
       delivered = false;
       await db
         .prepare(
-          "INSERT INTO crm_automation_runs (id,tenant_id,automation_id,object_name,record_id,event_key,status,detail) VALUES (?,?,?,?,?,?,'failed',?) ON CONFLICT(tenant_id,automation_id,event_key) DO UPDATE SET status='failed',detail=excluded.detail",
+          "INSERT INTO studio_automation_runs (id,tenant_id,automation_id,object_name,record_id,event_key,status,detail) VALUES (?,?,?,?,?,?,'failed',?) ON CONFLICT(tenant_id,automation_id,event_key) DO UPDATE SET status='failed',detail=excluded.detail",
         )
         .bind(
           crypto.randomUUID(),
@@ -218,7 +218,7 @@ export function registerOperations(app: Hono<Env>) {
       id = c.req.param("id");
     const record = await getRecord(db, tenant, objectName, id);
     const { results: rawObjects } = await db
-      .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
+      .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
       .bind(tenant)
       .all<any>();
     const objects = rawObjects.map(parseObject),
@@ -240,12 +240,14 @@ export function registerOperations(app: Hono<Env>) {
           const where = `tenant_id=? AND object_name=? AND deleted_at IS NULL AND (${comparison.sql} OR EXISTS(SELECT 1 FROM ${dialectFor(db).jsonEach("data", path, "related")} WHERE value=?))`;
           const args = [tenant, object.name, ...comparison.parameters, id];
           const count = await db
-            .prepare(`SELECT COUNT(*) AS total FROM crm_records WHERE ${where}`)
+            .prepare(
+              `SELECT COUNT(*) AS total FROM studio_records WHERE ${where}`,
+            )
             .bind(...args)
             .first<{ total: number }>();
           const { results } = await db
             .prepare(
-              `SELECT * FROM crm_records WHERE ${where} ORDER BY updated_at DESC,id LIMIT ? OFFSET ?`,
+              `SELECT * FROM studio_records WHERE ${where} ORDER BY updated_at DESC,id LIMIT ? OFFSET ?`,
             )
             .bind(...args, pageSize, (page - 1) * pageSize)
             .all();
@@ -272,7 +274,7 @@ export function registerOperations(app: Hono<Env>) {
           );
           const { results } = await db
             .prepare(
-              `SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id IN (SELECT value FROM (SELECT ? AS ids) input, ${dialectFor(db).jsonEach("input.ids", "$", "related")}) ORDER BY id LIMIT ? OFFSET ?`,
+              `SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id IN (SELECT value FROM (SELECT ? AS ids) input, ${dialectFor(db).jsonEach("input.ids", "$", "related")}) ORDER BY id LIMIT ? OFFSET ?`,
             )
             .bind(
               tenant,
@@ -303,7 +305,7 @@ export function registerOperations(app: Hono<Env>) {
     await getRecord(db, tenant, object, id);
     const page = pageNumber(c.req.query("page"));
     const union =
-      "SELECT id,body,kind,version,created_at FROM crm_notes WHERE tenant_id=? AND object_name=? AND record_id=? UNION ALL SELECT id,detail AS body,action AS kind,0 AS version,created_at FROM crm_audit WHERE tenant_id=? AND object_name=? AND record_id=?";
+      "SELECT id,body,kind,version,created_at FROM studio_notes WHERE tenant_id=? AND object_name=? AND record_id=? UNION ALL SELECT id,detail AS body,action AS kind,0 AS version,created_at FROM studio_audit WHERE tenant_id=? AND object_name=? AND record_id=?";
     const args = [tenant, object, id, tenant, object, id];
     const { results } = await db
       .prepare(
@@ -332,7 +334,7 @@ export function registerOperations(app: Hono<Env>) {
     const id = crypto.randomUUID();
     await db
       .prepare(
-        "INSERT INTO crm_notes (id,tenant_id,object_name,record_id,body,kind) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO studio_notes (id,tenant_id,object_name,record_id,body,kind) VALUES (?,?,?,?,?,?)",
       )
       .bind(id, tenant, object, recordId, input.body, input.kind)
       .run();
@@ -341,7 +343,7 @@ export function registerOperations(app: Hono<Env>) {
   app.delete("/api/record-notes/:id", async (c) => {
     const { version } = versionSchema.parse(await c.req.json());
     const result = await c.env.DB.prepare(
-      "DELETE FROM crm_notes WHERE tenant_id=? AND id=? AND version=?",
+      "DELETE FROM studio_notes WHERE tenant_id=? AND id=? AND version=?",
     )
       .bind(c.get("tenant"), c.req.param("id"), version)
       .run();
@@ -361,7 +363,7 @@ export function registerOperations(app: Hono<Env>) {
     );
     const { results } = await c.env.DB.prepare(
       `SELECT id,name,mime,size,field_name AS field,version,created_at
-         FROM crm_files
+         FROM studio_files
          WHERE tenant_id=? AND object_name=? AND record_id=?${field ? " AND field_name=?" : ""}
          ORDER BY created_at DESC`,
     )
@@ -422,7 +424,7 @@ export function registerOperations(app: Hono<Env>) {
       await transaction(db, [
         db
           .prepare(
-            "INSERT INTO crm_file_drafts (id,tenant_id,object_name,field_name,name,mime,size,storage_key,expires_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO studio_file_drafts (id,tenant_id,object_name,field_name,name,mime,size,storage_key,expires_at) VALUES (?,?,?,?,?,?,?,?,?)",
           )
           .bind(
             id,
@@ -499,7 +501,7 @@ export function registerOperations(app: Hono<Env>) {
       return fail("El tipo de archivo no está permitido para este campo.", 422);
     const count = await db
       .prepare(
-        "SELECT count(*) AS total FROM crm_files WHERE tenant_id=? AND record_id=?",
+        "SELECT count(*) AS total FROM studio_files WHERE tenant_id=? AND record_id=?",
       )
       .bind(tenant, recordId)
       .first<{ total: number }>();
@@ -508,7 +510,7 @@ export function registerOperations(app: Hono<Env>) {
     if (field) {
       const fieldCount = await db
         .prepare(
-          "SELECT count(*) AS total FROM crm_files WHERE tenant_id=? AND object_name=? AND record_id=? AND field_name=?",
+          "SELECT count(*) AS total FROM studio_files WHERE tenant_id=? AND object_name=? AND record_id=? AND field_name=?",
         )
         .bind(tenant, object, recordId, field)
         .first<{ total: number }>();
@@ -525,14 +527,14 @@ export function registerOperations(app: Hono<Env>) {
     try {
       const limitGuard = guard(
         db,
-        "SELECT count(*)<50 FROM crm_files WHERE tenant_id=? AND record_id=?",
+        "SELECT count(*)<50 FROM studio_files WHERE tenant_id=? AND record_id=?",
         [tenant, recordId],
       );
       await transaction(db, [
         limitGuard.start,
         db
           .prepare(
-            "INSERT INTO crm_files (id,tenant_id,object_name,record_id,field_name,name,mime,size,storage_key) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO studio_files (id,tenant_id,object_name,record_id,field_name,name,mime,size,storage_key) VALUES (?,?,?,?,?,?,?,?,?)",
           )
           .bind(
             id,
@@ -574,7 +576,7 @@ export function registerOperations(app: Hono<Env>) {
       return fail("El almacenamiento de archivos no está configurado.", 503);
     await purgeExpiredTemporaryAttachments(db, c.env.FILES, tenant);
     const row = await db
-      .prepare("SELECT * FROM crm_file_drafts WHERE tenant_id=? AND id=?")
+      .prepare("SELECT * FROM studio_file_drafts WHERE tenant_id=? AND id=?")
       .bind(tenant, c.req.param("id"))
       .first<any>();
     if (!row) return fail("El adjunto temporal no existe o expiró.", 404);
@@ -590,7 +592,7 @@ export function registerOperations(app: Hono<Env>) {
     );
     const total = await db
       .prepare(
-        "SELECT count(*) AS total FROM crm_files WHERE tenant_id=? AND record_id=?",
+        "SELECT count(*) AS total FROM studio_files WHERE tenant_id=? AND record_id=?",
       )
       .bind(tenant, input.recordId)
       .first<{ total: number }>();
@@ -598,7 +600,7 @@ export function registerOperations(app: Hono<Env>) {
       return fail("Máximo 50 adjuntos por registro.", 422);
     const fieldTotal = await db
       .prepare(
-        "SELECT count(*) AS total FROM crm_files WHERE tenant_id=? AND object_name=? AND record_id=? AND field_name=?",
+        "SELECT count(*) AS total FROM studio_files WHERE tenant_id=? AND object_name=? AND record_id=? AND field_name=?",
       )
       .bind(tenant, row.object_name, input.recordId, row.field_name)
       .first<{ total: number }>();
@@ -608,7 +610,7 @@ export function registerOperations(app: Hono<Env>) {
     await transaction(db, [
       db
         .prepare(
-          "INSERT INTO crm_files (id,tenant_id,object_name,record_id,field_name,name,mime,size,storage_key,version) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO studio_files (id,tenant_id,object_name,record_id,field_name,name,mime,size,storage_key,version) VALUES (?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           row.id,
@@ -624,7 +626,7 @@ export function registerOperations(app: Hono<Env>) {
         ),
       db
         .prepare(
-          "DELETE FROM crm_file_drafts WHERE tenant_id=? AND id=? AND version=?",
+          "DELETE FROM studio_file_drafts WHERE tenant_id=? AND id=? AND version=?",
         )
         .bind(tenant, row.id, row.version),
       audit(db, tenant, "file.attached", row.object_name, input.recordId, {
@@ -647,7 +649,7 @@ export function registerOperations(app: Hono<Env>) {
   });
   app.get("/api/file/:id/download", async (c) => {
     const row = await c.env.DB.prepare(
-      "SELECT id,name,storage_key,object_name,NULL AS expires_at,0 AS temporary FROM crm_files WHERE tenant_id=? AND id=? UNION ALL SELECT id,name,storage_key,object_name,expires_at,1 AS temporary FROM crm_file_drafts WHERE tenant_id=? AND id=? LIMIT 1",
+      "SELECT id,name,storage_key,object_name,NULL AS expires_at,0 AS temporary FROM studio_files WHERE tenant_id=? AND id=? UNION ALL SELECT id,name,storage_key,object_name,expires_at,1 AS temporary FROM studio_file_drafts WHERE tenant_id=? AND id=? LIMIT 1",
     )
       .bind(
         c.get("tenant"),
@@ -661,7 +663,7 @@ export function registerOperations(app: Hono<Env>) {
     if (row.temporary && row.expires_at && String(row.expires_at) <= now()) {
       await c.env.FILES.delete(row.storage_key);
       await c.env.DB.prepare(
-        "DELETE FROM crm_file_drafts WHERE tenant_id=? AND id=?",
+        "DELETE FROM studio_file_drafts WHERE tenant_id=? AND id=?",
       )
         .bind(c.get("tenant"), row.id)
         .run();
@@ -687,13 +689,15 @@ export function registerOperations(app: Hono<Env>) {
       db = c.env.DB,
       tenant = c.get("tenant");
     const row = await db
-      .prepare("SELECT * FROM crm_files WHERE tenant_id=? AND id=?")
+      .prepare("SELECT * FROM studio_files WHERE tenant_id=? AND id=?")
       .bind(tenant, c.req.param("id"))
       .first<any>();
     const draft = row
       ? null
       : await db
-          .prepare("SELECT * FROM crm_file_drafts WHERE tenant_id=? AND id=?")
+          .prepare(
+            "SELECT * FROM studio_file_drafts WHERE tenant_id=? AND id=?",
+          )
           .bind(tenant, c.req.param("id"))
           .first<any>();
     const file = row ?? draft;
@@ -703,7 +707,7 @@ export function registerOperations(app: Hono<Env>) {
     const revisions = row
       ? await db
           .prepare(
-            "SELECT storage_key FROM crm_file_revisions WHERE tenant_id=? AND file_id=?",
+            "SELECT storage_key FROM studio_file_revisions WHERE tenant_id=? AND file_id=?",
           )
           .bind(tenant, file.id)
           .all<{ storage_key: string }>()
@@ -711,8 +715,8 @@ export function registerOperations(app: Hono<Env>) {
     const gate = guard(
       db,
       row
-        ? "SELECT version=? FROM crm_files WHERE tenant_id=? AND id=?"
-        : "SELECT version=? FROM crm_file_drafts WHERE tenant_id=? AND id=?",
+        ? "SELECT version=? FROM studio_files WHERE tenant_id=? AND id=?"
+        : "SELECT version=? FROM studio_file_drafts WHERE tenant_id=? AND id=?",
       [version, tenant, file.id],
     );
     await transaction(db, [
@@ -720,8 +724,8 @@ export function registerOperations(app: Hono<Env>) {
       db
         .prepare(
           row
-            ? "DELETE FROM crm_files WHERE tenant_id=? AND id=? AND version=?"
-            : "DELETE FROM crm_file_drafts WHERE tenant_id=? AND id=? AND version=?",
+            ? "DELETE FROM studio_files WHERE tenant_id=? AND id=? AND version=?"
+            : "DELETE FROM studio_file_drafts WHERE tenant_id=? AND id=? AND version=?",
         )
         .bind(tenant, file.id, version),
       audit(
@@ -860,7 +864,7 @@ export function registerOperations(app: Hono<Env>) {
         const key = `${field}:${JSON.stringify(normalized)}`;
         const row = await db
           .prepare(
-            `SELECT id FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND LOWER(TRIM(${dialectFor(db).jsonText("data", `$.${field}`)}))=? LIMIT 1`,
+            `SELECT id FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND LOWER(TRIM(${dialectFor(db).jsonText("data", `$.${field}`)}))=? LIMIT 1`,
           )
           .bind(
             tenant,
@@ -891,7 +895,7 @@ export function registerOperations(app: Hono<Env>) {
             if (
               !(await db
                 .prepare(
-                  "SELECT id FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id=?",
+                  "SELECT id FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id=?",
                 )
                 .bind(tenant, String(config.config.relation), String(id))
                 .first())
@@ -989,7 +993,7 @@ export function registerOperations(app: Hono<Env>) {
         dialectFor(db),
       );
       const total = await db
-        .prepare(`SELECT count(*) AS total FROM crm_records WHERE ${where}`)
+        .prepare(`SELECT count(*) AS total FROM studio_records WHERE ${where}`)
         .bind(...args)
         .first<{ total: number }>();
       if ((total?.total ?? 0) > 10_000)
@@ -1008,7 +1012,7 @@ export function registerOperations(app: Hono<Env>) {
         : dialectFor(db).jsonSort("data", `$.${sort}`);
       const { results } = await db
         .prepare(
-          `SELECT * FROM crm_records WHERE ${where} ORDER BY ${sortSql} ${order}, id ASC LIMIT 10000`,
+          `SELECT * FROM studio_records WHERE ${where} ORDER BY ${sortSql} ${order}, id ASC LIMIT 10000`,
         )
         .bind(...args)
         .all<any>();
@@ -1047,7 +1051,7 @@ export function registerOperations(app: Hono<Env>) {
         try {
           const { results } = await db
             .prepare(
-              "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id>? ORDER BY id LIMIT 200",
+              "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND id>? ORDER BY id LIMIT 200",
             )
             .bind(tenant, objectName, cursor)
             .all<any>();
@@ -1086,7 +1090,7 @@ export function registerOperations(app: Hono<Env>) {
 
   app.get("/api/automations", async (c) => {
     const { results } = await c.env.DB.prepare(
-      "SELECT * FROM crm_automations WHERE tenant_id=? ORDER BY created_at DESC,id",
+      "SELECT * FROM studio_automations WHERE tenant_id=? ORDER BY created_at DESC,id",
     )
       .bind(c.get("tenant"))
       .all<any>();
@@ -1123,7 +1127,7 @@ export function registerOperations(app: Hono<Env>) {
       const { version } = versionSchema.parse(body);
       const result = await db
         .prepare(
-          "UPDATE crm_automations SET name=?,object_name=?,config=?,enabled=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
+          "UPDATE studio_automations SET name=?,object_name=?,config=?,enabled=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
         )
         .bind(
           input.name,
@@ -1140,7 +1144,7 @@ export function registerOperations(app: Hono<Env>) {
     } else
       await db
         .prepare(
-          "INSERT INTO crm_automations (id,tenant_id,object_name,name,config,enabled) VALUES (?,?,?,?,?,?)",
+          "INSERT INTO studio_automations (id,tenant_id,object_name,name,config,enabled) VALUES (?,?,?,?,?,?)",
         )
         .bind(
           id,
@@ -1168,7 +1172,7 @@ export function registerOperations(app: Hono<Env>) {
   app.delete("/api/automations/:id", async (c) => {
     const { version } = versionSchema.parse(await c.req.json());
     const result = await c.env.DB.prepare(
-      "DELETE FROM crm_automations WHERE tenant_id=? AND id=? AND version=?",
+      "DELETE FROM studio_automations WHERE tenant_id=? AND id=? AND version=?",
     )
       .bind(c.get("tenant"), c.req.param("id"), version)
       .run();
@@ -1182,13 +1186,13 @@ export function registerOperations(app: Hono<Env>) {
       tenant = c.get("tenant");
     const { results } = await db
       .prepare(
-        "SELECT * FROM crm_automation_runs WHERE tenant_id=? ORDER BY created_at DESC,id LIMIT ? OFFSET ?",
+        "SELECT * FROM studio_automation_runs WHERE tenant_id=? ORDER BY created_at DESC,id LIMIT ? OFFSET ?",
       )
       .bind(tenant, pageSize, (page - 1) * pageSize)
       .all<any>();
     const total = await db
       .prepare(
-        "SELECT count(*) AS total FROM crm_automation_runs WHERE tenant_id=?",
+        "SELECT count(*) AS total FROM studio_automation_runs WHERE tenant_id=?",
       )
       .bind(tenant)
       .first<{ total: number }>();
@@ -1201,7 +1205,9 @@ export function registerOperations(app: Hono<Env>) {
     const db = c.env.DB,
       tenant = c.get("tenant");
     const row = await db
-      .prepare("SELECT * FROM crm_automation_runs WHERE tenant_id=? AND id=?")
+      .prepare(
+        "SELECT * FROM studio_automation_runs WHERE tenant_id=? AND id=?",
+      )
       .bind(tenant, c.req.param("id"))
       .first<any>();
     if (!row) return fail("La ejecución no existe.", 404);
@@ -1217,7 +1223,7 @@ export function registerOperations(app: Hono<Env>) {
       );
     const rule = await db
       .prepare(
-        "SELECT version,enabled FROM crm_automations WHERE tenant_id=? AND id=?",
+        "SELECT version,enabled FROM studio_automations WHERE tenant_id=? AND id=?",
       )
       .bind(tenant, row.automation_id)
       .first<{ version: number; enabled: number }>();
@@ -1245,7 +1251,7 @@ export function registerOperations(app: Hono<Env>) {
       tenant = c.get("tenant"),
       page = pageNumber(c.req.query("page"));
     let where =
-      "tenant_id=? AND EXISTS(SELECT 1 FROM crm_records r WHERE r.tenant_id=crm_tasks.tenant_id AND r.id=crm_tasks.record_id AND r.deleted_at IS NULL)";
+      "tenant_id=? AND EXISTS(SELECT 1 FROM studio_records r WHERE r.tenant_id=studio_tasks.tenant_id AND r.id=studio_tasks.record_id AND r.deleted_at IS NULL)";
     const args: (string | number)[] = [tenant];
     if (c.req.query("object")) {
       where += " AND object_name=?";
@@ -1264,17 +1270,17 @@ export function registerOperations(app: Hono<Env>) {
     }
     const { results } = await db
       .prepare(
-        `SELECT * FROM crm_tasks WHERE ${where} ORDER BY status DESC,due_at,id LIMIT ? OFFSET ?`,
+        `SELECT * FROM studio_tasks WHERE ${where} ORDER BY status DESC,due_at,id LIMIT ? OFFSET ?`,
       )
       .bind(...args, pageSize, (page - 1) * pageSize)
       .all();
     const total = await db
-      .prepare(`SELECT count(*) AS total FROM crm_tasks WHERE ${where}`)
+      .prepare(`SELECT count(*) AS total FROM studio_tasks WHERE ${where}`)
       .bind(...args)
       .first<{ total: number }>();
     const overdue = await db
       .prepare(
-        "SELECT count(*) AS total FROM crm_tasks WHERE tenant_id=? AND status='pending' AND due_at<? AND EXISTS(SELECT 1 FROM crm_records r WHERE r.tenant_id=crm_tasks.tenant_id AND r.id=crm_tasks.record_id AND r.deleted_at IS NULL)",
+        "SELECT count(*) AS total FROM studio_tasks WHERE tenant_id=? AND status='pending' AND due_at<? AND EXISTS(SELECT 1 FROM studio_records r WHERE r.tenant_id=studio_tasks.tenant_id AND r.id=studio_tasks.record_id AND r.deleted_at IS NULL)",
       )
       .bind(tenant, now().slice(0, 10))
       .first<{ total: number }>();
@@ -1310,7 +1316,7 @@ export function registerOperations(app: Hono<Env>) {
     await db.batch([
       db
         .prepare(
-          "INSERT INTO crm_tasks (id,tenant_id,object_name,record_id,title,owner,due_at,status) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO studio_tasks (id,tenant_id,object_name,record_id,title,owner,due_at,status) VALUES (?,?,?,?,?,?,?,?)",
         )
         .bind(
           id,
@@ -1336,14 +1342,14 @@ export function registerOperations(app: Hono<Env>) {
       db = c.env.DB,
       tenant = c.get("tenant");
     const row = await db
-      .prepare("SELECT * FROM crm_tasks WHERE tenant_id=? AND id=?")
+      .prepare("SELECT * FROM studio_tasks WHERE tenant_id=? AND id=?")
       .bind(tenant, c.req.param("id"))
       .first<any>();
     if (!row) return fail("La tarea no existe.", 404);
     await getRecord(db, tenant, row.object_name, row.record_id);
     const result = await db
       .prepare(
-        "UPDATE crm_tasks SET title=?,owner=?,due_at=?,status=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
+        "UPDATE studio_tasks SET title=?,owner=?,due_at=?,status=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
       )
       .bind(
         input.title,
@@ -1370,7 +1376,7 @@ export function registerOperations(app: Hono<Env>) {
   app.delete("/api/tasks/:id", async (c) => {
     const { version } = versionSchema.parse(await c.req.json());
     const result = await c.env.DB.prepare(
-      "DELETE FROM crm_tasks WHERE tenant_id=? AND id=? AND version=?",
+      "DELETE FROM studio_tasks WHERE tenant_id=? AND id=? AND version=?",
     )
       .bind(c.get("tenant"), c.req.param("id"), version)
       .run();
@@ -1382,7 +1388,7 @@ export function registerOperations(app: Hono<Env>) {
     const db = c.env.DB,
       tenant = c.get("tenant");
     const { results } = await db
-      .prepare("SELECT * FROM crm_objects WHERE tenant_id=? ORDER BY name")
+      .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
       .bind(tenant)
       .all<any>();
     const reports = [];
@@ -1400,7 +1406,7 @@ export function registerOperations(app: Hono<Env>) {
           : "$.nonexistent_field";
       const { results: groups } = await db
         .prepare(
-          `SELECT COALESCE(${dialectFor(db).jsonText("data", stage)},'Sin etapa') AS stage,COALESCE(${dialectFor(db).jsonText("data", owner)},'Sin responsable') AS owner,count(*) AS count,COALESCE(SUM(CAST(${dialectFor(db).jsonValue("data", amount)} AS DOUBLE PRECISION)),0) AS amount FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL GROUP BY 1,2 ORDER BY 1,2`,
+          `SELECT COALESCE(${dialectFor(db).jsonText("data", stage)},'Sin etapa') AS stage,COALESCE(${dialectFor(db).jsonText("data", owner)},'Sin responsable') AS owner,count(*) AS count,COALESCE(SUM(CAST(${dialectFor(db).jsonValue("data", amount)} AS DOUBLE PRECISION)),0) AS amount FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL GROUP BY 1,2 ORDER BY 1,2`,
         )
         .bind(tenant, object.name)
         .all<{ stage: string; owner: string; count: number; amount: number }>();

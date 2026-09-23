@@ -29,7 +29,7 @@ async function fileContext(c: Context<Env>) {
   const tenant = c.get("tenant"),
     db = c.env.DB;
   const row = await db
-    .prepare("SELECT * FROM crm_files WHERE tenant_id=? AND id=?")
+    .prepare("SELECT * FROM studio_files WHERE tenant_id=? AND id=?")
     .bind(tenant, c.req.param("id"))
     .first<FileRow>();
   if (!row) return fail("El adjunto no existe.", 404);
@@ -70,7 +70,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
     const { row, db, tenant } = await fileContext(c);
     const { results } = await db
       .prepare(
-        "SELECT version,size,created_at,created_by FROM crm_file_revisions WHERE tenant_id=? AND file_id=? ORDER BY version DESC",
+        "SELECT version,size,created_at,created_by FROM studio_file_revisions WHERE tenant_id=? AND file_id=? ORDER BY version DESC",
       )
       .bind(tenant, row.id)
       .all();
@@ -96,7 +96,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
       .parse(c.req.param("version"));
     const revision = await db
       .prepare(
-        "SELECT storage_key FROM crm_file_revisions WHERE tenant_id=? AND file_id=? AND version=?",
+        "SELECT storage_key FROM studio_file_revisions WHERE tenant_id=? AND file_id=? AND version=?",
       )
       .bind(tenant, row.id, version)
       .first<{ storage_key: string }>();
@@ -172,7 +172,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
     await c.env.FILES.put(key, bytes, { httpMetadata: { contentType: mime } });
     const gate = guard(
       db,
-      "SELECT f.version=? AND r.version=? AND r.deleted_at IS NULL FROM crm_files f JOIN crm_records r ON r.tenant_id=f.tenant_id AND r.id=f.record_id WHERE f.tenant_id=? AND f.id=?",
+      "SELECT f.version=? AND r.version=? AND r.deleted_at IS NULL FROM studio_files f JOIN studio_records r ON r.tenant_id=f.tenant_id AND r.id=f.record_id WHERE f.tenant_id=? AND f.id=?",
       [version, record._version, tenant, row.id],
     );
     try {
@@ -180,7 +180,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
         gate.start,
         db
           .prepare(
-            "INSERT INTO crm_file_revisions(tenant_id,file_id,version,storage_key,size,created_at,created_by) VALUES (?,?,?,?,?,?,NULL) ON CONFLICT DO NOTHING",
+            "INSERT INTO studio_file_revisions(tenant_id,file_id,version,storage_key,size,created_at,created_by) VALUES (?,?,?,?,?,?,NULL) ON CONFLICT DO NOTHING",
           )
           .bind(
             tenant,
@@ -192,7 +192,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
           ),
         db
           .prepare(
-            "INSERT INTO crm_file_revisions(tenant_id,file_id,version,storage_key,size,created_by) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO studio_file_revisions(tenant_id,file_id,version,storage_key,size,created_by) VALUES (?,?,?,?,?,?)",
           )
           .bind(
             tenant,
@@ -204,7 +204,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
           ),
         db
           .prepare(
-            "UPDATE crm_files SET storage_key=?,size=?,mime=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
+            "UPDATE studio_files SET storage_key=?,size=?,mime=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?",
           )
           .bind(key, file.size, mime, tenant, row.id, version),
         audit(db, tenant, "file.revised", row.object_name, row.record_id, {
@@ -218,7 +218,7 @@ export function registerOfficeFiles(app: Hono<Env>) {
     } catch (error) {
       // A transport failure may hide a committed batch. Never delete referenced bytes.
       const committed = await db
-        .prepare("SELECT 1 FROM crm_file_revisions WHERE storage_key=?")
+        .prepare("SELECT 1 FROM studio_file_revisions WHERE storage_key=?")
         .bind(key)
         .first();
       if (!committed) await c.env.FILES.delete(key);

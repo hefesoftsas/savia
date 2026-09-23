@@ -152,7 +152,7 @@ function guardedBarrier(db: PostgresDatabase, match: (sql: string) => boolean) {
       const result = await execute(statement, client);
       if (
         client &&
-        statement.sql.startsWith("INSERT INTO crm_write_guards") &&
+        statement.sql.startsWith("INSERT INTO studio_write_guards") &&
         match(statement.sql)
       ) {
         arrivals++;
@@ -211,7 +211,7 @@ function guardedBarrier(db: PostgresDatabase, match: (sql: string) => boolean) {
           ).status,
         ).toBe(201);
         const barrier = guardedBarrier(db, (sql) =>
-          sql.includes("SELECT version=? FROM crm_objects"),
+          sql.includes("SELECT version=? FROM studio_objects"),
         );
         try {
           const responses = await Promise.all(
@@ -229,14 +229,14 @@ function guardedBarrier(db: PostgresDatabase, match: (sql: string) => boolean) {
           expect(
             await db
               .prepare(
-                "SELECT version FROM crm_objects WHERE tenant_id=? AND name=?",
+                "SELECT version FROM studio_objects WHERE tenant_id=? AND name=?",
               )
               .bind("concurrency", "items")
               .first("version"),
           ).toBe(2);
           expect(
             await db
-              .prepare("SELECT count(*) AS n FROM crm_write_guards")
+              .prepare("SELECT count(*) AS n FROM studio_write_guards")
               .first("n"),
           ).toBe(0);
         } finally {
@@ -276,8 +276,12 @@ function guardedBarrier(db: PostgresDatabase, match: (sql: string) => boolean) {
         const barrier = guardedBarrier(
           db,
           (sql) =>
-            sql.includes("SELECT enabled=1 FROM crm_extension_installations") ||
-            sql.includes("SELECT count(*)=0 FROM crm_solution_installations"),
+            sql.includes(
+              "SELECT enabled=1 FROM studio_extension_installations",
+            ) ||
+            sql.includes(
+              "SELECT count(*)=0 FROM studio_solution_installations",
+            ),
         );
         try {
           const responses = await Promise.all([
@@ -290,14 +294,14 @@ function guardedBarrier(db: PostgresDatabase, match: (sql: string) => boolean) {
           expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
           const rows = await db
             .prepare(
-              "SELECT id,enabled FROM crm_extension_installations WHERE tenant_id=? ORDER BY id",
+              "SELECT id,enabled FROM studio_extension_installations WHERE tenant_id=? ORDER BY id",
             )
             .bind("concurrency")
             .all<{ id: string; enabled: number }>();
           expect(rows.results[1].enabled <= rows.results[0].enabled).toBe(true);
           expect(
             await db
-              .prepare("SELECT count(*) AS n FROM crm_write_guards")
+              .prepare("SELECT count(*) AS n FROM studio_write_guards")
               .first("n"),
           ).toBe(0);
         } finally {

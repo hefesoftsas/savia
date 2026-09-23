@@ -115,7 +115,7 @@ export function registerWorkflows(
   app.get("/api/workflow-bundles", async (c) => {
     await repository(c, "view");
     const objects = await c.env.DB.prepare(
-      "SELECT name FROM crm_objects WHERE tenant_id=?",
+      "SELECT name FROM studio_objects WHERE tenant_id=?",
     )
       .bind(c.get("tenant"))
       .all<{ name: string }>();

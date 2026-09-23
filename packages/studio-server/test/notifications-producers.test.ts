@@ -54,7 +54,7 @@ const options = { now: () => now, random: () => 0, workerId: "producers" };
 beforeAll(async () => {
   fixture = await notificationFixture();
   await fixture.db
-    .prepare("INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,?)")
+    .prepare("INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)")
     .bind(
       tenant,
       "requests",

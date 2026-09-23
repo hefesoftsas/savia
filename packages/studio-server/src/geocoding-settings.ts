@@ -21,7 +21,7 @@ export async function getGeoapifyApiKey(
 ) {
   const row = await db
     .prepare(
-      "SELECT encrypted_geoapify_key FROM crm_geocoding_settings WHERE tenant_id=?",
+      "SELECT encrypted_geoapify_key FROM studio_geocoding_settings WHERE tenant_id=?",
     )
     .bind(tenant)
     .first<{ encrypted_geoapify_key?: string | null }>();
@@ -37,7 +37,7 @@ export async function getGeoapifyApiKey(
 export function registerGeocodingSettings(app: Hono<Env>) {
   app.get("/api/settings/geocoding", async (c) => {
     const row = await c.env.DB.prepare(
-      "SELECT encrypted_geoapify_key, updated_at FROM crm_geocoding_settings WHERE tenant_id=?",
+      "SELECT encrypted_geoapify_key, updated_at FROM studio_geocoding_settings WHERE tenant_id=?",
     )
       .bind(c.get("tenant"))
       .first<{
@@ -58,7 +58,7 @@ export function registerGeocodingSettings(app: Hono<Env>) {
     const tenant = c.get("tenant");
     if (input.clearGeoapifyApiKey) {
       await c.env.DB.prepare(
-        "DELETE FROM crm_geocoding_settings WHERE tenant_id=?",
+        "DELETE FROM studio_geocoding_settings WHERE tenant_id=?",
       )
         .bind(tenant)
         .run();
@@ -74,7 +74,7 @@ export function registerGeocodingSettings(app: Hono<Env>) {
       encryptionContext(tenant),
     );
     await c.env.DB.prepare(
-      `INSERT INTO crm_geocoding_settings (tenant_id, encrypted_geoapify_key, updated_at)
+      `INSERT INTO studio_geocoding_settings (tenant_id, encrypted_geoapify_key, updated_at)
        VALUES (?, ?, ${dialectFor(c.env.DB).utcNow()})
        ON CONFLICT(tenant_id) DO UPDATE SET
          encrypted_geoapify_key=excluded.encrypted_geoapify_key,

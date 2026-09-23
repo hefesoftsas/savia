@@ -120,7 +120,7 @@ export function registerDataDomainRoutes(
       : (
           await db
             .prepare(
-              "SELECT d.id,d.label FROM crm_data_domains d WHERE EXISTS(SELECT 1 FROM access_assignments a JOIN access_roles r ON r.id=a.role_id AND r.scope=a.scope WHERE a.scope='domain:'||d.id AND a.principal_id=? AND r.enabled=1)",
+              "SELECT d.id,d.label FROM studio_data_domains d WHERE EXISTS(SELECT 1 FROM access_assignments a JOIN access_roles r ON r.id=a.role_id AND r.scope=a.scope WHERE a.scope='domain:'||d.id AND a.principal_id=? AND r.enabled=1)",
             )
             .bind(actor.principal.id)
             .all<{ id: string; label: string }>()
@@ -141,7 +141,9 @@ export function registerDataDomainRoutes(
         apiBasePath: "/v1/data-domains/platform",
       });
       const domains = await db
-        .prepare("SELECT id,label FROM crm_data_domains ORDER BY created_at,id")
+        .prepare(
+          "SELECT id,label FROM studio_data_domains ORDER BY created_at,id",
+        )
         .all<{ id: string; label: string }>();
       data.push(...domains.results.map((d) => customDomain(d.id, d.label)));
     }
@@ -171,8 +173,8 @@ export function registerDataDomainRoutes(
     const result = await db
       .prepare(
         dialectFor(db).name === "postgres"
-          ? "INSERT INTO crm_data_domains(id,label,created_by) VALUES (?,?,?) ON CONFLICT (id) DO NOTHING"
-          : "INSERT OR IGNORE INTO crm_data_domains(id,label,created_by) VALUES (?,?,?)",
+          ? "INSERT INTO studio_data_domains(id,label,created_by) VALUES (?,?,?) ON CONFLICT (id) DO NOTHING"
+          : "INSERT OR IGNORE INTO studio_data_domains(id,label,created_by) VALUES (?,?,?)",
       )
       .bind(input.name, input.label, actor.principal.id)
       .run();
@@ -218,7 +220,7 @@ export function registerDataDomainRoutes(
     if (
       id !== "platform" &&
       !(await db
-        .prepare("SELECT 1 FROM crm_data_domains WHERE id=?")
+        .prepare("SELECT 1 FROM studio_data_domains WHERE id=?")
         .bind(id)
         .first())
     )

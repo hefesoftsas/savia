@@ -61,7 +61,7 @@ export const postgresSourceInputSchema = z
 
 export type PostgresSourceInput = z.infer<typeof postgresSourceInputSchema>;
 
-/** Config persistida en crm_collection_sources.config (sin secretos). */
+/** Config persistida en studio_collection_sources.config (sin secretos). */
 export const postgresSourceConfigSchema = z
   .object({
     host: hostname,

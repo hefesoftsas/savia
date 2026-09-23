@@ -20,7 +20,7 @@ export default {
       response = new Response(null, { status: 204 });
     else if (new URL(request.url).pathname === "/preview/setup") {
       await env.DB.prepare(
-        "INSERT OR IGNORE INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+        "INSERT OR IGNORE INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
       )
         .bind(
           "domain:workflow-preview",

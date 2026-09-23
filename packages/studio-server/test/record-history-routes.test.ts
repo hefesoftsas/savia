@@ -228,7 +228,7 @@ it("immediately hides expired events and requires restore permission for trash",
   const record = await create(name);
   const path = `/record-history/${name}/${record.id}`;
   await platform.env.DB.prepare(
-    "UPDATE crm_record_history SET expires_at='2000-01-01T00:00:00.000Z' WHERE object_name=?",
+    "UPDATE studio_record_history SET expires_at='2000-01-01T00:00:00.000Z' WHERE object_name=?",
   )
     .bind(name)
     .run();
@@ -244,7 +244,7 @@ it("redacts retained values after a field becomes unreadable in current metadata
   await enable(name);
   const record = await create(name);
   await platform.env.DB.prepare(
-    "UPDATE crm_objects SET config=json_set(config,'$.fields.secret.readable',json('false'),'$.studio.history.fields',json('[\"name\"]')) WHERE tenant_id='history' AND name=?",
+    "UPDATE studio_objects SET config=json_set(config,'$.fields.secret.readable',json('false'),'$.studio.history.fields',json('[\"name\"]')) WHERE tenant_id='history' AND name=?",
   )
     .bind(name)
     .run();
@@ -270,7 +270,7 @@ it("starts without backfill and preserves original expiry when tracking is disab
     ).status,
   ).toBe(200);
   const before = await platform.env.DB.prepare(
-    "SELECT expires_at FROM crm_record_history WHERE object_name=? AND record_id=?",
+    "SELECT expires_at FROM studio_record_history WHERE object_name=? AND record_id=?",
   )
     .bind(name, record.id)
     .first("expires_at");
@@ -297,7 +297,7 @@ it("starts without backfill and preserves original expiry when tracking is disab
   expect(result.data.map((e: any) => e.version)).toEqual([2]);
   expect(
     await platform.env.DB.prepare(
-      "SELECT expires_at FROM crm_record_history WHERE object_name=? AND record_id=?",
+      "SELECT expires_at FROM studio_record_history WHERE object_name=? AND record_id=?",
     )
       .bind(name, record.id)
       .first("expires_at"),
@@ -413,7 +413,7 @@ it("rejects forbidden, missing, expired and truncated restoration sources", asyn
     ).status,
   ).toBe(403);
   await platform.env.DB.prepare(
-    "UPDATE crm_record_history SET changes=json_set(changes,'$.name.afterTruncated',json('true')) WHERE object_name=?",
+    "UPDATE studio_record_history SET changes=json_set(changes,'$.name.afterTruncated',json('true')) WHERE object_name=?",
   )
     .bind(name)
     .run();
@@ -427,7 +427,7 @@ it("rejects forbidden, missing, expired and truncated restoration sources", asyn
     ).status,
   ).toBe(422);
   await platform.env.DB.prepare(
-    "UPDATE crm_record_history SET expires_at='2000-01-01' WHERE object_name=?",
+    "UPDATE studio_record_history SET expires_at='2000-01-01' WHERE object_name=?",
   )
     .bind(name)
     .run();
@@ -450,7 +450,7 @@ it("reports bounded collection storage and expired backlog only to schema admini
   expect(result.data.logicalBytes).toBeGreaterThan(0);
   expect((await scoped(name, policy(name))(path)).status).toBe(403);
   await platform.env.DB.prepare(
-    "UPDATE crm_record_history SET expires_at='2000-01-01' WHERE object_name=?",
+    "UPDATE studio_record_history SET expires_at='2000-01-01' WHERE object_name=?",
   )
     .bind(name)
     .run();
@@ -505,7 +505,7 @@ it("restores only writable fields for custom roles and rejects changed schema va
     ).status,
   ).toBe(422);
   await platform.env.DB.prepare(
-    "UPDATE crm_objects SET config=json_set(config,'$.fields.name.type','Number'),version=version+1 WHERE name=?",
+    "UPDATE studio_objects SET config=json_set(config,'$.fields.name.type','Number'),version=version+1 WHERE name=?",
   )
     .bind(name)
     .run();
@@ -526,7 +526,7 @@ it("caps usage scans and does not expose another tenant's collection", async () 
   const record = await create(name);
   await platform.env.DB.prepare(
     `WITH RECURSIVE n(v) AS (SELECT 2 UNION ALL SELECT v+1 FROM n WHERE v<1001)
-    INSERT INTO crm_record_history(tenant_id,object_name,record_id,version,action,created_at,actor_kind,changes,expires_at)
+    INSERT INTO studio_record_history(tenant_id,object_name,record_id,version,action,created_at,actor_kind,changes,expires_at)
     SELECT 'history',?,?,v,'updated','2026-09-19','system','{}','2099-01-01' FROM n`,
   )
     .bind(name, record.id)

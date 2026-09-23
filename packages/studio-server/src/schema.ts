@@ -50,7 +50,7 @@ export async function createObject(
   await validateMetadataRelations(db, tenant, object);
   if (
     await db
-      .prepare("SELECT 1 FROM crm_objects WHERE tenant_id=? AND name=?")
+      .prepare("SELECT 1 FROM studio_objects WHERE tenant_id=? AND name=?")
       .bind(tenant, object.name)
       .first()
   )
@@ -58,7 +58,7 @@ export async function createObject(
   await transaction(db, [
     db
       .prepare(
-        "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+        "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
       )
       .bind(
         tenant,
@@ -69,7 +69,7 @@ export async function createObject(
       ),
     db
       .prepare(
-        "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,1,?)",
+        "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,1,?)",
       )
       .bind(tenant, object.name, JSON.stringify(object)),
     audit(db, tenant, "object.created", object.name, null, object),
@@ -114,7 +114,7 @@ export async function previewSchema(
     return fail("Dos campos no pueden renombrarse al mismo destino.", 422);
   const { results: rows } = await db
     .prepare(
-      "SELECT * FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL",
+      "SELECT * FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL",
     )
     .bind(tenant, name)
     .all<any>();
@@ -123,7 +123,7 @@ export async function previewSchema(
       ? (
           await db
             .prepare(
-              "SELECT record_id,data FROM crm_schema_data WHERE tenant_id=? AND object_name=? AND version=?",
+              "SELECT record_id,data FROM studio_schema_data WHERE tenant_id=? AND object_name=? AND version=?",
             )
             .bind(tenant, name, restoreVersion)
             .all<any>()
@@ -261,12 +261,12 @@ export async function publishSchema(
     definition = { ...next, version: nextVersion };
   const g = guard(
     db,
-    "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
     [previous.version, tenant, name],
   );
   const count = guard(
     db,
-    "SELECT count(*)=? FROM crm_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL",
+    "SELECT count(*)=? FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL",
     [records.length, tenant, name],
   );
   const relationGuards: D1PreparedStatement[] = [];
@@ -280,26 +280,26 @@ export async function publishSchema(
     ...relationGuards,
     db
       .prepare(
-        "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
+        "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
       )
       .bind(tenant, name, previous.version, JSON.stringify(previous)),
     db
       .prepare(
-        "DELETE FROM crm_unique_values WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_unique_values WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
   ];
   for (const record of records) {
     const rg = guard(
       db,
-      "SELECT version=? FROM crm_records WHERE tenant_id=? AND id=?",
+      "SELECT version=? FROM studio_records WHERE tenant_id=? AND id=?",
       [record.row.version, tenant, record.row.id],
     );
     statements.push(
       rg.start,
       db
         .prepare(
-          "INSERT INTO crm_schema_data(tenant_id,object_name,version,record_id,data) VALUES (?,?,?,?,?) ON CONFLICT(tenant_id,object_name,version,record_id) DO UPDATE SET data=excluded.data",
+          "INSERT INTO studio_schema_data(tenant_id,object_name,version,record_id,data) VALUES (?,?,?,?,?) ON CONFLICT(tenant_id,object_name,version,record_id) DO UPDATE SET data=excluded.data",
         )
         .bind(
           tenant,
@@ -310,7 +310,7 @@ export async function publishSchema(
         ),
       db
         .prepare(
-          "UPDATE crm_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
+          "UPDATE studio_records SET data=?,version=version+1,updated_at=? WHERE tenant_id=? AND id=?",
         )
         .bind(
           JSON.stringify(record.after),
@@ -325,7 +325,7 @@ export async function publishSchema(
   statements.push(
     db
       .prepare(
-        "UPDATE crm_objects SET label=?,description=?,config=?,version=? WHERE tenant_id=? AND name=?",
+        "UPDATE studio_objects SET label=?,description=?,config=?,version=? WHERE tenant_id=? AND name=?",
       )
       .bind(
         next.label,
@@ -337,7 +337,7 @@ export async function publishSchema(
       ),
     db
       .prepare(
-        "INSERT INTO crm_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
+        "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
       )
       .bind(tenant, name, nextVersion, JSON.stringify(definition)),
     audit(
@@ -425,14 +425,14 @@ export async function patchScreenMeta(
   const nextVersion = (object.version ?? 1) + 1;
   const g = guard(
     db,
-    "SELECT version=? FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
     [object.version ?? 1, tenant, name],
   );
   await transaction(db, [
     g.start,
     db
       .prepare(
-        "UPDATE crm_objects SET label=?, config=?, version=? WHERE tenant_id=? AND name=?",
+        "UPDATE studio_objects SET label=?, config=?, version=? WHERE tenant_id=? AND name=?",
       )
       .bind(
         label ?? object.label,
@@ -469,7 +469,7 @@ export async function reorderScreens(
     unique.push(name);
   }
   const { results } = await db
-    .prepare("SELECT name FROM crm_objects WHERE tenant_id=?")
+    .prepare("SELECT name FROM studio_objects WHERE tenant_id=?")
     .bind(tenant)
     .all<{ name: string }>();
   const known = new Set(results.map((row) => row.name));
@@ -507,7 +507,7 @@ async function assertObjectCanBeDeleted(
     return fail("Esta pantalla administrada no se puede eliminar aquí.", 422);
   const records = await db
     .prepare(
-      "SELECT count(*) AS total FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) AS total FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
     .bind(tenant, object.name)
     .first<{ total: number }>();
@@ -517,7 +517,7 @@ async function assertObjectCanBeDeleted(
       409,
     );
   const { results } = await db
-    .prepare("SELECT name,config FROM crm_objects WHERE tenant_id=?")
+    .prepare("SELECT name,config FROM studio_objects WHERE tenant_id=?")
     .bind(tenant)
     .all<{ name: string; config: string }>();
   for (const row of results) {
@@ -549,35 +549,35 @@ async function deleteObjectDataStatements(
   name: string,
 ) {
   const statements: D1PreparedStatement[] = [];
-  if (await tableExists(db, "crm_record_links")) {
+  if (await tableExists(db, "studio_record_links")) {
     statements.push(
       db
         .prepare(
-          "DELETE FROM crm_record_links WHERE tenant_id=? AND (source_id IN (SELECT id FROM crm_records WHERE tenant_id=? AND object_name=?) OR target_id IN (SELECT id FROM crm_records WHERE tenant_id=? AND object_name=?))",
+          "DELETE FROM studio_record_links WHERE tenant_id=? AND (source_id IN (SELECT id FROM studio_records WHERE tenant_id=? AND object_name=?) OR target_id IN (SELECT id FROM studio_records WHERE tenant_id=? AND object_name=?))",
         )
         .bind(tenant, tenant, name, tenant, name),
     );
   }
-  if (await tableExists(db, "crm_collection_relations")) {
+  if (await tableExists(db, "studio_collection_relations")) {
     statements.push(
       db
         .prepare(
-          "DELETE FROM crm_record_links WHERE tenant_id=? AND relation_id IN (SELECT id FROM crm_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?))",
+          "DELETE FROM studio_record_links WHERE tenant_id=? AND relation_id IN (SELECT id FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?))",
         )
         .bind(tenant, tenant, name, name),
       db
         .prepare(
-          "DELETE FROM crm_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?)",
+          "DELETE FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?)",
         )
         .bind(tenant, name, name),
     );
   }
   for (const table of [
-    "crm_business_links",
-    "crm_file_drafts",
-    "crm_files",
-    "crm_notes",
-    "crm_tasks",
+    "studio_business_links",
+    "studio_file_drafts",
+    "studio_files",
+    "studio_notes",
+    "studio_tasks",
   ] as const) {
     if (await tableExists(db, table))
       statements.push(
@@ -589,34 +589,34 @@ async function deleteObjectDataStatements(
   statements.push(
     db
       .prepare(
-        "DELETE FROM crm_automation_runs WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_automation_runs WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
       .prepare(
-        "DELETE FROM crm_automations WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_automations WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
-      .prepare("DELETE FROM crm_views WHERE tenant_id=? AND object_name=?")
+      .prepare("DELETE FROM studio_views WHERE tenant_id=? AND object_name=?")
       .bind(tenant, name),
     db
       .prepare(
-        "DELETE FROM crm_schema_data WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-    db
-      .prepare(
-        "DELETE FROM crm_schema_versions WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_schema_data WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
       .prepare(
-        "DELETE FROM crm_unique_values WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
-      .prepare("DELETE FROM crm_records WHERE tenant_id=? AND object_name=?")
+      .prepare(
+        "DELETE FROM studio_unique_values WHERE tenant_id=? AND object_name=?",
+      )
+      .bind(tenant, name),
+    db
+      .prepare("DELETE FROM studio_records WHERE tenant_id=? AND object_name=?")
       .bind(tenant, name),
   );
   return statements;
@@ -630,30 +630,30 @@ function deleteObjectMetadataStatements(
   return [
     db
       .prepare(
-        "DELETE FROM crm_automation_runs WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_automation_runs WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
       .prepare(
-        "DELETE FROM crm_automations WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_automations WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
-      .prepare("DELETE FROM crm_views WHERE tenant_id=? AND object_name=?")
+      .prepare("DELETE FROM studio_views WHERE tenant_id=? AND object_name=?")
       .bind(tenant, name),
     db
       .prepare(
-        "DELETE FROM crm_schema_data WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-    db
-      .prepare(
-        "DELETE FROM crm_schema_versions WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_schema_data WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
     db
       .prepare(
-        "DELETE FROM crm_unique_values WHERE tenant_id=? AND object_name=?",
+        "DELETE FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
+      )
+      .bind(tenant, name),
+    db
+      .prepare(
+        "DELETE FROM studio_unique_values WHERE tenant_id=? AND object_name=?",
       )
       .bind(tenant, name),
   ];
@@ -675,7 +675,7 @@ export async function deleteObject(
       ? await deleteObjectDataStatements(db, tenant, name)
       : deleteObjectMetadataStatements(db, tenant, name)),
     db
-      .prepare("DELETE FROM crm_objects WHERE tenant_id=? AND name=?")
+      .prepare("DELETE FROM studio_objects WHERE tenant_id=? AND name=?")
       .bind(tenant, name),
     audit(db, tenant, "object.deleted", name, null, {
       label: object.label,
@@ -685,7 +685,7 @@ export async function deleteObject(
   if (!cascadeData) {
     const empty = guard(
       db,
-      "SELECT count(*)=0 FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*)=0 FROM studio_records WHERE tenant_id=? AND object_name=?",
       [tenant, name],
     );
     await transaction(db, [empty.start, ...statements, empty.end]);

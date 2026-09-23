@@ -221,7 +221,7 @@ it("persists source policy changes into collection metadata for catalog refresh"
   });
   await call("sources/catalog", "PUT", { writeEnabled: false });
   const row = await env.DB.prepare(
-    "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind("database-tests", "catalog_orders")
     .first<{ config: string }>();

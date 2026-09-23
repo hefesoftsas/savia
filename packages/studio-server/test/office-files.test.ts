@@ -21,10 +21,10 @@ beforeAll(async () => {
       .filter((s) => s.trim()))
       await platform.env.DB.prepare(sql).run();
   await platform.env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES ('agency:1','contracts','Contracts','','{\"fields\":{}}')",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES ('agency:1','contracts','Contracts','','{\"fields\":{}}')",
   ).run();
   await platform.env.DB.prepare(
-    "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES ('record-1','agency:1','contracts','{}')",
+    "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES ('record-1','agency:1','contracts','{}')",
   ).run();
 });
 afterAll(async () => {
@@ -35,7 +35,7 @@ async function seed() {
     key = "agency:1/record-1/" + id;
   await platform.env.FILES.put(key, bytes);
   await platform.env.DB.prepare(
-    "INSERT INTO crm_files(id,tenant_id,object_name,record_id,name,mime,size,storage_key) VALUES (?,'agency:1','contracts','record-1','policy.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document',?,?)",
+    "INSERT INTO studio_files(id,tenant_id,object_name,record_id,name,mime,size,storage_key) VALUES (?,'agency:1','contracts','record-1','policy.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document',?,?)",
   )
     .bind(id, bytes.length, key)
     .run();
@@ -103,7 +103,7 @@ describe("Office revisions on real D1 and R2", () => {
     expect(
       (
         await platform.env.DB.prepare(
-          "SELECT count(*) AS n FROM crm_file_revisions WHERE file_id=?",
+          "SELECT count(*) AS n FROM studio_file_revisions WHERE file_id=?",
         )
           .bind(id)
           .first<any>()
@@ -118,7 +118,7 @@ describe("Office revisions on real D1 and R2", () => {
     expect(
       (
         await platform.env.DB.prepare(
-          "SELECT version FROM crm_files WHERE id=?",
+          "SELECT version FROM studio_files WHERE id=?",
         )
           .bind(id)
           .first<any>()
@@ -128,11 +128,11 @@ describe("Office revisions on real D1 and R2", () => {
   it("rejects saves after the parent record is deleted", async () => {
     const { id } = await seed();
     await platform.env.DB.prepare(
-      "UPDATE crm_records SET deleted_at='2026-09-19' WHERE id='record-1'",
+      "UPDATE studio_records SET deleted_at='2026-09-19' WHERE id='record-1'",
     ).run();
     expect((await save(id, 1)).status).toBe(404);
     await platform.env.DB.prepare(
-      "UPDATE crm_records SET deleted_at=NULL WHERE id='record-1'",
+      "UPDATE studio_records SET deleted_at=NULL WHERE id='record-1'",
     ).run();
   });
   it("keeps revision downloads private and removes access after deleting the file", async () => {
@@ -235,7 +235,7 @@ describe("Office revisions on real D1 and R2", () => {
   it("respects a read-only attachment field", async () => {
     const { id } = await seed();
     await platform.env.DB.prepare(
-      "UPDATE crm_objects SET config=? WHERE tenant_id='agency:1' AND name='contracts'",
+      "UPDATE studio_objects SET config=? WHERE tenant_id='agency:1' AND name='contracts'",
     )
       .bind(
         JSON.stringify({
@@ -250,7 +250,7 @@ describe("Office revisions on real D1 and R2", () => {
       )
       .run();
     await platform.env.DB.prepare(
-      "UPDATE crm_files SET field_name='document' WHERE id=?",
+      "UPDATE studio_files SET field_name='document' WHERE id=?",
     )
       .bind(id)
       .run();
@@ -262,7 +262,7 @@ describe("Office revisions on real D1 and R2", () => {
       expect((await save(id, 1)).status).toBe(403);
     } finally {
       await platform.env.DB.prepare(
-        "UPDATE crm_objects SET config='{\"fields\":{}}' WHERE tenant_id='agency:1' AND name='contracts'",
+        "UPDATE studio_objects SET config='{\"fields\":{}}' WHERE tenant_id='agency:1' AND name='contracts'",
       ).run();
     }
   });

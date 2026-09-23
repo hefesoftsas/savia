@@ -32,7 +32,7 @@ const rows = async (id: string) =>
   (
     await db
       .prepare(
-        "SELECT * FROM crm_record_history WHERE tenant_id=? AND record_id=? ORDER BY version",
+        "SELECT * FROM studio_record_history WHERE tenant_id=? AND record_id=? ORDER BY version",
       )
       .bind(tenant, id)
       .all<any>()
@@ -127,7 +127,7 @@ it("records offline create/update/delete retries once with the authenticated act
   for (const entry of history) expect(entry.actor_id).toBe("offline-user");
   expect(
     await db
-      .prepare("SELECT count(*) n FROM crm_record_history_context")
+      .prepare("SELECT count(*) n FROM studio_record_history_context")
       .first("n"),
   ).toBe(0);
 });

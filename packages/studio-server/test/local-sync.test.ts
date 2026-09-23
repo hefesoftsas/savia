@@ -114,7 +114,7 @@ it("keeps bootstrap gap-free across concurrent writes and emits hard-delete tomb
   for (const id of ["a", "b", "c"])
     await db
       .prepare(
-        "INSERT INTO crm_records(tenant_id,object_name,id,data) VALUES ('sync-test','initial',?,?)",
+        "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES ('sync-test','initial',?,?)",
       )
       .bind(id, JSON.stringify({ name: id }))
       .run();
@@ -124,11 +124,13 @@ it("keeps bootstrap gap-free across concurrent writes and emits hard-delete tomb
   let documents = [...page.documents];
   await db
     .prepare(
-      "UPDATE crm_records SET data='{}',version=version+1 WHERE tenant_id='sync-test' AND id='a'",
+      "UPDATE studio_records SET data='{}',version=version+1 WHERE tenant_id='sync-test' AND id='a'",
     )
     .run();
   await db
-    .prepare("DELETE FROM crm_records WHERE tenant_id='sync-test' AND id='b'")
+    .prepare(
+      "DELETE FROM studio_records WHERE tenant_id='sync-test' AND id='b'",
+    )
     .run();
   while (page.hasMore) {
     page = await (
@@ -145,7 +147,7 @@ it("keeps bootstrap gap-free across concurrent writes and emits hard-delete tomb
   ).toBeTruthy();
   await db
     .prepare(
-      "UPDATE crm_records SET data='{}',version=version+1 WHERE tenant_id='sync-test' AND id='c'",
+      "UPDATE studio_records SET data='{}',version=version+1 WHERE tenant_id='sync-test' AND id='c'",
     )
     .run();
   const delta: any = await (
@@ -194,7 +196,7 @@ it("rejects mutation ID reuse, converges concurrent retries, and isolates princi
 });
 it("does not expose external source shadows", async () => {
   await platform.env.DB.prepare(
-    "UPDATE crm_objects SET config=json_set(config,'$.studio.business',json('{}')) WHERE tenant_id='sync-test' AND name='initial'",
+    "UPDATE studio_objects SET config=json_set(config,'$.studio.business',json('{}')) WHERE tenant_id='sync-test' AND name='initial'",
   ).run();
   const manifest: any = await (await request("/local-sync/manifest")).json();
   expect(
@@ -215,7 +217,7 @@ it("does not expose external source shadows", async () => {
 
 it("fails closed for external metadata even before its binding is available", async () => {
   await platform.env.DB.prepare(
-    "UPDATE crm_objects SET config=json_remove(json_set(config,'$.studio.collection',json('{\"kind\":\"postgres\"}')),'$.studio.business') WHERE tenant_id='sync-test' AND name='initial'",
+    "UPDATE studio_objects SET config=json_remove(json_set(config,'$.studio.collection',json('{\"kind\":\"postgres\"}')),'$.studio.business') WHERE tenant_id='sync-test' AND name='initial'",
   ).run();
   const manifest: any = await (await request("/local-sync/manifest")).json();
   expect(
@@ -264,17 +266,17 @@ it("captures recreation by bulk INSERT OR IGNORE after a hard delete", async () 
   const db = platform.env.DB;
   await db
     .prepare(
-      "INSERT INTO crm_records(tenant_id,object_name,id,data) VALUES ('sync-test','sync_item','bulk-recreated','{}')",
+      "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES ('sync-test','sync_item','bulk-recreated','{}')",
     )
     .run();
   await db
     .prepare(
-      "DELETE FROM crm_records WHERE tenant_id='sync-test' AND id='bulk-recreated'",
+      "DELETE FROM studio_records WHERE tenant_id='sync-test' AND id='bulk-recreated'",
     )
     .run();
   await db
     .prepare(
-      "INSERT OR IGNORE INTO crm_records(tenant_id,object_name,id,data) VALUES ('sync-test','sync_item','bulk-recreated','{}')",
+      "INSERT OR IGNORE INTO studio_records(tenant_id,object_name,id,data) VALUES ('sync-test','sync_item','bulk-recreated','{}')",
     )
     .run();
   const state = await db
@@ -316,12 +318,12 @@ it("resumes a committed mutation whose automation acknowledgement was interrupte
   const db = platform.env.DB;
   await db
     .prepare(
-      "DELETE FROM crm_tasks WHERE tenant_id='sync-test' AND record_id='automated-record'",
+      "DELETE FROM studio_tasks WHERE tenant_id='sync-test' AND record_id='automated-record'",
     )
     .run();
   await db
     .prepare(
-      "DELETE FROM crm_automation_runs WHERE tenant_id='sync-test' AND record_id='automated-record'",
+      "DELETE FROM studio_automation_runs WHERE tenant_id='sync-test' AND record_id='automated-record'",
     )
     .run();
   await db
@@ -373,7 +375,7 @@ it("rejects every synchronization request bound to a different authenticated pri
   }
   expect(
     await platform.env.DB.prepare(
-      "SELECT 1 FROM crm_records WHERE id='must-not-write'",
+      "SELECT 1 FROM studio_records WHERE id='must-not-write'",
     ).first(),
   ).toBeNull();
 });
