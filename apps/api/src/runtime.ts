@@ -32,6 +32,7 @@ import {
 } from "./crm/connector-executor";
 import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { isLocalPublicOrigin } from "./public-forms/captcha";
+import { createIsGdShortener } from "./public-forms/shortener";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
 export { oauthResourceAuthenticator } from "./auth/runtime";
 export {
@@ -259,6 +260,10 @@ const runtime = {
         publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
         disableCaptcha: environment.SAVIA_DISABLE_CAPTCHA === "1",
         rateLimiter: environment.PUBLIC_FORMS_RATE_LIMITER,
+        ...(environment.SAVIA_PUBLIC_ORIGIN &&
+        !isLocalPublicOrigin(environment.SAVIA_PUBLIC_ORIGIN)
+          ? { shortener: createIsGdShortener() }
+          : {}),
         // Local-only provider simulation (fixture data, no provider calls).
         // The localhost gate keeps preview and production untouched even if
         // the flag ever leaks into another environment.

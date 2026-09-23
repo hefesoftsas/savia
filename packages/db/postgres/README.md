@@ -46,6 +46,10 @@ migrations. Existing native installations apply only the additive migration;
 the native core schema. Existing installations apply it after the notification
 migrations; the baseline remains unchanged.
 
+`0007_public_form_external_short_url.sql` stores the optional third-party short
+URL on each public form. Existing installations apply it after the Savia short
+link mapping; the baseline remains unchanged.
+
 Native pools discard failed idle connections without logging their credential-bearing
 client objects. Shutdown waits for socket removal as well as pool shutdown before
 allowing database teardown; the next query after an idle connection loss obtains

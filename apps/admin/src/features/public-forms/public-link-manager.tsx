@@ -189,6 +189,11 @@ export function PublicLinkManager({
       const body = z.object({ data: linkSchema }).parse(await response.json());
       if (current === generation.current) {
         setLinks((previous) => [body.data, ...previous]);
+        if (body.data.shortUrl)
+          setShortUrls((previous) => ({
+            ...previous,
+            [body.data.id]: body.data.shortUrl!,
+          }));
         setConfirmed(false);
         setNotice("Enlace publicado. Puedes copiarlo y compartirlo.");
       }
@@ -269,11 +274,10 @@ export function PublicLinkManager({
     }
   }
 
-  async function copy(link: PublicLink, forceShort = false) {
-    const targetUrl =
-      forceShort && shortUrls[link.id]
-        ? shortUrls[link.id]
-        : shortUrls[link.id] || linkUrl(link);
+  async function copy(link: PublicLink, useShort = false) {
+    const targetUrl = useShort
+      ? shortUrls[link.id] || linkUrl(link)
+      : linkUrl(link);
     try {
       await navigator.clipboard.writeText(targetUrl);
       setCopiedId(link.id);
@@ -299,11 +303,11 @@ export function PublicLinkManager({
           url: urlToShare,
         });
       } else {
-        await copy(link);
+        await copy(link, true);
       }
     } catch (err: unknown) {
       if ((err as Error)?.name !== "AbortError") {
-        void copy(link);
+        void copy(link, true);
       }
     }
   }
@@ -327,7 +331,7 @@ export function PublicLinkManager({
           ...previous,
           [link.id]: data.shortUrl,
         }));
-        setNotice(t("Enlace copiado."));
+        setNotice(t("Enlace corto generado."));
       }
     } catch {
       setError(
@@ -668,6 +672,21 @@ export function PublicLinkManager({
                         readOnly
                         onFocus={(event) => event.target.select()}
                       />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void copy(link)}
+                        disabled={unavailable}
+                        className="gap-1.5 shrink-0"
+                      >
+                        {isCopied ? (
+                          <Check className="size-3.5 text-emerald-500" aria-hidden="true" />
+                        ) : (
+                          <Copy className="size-3.5" aria-hidden="true" />
+                        )}
+                        <span>{isCopied ? t("¡Copiado!") : t("Copiar enlace")}</span>
+                      </Button>
                     </div>
                     {shortUrl && (
                       <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-1.5 text-xs">
@@ -704,23 +723,6 @@ export function PublicLinkManager({
                         <span>{t("Compartir")}</span>
                       </Button>
                     )}
-
-                    {/* Copy Link Button */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void copy(link)}
-                      disabled={unavailable}
-                      className="gap-1.5"
-                    >
-                      {isCopied ? (
-                        <Check className="size-3.5 text-emerald-500" aria-hidden="true" />
-                      ) : (
-                        <Copy className="size-3.5" aria-hidden="true" />
-                      )}
-                      <span>{isCopied ? t("¡Copiado!") : t("Copiar enlace")}</span>
-                    </Button>
 
                     {/* Shorten URL Button */}
                     <Button

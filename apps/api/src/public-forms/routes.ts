@@ -15,6 +15,7 @@ import {
   submissionSchema,
   submitPublicForm,
   tenantForDomain,
+  persistPublicFormShortUrl,
   type PublicFormOptions,
   type PublicFormRow,
 } from "./service";
@@ -98,18 +99,22 @@ export function registerPublicFormRoutes(
       path: "/v1/public-forms/{id}/short-url",
       tags: ["Public forms"],
       request: { params: z.object({ id: z.string().uuid() }) },
-      responses: { 200: jsonResponse, 404: jsonResponse },
+      responses: { 200: jsonResponse, 404: jsonResponse, 503: jsonResponse },
     }),
     async (c) => {
       const id = c.req.valid("param").id;
       const now = new Date().toISOString();
       const form = await db
-        .prepare("SELECT id,expires_at,revoked_at FROM public_forms WHERE id=?")
+        .prepare(
+          "SELECT id,token,expires_at,revoked_at,short_url FROM public_forms WHERE id=?",
+        )
         .bind(id)
         .first<{
           id: string;
+          token: string;
           expires_at: string | null;
           revoked_at: string | null;
+          short_url: string | null;
         }>();
       if (
         !form ||
@@ -117,6 +122,28 @@ export function registerPublicFormRoutes(
         (form.expires_at !== null && form.expires_at <= now)
       )
         return c.json({ error: "Public form unavailable." }, 404);
+
+      if (form.short_url)
+        return c.json({ data: { shortUrl: form.short_url } }, 200);
+      if (options.shortener) {
+        const destination = new URL(
+          "/public/forms/" + form.token,
+          options.publicOrigin ?? c.req.url,
+        ).href;
+        try {
+          const shortUrl = await options.shortener.shorten(destination);
+          const persistedShortUrl = await persistPublicFormShortUrl(
+            db,
+            id,
+            shortUrl,
+          );
+          return c.json({ data: { shortUrl: persistedShortUrl } }, 200);
+        } catch {
+          throw new HTTPException(503, {
+            message: "External short URL provider unavailable.",
+          });
+        }
+      }
 
       let row = await db
         .prepare("SELECT code FROM public_form_short_links WHERE form_id=?")
@@ -228,7 +255,7 @@ export function registerPublicFormRoutes(
       return c.json(
         {
           data: result.results.map((row) =>
-            managedForm(row, options.publicOrigin),
+            managedForm(row, options.publicOrigin, Boolean(options.shortener)),
           ),
         },
         200,

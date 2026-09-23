@@ -235,6 +235,7 @@ live("native baseline parity", () => {
           "0004_notifications.sql",
           "0005_notification_collection_triggers.sql",
           "0006_public_form_short_links.sql",
+          "0007_public_form_external_short_url.sql",
         ]);
         expect(
           await postgres

@@ -297,6 +297,10 @@
     {
       "filename": "0064_public_form_short_links.sql",
       "sha256": "f96354311a624afc3463ba1508587dd0dc45d94e61c58108c0df9497fd7c9d64"
+    },
+    {
+      "filename": "0065_public_form_external_short_url.sql",
+      "sha256": "2c458d5960805843833c569c7d18c86779a3204f3a9d9a93205425a5eced4b07"
     }
   ],
   "objects": [
@@ -35933,6 +35937,14 @@
           "name": "created_at",
           "type": "TEXT",
           "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "short_url",
+          "type": "TEXT",
+          "notnull": 0,
           "dflt_value": null,
           "pk": 0
         }

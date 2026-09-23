@@ -266,6 +266,120 @@ it("creates a stable Savia short URL that redirects only while the form is activ
     revokedLinks.data.find((item) => item.id === link.id)?.shortUrl,
   ).toBeUndefined();
 });
+it("creates and persists an external short URL when publishing and can retry it", async () => {
+  const shorten = vi.fn(async (url: string) => `https://is.gd/abc123`);
+  const instance = app({ shortener: { shorten } });
+  const name = await object();
+  const link = await publish(instance, name);
+
+  expect(shorten).toHaveBeenCalledWith(link.url);
+  expect(link.shortUrl).toBe("https://is.gd/abc123");
+
+  const listResponse = await instance.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
+  );
+  const listed = (await listResponse.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toBe(
+    "https://is.gd/abc123",
+  );
+
+  const retryResponse = await instance.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(retryResponse.status).toBe(200);
+  expect(await retryResponse.json()).toEqual({
+    data: { shortUrl: "https://is.gd/abc123" },
+  });
+  expect(shorten).toHaveBeenCalledTimes(1);
+});
+it("replaces the Savia-only short URL for existing links when external shortening is enabled", async () => {
+  const name = await object();
+  const legacyApp = app();
+  const link = await publish(legacyApp, name);
+  await legacyApp.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+
+  const shorten = vi.fn(async () => "https://is.gd/existing1");
+  const externalApp = app({ shortener: { shorten } });
+  const listing = await externalApp.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
+  );
+  const listed = (await listing.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(
+    listed.data.find((item) => item.id === link.id)?.shortUrl,
+  ).toBeUndefined();
+
+  const retry = await externalApp.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(retry.status).toBe(200);
+  expect(
+    ((await retry.json()) as { data: { shortUrl: string } }).data.shortUrl,
+  ).toBe("https://is.gd/existing1");
+  expect(shorten).toHaveBeenCalledWith(link.url);
+});
+it("returns the stored winner when external shortening retries overlap", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  const resolutions: ((url: string) => void)[] = [];
+  let notifyBothCalls!: () => void;
+  const bothCalls = new Promise<void>((resolve) => {
+    notifyBothCalls = resolve;
+  });
+  const shorten = vi.fn(
+    () =>
+      new Promise<string>((resolve) => {
+        resolutions.push(resolve);
+        if (resolutions.length === 2) notifyBothCalls();
+      }),
+  );
+  const instance = app({ shortener: { shorten } });
+  const retry = () =>
+    instance.request(`https://api.test/v1/public-forms/${link.id}/short-url`, {
+      method: "POST",
+    });
+
+  const firstRequest = retry();
+  const secondRequest = retry();
+  await bothCalls;
+  resolutions[1]("https://is.gd/winner2");
+  const secondResponse = await secondRequest;
+  resolutions[0]("https://is.gd/loser1");
+  const firstResponse = await firstRequest;
+
+  expect((await firstResponse.json()).data).toEqual({
+    shortUrl: "https://is.gd/winner2",
+  });
+  expect((await secondResponse.json()).data).toEqual({
+    shortUrl: "https://is.gd/winner2",
+  });
+});
+it("keeps publishing the canonical URL when the external shortener is unavailable", async () => {
+  const instance = app({
+    shortener: {
+      shorten: vi.fn().mockRejectedValue(new Error("provider down")),
+    },
+  });
+  const name = await object();
+  const link = await publish(instance, name);
+
+  expect(link.url).toMatch(/^https:\/\/forms\.savia\.test\/public\/forms\//);
+  expect(link.shortUrl).toBeUndefined();
+
+  const retry = await instance.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(retry.status).toBe(503);
+});
 it("restricts short URL creation to platform administrators", async () => {
   const name = await object();
   const link = await publish(app(), name);

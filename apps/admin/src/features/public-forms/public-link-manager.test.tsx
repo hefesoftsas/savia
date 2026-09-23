@@ -16,6 +16,7 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
     token: "token",
     path: "/public/forms/token",
     url: "https://public.savia.test/public/forms/token",
+    shortUrl: "https://is.gd/abc123",
     kind: "record",
     dailyLimit: 25,
     expiresAt: null,
@@ -46,6 +47,8 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
   fireEvent.click(screen.getByLabelText(/versión actual/));
   fireEvent.click(screen.getByRole("button", { name: "Publicar enlace" }));
   await screen.findByRole("button", { name: "Copiar enlace" });
+  expect(await screen.findByText("https://is.gd/abc123")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Copiar" })).toBeEnabled();
   expect(request.mock.calls[0][0]).toBe(
     "/v1/public-forms?domainId=domain&objectName=people",
   );
@@ -289,6 +292,7 @@ it("creates a Savia short URL through the authenticated API", async () => {
       screen.getByText("https://public.savia.test/s/0123456789abcdef"),
     ).toBeInTheDocument(),
   );
+  expect(screen.getByText("Enlace corto generado.")).toBeInTheDocument();
   expect(request.mock.calls[1]).toEqual([
     "/v1/public-forms/short-link/short-url",
     { method: "POST" },
@@ -322,9 +326,50 @@ it("restores a published short URL when the link list reloads", async () => {
   );
 
   expect(await screen.findByText(shortUrl)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Enlace corto" })).toBeDisabled();
+});
+
+it("shows the canonical and external short links together after loading", async () => {
+  const shortUrl = "https://is.gd/abc123";
+  const row = {
+    id: "published-links",
+    token: "public-token",
+    path: "/public/forms/public-token",
+    url: "https://public.savia.test/public/forms/public-token",
+    shortUrl,
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+
+  expect(await screen.findByText(shortUrl)).toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "Enlace corto" }),
-  ).toBeDisabled();
+    screen.getByRole("textbox", { name: "Dirección del enlace público" }),
+  ).toHaveValue(row.url);
+  expect(screen.getByRole("button", { name: "Copiar enlace" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Copiar" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Copiar enlace" }));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(row.url));
+  fireEvent.click(screen.getByRole("button", { name: "Copiar" }));
+  await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(shortUrl));
 });
 
 it("renders the direct open link button and back button when provided", async () => {
