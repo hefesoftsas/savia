@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(324);
+    expect(names).toHaveLength(332);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
