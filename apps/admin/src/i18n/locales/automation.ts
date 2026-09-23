@@ -138,6 +138,24 @@ export const automationMessages = {
     "Help with managing screens",
     "Ajuda para gerenciar telas",
   ],
+  "Enlace público": ["Enlace público", "Public link", "Link público"],
+  "Ayuda sobre enlaces públicos": [
+    "Ayuda sobre enlaces públicos",
+    "Help on public links",
+    "Ajuda sobre links públicos",
+  ],
+  "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.":
+    [
+      "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.",
+      "Generate secure links for external people to submit records or request quotes without signing in.",
+      "Gere links seguros para que pessoas externas enviem registros ou solicitem cotações sem iniciar sessão.",
+    ],
+  "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.":
+    [
+      "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.",
+      "Cannot publish links yet: security verification configuration is missing. Contact the administrator.",
+      "Não é possível publicar links ainda: falta configurar a verificação de segurança. Entre em contato com o administrador.",
+    ],
   "Reordena el menú de Tu negocio, crea secciones, activa u oculta pantallas y configura cómo se abren sus formularios.":
     [
       "Reordena el menú de Tu negocio, crea secciones, activa u oculta pantallas y configura cómo se abren sus formularios.",

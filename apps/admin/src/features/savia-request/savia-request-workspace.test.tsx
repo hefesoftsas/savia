@@ -175,7 +175,10 @@ describe("SaviaRequestWorkspace", () => {
     await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
 
     await waitFor(() =>
-      expect(remove).toHaveBeenCalledWith("/v1/savia-request/api/flows/autos"),
+      expect(remove).toHaveBeenCalledWith("/v1/savia-request/api/flows/autos", {
+        body: "{}",
+        headers: { "Content-Type": "application/json" },
+      }),
     );
     expect(
       await screen.findByRole("heading", { name: "No hay flows todavía" }),
@@ -209,6 +212,42 @@ it("defaults the DANE reference service to live without a failing simulation", a
       { mode: "live", input: { city: "Bogotá", department: "" } },
     ),
   );
+});
+
+it("shows the configured HTTP host instead of the source provider when a flow is repointed", async () => {
+  const user = userEvent.setup();
+  const repointed = {
+    ...autos,
+    id: "qa-echo",
+    name: "QA Echo",
+    provider: "DANE",
+    steps: [
+      {
+        ...autos.steps[0]!,
+        url: "https://postman-echo.com/post",
+      },
+    ],
+  };
+  renderWorkspace([repointed]);
+
+  expect(
+    await screen.findByRole("option", { name: "Real · postman-echo.com" }),
+  ).toBeInTheDocument();
+  await user.click(await screen.findByRole("tab", { name: "Ejecutar" }));
+  await user.selectOptions(
+    screen.getAllByRole("combobox", { name: "Modo de ejecución" }).at(-1)!,
+    "live",
+  );
+  expect(
+    await screen.findByRole("option", {
+      name: "postman-echo.com real · ejecuta requests",
+    }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Se enviarán estos datos a postman-echo.com sin reintentos.",
+    ),
+  ).toBeInTheDocument();
 });
 
 it("renders the dedicated secretos screen without selecting a flow", async () => {

@@ -35,6 +35,7 @@ import {
   Database,
   Eye,
   FormInput,
+  Globe,
   GripVertical,
   History,
   LayoutDashboard,
@@ -70,12 +71,6 @@ import { isPluginScreen } from "./extension-screens";
 import ExtensionManager from "./extension-manager";
 import SolutionManager from "./solution-manager";
 import "./screen-administration.css";
-
-const PublicLinkManager = lazy(() =>
-  import("../public-forms/public-link-manager").then((module) => ({
-    default: module.PublicLinkManager,
-  })),
-);
 
 const screenDragType = "application/x-savia-screen-order";
 const sectionDragType = "application/x-savia-menu-section";
@@ -121,7 +116,6 @@ export default function ScreenAdministration({
     defaultTab,
   );
   const [operations, setOperations] = useState(false);
-  const [publicLinks, setPublicLinks] = useState(false);
   const [filter, setFilter] = useState("");
   const [pendingScreen, setPendingScreen] = useState<string | null>(null);
   const [removingScreen, setRemovingScreen] = useState<string | null>(null);
@@ -670,6 +664,19 @@ export default function ScreenAdministration({
           "Elige cómo se abren crear y editar, y la visibilidad en el menú.",
         ),
       },
+      ...(canPublish
+        ? [
+            {
+              group: "experience",
+              icon: Globe,
+              view: "screen-public-link",
+              label: t("Enlace público"),
+              description: t(
+                "Configura y comparte accesos públicos sin iniciar sesión.",
+              ),
+            },
+          ]
+        : []),
       ...(binding
         ? [
             {
@@ -793,33 +800,6 @@ export default function ScreenAdministration({
             </section>
           ))}
         </div>
-        {canPublish && (
-          <section aria-label={t("Acceso público")}>
-            <Button
-              type="button"
-              variant="outline"
-              aria-expanded={publicLinks}
-              onClick={() => setPublicLinks(!publicLinks)}
-            >
-              {publicLinks
-                ? t("Ocultar enlaces públicos")
-                : t("Enlaces públicos")}
-            </Button>
-            {publicLinks && (
-              <Suspense
-                fallback={<p role="status">{t("Cargando enlaces…")}</p>}
-              >
-                <PublicLinkManager
-                  key={`${runtime.domainId}:${screen.name}`}
-                  domainId={runtime.domainId!}
-                  objectName={screen.name}
-                  kind={isQuote ? "quote" : "record"}
-                  request={runtime.publicFormTransport!}
-                />
-              </Suspense>
-            )}
-          </section>
-        )}
         {operations && (
           <CollectionOperationsPanel
             name={screen.name}

@@ -279,3 +279,130 @@ for (const [partial, mismatch] of [
     }
   });
 }
+
+test("0063 migration recovery handles interrupted deployment and preserves relationships", () => {
+  const dir = mkdtempSync(join(tmpdir(), "savia-0063-recovery-"));
+  const dbPath = join(dir, "domain.sqlite");
+  const db = new DatabaseSync(dbPath);
+  const targetMigration = "0063_tenant_crm_and_assistant_tables.sql";
+  try {
+    db.exec(
+      "PRAGMA foreign_keys=ON; CREATE TABLE _savia_migrations(filename TEXT PRIMARY KEY, applied_at TEXT NOT NULL)",
+    );
+    for (const file of readdirSync(migrations)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()) {
+      if (file >= targetMigration) break;
+      db.exec(readFileSync(new URL(file, migrations), "utf8"));
+      db.prepare("INSERT INTO _savia_migrations VALUES (?, 'test')").run(file);
+    }
+    db.exec(`
+      INSERT INTO tenants(id, id_slug, name, is_active, created_at, updated_at)
+      VALUES (1, 't1', 'Tenant 1', 1, 'test', 'test');
+
+      INSERT INTO identity_principal(id, issuer, subject, email, display_name, created_at, updated_at)
+      VALUES ('p1', 'iss', 'sub', 'p1@test', 'Principal 1', 'test', 'test');
+
+      INSERT INTO agency_crm_connections (
+        id, agency_id, created_by_principal_id, provider,
+        nango_connection_id, nango_integration_id, status,
+        created_at, updated_at
+      ) VALUES (
+        'conn1', 1, 'p1', 'hubspot', 'n1', 'i1', 'connected', 'test', 'test'
+      );
+
+      INSERT INTO agency_crm_connection_audit_events (
+        id, connection_id, agency_id, principal_id, provider,
+        event_type, outcome, created_at
+      ) VALUES (
+        'audit1', 'conn1', 1, 'p1', 'hubspot', 'auth', 'ok', 'test'
+      );
+
+      INSERT INTO crm_sync_rules (
+        id, principal_id, tenant_id, provider, connection_id,
+        external_account_id, account_label
+      ) VALUES (
+        'rule1', 'p1', 1, 'hubspot', 'conn1', 'ext1', 'Label'
+      );
+
+      INSERT INTO crm_sync_jobs (id, rule_id, customer_id)
+      VALUES ('job1', 'rule1', 100);
+
+      INSERT INTO assistant_active_agencies (principal_id, agency_id, updated_at)
+      VALUES ('p1', 1, 'test');
+
+      -- Simulate interrupted preview state where tenant_crm_connections already exists
+      CREATE TABLE tenant_crm_connections (id TEXT PRIMARY KEY, tenant_id BIGINT);
+      INSERT INTO tenant_crm_connections VALUES ('conn1', 1);
+    `);
+
+    const preload = join(dir, "d1.mjs");
+    writeFileSync(
+      preload,
+      `import {DatabaseSync} from 'node:sqlite';
+      const db = new DatabaseSync(${JSON.stringify(dbPath)}); db.exec('PRAGMA foreign_keys=ON');
+      globalThis.fetch = async (_url, options) => {
+        try {
+          const results = db.prepare(JSON.parse(options.body).sql).all();
+          return Response.json({success:true,result:[{results}]});
+        } catch(error) {
+          return Response.json({success:false,errors:[{message:error.message}]},{status:400});
+        }
+      };`,
+    );
+    const run = () =>
+      spawnSync(
+        process.execPath,
+        [
+          "--import",
+          preload,
+          fileURLToPath(new URL("./apply-d1-migrations.mjs", import.meta.url)),
+        ],
+        {
+          env: {
+            ...process.env,
+            CLOUDFLARE_ACCOUNT_ID: "test",
+            CLOUDFLARE_DATABASE_ID: "test",
+            CLOUDFLARE_API_TOKEN: "test",
+          },
+          encoding: "utf8",
+        },
+      );
+
+    const result = run();
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+
+    assert.equal(
+      db.prepare("SELECT type FROM sqlite_master WHERE name='tenant_crm_connections'").get().type,
+      "table",
+    );
+    assert.equal(
+      db.prepare("SELECT type FROM sqlite_master WHERE name='agency_crm_connections'").get().type,
+      "view",
+    );
+    assert.equal(
+      db.prepare("SELECT count(*) c FROM tenant_crm_connections WHERE id='conn1'").get().c,
+      1,
+    );
+    assert.equal(
+      db.prepare("SELECT count(*) c FROM agency_crm_connections WHERE id='conn1'").get().c,
+      1,
+    );
+    assert.equal(
+      db.prepare("SELECT count(*) c FROM assistant_active_tenants WHERE principal_id='p1'").get().c,
+      1,
+    );
+    assert.equal(
+      db.prepare("SELECT count(*) c FROM assistant_active_agencies WHERE principal_id='p1'").get().c,
+      1,
+    );
+    assert.ok(
+      db.prepare("SELECT filename FROM _savia_migrations WHERE filename=?").get(targetMigration),
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+

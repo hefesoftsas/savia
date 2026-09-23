@@ -1,5 +1,5 @@
 import { render } from "@/features/crm-engine/test/locale-test-render";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ServiceCredentialsPage } from "./service-credentials-page";
@@ -48,10 +48,18 @@ describe("ServiceCredentialsPage", () => {
       await screen.findByRole("heading", { name: "Claves y servicios" }),
     ).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Ayuda sobre credenciales" }),
+      within(
+        screen
+          .getByRole("heading", { name: "Claves y servicios" })
+          .closest("header")!,
+      ).getByRole("button", {
+        name: "Ayuda sobre credenciales",
+      }),
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "OpenRouter" })).toBeVisible();
     expect(screen.getByLabelText("Clave OpenRouter")).toBeVisible();
-    expect(screen.queryByRole("tab", { name: /Por (organización|agencia)/i })).toBeNull();
+    expect(
+      screen.queryByRole("tab", { name: /Por (organización|agencia)/i }),
+    ).toBeNull();
   });
 });

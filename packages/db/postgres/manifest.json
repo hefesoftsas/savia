@@ -292,14 +292,22 @@
     },
     {
       "filename": "0063_tenant_crm_and_assistant_tables.sql",
-      "sha256": "5f536cc8e6f410071c29377baabf07b99dd7af82060d02b494b43611a9d13bb3"
+      "sha256": "4c98a3910dcb6b310595bd3077dfc8e74f8ce38add6a60009404ea8b9d37eaf1"
     },
     {
-      "filename": "0064_savia_request_tenant_scope.sql",
+      "filename": "0064_public_form_short_links.sql",
+      "sha256": "f96354311a624afc3463ba1508587dd0dc45d94e61c58108c0df9497fd7c9d64"
+    },
+    {
+      "filename": "0065_public_form_external_short_url.sql",
+      "sha256": "2c458d5960805843833c569c7d18c86779a3204f3a9d9a93205425a5eced4b07"
+    },
+    {
+      "filename": "0066_savia_request_tenant_scope.sql",
       "sha256": "a29c3d61c64874c4100054ac2b1cc8d6ec7a3ad9d066ac2fef4690babc9b6e44"
     },
     {
-      "filename": "0065_savia_request_audit.sql",
+      "filename": "0067_savia_request_audit.sql",
       "sha256": "c3ef60c41eee4fc951efebbef03b8f2fc06b8567698c7142fa2e7155d0c48e96"
     }
   ],
@@ -36270,6 +36278,63 @@
       "checkCount": 0
     },
     {
+      "name": "public_form_short_links",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "form_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "public_forms",
+          "from": "form_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "form_id"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "code"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
       "name": "public_forms",
       "columns": [
         {
@@ -36397,6 +36462,14 @@
           "name": "created_at",
           "type": "TEXT",
           "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "short_url",
+          "type": "TEXT",
+          "notnull": 0,
           "dflt_value": null,
           "pk": 0
         }

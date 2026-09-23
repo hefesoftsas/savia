@@ -127,6 +127,20 @@ for (const file of files) {
       }
     }
   }
+  if (file === "0063_tenant_crm_and_assistant_tables.sql") {
+    const [schema] = await query(
+      "SELECT name, type FROM sqlite_master WHERE name IN ('tenant_crm_connections', 'agency_crm_connections')",
+    );
+    const existing = new Map(
+      (schema?.results ?? []).map((row) => [row.name, row.type]),
+    );
+    if (
+      existing.get("agency_crm_connections") === "table" &&
+      existing.has("tenant_crm_connections")
+    ) {
+      await query("DROP TABLE tenant_crm_connections");
+    }
+  }
   for (const [index, statement] of statements.entries()) {
     if (completedPrefix.has(index)) continue;
     try {

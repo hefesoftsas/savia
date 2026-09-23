@@ -93,11 +93,7 @@ describe("createSaviaRequestApi", () => {
         "POST",
         undefined,
       ],
-      [
-        "https://admin.test/v1/savia-request/api/flows/autos",
-        "DELETE",
-        undefined,
-      ],
+      ["https://admin.test/v1/savia-request/api/flows/autos", "DELETE", "{}"],
       [
         "https://admin.test/v1/savia-request/api/flows/autos/variables",
         "PUT",
@@ -116,7 +112,7 @@ describe("createSaviaRequestApi", () => {
       [
         "https://admin.test/v1/savia-request/api/flows/autos/variables/token",
         "DELETE",
-        undefined,
+        "{}",
       ],
       [
         "https://admin.test/v1/savia-request/api/flows/autos/reset",
@@ -134,6 +130,9 @@ describe("createSaviaRequestApi", () => {
         '{"version":1,"exportedAt":"hoy","flows":[]}',
       ],
     ]);
+    expect(
+      new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("Content-Type"),
+    ).toBe("application/json");
   });
 
   it("scopes every endpoint to the selected tenant", async () => {

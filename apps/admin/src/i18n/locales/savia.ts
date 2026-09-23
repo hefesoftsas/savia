@@ -218,6 +218,15 @@ const saviaEnglish = {
         temporaryPassword: "Temporary password",
         temporaryPasswordHelper:
           "Optional. If left blank, a link will be sent to set it up.",
+        memberMode: "First administrator",
+        memberModeNew: "Create new user",
+        memberModeExisting: "Transfer existing user",
+        existingUser: "Existing user",
+        existingUserHelper:
+          "The user will leave their current organization: the transfer does not share the account.",
+        existingRole: "Role in the new tenant",
+        existingUserWarning:
+          "The last active member of their organization and platform administrators cannot be transferred.",
       },
       table: {
         tenant: "Tenant",
@@ -736,6 +745,15 @@ const saviaSpanish = {
         temporaryPassword: "Contraseña temporal",
         temporaryPasswordHelper:
           "Opcional. Si se deja vacía, se enviará un enlace para definirla.",
+        memberMode: "Primer administrador",
+        memberModeNew: "Crear usuario nuevo",
+        memberModeExisting: "Transferir usuario existente",
+        existingUser: "Usuario existente",
+        existingUserHelper:
+          "El usuario dejará su organización actual: la transferencia no comparte la cuenta.",
+        existingRole: "Rol en el nuevo tenant",
+        existingUserWarning:
+          "No se puede transferir al último miembro activo de su organización ni a un administrador de plataforma.",
       },
       table: {
         tenant: "Tenant",
@@ -1252,6 +1270,15 @@ const saviaPortuguese = {
         temporaryPassword: "Senha temporária",
         temporaryPasswordHelper:
           "Opcional. Se deixada em branco, um link de definição será enviado.",
+        memberMode: "Primeiro administrador",
+        memberModeNew: "Criar novo usuário",
+        memberModeExisting: "Transferir usuário existente",
+        existingUser: "Usuário existente",
+        existingUserHelper:
+          "O usuário deixará sua organização atual: a transferência não compartilha a conta.",
+        existingRole: "Função no novo tenant",
+        existingUserWarning:
+          "Não é possível transferir o último membro ativo de sua organização nem um administrador da plataforma.",
       },
       table: {
         tenant: "Tenant",

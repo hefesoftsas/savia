@@ -94,7 +94,14 @@ describe("CrmConnectionsPage", () => {
     );
 
     expect(services.crm.createSyncRule).toHaveBeenCalledWith(101);
-    expect(screen.getByText(/clientes nuevos y actualizados/i)).toBeVisible();
+    await user.hover(
+      screen.getByRole("button", {
+        name: "Ayuda sobre sincronización automática",
+      }),
+    );
+    expect(
+      await screen.findByText(/clientes nuevos y actualizados/i),
+    ).toBeVisible();
     expect(screen.getByText(/no elimina/i)).toBeVisible();
   });
 

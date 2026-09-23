@@ -36,12 +36,24 @@ const localConfigFiles = trackedFiles.filter((file) =>
 );
 
 for (const file of trackedFiles) {
-  let content;
+  let bytes;
   try {
-    content = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+    bytes = readFileSync(new URL(`../${file}`, import.meta.url));
   } catch {
     continue;
   }
+
+  const pathHasPrivateIdentifier = privateIdentifiers.some((value) =>
+    file.toLowerCase().includes(value),
+  );
+
+  // Binary media has arbitrary byte sequences and is not source text to scan.
+  if (bytes.includes(0)) {
+    if (pathHasPrivateIdentifier) privateIdentifierFiles.push(file);
+    continue;
+  }
+
+  const content = bytes.toString("utf8");
 
   if (
     /-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/.test(content)
@@ -49,9 +61,8 @@ for (const file of trackedFiles) {
     privateKeyFiles.push(file);
 
   if (
-    privateIdentifiers.some((value) =>
-      (file + "\n" + content).toLowerCase().includes(value),
-    )
+    pathHasPrivateIdentifier ||
+    privateIdentifiers.some((value) => content.toLowerCase().includes(value))
   ) {
     privateIdentifierFiles.push(file);
   }

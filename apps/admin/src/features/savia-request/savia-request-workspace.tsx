@@ -43,6 +43,22 @@ import { VariableNames } from "./editor/variable-completion";
 type WorkspaceTab = "steps" | "variables" | "run" | "history";
 type EditorPane = "body" | "headers" | "pre" | "post";
 
+function requestDestinationLabel(flow: RequestFlow): string {
+  const hosts = flow.steps.map((step) => {
+    try {
+      const url = new URL(step.url);
+      return url.username || url.password ? null : url.host;
+    } catch {
+      return null;
+    }
+  });
+  const uniqueHosts = [...new Set(hosts)];
+  if (hosts.length > 0 && hosts.every(Boolean) && uniqueHosts.length === 1) {
+    return uniqueHosts[0]!;
+  }
+  return flow.provider ?? "proveedor";
+}
+
 function displayInput(values: Record<string, string>) {
   return JSON.stringify(
     Object.fromEntries(
@@ -152,6 +168,7 @@ export function SaviaRequestWorkspace() {
   const [input, setInput] = useState("{}");
   const [mode, setMode] = useState<"mock" | "live">("mock");
   const effectiveMode = flow?.id === "dane-city-lookup" ? "live" : mode;
+  const destinationLabel = flow ? requestDestinationLabel(flow) : "proveedor";
   const [runs, setRuns] = useState<RequestRun[]>([]);
   const [activeRun, setActiveRun] = useState<RequestRun | null>(null);
   const [notice, setNotice] = useState("");
@@ -518,7 +535,7 @@ export function SaviaRequestWorkspace() {
               >
                 <option value="mock" disabled={flow.id === "dane-city-lookup"}>Simulado</option>
                 <option value="live">
-                  Real · {flow.provider ?? "proveedor"}
+                  Real · {destinationLabel}
                 </option>
               </select>
               <Button disabled={working} onClick={run} type="button">
@@ -1329,14 +1346,14 @@ function RunPanel({
           >
             <option value="mock" disabled={flow.id === "dane-city-lookup"}>Simulado · sin llamadas externas</option>
             <option value="live">
-              {flow.provider ?? "Proveedor"} real · ejecuta requests
+              {requestDestinationLabel(flow)} real · ejecuta requests
             </option>
           </select>
         </label>
         <p className="mt-3 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
           {mode === "mock"
             ? "El simulador usa respuestas de demostración; no contacta al proveedor."
-            : `Se enviarán estos datos a ${flow.provider ?? "el proveedor"} sin reintentos.`}
+            : `Se enviarán estos datos a ${requestDestinationLabel(flow)} sin reintentos.`}
         </p>
         <div className="mt-4 flex items-center justify-between gap-3">
           <span className="text-sm font-medium">Entrada JSON</span>

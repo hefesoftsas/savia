@@ -55,7 +55,11 @@ export function createSaviaRequestApi(
           `${apiRoot}/flows/${id}/variables/${encodeURIComponent(key)}`,
           scope,
         ),
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+          body: "{}",
+          headers: { "Content-Type": "application/json" },
+        },
       ),
     resetFlow: (id: string) =>
       apiClient.post<{ ok: true; reverted: boolean }>(
@@ -83,7 +87,10 @@ export function createSaviaRequestApi(
         scoped(`${apiRoot}/flows/${id}/duplicate`, scope),
       ),
     removeFlow: (id: string) =>
-      apiClient.delete(scoped(`${apiRoot}/flows/${id}`, scope)),
+      apiClient.delete(scoped(`${apiRoot}/flows/${id}`, scope), {
+        body: "{}",
+        headers: { "Content-Type": "application/json" },
+      }),
     run: (id: string, mode: "mock" | "live", input: Record<string, string>) =>
       apiClient.post<RequestRun>(scoped(`${apiRoot}/flows/${id}/runs`, scope), {
         mode,

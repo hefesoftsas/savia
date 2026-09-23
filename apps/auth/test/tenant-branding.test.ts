@@ -21,7 +21,102 @@ const branding: TenantBranding = {
 };
 const request = (path: string) =>
   new Request(`https://example.com/api/auth/${path}`);
+
+function fakeVideo(play: () => Promise<void> = () => Promise.resolve()) {
+  const listeners = new Map<string, () => void>();
+  return {
+    currentTime: 0,
+    playCalls: 0,
+    pauseCalls: 0,
+    addEventListener(name: string, listener: () => void) {
+      listeners.set(name, listener);
+    },
+    play() {
+      this.playCalls += 1;
+      return play();
+    },
+    pause() {
+      this.pauseCalls += 1;
+    },
+    end() {
+      listeners.get("ended")?.();
+    },
+  };
+}
+
+async function startOAuthReel(videos: ReturnType<typeof fakeVideo>[]) {
+  const toggle = {
+    attributes: new Map<string, string>(),
+    addEventListener(_name: string, _listener: () => void) {},
+    setAttribute(name: string, value: string) {
+      this.attributes.set(name, value);
+    },
+  };
+  const reel = {
+    dataset: { active: "0" },
+    querySelectorAll: () => videos,
+    querySelector: () => toggle,
+  };
+  const script = await oauthPageResponse(request("oauth-ui.js"))!.text();
+  const document = {
+    body: { dataset: {} },
+    querySelector: (selector: string) =>
+      selector === "[data-oauth-login-reel]" ? reel : null,
+    querySelectorAll: () => [],
+  };
+  new Function("document", "window", script)(document, {
+    location: { search: "" },
+  });
+  return { reel, toggle };
+}
+
 describe("tenant identity on OAuth surfaces", () => {
+  it("renders the default login video reel muted with a pause control", async () => {
+    const html = await oauthPageResponse(request("login"))!.text();
+
+    expect(html).toContain('src="/login/savia-platform-01.mp4"');
+    expect(html).toContain('src="/login/savia-platform-02.mp4"');
+    expect(html).toContain('aria-label="Pausar vídeos"');
+    expect(html).toMatch(
+      /<video[^>]*autoPlay=""[^>]*muted=""[^>]*playsInline=""/,
+    );
+    expect(html).toContain("data-oauth-login-reel");
+  });
+
+  it("rotates both login videos as each clip ends", async () => {
+    const first = fakeVideo();
+    const second = fakeVideo();
+    const { reel } = await startOAuthReel([first, second]);
+
+    first.end();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(second.playCalls).toBe(1);
+    expect(first.pauseCalls).toBe(1);
+    expect(reel.dataset.active).toBe("1");
+
+    second.end();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(first.playCalls).toBe(1);
+    expect(second.pauseCalls).toBe(1);
+    expect(reel.dataset.active).toBe("0");
+  });
+
+  it("restarts the current clip if the next video cannot play", async () => {
+    const first = fakeVideo();
+    const second = fakeVideo(() => Promise.reject(new Error("codec error")));
+    await startOAuthReel([first, second]);
+
+    first.end();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(first.currentTime).toBe(0);
+    expect(first.playCalls).toBe(1);
+  });
+
   it("passes the internal tenant header through worker HTML and stylesheet routes", async () => {
     const headers = {
       "x-savia-tenant-branding": encodeURIComponent(JSON.stringify(branding)),
@@ -51,6 +146,7 @@ describe("tenant identity on OAuth surfaces", () => {
       expect(html).toContain(value);
     expect(html).toContain('data-oauth-form="sign-in"');
     expect(html).toContain('data-tenant-branding="true"');
+    expect(html).not.toContain("data-oauth-login-reel");
     expect(html).not.toContain('style="');
     expect(response.headers.get("content-security-policy")).toContain(
       "form-action 'self'",

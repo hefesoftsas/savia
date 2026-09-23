@@ -1,7 +1,15 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as rtlRender,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { memoryStore, StoreContextProvider } from "ra-core";
 import type { AppServices } from "@/app-services";
+import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { AppServicesProvider } from "./assistant-context";
 import { AssistantBar } from "./assistant-bar";
 import {
@@ -9,6 +17,14 @@ import {
   saveStoredThread,
   type AssistantThreadRecord,
 } from "./assistant-thread-storage";
+
+function render(ui: Parameters<typeof rtlRender>[0]) {
+  return rtlRender(
+    <StoreContextProvider value={memoryStore({ locale: "es" })}>
+      <AppLocaleProvider>{ui}</AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+}
 
 function createMockServices(): AppServices {
   return {
@@ -602,5 +618,29 @@ it("keeps the answer visible and earlier narration and tool activity collapsed",
   await user.click(screen.getByText("Ver consultas (1)"));
   expect(
     screen.getByText("Voy a consultar las cotizaciones guardadas."),
+  ).toBeVisible();
+});
+
+it("localizes the assistant panel for an English app locale", async () => {
+  window.localStorage.clear();
+  rtlRender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <AppServicesProvider services={createMockServices()}>
+          <AssistantBar />
+        </AppServicesProvider>
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Open assistant" }));
+  expect(
+    await screen.findByRole("heading", { name: "Savia assistant" }),
+  ).toBeVisible();
+  expect(screen.getByText("Answers to help you decide and act")).toBeVisible();
+  expect(screen.getByText("How can I help today?")).toBeVisible();
+  expect(screen.getByText("Suggested queries")).toBeVisible();
+  expect(
+    screen.getByRole("textbox", { name: "Message for the assistant" }),
   ).toBeVisible();
 });

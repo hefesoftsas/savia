@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(332);
+    expect(names).toHaveLength(333);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -74,6 +74,7 @@ describe("full D1 schema projection", () => {
         "assistant_virtual_employee_chunks",
         "request_page_runs",
         "public_forms",
+        "public_form_short_links",
         "tenant_branding",
         "tenant_branding_assets",
         "public_form_submissions",
