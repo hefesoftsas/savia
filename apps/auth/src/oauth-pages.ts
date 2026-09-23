@@ -39,7 +39,7 @@ function page(
     <link rel="stylesheet" href="/api/auth/oauth-ui.css">
   </head>
   <body${restartAttribute}>
-    <!-- THESIS: Login opens on Savia's product in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy media stage with teal accents. STORY: visitors see the product, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the 16:9 animation right; mobile puts the animation above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
+    <!-- THESIS: Login opens on Savia's identity in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy stage with teal accents. STORY: visitors see the animated logo, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the logo right; mobile puts the logo above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
     ${content}
     ${showLoginAnimation ? '<script src="/login/lottie-light.min.js" defer></script>' : ""}
     <script src="/api/auth/oauth-ui.js" defer></script>
@@ -148,70 +148,31 @@ const oauthUiScript = String.raw`(() => {
   const loginAnimation = document.querySelector("[data-oauth-login-animation]");
 
   if (loginAnimation && window.lottie) {
-    const frames = Array.from(
-      loginAnimation.querySelectorAll("[data-oauth-login-animation-frame]"),
-    );
-    const toggle = loginAnimation.querySelector(
-      "[data-oauth-login-animation-toggle]",
-    );
+    const frame = loginAnimation.querySelector("[data-oauth-login-animation-frame]");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const animations = frames.map((frame) => window.lottie.loadAnimation({
+    const animation = window.lottie.loadAnimation({
       container: frame,
       renderer: "svg",
       loop: false,
       autoplay: false,
       path: frame.dataset.src,
-    }));
-    const ready = animations.map(() => false);
-    let activeIndex = 0;
-    let paused = reducedMotion;
-
-    function updateToggle() {
-      toggle?.setAttribute("aria-pressed", String(paused));
-      toggle?.setAttribute(
-        "aria-label",
-        paused ? "Reanudar animación" : "Pausar animación",
-      );
-    }
-
-    function playActive() {
-      if (!paused && !document.hidden && ready[activeIndex]) {
-        animations[activeIndex].play();
-      }
-    }
-
-    animations.forEach((animation, index) => {
-      animation.addEventListener("DOMLoaded", () => {
-        ready[index] = true;
-        animation.goToAndStop(0, true);
-        if (index === activeIndex) {
-          loginAnimation.dataset.active = String(index);
-          loginAnimation.dataset.ready = "true";
-          playActive();
-        }
-      });
-      animation.addEventListener("complete", () => {
-        if (index !== activeIndex || paused) return;
-        activeIndex = (index + 1) % animations.length;
-        if (!ready[activeIndex]) return;
-        loginAnimation.dataset.active = String(activeIndex);
-        loginAnimation.dataset.ready = "true";
-        animations[activeIndex].goToAndStop(0, true);
-        playActive();
-      });
     });
+    let ready = false;
+    let finished = false;
 
-    toggle?.addEventListener("click", () => {
-      paused = !paused;
-      updateToggle();
-      if (paused) animations.forEach((animation) => animation.pause());
-      else playActive();
+    animation.addEventListener("DOMLoaded", () => {
+      ready = true;
+      if (reducedMotion) {
+        animation.goToAndStop(animation.totalFrames - 1, true);
+        finished = true;
+      } else if (!document.hidden) animation.play();
     });
+    animation.addEventListener("complete", () => { finished = true; });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) animations.forEach((animation) => animation.pause());
-      else playActive();
+      if (!ready || finished) return;
+      if (document.hidden) animation.pause();
+      else animation.play();
     });
-    updateToggle();
   }
 
   function signedOAuthQuery() {

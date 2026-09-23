@@ -65,46 +65,16 @@ function Shell({
           <img className="oauth-aside-cover" src={branding.coverUrl} alt="" />
         )}
         {showLoginAnimation ? (
-          <div
-            className="oauth-login-animation"
-            data-oauth-login-animation
-            data-active="0"
-          >
-            <SaviaMark branding={branding} />
+          <div className="oauth-login-animation" data-oauth-login-animation>
             <div
               className="oauth-login-animation-frame"
               data-oauth-login-animation-frame
-              data-src="/login/chatbot-savia.json"
+              data-src="/login/savia-logo.json"
             />
-            <div
-              className="oauth-login-animation-frame"
-              data-oauth-login-animation-frame
-              data-src="/login/chatbot.json"
-            />
-            <button
-              className="oauth-login-animation-toggle"
-              type="button"
-              data-oauth-login-animation-toggle
-              aria-label="Pausar animación"
-              aria-pressed="false"
-            >
-              <svg
-                data-reel-pause-icon
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path d="M8 5v14M16 5v14" />
-              </svg>
-              <svg
-                data-reel-play-icon
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path d="m8 5 11 7-11 7V5Z" />
-              </svg>
-            </button>
+            <p className="oauth-login-animation-wordmark" aria-label="Savia">
+              <span>sav</span>
+              <span>ia</span>
+            </p>
           </div>
         ) : (
           <>
