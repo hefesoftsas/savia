@@ -34,7 +34,7 @@ function page(title: string, content: string, restartUrl?: string): string {
     <link rel="stylesheet" href="/api/auth/oauth-ui.css">
   </head>
   <body${restartAttribute}>
-    <!-- THESIS: A secure OAuth step should feel like one focused workspace, not a generic identity portal. OWN-WORLD: calm Savia teal on a light operational canvas, with a deep-navy trust panel. STORY: identify the requested access, authenticate, then return to the client without losing context. FIRST VIEWPORT: login form at left, Savia assurance panel at right, action immediately below the credentials. FORM: Shadcn login-02 two-column composition, adapted for email, password and MFA. -->
+    <!-- THESIS: Login opens on Savia's product in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy media stage with teal accents. STORY: visitors see the product, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the 16:9 reel right; mobile puts the reel above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
     ${content}
     <script src="/api/auth/oauth-ui.js" defer></script>
   </body>
@@ -153,16 +153,21 @@ const oauthUiScript = String.raw`(() => {
     function rotateReel() {
       if (paused || videos.length < 2) return;
       const nextIndex = (activeIndex + 1) % videos.length;
+      const currentVideo = videos[activeIndex];
       const nextVideo = videos[nextIndex];
       nextVideo.currentTime = 0;
       nextVideo
         .play()
         .then(() => {
-          videos[activeIndex].pause();
+          currentVideo.pause();
           activeIndex = nextIndex;
           loginReel.dataset.active = String(activeIndex);
         })
-        .catch(() => {});
+        .catch(() => {
+          nextVideo.pause();
+          currentVideo.currentTime = 0;
+          currentVideo.play().catch(() => {});
+        });
     }
 
     videos.forEach((video) => video.addEventListener("ended", rotateReel));
