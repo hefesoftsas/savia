@@ -293,6 +293,10 @@
     {
       "filename": "0063_tenant_crm_and_assistant_tables.sql",
       "sha256": "4c98a3910dcb6b310595bd3077dfc8e74f8ce38add6a60009404ea8b9d37eaf1"
+    },
+    {
+      "filename": "0064_public_form_short_links.sql",
+      "sha256": "f96354311a624afc3463ba1508587dd0dc45d94e61c58108c0df9497fd7c9d64"
     }
   ],
   "objects": [
@@ -35743,6 +35747,63 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "public_form_short_links",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "form_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "public_forms",
+          "from": "form_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "form_id"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "code"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
     },
     {
       "name": "public_forms",

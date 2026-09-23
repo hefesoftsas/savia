@@ -208,6 +208,73 @@ it("requires administrator management and blocks anonymous methods, expired link
   ).toBe(200);
   expect((await submit(instance, link, { name: "Visitor" })).status).toBe(404);
 });
+it("creates a stable Savia short URL that redirects only while the form is active", async () => {
+  const instance = app();
+  const objectName = await object();
+  const link = await publish(instance, objectName);
+  const createShortUrl = () =>
+    instance.request(`https://api.test/v1/public-forms/${link.id}/short-url`, {
+      method: "POST",
+    });
+
+  const created = await createShortUrl();
+  expect(created.status, await created.clone().text()).toBe(200);
+  const { data } = (await created.json()) as { data: { shortUrl: string } };
+  expect(data.shortUrl).toMatch(
+    /^https:\/\/forms\.savia\.test\/s\/[a-f0-9]{16}$/,
+  );
+
+  const repeated = await createShortUrl();
+  expect(repeated.status).toBe(200);
+  expect(await repeated.json()).toEqual({ data });
+
+  const managed = await instance.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${objectName}`,
+  );
+  const listed = (await managed.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toBe(
+    data.shortUrl,
+  );
+
+  const redirect = await instance.request(new URL(data.shortUrl).pathname, {
+    redirect: "manual",
+  });
+  expect(redirect.status).toBe(302);
+  expect(redirect.headers.get("location")).toBe(link.url);
+  expect(redirect.headers.get("cache-control")).toBe("no-store");
+  expect(redirect.headers.get("referrer-policy")).toBe("no-referrer");
+
+  await instance.request(`https://api.test/v1/public-forms/${link.id}`, {
+    method: "DELETE",
+  });
+  expect(
+    (
+      await instance.request(new URL(data.shortUrl).pathname, {
+        redirect: "manual",
+      })
+    ).status,
+  ).toBe(404);
+  const revoked = await instance.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${objectName}`,
+  );
+  const revokedLinks = (await revoked.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(
+    revokedLinks.data.find((item) => item.id === link.id)?.shortUrl,
+  ).toBeUndefined();
+});
+it("restricts short URL creation to platform administrators", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  const response = await app({}, false).request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(response.status).toBe(403);
+});
 it("hard-deletes only dead links and refuses active ones", async () => {
   const instance = app();
   const name = await object();

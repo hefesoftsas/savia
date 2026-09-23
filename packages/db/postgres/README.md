@@ -42,6 +42,10 @@ metadata. The source manifest describes the final inventory after both native
 migrations. Existing native installations apply only the additive migration;
 `0001_baseline.sql` remains unchanged.
 
+`0006_public_form_short_links.sql` adds the persisted Savia short-link mapping to
+the native core schema. Existing installations apply it after the notification
+migrations; the baseline remains unchanged.
+
 Native pools discard failed idle connections without logging their credential-bearing
 client objects. Shutdown waits for socket removal as well as pool shutdown before
 allowing database teardown; the next query after an idle connection loss obtains
