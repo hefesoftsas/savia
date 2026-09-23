@@ -28,7 +28,7 @@ export type TestAppOptions = {
   assistantModelCatalog?: Param<13>;
   saviaRequestService?: Param<14>;
   personalIntegrations?: Param<15>;
-  crmIntegrationKey?: Param<16>;
+  studioIntegrationKey?: Param<16>;
   externalCollections?: Param<17>;
   sqlBridge?: Param<18>;
   extensionActionExecutor?: Param<19>;
@@ -61,7 +61,7 @@ export function createTestApp(options: TestAppOptions = {}) {
     options.assistantModelCatalog,
     options.saviaRequestService,
     options.personalIntegrations,
-    options.crmIntegrationKey,
+    options.studioIntegrationKey,
     options.externalCollections,
     options.sqlBridge,
     options.extensionActionExecutor,

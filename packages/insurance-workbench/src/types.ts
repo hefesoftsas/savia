@@ -1,5 +1,5 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import type { ReactNode } from "react";
 import type { WorkRecord } from "./data";
 export type Field = {

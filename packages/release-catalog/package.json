@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@savia/crm-shared": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
     "@savia/insurance-portfolio-dashboard": "workspace:*",
     "@savia/insurance-quotes": "workspace:*",
     "@savia/insurance-collections": "workspace:*",

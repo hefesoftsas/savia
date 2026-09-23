@@ -12,12 +12,12 @@ export function parseBitwardenExport(jsonContent) {
   const items = Array.isArray(data?.items) ? data.items : [];
 
   const rawVariables = {};
-  let crmIntegrationKey = "";
+  let studioIntegrationKey = "";
 
   for (const item of items) {
     const itemName = item.name ?? "";
     if (itemName.includes("CRM_INTEGRATION_KEY") || item.notes?.match(/^[a-f0-9]{64}$/i)) {
-      crmIntegrationKey = (item.notes ?? "").trim();
+      studioIntegrationKey = (item.notes ?? "").trim();
     }
 
     // Process fields
@@ -43,7 +43,7 @@ export function parseBitwardenExport(jsonContent) {
     }
   }
 
-  return { rawVariables, crmIntegrationKey, totalItems: items.length };
+  return { rawVariables, studioIntegrationKey, totalItems: items.length };
 }
 
 function xmlTagValue(xml, tagName) {
@@ -426,8 +426,8 @@ export async function main() {
   const parsed = parseBitwardenExport(content);
   console.log(`✓ Ítems parseados: ${parsed.totalItems}`);
   console.log(`✓ Variables en bruto extraídas: ${Object.keys(parsed.rawVariables).length}`);
-  if (parsed.crmIntegrationKey) {
-    console.log(`✓ CRM_INTEGRATION_KEY encontrada: ${parsed.crmIntegrationKey.slice(0, 8)}... (${parsed.crmIntegrationKey.length} caracteres)`);
+  if (parsed.studioIntegrationKey) {
+    console.log(`✓ CRM_INTEGRATION_KEY encontrada: ${parsed.studioIntegrationKey.slice(0, 8)}... (${parsed.studioIntegrationKey.length} caracteres)`);
   }
 
   const plan = buildFlowVariablesPlan(parsed.rawVariables);
@@ -442,8 +442,8 @@ export async function main() {
   if (args.exportEnv) {
     console.log(`\n📝 Guardando variables de entorno en ${args.exportEnv}...`);
     let envContent = `# Savia Production Secrets\n`;
-    if (parsed.crmIntegrationKey) {
-      envContent += `CRM_INTEGRATION_KEY=${parsed.crmIntegrationKey}\n`;
+    if (parsed.studioIntegrationKey) {
+      envContent += `CRM_INTEGRATION_KEY=${parsed.studioIntegrationKey}\n`;
     }
     await writeFile(args.exportEnv, envContent, "utf8");
     console.log(`✓ Archivo ${args.exportEnv} escrito exitosamente.`);

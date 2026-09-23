@@ -1,4 +1,4 @@
-import type { MyDayWidgetsLayout } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidgetsLayout } from "@savia/studio-shared/my-day-widgets";
 
 export const sidebarNavigationSectionIds = [
   "operation",
@@ -395,15 +395,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// --- My Day widgets (schema lives in @savia/crm-shared/my-day-widgets) ---
+// --- My Day widgets (schema lives in @savia/studio-shared/my-day-widgets) ---
 
 export type {
   MyDayWidget,
   MyDayWidgetConfig,
   MyDayWidgetsLayout,
-} from "@savia/crm-shared/my-day-widgets";
+} from "@savia/studio-shared/my-day-widgets";
 export {
   defaultMyDayWidgets,
   MyDayWidgetsError,
   parseMyDayWidgets,
-} from "@savia/crm-shared/my-day-widgets";
+} from "@savia/studio-shared/my-day-widgets";

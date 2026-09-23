@@ -14,7 +14,7 @@ import {
   deleteFileVectors,
   type RagEnvironment,
 } from "./rag";
-import { disabledSolutionObjects } from "@savia/crm-server/solutions";
+import { disabledSolutionObjects } from "@savia/studio-server/solutions";
 
 const chatRequestSchema = z.object({
   messages: z.array(z.unknown()).max(100),

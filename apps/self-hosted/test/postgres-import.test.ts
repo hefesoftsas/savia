@@ -1,8 +1,8 @@
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
 import {
   encryptSecret,
   decryptSecret,
-} from "../../../packages/crm-server/src/integrations";
+} from "../../../packages/studio-server/src/integrations";
 import { mkdtemp, rm, readFile, chmod, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

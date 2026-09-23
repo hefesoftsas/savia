@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { ExtensionConnectionRepository } from "@savia/crm-server/extension-connections";
+import { ExtensionConnectionRepository } from "@savia/studio-server/extension-connections";
 import {
   ConnectorGatewayError,
   ConnectorRegistry,

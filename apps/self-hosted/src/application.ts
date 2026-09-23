@@ -1,4 +1,4 @@
-import { createCollectionGateway } from "../../api/src/crm/collection-gateway";
+import { createCollectionGateway } from "../../api/src/studio/collection-gateway";
 import { createNativeCollectionFetch } from "./outbound-fetch";
 import { mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";

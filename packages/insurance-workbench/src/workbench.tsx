@@ -1,7 +1,7 @@
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import { useWorkbenchMessages } from "./localization";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import {
   csv,
   errorMessage,

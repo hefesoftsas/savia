@@ -11,7 +11,7 @@ import {
   requestInput,
 } from "../../../packages/insurance-customer-portal/src/domain";
 import { requirement } from "../../../packages/insurance-customer-portal/src/object";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 let f: Awaited<ReturnType<typeof createAccessFixture>>;
 const base = "/v1/dynamic-crm/101/api";
 let ownPolicy: string,

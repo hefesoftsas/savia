@@ -3,7 +3,7 @@ import {
   createRelationalDriver,
   type SqlSession,
 } from "../src/relational-driver";
-import { databaseMutationSchema } from "@savia/crm-shared/database-sources";
+import { databaseMutationSchema } from "@savia/studio-shared/database-sources";
 const meta = {
   resource: "orders",
   kind: "table" as const,

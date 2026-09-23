@@ -88,7 +88,7 @@ describe("release catalog", () => {
     for (const path of [
       "apps/api/src/extensions/catalog.ts",
       "apps/api/src/solutions/catalog.ts",
-      "apps/admin/src/features/crm-engine/extension-screens.tsx",
+      "apps/admin/src/features/studio-engine/extension-screens.tsx",
       "apps/mcp/src/extensions/registry.ts",
     ])
       await expect(source(path)).resolves.not.toMatch(/insurance/i);

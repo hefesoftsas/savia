@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@savia/crm-shared": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
     "react": "^19.2.8",
     "@savia/insurance-workbench": "workspace:*"
   },

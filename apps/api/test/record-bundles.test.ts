@@ -3,7 +3,7 @@ import { platformAdministratorAuthenticator } from "./auth-fixtures";
 import { seedTenantAgency } from "./tenant-fixtures";
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { createRecordBundlesApp } from "../src/crm/record-bundles";
+import { createRecordBundlesApp } from "../src/studio/record-bundles";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -657,7 +657,7 @@ it("saves the maximum 100-row bundle within the bounded local transaction", asyn
 });
 it("coalesces bundle realtime hints and versions to one per affected collection", async () => {
   const { publishRecordBundleChanges } =
-    await import("../src/crm/record-bundle-realtime");
+    await import("../src/studio/record-bundle-realtime");
   const { tenant, relationId, call } = await fixture();
   const response = await call({
     record: { data: { name: "Parent" } },
@@ -871,7 +871,7 @@ it("rolls back a parent when a child create ID collides, including deleted recor
 
 it("enforces scoped bundle row and field grants and projects immutable replays", async () => {
   const { accessDatabase } =
-    await import("@savia/crm-server/access-authorization");
+    await import("@savia/studio-server/access-authorization");
   const { tenant, relationId } = await fixture();
   const scope = `domain:${tenant}` as const;
   await env.DB.prepare(
@@ -941,7 +941,7 @@ it("enforces scoped bundle row and field grants and projects immutable replays",
   expect(response.status, await response.clone().text()).toBe(200);
   const saved: any = await response.json();
   const { createCollectionGateway } =
-    await import("../src/crm/collection-gateway");
+    await import("../src/studio/collection-gateway");
   const actor = await platformAdministratorAuthenticator().authenticate(
     new Request("http://test"),
     env.DB,

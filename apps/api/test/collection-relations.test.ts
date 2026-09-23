@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { HTTPException } from "hono/http-exception";
-import { createCollectionRelationsApp } from "../src/crm/collection-relations";
+import { createCollectionRelationsApp } from "../src/studio/collection-relations";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -181,9 +181,9 @@ it("validates definitions and bounded pagination, and hides unreadable collectio
 });
 
 it("removes local association metadata atomically when a CRM record is deleted", async () => {
-  const { createObject } = await import("@savia/crm-server/schema");
+  const { createObject } = await import("@savia/studio-server/schema");
   const { createRecord, deleteRecord, getRecord } =
-    await import("@savia/crm-server/services");
+    await import("@savia/studio-server/services");
   const tenant = "relations:delete";
   for (const name of ["a", "b"])
     await createObject(env.DB, tenant, {

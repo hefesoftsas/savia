@@ -3,7 +3,7 @@ import {
   executeJsonApi,
   JsonApiAdapterError,
   validateJsonApiBaseUrl,
-} from "../src/crm/jsonapi-adapter";
+} from "../src/studio/jsonapi-adapter";
 
 const source = {
   baseUrl: "https://catalog.savia.dev/api",
@@ -363,7 +363,7 @@ describe("isolated JSON:API adapter", () => {
 
 it("executes a configured POST update with mapped JSON request and response", async () => {
   const { endpointSchema } =
-    await import("@savia/crm-shared/collection-operations");
+    await import("@savia/studio-shared/collection-operations");
   const f = fixture(Response.json({ result: { key: 17, fullName: "Ana" } }));
   const endpoint = endpointSchema.parse({
     method: "POST",
@@ -402,7 +402,7 @@ it("executes a configured POST update with mapped JSON request and response", as
 });
 it("uses configured pagination, search and data/total pointers", async () => {
   const { endpointSchema } =
-    await import("@savia/crm-shared/collection-operations");
+    await import("@savia/studio-shared/collection-operations");
   const f = fixture(
     Response.json({ items: [{ key: "1", title: "Uno" }], count: 4 }),
   );

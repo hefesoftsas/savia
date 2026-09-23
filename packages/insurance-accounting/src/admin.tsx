@@ -1,7 +1,7 @@
-import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginMessages } from "@savia/studio-shared/plugin-locale-react";
 import { integrationMessages } from "./locales";
 import { useState } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { money, text, errorMessage } from "@savia/insurance-workbench/data";
 import { manifest } from "./manifest";
 import { requirement } from "./object";

@@ -1,19 +1,19 @@
 import type { PostgresDatabase } from "../src/postgres/database";
-import { createExtensionRegistry } from "../../../packages/crm-shared/src/extension-package";
+import { createExtensionRegistry } from "../../../packages/studio-shared/src/extension-package";
 import { registerDialect } from "@savia/db/dialect";
 import { postgresDialect } from "@savia/db/postgres-dialect";
 import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
 import { readFileSync, readdirSync } from "node:fs";
-import { createCrmApp } from "@savia/crm-server";
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
+import { createStudioApp } from "@savia/studio-server";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
 import { openSqliteDatabase } from "../src/sqlite";
 import { migratePostgres } from "../src/postgres/migrations";
 import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
-import { maintainRecordHistory } from "@savia/crm-server/record-history-storage";
+import { maintainRecordHistory } from "@savia/studio-server/record-history-storage";
 
 async function businessContract(db: D1Database) {
-  const app = createCrmApp("business", { principalId: "tester" });
+  const app = createStudioApp("business", { principalId: "tester" });
   const json = async (path: string, method = "GET", input?: unknown) => {
     const response = await app.request(
       "http://localhost/api" + path,
@@ -110,7 +110,7 @@ async function businessContract(db: D1Database) {
     it("runs the same bootstrap, schema, record, aggregate, history and deletion contract as SQLite", async () => {
       const sqlite = openSqliteDatabase(":memory:");
       try {
-        const directory = resolve("../../packages/crm-server/migrations");
+        const directory = resolve("../../packages/studio-server/migrations");
         for (const file of readdirSync(directory)
           .filter((file) => file.endsWith(".sql"))
           .sort())
@@ -181,9 +181,9 @@ function guardedBarrier(db: PostgresDatabase, match: (sql: string) => boolean) {
     }
     function requests(
       db: PostgresDatabase,
-      options: Parameters<typeof createCrmApp>[1] = {},
+      options: Parameters<typeof createStudioApp>[1] = {},
     ) {
-      const app = createCrmApp("concurrency", {
+      const app = createStudioApp("concurrency", {
         principalId: "tester",
         ...options,
       });

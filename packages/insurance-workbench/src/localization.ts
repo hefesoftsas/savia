@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
-import { localizeExternalError, translatePluginMessage, type PluginLocale, type PluginMessages, type PluginMessageParams } from "@savia/crm-shared/plugin-localization";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
+import { localizeExternalError, translatePluginMessage, type PluginLocale, type PluginMessages, type PluginMessageParams } from "@savia/studio-shared/plugin-localization";
 import { messages } from "./messages";
 import type { Field, WorkbenchConfig } from "./types";
 

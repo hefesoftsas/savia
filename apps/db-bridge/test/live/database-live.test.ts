@@ -8,7 +8,7 @@ import {
   databaseMutationSchema,
   databaseReadSchema,
   type DatabaseKind,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import { createPostgresDatabaseDriver } from "../../src/postgres-driver";
 import { createMysqlDriver } from "../../src/mysql-driver";
 import { createMssqlDriver } from "../../src/mssql-driver";

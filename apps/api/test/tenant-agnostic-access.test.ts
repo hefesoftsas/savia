@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   canAccessSharedCrm,
   canManageSharedCrm,
-} from "../src/crm/hubspot-access";
+} from "../src/external-crm/hubspot-access";
 import type { AppActor } from "../src/auth/types";
-import { resolveDynamicTenantKey } from "../src/routes/dynamic-crm";
+import { resolveDynamicTenantKey } from "../src/routes/studio";
 
 function createActor(overrides?: Partial<AppActor>): AppActor {
   return {

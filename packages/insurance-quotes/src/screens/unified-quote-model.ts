@@ -1,9 +1,9 @@
 import {
   pluginIntlLocale,
   type PluginLocale,
-} from "@savia/crm-shared/plugin-localization";
+} from "@savia/studio-shared/plugin-localization";
 import { insuranceMessage } from "../messages";
-import type { PluginExtensionActionRun } from "@savia/crm-shared/plugin-api";
+import type { PluginExtensionActionRun } from "@savia/studio-shared/plugin-api";
 import type { QuoteBatchItem } from "./quote-results";
 import { defaultProfiles, type UnifiedQuoteCoverage } from "../plan-profiles";
 

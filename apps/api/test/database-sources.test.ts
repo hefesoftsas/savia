@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { createCollectionSourceApp } from "../src/crm/collection-sources";
-import type { DatabaseBridgeClient } from "../src/crm/database-bridge";
+import { createCollectionSourceApp } from "../src/studio/collection-sources";
+import type { DatabaseBridgeClient } from "../src/studio/database-bridge";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,

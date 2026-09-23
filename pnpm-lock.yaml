@@ -107,15 +107,15 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.16
         version: 1.2.16(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../../packages/crm-shared
       '@savia/provider-contracts':
         specifier: workspace:*
         version: link:../../packages/provider-contracts
       '@savia/release-catalog':
         specifier: workspace:*
         version: link:../../packages/release-catalog
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../../packages/studio-shared
       '@savia/tenant-host':
         specifier: workspace:*
         version: link:../../packages/tenant-host
@@ -324,12 +324,6 @@ importers:
       '@openrouter/ai-sdk-provider':
         specifier: 3.0.0
         version: 3.0.0(ai@7.0.91(zod@4.5.4))(zod@4.5.4)
-      '@savia/crm-server':
-        specifier: workspace:*
-        version: link:../../packages/crm-server
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../../packages/crm-shared
       '@savia/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -342,6 +336,12 @@ importers:
       '@savia/release-catalog':
         specifier: workspace:*
         version: link:../../packages/release-catalog
+      '@savia/studio-server':
+        specifier: workspace:*
+        version: link:../../packages/studio-server
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../../packages/studio-shared
       '@savia/tenant-host':
         specifier: workspace:*
         version: link:../../packages/tenant-host
@@ -455,15 +455,15 @@ importers:
 
   apps/connector-gateway:
     dependencies:
-      '@savia/crm-server':
-        specifier: workspace:*
-        version: link:../../packages/crm-server
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../../packages/crm-shared
       '@savia/release-catalog':
         specifier: workspace:*
         version: link:../../packages/release-catalog
+      '@savia/studio-server':
+        specifier: workspace:*
+        version: link:../../packages/studio-server
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../../packages/studio-shared
       hono:
         specifier: ^4.13.5
         version: 4.13.5
@@ -489,9 +489,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.17(hono@4.13.5)
-      '@savia/crm-shared':
+      '@savia/studio-shared':
         specifier: workspace:*
-        version: link:../../packages/crm-shared
+        version: link:../../packages/studio-shared
       hono:
         specifier: ^4.13.5
         version: 4.13.5
@@ -613,12 +613,12 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.17(hono@4.13.5)
-      '@savia/crm-server':
-        specifier: workspace:*
-        version: link:../../packages/crm-server
       '@savia/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@savia/studio-server':
+        specifier: workspace:*
+        version: link:../../packages/studio-server
       '@savia/tenant-host':
         specifier: workspace:*
         version: link:../../packages/tenant-host
@@ -666,71 +666,6 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@22.20.1)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
 
-  packages/crm-server:
-    dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
-      '@savia/db':
-        specifier: workspace:*
-        version: link:../db
-      hono:
-        specifier: ^4.13.5
-        version: 4.13.5
-      zod:
-        specifier: ^4.1.0
-        version: 4.5.4
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: 5.20260901.1
-        version: 5.20260901.1
-      '@types/node':
-        specifier: ^24.13.3
-        version: 24.13.3
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
-      wrangler:
-        specifier: ^4.127.1
-        version: 4.127.1(@cloudflare/workers-types@5.20260901.1)
-
-  packages/crm-shared:
-    dependencies:
-      '@form-eng/core':
-        specifier: 1.6.1
-        version: 1.6.1(react-hook-form@7.87.0(react@19.2.8))(react@19.2.8)
-      yaml:
-        specifier: ^2.8.0
-        version: 2.9.0
-      zod:
-        specifier: ^4.1.0
-        version: 4.5.4
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: 5.20260901.1
-        version: 5.20260901.1
-      '@types/node':
-        specifier: ^24.13.3
-        version: 24.13.3
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      jsdom:
-        specifier: ^28.1.0
-        version: 28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2)
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
-
   packages/db:
     dependencies:
       drizzle-orm:
@@ -749,12 +684,12 @@ importers:
 
   packages/insurance-accounting:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -777,12 +712,12 @@ importers:
 
   packages/insurance-activities:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -802,9 +737,9 @@ importers:
 
   packages/insurance-automation:
     dependencies:
-      '@savia/crm-shared':
+      '@savia/studio-shared':
         specifier: workspace:*
-        version: link:../crm-shared
+        version: link:../studio-shared
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
@@ -821,15 +756,15 @@ importers:
 
   packages/insurance-calendar:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-communications':
         specifier: workspace:*
         version: link:../insurance-communications
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -852,15 +787,15 @@ importers:
 
   packages/insurance-campaigns:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-communications':
         specifier: workspace:*
         version: link:../insurance-communications
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -883,15 +818,15 @@ importers:
 
   packages/insurance-carriers:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-communications':
         specifier: workspace:*
         version: link:../insurance-communications
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -914,12 +849,12 @@ importers:
 
   packages/insurance-claims:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -939,12 +874,12 @@ importers:
 
   packages/insurance-collections:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -964,12 +899,12 @@ importers:
 
   packages/insurance-commissions:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -989,12 +924,12 @@ importers:
 
   packages/insurance-communications:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1017,12 +952,12 @@ importers:
 
   packages/insurance-compliance:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1045,12 +980,12 @@ importers:
 
   packages/insurance-customer-portal:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1073,12 +1008,12 @@ importers:
 
   packages/insurance-data-quality:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1101,15 +1036,15 @@ importers:
 
   packages/insurance-document-generation:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-communications':
         specifier: workspace:*
         version: link:../insurance-communications
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1132,12 +1067,12 @@ importers:
 
   packages/insurance-documents:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1157,12 +1092,12 @@ importers:
 
   packages/insurance-endorsements:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1182,12 +1117,12 @@ importers:
 
   packages/insurance-issuance:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1207,12 +1142,12 @@ importers:
 
   packages/insurance-opportunities:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1232,12 +1167,12 @@ importers:
 
   packages/insurance-payments:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1260,9 +1195,9 @@ importers:
 
   packages/insurance-portfolio-dashboard:
     dependencies:
-      '@savia/crm-shared':
+      '@savia/studio-shared':
         specifier: workspace:*
-        version: link:../crm-shared
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1285,12 +1220,12 @@ importers:
 
   packages/insurance-quotes:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/provider-contracts':
         specifier: workspace:*
         version: link:../provider-contracts
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -1316,12 +1251,12 @@ importers:
 
   packages/insurance-renewals:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1341,12 +1276,12 @@ importers:
 
   packages/insurance-reports:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1369,12 +1304,12 @@ importers:
 
   packages/insurance-service:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1394,12 +1329,12 @@ importers:
 
   packages/insurance-settlements:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-workbench':
         specifier: workspace:*
         version: link:../insurance-workbench
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1422,9 +1357,9 @@ importers:
 
   packages/insurance-workbench:
     dependencies:
-      '@savia/crm-shared':
+      '@savia/studio-shared':
         specifier: workspace:*
-        version: link:../crm-shared
+        version: link:../studio-shared
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -1446,9 +1381,6 @@ importers:
 
   packages/release-catalog:
     dependencies:
-      '@savia/crm-shared':
-        specifier: workspace:*
-        version: link:../crm-shared
       '@savia/insurance-accounting':
         specifier: workspace:*
         version: link:../insurance-accounting
@@ -1524,6 +1456,9 @@ importers:
       '@savia/insurance-settlements':
         specifier: workspace:*
         version: link:../insurance-settlements
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
@@ -1531,6 +1466,71 @@ importers:
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/studio-server:
+    dependencies:
+      '@savia/db':
+        specifier: workspace:*
+        version: link:../db
+      '@savia/studio-shared':
+        specifier: workspace:*
+        version: link:../studio-shared
+      hono:
+        specifier: ^4.13.5
+        version: 4.13.5
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 5.20260901.1
+        version: 5.20260901.1
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+      wrangler:
+        specifier: ^4.127.1
+        version: 4.127.1(@cloudflare/workers-types@5.20260901.1)
+
+  packages/studio-shared:
+    dependencies:
+      '@form-eng/core':
+        specifier: 1.6.1
+        version: 1.6.1(react-hook-form@7.87.0(react@19.2.8))(react@19.2.8)
+      yaml:
+        specifier: ^2.8.0
+        version: 2.9.0
+      zod:
+        specifier: ^4.1.0
+        version: 4.5.4
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 5.20260901.1
+        version: 5.20260901.1
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      jsdom:
+        specifier: ^28.1.0
+        version: 28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2)
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

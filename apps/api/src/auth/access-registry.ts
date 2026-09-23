@@ -4,12 +4,12 @@ import type {
   AccessGrant,
   AccessPredicate,
   AccessAction,
-} from "@savia/crm-shared/access-control";
+} from "@savia/studio-shared/access-control";
 import {
   accessActions,
   accessFieldSchema,
   protectedAccessFields,
-} from "@savia/crm-shared/access-control";
+} from "@savia/studio-shared/access-control";
 export class AccessControlError extends Error {
   constructor(
     public status: 403 | 404 | 409 | 422,
@@ -26,7 +26,7 @@ export const denyAccess = () => {
     "You do not have access to this scope or operation.",
   );
 };
-export const crmTenantForScope = (scope: AccessScope) =>
+export const studioTenantForScope = (scope: AccessScope) =>
   scope === "platform"
     ? "domain:platform"
     : scope.startsWith("tenant:")
@@ -45,7 +45,7 @@ export async function accessCatalog(
   db: D1Database,
   scope: AccessScope,
 ): Promise<AccessCatalogEntry[]> {
-  const tenant = crmTenantForScope(scope);
+  const tenant = studioTenantForScope(scope);
   const rows = await db
     .prepare("SELECT name,label,config FROM crm_objects WHERE tenant_id=?")
     .bind(tenant)

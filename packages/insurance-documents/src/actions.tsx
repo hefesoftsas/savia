@@ -1,7 +1,7 @@
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import { useMessages } from "./localization";
 import { useState } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { today, type WorkRecord } from "@savia/insurance-workbench";
 import { reopenExpired } from "./domain";
 export function RecordActions({

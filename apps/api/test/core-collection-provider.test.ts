@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { createCollectionSourceApp } from "../src/crm/collection-sources";
-import { defaultOperationMap } from "../src/crm/collection-operations";
-import { loadCollectionOptions } from "../src/crm/collection-options";
+import { createCollectionSourceApp } from "../src/studio/collection-sources";
+import { defaultOperationMap } from "../src/studio/collection-operations";
+import { loadCollectionOptions } from "../src/studio/collection-options";
 
 const unavailableDb = new Proxy(
   {},

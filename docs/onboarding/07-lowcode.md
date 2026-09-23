@@ -25,18 +25,21 @@ versioned schema. Files go to R2.
 
 ## Three runtime pieces
 
-1. **React UI** (`apps/admin/src/features/crm-engine/`): designer,
+1. **React UI** (`apps/admin/src/features/studio-engine/`): designer,
    `dynamic-form`, collection source/relation/operation panels,
    conversational wizard. User-visible name: **Studio** (route `#/studio`,
    `#/crm` kept as legacy alias).
-2. **Server** (`packages/crm-server`, `createCrmApp`): mounted by the API.
-3. **Shared metadata** (`packages/crm-shared`): zod schemas, validation,
+2. **Server** (`packages/studio-server`, `createStudioApp`): mounted by the
+   API (`apps/api/src/studio/`, external HubSpot integration isolated in
+   `apps/api/src/external-crm/`).
+3. **Shared metadata** (`packages/studio-shared`): zod schemas, validation,
    utilities — used by both admin and API.
 
-> Fase 1 note: only the UI names and the `#/studio` route were renamed.
-> Code, package names (`crm-engine`, `crm-server`, `crm-shared`), D1 tables
-> (`crm_*`) and `/v1/crm/*` (external HubSpot integration — correctly named)
-> keep their names until Fase 2.
+> Fase 2 note: code, folders, packages and the generated client are renamed
+> to Studio. Still keeping their old names (Fase 3): D1 tables (`crm_*`),
+> API paths (`/v1/dynamic-crm/*`, `/v1/crm/*` — the latter is the external
+> HubSpot integration and stays), permission/sidebar ids (`dynamic-crm`),
+> the `CRM_INTEGRATION_KEY` secret name, and collection kind `"crm"`.
 
 ## Everything configurable generates its own API
 

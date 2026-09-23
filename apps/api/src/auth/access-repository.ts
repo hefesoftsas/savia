@@ -6,7 +6,7 @@ import {
   type AccessScope,
   type AccessGrant,
   type AccessPolicy,
-} from "@savia/crm-shared/access-control";
+} from "@savia/studio-shared/access-control";
 import type { AppActor } from "./types";
 import { accessAuthority } from "./access-context";
 import {

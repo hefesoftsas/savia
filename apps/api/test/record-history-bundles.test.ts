@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { createRecordBundlesApp } from "../src/crm/record-bundles";
-import { historyDatabase } from "@savia/crm-server/record-history-storage";
+import { createRecordBundlesApp } from "../src/studio/record-bundles";
+import { historyDatabase } from "@savia/studio-server/record-history-storage";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,

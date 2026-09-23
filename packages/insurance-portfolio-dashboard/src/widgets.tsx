@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import {
   localizeExternalError,
   pluginIntlLocale,
-} from "@savia/crm-shared/plugin-localization";
+} from "@savia/studio-shared/plugin-localization";
 import { useInsuranceMessages } from "./localization";
 import { insurancePortfolioExtensionManifest } from "./manifest";
 import type { InsurancePortfolioSummary } from "./summary";

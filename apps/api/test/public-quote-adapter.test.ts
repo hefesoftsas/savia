@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import {
   PUBLIC_QUOTE_CONCURRENCY,
   createPublicQuoteAdapter,

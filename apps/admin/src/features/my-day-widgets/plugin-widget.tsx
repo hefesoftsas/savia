@@ -1,6 +1,6 @@
 import { Component, useEffect, useMemo, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {

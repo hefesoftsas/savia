@@ -1,5 +1,5 @@
-import type { AccessScope } from "@savia/crm-shared/access-control";
-import { accessScopeSchema } from "@savia/crm-shared/access-control";
+import type { AccessScope } from "@savia/studio-shared/access-control";
+import { accessScopeSchema } from "@savia/studio-shared/access-control";
 import type { AppActor } from "./types";
 import { AccessControlError, denyAccess } from "./access-registry";
 export async function hasCustomAccess(

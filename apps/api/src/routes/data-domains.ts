@@ -2,7 +2,7 @@ import { dialectFor } from "@savia/db/dialect";
 import { streamingRequest } from "../lib/streaming-request";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { PLATFORM_ROOM } from "../realtime/protocol";
-import { publishRecordBundleChanges } from "../crm/record-bundle-realtime";
+import { publishRecordBundleChanges } from "../studio/record-bundle-realtime";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   actorFromContext,
@@ -10,14 +10,14 @@ import {
 } from "../auth/middleware";
 import { AuthenticationError } from "../auth/types";
 import { loadAccessPolicy } from "../auth/access-repository";
-import { createCollectionGateway } from "../crm/collection-gateway";
-import type { SqlBridgeClient } from "../crm/sql-bridge";
-import { dynamicOpenApi } from "../crm/dynamic-openapi";
-import { dynamicScalar } from "../crm/dynamic-scalar";
-import type { CrmObject } from "@savia/crm-shared/metadata";
-import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
+import { createCollectionGateway } from "../studio/collection-gateway";
+import type { SqlBridgeClient } from "../studio/sql-bridge";
+import { dynamicOpenApi } from "../studio/dynamic-openapi";
+import { dynamicScalar } from "../studio/dynamic-scalar";
+import type { StudioObject } from "@savia/studio-shared/metadata";
+import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
 import type { CrmRouteDependencies } from "./crm";
-import type { SolutionOptions } from "@savia/crm-server/solutions";
+import type { SolutionOptions } from "@savia/studio-server/solutions";
 
 const domainSchema = z.object({
   id: z.string(),
@@ -93,7 +93,7 @@ const customDomain = (id: string, label: string) => ({
   kind: "custom" as const,
   apiBasePath: `/v1/data-domains/${id}`,
 });
-export const genericSeed: CrmObject[] = [];
+export const genericSeed: StudioObject[] = [];
 
 export function registerDataDomainRoutes(
   app: OpenAPIHono,

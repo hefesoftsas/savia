@@ -1,4 +1,4 @@
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import { seedTenantAgency } from "./tenant-fixtures";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -277,7 +277,7 @@ it("encrypts integration credentials using the configured Savia CRM key", async 
   const app = createTestApp({
     auth: agencyAdministratorAuthenticator(),
     documents: env.DOCUMENTS,
-    crmIntegrationKey: "integration-test-key-with-at-least-32-characters",
+    studioIntegrationKey: "integration-test-key-with-at-least-32-characters",
   });
   const headers = { "content-type": "application/json" };
   const created = await app.request(prefix + "/integrations", {

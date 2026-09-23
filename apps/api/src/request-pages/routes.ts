@@ -8,12 +8,12 @@ import type { SaviaRequestService } from "../routes/savia-request";
 import {
   requestPageSchema,
   requestOperations,
-} from "@savia/crm-shared/request-page";
+} from "@savia/studio-shared/request-page";
 import {
   configSchema,
   validateRecord,
-  type CrmObject,
-} from "@savia/crm-shared/metadata";
+  type StudioObject,
+} from "@savia/studio-shared/metadata";
 import {
   normalizeResult,
   type FlowDescriptor,
@@ -21,7 +21,7 @@ import {
 } from "../request-results/normalize";
 import { requestResultSchema } from "../request-results/contracts";
 import type { ResultNormalizer } from "../request-results/normalize";
-import { validateJsonSchema } from "@savia/crm-shared/json-schema";
+import { validateJsonSchema } from "@savia/studio-shared/json-schema";
 const domainId = z
   .string()
   .regex(/^(?:[a-z][a-z0-9_-]{0,47}|tenant:[1-9][0-9]*)$/);
@@ -224,11 +224,11 @@ export function registerRequestPageRoutes(
         config: string;
       }>();
     if (!stored) return error("Página no encontrada.", 404);
-    const object: CrmObject = {
+    const object: StudioObject = {
       ...stored,
       config: configSchema.parse(
         JSON.parse(stored.config),
-      ) as CrmObject["config"],
+      ) as StudioObject["config"],
     };
     const config = requestPageSchema.parse(object.config.studio?.requestPage);
     const action = config.actions.find((a) => a.id === body.actionId);

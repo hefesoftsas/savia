@@ -1,4 +1,4 @@
-import { PluginLocaleProvider } from "@savia/crm-shared/plugin-locale-react";
+import { PluginLocaleProvider } from "@savia/studio-shared/plugin-locale-react";
 import { useAppLocale } from "./core";
 import { useMemo, type ReactNode } from "react";
 import { I18nContext, useStore } from "ra-core";

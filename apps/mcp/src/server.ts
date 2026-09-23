@@ -274,7 +274,7 @@ export function createSaviaMcpServer(
     async ({ reference }) => clientForRequest().getQuoteSummary(reference),
   );
 
-  const crmObject = nonEmptyString
+  const studioObject = nonEmptyString
     .regex(/^[A-Za-z][A-Za-z0-9_-]*$/)
     .describe(
       "Exact installed object name returned by savia_list_crm_collections",
@@ -305,7 +305,7 @@ export function createSaviaMcpServer(
         "Query and list records in a CRM collection. Supports field sorting, pagination, free-text search, and structured field filters (eq, ne, contains, gt, in, etc.).",
       annotations: { readOnlyHint: true },
       input: z.object({
-        object: crmObject,
+        object: studioObject,
         page: z.number().int().min(1).default(1),
         perPage: z.number().int().min(1).max(100).default(25),
         query: nonEmptyString
@@ -370,7 +370,7 @@ export function createSaviaMcpServer(
         "Compute metrics, counts, and statistical summaries on a CRM collection. Groups records by a field (e.g. city, status, category) and computes counts and metric sums (e.g. total premium or amount), or counts matching records with optional filters.",
       annotations: { readOnlyHint: true },
       input: z.object({
-        object: crmObject,
+        object: studioObject,
         groupBy: nonEmptyString
           .optional()
           .describe(
@@ -424,7 +424,7 @@ export function createSaviaMcpServer(
       name: "savia_get_crm_record",
       description: "Read one live record by ID from a CRM collection.",
       annotations: { readOnlyHint: true },
-      input: z.object({ object: crmObject, id: nonEmptyString }),
+      input: z.object({ object: studioObject, id: nonEmptyString }),
     },
     async ({ object, id }) => clientForRequest().getCrmRecord(object, id, true),
   );
@@ -439,7 +439,7 @@ export function createSaviaMcpServer(
       description:
         "Create a record in an installed CRM provider collection using its discovered fields. This writes to the connected CRM. Requires caller authorization and provider create capability.",
       input: z.object({
-        object: crmObject,
+        object: studioObject,
         data: z.record(z.string(), z.unknown()),
       }),
       inputSchema: {
@@ -466,7 +466,7 @@ export function createSaviaMcpServer(
       description:
         "Update specified fields of an installed CRM provider record. This writes to the connected CRM. Read the record first and include its _version when present; provider update capability is enforced.",
       input: z.object({
-        object: crmObject,
+        object: studioObject,
         id: nonEmptyString,
         data: z.record(z.string(), z.unknown()),
       }),
@@ -495,7 +495,7 @@ export function createSaviaMcpServer(
       description:
         "Delete a record by ID from a CRM collection. This permanently removes or archives the record.",
       input: z.object({
-        object: crmObject,
+        object: studioObject,
         id: nonEmptyString,
         version: z.number().int().positive().optional(),
       }),
@@ -519,7 +519,7 @@ export function createSaviaMcpServer(
       description:
         "Read configured relations and linked records for an installed CRM collection record.",
       annotations: { readOnlyHint: true },
-      input: z.object({ object: crmObject, id: nonEmptyString }),
+      input: z.object({ object: studioObject, id: nonEmptyString }),
     },
     async ({ object, id }) => clientForRequest().getCrmRecordLinks(object, id),
   );

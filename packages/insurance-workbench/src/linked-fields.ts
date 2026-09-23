@@ -1,4 +1,4 @@
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import type { Field } from "./types";
 import { loadRecords, text } from "./data";
 export async function linkedFields(

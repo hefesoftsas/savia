@@ -1,4 +1,4 @@
-import { DatabaseBridgeError } from "@savia/crm-shared/database-sources";
+import { DatabaseBridgeError } from "@savia/studio-shared/database-sources";
 export { DatabaseBridgeError };
 export function databaseError(
   error: unknown,

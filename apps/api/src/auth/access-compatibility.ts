@@ -2,9 +2,9 @@ import { dialectFor } from "@savia/db/dialect";
 import type {
   AccessGrant,
   AccessScope,
-} from "@savia/crm-shared/access-control";
-import { accessActions } from "@savia/crm-shared/access-control";
-import { accessCatalog, crmTenantForScope } from "./access-registry";
+} from "@savia/studio-shared/access-control";
+import { accessActions } from "@savia/studio-shared/access-control";
+import { accessCatalog, studioTenantForScope } from "./access-registry";
 export async function compatibilityGrants(
   db: D1Database,
   scope: AccessScope,
@@ -21,7 +21,7 @@ export async function compatibilityGrants(
         dialectFor(db).jsonValue("config", "$.accessScope") +
         "='tenant'",
     )
-    .bind(crmTenantForScope(scope))
+    .bind(studioTenantForScope(scope))
     .all<{ object_name: string }>();
   const shared = new Set(rows.results.map((r) => r.object_name));
   const roleId =

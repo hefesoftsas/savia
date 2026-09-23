@@ -5,7 +5,7 @@
 - `apps/`: deployable workers (`api`, `auth`, `mcp`, `savia-request`,
   `legacy-api`, `admin`) + `legacy-exporter`.
 - `packages/`: `db` (Drizzle migrations, source of truth for the schema),
-  `crm-shared`, `crm-server`, `provider-contracts`,
+  `studio-shared`, `studio-server`, `provider-contracts`,
   `insurance-portfolio-dashboard`.
 - `scripts/`: Node tooling (`dev-local.sh`, imports, CI checks).
 - `infra/`: Cloudflare; redirect to `infra/cloudflare`.

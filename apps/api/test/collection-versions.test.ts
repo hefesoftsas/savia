@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { createRealtimeHubClient } from "../src/realtime/hub-client";
 import { agencyAdministratorAuthenticator } from "./auth-fixtures";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {

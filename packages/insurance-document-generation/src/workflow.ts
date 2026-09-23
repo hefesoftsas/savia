@@ -1,4 +1,4 @@
-import type { PluginApi, PluginFile } from "@savia/crm-shared/plugin-api";
+import type { PluginApi, PluginFile } from "@savia/studio-shared/plugin-api";
 import type { Receipt } from "@savia/insurance-communications/gateway";
 import { requirement } from "./object";
 import { renderDocument } from "./domain";

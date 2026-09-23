@@ -3,8 +3,8 @@ import { beforeAll, expect, it, vi } from "vitest";
 import {
   createHubspotWorkspaceApp,
   capabilities,
-} from "../src/crm/hubspot-workspace";
-import { createCollectionSourceApp } from "../src/crm/collection-sources";
+} from "../src/external-crm/hubspot-workspace";
+import { createCollectionSourceApp } from "../src/studio/collection-sources";
 let conn: any = {
   id: "connection",
   status: "connected",
@@ -12,7 +12,7 @@ let conn: any = {
   externalAccountLabel: "Test",
   scopes: ["crm.objects.contacts.write", "crm.objects.companies.write"],
 };
-vi.mock("../src/crm/repository", () => ({
+vi.mock("../src/external-crm/repository", () => ({
   createCrmRepository: () => ({
     findActiveConnectionForPrincipal: async (_: string, principal: string) =>
       principal === "owner"

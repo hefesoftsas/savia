@@ -1,4 +1,4 @@
-import { createCollectionGateway } from "./crm/collection-gateway";
+import { createCollectionGateway } from "./studio/collection-gateway";
 import { registerWorkflowWebhookRoutes } from "./workflow-webhooks";
 import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
 import { canonicalHostForApi } from "./auth/tenant-host-guard";
@@ -15,12 +15,12 @@ import {
 import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { registerRequestPageRoutes } from "./request-pages/routes";
 import { registerDataDomainRoutes } from "./routes/data-domains";
-import { registerDynamicCrmRoutes } from "./routes/dynamic-crm";
+import { registerStudioRoutes } from "./routes/studio";
 import { registerTenantRoutes } from "./routes/tenants";
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context, Next } from "hono";
-import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
+import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
 import {
   betterAuthOAuthClientAdministrator,
   betterAuthUserAdministrator,
@@ -46,7 +46,7 @@ import { registerAssistantConfigurationRoutes } from "./assistant/configuration-
 import type { AssistantService } from "./assistant/contracts";
 import { registerAssistantRoutes } from "./assistant/routes";
 import { registerCrmRoutes, type CrmRouteDependencies } from "./routes/crm";
-import type { SqlBridgeClient } from "./crm/sql-bridge";
+import type { SqlBridgeClient } from "./studio/sql-bridge";
 import { registerCrmAutomaticSyncRoutes } from "./routes/crm-automatic-sync";
 import { registerIdentityRoutes } from "./routes/identity";
 import { registerRealtimeRoutes } from "./realtime/routes";
@@ -56,7 +56,7 @@ import {
   type PersonalIntegrationRouteDependencies,
 } from "./routes/personal-integrations";
 import { registerUserPreferenceRoutes } from "./routes/user-preferences";
-import { registerNotifications } from "@savia/crm-server/notifications/routes";
+import { registerNotifications } from "@savia/studio-server/notifications/routes";
 import { createNotificationPolicy } from "./notifications";
 import { actorFromContext, authenticationMiddleware } from "./auth/middleware";
 import { betterAuthAuthenticator } from "./auth/better-auth";
@@ -84,7 +84,7 @@ export function createApp(
   assistantModelCatalog?: AssistantModelCatalog,
   saviaRequestService?: SaviaRequestService,
   personalIntegrations?: PersonalIntegrationRouteDependencies,
-  crmIntegrationKey?: string,
+  studioIntegrationKey?: string,
   externalCollections?: { fetch(request: Request): Promise<Response> },
   sqlBridge?: SqlBridgeClient,
   extensionActionExecutor?: ExtensionActionExecutor,
@@ -142,11 +142,11 @@ export function createApp(
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
   registerCrmAutomaticSyncRoutes(app, db);
-  registerDynamicCrmRoutes(
+  registerStudioRoutes(
     app,
     db,
     documents,
-    crmIntegrationKey,
+    studioIntegrationKey,
     crm,
     externalCollections,
     collectionGatewayFactory,
@@ -160,7 +160,7 @@ export function createApp(
     app,
     db,
     documents,
-    crmIntegrationKey,
+    studioIntegrationKey,
     crm,
     externalCollections,
     collectionGatewayFactory,

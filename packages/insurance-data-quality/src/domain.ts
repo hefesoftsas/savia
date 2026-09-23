@@ -1,4 +1,4 @@
-import type { CrmObject } from "@savia/crm-shared/metadata";
+import type { StudioObject } from "@savia/studio-shared/metadata";
 export function parseCsv(source: string): Record<string, string>[] {
   if (source.length > 2_000_000) throw Error("El archivo supera 2 MB.");
   const rows: string[][] = [];
@@ -81,7 +81,7 @@ export type ImportRow = {
 };
 export function planImport(
   rows: Record<string, string>[],
-  fields: CrmObject["config"]["fields"],
+  fields: StudioObject["config"]["fields"],
   existing: Record<string, unknown>[],
   matchField: string,
 ): ImportRow[] {

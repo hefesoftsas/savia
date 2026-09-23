@@ -4,15 +4,15 @@ import { describe, expect, it } from "vitest";
 import { resolve } from "node:path";
 import { registerDialect } from "@savia/db/dialect";
 import { postgresDialect } from "@savia/db/postgres-dialect";
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
-import { createObject } from "@savia/crm-server/schema";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
+import { createObject } from "@savia/studio-server/schema";
 import {
   createRecord,
   deleteRecord,
   getRecord,
-} from "@savia/crm-server/services";
-import { WorkflowRepository } from "@savia/crm-server/workflows/repository";
-import { processWorkflows } from "@savia/crm-server/workflows/runtime";
+} from "@savia/studio-server/services";
+import { WorkflowRepository } from "@savia/studio-server/workflows/repository";
+import { processWorkflows } from "@savia/studio-server/workflows/runtime";
 import { migratePostgres } from "../src/postgres/migrations";
 import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
 

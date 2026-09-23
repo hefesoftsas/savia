@@ -1,11 +1,11 @@
-import { render } from "@/features/crm-engine/test/locale-test-render";
+import { render } from "@/features/studio-engine/test/locale-test-render";
 import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ServiceCredentialsPage } from "./service-credentials-page";
 
-vi.mock("./crm-domain-credentials-section", () => ({
-  CrmDomainCredentialsSection: ({
+vi.mock("./studio-domain-credentials-section", () => ({
+  StudioDomainCredentialsSection: ({
     globalCredentials,
   }: {
     globalCredentials?: React.ReactNode;

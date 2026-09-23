@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { expect, it, vi } from "vitest";
-vi.mock("../src/crm/auto-sync", () => ({
+vi.mock("../src/external-crm/auto-sync", () => ({
   processCrmSyncJobs: vi.fn(async () => {
     throw new Error("CRM sync unavailable");
   }),
@@ -29,7 +29,7 @@ it("continues workflows when the independent CRM synchronization fails", async (
     true,
   );
 });
-import { processCrmSyncJobs } from "../src/crm/auto-sync";
+import { processCrmSyncJobs } from "../src/external-crm/auto-sync";
 it("ticks workflows in preview without activating external CRM synchronization", async () => {
   vi.clearAllMocks();
   await expect(

@@ -1,5 +1,5 @@
 import { cleanup, screen, waitFor } from "@testing-library/react";
-import { render } from "../crm-engine/test/locale-test-render";
+import { render } from "../studio-engine/test/locale-test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";

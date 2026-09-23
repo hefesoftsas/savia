@@ -74,7 +74,7 @@ asynchronously; these triggers cannot reject a save. Relation preloading and
 synchronous pre-save validation workflows remain future capabilities.
 
 Apply `packages/db/migrations/0059_workflow_collection_triggers.sql` on the host,
-or `packages/crm-server/migrations/0019_workflow_collection_triggers.sql` on the
+or `packages/studio-server/migrations/0019_workflow_collection_triggers.sql` on the
 standalone stack, before using the new configuration. Neither migration replays
 historical records.
 
@@ -141,7 +141,7 @@ resolution in the Worker transport. Network work is bounded to ten seconds. Payl
 are limited to 32 KiB, and the existing execution-context limit still applies.
 
 Apply `packages/db/migrations/0058_workflow_webhooks.sql` (host) or
-`packages/crm-server/migrations/0018_workflow_webhooks.sql` (standalone) before using
+`packages/studio-server/migrations/0018_workflow_webhooks.sql` (standalone) before using
 webhooks. Existing definitions require no rewrite. Preview runs a workflow-only scheduler once per minute; external CRM synchronization
 remains disabled. Other hosts with cron disabled need an intentional scheduler tick.
 
@@ -183,7 +183,7 @@ workflow-only mode, without CRM synchronization or history maintenance. Local `p
 the existing development scheduled-event runner. Delays have scheduler-granularity timing,
 not second-accurate delivery.
 
-`packages/crm-server/test/managed-workflow.test.ts` probes the installed Cloudflare managed
+`packages/studio-server/test/managed-workflow.test.ts` probes the installed Cloudflare managed
 runtime: committing a D1 write and failing before the managed step receipt causes a second
 write on retry; event-based resumption also passes. Managed orchestration does not make an
 arbitrary native side effect atomic. For this native-only delivery, D1 checkpoints keep the
@@ -191,15 +191,15 @@ write and receipt together. This is not a claim that managed Workflows lacks dur
 it would still require adapter idempotency if adopted later.
 
 Apply `packages/db/migrations/0054_workflows.sql` before deploying the API. The standalone
-CRM test/local stack uses `packages/crm-server/migrations/0016_workflows.sql`. Existing
+Studio test/local stack uses `packages/studio-server/migrations/0016_workflows.sql`. Existing
 automations are untouched. Neither migration dispatches historical records.
 
 Focused verification:
 
 ```sh
-pnpm --filter @savia/crm-shared exec vitest run test/workflows.test.ts
-pnpm --filter @savia/crm-server exec vitest run test/workflows.test.ts test/managed-workflow.test.ts --hookTimeout=120000
-pnpm --filter @savia/admin exec vitest run src/features/crm-engine/test/workflows.test.tsx --maxWorkers=1
+pnpm --filter @savia/studio-shared exec vitest run test/workflows.test.ts
+pnpm --filter @savia/studio-server exec vitest run test/workflows.test.ts test/managed-workflow.test.ts --hookTimeout=120000
+pnpm --filter @savia/admin exec vitest run src/features/studio-engine/test/workflows.test.tsx --maxWorkers=1
 ```
 
 The loopback-only `test/fixtures/workflow-preview.ts` worker and admin

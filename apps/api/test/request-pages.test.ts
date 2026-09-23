@@ -6,7 +6,7 @@ import {
   agencyMemberAuthenticator,
 } from "./auth-fixtures";
 import type { Authenticator } from "../src/auth/types";
-import { generateRequestPage } from "@savia/crm-shared/request-page";
+import { generateRequestPage } from "@savia/studio-shared/request-page";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,

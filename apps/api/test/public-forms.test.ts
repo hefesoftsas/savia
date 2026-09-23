@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { beforeAll, expect, it, vi } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import {
   platformAdministratorAuthenticator,

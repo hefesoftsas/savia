@@ -1,4 +1,4 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 export const integrationMessages = {
   "Selecciona comisiones recaudadas, calcula la participación y conserva un estado de liquidación por lote.": [
     "Selecciona comisiones recaudadas, calcula la participación y conserva un estado de liquidación por lote.",

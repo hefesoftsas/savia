@@ -1,5 +1,5 @@
 import type { ApiClient } from "@/api/api-client";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import type {
   WidgetCollection,
   WidgetCollectionSchema,

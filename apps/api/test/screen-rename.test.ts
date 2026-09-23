@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import {
   patchScreenMeta,
   screenMetaPatchSchema,
-} from "@savia/crm-server/schema";
+} from "@savia/studio-server/schema";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,

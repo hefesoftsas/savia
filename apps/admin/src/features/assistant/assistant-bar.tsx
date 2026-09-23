@@ -255,14 +255,14 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
     }
   };
 
-  const isCrm =
+  const isStudioAction =
     action.domain === "crm" ||
     action.command.includes("record") ||
     action.command.includes("create") ||
     action.command.includes("update") ||
     action.command.includes("delete");
 
-  const crmCollection = String(
+  const studioCollection = String(
     action.input.collection ??
       action.input.object ??
       (action.domain !== "crm" ? action.domain : ""),
@@ -271,14 +271,14 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
   let actionTitle = isQuote
     ? "consultar las aseguradoras habilitadas"
     : `${action.domain}.${action.command}`;
-  if (isCrm && crmCollection) {
+  if (isStudioAction && studioCollection) {
     const cmd = action.command.toLowerCase();
     if (cmd.includes("create")) {
-      actionTitle = `Crear registro en "${crmCollection}"`;
+      actionTitle = `Crear registro en "${studioCollection}"`;
     } else if (cmd.includes("update") || cmd.includes("edit")) {
-      actionTitle = `Actualizar registro en "${crmCollection}"`;
+      actionTitle = `Actualizar registro en "${studioCollection}"`;
     } else if (cmd.includes("delete") || cmd.includes("remove")) {
-      actionTitle = `Eliminar registro en "${crmCollection}"`;
+      actionTitle = `Eliminar registro en "${studioCollection}"`;
     }
   }
 

@@ -1,8 +1,8 @@
 import { remoteMcpResponse } from "./mcp-gateway";
-import { maintainRecordHistory } from "@savia/crm-server/record-history-storage";
+import { maintainRecordHistory } from "@savia/studio-server/record-history-storage";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
-import { processCrmSyncJobs } from "./crm/auto-sync";
+import { processCrmSyncJobs } from "./external-crm/auto-sync";
 import { runScheduledNotifications } from "./notifications";
 import { runScheduledWorkflows } from "./workflows";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
@@ -14,13 +14,13 @@ import {
   crmRoutesFromEnvironment,
   nangoConfigurationFromEnvironment,
   type CrmSecrets,
-} from "./crm/runtime";
+} from "./external-crm/runtime";
 import {
   createSqlBridgeClient,
   sqlBridgeFromEnvironment,
   type SqlBridgeClient,
   type SqlBridgeSecrets,
-} from "./crm/sql-bridge";
+} from "./studio/sql-bridge";
 import type { R2SigningCredentials } from "./lib/r2-presign";
 import { createPersonalIntegrationNangoClient } from "./personal-integrations/nango";
 import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
@@ -29,7 +29,7 @@ import {
   connectorExecutorFromEnvironment,
   extensionConnectionsEncryptionKeyFromEnvironment,
   type ConnectorGatewayEnvironment,
-} from "./crm/connector-executor";
+} from "./studio/connector-executor";
 import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { isLocalPublicOrigin } from "./public-forms/captcha";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
@@ -39,7 +39,7 @@ export {
   crmRoutesFromEnvironment,
   nangoConfigurationFromEnvironment,
   type CrmSecrets,
-} from "./crm/runtime";
+} from "./external-crm/runtime";
 
 type AttachmentSecrets = {
   R2_ACCOUNT_ID?: string;
@@ -87,7 +87,7 @@ export type RuntimeEnvironment = {
   SqlBridgeSecrets &
   ConnectorGatewayEnvironment;
 
-export { sqlBridgeFromEnvironment } from "./crm/sql-bridge";
+export { sqlBridgeFromEnvironment } from "./studio/sql-bridge";
 
 export function personalIntegrationRoutesFromEnvironment(
   environment: CrmSecrets & Pick<AssistantSecrets, "SAVIA_MCP_SHARED_SECRET">,
@@ -202,7 +202,7 @@ export type RuntimeOverrides = {
   realtime?: import("./realtime/hub-client").RealtimeHubClient;
   publicForms?: import("./public-forms/routes").PublicFormsOptions;
   signing?: R2SigningCredentials;
-  collectionGatewayFactory?: typeof import("./crm/collection-gateway").createCollectionGateway;
+  collectionGatewayFactory?: typeof import("./studio/collection-gateway").createCollectionGateway;
 };
 export function createApiRuntime(
   environment: RuntimeEnvironment,

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import { createTestApp } from "./test-app";
 import { seedTenantAgency } from "./tenant-fixtures";
 import { agencyMemberAuthenticator } from "./auth-fixtures";

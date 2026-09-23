@@ -1,33 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const gatewayMocks = vi.hoisted(() => ({
-  createCrmApp: vi.fn(),
+  createStudioApp: vi.fn(),
   fetch: vi.fn(),
   connectionRepository: vi.fn(),
   settingsRepository: vi.fn(),
   disabledSolutionObjects: vi.fn(),
 }));
 
-vi.mock("@savia/crm-server/index", () => ({
-  createCrmApp: gatewayMocks.createCrmApp,
+vi.mock("@savia/studio-server/index", () => ({
+  createStudioApp: gatewayMocks.createStudioApp,
 }));
-vi.mock("@savia/crm-server/extension-connections", () => ({
+vi.mock("@savia/studio-server/extension-connections", () => ({
   ExtensionConnectionRepository: gatewayMocks.connectionRepository,
 }));
-vi.mock("@savia/crm-server/extension-settings", () => ({
+vi.mock("@savia/studio-server/extension-settings", () => ({
   ExtensionSettingsRepository: gatewayMocks.settingsRepository,
 }));
-vi.mock("@savia/crm-server/extensions", () => ({
+vi.mock("@savia/studio-server/extensions", () => ({
   isExtensionAvailable: vi.fn(),
 }));
-vi.mock("@savia/crm-server/solutions", () => ({
+vi.mock("@savia/studio-server/solutions", () => ({
   disabledSolutionObjects: gatewayMocks.disabledSolutionObjects,
 }));
 
 import {
   canManageTenantExtensions,
   createCollectionGateway,
-} from "../src/crm/collection-gateway";
+} from "../src/studio/collection-gateway";
 import type { AppActor } from "../src/auth/types";
 
 function actor(
@@ -51,7 +51,7 @@ function actor(
 describe("extension administration authorization", () => {
   beforeEach(() => {
     gatewayMocks.fetch.mockResolvedValue(new Response(null, { status: 204 }));
-    gatewayMocks.createCrmApp.mockReturnValue({ fetch: gatewayMocks.fetch });
+    gatewayMocks.createStudioApp.mockReturnValue({ fetch: gatewayMocks.fetch });
     gatewayMocks.disabledSolutionObjects.mockResolvedValue(new Set());
   });
 
@@ -120,7 +120,7 @@ describe("extension administration authorization", () => {
       db,
       expect.objectContaining({ isExtensionActive: expect.any(Function) }),
     );
-    expect(gatewayMocks.createCrmApp).toHaveBeenCalledWith(
+    expect(gatewayMocks.createStudioApp).toHaveBeenCalledWith(
       "agency:101",
       expect.objectContaining({
         settingsRepository: expect.anything(),
