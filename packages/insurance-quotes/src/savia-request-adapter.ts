@@ -115,6 +115,7 @@ export function createInsuranceSaviaRequestConnectorAction(
               headers: {
                 "content-type": "application/json",
                 "x-savia-tenant": context.tenantId,
+                "x-savia-actor": context.principalId,
               },
               body: JSON.stringify({
                 mode: request.mode,

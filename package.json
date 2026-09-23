@@ -23,6 +23,7 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "favicons:generate": "node scripts/generate-favicons.mjs",
     "extension:pack": "node scripts/pack-extension.mjs",
+    "store:pack": "node scripts/pack-store-plugin.mjs",
     "savia:credentials:import": "node scripts/import-bitwarden-credentials.mjs"
   },
   "devDependencies": {

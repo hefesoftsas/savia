@@ -610,6 +610,53 @@ export const automationMessages = {
     "Reapply requirements without disabling the extension.",
     "Reaplica os requisitos sem desativar a extensão.",
   ],
+  "Mis plugins": ["Mis plugins", "My plugins", "Meus plugins"],
+  "Cómo funcionan los plugins del store": [
+    "Cómo funcionan los plugins del store",
+    "How store plugins work",
+    "Como funcionam os plugins da loja",
+  ],
+  "Sube un .zip con savia-extension.json (id custom.*) y dist/plugin.js compilado. Solo es visible en este espacio.":
+    [
+      "Sube un .zip con savia-extension.json (id custom.*) y dist/plugin.js compilado. Solo es visible en este espacio.",
+      "Upload a .zip with savia-extension.json (custom.* id) and compiled dist/plugin.js. It is only visible in this workspace.",
+      "Envie um .zip com savia-extension.json (id custom.*) e dist/plugin.js compilado. Ele só fica visível neste espaço.",
+    ],
+  "Subir plugin": ["Subir plugin", "Upload plugin", "Enviar plugin"],
+  "Subiendo…": ["Subiendo…", "Uploading…", "Enviando…"],
+  "Cargando plugins…": [
+    "Cargando plugins…",
+    "Loading plugins…",
+    "Carregando plugins…",
+  ],
+  "Aún no subiste plugins a este espacio.": [
+    "Aún no subiste plugins a este espacio.",
+    "No plugins uploaded to this workspace yet.",
+    "Nenhum plugin enviado para este espaço ainda.",
+  ],
+  Ver: ["Ver", "View", "Ver"],
+  Ocultar: ["Ocultar", "Hide", "Ocultar"],
+  Eliminar: ["Eliminar", "Delete", "Excluir"],
+  "Sin conexiones configuradas.": [
+    "Sin conexiones configuradas.",
+    "No connections configured.",
+    "Sem conexões configuradas.",
+  ],
+  "Ver plugin %{value0}": [
+    "Ver plugin %{value0}",
+    "View plugin %{value0}",
+    "Ver plugin %{value0}",
+  ],
+  "No se pudo actualizar el plugin. Intenta de nuevo.": [
+    "No se pudo actualizar el plugin. Intenta de nuevo.",
+    "Could not update the plugin. Try again.",
+    "Não foi possível atualizar o plugin. Tente de novo.",
+  ],
+  "Se ejecuta aislado: sin acceso a tus credenciales ni a otros espacios.": [
+    "Se ejecuta aislado: sin acceso a tus credenciales ni a otros espacios.",
+    "It runs isolated: no access to your credentials or other workspaces.",
+    "Executa isolado: sem acesso às suas credenciais ou a outros espaços.",
+  ],
   Integraciones: ["Integraciones", "Integrations", "Integrações"],
   "De API a herramienta.": [
     "De API a herramienta.",

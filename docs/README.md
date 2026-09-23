@@ -54,6 +54,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Insurance plugin coverage](insurance-plugin-coverage.md) — all 25 optional extensions, activation and provider prerequisites.
 - [Insurance operations plugins](insurance-operations.md) — optional worklists, connected operations, installation and release packaging.
 - [solution-packages.md](solution-packages.md) — installing/exporting solution packages.
+- [plugin-store.md](plugin-store.md) — per-tenant ZIP plugin uploads, sandbox and activation.
 - [legacy-api.md](legacy-api.md) — core API vs legacy API boundary.
 - [custom-result-components.md](custom-result-components.md) — custom React result components.
 - [runbooks/](runbooks/) — operational procedures (each states owner and review date).
