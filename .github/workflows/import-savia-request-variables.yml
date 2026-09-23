@@ -2,6 +2,11 @@ name: Import Savia Request variables
 
 on:
   workflow_dispatch:
+    inputs:
+      tenant:
+        description: "Tenant scope (e.g. agency:101). Empty targets the platform catalog."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -29,3 +34,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
           SAVIA_REQUEST_IMPORT_VARIABLES_JSON: ${{ secrets.SAVIA_REQUEST_IMPORT_VARIABLES_JSON }}
+          SAVIA_REQUEST_TENANT: ${{ inputs.tenant }}

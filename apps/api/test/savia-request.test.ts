@@ -21,6 +21,8 @@ const routes = [
   ["DELETE", "/api/flows/test"],
   ["POST", "/api/flows/test/duplicate"],
   ["PUT", "/api/flows/test/variables"],
+  ["DELETE", "/api/flows/test/variables/key"],
+  ["POST", "/api/flows/test/reset"],
   ["POST", "/api/flows/test/variables/reveal"],
   ["POST", "/api/flows/test/publish"],
   ["GET", "/api/flows/test/runs"],
@@ -30,6 +32,9 @@ const routes = [
   ["GET", "/api/folders"],
   ["POST", "/api/folders"],
   ["DELETE", "/api/folders"],
+  ["GET", "/api/bundles/insurance-auto-light/status"],
+  ["POST", "/api/bundles/insurance-auto-light/sync"],
+  ["GET", "/api/audit"],
 ];
 
 describe("Savia request access boundary", () => {
@@ -68,7 +73,11 @@ describe("Savia request access boundary", () => {
       expect(request.url).toBe(
         "https://savia-request.internal/api/flows/test/runs",
       );
-      expect([...request.headers.keys()]).toEqual(["content-type"]);
+      expect([...request.headers.keys()]).toEqual([
+        "content-type",
+        "x-savia-actor",
+      ]);
+      expect(request.headers.get("x-savia-actor")).toBe("test-platform-admin");
       expect(await request.json()).toEqual({
         mode: "mock",
         input: { plate: "TESTCAR" },

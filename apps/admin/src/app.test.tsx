@@ -293,11 +293,11 @@ describe("App", () => {
     services.authProvider.canAccess = vi.fn(async () => false);
     render(<App services={services} />);
     expect(
-      await screen.findByText("Acceso de administrador de plataforma"),
+      await screen.findByText("Acceso de administración"),
     ).toBeVisible();
     expect(
       await screen.findByText(/Tu cuenta no tiene acceso al editor/),
-    ).toHaveTextContent("administrador de plataforma");
+    ).toHaveTextContent("administrador de tu tenant");
     expect(screen.queryByTitle("Savia request")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Savia request" }),

@@ -1,7 +1,8 @@
 import { inputHint } from './input-hints';
 import type { Env } from './env';
 import type { Flow } from './types';
-import {getFlow,seedOnce} from './store';
+import {getFlow,listScopedFlowIds,seedOnce} from './store';
+import { scopeTenant } from './tenant';
 type Schema=Record<string,unknown>;
 function shape(value:unknown):Schema {
  if(value===null)return {type:'null'};
@@ -14,14 +15,15 @@ function inputs(flow:Flow):Schema {return {type:'object',additionalProperties:fa
  if(key.endsWith('_request_body')){try{schema={...schema,description:'Objeto JSON serializado como texto. La estructura interna se muestra en contentSchema.',contentMediaType:'application/json',contentSchema:shape(JSON.parse(value))}}catch{}}
  return [key,{...schema,...inputHint(key)}];
 }))}}
-export async function openApi(env:Env){
- await seedOnce(env);const rows=await env.DB.prepare('SELECT id FROM flows').all<{id:string}>();
+export async function openApi(env:Env,tenant=''){
+ const scope=scopeTenant(tenant);
+ await seedOnce(env);const ids=await listScopedFlowIds(env,scope);
  const paths:Record<string,unknown>={},schemas:Record<string,unknown>={
  Trace:{type:'object',properties:{name:{type:'string'},status:{type:'string'},httpStatus:{type:'integer'},durationMs:{type:'number'},responseJson:{description:'JSON original o XML convertido. Credenciales y sesiones ocultas.'},extracted:{type:'array',items:{type:'string'}},error:{type:'string'}}},
  Run:{type:'object',properties:{id:{type:'string'},flowId:{type:'string'},versionId:{type:['string','null']},mode:{type:'string',enum:['mock','live']},status:{type:'string',enum:['success','failed','running']},createdAt:{type:'string',format:'date-time'},steps:{type:'array',items:{$ref:'#/components/schemas/Trace'}},result:{type:['object','null'],additionalProperties:true,description:'Resultado del flow. Prima en COP cuando el proveedor la entrega; no todos los flows cotizan.'},error:{type:'string'}}}
  };
  const response={description:'Revisa status y responseJson: HTTP 200 no garantiza una cotización aceptada.',content:{'application/json':{schema:{$ref:'#/components/schemas/Run'}}}};
- for(const row of rows.results){const flow=await getFlow(env,row.id);if(!flow)continue;
+ for(const id of ids){const flow=await getFlow(env,id,scope);if(!flow)continue;
  const tag=flow.provider??flow.folderPath?.split('/').filter(Boolean).at(-1)??'Requests';const key='Input_'+flow.id;schemas[key]=inputs(flow);
  // Expose nested JSON structures independently too, since the execution API accepts strings.
  for(const [name,value] of Object.entries(flow.input))if(name.endsWith('_request_body'))try{schemas[key+'_'+name]=shape(JSON.parse(value))}catch{}
@@ -31,5 +33,5 @@ export async function openApi(env:Env){
 
  }
  paths['/api/lookups/dane']={get:{tags:['DANE'],operationId:'lookupDaneCity',summary:'Código DANE por ciudad',description:'Consulta de referencia oficial, sin crear cotizaciones. Si hay varios municipios devuelve opciones con departamento.',parameters:[{in:'query',name:'city',required:true,schema:{type:'string',minLength:2,maxLength:100}},{in:'query',name:'department',schema:{type:'string',maxLength:100}}],responses:{'200':{description:'Estado de coincidencia, municipios, códigos de cinco dígitos y fuente oficial.'},'502':{description:'La fuente oficial no está disponible; no se inventan códigos.'}}}};
- return {openapi:'3.1.0',info:{title:'Savia request · API',version:'0.2.0',description:'Documentación de administración de Savia request. Una operación por flow, agrupada por proveedor, con su entrada y respuesta. Los pasos internos se ejecutan juntos. Las estructuras y los ejemplos se generan del borrador guardado. El ejemplo de simulación usa esos mismos datos sin contactar al proveedor; el ejemplo real envía una llamada al proveedor.'},servers:[{url:'/v1/savia-request'}],tags:[...new Set(Object.values(paths).map((item:any)=>(item.post??item.get).tags[0] as string))].sort().map(name=>({name,description:name==='Sura'?'Consulta de vehículo por placa. Envía la placa en input.':undefined})),paths,components:{schemas}};
+ return {openapi:'3.1.0',info:{title:'Savia request · API',version:'0.3.0',description:'Documentación de administración de Savia request. Una operación por flow, agrupada por proveedor, con su entrada y respuesta. Los pasos internos se ejecutan juntos. Las estructuras y los ejemplos se generan del borrador guardado. El ejemplo de simulación usa esos mismos datos sin contactar al proveedor; el ejemplo real envía una llamada al proveedor.'},servers:[{url:'/v1/savia-request'}],tags:[...new Set(Object.values(paths).map((item:any)=>(item.post??item.get).tags[0] as string))].sort().map(name=>({name,description:name==='Sura'?'Consulta de vehículo por placa. Envía la placa en input.':undefined})),paths,components:{schemas}};
 }

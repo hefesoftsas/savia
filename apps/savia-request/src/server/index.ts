@@ -1,22 +1,57 @@
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { HTTPException } from "hono/http-exception";
-import { dialectFor } from "@savia/db/dialect";
 import { lookupDaneCity } from "./dane";
 import { openApi } from "./openapi";
 import { Hono } from "hono";
 import type { Env } from "./env";
 import type { Flow, Variable } from "./types";
 import {
+  bundleStatus,
+  createFolder,
+  deleteFlow,
+  deleteFolder,
+  duplicateFlow,
   ensureInsuranceAutoLightBundle,
+  folderExists,
   getFlow,
+  getRun,
   getVariables,
+  getVersionDefinition,
   importVariables,
+  listAuditEvents,
+  listFolders,
+  listRuns,
+  listScopedFlowIds,
+  listScopedFlows,
+  listVersions,
+  publishFlow,
+  purgeTenant,
+  recordAudit,
+  resetFlow,
+  resetVariable,
+  resolveVersion,
+  saveFlow,
   saveVariables,
   seedOnce,
+  syncInsuranceAutoLightBundle,
 } from "./store";
+import { isPlatformTenant, scopeTenant } from "./tenant";
 import { execute } from "./runner";
 import { demoInput } from "./mock";
 const app = new Hono<{ Bindings: Env }>();
+function scopeOf(request: Request): string {
+  const header = request.headers.get("x-savia-tenant");
+  if (header !== null) return scopeTenant(header);
+  try {
+    return scopeTenant(new URL(request.url).searchParams.get("tenant"));
+  } catch {
+    return scopeTenant("");
+  }
+}
+/** Principal id forwarded by the API gateway for attribution, if any. */
+function actorOf(request: Request): string {
+  return (request.headers.get("x-savia-actor") ?? "").slice(0, 200);
+}
 app.use("*", async (c, next) => {
   if (new URL(c.req.url).hostname !== "savia-request.internal")
     return c.json({ error: "Acceso privado." }, 403);
@@ -25,6 +60,11 @@ app.use("*", async (c, next) => {
     !c.req.header("content-type")?.startsWith("application/json")
   )
     return c.json({ error: "Usa application/json." }, 415);
+  try {
+    scopeOf(c.req.raw);
+  } catch {
+    return c.json({ error: "Tenant inválido." }, 400);
+  }
   c.header("Cache-Control", "no-store");
   await next();
 });
@@ -55,44 +95,109 @@ app.get("/api/lookups/dane", async (c) => {
   }
 });
 app.get("/api/health", (c) => c.json({ ok: true, local: true }));
-app.post("/api/bundles/insurance-auto-light/ensure", async (c) =>
-  c.json(await ensureInsuranceAutoLightBundle(c.env)),
+app.post("/api/bundles/insurance-auto-light/ensure", async (c) => {
+  const scope = scopeOf(c.req.raw);
+  const installed = await ensureInsuranceAutoLightBundle(c.env, scope);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "bundle.ensure",
+    detail: { bundle: installed.id, version: installed.version },
+  });
+  return c.json(installed);
+});
+app.get("/api/bundles/insurance-auto-light/status", async (c) =>
+  c.json(await bundleStatus(c.env, scopeOf(c.req.raw))),
 );
-app.get("/api/flows", async (c) => {
-  await seedOnce(c.env);
-  const dialect = dialectFor(c.env.DB);
-  const visible = dialect.jsonCompare("definition", "$.deleted", "eq", 0);
-  const absent = dialect.jsonCompare("definition", "$.deleted", "eq", null);
-  const rows = await c.env.DB.prepare(
-    `SELECT id,definition FROM flows WHERE (${visible.sql}) OR (${absent.sql}) ORDER BY id`,
+app.post("/api/bundles/insurance-auto-light/sync", async (c) => {
+  const scope = scopeOf(c.req.raw);
+  const body = await c.req.json().catch(() => ({}));
+  const flowIds = body?.flowIds;
+  const force = body?.force;
+  if (
+    (flowIds !== undefined &&
+      (!Array.isArray(flowIds) ||
+        flowIds.length > 200 ||
+        flowIds.some(
+          (id: unknown) => typeof id !== "string" || !id || id.length > 120,
+        ))) ||
+    (force !== undefined && typeof force !== "boolean")
   )
-    .bind(...visible.parameters, ...absent.parameters)
-    .all<{ id: string; definition: string }>();
+    return c.json({ error: "Parámetros de sincronización inválidos." }, 400);
+  const result = await syncInsuranceAutoLightBundle(c.env, scope, {
+    ...(flowIds === undefined ? {} : { flowIds }),
+    ...(force === undefined ? {} : { force }),
+  });
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "bundle.sync",
+    detail: {
+      version: result.version,
+      updated: result.updated.length,
+      installed: result.installed.length,
+      skipped: result.skippedCustomized.length,
+    },
+  });
+  return c.json(result);
+});
+/**
+ * Tenant lifecycle: removes every overlay row (flows, variables including
+ * sealed secrets, versions, runs, folders, bundle markers) so a deleted
+ * tenant leaves nothing behind. The platform catalog ("") is refused.
+ * Reachable by platform admins through the API proxy; a scoped caller may
+ * only purge its own scope.
+ */
+app.delete("/api/admin/tenants/:tenant", async (c) => {
+  let scope: string;
+  try {
+    scope = scopeTenant(c.req.param("tenant"));
+  } catch {
+    return c.json({ error: "Tenant inválido." }, 400);
+  }
+  if (!scope) return c.json({ error: "Tenant inválido." }, 400);
+  const caller = scopeOf(c.req.raw);
+  if (caller && caller !== scope)
+    return c.json({ error: "Acceso privado." }, 403);
+  try {
+    const purged = await purgeTenant(c.env, scope);
+    await recordAudit(c.env, {
+      tenant: scope,
+      actor: actorOf(c.req.raw),
+      action: "tenant.purge",
+      detail: { purged },
+    });
+    return c.json({ tenant: scope, purged });
+  } catch {
+    return c.json(
+      { error: "El catálogo de plataforma no se puede purgar." },
+      400,
+    );
+  }
+});
+app.get("/api/flows", async (c) => {
+  const scope = scopeOf(c.req.raw);
+  await seedOnce(c.env);
+  const flows = await listScopedFlows(c.env, scope);
   return c.json(
-    await Promise.all(
-      rows.results.map(async (row) => {
-        const flow = await getFlow(c.env, row.id);
-        return {
-          id: row.id,
-          name: flow!.name,
-          folderPath: flow!.folderPath,
-          steps: flow!.steps.map((s) => ({
-            id: s.id,
-            name: s.name,
-            method: s.method,
-          })),
-        };
-      }),
-    ),
+    flows.map((flow) => ({
+      id: flow.id,
+      name: flow.name,
+      folderPath: flow.folderPath,
+      customized: flow.customized ?? false,
+      steps: flow.steps.map((s) => ({
+        id: s.id,
+        name: s.name,
+        method: s.method,
+      })),
+    })),
   );
 });
 app.get("/api/folders", async (c) => {
-  const rows = await c.env.DB.prepare(
-    "SELECT path FROM folders ORDER BY path",
-  ).all<{ path: string }>();
-  return c.json(rows.results.map((r) => r.path));
+  return c.json(await listFolders(c.env, scopeOf(c.req.raw)));
 });
 app.post("/api/folders", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const { path } = await c.req.json();
   if (typeof path !== "string")
     return c.json({ error: "Nombre de carpeta inválido." }, 400);
@@ -107,33 +212,24 @@ app.post("/api/folders", async (c) => {
       400,
     );
   const normalized = parts.join("/");
-  const existing = await c.env.DB.prepare(
-    "SELECT path FROM folders WHERE path=?",
-  )
-    .bind(normalized)
-    .first();
-  if (existing)
+  if (await folderExists(c.env, normalized, scope))
     return c.json({ error: "Ya existe una carpeta en esa ubicación." }, 409);
-  await c.env.DB.batch(
-    parts.map((_, index) =>
-      c.env.DB.prepare(
-        dialectFor(c.env.DB).name === "postgres"
-          ? "INSERT INTO folders(path) VALUES(?) ON CONFLICT (path) DO NOTHING"
-          : "INSERT OR IGNORE INTO folders(path) VALUES(?)",
-      ).bind(parts.slice(0, index + 1).join("/")),
-    ),
-  );
+  await createFolder(c.env, normalized, scope);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "folder.create",
+    detail: { path: normalized },
+  });
   return c.json({ path: normalized }, 201);
 });
 app.delete("/api/folders", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const { path } = await c.req.json();
   if (typeof path !== "string" || !path.trim())
     return c.json({ error: "Carpeta inválida." }, 400);
-  const rows = await c.env.DB.prepare("SELECT id FROM flows").all<{
-    id: string;
-  }>();
-  for (const row of rows.results) {
-    const flow = await getFlow(c.env, row.id);
+  for (const id of await listScopedFlowIds(c.env, scope)) {
+    const flow = await getFlow(c.env, id, scope);
     if (flow?.folderPath === path || flow?.folderPath?.startsWith(path + "/"))
       return c.json(
         {
@@ -143,67 +239,65 @@ app.delete("/api/folders", async (c) => {
         409,
       );
   }
-  await c.env.DB.prepare(
-    "DELETE FROM folders WHERE path=? OR substr(path,1,length(?)+1)=?",
-  )
-    .bind(path, path, path + "/")
-    .run();
+  await deleteFolder(c.env, path, scope);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "folder.delete",
+    detail: { path },
+  });
   return c.json({ ok: true });
 });
 app.post("/api/flows/:id/duplicate", async (c) => {
-  const source = await getFlow(c.env, c.req.param("id"));
-  if (!source) return c.json({ error: "Request no encontrado." }, 404);
-  const id = "request-" + crypto.randomUUID();
-  const copy = {
-    ...source,
-    id,
-    name: source.name + " (copia)",
-    steps: source.steps.map((step) => ({ ...step, id: crypto.randomUUID() })),
-  };
-  await c.env.DB.batch([
-    c.env.DB.prepare("INSERT INTO flows(id,definition) VALUES(?,?)").bind(
-      id,
-      JSON.stringify(copy),
-    ),
-    c.env.DB.prepare(
-      "INSERT INTO flow_variables(flow_id,key,value,secret) SELECT ?,key,value,secret FROM flow_variables WHERE flow_id=?",
-    ).bind(id, source.id),
-  ]);
-  return c.json({ id, name: copy.name }, 201);
+  const scope = scopeOf(c.req.raw);
+  const duplicated = await duplicateFlow(c.env, c.req.param("id"), scope);
+  if (!duplicated) return c.json({ error: "Request no encontrado." }, 404);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "flow.duplicate",
+    flowId: duplicated.id,
+    detail: { source: c.req.param("id") },
+  });
+  return c.json(duplicated, 201);
 });
 app.delete("/api/flows/:id", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const id = c.req.param("id");
-  const flow = await getFlow(c.env, id);
-  if (!flow) return c.json({ error: "Request no encontrado." }, 404);
-  await c.env.DB.prepare(
-    dialectFor(c.env.DB).name === "postgres"
-      ? "UPDATE flows SET definition=jsonb_set(definition::jsonb,'{deleted}','true'::jsonb)::text WHERE id=?"
-      : "UPDATE flows SET definition=json_set(definition,'$.deleted',json('true')) WHERE id=?",
-  )
-    .bind(id)
-    .run();
+  if (!(await deleteFlow(c.env, id, scope)))
+    return c.json({ error: "Request no encontrado." }, 404);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "flow.delete",
+    flowId: id,
+  });
   return c.json({ ok: true });
 });
 app.post("/api/flows/:id/variables/reveal", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const { key } = await c.req.json();
-  const rows = await getVariables(c.env, c.req.param("id"), true);
+  const rows = await getVariables(c.env, c.req.param("id"), true, scope);
   const variable = rows.find((v) => v.key === key);
   if (!variable) return c.json({ error: "Variable no encontrada." }, 404);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "variable.reveal",
+    flowId: c.req.param("id"),
+    detail: { key },
+  });
   return c.json({ value: variable.value });
 });
 app.get("/api/demo-input", (c) => c.json(demoInput));
 app.get("/api/flows/:id", async (c) => {
-  const flow = await getFlow(c.env, c.req.param("id"));
+  const scope = scopeOf(c.req.raw);
+  const flow = await getFlow(c.env, c.req.param("id"), scope);
   if (!flow) return c.json({ error: "Flow no encontrado." }, 404);
-  const versions = await c.env.DB.prepare(
-    "SELECT id,created_at FROM flow_versions WHERE flow_id=? ORDER BY created_at DESC",
-  )
-    .bind(flow.id)
-    .all();
   return c.json({
     ...flow,
-    variables: await getVariables(c.env, flow.id),
-    versions: versions.results,
+    variables: await getVariables(c.env, flow.id, false, scope),
+    versions: await listVersions(c.env, flow.id, scope),
   });
 });
 function validateFlow(value: Flow) {
@@ -231,30 +325,22 @@ function validateFlow(value: Flow) {
   }
 }
 app.put("/api/flows/:id", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const flow = await c.req.json<Flow>();
   flow.id = c.req.param("id");
   validateFlow(flow);
-  const definition = {
-    id: flow.id,
-    name: flow.name,
-    description: flow.description,
-    steps: flow.steps,
-    input: flow.input,
-    variables: [],
-    provider: flow.provider,
-    kind: flow.kind,
-    resultPrefix: flow.resultPrefix,
-    allowedOrigins: flow.allowedOrigins,
-    folderPath: flow.folderPath,
-  };
-  await c.env.DB.prepare(
-    "INSERT INTO flows(id,definition) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET definition=excluded.definition",
-  )
-    .bind(flow.id, JSON.stringify(definition))
-    .run();
+  await saveFlow(c.env, flow, scope);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "flow.save",
+    flowId: flow.id,
+    detail: { name: flow.name },
+  });
   return c.json({ ok: true });
 });
 app.put("/api/flows/:id/variables", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const rows = await c.req.json<Variable[]>();
   if (
     !Array.isArray(rows) ||
@@ -269,28 +355,79 @@ app.put("/api/flows/:id/variables", async (c) => {
     new Set(rows.map((v) => v.key)).size !== rows.length
   )
     return c.json({ error: "Variables inválidas o claves duplicadas." }, 400);
-  const flow = await getFlow(c.env, c.req.param("id"));
+  const flow = await getFlow(c.env, c.req.param("id"), scope);
   if (!flow) return c.json({ error: "Flow no encontrado." }, 404);
-  await saveVariables(c.env, flow.id, rows);
+  await saveVariables(c.env, flow.id, rows, scope);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "variables.save",
+    flowId: flow.id,
+    detail: { keys: rows.length },
+  });
   return c.json({ ok: true });
+});
+/**
+ * Reverts one tenant customization back to the platform catalog.
+ * Flow reset removes its definition and variable overlays (tenant-only
+ * flows disappear; versions and runs are kept as history). Variable reset
+ * removes a single override so the platform default applies again.
+ */
+app.post("/api/flows/:id/reset", async (c) => {
+  const scope = scopeOf(c.req.raw);
+  if (isPlatformTenant(scope))
+    return c.json(
+      { error: "El restablecido solo aplica a scopes de tenant." },
+      400,
+    );
+  const status = await resetFlow(c.env, c.req.param("id"), scope);
+  if (status === "unknown-flow")
+    return c.json({ error: "Flow no encontrado." }, 404);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "flow.reset",
+    flowId: c.req.param("id"),
+    detail: { reverted: status === "reverted" },
+  });
+  return c.json({ ok: true, reverted: status === "reverted" });
+});
+app.delete("/api/flows/:id/variables/:key", async (c) => {
+  const scope = scopeOf(c.req.raw);
+  if (isPlatformTenant(scope))
+    return c.json(
+      { error: "El restablecido solo aplica a scopes de tenant." },
+      400,
+    );
+  const status = await resetVariable(
+    c.env,
+    c.req.param("id"),
+    c.req.param("key"),
+    scope,
+  );
+  if (status === "unknown-flow")
+    return c.json({ error: "Flow no encontrado." }, 404);
+  if (status === "unknown-key")
+    return c.json({ error: "Variable no encontrada." }, 404);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "variable.reset",
+    flowId: c.req.param("id"),
+    detail: { key: c.req.param("key"), reverted: status === "reverted" },
+  });
+  return c.json({ ok: true, reverted: status === "reverted" });
 });
 /** Single-request bulk transfer so moving secrets between environments is fast. */
 app.get("/api/variables/export", async (c) => {
+  const scope = scopeOf(c.req.raw);
   await seedOnce(c.env);
-  const dialect = dialectFor(c.env.DB);
-  const visible = dialect.jsonCompare("definition", "$.deleted", "eq", 0);
-  const absent = dialect.jsonCompare("definition", "$.deleted", "eq", null);
-  const rows = await c.env.DB.prepare(
-    `SELECT id FROM flows WHERE (${visible.sql}) OR (${absent.sql}) ORDER BY id`,
-  )
-    .bind(...visible.parameters, ...absent.parameters)
-    .all<{ id: string }>();
   const flows = [];
-  for (const row of rows.results) {
-    const variables = await getVariables(c.env, row.id, true);
+  for (const flow of await listScopedFlows(c.env, scope)) {
+    const variables = await getVariables(c.env, flow.id, true, scope);
     if (variables.length)
       flows.push({
-        flowId: row.id,
+        flowId: flow.id,
         variables: variables
           .map((variable) => ({
             key: variable.key,
@@ -303,10 +440,12 @@ app.get("/api/variables/export", async (c) => {
   return c.json({
     version: 1,
     exportedAt: new Date().toISOString(),
+    tenant: scope,
     flows,
   });
 });
 app.post("/api/variables/import", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const body = await c.req.json();
   const incoming = Array.isArray(body) ? body : body?.flows;
   if (!Array.isArray(incoming) || !incoming.length || incoming.length > 200)
@@ -345,7 +484,7 @@ app.post("/api/variables/import", async (c) => {
   }
   const results = [];
   for (const flow of parsed) {
-    if (!(await getFlow(c.env, flow.flowId))) {
+    if (!(await getFlow(c.env, flow.flowId, scope))) {
       results.push({
         flowId: flow.flowId,
         applied: 0,
@@ -358,6 +497,7 @@ app.post("/api/variables/import", async (c) => {
       c.env,
       flow.flowId,
       flow.variables,
+      scope,
     );
     results.push({
       flowId: flow.flowId,
@@ -366,21 +506,50 @@ app.post("/api/variables/import", async (c) => {
       status: applied ? "updated" : "unchanged",
     });
   }
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "variables.import",
+    detail: {
+      flows: results.length,
+      applied: results.reduce((total, result) => total + result.applied, 0),
+      skipped: results.reduce((total, result) => total + result.skipped, 0),
+    },
+  });
   return c.json({ results });
 });
 app.post("/api/flows/:id/publish", async (c) => {
-  const flow = await getFlow(c.env, c.req.param("id"));
-  if (!flow) return c.json({ error: "Flow no encontrado." }, 404);
-  const id = crypto.randomUUID();
-  await c.env.DB.prepare(
-    "INSERT INTO flow_versions(id,flow_id,definition,created_at) VALUES(?,?,?,?)",
-  )
-    .bind(id, flow.id, JSON.stringify(flow), new Date().toISOString())
-    .run();
-  return c.json({ id });
+  const scope = scopeOf(c.req.raw);
+  const published = await publishFlow(c.env, c.req.param("id"), scope);
+  if (!published) return c.json({ error: "Flow no encontrado." }, 404);
+  await recordAudit(c.env, {
+    tenant: scope,
+    actor: actorOf(c.req.raw),
+    action: "flow.publish",
+    flowId: c.req.param("id"),
+    detail: { version: published.id },
+  });
+  return c.json({ id: published.id });
+});
+/**
+ * Audit trail for the caller's scope: who changed or revealed what, newest
+ * first. Keyset pagination via `cursor` (opaque, from `nextCursor`).
+ */
+app.get("/api/audit", async (c) => {
+  const scope = scopeOf(c.req.raw);
+  const limit = Number(c.req.query("limit") ?? 50);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
+    return c.json({ error: "Límite inválido." }, 400);
+  return c.json(
+    await listAuditEvents(c.env, scope, {
+      limit,
+      cursor: c.req.query("cursor") ?? undefined,
+    }),
+  );
 });
 app.post("/api/flows/:id/runs", async (c) => {
-  const flow = await getFlow(c.env, c.req.param("id"));
+  const scope = scopeOf(c.req.raw);
+  const flow = await getFlow(c.env, c.req.param("id"), scope);
   if (!flow) return c.json({ error: "Flow no encontrado." }, 404);
   const body = await c.req.json();
   if (
@@ -391,61 +560,58 @@ app.post("/api/flows/:id/runs", async (c) => {
     Object.values(body.input).some((v) => typeof v !== "string")
   )
     return c.json({ error: "Envía mode e input con valores de texto." }, 400);
-  return c.json(await execute(c.env, flow, body.input, body.mode, null));
+  return c.json(await execute(c.env, flow, body.input, body.mode, null, scope));
 });
 app.get("/api/flows/:id/runs", async (c) => {
-  const rows = await c.env.DB.prepare(
-    "SELECT summary FROM flow_runs WHERE flow_id=? ORDER BY created_at DESC LIMIT 20",
-  )
-    .bind(c.req.param("id"))
-    .all<{ summary: string }>();
-  return c.json(rows.results.map((row) => JSON.parse(row.summary)));
+  const scope = scopeOf(c.req.raw);
+  return c.json(await listRuns(c.env, c.req.param("id"), scope));
 });
 // Read-only result access for the authenticated normalization layer.
 app.get("/api/flows/:id/versions/:versionId", async (c) => {
-  const row = await c.env.DB.prepare(
-    "SELECT definition FROM flow_versions WHERE flow_id=? AND id=?",
-  )
-    .bind(c.req.param("id"), c.req.param("versionId"))
-    .first<{ definition: string }>();
-  if (!row) return c.json({ error: "Versión no encontrada." }, 404);
-  return c.json(JSON.parse(row.definition));
+  const scope = scopeOf(c.req.raw);
+  const definition = await getVersionDefinition(
+    c.env,
+    c.req.param("id"),
+    c.req.param("versionId"),
+    scope,
+  );
+  if (!definition) return c.json({ error: "Versión no encontrada." }, 404);
+  return c.json(JSON.parse(definition));
 });
 app.get("/api/flows/:id/runs/:runId", async (c) => {
-  const row = await c.env.DB.prepare(
-    "SELECT summary,version_id FROM flow_runs WHERE flow_id=? AND id=?",
-  )
-    .bind(c.req.param("id"), c.req.param("runId"))
-    .first<{ summary: string; version_id: string | null }>();
+  const scope = scopeOf(c.req.raw);
+  const row = await getRun(
+    c.env,
+    c.req.param("id"),
+    c.req.param("runId"),
+    scope,
+  );
   if (!row) return c.json({ error: "Ejecución no encontrada." }, 404);
-  const flow = row.version_id
-    ? await c.env.DB.prepare(
-        "SELECT definition FROM flow_versions WHERE flow_id=? AND id=?",
+  const definition = row.version_id
+    ? await getVersionDefinition(
+        c.env,
+        c.req.param("id"),
+        row.version_id,
+        scope,
       )
-        .bind(c.req.param("id"), row.version_id)
-        .first<{ definition: string }>()
-    : await c.env.DB.prepare("SELECT definition FROM flows WHERE id=?")
-        .bind(c.req.param("id"))
-        .first<{ definition: string }>();
-  if (!flow) return c.json({ error: "Definición no encontrada." }, 404);
+    : (await getFlow(c.env, c.req.param("id"), scope))
+      ? JSON.stringify(await getFlow(c.env, c.req.param("id"), scope))
+      : null;
+  if (!definition) return c.json({ error: "Definición no encontrada." }, 404);
   return c.json({
     run: JSON.parse(row.summary),
-    flow: JSON.parse(flow.definition),
+    flow: JSON.parse(definition),
   });
 });
 app.post("/v1/flows/:id/runs", async (c) => {
+  const scope = scopeOf(c.req.raw);
   const body = await c.req.json();
-  const version = body.versionId
-    ? await c.env.DB.prepare(
-        "SELECT id,definition FROM flow_versions WHERE id=? AND flow_id=?",
-      )
-        .bind(body.versionId, c.req.param("id"))
-        .first<{ id: string; definition: string }>()
-    : await c.env.DB.prepare(
-        "SELECT id,definition FROM flow_versions WHERE flow_id=? ORDER BY created_at DESC LIMIT 1",
-      )
-        .bind(c.req.param("id"))
-        .first<{ id: string; definition: string }>();
+  const version = await resolveVersion(
+    c.env,
+    c.req.param("id"),
+    body.versionId,
+    scope,
+  );
   if (!version) return c.json({ error: "Publica una versión primero." }, 409);
   if (
     !["mock", "live"].includes(body.mode) ||
@@ -462,10 +628,13 @@ app.post("/v1/flows/:id/runs", async (c) => {
       body.input,
       body.mode,
       version.id,
+      scope,
     ),
   );
 });
-app.get("/api/openapi.json", async (c) => c.json(await openApi(c.env)));
+app.get("/api/openapi.json", async (c) =>
+  c.json(await openApi(c.env, scopeOf(c.req.raw))),
+);
 
 app.onError((error, c) => {
   if (databaseConflict(error))

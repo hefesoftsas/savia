@@ -74,7 +74,11 @@ export function createReactAdminAuthProvider(
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"]) ||
           Boolean(await options?.canAccessCrm?.())
         );
-      if (resource === "savia-request") return isPlatformAdmin;
+      if (resource === "savia-request")
+        return (
+          isPlatformAdmin ||
+          hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
+        );
       if (resource === "users" || resource === "tenants")
         return isPlatformAdmin;
       if (resource === "crm-connections") {

@@ -9,6 +9,9 @@ function fixture() {
   db.exec(
     "CREATE TABLE flows(id TEXT PRIMARY KEY,definition TEXT); INSERT INTO flows VALUES('quote','{}'); CREATE TABLE flow_variables(flow_id TEXT,key TEXT,value TEXT,secret INTEGER,PRIMARY KEY(flow_id,key)); INSERT INTO flow_variables VALUES('quote','existing','production-value',1),('quote','empty','',1)",
   );
+  db.exec(
+    "CREATE TABLE tenant_flows(tenant_id TEXT,flow_id TEXT,definition TEXT,updated_at TEXT,PRIMARY KEY(tenant_id,flow_id)); CREATE TABLE tenant_flow_variables(tenant_id TEXT,flow_id TEXT,key TEXT,value TEXT,secret INTEGER,updated_at TEXT,PRIMARY KEY(tenant_id,flow_id,key))",
+  );
   const query = async (sql, params = []) => db.prepare(sql).all(...params);
   return { db, query };
 }
@@ -108,6 +111,84 @@ test("rejects missing flows and invalid input before any write", async () => {
     assert.equal(
       db.prepare("SELECT count(*) AS n FROM flow_variables").get().n,
       2,
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test("imports tenant overlays without touching the platform catalog", async () => {
+  const { db, query } = fixture();
+  try {
+    assert.deepEqual(
+      await importVariables({
+        query,
+        flows,
+        encryptionKey,
+        tenant: "agency:101",
+      }),
+      { flows: 1, imported: 3, preserved: 0, tenant: "agency:101" },
+    );
+    // Globals untouched.
+    assert.equal(
+      db.prepare("SELECT count(*) AS n FROM flow_variables").get().n,
+      2,
+    );
+    assert.equal(
+      db.prepare("SELECT value FROM flow_variables WHERE key='empty'").get()
+        .value,
+      "",
+    );
+    // Overlay rows sealed when secret.
+    const token = db
+      .prepare(
+        "SELECT value,secret,updated_at FROM tenant_flow_variables WHERE tenant_id='agency:101' AND key='existing'",
+      )
+      .get();
+    assert.equal(token.secret, 1);
+    assert.match(token.value, /^[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/);
+    assert.ok(token.updated_at);
+    // Rerun preserves everything.
+    assert.deepEqual(
+      await importVariables({
+        query,
+        flows,
+        encryptionKey,
+        tenant: "agency:101",
+      }),
+      { flows: 1, imported: 0, preserved: 3, tenant: "agency:101" },
+    );
+    // Other tenants isolated.
+    assert.equal(
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM tenant_flow_variables WHERE tenant_id='agency:202'",
+        )
+        .get().n,
+      0,
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test("rejects invalid tenants and tombstoned flows before any write", async () => {
+  const { db, query } = fixture();
+  try {
+    db.exec(
+      "INSERT INTO tenant_flows VALUES('agency:101','quote','{\"deleted\":true}','2026-01-01T00:00:00.000Z')",
+    );
+    await assert.rejects(
+      importVariables({ query, flows, encryptionKey, tenant: "agency:101" }),
+      /Missing flow/,
+    );
+    await assert.rejects(
+      importVariables({ query, flows, encryptionKey, tenant: "agency/../x" }),
+      /Invalid tenant/,
+    );
+    assert.equal(
+      db.prepare("SELECT count(*) AS n FROM tenant_flow_variables").get().n,
+      0,
     );
   } finally {
     db.close();
