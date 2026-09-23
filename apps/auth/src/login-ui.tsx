@@ -71,9 +71,24 @@ function Shell({
               data-oauth-login-animation-frame
               data-src="/login/savia-logo.json"
             />
-            <p className="oauth-login-animation-wordmark" aria-label="Savia">
+            <div
+              className="oauth-login-animation-robot"
+              data-oauth-login-robot
+              aria-hidden="true"
+            >
+              <div
+                className="oauth-login-animation-robot-frame"
+                data-oauth-login-robot-frame
+                data-src="/login/savia-chatbot-hover.json"
+              />
+            </div>
+            <p
+              className="oauth-login-animation-wordmark"
+              data-oauth-login-wordmark
+              aria-label="Savia"
+            >
               <span>sav</span>
-              <span>ia</span>
+              <span data-oauth-login-wordmark-ai>ia</span>
             </p>
           </div>
         ) : (

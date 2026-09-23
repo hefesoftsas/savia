@@ -39,6 +39,11 @@ once and pauses while the tab is hidden. Visitors who prefer reduced motion see 
 completed frame. A tenant's configured login cover image takes precedence; tenant
 title, welcome text, logo and colors remain unchanged.
 
+Pointer hover briefly pulses the emblem and animates the `ia` in the wordmark. Holding
+the pointer over the emblem or wordmark for three seconds reveals a second Lottie
+animation of Savia's robot greeting the visitor. Leaving before the delay cancels the
+greeting. Touch and reduced-motion visitors do not trigger the hover animations.
+
 Inside the application, a shared provider reads the public identity for the current
 host and applies its display name, logo and primary colors. Theme mode remains a
 personal preference. The personal palette selector is hidden when the tenant controls
