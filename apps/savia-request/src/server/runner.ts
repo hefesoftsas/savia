@@ -1,7 +1,8 @@
 import {lookupDaneCity} from './dane';
 import type { Env } from './env';
 import type { Flow, Run, Trace } from './types';
-import { getVariables } from './store';
+import { createRun, getVariables, persistRun } from './store';
+import { scopeTenant } from './tenant';
 import { hook } from './hooks';
 import { responsePreview } from './response-preview';
 const insuranceAutoLightFolder='06-Cotizaciones/Autos-livianos/';
@@ -28,10 +29,11 @@ function requestBody(template:string,values:Record<string,string>,type:string){
  }
  return interpolate(template,values);
 }
-export async function execute(env:Env,flow:Flow,input:Record<string,string>,mode:'mock'|'live',versionId:string|null){
+export async function execute(env:Env,flow:Flow,input:Record<string,string>,mode:'mock'|'live',versionId:string|null,tenant=''){
+ const scope=scopeTenant(tenant);
  const run:Run={id:crypto.randomUUID(),flowId:flow.id,mode,versionId,status:'running',createdAt:new Date().toISOString(),steps:[],result:null};
- await env.DB.prepare('INSERT INTO flow_runs(id,flow_id,version_id,mode,status,created_at,summary) VALUES(?,?,?,?,?,?,?)').bind(run.id,flow.id,versionId,mode,run.status,run.createdAt,JSON.stringify(run)).run();
- const start=Date.now();const persist=()=>env.DB.prepare('UPDATE flow_runs SET status=?,summary=? WHERE id=?').bind(run.status,JSON.stringify(run),run.id).run();
+ await createRun(env,run,scope);
+ const start=Date.now();const persist=()=>persistRun(env,run,scope);
  try {
   if(flow.id==='dane-city-lookup'){
    if(mode!=='live')throw new Error('La consulta DANE usa el catálogo oficial. Selecciona modo live; es una consulta de solo lectura.');
@@ -40,7 +42,7 @@ export async function execute(env:Env,flow:Flow,input:Record<string,string>,mode
    await persist();return run;
   }
   const mockProviderQuote=mode==='mock'&&isInsuranceAutoLightQuote(flow);
-  const vars=await getVariables(env,flow.id,true);const values:Record<string,string>=Object.create(null);const secretKeys=new Set(vars.filter(v=>v.secret).map(v=>v.key));
+  const vars=await getVariables(env,flow.id,true,scope);const values:Record<string,string>=Object.create(null);const secretKeys=new Set(vars.filter(v=>v.secret).map(v=>v.key));
   // The SBS simulator accepts placeholder product settings; they are never persisted or used live.
   for(const v of vars)values[v.key]=mode==='mock'&&v.secret?'SIMULADO':mode==='mock'&&/^sbs-producto-(8|10|11)$/.test(flow.id)&&/^sbs_product_\d+_/.test(v.key)&&v.value===''?'0':v.value;
   for(const [key,value]of Object.entries(input)){
