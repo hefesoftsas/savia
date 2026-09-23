@@ -60,7 +60,10 @@ describe("tenant data provider", () => {
       agencyId: null,
       kind: "platform" as const,
     };
-    client.get.mockResolvedValue({ data: [platform, tenant], meta: { total: 2 } });
+    client.get.mockResolvedValue({
+      data: [platform, tenant],
+      meta: { total: 2 },
+    });
 
     await expect(
       provider.getList("tenants", {
@@ -98,6 +101,33 @@ describe("tenant data provider", () => {
         lastName: "Administradora",
         role: "tenant_admin",
       },
+    });
+  });
+
+  it("creates tenants by transferring an existing user without auth-service fields", async () => {
+    const { client, provider } = setup();
+    client.post.mockResolvedValue({ data: tenant });
+    await expect(
+      provider.create("tenants", {
+        data: {
+          name: tenant.name,
+          isActive: true,
+          idSlug: "",
+          memberMode: "existing",
+          existingUserId: "principal-one",
+          existingRole: "operator",
+          initialUser: {
+            email: "ignored@comunidad.test",
+            firstName: "Ignored",
+            lastName: "User",
+          },
+        },
+      }),
+    ).resolves.toEqual({ data: tenant });
+    expect(client.post).toHaveBeenCalledWith("/v1/tenants", {
+      name: tenant.name,
+      isActive: true,
+      existingMember: { principalId: "principal-one", role: "operator" },
     });
   });
 

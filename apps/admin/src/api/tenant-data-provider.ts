@@ -20,6 +20,11 @@ type InitialUser = {
   temporaryPassword?: string;
 };
 
+type ExistingMember = {
+  principalId: string;
+  role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
+};
+
 export function createTenantDataProvider(
   client: ApiClient,
 ): Pick<
@@ -34,20 +39,41 @@ export function createTenantDataProvider(
       return { data: params.previousData as never };
     },
     async create(_resource, params) {
-      const { name, idSlug, isActive, initialUser } = params.data as {
+      const {
+        name,
+        idSlug,
+        isActive,
+        memberMode,
+        existingUserId,
+        existingRole,
+        initialUser,
+      } = params.data as {
         name: string;
         idSlug?: string;
         isActive?: boolean;
+        memberMode?: "new" | "existing";
+        existingUserId?: string;
+        existingRole?: ExistingMember["role"];
         initialUser: Omit<InitialUser, "role">;
       };
       const response = await client.post<{ data: TenantRecord }>(
         "/v1/tenants",
-        {
-          name,
-          ...(idSlug ? { idSlug } : {}),
-          isActive,
-          initialUser: { ...initialUser, role: "tenant_admin" },
-        },
+        memberMode === "existing" && existingUserId
+          ? {
+              name,
+              ...(idSlug ? { idSlug } : {}),
+              isActive,
+              existingMember: {
+                principalId: String(existingUserId),
+                role: existingRole ?? "tenant_admin",
+              },
+            }
+          : {
+              name,
+              ...(idSlug ? { idSlug } : {}),
+              isActive,
+              initialUser: { ...initialUser, role: "tenant_admin" },
+            },
       );
       return { data: response.data as never };
     },

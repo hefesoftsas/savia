@@ -8,6 +8,8 @@ Open **Roles and permissions** in the administration navigation. Select the work
 
 Platform administrators can manage platform, independent-domain and commercial-tenant roles. Agency administrators can manage business roles only in their own active tenant. Custom role assignments do not create additional tenant memberships or grant global identity administration. Built-in roles are protected and preserve existing access.
 
+Creating a tenant accepts either a new first administrator or an existing user. Membership is unique per user, so selecting an existing user transfers them out of their current organization instead of sharing the account. The transfer is rejected for the last active member of their organization and for platform administrators; revoke the global role first through user management.
+
 Deleting a tenant removes its built-in and custom roles, cascading to grants and assignments. Audit events and the incremented policy revision remain. Recreating the same tenant ID seeds fresh built-in roles without restoring previous assignments or reusing an old policy revision. Migration `0057_access_tenant_lifecycle.sql` also removes policies orphaned by earlier tenant deletions.
 
 Role names use lowercase letters, numbers, underscores and hyphens, starting with a letter. Display names are free text. Saving or assigning roles requires connectivity. A concurrent policy change returns 409 rather than overwriting another administrator's changes; reopen the saved role before retrying. The editor retains an unsuccessful draft.

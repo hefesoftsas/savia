@@ -1,8 +1,10 @@
 import type { ResourceProps } from "ra-core";
 import { required, useCreatePath, useTranslate } from "ra-core";
+import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
 import {
+  AutocompleteInput,
   BooleanInput,
   Create,
   CreateButton,
@@ -10,6 +12,9 @@ import {
   Edit,
   EditButton,
   List,
+  RadioButtonGroupInput,
+  ReferenceInput,
+  SelectInput,
   SimpleForm,
   TextInput,
 } from "@/components/admin";
@@ -54,40 +59,125 @@ function TenantFields() {
 
 function InitialTenantUserFields() {
   const translate = useTranslate();
+  const memberMode = useWatch({ name: "memberMode" }) ?? "new";
   return (
     <>
-      <TextInput
-        source="initialUser.email"
-        label={translate("savia.tenants.fields.initialAdminEmail", {
-          _: "Correo del primer administrador",
+      <RadioButtonGroupInput
+        source="memberMode"
+        label={translate("savia.tenants.fields.memberMode", {
+          _: "Primer administrador",
         })}
-        type="email"
+        choices={[
+          {
+            id: "new",
+            name: translate("savia.tenants.fields.memberModeNew", {
+              _: "Crear usuario nuevo",
+            }),
+          },
+          {
+            id: "existing",
+            name: translate("savia.tenants.fields.memberModeExisting", {
+              _: "Transferir usuario existente",
+            }),
+          },
+        ]}
+        row
+      />
+      {memberMode === "existing" ? (
+        <ExistingTenantMemberFields />
+      ) : (
+        <>
+          <TextInput
+            source="initialUser.email"
+            label={translate("savia.tenants.fields.initialAdminEmail", {
+              _: "Correo del primer administrador",
+            })}
+            type="email"
+            validate={required()}
+          />
+          <TextInput
+            source="initialUser.firstName"
+            label={translate("savia.tenants.fields.initialAdminFirstName", {
+              _: "Nombres del primer administrador",
+            })}
+            validate={required()}
+          />
+          <TextInput
+            source="initialUser.lastName"
+            label={translate("savia.tenants.fields.initialAdminLastName", {
+              _: "Apellidos del primer administrador",
+            })}
+            validate={required()}
+          />
+          <TextInput
+            source="initialUser.temporaryPassword"
+            label={translate("savia.tenants.fields.temporaryPassword", {
+              _: "Contraseña temporal",
+            })}
+            type="password"
+            helperText={translate(
+              "savia.tenants.fields.temporaryPasswordHelper",
+              {
+                _: "Opcional. Si se deja vacía, se enviará un enlace para definirla.",
+              },
+            )}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+function ExistingTenantMemberFields() {
+  const translate = useTranslate();
+  return (
+    <>
+      <ReferenceInput
+        source="existingUserId"
+        reference="users"
+        perPage={100}
+        sort={{ field: "displayName", order: "ASC" }}
+      >
+        <AutocompleteInput
+          label={translate("savia.tenants.fields.existingUser", {
+            _: "Usuario existente",
+          })}
+          helperText={translate("savia.tenants.fields.existingUserHelper", {
+            _: "El usuario dejará su organización actual: la transferencia no comparte la cuenta.",
+          })}
+          validate={required()}
+        />
+      </ReferenceInput>
+      <SelectInput
+        source="existingRole"
+        label={translate("savia.tenants.fields.existingRole", {
+          _: "Rol en el nuevo tenant",
+        })}
+        choices={[
+          {
+            id: "tenant_admin",
+            name: translate("savia.users.roles.tenant_admin", {
+              _: "Administrador de tenant",
+            }),
+          },
+          {
+            id: "operator",
+            name: translate("savia.users.roles.operator", { _: "Operador" }),
+          },
+          {
+            id: "viewer",
+            name: translate("savia.users.roles.viewer", {
+              _: "Solo lectura",
+            }),
+          },
+        ]}
         validate={required()}
       />
-      <TextInput
-        source="initialUser.firstName"
-        label={translate("savia.tenants.fields.initialAdminFirstName", {
-          _: "Nombres del primer administrador",
+      <p className="text-sm text-muted-foreground md:col-span-2">
+        {translate("savia.tenants.fields.existingUserWarning", {
+          _: "No se puede transferir al último miembro activo de su organización ni a un administrador de plataforma.",
         })}
-        validate={required()}
-      />
-      <TextInput
-        source="initialUser.lastName"
-        label={translate("savia.tenants.fields.initialAdminLastName", {
-          _: "Apellidos del primer administrador",
-        })}
-        validate={required()}
-      />
-      <TextInput
-        source="initialUser.temporaryPassword"
-        label={translate("savia.tenants.fields.temporaryPassword", {
-          _: "Contraseña temporal",
-        })}
-        type="password"
-        helperText={translate("savia.tenants.fields.temporaryPasswordHelper", {
-          _: "Opcional. Si se deja vacía, se enviará un enlace para definirla.",
-        })}
-      />
+      </p>
     </>
   );
 }
@@ -182,10 +272,15 @@ function TenantList() {
 function TenantCreate() {
   const translate = useTranslate();
   return (
-    <Create
-      title={translate("savia.tenants.newTenant", { _: "Nuevo tenant" })}
-    >
-      <SimpleForm className="max-w-2xl" defaultValues={{ isActive: true }}>
+    <Create title={translate("savia.tenants.newTenant", { _: "Nuevo tenant" })}>
+      <SimpleForm
+        className="max-w-2xl"
+        defaultValues={{
+          isActive: true,
+          memberMode: "new",
+          existingRole: "tenant_admin",
+        }}
+      >
         <TenantFields />
         <InitialTenantUserFields />
       </SimpleForm>

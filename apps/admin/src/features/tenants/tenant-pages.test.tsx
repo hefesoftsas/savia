@@ -210,6 +210,80 @@ describe("generic tenant pages", () => {
     expect(action).toHaveAttribute("href", "#/tenants/create");
   });
 
+  it("creates a tenant by transferring an existing user", async () => {
+    open("/tenants/create");
+    const appServices = services(),
+      user = userEvent.setup();
+    const person = {
+      id: "principal-one",
+      displayName: "Persona Uno",
+      firstName: "Persona",
+      lastName: "Uno",
+      email: "person@example.test",
+      platformAdmin: false,
+      isActive: true,
+      isBanned: false,
+      twoFactorEnabled: false,
+      memberships: [
+        {
+          id: "membership-one",
+          tenantId: 101,
+          agencyId: 101,
+          role: "tenant_admin",
+          isActive: true,
+        },
+      ],
+    };
+    vi.mocked(appServices.dataProvider.getList).mockImplementation((resource) =>
+      Promise.resolve({
+        data: resource === "users" ? [person] : [],
+        total: resource === "users" ? 1 : 0,
+      }),
+    );
+    await renderApp(appServices);
+    expect(await screen.findByText("Nuevo tenant")).toBeVisible();
+    // The shared text inputs do not associate their labels programmatically,
+    // so target them by field name like the record data does.
+    const nameInput = document.querySelector(
+      'input[name="name"]',
+    ) as HTMLInputElement;
+    expect(nameInput).not.toBe(null);
+    await user.type(nameInput, "Nueva comunidad");
+    await user.click(
+      await screen.findByRole("radio", {
+        name: "Transferir usuario existente",
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "El usuario dejará su organización actual: la transferencia no comparte la cuenta.",
+      ),
+    ).toBeVisible();
+    expect(document.querySelector('input[name="initialUser.email"]')).toBe(
+      null,
+    );
+    await user.click(
+      await screen.findByRole("combobox", { name: "Usuario existente" }),
+    );
+    await user.click(
+      await screen.findByRole("option", { name: "Persona Uno" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Guardar/ }));
+    await waitFor(() =>
+      expect(appServices.dataProvider.create).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: "Nueva comunidad",
+            memberMode: "existing",
+            existingUserId: "principal-one",
+            existingRole: "tenant_admin",
+          }),
+        }),
+      ),
+    );
+  });
+
   it("edits the tenant state and explains the effect on member access", async () => {
     open("/tenants/101");
     const appServices = services(),

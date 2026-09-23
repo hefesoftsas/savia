@@ -14,9 +14,15 @@ import { tenantSlugFromApiRequest } from "../auth/tenant-host-guard";
 import type { IdentityUserAdministrator } from "../auth/better-auth";
 import {
   deletePrincipal,
+  findPrincipal,
   grantMembership,
+  listGlobalRoles,
   upsertPrincipal,
 } from "../auth/identity-repository";
+import {
+  assignOrTransferMembership,
+  TenantMembershipInvariantError,
+} from "../auth/tenant-membership-invariants";
 import {
   isForeignKeyConstraint,
   isUniqueConstraint,
@@ -98,7 +104,28 @@ const tenantSchema = z.object({
   updatedAt: z.string(),
   agencyId: z.number().nullable(),
 });
-const inputSchema = z
+const tenantRole = z.enum([
+  "tenant_admin",
+  "agency_admin",
+  "operator",
+  "viewer",
+]);
+const newTenantUserSchema = z
+  .object({
+    email: z.string().email(),
+    firstName: z.string().trim().min(1).max(100),
+    lastName: z.string().trim().min(1).max(100),
+    role: tenantRole,
+    temporaryPassword: z.string().min(12).max(128).optional(),
+  })
+  .strict();
+const existingTenantMemberSchema = z
+  .object({
+    principalId: z.string().min(1).max(100),
+    role: tenantRole,
+  })
+  .strict();
+const tenantInputSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
     idSlug: z
@@ -111,17 +138,19 @@ const inputSchema = z
       .transform((val) => normalizeTenantSlug(val)!)
       .optional(),
     isActive: z.boolean().optional(),
-    initialUser: z
-      .object({
-        email: z.string().email(),
-        firstName: z.string().trim().min(1).max(100),
-        lastName: z.string().trim().min(1).max(100),
-        role: z.enum(["tenant_admin", "agency_admin", "operator", "viewer"]),
-        temporaryPassword: z.string().min(12).max(128).optional(),
-      })
-      .strict(),
+    initialUser: newTenantUserSchema.optional(),
+    existingMember: existingTenantMemberSchema.optional(),
   })
   .strict();
+const inputSchema = tenantInputSchema.refine(
+  (val) =>
+    Number(Boolean(val.initialUser)) + Number(Boolean(val.existingMember)) ===
+    1,
+  {
+    message:
+      "Provide either initialUser for a new account or existingMember to transfer a user, not both.",
+  },
+);
 const params = z.object({ tenantId: z.coerce.number().int().nonnegative() });
 const response = {
   description: "Tenant",
@@ -216,7 +245,7 @@ const updateDefinition = createRoute({
     params,
     body: {
       required: true,
-      content: { "application/json": { schema: inputSchema.partial() } },
+      content: { "application/json": { schema: tenantInputSchema.partial() } },
     },
   },
   responses: { 200: response, ...errors },
@@ -246,6 +275,102 @@ const conflict = {
     message: "El identificador ya existe o el tenant tiene datos asociados.",
   },
 };
+const userMissing = {
+  error: { code: "USER_NOT_FOUND", message: "El usuario no existe." },
+};
+function memberConflict(message: string) {
+  return { error: { code: "TENANT_CONFLICT", message } };
+}
+
+/**
+ * Reserve the next tenant ID and insert the commercial tenant row.
+ * Callers compensate with `DELETE FROM tenants WHERE id=?` when a later
+ * phase of the compensated creation fails.
+ */
+async function insertTenant(
+  db: D1Database,
+  input: { name: string; idSlug?: string; isActive?: boolean },
+  now: string,
+): Promise<number> {
+  const allocation = await db
+    .prepare(
+      `INSERT INTO server_id_sequences(resource,next_id) SELECT 'tenants',COALESCE(MAX(id),0)+2 FROM tenants WHERE true ON CONFLICT(resource) DO UPDATE SET next_id=${dialectFor(db).name === "postgres" ? "GREATEST" : "MAX"}(${dialectFor(db).name === "postgres" ? "server_id_sequences.next_id" : "next_id"}+1,(SELECT COALESCE(MAX(id),0)+2 FROM tenants)) RETURNING next_id-1 AS id`,
+    )
+    .first<{ id: number }>();
+  if (!allocation) throw new Error("Unable to allocate tenant ID");
+  await db
+    .prepare(
+      "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,?,?,?, 'commercial')",
+    )
+    .bind(
+      allocation.id,
+      input.idSlug ?? crypto.randomUUID(),
+      input.name,
+      input.isActive === false ? 0 : 1,
+      now,
+      now,
+    )
+    .run();
+  return allocation.id;
+}
+
+/**
+ * Create a commercial tenant around an existing user. Membership is unique
+ * per principal, so this transfers the user out of their current tenant
+ * instead of sharing them. Platform administrators cannot be transferred:
+ * revoke their global role first through user management.
+ */
+async function createTenantWithExistingMember(
+  c: Context,
+  db: D1Database,
+  input: {
+    name: string;
+    idSlug?: string;
+    isActive?: boolean;
+    existingMember: { principalId: string; role: z.infer<typeof tenantRole> };
+  },
+  realtime?: RealtimeHubClient,
+) {
+  const principal = await findPrincipal(db, input.existingMember.principalId);
+  if (!principal || !principal.isActive) return c.json(userMissing, 404);
+  if ((await listGlobalRoles(db, principal.id)).includes("platform_admin"))
+    return c.json(
+      memberConflict(
+        "El usuario es administrador de plataforma. Revoca ese rol antes de transferirlo a un tenant.",
+      ),
+      409,
+    );
+  const now = new Date().toISOString();
+  let tenantId: number | undefined;
+  try {
+    tenantId = await insertTenant(db, input, now);
+    await assignOrTransferMembership(
+      db,
+      principal.id,
+      tenantId,
+      input.existingMember.role,
+    );
+  } catch (error) {
+    if (tenantId !== undefined)
+      await db.prepare("DELETE FROM tenants WHERE id=?").bind(tenantId).run();
+    if (error instanceof TenantMembershipInvariantError)
+      return c.json(
+        memberConflict(
+          "El usuario es el último miembro activo de su organización. Agrega otro miembro allí antes de transferirlo.",
+        ),
+        409,
+      );
+    if (isUniqueConstraint(error)) return c.json(conflict, 409);
+    throw error;
+  }
+  const row = await db
+    .prepare(`${select} WHERE t.id=?`)
+    .bind(tenantId)
+    .first<TenantRow>();
+  notifyTenantRoom(realtime, c, "tenants", "created", tenantId);
+  notifyTenantRoom(realtime, c, "users", "updated", principal.id);
+  return c.json({ data: document(row!) }, 201);
+}
 
 /**
  * Best-effort realtime hint after tenant mutations. The socket carries no
@@ -366,6 +491,23 @@ export function registerTenantRoutes(
   });
   app.openapi(createDefinition, async (c) => {
     requirePlatformAdministrator(actorFromContext(c));
+    const input = c.req.valid("json");
+    if (input.existingMember) {
+      return createTenantWithExistingMember(
+        c,
+        db,
+        input as {
+          name: string;
+          idSlug?: string;
+          isActive?: boolean;
+          existingMember: {
+            principalId: string;
+            role: z.infer<typeof tenantRole>;
+          };
+        },
+        realtime,
+      );
+    }
     if (!userAdministrator) {
       return c.json(
         {
@@ -377,44 +519,29 @@ export function registerTenantRoutes(
         503,
       );
     }
-    const input = c.req.valid("json"),
-      now = new Date().toISOString();
+    const now = new Date().toISOString();
     let authenticatedUser: { subject: string } | undefined;
     let principalId: string | undefined;
     let tenantId: number | undefined;
     try {
       authenticatedUser = await userAdministrator.createUser(
-        { ...input.initialUser, platformAdmin: false },
+        { ...input.initialUser!, platformAdmin: false },
         c.req.raw,
       );
-      const allocation = await db
-        .prepare(
-          `INSERT INTO server_id_sequences(resource,next_id) SELECT 'tenants',COALESCE(MAX(id),0)+2 FROM tenants WHERE true ON CONFLICT(resource) DO UPDATE SET next_id=${dialectFor(db).name === "postgres" ? "GREATEST" : "MAX"}(${dialectFor(db).name === "postgres" ? "server_id_sequences.next_id" : "next_id"}+1,(SELECT COALESCE(MAX(id),0)+2 FROM tenants)) RETURNING next_id-1 AS id`,
-        )
-        .first<{ id: number }>();
-      if (!allocation) throw new Error("Unable to allocate tenant ID");
-      tenantId = allocation.id;
-      await db
-        .prepare(
-          "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,?,?,?, 'commercial')",
-        )
-        .bind(
-          tenantId,
-          input.idSlug ?? crypto.randomUUID(),
-          input.name,
-          input.isActive === false ? 0 : 1,
-          now,
-          now,
-        )
-        .run();
+      tenantId = await insertTenant(db, input, now);
       const principal = await upsertPrincipal(db, {
         issuer: userAdministrator.issuer,
         subject: authenticatedUser.subject,
-        email: input.initialUser.email,
-        displayName: `${input.initialUser.firstName} ${input.initialUser.lastName}`,
+        email: input.initialUser!.email,
+        displayName: `${input.initialUser!.firstName} ${input.initialUser!.lastName}`,
       });
       principalId = principal.id;
-      await grantMembership(db, principal.id, tenantId, input.initialUser.role);
+      await grantMembership(
+        db,
+        principal.id,
+        tenantId,
+        input.initialUser!.role,
+      );
     } catch (error) {
       if (principalId) await deletePrincipal(db, principalId);
       if (tenantId)

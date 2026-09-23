@@ -6260,7 +6260,7 @@ export interface paths {
             name: string;
             idSlug?: string;
             isActive?: boolean;
-            initialUser: {
+            initialUser?: {
               /** Format: email */
               email: string;
               firstName: string;
@@ -6268,6 +6268,11 @@ export interface paths {
               /** @enum {string} */
               role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
               temporaryPassword?: string;
+            };
+            existingMember?: {
+              principalId: string;
+              /** @enum {string} */
+              role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
             };
           };
         };
@@ -6673,6 +6678,11 @@ export interface paths {
               /** @enum {string} */
               role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
               temporaryPassword?: string;
+            };
+            existingMember?: {
+              principalId: string;
+              /** @enum {string} */
+              role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
             };
           };
         };
