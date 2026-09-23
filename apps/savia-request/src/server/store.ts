@@ -697,15 +697,19 @@ export async function listScopedFlows(env: Env, tenant = ""): Promise<Flow[]> {
 
 /**
  * Effective variables: tenant overlay wins per key, otherwise the global
- * default. Tenant scopes never reveal global secret values: base secrets
- * are reported as masked (`value: ""`, `configured` from either layer) and
- * only tenant-owned secrets can be revealed.
+ * default. Reads and reveals never expose base secrets to tenant scopes
+ * (`value: ""`, `configured` from either layer); only tenant-owned secrets
+ * can be revealed. Server-side execution (`decryptBaseSecrets`) resolves
+ * base secrets too, so shared catalog flows run for tenants — values stay
+ * in memory, hooks can never touch secrets, and response previews redact
+ * them before anything is persisted or returned.
  */
 export async function getVariables(
   env: Env,
   id: string,
   privateValues = false,
   tenant = "",
+  decryptBaseSecrets = false,
 ): Promise<Variable[]> {
   const scope = scopeTenant(tenant);
   const base = await baseVariables(env, id);
@@ -746,7 +750,8 @@ export async function getVariables(
           value: overlayRow ? overlayRow.value : (baseRow?.value ?? ""),
         };
       }
-      // Secret: only tenant-owned values are ever readable.
+      // Secret: tenant-owned values are readable when requested; base
+      // values only for server-side execution, never for reads/reveals.
       if (overlayRow?.value) {
         return {
           key,
@@ -754,6 +759,15 @@ export async function getVariables(
           configured,
           overridden,
           value: privateValues ? await unseal(env, overlayRow.value) : "",
+        };
+      }
+      if (privateValues && decryptBaseSecrets && baseRow?.value) {
+        return {
+          key,
+          secret,
+          configured,
+          overridden,
+          value: await unseal(env, baseRow.value),
         };
       }
       return { key, secret, configured, overridden, value: "" };
