@@ -49,7 +49,7 @@ export function scalarTransportScript(agencyId: number | string) {
   if (window.parent === window) return;
   const originalFetch = window.fetch.bind(window), pending = new Map();
   window.addEventListener('message', event => {
-    if (event.source !== window.parent || event.data?.type !== 'savia-crm-response') return;
+    if (event.source !== window.parent || event.data?.type !== 'savia-studio-response') return;
     const task = pending.get(event.data.id);
     if (!task) return;
     pending.delete(event.data.id); clearTimeout(task.timer);
@@ -71,7 +71,7 @@ export function scalarTransportScript(agencyId: number | string) {
     return new Promise((resolve,reject) => {
       const timer = setTimeout(() => {pending.delete(id);reject(new Error('La operación tardó demasiado. Revisa su estado antes de repetir.'));}, 45000);
       pending.set(id,{resolve,reject,timer,url:url.href});
-      window.parent.postMessage({type:'savia-crm-fetch',id,url:url.pathname+url.search,method,headers:Object.fromEntries(request.headers),body}, '*');
+      window.parent.postMessage({type:'savia-studio-fetch',id,url:url.pathname+url.search,method,headers:Object.fromEntries(request.headers),body}, '*');
     });
   };
 })();

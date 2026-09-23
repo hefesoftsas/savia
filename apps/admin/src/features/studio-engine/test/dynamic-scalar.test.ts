@@ -12,7 +12,7 @@ it("returns an absolute response URL for Scalar and honors Request overrides", a
       listener({
         source: parent,
         data: {
-          type: "savia-crm-response",
+          type: "savia-studio-response",
           id: data.id,
           status: 200,
           headers: { "content-type": "application/json" },
@@ -34,13 +34,13 @@ it("returns an absolute response URL for Scalar and honors Request overrides", a
   );
   const response = await window.fetch(
     new Request(
-      "https://api.example.test/v1/dynamic-crm/101/api/published/clientes",
+      "https://api.example.test/v1/studio/101/api/published/clientes",
       { method: "POST", body: '{"name":"old"}' },
     ),
     { method: "PATCH", body: '{"name":"new"}' },
   );
   expect(response.url).toBe(
-    "https://api.example.test/v1/dynamic-crm/101/api/published/clientes",
+    "https://api.example.test/v1/studio/101/api/published/clientes",
   );
   expect(new URL(response.url).pathname).toContain("/published/clientes");
   expect(sent[0].method).toBe("PATCH");
