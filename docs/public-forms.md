@@ -91,8 +91,11 @@ provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration
 
-1. Apply D1 migration `0064_public_form_short_links.sql` (after earlier public-form
-   migrations) using the normal migration pipeline.
+1. Apply D1 migrations `0064_public_form_short_links.sql` and
+   `0065_public_form_external_short_url.sql` using the normal migration pipeline.
+   Active public forms receive an external short URL automatically when the
+   provider succeeds; the full link remains available if it is unavailable.
+   The provider receives the complete public URL, including its bearer token.
 2. Create a Cloudflare Turnstile widget for the canonical public hostname.
 3. Configure `TURNSTILE_SITE_KEY` and secret `TURNSTILE_SECRET_KEY` on the API worker.
    Keep the secret outside source control and frontend environment variables.
