@@ -251,9 +251,17 @@ connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 
 ## Fuera de alcance (futuro)
 
-- **MCP**: los plugins del store no publican herramientas al
-  asistente. Exponerlas exige registro dinámico por tenant y
-  descripciones saneadas (riesgo de inyección de prompts), fuera de
-  esta versión.
 - **R2 para entradas grandes** si D1 rechaza filas de ~1 MB en
   producción.
+
+## Asistente
+
+`store.json` puede marcar acciones de lectura con `mcp: { label,
+summary }` (solo `simulation` y `http` GET; las escrituras no se
+exponen). El worker MCP publica dos herramientas estáticas y de solo
+lectura: `savia_store_catalog` (plugins activos y acciones con
+etiquetas saneadas y prefijo de origen) y `savia_store_execute`
+(verifica la acción contra el catálogo antes de ejecutar con la sesión
+delegada). El texto del autor se valida en la subida (sin
+instrucciones, sin enlaces, con topes) y se vuelve a sanear al servir.
+Ver ADR 0004.

@@ -145,16 +145,111 @@ export function pluginStoreArtifactKey(
 }
 
 /**
- * Configuración declarativa opcional (`store.json`) dentro del ZIP.
- * v1 solo implementa acciones `simulation`: el host responde con la
- * plantilla `output` sin red ni secretos. Es la base de los futuros
- * conectores declarativos (`http` con secretos del tenant).
+ * Texto visible para el asistente. Se valida en la subida y se vuelve a
+ * sanear al servir: sin instrucciones, sin sintaxis de enlaces y con
+ * topes de longitud. El modelo nunca recibe texto libre del autor más
+ * allá de estos campos.
  */
+const ASSISTANT_INJECTION_PATTERNS: ReadonlyArray<RegExp> = [
+  /ignore\s+(previous|all|your)\s+instructions/i,
+  /disregard\s+(previous|all|your)\s+instructions/i,
+  /\bsystem\s*:/i,
+  /<\||\|>/,
+  /\bassistant\s+to\s*=/i,
+  /\[.*?\]\(.*?\)/,
+  /jailbreak/i,
+];
+
+export function assertAssistantText(value: string, field: string): void {
+  if (/[\u0000-\u001F\u007F]/.test(value))
+    throw new Error(`${field} contiene caracteres de control.`);
+  for (const pattern of ASSISTANT_INJECTION_PATTERNS)
+    if (pattern.test(value))
+      throw new Error(
+        `${field} contiene instrucciones o formato no permitido.`,
+      );
+}
+
+/** Etiqueta y resumen que el asistente muestra de una acción del store. */
+export const storeMcpSchema = z
+  .object({
+    label: z.string().trim().min(1).max(100),
+    summary: z.string().trim().min(1).max(300),
+  })
+  .strict()
+  .superRefine((mcp, ctx) => {
+    for (const [field, value] of [
+      ["label", mcp.label],
+      ["summary", mcp.summary],
+    ] as const) {
+      try {
+        assertAssistantText(value, field);
+      } catch (error) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: error instanceof Error ? error.message : "Texto no válido.",
+        });
+      }
+    }
+  });
+
+export type StoreMcp = z.infer<typeof storeMcpSchema>;
+
+/** Vuelve a sanear al servir (defensa en profundidad ante datos viejos). */
+export function sanitizeAssistantCopy(value: string, max: number): string {
+  const normalized = value.replace(/[\u0000-\u001F\u007F]+/g, " ").trim();
+  const sliced = normalized.slice(0, max);
+  try {
+    assertAssistantText(sliced, "texto");
+    return sliced;
+  } catch {
+    return "";
+  }
+}
+
+export type StoreMcpCatalogAction = {
+  id: string;
+  kind: "simulation" | "http";
+  method?: string;
+  label: string;
+  summary: string;
+};
+
+/** Acciones visibles al asistente, ya saneadas y con prefijo de origen. */
+export function storeMcpActions(
+  pluginId: string,
+  config: StoreJson,
+): StoreMcpCatalogAction[] {
+  const actions: StoreMcpCatalogAction[] = [];
+  for (const action of config.actions) {
+    if (action.kind !== "simulation" && action.kind !== "http") continue;
+    if (!action.mcp) continue;
+    if (action.kind === "http" && action.request.method !== "GET") continue;
+    const label = sanitizeAssistantCopy(
+      `[${pluginId}/${action.id}] ${action.mcp.label}`,
+      140,
+    );
+    const summary = sanitizeAssistantCopy(action.mcp.summary, 300);
+    if (!label || !summary) continue;
+    actions.push({
+      id: action.id,
+      kind: action.kind,
+      ...(action.kind === "http" ? { method: action.request.method } : {}),
+      label,
+      summary,
+    });
+  }
+  return actions;
+}
+
+/** Acción simulada: el host responde con la plantilla `output`. */
 export const storeSimulationActionSchema = z
   .object({
     id: solutionIdSchema,
     kind: z.literal("simulation"),
     output: z.unknown(),
+    mcp: storeMcpSchema.optional(),
   })
   .strict();
 
@@ -287,6 +382,7 @@ const storeHttpActionSchema = z
         body: z.unknown().optional(),
       })
       .strict(),
+    mcp: storeMcpSchema.optional(),
   })
   .strict();
 
@@ -327,6 +423,23 @@ export const storeJsonSchema = z
             });
         }
       }
+      // El asistente solo expone acciones de lectura declaradas
+      // (simulation o http GET con bloque mcp; delegate no admite mcp
+      // por su esquema estricto).
+      const mcp =
+        action.kind === "simulation" || action.kind === "http"
+          ? action.mcp
+          : undefined;
+      if (
+        action.kind === "http" &&
+        mcp !== undefined &&
+        action.request.method !== "GET"
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["actions"],
+          message: `La acción ${action.id} solo puede exponerse al asistente si es GET.`,
+        });
     }
   });
 

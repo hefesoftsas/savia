@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { FastMCP, type ToolConfig } from "@prefecthq/fastmcp-ts/server";
 import { z } from "zod";
 import { registerTrustedAssistantExtensions } from "./extensions/registry";
+import { registerStoreAssistantTools } from "./extensions/store";
 import { readDelegatedRequestCredentials } from "./request-credentials";
 import { SaviaApiClient } from "./savia-api";
 
@@ -596,6 +597,7 @@ export function createSaviaMcpServer(
   );
 
   registerTrustedAssistantExtensions(server, clientForRequest);
+  registerStoreAssistantTools(server, clientForRequest);
 
   return server;
 }

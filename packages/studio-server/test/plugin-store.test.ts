@@ -973,6 +973,82 @@ describe("acciones http declarativas", () => {
   });
 });
 
+const mcpStore = {
+  format: "savia.store",
+  formatVersion: 1,
+  actions: [
+    {
+      id: "eco",
+      kind: "simulation",
+      output: { ok: true },
+      mcp: { label: "Eco", summary: "Devuelve un eco de demostración." },
+    },
+    {
+      id: "interna",
+      kind: "simulation",
+      output: { ok: true },
+    },
+  ],
+};
+
+describe("catálogo mcp del store", () => {
+  it("lista solo plugins activos con acciones de lectura.", async () => {
+    const tenant = "store-mcp";
+    await uploadZip(tenant, pluginZip({ store: mcpStore }));
+    const empty = await app(tenant).request(
+      "http://localhost/api/plugin-store/mcp-catalog",
+      {},
+      platform.env,
+    );
+    expect(((await empty.json()) as any).data).toEqual([]);
+
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const catalog = (await (
+      await app(tenant).request(
+        "http://localhost/api/plugin-store/mcp-catalog",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(catalog.data).toEqual([
+      {
+        pluginId: "custom.demo",
+        label: "Demo",
+        actions: [
+          {
+            id: "eco",
+            kind: "simulation",
+            label: "[custom.demo/eco] Eco",
+            summary: "Devuelve un eco de demostración.",
+          },
+        ],
+      },
+    ]);
+
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      },
+      platform.env,
+    );
+    const off = (await (
+      await app(tenant).request(
+        "http://localhost/api/plugin-store/mcp-catalog",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(off.data).toEqual([]);
+  });
+});
+
 const ECHO_ARTIFACT = new URL(
   "../../../dist/plugin-store/custom.http-echo-1.0.0.store.zip",
   import.meta.url,

@@ -9,6 +9,7 @@ import {
   renderTemplate,
   sanitizeStoreCollection,
   storeJsonSchema,
+  storeMcpActions,
   validatePluginEntrySource,
   type PluginStoreManifest,
   type StoreCollection,
@@ -922,6 +923,41 @@ export function registerPluginStore(
         "content-security-policy": "default-src 'none';",
       },
     });
+  });
+
+  // Catálogo para el asistente: solo plugins activos con acciones
+  // de lectura declaradas, ya saneadas. Sin manager: es lectura del
+  // propio tenant con la sesión actual.
+  app.get("/api/plugin-store/mcp-catalog", async (c) => {
+    const tenant = c.get("tenant");
+    if (!(await storeTableExists(c.env.DB))) return c.json({ data: [] });
+    const installed = await c.env.DB.prepare(
+      "SELECT id,version,enabled,manifest FROM crm_extension_installations WHERE tenant_id=? AND enabled=1",
+    )
+      .bind(tenant)
+      .all<{
+        id: string;
+        version: string;
+        enabled: number;
+        manifest: string;
+      }>();
+    const entries = [];
+    for (const row of installed.results) {
+      let manifest: PluginStoreManifest;
+      try {
+        manifest = pluginStoreManifestSchema.parse(JSON.parse(row.manifest));
+      } catch {
+        continue;
+      }
+      // Solo ids del store (custom.*): los compilados no tienen store.json.
+      if (!manifest.id.startsWith("custom.")) continue;
+      const config = await storeConfigFor(c.env.DB, tenant, row.id);
+      if (!config) continue;
+      const actions = storeMcpActions(row.id, config);
+      if (!actions.length) continue;
+      entries.push({ pluginId: row.id, label: manifest.label, actions });
+    }
+    return c.json({ data: entries });
   });
 
   app.get("/api/plugin-store/:id/entry", async (c) => {
