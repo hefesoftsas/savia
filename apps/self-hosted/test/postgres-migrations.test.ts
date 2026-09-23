@@ -231,6 +231,10 @@ live("native baseline parity", () => {
         expect(initialization.flat()).toEqual([
           "0001_baseline.sql",
           "0002_workflow_collection_triggers.sql",
+          "0003_user_my_day_widgets.sql",
+          "0004_notifications.sql",
+          "0005_notification_collection_triggers.sql",
+          "0006_public_form_short_links.sql",
         ]);
         expect(
           await postgres

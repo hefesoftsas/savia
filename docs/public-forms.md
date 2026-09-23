@@ -1,6 +1,6 @@
 # Public forms
 
-Owner: Savia platform team. Last reviewed: 2026-09-19.
+Owner: Savia platform team. Last reviewed: 2026-09-23.
 
 ## Publishing
 
@@ -8,7 +8,7 @@ Forms remain private until a platform administrator opens a screen's configurati
 navigates to the dedicated **Enlace público** page, confirms the published snapshot,
 and creates a link. The administrator can set an expiration (with quick presets for 24h,
 7d, 30d, or no expiration) and a daily submission budget, copy the canonical public URL,
-generate a short URL via a free URL service (`is.gd`), share via the native Web Share API
+generate a Savia-hosted short URL, share via the native Web Share API
 on mobile devices, open the form in a new tab to test it, and revoke each link independently.
 Revoked or expired links can be permanently deleted with their submission history; active links
 must be revoked first so in-flight deduplication is never dropped silently. Each active link can also
@@ -17,6 +17,11 @@ print or in-person sharing. The default budget is
 25 submissions per link per UTC day. Existing links do not inherit later edits;
 review and publish a new link after changing a form. Revoke the previous link when
 replacing it.
+
+Short URLs use a random Savia code stored with the published form and redirect
+to its canonical public page. The same short URL is returned when an administrator
+requests it again. Redirects stop working when the form is revoked, expires, or is
+deleted; links are rate-limited and never sent to a third-party shortening service.
 
 Native collections support plain text, numeric, email, date, boolean, and static
 select fields. Hidden, read-only, computed, secret, relational, remote-option,
@@ -86,7 +91,8 @@ provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration
 
-1. Apply D1 migration `0054_public_forms.sql` using the normal migration pipeline.
+1. Apply D1 migration `0064_public_form_short_links.sql` (after earlier public-form
+   migrations) using the normal migration pipeline.
 2. Create a Cloudflare Turnstile widget for the canonical public hostname.
 3. Configure `TURNSTILE_SITE_KEY` and secret `TURNSTILE_SECRET_KEY` on the API worker.
    Keep the secret outside source control and frontend environment variables.

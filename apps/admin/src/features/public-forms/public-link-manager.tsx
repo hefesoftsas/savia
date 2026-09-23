@@ -35,6 +35,7 @@ const linkSchema = z.object({
   expiresAt: z.string().nullable().optional(),
   revokedAt: z.string().nullable().optional(),
   dailyLimit: z.number(),
+  shortUrl: z.string().url().optional(),
 });
 type PublicLink = z.infer<typeof linkSchema>;
 
@@ -107,6 +108,7 @@ export function PublicLinkManager({
     setLoading(true);
     setError("");
     setLinks([]);
+    setShortUrls({});
     setNotice("");
     setConfirmed(false);
     setConfirming(null);
@@ -118,7 +120,19 @@ export function PublicLinkManager({
         const body = z
           .object({ data: z.array(linkSchema) })
           .parse(await response.json());
-        if (current === generation.current) setLinks(body.data);
+        if (current === generation.current) {
+          setLinks(body.data);
+          setShortUrls(
+            Object.fromEntries(
+              body.data
+                .filter(
+                  (link): link is PublicLink & { shortUrl: string } =>
+                    Boolean(link.shortUrl),
+                )
+                .map((link) => [link.id, link.shortUrl]),
+            ),
+          );
+        }
       })
       .catch((cause) => {
         if (current === generation.current)
@@ -212,6 +226,11 @@ export function PublicLinkManager({
               : item,
           ),
         );
+        setShortUrls((previous) => {
+          const next = { ...previous };
+          delete next[link.id];
+          return next;
+        });
         setNotice("Enlace revocado. Ya no admite nuevos envíos.");
       }
     } catch (cause) {
@@ -295,22 +314,20 @@ export function PublicLinkManager({
     setShorteningId(link.id);
     setError("");
     try {
-      const response = await fetch(
-        `https://is.gd/create.php?format=json&url=${encodeURIComponent(originalUrl)}`,
+      const response = await request(
+        `/v1/public-forms/${encodeURIComponent(link.id)}/short-url`,
+        { method: "POST" },
       );
       if (!response.ok) throw new Error("HTTP error " + response.status);
-      const data = (await response.json()) as {
-        shorturl?: string;
-        errormessage?: string;
-      };
-      if (data.shorturl) {
+      const { data } = z
+        .object({ data: z.object({ shortUrl: z.string().url() }) })
+        .parse(await response.json());
+      if (data.shortUrl) {
         setShortUrls((previous) => ({
           ...previous,
-          [link.id]: data.shorturl!,
+          [link.id]: data.shortUrl,
         }));
         setNotice(t("Enlace copiado."));
-      } else {
-        throw new Error(data.errormessage || "Failed to shorten");
       }
     } catch {
       setError(

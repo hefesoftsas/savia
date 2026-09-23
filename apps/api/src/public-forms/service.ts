@@ -142,6 +142,7 @@ export type PublicFormRow = {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  short_code?: string | null;
 };
 type SubmissionRow = {
   fingerprint: string;
@@ -161,9 +162,15 @@ export function tenantForDomain(domainId: string) {
     : "domain:" + domainId;
 }
 export function managedForm(row: PublicFormRow, publicOrigin?: string) {
+  const active =
+    row.revoked_at === null &&
+    (row.expires_at === null || Date.parse(row.expires_at) > Date.now());
   return {
     ...(publicOrigin
       ? { url: new URL("/public/forms/" + row.token, publicOrigin).href }
+      : {}),
+    ...(publicOrigin && row.short_code && active
+      ? { shortUrl: new URL("/s/" + row.short_code, publicOrigin).href }
       : {}),
     id: row.id,
     token: row.token,

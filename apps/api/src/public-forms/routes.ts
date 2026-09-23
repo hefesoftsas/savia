@@ -72,6 +72,112 @@ export function registerPublicFormRoutes(
     await next();
   });
   app.use("/api/public/forms/*", bodyLimit({ maxSize: 32768 }));
+  app.use("/s/*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    c.header("X-Robots-Tag", "noindex, nofollow");
+    c.header("Referrer-Policy", "no-referrer");
+    if (c.req.method !== "GET")
+      return c.json({ error: "Method not allowed" }, 405);
+    if (options.rateLimiter) {
+      const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+      const hash = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(ip),
+      );
+      const key = Array.from(new Uint8Array(hash), (b) =>
+        b.toString(16).padStart(2, "0"),
+      ).join("");
+      if (!(await options.rateLimiter.limit({ key })).success)
+        return c.json({ error: "Too many requests" }, 429);
+    }
+    await next();
+  });
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/v1/public-forms/{id}/short-url",
+      tags: ["Public forms"],
+      request: { params: z.object({ id: z.string().uuid() }) },
+      responses: { 200: jsonResponse, 404: jsonResponse },
+    }),
+    async (c) => {
+      const id = c.req.valid("param").id;
+      const now = new Date().toISOString();
+      const form = await db
+        .prepare("SELECT id,expires_at,revoked_at FROM public_forms WHERE id=?")
+        .bind(id)
+        .first<{
+          id: string;
+          expires_at: string | null;
+          revoked_at: string | null;
+        }>();
+      if (
+        !form ||
+        form.revoked_at !== null ||
+        (form.expires_at !== null && form.expires_at <= now)
+      )
+        return c.json({ error: "Public form unavailable." }, 404);
+
+      let row = await db
+        .prepare("SELECT code FROM public_form_short_links WHERE form_id=?")
+        .bind(id)
+        .first<{ code: string }>();
+      for (let attempt = 0; !row && attempt < 8; attempt++) {
+        const code = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
+        const inserted = await db
+          .prepare(
+            "INSERT OR IGNORE INTO public_form_short_links(code,form_id,created_at) VALUES(?,?,?)",
+          )
+          .bind(code, id, now)
+          .run();
+        if (inserted.meta.changes > 0) row = { code };
+        else
+          row = await db
+            .prepare("SELECT code FROM public_form_short_links WHERE form_id=?")
+            .bind(id)
+            .first<{ code: string }>();
+      }
+      if (!row)
+        throw new HTTPException(503, {
+          message: "Could not create a short URL.",
+        });
+
+      const shortUrl = new URL(
+        "/s/" + row.code,
+        options.publicOrigin ?? c.req.url,
+      ).href;
+      return c.json({ data: { shortUrl } }, 200);
+    },
+  );
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/s/{code}",
+      security: [],
+      tags: ["Public forms"],
+      request: { params: z.object({ code: z.string() }) },
+      responses: {
+        302: { description: "Redirect to the published public form" },
+      },
+    }),
+    async (c) => {
+      const { code } = c.req.valid("param");
+      if (!/^[a-f0-9]{16}$/.test(code))
+        return c.json({ error: "Public form unavailable." }, 404);
+      const form = await db
+        .prepare(
+          "SELECT f.token FROM public_form_short_links s JOIN public_forms f ON f.id=s.form_id WHERE s.code=? AND f.revoked_at IS NULL AND (f.expires_at IS NULL OR f.expires_at>?)",
+        )
+        .bind(code, new Date().toISOString())
+        .first<{ token: string }>();
+      if (!form) return c.json({ error: "Public form unavailable." }, 404);
+      const destination = new URL(
+        "/public/forms/" + form.token,
+        options.publicOrigin ?? c.req.url,
+      );
+      return c.redirect(destination.href, 302);
+    },
+  );
   app.openapi(
     createRoute({
       method: "post",
@@ -115,7 +221,7 @@ export function registerPublicFormRoutes(
       const q = c.req.valid("query");
       const result = await db
         .prepare(
-          "SELECT * FROM public_forms WHERE tenant_id=? AND object_name=? ORDER BY created_at DESC",
+          "SELECT f.*, s.code AS short_code FROM public_forms f LEFT JOIN public_form_short_links s ON s.form_id=f.id WHERE f.tenant_id=? AND f.object_name=? ORDER BY f.created_at DESC",
         )
         .bind(tenantForDomain(q.domainId), q.objectName)
         .all<PublicFormRow>();

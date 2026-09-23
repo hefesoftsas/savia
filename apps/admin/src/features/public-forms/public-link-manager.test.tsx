@@ -248,7 +248,7 @@ it("shares the public URL when Web Share API is available", async () => {
   );
 });
 
-it("shortens the public link using free shortener service", async () => {
+it("creates a Savia short URL through the authenticated API", async () => {
   const row = {
     id: "short-link",
     token: "token-short",
@@ -261,35 +261,70 @@ it("shortens the public link using free shortener service", async () => {
   };
   const request = vi
     .fn()
-    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
-  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-    new Response(JSON.stringify({ shorturl: "https://is.gd/short123" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }),
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: { shortUrl: "https://public.savia.test/s/0123456789abcdef" },
+        }),
+      ),
+    );
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
   );
 
-  try {
-    render(
-      <PublicLinkManager
-        domainId="domain"
-        objectName="people"
-        kind="record"
-        request={request}
-      />,
-    );
+  const shortenButton = await screen.findByRole("button", {
+    name: "Acortar URL",
+  });
+  fireEvent.click(shortenButton);
 
-    const shortenButton = await screen.findByRole("button", {
-      name: "Acortar URL",
-    });
-    fireEvent.click(shortenButton);
+  await waitFor(() =>
+    expect(
+      screen.getByText("https://public.savia.test/s/0123456789abcdef"),
+    ).toBeInTheDocument(),
+  );
+  expect(request.mock.calls[1]).toEqual([
+    "/v1/public-forms/short-link/short-url",
+    { method: "POST" },
+  ]);
+});
 
-    await waitFor(() =>
-      expect(screen.getByText("https://is.gd/short123")).toBeInTheDocument(),
-    );
-  } finally {
-    fetchSpy.mockRestore();
-  }
+it("restores a published short URL when the link list reloads", async () => {
+  const shortUrl = "https://public.savia.test/s/0123456789abcdef";
+  const row = {
+    id: "saved-short-link",
+    token: "token-saved-short",
+    path: "/public/forms/token-saved-short",
+    url: "https://public.savia.test/public/forms/token-saved-short",
+    shortUrl,
+    kind: "record",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })));
+
+  render(
+    <PublicLinkManager
+      domainId="domain"
+      objectName="people"
+      kind="record"
+      request={request}
+    />,
+  );
+
+  expect(await screen.findByText(shortUrl)).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Enlace corto" }),
+  ).toBeDisabled();
 });
 
 it("renders the direct open link button and back button when provided", async () => {
