@@ -202,7 +202,9 @@ describe("App", () => {
     await screen.findByRole("heading", { name: "Integraciones" });
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
 
-    expect(await screen.findByLabelText("Organización activa")).toHaveValue("101");
+    expect(await screen.findByLabelText("Organización activa")).toHaveValue(
+      "101",
+    );
   });
 
   it("keeps the signed-in account menu in the sidebar", async () => {
@@ -279,7 +281,10 @@ describe("App", () => {
     expect(
       await screen.findByRole("link", { name: "Conexiones" }),
     ).toHaveAttribute("href", "#/my-integrations?tab=connections");
-    expect(await screen.findByRole("heading", { name: "CRM" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "Integraciones" }),
+    ).toBeVisible();
+    expect(screen.getByRole("tab", { name: "CRM" })).toBeVisible();
   });
 
   it("shows the Request access explanation without mounting the editor for a non-platform administrator", async () => {
@@ -388,7 +393,9 @@ describe("App", () => {
     ).toBeVisible();
     expect(screen.getByRole("tab", { name: "Globales" })).toBeVisible();
     expect(screen.getByRole("tab", { name: /Integraciones/i })).toBeVisible();
-    expect(screen.queryByRole("tab", { name: /Por (organización|agencia)/i })).toBeNull();
+    expect(
+      screen.queryByRole("tab", { name: /Por (organización|agencia)/i }),
+    ).toBeNull();
     expect(
       await screen.findByRole("link", { name: "Claves y servicios" }),
     ).toHaveAttribute("href", "#/service-credentials");

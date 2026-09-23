@@ -289,6 +289,10 @@
     {
       "filename": "0062_notification_collection_triggers.sql",
       "sha256": "5c93b9122bf71b96f3d90abc730abc59f8c1c34aa3ceb488b5ac2dfb97176506"
+    },
+    {
+      "filename": "0063_tenant_crm_and_assistant_tables.sql",
+      "sha256": "5f536cc8e6f410071c29377baabf07b99dd7af82060d02b494b43611a9d13bb3"
     }
   ],
   "objects": [

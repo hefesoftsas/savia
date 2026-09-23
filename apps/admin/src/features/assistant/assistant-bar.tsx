@@ -335,7 +335,9 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
                   {isQuote ? (quoteFieldLabels[name] ?? name) : name}
                 </dt>
                 <dd className="break-words text-foreground">
-                  {isQuote ? formatQuoteField(value,name) : inputValue(value, name)}
+                  {isQuote
+                    ? formatQuoteField(value, name)
+                    : inputValue(value, name)}
                 </dd>
               </div>
             ))}
@@ -560,6 +562,7 @@ function ChatMessage({
   message?: unknown;
   employees?: VirtualEmployee[];
 }) {
+  const t = useMessages(uiMessages);
   const threadMessages = useAuiState((s) => s.thread.messages);
   const messageParts = useAuiState((s) => s.message.parts);
   const answerText = (() => {
@@ -633,7 +636,7 @@ function ChatMessage({
           <EmployeeIcon className="size-3" />
         </div>
         <span className="text-xs font-semibold tracking-tight text-foreground/80">
-          {respondingEmployee ? respondingEmployee.name : "Asistente Savia"}
+          {respondingEmployee ? respondingEmployee.name : t("Savia assistant")}
         </span>
       </div>
       <MessagePrimitive.Root className="min-w-0 text-sm leading-relaxed text-foreground">
@@ -651,7 +654,7 @@ function ChatMessage({
         <MessagePrimitive.Error>
           <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2 text-xs text-destructive">
             <AlertCircle className="size-4 shrink-0" />
-            <span>La respuesta se interrumpió. Intenta de nuevo.</span>
+            <span>{t("The response was interrupted. Try again.")}</span>
           </div>
         </MessagePrimitive.Error>
       </MessagePrimitive.Root>
@@ -662,27 +665,25 @@ function ChatMessage({
 const quickPrompts = [
   {
     icon: Users,
-    label: "¿Cuántos clientes tenemos por ciudad?",
-    prompt:
-      "¿Cuántos clientes tenemos por ciudad? Muéstramelo en un gráfico de barras.",
+    label: "Customers by city",
+    prompt: "Ask about customers by city in a bar chart.",
   },
   {
     icon: Database,
-    label: "¿Qué colecciones hay en el CRM?",
+    label: "CRM collections",
     prompt:
-      "¿Qué colecciones de datos tenemos disponibles en el CRM y cuántos registros hay?",
+      "Ask what collections are available and how many records they contain.",
   },
   {
     icon: BarChart3,
-    label: "Cotizaciones agrupadas por estado",
+    label: "Quotes by status",
     prompt:
-      "Genera un informe con las cotizaciones agrupadas por su estado en un gráfico y tabla.",
+      "Create a report with quotes grouped by status in a chart and table.",
   },
   {
     icon: FileSpreadsheet,
-    label: "Clientes activos con correo y ciudad",
-    prompt:
-      "Muestra la lista de clientes activos indicando su correo, teléfono y ciudad.",
+    label: "Active customers with email and city",
+    prompt: "Show active customers with their email, phone, and city.",
   },
 ];
 
@@ -784,6 +785,7 @@ function VoiceDictationButton({
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   disabled?: boolean;
 }) {
+  const t = useMessages(uiMessages);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -796,7 +798,7 @@ function VoiceDictationButton({
 
   const toggleListening = useCallback(() => {
     if (!isSupported) {
-      toast.error("El dictado por voz no es compatible con este navegador.");
+      toast.error(t("Voice dictation is not supported in this browser"));
       return;
     }
 
@@ -871,7 +873,7 @@ function VoiceDictationButton({
             variant="ghost"
             disabled
             data-testid="composer-voice-dictation"
-            aria-label="Dictado por voz (no compatible con este navegador)"
+            aria-label={t("Voice dictation is not supported in this browser")}
             className="size-9 shrink-0 rounded-lg text-muted-foreground/30 cursor-not-allowed"
           >
             <Mic className="size-4" />
@@ -879,7 +881,9 @@ function VoiceDictationButton({
         </TooltipTrigger>
         <TooltipContent side="top">
           <p className="text-xs">
-            Tu navegador no soporta dictado por voz (usa Chrome, Edge o Safari)
+            {t(
+              "Your browser does not support voice dictation (use Chrome, Edge, or Safari)",
+            )}
           </p>
         </TooltipContent>
       </Tooltip>
@@ -896,10 +900,10 @@ function VoiceDictationButton({
           disabled={disabled}
           onClick={toggleListening}
           data-testid="composer-voice-dictation"
-          aria-label={
-            isListening ? "Detener dictado por voz" : "Dictar por voz"
-          }
-          title={isListening ? "Detener dictado por voz" : "Dictar por voz"}
+          aria-label={t(
+            isListening ? "Stop voice dictation" : "Voice dictation",
+          )}
+          title={t(isListening ? "Stop voice dictation" : "Voice dictation")}
           className={cn(
             "size-9 shrink-0 rounded-lg transition-colors active:scale-95",
             isListening
@@ -916,14 +920,12 @@ function VoiceDictationButton({
       </TooltipTrigger>
       <TooltipContent side="top">
         <p className="font-semibold text-xs">
-          {isListening
-            ? "Escuchando... Haz clic para detener"
-            : "Dictado por voz"}
+          {isListening ? t("Listening… Click to stop") : t("Voice dictation")}
         </p>
         <p className="text-[11px] text-muted-foreground">
           {isListening
-            ? "Transcribiendo en tiempo real"
-            : "Habla para escribir tu mensaje"}
+            ? t("Transcribing in real time")
+            : t("Speak to write your message")}
         </p>
       </TooltipContent>
     </Tooltip>
@@ -937,6 +939,7 @@ function ComposerAttachmentButton({
   canUpload: boolean;
   activeModelName?: string;
 }) {
+  const t = useMessages(uiMessages);
   if (!canUpload) {
     return (
       <Tooltip>
@@ -947,7 +950,7 @@ function ComposerAttachmentButton({
             variant="ghost"
             disabled
             data-testid="composer-attachment-button"
-            aria-label="Adjuntar archivo (no disponible para el modelo actual)"
+            aria-label={t("Attachments are not supported")}
             className="size-9 shrink-0 rounded-lg text-muted-foreground/30 cursor-not-allowed opacity-50"
           >
             <Paperclip className="size-4" />
@@ -955,12 +958,13 @@ function ComposerAttachmentButton({
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs text-xs">
           <p className="font-semibold text-amber-600 dark:text-amber-400">
-            Adjuntos no soportados
+            {t("Attachments are not supported")}
           </p>
           <p className="text-muted-foreground">
-            El modelo actual ({activeModelName || "texto plano"}) no admite
-            visión ni archivos. Menciona a un empleado o selecciona un modelo
-            multimodal con visión para adjuntar archivos.
+            {t(
+              "The current model (%{model}) does not support vision or files. Mention an employee or select a multimodal model with vision to attach files.",
+              { model: activeModelName || t("plain text") },
+            )}
           </p>
         </TooltipContent>
       </Tooltip>
@@ -976,8 +980,8 @@ function ComposerAttachmentButton({
             type="button"
             variant="ghost"
             data-testid="composer-attachment-button"
-            aria-label="Adjuntar archivo o imagen"
-            title="Adjuntar archivo o imagen"
+            aria-label={t("Attach file or image")}
+            title={t("Attach file or image")}
             className="size-9 shrink-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95"
           >
             <Paperclip className="size-4" />
@@ -985,9 +989,9 @@ function ComposerAttachmentButton({
         </ComposerPrimitive.AddAttachment>
       </TooltipTrigger>
       <TooltipContent side="top">
-        <p className="font-semibold text-xs">Adjuntar archivo o imagen</p>
+        <p className="font-semibold text-xs">{t("Attach file or image")}</p>
         <p className="text-[11px] text-muted-foreground">
-          Soporta imágenes, documentos y archivos de datos
+          {t("Supports images, documents, and data files")}
         </p>
       </TooltipContent>
     </Tooltip>
@@ -1053,6 +1057,7 @@ function ComposerTextInput({
   employees?: VirtualEmployee[];
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
 }) {
+  const t = useMessages(uiMessages);
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const localInputRef = useRef<HTMLTextAreaElement | null>(null);
   const inputRef = externalInputRef ?? localInputRef;
@@ -1231,10 +1236,10 @@ function ComposerTextInput({
         className="min-h-10 max-h-32 flex-1 resize-none bg-transparent px-3 py-2 text-sm font-normal leading-normal outline-none placeholder:text-muted-foreground/70"
         placeholder={
           isRunning
-            ? "El asistente está respondiendo…"
-            : "Escribe una solicitud o menciona a @empleado…"
+            ? t("The assistant is responding…")
+            : t("Write a request or mention @employee…")
         }
-        aria-label="Mensaje para el asistente"
+        aria-label={t("Message for the assistant")}
         rows={1}
       />
     </div>
@@ -1242,6 +1247,7 @@ function ComposerTextInput({
 }
 
 function ComposerActionButton() {
+  const t = useMessages(uiMessages);
   const isRunning = useAuiState((s) => s.thread.isRunning);
 
   if (isRunning) {
@@ -1251,8 +1257,8 @@ function ComposerActionButton() {
           size="icon"
           type="button"
           variant="outline"
-          aria-label="Detener respuesta"
-          title="Detener respuesta"
+          aria-label={t("Stop response")}
+          title={t("Stop response")}
           className="size-9 shrink-0 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive active:scale-95"
         >
           <Square className="size-3.5 fill-current" />
@@ -1266,7 +1272,7 @@ function ComposerActionButton() {
       <Button
         size="icon"
         type="submit"
-        aria-label="Enviar mensaje"
+        aria-label={t("Send message")}
         className="size-9 shrink-0 rounded-lg bg-primary text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95 disabled:opacity-40"
       >
         <SendHorizontal className="size-4" />
@@ -1276,10 +1282,11 @@ function ComposerActionButton() {
 }
 
 function ComposerFooterInfo() {
+  const t = useMessages(uiMessages);
   const isRunning = useAuiState((s) => s.thread.isRunning);
   return isRunning ? null : (
     <p className="mt-2 hidden px-1 text-right text-xs text-muted-foreground sm:block">
-      Enter para enviar • Shift + Enter para salto de línea
+      {t("Enter to send • Shift + Enter for a new line")}
     </p>
   );
 }
@@ -1293,6 +1300,7 @@ function ComposerSection({
   models: AssistantModel[];
   summary: AssistantConfigurationSummary | null;
 }) {
+  const t = useMessages(uiMessages);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const threadMessages = useAuiState((s) => s.thread.messages);
 
@@ -1327,7 +1335,7 @@ function ComposerSection({
     <div className="border-t border-border/60 bg-background/95 p-3.5 backdrop-blur-xs sm:p-4">
       <details className="mb-2 text-xs text-muted-foreground">
         <summary className="w-fit cursor-pointer rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-ring">
-          Opciones del asistente
+          {t("Assistant options")}
         </summary>
         <ComposerActiveContext
           activeEmployee={activeEmployee}
@@ -1376,6 +1384,7 @@ function AssistantConversation({
   threadTitle?: string;
   onRunningChange?: (isRunning: boolean) => void;
 }) {
+  const t = useMessages(uiMessages);
   const { authSession, assistantConfiguration, virtualEmployees } =
     useAppServices();
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
@@ -1468,17 +1477,18 @@ function AssistantConversation({
                 </div>
               </div>
               <h3 className="text-sm font-semibold tracking-tight text-foreground sm:text-base">
-                ¿En qué puedo ayudarte hoy?
+                {t("How can I help today?")}
               </h3>
               <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                Consulta colecciones, busca clientes, analiza métricas y genera
-                gráficos interactivos sobre tus datos del CRM.
+                {t(
+                  "Browse collections, search for customers, analyze metrics, and create interactive charts from your CRM data.",
+                )}
               </p>
 
               {employees.length > 0 ? (
                 <div className="mt-4 w-full max-w-sm space-y-2">
                   <p className="px-1 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                    Empleados Virtuales (@mención)
+                    {t("Virtual employees (@mention)")}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {employees.map((emp) => {
@@ -1510,13 +1520,13 @@ function AssistantConversation({
 
               <div className="mt-5 w-full max-w-sm space-y-2">
                 <p className="px-1 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                  Consultas sugeridas
+                  {t("Suggested queries")}
                 </p>
                 <div className="grid grid-cols-1 gap-2">
                   {quickPrompts.map((item) => (
                     <ThreadPrimitive.Suggestion
                       key={item.label}
-                      prompt={item.prompt}
+                      prompt={t(item.prompt as keyof typeof uiMessages)}
                       send
                       asChild
                     >
@@ -1525,7 +1535,9 @@ function AssistantConversation({
                         className="group flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/60 bg-card/60 px-3.5 py-2.5 text-left text-xs font-medium text-foreground shadow-2xs transition-all hover:border-primary/40 hover:bg-muted/50"
                       >
                         <item.icon className="size-4 shrink-0 text-primary/70 transition-colors group-hover:text-primary" />
-                        <span className="flex-1 truncate">{item.label}</span>
+                        <span className="flex-1 truncate">
+                          {t(item.label as keyof typeof uiMessages)}
+                        </span>
                       </button>
                     </ThreadPrimitive.Suggestion>
                   ))}
@@ -1700,16 +1712,16 @@ export function AssistantBar() {
                   size="icon"
                   className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
                   onClick={() => setViewMode("chat")}
-                  aria-label="Volver al chat"
+                  aria-label={t("Back to chat")}
                 >
                   <ArrowLeft className="size-4" />
                 </Button>
                 <div>
                   <SheetTitle className="text-sm font-semibold tracking-tight text-foreground">
-                    Historial
+                    {t("History")}
                   </SheetTitle>
                   <p className="text-[11px] text-muted-foreground">
-                    Tus conversaciones anteriores
+                    {t("Previous conversations")}
                   </p>
                 </div>
               </div>
@@ -1721,11 +1733,11 @@ export function AssistantBar() {
                 <div>
                   <div className="flex items-center gap-2">
                     <SheetTitle className="text-sm font-semibold tracking-tight text-foreground">
-                      Asistente Savia
+                      {t("Savia assistant")}
                     </SheetTitle>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Respuestas para decidir y actuar
+                    {t("Answers to help you decide and act")}
                   </p>
                 </div>
               </div>
@@ -1739,11 +1751,11 @@ export function AssistantBar() {
                     size="sm"
                     onClick={handleOpenHistory}
                     className="relative h-8 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/70"
-                    aria-label="Ver historial"
-                    title="Ver historial de conversaciones"
+                    aria-label={t("Show history")}
+                    title={t("Conversation history")}
                   >
                     <History className="size-3.5" />
-                    <span className="hidden sm:inline">Historial</span>
+                    <span className="hidden sm:inline">{t("History")}</span>
                     {threads.length > 0 ? (
                       <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold text-primary">
                         {threads.length}
@@ -1756,8 +1768,8 @@ export function AssistantBar() {
                     size="icon"
                     onClick={handleNewThread}
                     className="size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/70"
-                    aria-label="Nueva conversación"
-                    title="Nueva conversación"
+                    aria-label={t("New conversation")}
+                    title={t("New conversation")}
                   >
                     <SquarePen className="size-4" />
                   </Button>
@@ -1770,7 +1782,7 @@ export function AssistantBar() {
                   className="h-8 gap-1.5 rounded-lg text-xs font-medium"
                 >
                   <Plus className="size-3.5" />
-                  <span>Nueva</span>
+                  <span>{t("New")}</span>
                 </Button>
               )}
             </div>
