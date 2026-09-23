@@ -22,6 +22,18 @@ const branding: TenantBranding = {
 const request = (path: string) =>
   new Request(`https://example.com/api/auth/${path}`);
 describe("tenant identity on OAuth surfaces", () => {
+  it("renders the default login video reel muted with a pause control", async () => {
+    const html = await oauthPageResponse(request("login"))!.text();
+
+    expect(html).toContain('src="/login/savia-platform-01.mp4"');
+    expect(html).toContain('src="/login/savia-platform-02.mp4"');
+    expect(html).toContain('aria-label="Pausar vídeos"');
+    expect(html).toMatch(
+      /<video[^>]*autoPlay=""[^>]*muted=""[^>]*playsInline=""/,
+    );
+    expect(html).toContain("data-oauth-login-reel");
+  });
+
   it("passes the internal tenant header through worker HTML and stylesheet routes", async () => {
     const headers = {
       "x-savia-tenant-branding": encodeURIComponent(JSON.stringify(branding)),

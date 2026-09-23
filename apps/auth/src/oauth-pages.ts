@@ -138,6 +138,45 @@ const oauthUiScript = String.raw`(() => {
   const enrollment = document.querySelector("[data-oauth-enrollment]");
   const passwordInput = document.querySelector("#password");
   const passwordToggle = document.querySelector("[data-oauth-password-toggle]");
+  const loginReel = document.querySelector("[data-oauth-login-reel]");
+
+  if (loginReel) {
+    const videos = Array.from(
+      loginReel.querySelectorAll("[data-oauth-login-reel-video]"),
+    );
+    const reelToggle = loginReel.querySelector(
+      "[data-oauth-login-reel-toggle]",
+    );
+    let activeIndex = 0;
+    let paused = false;
+
+    function rotateReel() {
+      if (paused || videos.length < 2) return;
+      const nextIndex = (activeIndex + 1) % videos.length;
+      const nextVideo = videos[nextIndex];
+      nextVideo.currentTime = 0;
+      nextVideo
+        .play()
+        .then(() => {
+          videos[activeIndex].pause();
+          activeIndex = nextIndex;
+          loginReel.dataset.active = String(activeIndex);
+        })
+        .catch(() => {});
+    }
+
+    videos.forEach((video) => video.addEventListener("ended", rotateReel));
+    reelToggle?.addEventListener("click", () => {
+      paused = !paused;
+      reelToggle.setAttribute("aria-pressed", String(paused));
+      reelToggle.setAttribute(
+        "aria-label",
+        paused ? "Reanudar vídeos" : "Pausar vídeos",
+      );
+      if (paused) videos.forEach((video) => video.pause());
+      else videos[activeIndex].play().catch(() => {});
+    });
+  }
 
   function signedOAuthQuery() {
     const source = new URLSearchParams(window.location.search);
