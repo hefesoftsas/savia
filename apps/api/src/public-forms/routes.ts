@@ -15,6 +15,7 @@ import {
   submissionSchema,
   submitPublicForm,
   tenantForDomain,
+  persistPublicFormShortUrl,
   type PublicFormOptions,
   type PublicFormRow,
 } from "./service";
@@ -98,7 +99,7 @@ export function registerPublicFormRoutes(
       path: "/v1/public-forms/{id}/short-url",
       tags: ["Public forms"],
       request: { params: z.object({ id: z.string().uuid() }) },
-      responses: { 200: jsonResponse, 404: jsonResponse },
+      responses: { 200: jsonResponse, 404: jsonResponse, 503: jsonResponse },
     }),
     async (c) => {
       const id = c.req.valid("param").id;
@@ -131,11 +132,12 @@ export function registerPublicFormRoutes(
         ).href;
         try {
           const shortUrl = await options.shortener.shorten(destination);
-          await db
-            .prepare("UPDATE public_forms SET short_url=? WHERE id=?")
-            .bind(shortUrl, id)
-            .run();
-          return c.json({ data: { shortUrl } }, 200);
+          const persistedShortUrl = await persistPublicFormShortUrl(
+            db,
+            id,
+            shortUrl,
+          );
+          return c.json({ data: { shortUrl: persistedShortUrl } }, 200);
         } catch {
           throw new HTTPException(503, {
             message: "External short URL provider unavailable.",

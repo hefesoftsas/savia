@@ -326,6 +326,42 @@ it("replaces the Savia-only short URL for existing links when external shortenin
   ).toBe("https://is.gd/existing1");
   expect(shorten).toHaveBeenCalledWith(link.url);
 });
+it("returns the stored winner when external shortening retries overlap", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  const resolutions: ((url: string) => void)[] = [];
+  let notifyBothCalls!: () => void;
+  const bothCalls = new Promise<void>((resolve) => {
+    notifyBothCalls = resolve;
+  });
+  const shorten = vi.fn(
+    () =>
+      new Promise<string>((resolve) => {
+        resolutions.push(resolve);
+        if (resolutions.length === 2) notifyBothCalls();
+      }),
+  );
+  const instance = app({ shortener: { shorten } });
+  const retry = () =>
+    instance.request(`https://api.test/v1/public-forms/${link.id}/short-url`, {
+      method: "POST",
+    });
+
+  const firstRequest = retry();
+  const secondRequest = retry();
+  await bothCalls;
+  resolutions[1]("https://is.gd/winner2");
+  const secondResponse = await secondRequest;
+  resolutions[0]("https://is.gd/loser1");
+  const firstResponse = await firstRequest;
+
+  expect((await firstResponse.json()).data).toEqual({
+    shortUrl: "https://is.gd/winner2",
+  });
+  expect((await secondResponse.json()).data).toEqual({
+    shortUrl: "https://is.gd/winner2",
+  });
+});
 it("keeps publishing the canonical URL when the external shortener is unavailable", async () => {
   const instance = app({
     shortener: {

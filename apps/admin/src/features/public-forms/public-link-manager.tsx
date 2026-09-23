@@ -331,7 +331,7 @@ export function PublicLinkManager({
           ...previous,
           [link.id]: data.shortUrl,
         }));
-        setNotice(t("Enlace copiado."));
+        setNotice(t("Enlace corto generado."));
       }
     } catch {
       setError(

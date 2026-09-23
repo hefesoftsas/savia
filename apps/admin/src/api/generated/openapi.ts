@@ -2798,6 +2798,17 @@ export interface paths {
             };
           };
         };
+        /** @description Public form response */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
       };
     };
     delete?: never;

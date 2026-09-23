@@ -282,6 +282,11 @@ export const publicFormsMessages = {
   "Acortar URL": ["Acortar URL", "Shorten URL", "Encurtar URL"],
   "Acortando…": ["Acortando…", "Shortening…", "Encurtando…"],
   "Enlace corto": ["Enlace corto", "Short link", "Link curto"],
+  "Enlace corto generado.": [
+    "Enlace corto generado.",
+    "Short link generated.",
+    "Link curto gerado.",
+  ],
   "No se pudo acortar el enlace. Puedes usar el enlace completo.": [
     "No se pudo acortar el enlace. Puedes usar el enlace completo.",
     "Unable to shorten the link. You can use the full link.",

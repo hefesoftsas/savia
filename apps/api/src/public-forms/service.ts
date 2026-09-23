@@ -194,6 +194,24 @@ export function managedForm(
     createdAt: row.created_at,
   };
 }
+export async function persistPublicFormShortUrl(
+  db: D1Database,
+  id: string,
+  shortUrl: string,
+) {
+  const update = await db
+    .prepare(
+      "UPDATE public_forms SET short_url=? WHERE id=? AND short_url IS NULL",
+    )
+    .bind(shortUrl, id)
+    .run();
+  if (update.meta.changes > 0) return shortUrl;
+  const stored = await db
+    .prepare("SELECT short_url FROM public_forms WHERE id=?")
+    .bind(id)
+    .first<{ short_url: string | null }>();
+  return stored?.short_url ?? shortUrl;
+}
 export async function availableObject(
   db: D1Database,
   tenant: string,
@@ -449,11 +467,12 @@ export async function publishPublicForm(
   if (options.shortener && result.url) {
     try {
       const shortUrl = await options.shortener.shorten(result.url);
-      await db
-        .prepare("UPDATE public_forms SET short_url=? WHERE id=?")
-        .bind(shortUrl, id)
-        .run();
-      return { ...result, shortUrl };
+      const persistedShortUrl = await persistPublicFormShortUrl(
+        db,
+        id,
+        shortUrl,
+      );
+      return { ...result, shortUrl: persistedShortUrl };
     } catch {
       // Publishing remains available when the optional third-party provider is down.
     }

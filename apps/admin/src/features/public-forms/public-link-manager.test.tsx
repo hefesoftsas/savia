@@ -292,6 +292,7 @@ it("creates a Savia short URL through the authenticated API", async () => {
       screen.getByText("https://public.savia.test/s/0123456789abcdef"),
     ).toBeInTheDocument(),
   );
+  expect(screen.getByText("Enlace corto generado.")).toBeInTheDocument();
   expect(request.mock.calls[1]).toEqual([
     "/v1/public-forms/short-link/short-url",
     { method: "POST" },
