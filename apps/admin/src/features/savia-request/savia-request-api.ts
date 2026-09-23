@@ -49,7 +49,11 @@ export function createSaviaRequestApi(apiClient: ApiClient) {
       apiClient.post<{ id: string; name: string }>(
         `${apiRoot}/flows/${id}/duplicate`,
       ),
-    removeFlow: (id: string) => apiClient.delete(`${apiRoot}/flows/${id}`),
+    removeFlow: (id: string) =>
+      apiClient.delete(`${apiRoot}/flows/${id}`, {
+        body: "{}",
+        headers: { "Content-Type": "application/json" },
+      }),
     run: (id: string, mode: "mock" | "live", input: Record<string, string>) =>
       apiClient.post<RequestRun>(`${apiRoot}/flows/${id}/runs`, {
         mode,
