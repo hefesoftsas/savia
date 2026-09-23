@@ -1,6 +1,7 @@
 .screens-page {
   min-width: 0;
   max-width: 56rem;
+  margin-inline: auto;
   container-type: inline-size;
   container-name: screens-page;
 }

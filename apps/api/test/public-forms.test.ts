@@ -380,7 +380,11 @@ it("keeps publishing the canonical URL when the external shortener is unavailabl
     `https://api.test/v1/public-forms/${link.id}/short-url`,
     { method: "POST" },
   );
-  expect(retry.status).toBe(503);
+  expect(retry.status).toBe(200);
+  const { data } = (await retry.json()) as { data: { shortUrl: string } };
+  expect(data.shortUrl).toMatch(
+    /^https:\/\/forms\.savia\.test\/s\/[a-f0-9]{16}$/,
+  );
 });
 it("restricts short URL creation to platform administrators", async () => {
   const name = await object();
