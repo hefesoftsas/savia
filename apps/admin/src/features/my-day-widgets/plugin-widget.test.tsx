@@ -178,7 +178,7 @@ describe("PluginWidgetBody", () => {
       return element!;
     });
     expect(frame?.getAttribute("src")).toContain(
-      "/api/plugin-store/custom.demo/widget?widget=resumen",
+      "/v1/data-domains/platform/api/plugin-store/custom.demo/widget?widget=resumen",
     );
   });
 });
