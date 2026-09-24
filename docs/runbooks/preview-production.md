@@ -53,8 +53,10 @@ stored in its GitHub environment. Business integrations copied from production
 can still refer to live external accounts: interactive operations use those
 accounts. Scheduled synchronization is disabled in preview to avoid duplicate
 background work. A workflow-only scheduler runs once per minute so explicitly active
-workflows and incoming webhooks can execute; it does not invoke CRM synchronization
-or scheduled record-history maintenance. Preview OAuth origins and service bindings point to preview.
+workflows and incoming webhooks can execute; it also retains the newest 200
+operational audit events per domain. It does not invoke CRM synchronization or
+scheduled collection record-history maintenance. Preview OAuth origins and service
+bindings point to preview.
 
 The public gateway uses an exact custom domain. Wildcard custom domains are not
 supported by Cloudflare; tenant-specific hostnames need separately provisioned

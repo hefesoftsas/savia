@@ -1,5 +1,6 @@
 import { remoteMcpResponse } from "./mcp-gateway";
 import { maintainRecordHistory } from "@savia/studio-server/record-history-storage";
+import { purgeStudioAudit } from "@savia/studio-server/audit-retention";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
 import { processCrmSyncJobs } from "./external-crm/auto-sync";
@@ -218,6 +219,12 @@ export async function runScheduledCrmSync(
   );
 }
 
+async function runScheduledAuditRetention(db: D1Database): Promise<void> {
+  const report = await purgeStudioAudit(db);
+  if (report.deleted > 0)
+    console.info(JSON.stringify({ event: "studio_audit_cleanup", ...report }));
+}
+
 export type RuntimeOverrides = {
   workflowFetch?: typeof fetch;
   realtime?: import("./realtime/hub-client").RealtimeHubClient;
@@ -317,12 +324,21 @@ const runtime = {
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
-      await runScheduledWorkflows(
-        environment.DB,
-        studioIntegrationKeyFromEnvironment(environment),
-        overrides.workflowFetch,
-      );
-      await runScheduledNotifications(environment.DB);
+      const results = await Promise.allSettled([
+        runScheduledWorkflows(
+          environment.DB,
+          studioIntegrationKeyFromEnvironment(environment),
+          overrides.workflowFetch,
+        ),
+        runScheduledNotifications(environment.DB),
+        runScheduledAuditRetention(environment.DB),
+      ]);
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result) => result.reason),
+          "Scheduled jobs failed",
+        );
       return;
     }
     const results = await Promise.allSettled([
@@ -333,6 +349,7 @@ const runtime = {
         overrides.workflowFetch,
       ),
       runScheduledNotifications(environment.DB),
+      runScheduledAuditRetention(environment.DB),
       maintainRecordHistory(environment.DB).then((report) => {
         console.info(
           JSON.stringify({ event: "record_history_cleanup", ...report }),
