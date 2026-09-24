@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(333);
+    expect(names).toHaveLength(139);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -153,8 +153,7 @@ describe("full D1 schema projection", () => {
         "legacy_import_streams",
         "insurer_companies",
         "customer_address",
-        "insurance_policy",
-        "operation_payment",
+        "customer_clientagency",
         "attachment_uploads",
         "identity_principal",
         "identity_global_role",
@@ -187,7 +186,6 @@ describe("full D1 schema projection", () => {
         "notification_send_limits",
         "notification_scope_settings",
         "notification_maintenance_checkpoints",
-        "user_user",
       ]),
     );
 
@@ -243,12 +241,14 @@ describe("full D1 schema projection", () => {
   });
 
   it("keeps portable types and relational constraints in the internal schema", async () => {
-    const [addressColumns, paymentColumns, paymentForeignKeys] =
+    const [addressColumns, profileColumns, profileForeignKeys] =
       await Promise.all([
         env.DB.prepare("PRAGMA table_info(customer_address)").all<TableInfo>(),
-        env.DB.prepare("PRAGMA table_info(operation_payment)").all<TableInfo>(),
         env.DB.prepare(
-          "PRAGMA foreign_key_list(operation_payment)",
+          "PRAGMA table_info(customer_clientagency)",
+        ).all<TableInfo>(),
+        env.DB.prepare(
+          "PRAGMA foreign_key_list(customer_clientagency)",
         ).all<ForeignKey>(),
       ]);
 
@@ -257,12 +257,12 @@ describe("full D1 schema projection", () => {
         expect.objectContaining({ name: "coordinates", type: "TEXT" }),
       ]),
     );
-    expect(paymentColumns.results).toEqual(
+    expect(profileColumns.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "id", type: "INTEGER" }),
       ]),
     );
-    expect(paymentForeignKeys.results.length).toBeGreaterThan(0);
+    expect(profileForeignKeys.results.length).toBeGreaterThan(0);
   });
 
   it("projects the private attachment metadata relation", async () => {
