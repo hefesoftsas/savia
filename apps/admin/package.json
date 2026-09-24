@@ -8,7 +8,7 @@
     "build": "pnpm run typecheck && vite build",
     "build:worker": "pnpm run build",
     "generate:api": "tsx scripts/generate-openapi-types.ts && prettier --write src/api/generated/openapi.ts",
-    "generate:crm-api": "orval --config src/features/crm-engine/orval.config.ts",
+    "generate:studio-api": "orval --config src/features/studio-engine/orval.config.ts && prettier --write src/features/studio-engine/generated/studio.ts",
     "typecheck": "pnpm run generate:api && tsc --noEmit",
     "test": "vitest run --maxWorkers=1 $VITEST_SHARD_ARGS",
     "test:watch": "vitest"
@@ -41,7 +41,7 @@
     "@radix-ui/react-slot": "^1.3.3",
     "@radix-ui/react-switch": "^1.3.7",
     "@radix-ui/react-tooltip": "^1.2.16",
-    "@savia/crm-shared": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
     "@savia/provider-contracts": "workspace:*",
     "@savia/release-catalog": "workspace:*",
     "@savia/tenant-host": "workspace:*",

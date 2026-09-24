@@ -1,0 +1,186 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "actions": [
+    {
+      "id": "quote",
+      "kind": "savia-request",
+      "flows": [
+        "sbs-producto-8",
+        "sbs-producto-10",
+        "sbs-producto-11",
+        "equidad-basico-quote",
+        "equidad-full-quote",
+        "equidad-ligero-quote",
+        "equidad-rce-quote",
+        "liberty-basico-quote",
+        "liberty-basico-pt-quote",
+        "liberty-full-quote",
+        "liberty-integral-quote",
+        "mapfre-para-la-mujer-quote",
+        "qualitas-direct-research",
+        "qualitas-base-quote",
+        "qualitas-plus-quote",
+        "previsora-clasica-quote",
+        "previsora-preferente-quote",
+        "previsora-premium-quote",
+        "previsora-sin-asistencia-quote",
+        "sura-autos-provider",
+        "equidad-vehicle-by-plate"
+      ],
+      "normalize": "insurance-quote"
+    }
+  ],
+  "settings": {
+    "defaults": {
+      "quotePages": {
+        "direct": true,
+        "wizard": true
+      },
+      "vehicleLookup": {
+        "enabled": true,
+        "flowId": "sura-autos-provider"
+      },
+      "clientMapping": {
+        "collection": "clientes",
+        "matchField": "documento",
+        "fieldMap": {
+          "name": "fullName",
+          "documento": "documentNumber",
+          "email": "email",
+          "telefono": "phone"
+        }
+      },
+      "products": [
+        {
+          "id": "sbs-producto-8",
+          "label": "SBS · Autos Producto 8",
+          "enabled": true,
+          "rank": 10
+        },
+        {
+          "id": "sbs-producto-10",
+          "label": "SBS · Gold",
+          "enabled": true,
+          "rank": 20
+        },
+        {
+          "id": "sbs-producto-11",
+          "label": "SBS · Plata",
+          "enabled": true,
+          "rank": 30
+        },
+        {
+          "id": "equidad-basico-quote",
+          "label": "Equidad · Básico",
+          "enabled": true,
+          "rank": 40
+        },
+        {
+          "id": "equidad-full-quote",
+          "label": "Equidad · Full",
+          "enabled": true,
+          "rank": 50
+        },
+        {
+          "id": "equidad-ligero-quote",
+          "label": "Equidad · Ligero",
+          "enabled": true,
+          "rank": 60
+        },
+        {
+          "id": "equidad-rce-quote",
+          "label": "Equidad · RCE",
+          "enabled": true,
+          "rank": 70
+        },
+        {
+          "id": "liberty-basico-quote",
+          "label": "Liberty · Básico",
+          "enabled": true,
+          "rank": 80
+        },
+        {
+          "id": "liberty-basico-pt-quote",
+          "label": "Liberty · Básico + PT",
+          "enabled": true,
+          "rank": 90
+        },
+        {
+          "id": "liberty-full-quote",
+          "label": "Liberty · Full",
+          "enabled": true,
+          "rank": 100
+        },
+        {
+          "id": "liberty-integral-quote",
+          "label": "Liberty · Integral",
+          "enabled": true,
+          "rank": 110
+        },
+        {
+          "id": "mapfre-para-la-mujer-quote",
+          "label": "Mapfre · Para la Mujer",
+          "enabled": true,
+          "rank": 120
+        },
+        {
+          "id": "qualitas-direct-research",
+          "label": "Qualitas · Amplia",
+          "enabled": true,
+          "rank": 130
+        },
+        {
+          "id": "qualitas-base-quote",
+          "label": "Qualitas · Base",
+          "enabled": true,
+          "rank": 140
+        },
+        {
+          "id": "qualitas-plus-quote",
+          "label": "Qualitas · Plus",
+          "enabled": true,
+          "rank": 150
+        },
+        {
+          "id": "previsora-clasica-quote",
+          "label": "Previsora · Clásica",
+          "enabled": true,
+          "rank": 160
+        },
+        {
+          "id": "previsora-preferente-quote",
+          "label": "Previsora · Preferente",
+          "enabled": true,
+          "rank": 170
+        },
+        {
+          "id": "previsora-premium-quote",
+          "label": "Previsora · Premium",
+          "enabled": true,
+          "rank": 180
+        },
+        {
+          "id": "previsora-sin-asistencia-quote",
+          "label": "Previsora · Sin asistencia",
+          "enabled": true,
+          "rank": 190
+        }
+      ]
+    }
+  },
+  "screens": [
+    {
+      "object": "cotizador",
+      "view": "records"
+    },
+    {
+      "object": "cotizador_por_pasos",
+      "view": "records"
+    },
+    {
+      "object": "administrar_seguros",
+      "view": "records"
+    }
+  ]
+}

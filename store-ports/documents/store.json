@@ -1,0 +1,333 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_documents",
+        "label": "Requisitos documentales",
+        "description": "Solicita, recibe y revisa los documentos necesarios para cada caso.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "valid_until": {
+              "type": "DateControl",
+              "label": "Válido hasta",
+              "labels": {},
+              "config": {}
+            },
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza o caso relacionado",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "insurer": {
+              "type": "Textbox",
+              "label": "Aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "kind": {
+              "type": "Dropdown",
+              "label": "Tipo de documento",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "application",
+                  "label": "Solicitud firmada"
+                },
+                {
+                  "value": "identity",
+                  "label": "Identificación"
+                },
+                {
+                  "value": "inspection",
+                  "label": "Inspección"
+                },
+                {
+                  "value": "payment",
+                  "label": "Soporte de pago"
+                },
+                {
+                  "value": "other",
+                  "label": "Otro"
+                }
+              ],
+              "config": {}
+            },
+            "requested_date": {
+              "type": "DateControl",
+              "label": "Fecha de solicitud",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Fecha de compromiso",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "received_date": {
+              "type": "DateControl",
+              "label": "Fecha de recepción",
+              "labels": {},
+              "config": {
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "received",
+                    "changes",
+                    "approved"
+                  ]
+                }
+              }
+            },
+            "evidence_reference": {
+              "type": "Textbox",
+              "label": "Referencia del archivo",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "received",
+                    "changes",
+                    "approved"
+                  ]
+                }
+              }
+            },
+            "reviewed_date": {
+              "type": "DateControl",
+              "label": "Fecha de revisión",
+              "labels": {},
+              "config": {
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "changes",
+                    "approved"
+                  ]
+                }
+              }
+            },
+            "outcome": {
+              "type": "Textarea",
+              "label": "Resultado de revisión o motivo de exención",
+              "labels": {},
+              "config": {
+                "maxLength": 2000,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "changes",
+                    "approved",
+                    "waived"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "requested",
+                  "label": "Solicitado"
+                },
+                {
+                  "value": "received",
+                  "label": "Recibido"
+                },
+                {
+                  "value": "changes",
+                  "label": "Requiere corrección"
+                },
+                {
+                  "value": "approved",
+                  "label": "Aprobado"
+                },
+                {
+                  "value": "waived",
+                  "label": "Exento"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "valid_until",
+            "name",
+            "customer",
+            "policy_reference",
+            "insurer",
+            "owner",
+            "kind",
+            "requested_date",
+            "due_date",
+            "received_date",
+            "evidence_reference",
+            "reviewed_date",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "valid_until": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "insurer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "kind": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "application",
+            "identity",
+            "inspection",
+            "payment",
+            "other"
+          ]
+        },
+        "requested_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "due_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "received_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "evidence_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "reviewed_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "requested",
+            "received",
+            "changes",
+            "approved",
+            "waived"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_documents",
+      "view": "records"
+    }
+  ]
+}

@@ -31,6 +31,7 @@ import type { Context } from "hono";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { PLATFORM_ROOM } from "../realtime/protocol";
+import type { SaviaRequestService } from "./savia-request";
 
 /** Discover restrictive references from the schema before any external cleanup. */
 async function hasRestrictingTenantReference(db: D1Database, tenantId: number) {
@@ -397,6 +398,7 @@ export function registerTenantRoutes(
   userAdministrator?: IdentityUserAdministrator,
   realtime?: RealtimeHubClient,
   documents?: R2Bucket,
+  saviaRequestService?: SaviaRequestService,
 ) {
   app.openapi(listRoute, async (c) => {
     const actor = actorFromContext(c);
@@ -612,7 +614,7 @@ export function registerTenantRoutes(
       return c.json(conflict, 409);
     const linked = await db
       .prepare(
-        "SELECT 1 FROM identity_tenant_membership WHERE tenant_id=? UNION ALL SELECT 1 FROM crm_objects WHERE tenant_id=? LIMIT 1",
+        "SELECT 1 FROM identity_tenant_membership WHERE tenant_id=? UNION ALL SELECT 1 FROM studio_objects WHERE tenant_id=? LIMIT 1",
       )
       .bind(id, `agency:${id}`)
       .first();
@@ -623,11 +625,11 @@ export function registerTenantRoutes(
         : (
             await db
               .prepare(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' AND sql LIKE '%tenant_id%'",
+                "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'crm_%' OR name LIKE 'studio_%') AND sql LIKE '%tenant_id%'",
               )
               .all<{ name: string }>()
           ).results.map((row) => row.name);
-    const names = tables.filter((name) => /^crm_[a-z_]+$/.test(name));
+    const names = tables.filter((name) => /^(crm|studio)_[a-z_]+$/.test(name));
     if (names.length) {
       const remaining = await db.batch(
         names.map((name) =>
@@ -651,6 +653,35 @@ export function registerTenantRoutes(
     } catch (error) {
       if (isForeignKeyConstraint(error)) return c.json(conflict, 409);
       throw error;
+    }
+    // Best-effort: drop the tenant's Savia Request overlays (flows,
+    // variables, versions, runs, folders, bundles) so sealed secrets never
+    // linger in the request store. The core record is already gone, so a
+    // purge failure is logged loudly instead of failing the deletion.
+    if (saviaRequestService) {
+      for (const scope of [`agency:${id}`, `tenant:${id}`]) {
+        try {
+          const purged = await saviaRequestService.fetch(
+            new Request(
+              `https://savia-request.internal/api/admin/tenants/${scope}`,
+              {
+                method: "DELETE",
+                headers: { "content-type": "application/json" },
+                body: "{}",
+              },
+            ),
+          );
+          if (!purged.ok)
+            console.error(
+              `Savia Request purge failed for ${scope}: HTTP ${purged.status}.`,
+            );
+        } catch (error) {
+          console.error(
+            `Savia Request purge failed for ${scope}:`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
     }
     notifyTenantRoom(realtime, c, "tenants", "deleted", id);
     return c.body(null, 204);

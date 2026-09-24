@@ -1,0 +1,1152 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "bundles": [
+    {
+      "id": "insurance.issuance-policy",
+      "label": "Emisión → póliza",
+      "description": "Crea la póliza nativa de una emisión expedida, una sola vez; conserva pólizas existentes.",
+      "collections": [
+        "insurance_issuance",
+        "polizas"
+      ],
+      "fields": [
+        {
+          "collection": "polizas",
+          "fields": {
+            "source_issuance_id": {
+              "type": "Dropdown",
+              "label": "Emisión de origen",
+              "labels": {},
+              "config": {
+                "relation": "insurance_issuance",
+                "onDelete": "restrict",
+                "unique": true
+              }
+            },
+            "cliente": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        }
+      ],
+      "workflows": [
+        {
+          "key": "created",
+          "name": "Emisión a póliza · nuevos",
+          "definition": {
+            "trigger": {
+              "type": "created",
+              "collection": "insurance_issuance"
+            },
+            "nodes": [
+              {
+                "id": "issued",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "eq",
+                "right": "issued",
+                "next": "dates",
+                "otherwise": "delivered"
+              },
+              {
+                "id": "delivered",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "eq",
+                "right": "delivered",
+                "next": "dates"
+              },
+              {
+                "id": "dates",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.end_date"
+                },
+                "operator": "date_after",
+                "right": {
+                  "ref": "trigger.effective_date"
+                },
+                "next": "create"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "polizas",
+                "matchField": "source_issuance_id",
+                "values": {
+                  "name": {
+                    "ref": "trigger.policy_reference"
+                  },
+                  "inicio": {
+                    "ref": "trigger.effective_date"
+                  },
+                  "fin": {
+                    "ref": "trigger.end_date"
+                  },
+                  "prima": {
+                    "ref": "trigger.premium"
+                  },
+                  "estado": "Vigente",
+                  "cliente": {
+                    "ref": "trigger.customer_id"
+                  },
+                  "source_issuance_id": {
+                    "ref": "trigger.id"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key": "updated",
+          "name": "Emisión a póliza · cambios",
+          "definition": {
+            "trigger": {
+              "type": "updated",
+              "collection": "insurance_issuance",
+              "changedFields": [
+                "stage",
+                "policy_reference",
+                "effective_date",
+                "end_date",
+                "premium"
+              ]
+            },
+            "nodes": [
+              {
+                "id": "issued",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "eq",
+                "right": "issued",
+                "next": "dates",
+                "otherwise": "delivered"
+              },
+              {
+                "id": "delivered",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "eq",
+                "right": "delivered",
+                "next": "dates"
+              },
+              {
+                "id": "dates",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.end_date"
+                },
+                "operator": "date_after",
+                "right": {
+                  "ref": "trigger.effective_date"
+                },
+                "next": "create"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "polizas",
+                "matchField": "source_issuance_id",
+                "values": {
+                  "name": {
+                    "ref": "trigger.policy_reference"
+                  },
+                  "inicio": {
+                    "ref": "trigger.effective_date"
+                  },
+                  "fin": {
+                    "ref": "trigger.end_date"
+                  },
+                  "prima": {
+                    "ref": "trigger.premium"
+                  },
+                  "estado": "Vigente",
+                  "cliente": {
+                    "ref": "trigger.customer_id"
+                  },
+                  "source_issuance_id": {
+                    "ref": "trigger.id"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "insurance.links",
+      "label": "Vincular clientes y pólizas",
+      "description": "Añade selectores de registros reales a los plugins instalados. Conserva los textos anteriores sin asociarlos automáticamente.",
+      "collections": [
+        "clientes",
+        "polizas"
+      ],
+      "fields": [
+        {
+          "collection": "insurance_receivables",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_renewals",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_claims",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_commissions",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_endorsements",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_opportunities",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_activities",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_issuance",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_documents",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_service",
+          "optional": true,
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza vinculada",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        }
+      ],
+      "workflows": []
+    },
+    {
+      "id": "insurance.policy-renewal",
+      "label": "Póliza → renovación",
+      "description": "Crea una renovación por vigencia de póliza vigente al crearla o actualizar sus datos. Requiere cliente, vencimiento y prima. Los casos existentes no se sobrescriben.",
+      "collections": [
+        "clientes",
+        "polizas",
+        "insurance_renewals"
+      ],
+      "fields": [
+        {
+          "collection": "polizas",
+          "fields": {
+            "cliente": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            }
+          }
+        },
+        {
+          "collection": "insurance_renewals",
+          "fields": {
+            "customer_id": {
+              "type": "Dropdown",
+              "label": "Cliente vinculado",
+              "labels": {},
+              "config": {
+                "relation": "clientes",
+                "onDelete": "restrict"
+              }
+            },
+            "source_policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza de origen",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict",
+                "unique": true
+              }
+            },
+            "term_policy_id": {
+              "type": "Dropdown",
+              "label": "Póliza de esta vigencia",
+              "labels": {},
+              "config": {
+                "relation": "polizas",
+                "onDelete": "restrict"
+              }
+            },
+            "term_key": {
+              "type": "Textbox",
+              "label": "Clave de vigencia",
+              "labels": {},
+              "config": {
+                "unique": true,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      ],
+      "workflows": [
+        {
+          "key": "created",
+          "name": "Póliza a renovación · nuevos",
+          "definition": {
+            "trigger": {
+              "type": "created",
+              "collection": "polizas"
+            },
+            "nodes": [
+              {
+                "id": "active",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.estado"
+                },
+                "operator": "eq",
+                "right": "Vigente",
+                "next": "customer"
+              },
+              {
+                "id": "customer",
+                "type": "query",
+                "collection": "clientes",
+                "field": "id",
+                "value": {
+                  "ref": "trigger.cliente"
+                },
+                "limit": 1,
+                "next": "legacy"
+              },
+              {
+                "id": "legacy",
+                "type": "query",
+                "collection": "insurance_renewals",
+                "field": "source_policy_id",
+                "value": {
+                  "ref": "trigger.id"
+                },
+                "limit": 1,
+                "next": "has_legacy"
+              },
+              {
+                "id": "has_legacy",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.legacy.count"
+                },
+                "operator": "gt",
+                "right": 0,
+                "next": "new_term",
+                "otherwise": "create"
+              },
+              {
+                "id": "new_term",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.legacy.records.0.expiry_date"
+                },
+                "operator": "neq",
+                "right": {
+                  "ref": "trigger.fin"
+                },
+                "next": "create"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "insurance_renewals",
+                "matchField": "term_key",
+                "values": {
+                  "name": {
+                    "ref": "trigger.name"
+                  },
+                  "customer": {
+                    "ref": "steps.customer.records.0.name"
+                  },
+                  "customer_id": {
+                    "ref": "trigger.cliente"
+                  },
+                  "term_policy_id": {
+                    "ref": "trigger.id"
+                  },
+                  "term_key": {
+                    "concat": [
+                      {
+                        "ref": "trigger.id"
+                      },
+                      ":",
+                      {
+                        "ref": "trigger.fin"
+                      }
+                    ]
+                  },
+                  "next_follow_up": {
+                    "dateOffset": {
+                      "value": {
+                        "ref": "trigger.fin"
+                      },
+                      "days": -30
+                    }
+                  },
+                  "policy_reference": {
+                    "ref": "trigger.name"
+                  },
+                  "expiry_date": {
+                    "ref": "trigger.fin"
+                  },
+                  "premium": {
+                    "ref": "trigger.prima"
+                  },
+                  "stage": "pending",
+                  "owner": {
+                    "ref": "system.owner"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key": "updated",
+          "name": "Póliza a renovación · cambios",
+          "definition": {
+            "trigger": {
+              "type": "updated",
+              "collection": "polizas",
+              "changedFields": [
+                "fin",
+                "prima",
+                "estado",
+                "cliente"
+              ]
+            },
+            "nodes": [
+              {
+                "id": "active",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.estado"
+                },
+                "operator": "eq",
+                "right": "Vigente",
+                "next": "customer"
+              },
+              {
+                "id": "customer",
+                "type": "query",
+                "collection": "clientes",
+                "field": "id",
+                "value": {
+                  "ref": "trigger.cliente"
+                },
+                "limit": 1,
+                "next": "legacy"
+              },
+              {
+                "id": "legacy",
+                "type": "query",
+                "collection": "insurance_renewals",
+                "field": "source_policy_id",
+                "value": {
+                  "ref": "trigger.id"
+                },
+                "limit": 1,
+                "next": "has_legacy"
+              },
+              {
+                "id": "has_legacy",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.legacy.count"
+                },
+                "operator": "gt",
+                "right": 0,
+                "next": "new_term",
+                "otherwise": "create"
+              },
+              {
+                "id": "new_term",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.legacy.records.0.expiry_date"
+                },
+                "operator": "neq",
+                "right": {
+                  "ref": "trigger.fin"
+                },
+                "next": "create"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "insurance_renewals",
+                "matchField": "term_key",
+                "values": {
+                  "name": {
+                    "ref": "trigger.name"
+                  },
+                  "customer": {
+                    "ref": "steps.customer.records.0.name"
+                  },
+                  "customer_id": {
+                    "ref": "trigger.cliente"
+                  },
+                  "term_policy_id": {
+                    "ref": "trigger.id"
+                  },
+                  "term_key": {
+                    "concat": [
+                      {
+                        "ref": "trigger.id"
+                      },
+                      ":",
+                      {
+                        "ref": "trigger.fin"
+                      }
+                    ]
+                  },
+                  "next_follow_up": {
+                    "dateOffset": {
+                      "value": {
+                        "ref": "trigger.fin"
+                      },
+                      "days": -30
+                    }
+                  },
+                  "policy_reference": {
+                    "ref": "trigger.name"
+                  },
+                  "expiry_date": {
+                    "ref": "trigger.fin"
+                  },
+                  "premium": {
+                    "ref": "trigger.prima"
+                  },
+                  "stage": "pending",
+                  "owner": {
+                    "ref": "system.owner"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "insurance.opportunity-issuance",
+      "label": "Oportunidad ganada → emisión",
+      "description": "Crea una solicitud por oportunidad ganada con vigencia acordada y prima positiva. Repite la preparación para reparar campos faltantes; no reemplaza flujos editados.",
+      "collections": [
+        "insurance_opportunities",
+        "insurance_issuance"
+      ],
+      "fields": [
+        {
+          "collection": "insurance_opportunities",
+          "fields": {
+            "coverage_start": {
+              "type": "DateControl",
+              "label": "Vigencia acordada: inicio",
+              "labels": {}
+            },
+            "coverage_end": {
+              "type": "DateControl",
+              "label": "Vigencia acordada: fin",
+              "labels": {}
+            }
+          }
+        },
+        {
+          "collection": "insurance_issuance",
+          "fields": {
+            "source_opportunity_id": {
+              "type": "Dropdown",
+              "label": "Oportunidad de origen",
+              "labels": {},
+              "config": {
+                "relation": "insurance_opportunities",
+                "onDelete": "restrict",
+                "unique": true
+              }
+            }
+          }
+        }
+      ],
+      "workflows": [
+        {
+          "key": "created",
+          "name": "Oportunidad a emisión · nuevos",
+          "definition": {
+            "trigger": {
+              "type": "created",
+              "collection": "insurance_opportunities"
+            },
+            "nodes": [
+              {
+                "id": "won",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "eq",
+                "right": "won",
+                "next": "dates"
+              },
+              {
+                "id": "dates",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.coverage_end"
+                },
+                "operator": "date_after",
+                "right": {
+                  "ref": "trigger.coverage_start"
+                },
+                "next": "premium",
+                "otherwise": "review"
+              },
+              {
+                "id": "premium",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.premium"
+                },
+                "operator": "gt",
+                "right": 0,
+                "next": "create",
+                "otherwise": "review"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "insurance_issuance",
+                "matchField": "source_opportunity_id",
+                "values": {
+                  "name": {
+                    "ref": "trigger.name"
+                  },
+                  "customer": {
+                    "ref": "trigger.customer"
+                  },
+                  "owner": {
+                    "ref": "trigger.owner"
+                  },
+                  "requested_date": {
+                    "ref": "trigger.target_date"
+                  },
+                  "due_date": {
+                    "ref": "trigger.target_date"
+                  },
+                  "effective_date": {
+                    "ref": "trigger.coverage_start"
+                  },
+                  "end_date": {
+                    "ref": "trigger.coverage_end"
+                  },
+                  "premium": {
+                    "ref": "trigger.premium"
+                  },
+                  "stage": "requested",
+                  "source_opportunity_id": {
+                    "ref": "trigger.id"
+                  }
+                }
+              },
+              {
+                "id": "review",
+                "type": "task",
+                "title": "Completar vigencia y prima de oportunidad ganada",
+                "assignee": {
+                  "ref": "system.owner"
+                },
+                "dueDays": 1
+              }
+            ]
+          }
+        },
+        {
+          "key": "updated",
+          "name": "Oportunidad a emisión · cambios",
+          "definition": {
+            "trigger": {
+              "type": "updated",
+              "collection": "insurance_opportunities",
+              "changedFields": [
+                "stage",
+                "coverage_start",
+                "coverage_end",
+                "premium",
+                "target_date"
+              ]
+            },
+            "nodes": [
+              {
+                "id": "won",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "eq",
+                "right": "won",
+                "next": "dates"
+              },
+              {
+                "id": "dates",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.coverage_end"
+                },
+                "operator": "date_after",
+                "right": {
+                  "ref": "trigger.coverage_start"
+                },
+                "next": "premium",
+                "otherwise": "review"
+              },
+              {
+                "id": "premium",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.premium"
+                },
+                "operator": "gt",
+                "right": 0,
+                "next": "create",
+                "otherwise": "review"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "insurance_issuance",
+                "matchField": "source_opportunity_id",
+                "values": {
+                  "name": {
+                    "ref": "trigger.name"
+                  },
+                  "customer": {
+                    "ref": "trigger.customer"
+                  },
+                  "owner": {
+                    "ref": "trigger.owner"
+                  },
+                  "requested_date": {
+                    "ref": "trigger.target_date"
+                  },
+                  "due_date": {
+                    "ref": "trigger.target_date"
+                  },
+                  "effective_date": {
+                    "ref": "trigger.coverage_start"
+                  },
+                  "end_date": {
+                    "ref": "trigger.coverage_end"
+                  },
+                  "premium": {
+                    "ref": "trigger.premium"
+                  },
+                  "stage": "requested",
+                  "source_opportunity_id": {
+                    "ref": "trigger.id"
+                  }
+                }
+              },
+              {
+                "id": "review",
+                "type": "task",
+                "title": "Completar vigencia y prima de oportunidad ganada",
+                "assignee": {
+                  "ref": "system.owner"
+                },
+                "dueDays": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "insurance.renewal-followup",
+      "label": "Renovación → actividad",
+      "description": "Crea una actividad vinculada por renovación nueva abierta, 30 días antes del vencimiento de la póliza. La actividad no envía mensajes.",
+      "collections": [
+        "insurance_renewals",
+        "insurance_activities"
+      ],
+      "fields": [
+        {
+          "collection": "insurance_activities",
+          "fields": {
+            "source_renewal_id": {
+              "type": "Dropdown",
+              "label": "Renovación de origen",
+              "labels": {},
+              "config": {
+                "relation": "insurance_renewals",
+                "onDelete": "restrict",
+                "unique": true
+              }
+            }
+          }
+        }
+      ],
+      "workflows": [
+        {
+          "key": "created",
+          "name": "Seguimiento de renovación",
+          "definition": {
+            "trigger": {
+              "type": "created",
+              "collection": "insurance_renewals"
+            },
+            "nodes": [
+              {
+                "id": "not_renewed",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "neq",
+                "right": "renewed",
+                "next": "not_lost"
+              },
+              {
+                "id": "not_lost",
+                "type": "condition",
+                "left": {
+                  "ref": "trigger.stage"
+                },
+                "operator": "neq",
+                "right": "lost",
+                "next": "wait"
+              },
+              {
+                "id": "wait",
+                "type": "delay",
+                "until": {
+                  "dateOffset": {
+                    "value": {
+                      "ref": "trigger.expiry_date"
+                    },
+                    "days": -30
+                  }
+                },
+                "next": "current"
+              },
+              {
+                "id": "current",
+                "type": "query",
+                "collection": "insurance_renewals",
+                "field": "id",
+                "value": {
+                  "ref": "trigger.id"
+                },
+                "limit": 1,
+                "next": "has_current"
+              },
+              {
+                "id": "has_current",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.current.count"
+                },
+                "operator": "gt",
+                "right": 0,
+                "next": "still_open"
+              },
+              {
+                "id": "still_open",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.current.records.0.stage"
+                },
+                "operator": "neq",
+                "right": "renewed",
+                "next": "still_active"
+              },
+              {
+                "id": "still_active",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.current.records.0.stage"
+                },
+                "operator": "neq",
+                "right": "lost",
+                "next": "exists"
+              },
+              {
+                "id": "exists",
+                "type": "condition",
+                "left": {
+                  "ref": "steps.current.records.0.id"
+                },
+                "operator": "eq",
+                "right": {
+                  "ref": "trigger.id"
+                },
+                "next": "create"
+              },
+              {
+                "id": "create",
+                "type": "create",
+                "collection": "insurance_activities",
+                "matchField": "source_renewal_id",
+                "values": {
+                  "name": {
+                    "ref": "trigger.name"
+                  },
+                  "customer": {
+                    "ref": "trigger.customer"
+                  },
+                  "policy_reference": {
+                    "ref": "trigger.policy_reference"
+                  },
+                  "owner": {
+                    "ref": "system.owner"
+                  },
+                  "due_date": {
+                    "dateOffset": {
+                      "value": {
+                        "ref": "trigger.expiry_date"
+                      },
+                      "days": -30
+                    }
+                  },
+                  "kind": "call",
+                  "importance": "normal",
+                  "stage": "scheduled",
+                  "source_renewal_id": {
+                    "ref": "trigger.id"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

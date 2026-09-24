@@ -173,13 +173,13 @@ it("invalidates only the mapped policy scope when collection schemas change or d
     const name = "revision_probe_" + scope.replace(/:/g, "_");
     await f.db
       .prepare(
-        "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES (?,?,?,'{}')",
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,'{}')",
       )
       .bind(tenant, name, name)
       .run();
     for (const sql of [
-      "UPDATE crm_objects SET config='{\"fields\":{}}' WHERE tenant_id=? AND name=?",
-      "DELETE FROM crm_objects WHERE tenant_id=? AND name=?",
+      "UPDATE studio_objects SET config='{\"fields\":{}}' WHERE tenant_id=? AND name=?",
+      "DELETE FROM studio_objects WHERE tenant_id=? AND name=?",
     ]) {
       const before = (
         await f.db

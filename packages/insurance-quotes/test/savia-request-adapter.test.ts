@@ -38,8 +38,10 @@ describe("insurance Savia Request connector action", () => {
   it("normalizes the Sura lookup through its declared private flow", async () => {
     const fetch = vi.fn(async (request: Request) => {
       expect(request.url).toBe(
-        "https://savia-request.internal/api/flows/sura-autos-provider/runs",
+        "https://savia-request.internal/api/flows/sura-autos-provider/runs?tenant=tenant-a",
       );
+      expect(request.headers.get("x-savia-tenant")).toBe("tenant-a");
+      expect(request.headers.get("x-savia-actor")).toBe("user-a");
       expect(await request.json()).toEqual({
         mode: "mock",
         input: { sura_test_plate: "TESTCAR" },

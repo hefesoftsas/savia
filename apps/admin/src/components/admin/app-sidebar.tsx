@@ -74,12 +74,13 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { isCrmChildActive } from "@/features/dynamic-crm/crm-navigation";
-import { useCrmSidebarNavigation } from "@/features/dynamic-crm/use-crm-sidebar-navigation";
+import { isStudioChildActive } from "@/features/studio/studio-navigation";
+import { isStudioLocation } from "@/features/studio/studio-route";
+import { useStudioSidebarNavigation } from "@/features/studio/use-studio-sidebar-navigation";
 import {
   hasLucideIconLoader,
   LucideLookupIcon,
-} from "@/features/crm-engine/lucide-lookup-icon";
+} from "@/features/studio-engine/lucide-lookup-icon";
 import { UserMenu } from "@/components/admin/user-menu";
 import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -332,15 +333,15 @@ export function AppSidebar() {
     itemsById: staticItems,
   } = useVisibleSidebarNavigation();
   const location = useLocation();
-  const { children: crmChildren, domainId } = useCrmSidebarNavigation(
-    Boolean(staticItems["dynamic-crm"]),
+  const { children: studioChildren, domainId } = useStudioSidebarNavigation(
+    Boolean(staticItems["studio"]),
   );
-  const pageAdmin = crmChildren.find((child) => child.id === "studio:admin");
+  const pageAdmin = studioChildren.find((child) => child.id === "studio:admin");
   const itemsById = useMemo(() => {
     const items = { ...staticItems };
-    delete items["dynamic-crm"];
+    delete items["studio"];
     if (domainId)
-      for (const page of crmChildren.filter(
+      for (const page of studioChildren.filter(
         (child) => child.group === "objects",
       )) {
         const id: SidebarNavigationItemId = `page:${encodeURIComponent(domainId)}:${page.id.slice("object:".length)}`;
@@ -352,8 +353,8 @@ export function AppSidebar() {
           icon: page.icon ?? FileText,
           count: page.count,
           active:
-            location.pathname === "/crm" &&
-            isCrmChildActive(page, location.search),
+            isStudioLocation(location.pathname) &&
+            isStudioChildActive(page, location.search),
         };
       }
     if (pageAdmin) {
@@ -365,8 +366,8 @@ export function AppSidebar() {
         section: "productivity",
         icon: ListTree,
         active:
-          location.pathname === "/crm" &&
-          isCrmChildActive(pageAdmin, location.search),
+          isStudioLocation(location.pathname) &&
+          isStudioChildActive(pageAdmin, location.search),
       };
     }
     if (pageAdmin && domainId) {
@@ -382,20 +383,20 @@ export function AppSidebar() {
         const params = new URLSearchParams(base);
         for (const [key, value] of target) params.set(key, value);
         const active =
-          location.pathname === "/crm" &&
+          isStudioLocation(location.pathname) &&
           current.get("view") === target.get("view") &&
           (target.has("tab") ? current.get("tab") === target.get("tab") : true);
         items[id] = {
           ...definition,
           label: translate(definition.labelKey),
-          route: `/crm?${params}`,
+          route: `/studio?${params}`,
           active,
           searchTerms: translate(`savia.sidebar.searchTerms.${id}`),
         };
       }
       if (items["page-administrator"]) {
         items["page-administrator"].active =
-          location.pathname === "/crm" &&
+          isStudioLocation(location.pathname) &&
           [
             "admin",
             "admin-screen",
@@ -403,6 +404,7 @@ export function AppSidebar() {
             "screen-settings",
             "screen-relations",
             "screen-audit",
+            "screen-public-link",
             "designer",
             "new-object",
             "import-spreadsheet",
@@ -413,7 +415,7 @@ export function AppSidebar() {
     return items;
   }, [
     staticItems,
-    crmChildren,
+    studioChildren,
     domainId,
     location.pathname,
     location.search,
@@ -423,7 +425,7 @@ export function AppSidebar() {
   const pageDefaultSections = useMemo(() => {
     if (!domainId) return {};
     return Object.fromEntries(
-      crmChildren
+      studioChildren
         .filter((child) => child.group === "objects")
         .map((child) => [
           `page:${encodeURIComponent(domainId)}:${child.id.slice("object:".length)}`,
@@ -432,7 +434,7 @@ export function AppSidebar() {
     ) as Partial<
       Record<SidebarNavigationItemId, SidebarNavigationItem["section"]>
     >;
-  }, [crmChildren, domainId]);
+  }, [studioChildren, domainId]);
   const [search, setSearch] = useState("");
   const [organizationMode, setOrganizationMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -790,12 +792,12 @@ export function AppSidebar() {
                     <img
                       src="/savia-logo-large.png"
                       alt="Savia"
-                      className="h-6 w-auto object-contain group-data-[collapsible=icon]:hidden"
+                      className="h-6 w-auto object-contain group-data-[collapsible=icon]:hidden dark:rounded-md dark:bg-white dark:px-1.5 dark:py-0.5"
                     />
                     <img
-                      src="/favicon-32x32.png"
+                      src="/favicon-32-v3.png"
                       alt="Savia"
-                      className="hidden !size-5 rounded-[4px] object-cover group-data-[collapsible=icon]:block"
+                      className="hidden !size-5 rounded-[4px] object-cover group-data-[collapsible=icon]:block dark:bg-white"
                     />
                     <span className="sr-only">Savia</span>
                   </>

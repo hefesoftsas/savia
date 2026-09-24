@@ -5,7 +5,7 @@ import {
   widgetDeepLink,
   type ObjectsResponse,
 } from "./data";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 
 const response: ObjectsResponse = {
   data: [
@@ -71,7 +71,7 @@ describe("normalizeSchema", () => {
 });
 
 describe("widgetDeepLink", () => {
-  it("links data-domain widgets to the crm screen", () => {
+  it("links data-domain widgets to the studio screen", () => {
     expect(
       widgetDeepLink({
         id: "w_1",
@@ -79,7 +79,7 @@ describe("widgetDeepLink", () => {
         collection: "polizas",
         kind: "summary",
       } as MyDayWidget),
-    ).toBe("/crm?domain=platform&object=polizas");
+    ).toBe("/studio?domain=platform&object=polizas");
   });
 
   it("links agency widgets with agencyId", () => {
@@ -90,6 +90,17 @@ describe("widgetDeepLink", () => {
         collection: "clientes",
         kind: "items",
       } as MyDayWidget),
-    ).toBe("/crm?agencyId=101&object=clientes");
+    ).toBe("/studio?agencyId=101&object=clientes");
+  });
+
+  it("links agency widgets on the canonical /v1/studio base", () => {
+    expect(
+      widgetDeepLink({
+        id: "w_3",
+        apiBasePath: "/v1/studio/101",
+        collection: "clientes",
+        kind: "items",
+      } as MyDayWidget),
+    ).toBe("/studio?agencyId=101&object=clientes");
   });
 });

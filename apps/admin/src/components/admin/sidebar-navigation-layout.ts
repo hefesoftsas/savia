@@ -49,12 +49,21 @@ export type SidebarNavigationLayout = {
   hiddenItems?: SidebarNavigationItemId[];
 };
 
+/** Stored layouts may still carry the pre-Studio item id. */
+export function migrateSidebarNavigationItemId(
+  itemId: string,
+): SidebarNavigationItemId {
+  return (
+    itemId === "dynamic-crm" ? "studio" : itemId
+  ) as SidebarNavigationItemId;
+}
+
 export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
   return {
     ...normalizeSidebarNavigationLayout({
       version: 1,
       sections: {
-        operation: ["my-day", "dashboard", "dynamic-crm"],
+        operation: ["my-day", "dashboard", "studio"],
         productivity: [
           "page-administrator",
           "domain-sources",
@@ -85,7 +94,11 @@ export function normalizeSidebarNavigationLayout(
 ): SidebarNavigationLayout {
   const hiddenItems =
     "hiddenItems" in value && Array.isArray(value.hiddenItems)
-      ? [...value.hiddenItems]
+      ? value.hiddenItems.map((item) =>
+          typeof item === "string"
+            ? migrateSidebarNavigationItemId(item)
+            : item,
+        )
       : undefined;
   if (value.version === 2) {
     return {
@@ -98,14 +111,14 @@ export function normalizeSidebarNavigationLayout(
           ? {
               kind: "builtin",
               id: block.id,
-              items: [...block.items],
+              items: block.items.map(migrateSidebarNavigationItemId),
               collapsed: block.collapsed === true,
             }
           : {
               kind: "custom",
               id: block.id,
               label: block.label,
-              items: [...block.items],
+              items: block.items.map(migrateSidebarNavigationItemId),
               collapsed: block.collapsed === true,
             },
       ),
@@ -117,7 +130,7 @@ export function normalizeSidebarNavigationLayout(
     blocks: sidebarNavigationSectionIds.map((id) => ({
       kind: "builtin",
       id,
-      items: [...value.sections[id]],
+      items: [...value.sections[id]].map(migrateSidebarNavigationItemId),
       collapsed: false,
     })),
     ...(hiddenItems ? { hiddenItems } : {}),
@@ -383,7 +396,7 @@ export function defaultSectionForItem(
     "domain-history": "administration",
     "tenant-branding": "administration",
     dashboard: "operation",
-    "dynamic-crm": "operation",
+    studio: "operation",
     "my-day": "operation",
     integrations: "productivity",
     "provider-credentials": "productivity",
@@ -437,7 +450,7 @@ export function reconcileSidebarNavigation(
 
   for (const [index, block] of normalized.blocks.entries()) {
     for (const itemId of block.items) {
-      if (itemId === "dynamic-crm") {
+      if (itemId === "studio") {
         for (const page of visibleItemIds.filter(
           (id) =>
             id.startsWith("page:") &&

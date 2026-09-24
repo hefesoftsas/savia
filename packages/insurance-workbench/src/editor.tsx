@@ -1,4 +1,4 @@
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import { useWorkbenchMessages } from "./localization";
 import { Attachments } from "./attachments";
 import { Drawer } from "./drawer";
@@ -6,7 +6,7 @@ import { linkedFields } from "./linked-fields";
 import { validateFields } from "./schema";
 import type { Field } from "./types";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { errorMessage, money, text, today, type WorkRecord } from "./data";
 import type { WorkbenchConfig } from "./types";
 

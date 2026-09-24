@@ -2,7 +2,7 @@ import { Pool } from "pg";
 import type {
   DatabaseConnection,
   ResourceMetadata,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import { ConnectionPools, leasePool } from "./connection-pools";
 import { createRelationalDriver, type SqlSession } from "./relational-driver";
 import { fieldType } from "./database-values";

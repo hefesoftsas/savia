@@ -1,0 +1,202 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_customer_portal",
+        "label": "Portal del cliente",
+        "description": "Comparte información y recibe solicitudes mediante accesos limitados.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Asunto",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 160
+              }
+            },
+            "customer_id": {
+              "type": "Textbox",
+              "label": "Identificador del cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "kind": {
+              "type": "Dropdown",
+              "label": "Tipo",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "query",
+                  "label": "Consulta"
+                },
+                {
+                  "value": "certificate",
+                  "label": "Certificado"
+                },
+                {
+                  "value": "data_update",
+                  "label": "Actualización de datos"
+                },
+                {
+                  "value": "complaint",
+                  "label": "Reclamo de servicio"
+                },
+                {
+                  "value": "claim",
+                  "label": "Aviso de siniestro"
+                }
+              ],
+              "config": {}
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza relacionada",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "details": {
+              "type": "Textarea",
+              "label": "Descripción del cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 6000
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Estado",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "received",
+                  "label": "Recibida"
+                },
+                {
+                  "value": "in_progress",
+                  "label": "En revisión"
+                },
+                {
+                  "value": "waiting",
+                  "label": "Esperando información"
+                },
+                {
+                  "value": "resolved",
+                  "label": "Respondida"
+                },
+                {
+                  "value": "cancelled",
+                  "label": "Cancelada"
+                }
+              ],
+              "config": {}
+            },
+            "response": {
+              "type": "Textarea",
+              "label": "Respuesta al cliente",
+              "labels": {},
+              "config": {
+                "maxLength": 6000
+              }
+            },
+            "response_date": {
+              "type": "DateControl",
+              "label": "Fecha de respuesta",
+              "labels": {},
+              "config": {}
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer_id",
+            "kind",
+            "policy_reference",
+            "details",
+            "stage",
+            "response",
+            "response_date"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer_id": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "kind": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "query",
+            "certificate",
+            "data_update",
+            "complaint",
+            "claim"
+          ]
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "details": {
+          "types": [
+            "Textarea"
+          ],
+          "required": true
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "received",
+            "in_progress",
+            "waiting",
+            "resolved",
+            "cancelled"
+          ]
+        },
+        "response": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "response_date": {
+          "types": [
+            "DateControl"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_customer_portal",
+      "view": "records"
+    }
+  ]
+}

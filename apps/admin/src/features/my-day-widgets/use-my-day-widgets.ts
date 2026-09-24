@@ -5,7 +5,7 @@ import {
   parseMyDayWidgets,
   type MyDayWidget,
   type MyDayWidgetsLayout,
-} from "@savia/crm-shared/my-day-widgets";
+} from "@savia/studio-shared/my-day-widgets";
 
 export function useMyDayWidgets(
   userPreferences: UserPreferencesClient | undefined,

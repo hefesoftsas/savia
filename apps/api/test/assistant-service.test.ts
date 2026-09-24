@@ -301,7 +301,7 @@ describe("SaviaAssistantService action approvals", () => {
     });
     expect(createRes).toMatchObject({ state: "completed" });
     expect(callTool).toHaveBeenCalledWith({
-      name: "savia_create_crm_record",
+      name: "savia_create_studio_record",
       arguments: {
         object: "cartera",
         data: { name: "juancho", number_1: 10000000 },
@@ -328,7 +328,7 @@ describe("SaviaAssistantService action approvals", () => {
     });
     expect(updateRes).toMatchObject({ state: "completed" });
     expect(callTool).toHaveBeenCalledWith({
-      name: "savia_update_crm_record",
+      name: "savia_update_studio_record",
       arguments: {
         object: "clientes",
         id: "rec-123",
@@ -355,7 +355,7 @@ describe("SaviaAssistantService action approvals", () => {
     });
     expect(deleteRes).toMatchObject({ state: "completed" });
     expect(callTool).toHaveBeenCalledWith({
-      name: "savia_delete_crm_record",
+      name: "savia_delete_studio_record",
       arguments: {
         object: "cartera",
         id: "rec-456",
@@ -569,13 +569,14 @@ describe("SaviaAssistantService MCP transport", () => {
 
   it("exposes CRM collections and aggregation tools to the model while keeping writes confirmed", async () => {
     const toolsMock = vi.fn(async () => ({
-      savia_list_crm_collections: { description: "list collections" },
-      savia_list_crm_records: { description: "query records" },
-      savia_aggregate_crm_records: { description: "aggregate records" },
-      savia_get_crm_record: { description: "get record" },
-      savia_get_crm_record_links: { description: "get links" },
-      savia_create_crm_record: { description: "create record" },
-      savia_update_crm_record: { description: "update record" },
+      savia_list_studio_collections: { description: "list collections" },
+      savia_list_studio_records: { description: "query records" },
+      savia_aggregate_studio_records: { description: "aggregate records" },
+      savia_get_studio_record: { description: "get record" },
+      savia_get_studio_record_links: { description: "get links" },
+      savia_create_studio_record: { description: "create record" },
+      savia_update_studio_record: { description: "update record" },
+      savia_list_crm_collections: { description: "legacy alias" },
     }));
     const service = new SaviaAssistantService(
       {
@@ -608,10 +609,11 @@ describe("SaviaAssistantService MCP transport", () => {
     expect(response).toBeInstanceOf(Response);
     expect(toolsMock).toHaveBeenCalledOnce();
     const modelTools = streamTextMock.mock.calls[0][0].tools;
+    expect(modelTools).toHaveProperty("savia_list_studio_collections");
+    expect(modelTools).toHaveProperty("savia_aggregate_studio_records");
     expect(modelTools).toHaveProperty("savia_list_crm_collections");
-    expect(modelTools).toHaveProperty("savia_aggregate_crm_records");
-    expect(modelTools).not.toHaveProperty("savia_create_crm_record");
-    expect(modelTools).not.toHaveProperty("savia_update_crm_record");
+    expect(modelTools).not.toHaveProperty("savia_create_studio_record");
+    expect(modelTools).not.toHaveProperty("savia_update_studio_record");
     expect(await response.text()).toContain('"type":"finish"');
   });
 
@@ -672,15 +674,23 @@ describe("virtual employee CRM scoping", () => {
   it("enforces the MCP object argument while allowing assigned quote collections", async () => {
     const execute = vi.fn(async () => ({ data: [] }));
     const tools = applyCollectionScoping(
-      { savia_list_crm_records: { execute } },
+      {
+        savia_list_studio_records: { execute },
+        savia_list_crm_records: { execute },
+      },
       employee,
     );
     expect(
-      await tools.savia_list_crm_records.execute({ object: "clientes" }, {}),
+      await tools.savia_list_studio_records.execute({ object: "clientes" }, {}),
     ).toMatchObject({ isError: true, error: "ACCESS_DENIED" });
     expect(execute).not.toHaveBeenCalled();
-    await tools.savia_list_crm_records.execute({ object: "cotizaciones" }, {});
+    await tools.savia_list_studio_records.execute(
+      { object: "cotizaciones" },
+      {},
+    );
     expect(execute).toHaveBeenCalledOnce();
+    await tools.savia_list_crm_records.execute({ object: "cotizaciones" }, {});
+    expect(execute).toHaveBeenCalledTimes(2);
   });
   it("filters collection discovery inside MCP text and structured content", async () => {
     const data = { data: [{ name: "cotizaciones" }, { name: "clientes" }] };
@@ -689,10 +699,10 @@ describe("virtual employee CRM scoping", () => {
       structuredContent: data,
     }));
     const tools = applyCollectionScoping(
-      { savia_list_crm_collections: { execute } },
+      { savia_list_studio_collections: { execute } },
       employee,
     );
-    const result = await tools.savia_list_crm_collections.execute({}, {});
+    const result = await tools.savia_list_studio_collections.execute({}, {});
     expect(result.structuredContent.data).toEqual([{ name: "cotizaciones" }]);
     expect(JSON.parse(result.content[0].text).data).toEqual([
       { name: "cotizaciones" },

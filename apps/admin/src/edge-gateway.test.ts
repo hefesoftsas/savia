@@ -25,6 +25,7 @@ describe("edge gateway", () => {
     expect(isServicePath("/mcp")).toBe(true);
     expect(isServicePath("/docs")).toBe(true);
     expect(isServicePath("/openapi.json")).toBe(true);
+    expect(isServicePath("/s/0123456789abcdef")).toBe(true);
   });
 
   it("serves admin assets without invoking the API service", async () => {
@@ -104,4 +105,23 @@ it("serves public pages without leaking their link via referrers or caching", as
     { API: api, ASSETS: assets },
   );
   expect(api.fetch).toHaveBeenCalledOnce();
+});
+
+it("forwards Savia short URLs to the API redirect handler", async () => {
+  const api = {
+    fetch: vi.fn(async () =>
+      Response.redirect("https://savia.example/public/forms/token", 302),
+    ),
+  };
+  const assets = { fetch: vi.fn(async () => new Response("admin")) };
+  const request = new Request("https://savia.example/s/0123456789abcdef");
+
+  const response = await gatewayFetch(request, { API: api, ASSETS: assets });
+
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toBe(
+    "https://savia.example/public/forms/token",
+  );
+  expect(api.fetch).toHaveBeenCalledWith(request);
+  expect(assets.fetch).not.toHaveBeenCalled();
 });

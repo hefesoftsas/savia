@@ -36,7 +36,7 @@ test("parseBitwardenExport extracts fields, notes JSON and CRM_INTEGRATION_KEY",
   assert.equal(parsed.rawVariables.SAVIA_BRUNO_LIBERTY_AUTOS_USERNAME, "liberty-user");
   assert.equal(parsed.rawVariables.SAVIA_BRUNO_CHUBB_KEY, "secret-123");
   assert.equal(
-    parsed.crmIntegrationKey,
+    parsed.studioIntegrationKey,
     "a1b2c3d4e5f600112233445566778899aabbccddeeff00112233445566778899",
   );
 });

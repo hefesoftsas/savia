@@ -1,6 +1,6 @@
-import { processWorkflows } from "@savia/crm-server/workflows/runtime";
+import { processWorkflows } from "@savia/studio-server/workflows/runtime";
 import { findPrincipal, loadActor } from "./auth/identity-repository";
-import { canManageSharedCrm } from "./crm/hubspot-access";
+import { canManageSharedCrm } from "./external-crm/hubspot-access";
 export const workflowAuthorizer =
   (db: D1Database) =>
   async ({

@@ -231,6 +231,11 @@ live("native baseline parity", () => {
         expect(initialization.flat()).toEqual([
           "0001_baseline.sql",
           "0002_workflow_collection_triggers.sql",
+          "0003_user_my_day_widgets.sql",
+          "0004_notifications.sql",
+          "0005_notification_collection_triggers.sql",
+          "0006_public_form_short_links.sql",
+          "0007_public_form_external_short_url.sql",
         ]);
         expect(
           await postgres
@@ -285,13 +290,13 @@ live("native baseline parity", () => {
             });
             await db
               .prepare(
-                "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+                "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
               )
               .bind("agency:999", "items", "Items", config)
               .run();
             await db
               .prepare(
-                "INSERT INTO crm_records(tenant_id,object_name,id,data,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                "INSERT INTO studio_records(tenant_id,object_name,id,data,created_at,updated_at) VALUES(?,?,?,?,?,?)",
               )
               .bind(
                 "agency:999",
@@ -308,7 +313,7 @@ live("native baseline parity", () => {
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data=?,version=version+1 WHERE id=?",
+                "UPDATE studio_records SET data=?,version=version+1 WHERE id=?",
               )
               .bind(
                 JSON.stringify({
@@ -321,13 +326,13 @@ live("native baseline parity", () => {
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET deleted_at=?,version=version+1 WHERE id=?",
+                "UPDATE studio_records SET deleted_at=?,version=version+1 WHERE id=?",
               )
               .bind(at, "record")
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET deleted_at=NULL,version=version+1 WHERE id=?",
+                "UPDATE studio_records SET deleted_at=NULL,version=version+1 WHERE id=?",
               )
               .bind("record")
               .run();
@@ -335,7 +340,7 @@ live("native baseline parity", () => {
               db.batch([
                 db
                   .prepare(
-                    "UPDATE crm_records SET data=?,version=version+1 WHERE id=?",
+                    "UPDATE studio_records SET data=?,version=version+1 WHERE id=?",
                   )
                   .bind('{"name":"rollback"}', "record"),
                 db
@@ -348,7 +353,7 @@ live("native baseline parity", () => {
             const history = (
               await db
                 .prepare(
-                  "SELECT version,action,actor_kind,changes FROM crm_record_history ORDER BY version",
+                  "SELECT version,action,actor_kind,changes FROM studio_record_history ORDER BY version",
                 )
                 .all<{
                   version: number;
@@ -394,7 +399,9 @@ live("native baseline parity", () => {
                 .first("revision"),
             );
             expect(revisionAfter).toBeGreaterThan(revisionBefore);
-            await db.prepare("DELETE FROM crm_records WHERE id='record'").run();
+            await db
+              .prepare("DELETE FROM studio_records WHERE id='record'")
+              .run();
             const tombstone = await db
               .prepare(
                 "SELECT version FROM crm_sync_changes WHERE id='record' AND deleted_at IS NOT NULL",
@@ -403,7 +410,7 @@ live("native baseline parity", () => {
             expect(tombstone).toBe(5);
             expect(
               await db
-                .prepare("SELECT count(*) AS n FROM crm_record_history")
+                .prepare("SELECT count(*) AS n FROM studio_record_history")
                 .first("n"),
             ).toBe(0);
             await db.prepare("DELETE FROM tenants WHERE id=999").run();
@@ -480,7 +487,7 @@ live("native trigger behavior", () => {
           for (const db of [sqlite, postgres]) {
             await db
               .prepare(
-                "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES('scope','items','Items','{}')",
+                "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('scope','items','Items','{}')",
               )
               .run();
             for (const kind of ["created", "updated"]) {
@@ -507,27 +514,27 @@ live("native trigger behavior", () => {
             }
             await db
               .prepare(
-                "INSERT INTO crm_records(tenant_id,object_name,id,data) VALUES('scope','items','record','{\"title\":\"First\"}')",
+                "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('scope','items','record','{\"title\":\"First\"}')",
               )
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data='{\"title\":\"Second\"}',version=version+1 WHERE id='record'",
+                "UPDATE studio_records SET data='{\"title\":\"Second\"}',version=version+1 WHERE id='record'",
               )
               .run();
             await db
               .prepare(
-                'UPDATE crm_records SET data=\'{"title":"Second","other":1}\',version=version+1 WHERE id=\'record\'',
+                'UPDATE studio_records SET data=\'{"title":"Second","other":1}\',version=version+1 WHERE id=\'record\'',
               )
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data='{\"title\":false}',version=version+1 WHERE id='record'",
+                "UPDATE studio_records SET data='{\"title\":false}',version=version+1 WHERE id='record'",
               )
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data='{\"title\":0}',version=version+1 WHERE id='record'",
+                "UPDATE studio_records SET data='{\"title\":0}',version=version+1 WHERE id='record'",
               )
               .run();
             expect(
@@ -546,38 +553,38 @@ live("native trigger behavior", () => {
             );
             await db
               .prepare(
-                "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES('scope','relation','items','items','Source','Target','one-to-one')",
+                "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES('scope','relation','items','items','Source','Target','one-to-one')",
               )
               .run();
             await db
               .prepare(
-                "INSERT INTO crm_record_links VALUES('scope','relation','source','target')",
+                "INSERT INTO studio_record_links VALUES('scope','relation','source','target')",
               )
               .run();
             await expect(
               db
                 .prepare(
-                  "INSERT INTO crm_record_links VALUES('scope','relation','source','other')",
+                  "INSERT INTO studio_record_links VALUES('scope','relation','source','other')",
                 )
                 .run(),
             ).rejects.toThrow("relation_cardinality_conflict");
             await expect(
               db
                 .prepare(
-                  "UPDATE crm_collection_relations SET storage='fields' WHERE id='relation'",
+                  "UPDATE studio_collection_relations SET storage='fields' WHERE id='relation'",
                 )
                 .run(),
             ).rejects.toThrow("relation_mapping_has_links");
-            await db.prepare("DELETE FROM crm_record_links").run();
+            await db.prepare("DELETE FROM studio_record_links").run();
             await db
               .prepare(
-                "UPDATE crm_collection_relations SET storage='fields' WHERE id='relation'",
+                "UPDATE studio_collection_relations SET storage='fields' WHERE id='relation'",
               )
               .run();
             await expect(
               db
                 .prepare(
-                  "INSERT INTO crm_record_links VALUES('scope','relation','source','target')",
+                  "INSERT INTO studio_record_links VALUES('scope','relation','source','target')",
                 )
                 .run(),
             ).rejects.toThrow("relation_mapping_has_links");
@@ -675,25 +682,27 @@ live("access revision invalidation", () => {
             await capture();
             await db
               .prepare(
-                "INSERT INTO crm_data_domains(id,label,created_by) VALUES('d','Domain','p')",
+                "INSERT INTO studio_data_domains(id,label,created_by) VALUES('d','Domain','p')",
               )
               .run();
             await capture();
-            await db.prepare("DELETE FROM crm_data_domains WHERE id='d'").run();
+            await db
+              .prepare("DELETE FROM studio_data_domains WHERE id='d'")
+              .run();
             await capture();
             await db
               .prepare(
-                "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES('agency:21','items','Items','{}')",
+                "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('agency:21','items','Items','{}')",
               )
               .run();
             await db
               .prepare(
-                "UPDATE crm_objects SET config='{}' WHERE tenant_id='agency:21'",
+                "UPDATE studio_objects SET config='{}' WHERE tenant_id='agency:21'",
               )
               .run();
             await capture();
             await db
-              .prepare("DELETE FROM crm_objects WHERE tenant_id='agency:21'")
+              .prepare("DELETE FROM studio_objects WHERE tenant_id='agency:21'")
               .run();
             await capture();
             await db.prepare("DELETE FROM tenants WHERE id=21").run();
@@ -729,9 +738,9 @@ live("concurrent relation guards", () => {
     {
       name: "conflicting link inserts",
       first:
-        "INSERT INTO crm_record_links VALUES('scope','relation','source','first')",
+        "INSERT INTO studio_record_links VALUES('scope','relation','source','first')",
       second:
-        "INSERT INTO crm_record_links VALUES('scope','relation','source','second')",
+        "INSERT INTO studio_record_links VALUES('scope','relation','source','second')",
       error: "relation_cardinality_conflict",
       links: 1,
       storage: "local",
@@ -739,9 +748,9 @@ live("concurrent relation guards", () => {
     {
       name: "link insertion before a storage change",
       first:
-        "INSERT INTO crm_record_links VALUES('scope','relation','source','first')",
+        "INSERT INTO studio_record_links VALUES('scope','relation','source','first')",
       second:
-        "UPDATE crm_collection_relations SET storage='fields' WHERE tenant_id='scope' AND id='relation'",
+        "UPDATE studio_collection_relations SET storage='fields' WHERE tenant_id='scope' AND id='relation'",
       error: "relation_mapping_has_links",
       links: 1,
       storage: "local",
@@ -749,9 +758,9 @@ live("concurrent relation guards", () => {
     {
       name: "storage change before a link insertion",
       first:
-        "UPDATE crm_collection_relations SET storage='fields' WHERE tenant_id='scope' AND id='relation'",
+        "UPDATE studio_collection_relations SET storage='fields' WHERE tenant_id='scope' AND id='relation'",
       second:
-        "INSERT INTO crm_record_links VALUES('scope','relation','source','first')",
+        "INSERT INTO studio_record_links VALUES('scope','relation','source','first')",
       error: "relation_mapping_has_links",
       links: 0,
       storage: "fields",
@@ -768,12 +777,12 @@ live("concurrent relation guards", () => {
         });
         await observer
           .prepare(
-            "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES('scope','items','Items','{}')",
+            "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('scope','items','Items','{}')",
           )
           .run();
         await observer
           .prepare(
-            "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES('scope','relation','items','items','Source','Target','one-to-one')",
+            "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES('scope','relation','items','items','Source','Target','one-to-one')",
           )
           .run();
         const writer = new pg.Client({ connectionString });
@@ -818,13 +827,13 @@ live("concurrent relation guards", () => {
           await competitor.query("ROLLBACK");
           expect(
             await observer
-              .prepare("SELECT count(*) AS n FROM crm_record_links")
+              .prepare("SELECT count(*) AS n FROM studio_record_links")
               .first("n"),
           ).toBe(links);
           expect(
             await observer
               .prepare(
-                "SELECT storage FROM crm_collection_relations WHERE tenant_id='scope' AND id='relation'",
+                "SELECT storage FROM studio_collection_relations WHERE tenant_id='scope' AND id='relation'",
               )
               .first("storage"),
           ).toBe(storage);
@@ -857,7 +866,7 @@ live("collection workflow trigger migration", () => {
           for (const db of [sqlite, postgres]) {
             await db
               .prepare(
-                "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES('events','items','Items','{}')",
+                "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('events','items','Items','{}')",
               )
               .run();
             const triggers = [
@@ -935,25 +944,25 @@ live("collection workflow trigger migration", () => {
             const at = "2026-09-19T00:00:00.000Z";
             await db
               .prepare(
-                "INSERT INTO crm_records(tenant_id,object_name,id,data,created_at,updated_at) VALUES('events','items','record',?,?,?)",
+                "INSERT INTO studio_records(tenant_id,object_name,id,data,created_at,updated_at) VALUES('events','items','record',?,?,?)",
               )
               .bind('{"name":"Alpha","amount":2,"flag":false}', at, at)
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
+                "UPDATE studio_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
               )
               .bind('{"name":"Beta","amount":3,"flag":0}')
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
+                "UPDATE studio_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
               )
               .bind('{"name":"Alpha","amount":false,"flag":false}')
               .run();
             await db
               .prepare(
-                "UPDATE crm_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
+                "UPDATE studio_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
               )
               .bind('{"name":"Alpha","amount":0,"flag":false}')
               .run();
@@ -961,35 +970,35 @@ live("collection workflow trigger migration", () => {
               db.batch([
                 db
                   .prepare(
-                    "UPDATE crm_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
+                    "UPDATE studio_records SET data=?,version=version+1 WHERE tenant_id='events' AND id='record'",
                   )
                   .bind('{"name":"Rollback","amount":99}'),
                 db.prepare(
-                  "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES('events','items','Duplicate','{}')",
+                  "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('events','items','Duplicate','{}')",
                 ),
               ]),
             ).rejects.toThrow();
             await db
               .prepare(
-                "UPDATE crm_records SET deleted_at=?,version=version+1 WHERE tenant_id='events' AND id='record'",
+                "UPDATE studio_records SET deleted_at=?,version=version+1 WHERE tenant_id='events' AND id='record'",
               )
               .bind(at)
               .run();
             // Purging an already soft-deleted record must not create another event.
             await db
               .prepare(
-                "DELETE FROM crm_records WHERE tenant_id='events' AND id='record'",
+                "DELETE FROM studio_records WHERE tenant_id='events' AND id='record'",
               )
               .run();
             await db
               .prepare(
-                "INSERT INTO crm_records(tenant_id,object_name,id,data,created_at,updated_at) VALUES('events','items','hard',?,?,?)",
+                "INSERT INTO studio_records(tenant_id,object_name,id,data,created_at,updated_at) VALUES('events','items','hard',?,?,?)",
               )
               .bind('{"name":"Alpha","amount":2}', at, at)
               .run();
             await db
               .prepare(
-                "DELETE FROM crm_records WHERE tenant_id='events' AND id='hard'",
+                "DELETE FROM studio_records WHERE tenant_id='events' AND id='hard'",
               )
               .run();
             const executions = (
@@ -1078,7 +1087,7 @@ live("concurrent collection events", () => {
         });
         await db
           .prepare(
-            "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES('events','items','Items','{}')",
+            "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('events','items','Items','{}')",
           )
           .run();
         const definition = JSON.stringify({
@@ -1107,10 +1116,10 @@ live("concurrent collection events", () => {
           await Promise.all([a.query("BEGIN"), b.query("BEGIN")]);
           await Promise.all([
             a.query(
-              "INSERT INTO crm_records(tenant_id,object_name,id,data) VALUES('events','items','rolled-back','{\"amount\":2}')",
+              "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('events','items','rolled-back','{\"amount\":2}')",
             ),
             b.query(
-              "INSERT INTO crm_records(tenant_id,object_name,id,data) VALUES('events','items','committed','{\"amount\":3}')",
+              "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('events','items','committed','{\"amount\":3}')",
             ),
           ]);
           expect(

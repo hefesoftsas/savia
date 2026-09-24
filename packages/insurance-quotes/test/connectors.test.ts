@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionActionContext } from "@savia/crm-shared/extension-runtime";
+import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 import { createInsuranceQuotes, insuranceQuotes } from "../src/connectors";
 import { insuranceQuotesExtension } from "../src/manifest";
 

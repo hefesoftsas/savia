@@ -3,7 +3,7 @@ import { accessMessages } from "@/i18n/locales/access";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { AccessCatalog, RoleInput } from "@/api/access-control-client";
-import type { AccessPredicate } from "@savia/crm-shared/access-control";
+import type { AccessPredicate } from "@savia/studio-shared/access-control";
 type Grant = RoleInput["grants"][number];
 const emptyCondition = (): AccessPredicate => ({
   field: "",

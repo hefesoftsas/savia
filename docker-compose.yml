@@ -23,8 +23,8 @@ services:
       - apps_legacy_exporter_modules:/workspace/apps/legacy-exporter/node_modules
       - apps_mcp_modules:/workspace/apps/mcp/node_modules
       - apps_savia_request_modules:/workspace/apps/savia-request/node_modules
-      - packages_crm_server_modules:/workspace/packages/crm-server/node_modules
-      - packages_crm_shared_modules:/workspace/packages/crm-shared/node_modules
+      - packages_studio_server_modules:/workspace/packages/studio-server/node_modules
+      - packages_studio_shared_modules:/workspace/packages/studio-shared/node_modules
       - packages_db_modules:/workspace/packages/db/node_modules
       - packages_insurance_portfolio_dashboard_modules:/workspace/packages/insurance-portfolio-dashboard/node_modules
       - packages_insurance_quotes_modules:/workspace/packages/insurance-quotes/node_modules
@@ -81,8 +81,8 @@ volumes:
   apps_legacy_exporter_modules:
   apps_mcp_modules:
   apps_savia_request_modules:
-  packages_crm_server_modules:
-  packages_crm_shared_modules:
+  packages_studio_server_modules:
+  packages_studio_shared_modules:
   packages_db_modules:
   packages_insurance_portfolio_dashboard_modules:
   packages_insurance_quotes_modules:

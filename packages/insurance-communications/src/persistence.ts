@@ -1,4 +1,4 @@
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 export type IntegrationRecord = Record<string, unknown> & {
   id: string;
   _version?: number;

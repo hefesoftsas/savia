@@ -1,7 +1,7 @@
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import { useWorkbenchMessages } from "./localization";
 import { useEffect, useId, useState } from "react";
-import type { PluginApi, PluginFile } from "@savia/crm-shared/plugin-api";
+import type { PluginApi, PluginFile } from "@savia/studio-shared/plugin-api";
 import { errorMessage } from "./data";
 
 export function downloadBlob(blob: Blob, name: string) {

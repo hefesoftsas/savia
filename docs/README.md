@@ -54,11 +54,12 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Insurance plugin coverage](insurance-plugin-coverage.md) — all 25 optional extensions, activation and provider prerequisites.
 - [Insurance operations plugins](insurance-operations.md) — optional worklists, connected operations, installation and release packaging.
 - [solution-packages.md](solution-packages.md) — installing/exporting solution packages.
+- [plugin-store.md](plugin-store.md) — per-tenant ZIP plugin uploads, sandbox and activation.
 - [legacy-api.md](legacy-api.md) — core API vs legacy API boundary.
 - [custom-result-components.md](custom-result-components.md) — custom React result components.
 - [runbooks/](runbooks/) — operational procedures (each states owner and review date).
-- [../apps/admin/src/features/crm-engine/DESIGN.md](../apps/admin/src/features/crm-engine/DESIGN.md) — CRM engine design.
-- [../packages/crm-server/API.md](../packages/crm-server/API.md) · [../packages/crm-server/INTEGRATIONS.md](../packages/crm-server/INTEGRATIONS.md) — CRM contract.
+- [../apps/admin/src/features/studio-engine/DESIGN.md](../apps/admin/src/features/studio-engine/DESIGN.md) — Studio engine design.
+- [../packages/studio-server/API.md](../packages/studio-server/API.md) · [../packages/studio-server/INTEGRATIONS.md](../packages/studio-server/INTEGRATIONS.md) — Studio engine contract.
 
 ## Rules that keep this from rotting
 

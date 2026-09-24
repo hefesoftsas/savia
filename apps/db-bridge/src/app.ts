@@ -5,7 +5,7 @@ import {
   databaseResourceName,
   DatabaseBridgeError,
   type DatabaseKind,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import { databaseError } from "./database-errors";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -15,7 +15,7 @@ import {
   bridgeQuerySchema,
   postgresConnectionSchema,
   sqlIdentifier,
-} from "@savia/crm-shared/sql-sources";
+} from "@savia/studio-shared/sql-sources";
 import type { BridgeDriver, DatabaseDriver } from "./driver";
 
 export type DbBridgeOptions = {

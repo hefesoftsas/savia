@@ -278,26 +278,26 @@ organización nueva se utiliza **Descargar Seguros**, la plantilla del catálogo
 
 ## Desarrollo
 
-- Contrato: `packages/crm-shared/src/solution-package.ts`.
-- Contrato y registro de extensiones: `packages/crm-shared/src/extension-package.ts`.
+- Contrato: `packages/studio-shared/src/solution-package.ts`.
+- Contrato y registro de extensiones: `packages/studio-shared/src/extension-package.ts`.
 - API de colecciones para pantallas de extensiones:
-  `packages/crm-shared/src/plugin-api.ts`.
-- Instalador y estado: `packages/crm-server/src/solutions.ts` y `solution-state.ts`.
-- Estado de extensiones por tenant: `packages/crm-server/src/extensions.ts` y
+  `packages/studio-shared/src/plugin-api.ts`.
+- Instalador y estado: `packages/studio-server/src/solutions.ts` y `solution-state.ts`.
+- Estado de extensiones por tenant: `packages/studio-server/src/extensions.ts` y
   `packages/db/migrations/0045_extensions.sql`.
-- Conexiones y ejecuciones de extensiones: `packages/crm-server/src/extension-connections.ts`,
-  `packages/crm-server/src/extension-actions.ts` y
+- Conexiones y ejecuciones de extensiones: `packages/studio-server/src/extension-connections.ts`,
+  `packages/studio-server/src/extension-actions.ts` y
   `packages/db/migrations/0047_extension_runtime.sql`.
 - Requisitos y provisión segura de colecciones:
-  `packages/crm-server/src/extension-object-requirements.ts`.
-- Resúmenes limitados por el host: `packages/crm-server/src/extension-summaries.ts`.
+  `packages/studio-server/src/extension-object-requirements.ts`.
+- Resúmenes limitados por el host: `packages/studio-server/src/extension-summaries.ts`.
 - Extensiones del API: `apps/api/src/extensions`.
 - Herramientas de extensiones para Assistant: `apps/mcp/src/extensions`.
 - Catálogo first-party: `packages/release-catalog/`; es el único ensamblador
   que conoce los paquetes sectoriales.
 - Paquete opcional de cotizaciones: `packages/insurance-quotes/`.
-- UI de instalación: `apps/admin/src/features/crm-engine/extension-manager.tsx`.
-- Registro de pantallas React: `apps/admin/src/features/crm-engine/extension-screens.tsx`.
+- UI de instalación: `apps/admin/src/features/studio-engine/extension-manager.tsx`.
+- Registro de pantallas React: `apps/admin/src/features/studio-engine/extension-screens.tsx`.
 - Fuente del paquete oficial: `solutions/insurance/manifest.json`.
 - Catálogo compilado: `apps/api/src/solutions/catalog.ts`.
 
@@ -306,6 +306,6 @@ La prueba de integración verifica que el catálogo y el JSON descargable coinci
 `pnpm dev` aplica la migración local; el despliegue debe aplicar las migraciones
 D1 antes de servir la nueva versión del API.
 
-Las rutas se ofrecen bajo `/v1/dynamic-crm/:tenantId/api/solutions` o
+Las rutas se ofrecen bajo `/v1/studio/:tenantId/api/solutions` (alias heredado `/v1/dynamic-crm/...`) o
 `/v1/data-domains/:domainId/api/solutions`: GET catálogo, POST `/preview`,
 POST `/install`, GET `/:id/export` y PATCH `/:id` con `{ "enabled": false }`.

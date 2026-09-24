@@ -106,7 +106,7 @@ async function startOAuthAnimation(reducedMotion = false) {
 }
 
 describe("tenant identity on OAuth surfaces", () => {
-  it("renders the Savia logo Lottie on the default login", async () => {
+  it("renders the supplied Savia logo Lottie without the old video card", async () => {
     const html = await oauthPageResponse(request("login"))!.text();
     const css = await oauthPageResponse(request("oauth-ui.css"))!.text();
 
@@ -114,6 +114,7 @@ describe("tenant identity on OAuth surfaces", () => {
     expect(html).toContain('data-src="/login/savia-logo.json"');
     expect(html).toContain('class="oauth-login-animation-wordmark"');
     expect(html).toContain("data-oauth-login-animation");
+    expect(html).not.toContain('class="savia-mark"');
     expect(html).not.toContain("<video");
     expect(css).not.toContain("#071421");
   });

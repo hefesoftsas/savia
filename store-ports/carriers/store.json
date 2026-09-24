@@ -1,0 +1,166 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_carriers",
+        "label": "Aseguradoras",
+        "description": "Solicitudes y consultas mediante una conexión autorizada.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "title": {
+              "type": "Textbox",
+              "label": "Nombre",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "payload": {
+              "type": "Textarea",
+              "label": "Contenido",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "stage": {
+              "type": "Textbox",
+              "label": "Estado",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "title",
+            "payload",
+            "stage"
+          ]
+        }
+      },
+      "requiredFields": {
+        "title": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "payload": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Textbox"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_carriers",
+      "view": "records"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "insurance.carriers.gateway",
+      "label": "Conexión de integración",
+      "secretFields": [
+        "token"
+      ],
+      "configSchema": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "token"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": [],
+      "allowConfiguredHost": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "policy-status",
+      "kind": "http",
+      "connector": "insurance.carriers.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    },
+    {
+      "id": "documents",
+      "kind": "http",
+      "connector": "insurance.carriers.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    },
+    {
+      "id": "request-issuance",
+      "kind": "http",
+      "connector": "insurance.carriers.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    }
+  ]
+}

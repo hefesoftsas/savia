@@ -1,8 +1,8 @@
 import { remoteMcpResponse } from "./mcp-gateway";
-import { maintainRecordHistory } from "@savia/crm-server/record-history-storage";
+import { maintainRecordHistory } from "@savia/studio-server/record-history-storage";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
-import { processCrmSyncJobs } from "./crm/auto-sync";
+import { processCrmSyncJobs } from "./external-crm/auto-sync";
 import { runScheduledNotifications } from "./notifications";
 import { runScheduledWorkflows } from "./workflows";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
@@ -14,13 +14,13 @@ import {
   crmRoutesFromEnvironment,
   nangoConfigurationFromEnvironment,
   type CrmSecrets,
-} from "./crm/runtime";
+} from "./external-crm/runtime";
 import {
   createSqlBridgeClient,
   sqlBridgeFromEnvironment,
   type SqlBridgeClient,
   type SqlBridgeSecrets,
-} from "./crm/sql-bridge";
+} from "./studio/sql-bridge";
 import type { R2SigningCredentials } from "./lib/r2-presign";
 import { createPersonalIntegrationNangoClient } from "./personal-integrations/nango";
 import { createPersonalIntegrationProviderRegistry } from "./personal-integrations/providers";
@@ -29,9 +29,10 @@ import {
   connectorExecutorFromEnvironment,
   extensionConnectionsEncryptionKeyFromEnvironment,
   type ConnectorGatewayEnvironment,
-} from "./crm/connector-executor";
+} from "./studio/connector-executor";
 import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { isLocalPublicOrigin } from "./public-forms/captcha";
+import { createShlinkShortener } from "./public-forms/shortener";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
 export { oauthResourceAuthenticator } from "./auth/runtime";
 export {
@@ -39,7 +40,7 @@ export {
   crmRoutesFromEnvironment,
   nangoConfigurationFromEnvironment,
   type CrmSecrets,
-} from "./crm/runtime";
+} from "./external-crm/runtime";
 
 type AttachmentSecrets = {
   R2_ACCOUNT_ID?: string;
@@ -55,6 +56,7 @@ type AuthServiceBinding = {
 };
 
 type AssistantSecrets = {
+  STUDIO_INTEGRATION_KEY?: string;
   CRM_INTEGRATION_KEY?: string;
   ASSISTANT_SETTINGS_ENCRYPTION_KEY?: string;
   SAVIA_MCP_URL?: string;
@@ -74,6 +76,8 @@ export type RuntimeEnvironment = {
   };
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  SHLINK_SERVER_URL?: string;
+  SHLINK_API_KEY?: string;
   SAVIA_DISABLE_CAPTCHA?: string;
   SAVIA_MOCK_QUOTES?: string;
   PUBLIC_FORMS_RATE_LIMITER?: {
@@ -87,7 +91,7 @@ export type RuntimeEnvironment = {
   SqlBridgeSecrets &
   ConnectorGatewayEnvironment;
 
-export { sqlBridgeFromEnvironment } from "./crm/sql-bridge";
+export { sqlBridgeFromEnvironment } from "./studio/sql-bridge";
 
 export function personalIntegrationRoutesFromEnvironment(
   environment: CrmSecrets & Pick<AssistantSecrets, "SAVIA_MCP_SHARED_SECRET">,
@@ -127,12 +131,29 @@ function signingCredentials(
   };
 }
 
+/**
+ * Canonical secret is STUDIO_INTEGRATION_KEY; CRM_INTEGRATION_KEY stays as
+ * a legacy alias so existing deployments keep working without rotation.
+ */
+export function studioIntegrationKeyFromEnvironment(
+  environment: Pick<
+    AssistantSecrets,
+    "STUDIO_INTEGRATION_KEY" | "CRM_INTEGRATION_KEY"
+  >,
+): string | undefined {
+  return (
+    environment.STUDIO_INTEGRATION_KEY?.trim() ||
+    environment.CRM_INTEGRATION_KEY?.trim() ||
+    undefined
+  );
+}
+
 function assistantConfigurationFromEnvironment(
   environment: Pick<RuntimeEnvironment, "DB" | "DOCUMENTS"> & AssistantSecrets,
 ): AssistantConfigurationRepository {
   const encryptionKey =
     environment.ASSISTANT_SETTINGS_ENCRYPTION_KEY?.trim() ||
-    environment.CRM_INTEGRATION_KEY?.trim() ||
+    studioIntegrationKeyFromEnvironment(environment) ||
     environment.SAVIA_MCP_SHARED_SECRET?.trim();
   return new AssistantConfigurationRepository(environment.DB, {
     encryptionKey,
@@ -202,7 +223,7 @@ export type RuntimeOverrides = {
   realtime?: import("./realtime/hub-client").RealtimeHubClient;
   publicForms?: import("./public-forms/routes").PublicFormsOptions;
   signing?: R2SigningCredentials;
-  collectionGatewayFactory?: typeof import("./crm/collection-gateway").createCollectionGateway;
+  collectionGatewayFactory?: typeof import("./studio/collection-gateway").createCollectionGateway;
 };
 export function createApiRuntime(
   environment: RuntimeEnvironment,
@@ -247,7 +268,7 @@ const runtime = {
       undefined,
       environment.SAVIA_REQUEST,
       personalIntegrationRoutesFromEnvironment(environment),
-      environment.CRM_INTEGRATION_KEY,
+      studioIntegrationKeyFromEnvironment(environment),
       undefined,
       sqlBridgeFromEnvironment(environment),
       connectorExecutorFromEnvironment(environment),
@@ -259,6 +280,17 @@ const runtime = {
         publicOrigin: environment.SAVIA_PUBLIC_ORIGIN,
         disableCaptcha: environment.SAVIA_DISABLE_CAPTCHA === "1",
         rateLimiter: environment.PUBLIC_FORMS_RATE_LIMITER,
+        ...(environment.SAVIA_PUBLIC_ORIGIN &&
+        !isLocalPublicOrigin(environment.SAVIA_PUBLIC_ORIGIN) &&
+        environment.SHLINK_SERVER_URL &&
+        environment.SHLINK_API_KEY
+          ? {
+              shortener: createShlinkShortener({
+                serverUrl: environment.SHLINK_SERVER_URL,
+                apiKey: environment.SHLINK_API_KEY,
+              }),
+            }
+          : {}),
         // Local-only provider simulation (fixture data, no provider calls).
         // The localhost gate keeps preview and production untouched even if
         // the flag ever leaks into another environment.
@@ -287,7 +319,7 @@ const runtime = {
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       await runScheduledWorkflows(
         environment.DB,
-        environment.CRM_INTEGRATION_KEY,
+        studioIntegrationKeyFromEnvironment(environment),
         overrides.workflowFetch,
       );
       await runScheduledNotifications(environment.DB);
@@ -297,7 +329,7 @@ const runtime = {
       runScheduledCrmSync(environment),
       runScheduledWorkflows(
         environment.DB,
-        environment.CRM_INTEGRATION_KEY,
+        studioIntegrationKeyFromEnvironment(environment),
         overrides.workflowFetch,
       ),
       runScheduledNotifications(environment.DB),

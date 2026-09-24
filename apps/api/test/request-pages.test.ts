@@ -6,7 +6,7 @@ import {
   agencyMemberAuthenticator,
 } from "./auth-fixtures";
 import type { Authenticator } from "../src/auth/types";
-import { generateRequestPage } from "@savia/crm-shared/request-page";
+import { generateRequestPage } from "@savia/studio-shared/request-page";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -100,7 +100,7 @@ beforeAll(async () => {
       .filter(Boolean))
       await env.DB.exec(statement);
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
   )
     .bind(
       "domain:platform",
@@ -216,7 +216,7 @@ it("keeps request results generic across solution installations", async () => {
     "agency:914",
   ]) {
     await env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
     )
       .bind(
         scope,

@@ -3,7 +3,7 @@ import { bundles } from "../src/bundles";
 import {
   workflowDefinitionSchema,
   evaluateWorkflowCondition,
-} from "@savia/crm-shared/workflows";
+} from "@savia/studio-shared/workflows";
 import { manifest } from "../src/manifest";
 import { readFileSync } from "node:fs";
 it("ships valid linked workflow graphs and a matching manifest", () => {

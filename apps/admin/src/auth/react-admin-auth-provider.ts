@@ -68,13 +68,17 @@ export function createReactAdminAuthProvider(
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
         );
-      if (resource === "dynamic-crm")
+      if (resource === "studio")
         return (
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"]) ||
           Boolean(await options?.canAccessCrm?.())
         );
-      if (resource === "savia-request") return isPlatformAdmin;
+      if (resource === "savia-request")
+        return (
+          isPlatformAdmin ||
+          hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
+        );
       if (resource === "users" || resource === "tenants")
         return isPlatformAdmin;
       if (resource === "crm-connections") {

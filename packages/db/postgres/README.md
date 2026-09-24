@@ -42,9 +42,17 @@ metadata. The source manifest describes the final inventory after both native
 migrations. Existing native installations apply only the additive migration;
 `0001_baseline.sql` remains unchanged.
 
-`0006_tenant_branding_login_animation.sql` widens `tenant_branding_assets` for
+`0006_public_form_short_links.sql` adds the persisted Savia short-link mapping to
+the native core schema. Existing installations apply it after the notification
+migrations; the baseline remains unchanged.
+
+`0007_public_form_external_short_url.sql` stores the optional third-party short
+URL on each public form. Existing installations apply it after the Savia short
+link mapping; the baseline remains unchanged.
+
+`0015_tenant_branding_login_animation.sql` widens `tenant_branding_assets` for
 per-tenant login Lottie animations, matching SQLite migration
-`0064_tenant_branding_login_animation.sql` (`login-animation` kind,
+`0074_tenant_branding_login_animation.sql` (`login-animation` kind,
 `application/json` content type).
 
 Native pools discard failed idle connections without logging their credential-bearing

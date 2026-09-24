@@ -2,7 +2,13 @@ import { z } from "zod";
 const resultSchema = z.object({
   quoteId: z.string(),
   reference: z.string(),
-  url: z.string().startsWith("/#/crm?"),
+  // Fase 1: acepta canónica #/studio y alias legacy #/crm.
+  url: z
+    .string()
+    .refine(
+      (value) => value.startsWith("/#/studio?") || value.startsWith("/#/crm?"),
+      { message: "Invalid url" },
+    ),
   failedOffers: z.number(),
   unpricedOffers: z.number(),
   pricedOffers: z.number(),

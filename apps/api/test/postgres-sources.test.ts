@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { SqlBridgeError } from "../src/crm/sql-bridge";
-import type { SqlBridgeClient } from "../src/crm/sql-bridge";
+import { SqlBridgeError } from "../src/studio/sql-bridge";
+import type { SqlBridgeClient } from "../src/studio/sql-bridge";
 import type {
   BridgeQuery,
   BridgeQueryResult,
-} from "@savia/crm-shared/sql-sources";
-import { createCollectionSourceApp } from "../src/crm/collection-sources";
+} from "@savia/studio-shared/sql-sources";
+import { createCollectionSourceApp } from "../src/studio/collection-sources";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {

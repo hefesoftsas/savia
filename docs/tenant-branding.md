@@ -79,8 +79,8 @@ The generated OpenAPI/Scalar document is the API reference.
 
 ## Deployment and verification
 
-Apply migrations `0055_tenant_branding.sql` and `0064_tenant_branding_login_animation.sql`
-(plus native PostgreSQL migration `0006_tenant_branding_login_animation.sql` for
+Apply migrations `0055_tenant_branding.sql` and `0074_tenant_branding_login_animation.sql`
+(plus native PostgreSQL migration `0015_tenant_branding_login_animation.sql` for
 self-hosted installs), then deploy the API, auth worker and admin from the same
 revision. The feature uses the existing D1 and R2 bindings and requires
 no new secret or paid service. Each environment keeps its own branding configuration.

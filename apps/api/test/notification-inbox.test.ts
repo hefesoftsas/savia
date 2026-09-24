@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { NotificationRepository } from "@savia/crm-server/notifications/repository";
+import { NotificationRepository } from "@savia/studio-server/notifications/repository";
 import { createApp } from "../src/app";
 import { AuthenticationError, type Authenticator } from "../src/auth/types";
 

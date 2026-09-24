@@ -1,5 +1,5 @@
-import { pluginIntlLocale, type PluginLocale } from "@savia/crm-shared/plugin-localization";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import { pluginIntlLocale, type PluginLocale } from "@savia/studio-shared/plugin-localization";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 
 export type WorkRecord = {
   id: string;

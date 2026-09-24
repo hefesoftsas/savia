@@ -1,5 +1,5 @@
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
-import { pluginIntlLocale, localizeExternalError } from "@savia/crm-shared/plugin-localization";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
+import { pluginIntlLocale, localizeExternalError } from "@savia/studio-shared/plugin-localization";
 import { useInsuranceMessages } from "../localization";
 import {
   type FormEvent,
@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 
 export type InsurancePortfolioScreenProps = {
   savia: PluginApi;

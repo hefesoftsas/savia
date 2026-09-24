@@ -1,4 +1,4 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 
 /** Authored extension captions; persisted values and provider details are never catalog keys. */
 export const messages = {

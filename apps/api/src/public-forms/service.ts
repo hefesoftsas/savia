@@ -1,7 +1,10 @@
-import { historyDatabase } from "@savia/crm-server/record-history-storage";
+import { historyDatabase } from "@savia/studio-server/record-history-storage";
 import { HTTPException } from "hono/http-exception";
-import { getObject, createRecord } from "@savia/crm-server/services";
-import { validateRecord, type CrmObject } from "@savia/crm-shared/metadata";
+import { getObject, createRecord } from "@savia/studio-server/services";
+import {
+  validateRecord,
+  type StudioObject,
+} from "@savia/studio-shared/metadata";
 import { z } from "@hono/zod-openapi";
 import {
   captchaConfiguration,
@@ -36,7 +39,7 @@ export interface PublicQuoteAdapter {
     db: D1Database;
     tenant: string;
     domainId: string;
-    object: CrmObject;
+    object: StudioObject;
   }): Promise<{ fields: PublicFormField[]; snapshot: unknown }>;
   validate(input: {
     snapshot: unknown;
@@ -89,6 +92,7 @@ export interface PublicQuoteAdapter {
   }>;
 }
 export type PublicFormOptions = CaptchaOptions & {
+  shortener?: { shorten(destination: string): Promise<string> };
   quote?: PublicQuoteAdapter;
   saviaRequest?: {
     fetch(request: Request): Promise<Response> | Response;
@@ -142,6 +146,8 @@ export type PublicFormRow = {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  short_code?: string | null;
+  short_url?: string | null;
 };
 type SubmissionRow = {
   fingerprint: string;
@@ -160,11 +166,23 @@ export function tenantForDomain(domainId: string) {
     ? domainId.replace("tenant:", "agency:")
     : "domain:" + domainId;
 }
-export function managedForm(row: PublicFormRow, publicOrigin?: string) {
+export function managedForm(
+  row: PublicFormRow,
+  publicOrigin?: string,
+  externalShortenerConfigured = false,
+) {
+  const active =
+    row.revoked_at === null &&
+    (row.expires_at === null || Date.parse(row.expires_at) > Date.now());
   return {
     ...(publicOrigin
       ? { url: new URL("/public/forms/" + row.token, publicOrigin).href }
       : {}),
+    ...(publicOrigin && row.short_url && active
+      ? { shortUrl: row.short_url }
+      : publicOrigin && row.short_code && active && !externalShortenerConfigured
+        ? { shortUrl: new URL("/s/" + row.short_code, publicOrigin).href }
+        : {}),
     id: row.id,
     token: row.token,
     path: "/public/forms/" + row.token,
@@ -178,6 +196,24 @@ export function managedForm(row: PublicFormRow, publicOrigin?: string) {
     returnResult: Boolean(row.return_result),
     createdAt: row.created_at,
   };
+}
+export async function persistPublicFormShortUrl(
+  db: D1Database,
+  id: string,
+  shortUrl: string,
+) {
+  const update = await db
+    .prepare(
+      "UPDATE public_forms SET short_url=? WHERE id=? AND short_url IS NULL",
+    )
+    .bind(shortUrl, id)
+    .run();
+  if (update.meta.changes > 0) return shortUrl;
+  const stored = await db
+    .prepare("SELECT short_url FROM public_forms WHERE id=?")
+    .bind(id)
+    .first<{ short_url: string | null }>();
+  return stored?.short_url ?? shortUrl;
 }
 export async function availableObject(
   db: D1Database,
@@ -194,7 +230,7 @@ export async function availableObject(
         .first()
     : tenant === "domain:platform" ||
       (await db
-        .prepare("SELECT 1 FROM crm_data_domains WHERE id=?")
+        .prepare("SELECT 1 FROM studio_data_domains WHERE id=?")
         .bind(tenant.slice(7))
         .first());
   if (!active) reject("Public form unavailable.", 404);
@@ -227,9 +263,9 @@ const safeTypes: Record<string, PublicFormField["type"]> = {
   Toggle: "boolean",
   Dropdown: "select",
 };
-export function projectRecordForm(object: CrmObject) {
+export function projectRecordForm(object: StudioObject) {
   const fields: PublicFormField[] = [];
-  const safeFields: CrmObject["config"]["fields"] = {};
+  const safeFields: StudioObject["config"]["fields"] = {};
   for (const [name, field] of (
     object.config.fieldOrder ?? Object.keys(object.config.fields)
   ).map((name) => [name, object.config.fields[name]] as const)) {
@@ -426,13 +462,25 @@ export async function publishPublicForm(
       new Date().toISOString(),
     )
     .run();
-  return managedForm(
-    (await db
-      .prepare("SELECT * FROM public_forms WHERE id=?")
-      .bind(id)
-      .first<PublicFormRow>())!,
-    options.publicOrigin,
-  );
+  const row = (await db
+    .prepare("SELECT * FROM public_forms WHERE id=?")
+    .bind(id)
+    .first<PublicFormRow>())!;
+  const result = managedForm(row, options.publicOrigin);
+  if (options.shortener && result.url) {
+    try {
+      const shortUrl = await options.shortener.shorten(result.url);
+      const persistedShortUrl = await persistPublicFormShortUrl(
+        db,
+        id,
+        shortUrl,
+      );
+      return { ...result, shortUrl: persistedShortUrl };
+    } catch {
+      // Publishing remains available when the optional third-party provider is down.
+    }
+  }
+  return result;
 }
 export async function activePublicForm(db: D1Database, token: string) {
   if (!/^[a-f0-9]{64}$/.test(token)) reject("Public form unavailable.", 404);
@@ -486,7 +534,7 @@ export async function submitPublicForm(
   validateValues(fields, input.values);
   let values: Record<string, unknown>;
   if (link.kind === "record") {
-    const validation = validateRecord(snapshot as CrmObject, input.values);
+    const validation = validateRecord(snapshot as StudioObject, input.values);
     if (Object.keys(validation.errors).length)
       reject("Values do not match the published form.");
     values = validation.data;

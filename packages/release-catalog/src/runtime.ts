@@ -27,7 +27,7 @@ import { extension as complianceContribution } from "@savia/insurance-compliance
 import { requirement as complianceRequirement } from "@savia/insurance-compliance/object";
 import { manifest as customerPortalContribution } from "@savia/insurance-customer-portal/manifest";
 import { requirement as customerPortalRequirement } from "@savia/insurance-customer-portal/object";
-import type { WorkflowBundle } from "@savia/crm-shared/workflow-bundles";
+import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
 import { bundles } from "@savia/insurance-automation/bundles";
 import { manifest as automationManifest } from "@savia/insurance-automation/manifest";
 import { manifest as issuanceManifest } from "@savia/insurance-issuance/manifest";
@@ -54,11 +54,10 @@ import {
   createExtensionRegistry,
   type ExtensionObjectRequirement,
   type ExtensionRegistry,
-} from "@savia/crm-shared/extension-package";
-import type { ExtensionActionContext } from "@savia/crm-shared/extension-runtime";
-import type { SolutionPackage } from "@savia/crm-shared/solution-package";
+} from "@savia/studio-shared/extension-package";
+import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
+import type { SolutionPackage } from "@savia/studio-shared/solution-package";
 import { insurancePortfolioExtensionManifest } from "@savia/insurance-portfolio-dashboard/manifest";
-import { insurancePortfolioAssistantExtension } from "@savia/insurance-portfolio-dashboard/mcp";
 import { insurancePortfolioPolicyRequirement } from "@savia/insurance-portfolio-dashboard/policy-object";
 import { summarizeInsurancePortfolio } from "@savia/insurance-portfolio-dashboard/summary";
 import {
@@ -204,7 +203,7 @@ export const runtimeReleaseCatalog: RuntimeReleaseCatalog = {
 
     renewalsRequirement,
   ],
-  assistantExtensions: [insurancePortfolioAssistantExtension],
+  assistantExtensions: [],
   connectorActions: [],
   createConnectorActions: (service, options = {}) => [
     ...communicationsActions(options),

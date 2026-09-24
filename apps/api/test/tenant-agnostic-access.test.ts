@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   canAccessSharedCrm,
   canManageSharedCrm,
-} from "../src/crm/hubspot-access";
+} from "../src/external-crm/hubspot-access";
 import type { AppActor } from "../src/auth/types";
-import { resolveDynamicTenantKey } from "../src/routes/dynamic-crm";
+import { resolveStudioTenantKey } from "../src/routes/studio";
 
 function createActor(overrides?: Partial<AppActor>): AppActor {
   return {
@@ -136,7 +136,7 @@ describe("Tenant-agnostic CRM access control", () => {
       }),
     } as unknown as D1Database;
 
-    const key = await resolveDynamicTenantKey(mockDb, 101);
+    const key = await resolveStudioTenantKey(mockDb, 101);
     expect(key).toBe("agency:101");
   });
 
@@ -149,10 +149,10 @@ describe("Tenant-agnostic CRM access control", () => {
       }),
     } as unknown as D1Database;
 
-    const tenantRouteKey = await resolveDynamicTenantKey(mockDb, 202, "tenant");
+    const tenantRouteKey = await resolveStudioTenantKey(mockDb, 202, "tenant");
     expect(tenantRouteKey).toBe("tenant:202");
 
-    const agencyRouteKey = await resolveDynamicTenantKey(mockDb, 202, "agency");
+    const agencyRouteKey = await resolveStudioTenantKey(mockDb, 202, "agency");
     expect(agencyRouteKey).toBe("agency:202");
   });
 
@@ -168,7 +168,7 @@ describe("Tenant-agnostic CRM access control", () => {
       }),
     } as unknown as D1Database;
 
-    const key = await resolveDynamicTenantKey(mockDb, 303, "agency");
+    const key = await resolveStudioTenantKey(mockDb, 303, "agency");
     expect(key).toBe("tenant:303");
   });
 });

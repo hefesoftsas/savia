@@ -13,6 +13,18 @@
     {
       "filename": "0003_insurance_bundles.sql",
       "sha256": "565b204f4d6d6728b47b7187357266db0449f9186b0effb2b2123b744804264f"
+    },
+    {
+      "filename": "0004_tenant_scope.sql",
+      "sha256": "0cebd7c40f259f9d6363bcc5ebed32f6e49e2d50eff102fdc0b999996bf06f46"
+    },
+    {
+      "filename": "0005_bundle_flow_state.sql",
+      "sha256": "0bee96e25b8d370f555f524f6b3a88b22cd8f756ff831bda32316be0cacede5e"
+    },
+    {
+      "filename": "0006_audit.sql",
+      "sha256": "749d68852c465eaee3f7b87682b6bda9ac81df0928af713e1cc1352ba3220dc2"
     }
   ],
   "objects": [

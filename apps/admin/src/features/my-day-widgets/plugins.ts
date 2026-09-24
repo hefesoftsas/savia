@@ -2,13 +2,13 @@ import {
   createPluginApi,
   type PluginApi,
   type PluginHostRequest,
-} from "@savia/crm-shared/plugin-api";
+} from "@savia/studio-shared/plugin-api";
 import {
   releaseCatalog,
   type ExtensionWidgetContribution,
 } from "@savia/release-catalog";
 import type { ApiClient } from "@/api/api-client";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 
 export type PluginWidgetRef = {
   extensionId: string;
@@ -18,8 +18,51 @@ export type PluginWidgetRef = {
 export type ExtensionInstallation = {
   manifest: { id: string };
   builtIn: boolean;
+  store?: boolean;
+  widgets?: Array<{
+    id: string;
+    collection: string;
+    title: { es: string; en?: string; pt?: string };
+  }>;
   installed: { enabled: boolean } | null;
 };
+
+export type StoreWidgetContribution = {
+  extensionId: string;
+  id: string;
+  collection: string;
+  title: { es: string; en?: string; pt?: string };
+};
+
+/** Widgets declarados por plugins del store activos en el tenant. */
+export function storeWidgetContributions(
+  extensions: readonly ExtensionInstallation[] | undefined,
+): StoreWidgetContribution[] {
+  if (!Array.isArray(extensions)) return [];
+  const contributions: StoreWidgetContribution[] = [];
+  for (const entry of extensions) {
+    if (!entry.store || entry.builtIn || entry.installed?.enabled !== true)
+      continue;
+    for (const widget of entry.widgets ?? [])
+      contributions.push({
+        extensionId: entry.manifest.id,
+        id: widget.id,
+        collection: widget.collection,
+        title: widget.title,
+      });
+  }
+  return contributions;
+}
+
+export function storeWidgetFor(
+  ref: PluginWidgetRef,
+  extensions: readonly ExtensionInstallation[] | undefined,
+): StoreWidgetContribution | undefined {
+  return storeWidgetContributions(extensions).find(
+    (entry) =>
+      entry.extensionId === ref.extensionId && entry.id === ref.widgetId,
+  );
+}
 
 export function parsePluginKind(kind: string): PluginWidgetRef | null {
   const match = kind.match(/^plugin:([a-z0-9_.-]{1,64}):([a-z0-9_-]{1,64})$/);
@@ -46,11 +89,22 @@ export function availablePluginWidgets(
   extensions: readonly ExtensionInstallation[] | undefined,
 ): ExtensionWidgetContribution[] {
   if (!extensions) return [];
-  return releaseCatalog.extensionWidgets.filter(
-    (entry) =>
-      entry.collection === collection &&
-      isPluginWidgetEnabled(entry, extensions),
-  );
+  return [
+    ...releaseCatalog.extensionWidgets.filter(
+      (entry) =>
+        entry.collection === collection &&
+        isPluginWidgetEnabled(entry, extensions),
+    ),
+    ...storeWidgetContributions(extensions)
+      .filter((entry) => entry.collection === collection)
+      .map((entry) => ({
+        id: entry.id,
+        extensionId: entry.extensionId,
+        collection: entry.collection,
+        title: entry.title,
+        Widget: () => null,
+      })),
+  ];
 }
 
 export function isPluginWidgetEnabled(

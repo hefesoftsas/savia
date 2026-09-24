@@ -1,5 +1,6 @@
 import type { ApiClient } from "@/api/api-client";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import { matchAgencyApiBasePath } from "@/features/studio/studio-navigation";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import type {
   WidgetCollection,
   WidgetCollectionSchema,
@@ -165,11 +166,12 @@ export function widgetDeepLink(widget: MyDayWidget): string {
   if (!("apiBasePath" in widget) || !("collection" in widget)) return "/my-day";
   const search = new URLSearchParams();
   const domainMatch = widget.apiBasePath.match(/^\/v1\/data-domains\/(.+)$/);
-  const agencyMatch = widget.apiBasePath.match(/^\/v1\/dynamic-crm\/(\d+)$/);
+  const agencyId = matchAgencyApiBasePath(widget.apiBasePath);
   if (domainMatch) search.set("domain", domainMatch[1]);
-  else if (agencyMatch) search.set("agencyId", agencyMatch[1]);
+  else if (agencyId) search.set("agencyId", agencyId);
   search.set("object", widget.collection);
-  return `/crm?${search.toString()}`;
+  // Fase 1: canónica #/studio; #/crm sigue como alias legacy.
+  return `/studio?${search.toString()}`;
 }
 
 /**

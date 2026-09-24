@@ -71,7 +71,7 @@ it("keeps a saved page section and appends newly created pages", () => {
   const layout = normalizeSidebarNavigationLayout({
     version: 1,
     sections: {
-      operation: ["dynamic-crm", "dashboard"],
+      operation: ["studio", "dashboard"],
       productivity: ["page:platform:clients"],
       administration: [],
       management: [],

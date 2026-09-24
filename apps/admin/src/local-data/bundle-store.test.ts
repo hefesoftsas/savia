@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { openLocalStore, type LocalStore } from "./store";
-import type { RelationDefinition } from "@savia/crm-shared/relations";
+import type { RelationDefinition } from "@savia/studio-shared/relations";
 const stores: LocalStore[] = [];
 const definition: RelationDefinition = {
   id: "rel",

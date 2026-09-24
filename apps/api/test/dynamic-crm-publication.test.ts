@@ -7,7 +7,7 @@ import {
   agencyMemberAuthenticator,
   platformAdministratorAuthenticator,
 } from "./auth-fixtures";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {

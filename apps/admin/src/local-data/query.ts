@@ -1,8 +1,8 @@
 import {
   getPipeline,
-  type CrmObject,
-  type CrmRecord,
-} from "@savia/crm-shared/metadata";
+  type StudioObject,
+  type StudioRecord,
+} from "@savia/studio-shared/metadata";
 import type { Table } from "dexie";
 import { queryCache } from "./query-cache";
 import {
@@ -14,7 +14,7 @@ import {
 } from "./query-index";
 import { z } from "zod";
 
-type Row = { collection: string; id: string; document: CrmRecord };
+type Row = { collection: string; id: string; document: StudioRecord };
 type Database = {
   records: Table<Row, [string, string]>;
   syncState?: Table<
@@ -45,7 +45,7 @@ const reverseText = (value: string) =>
 /** Fixed multiEntry index: arbitrary collection fields need no IndexedDB schema upgrades. */
 export function createRecordSortKeys(
   collection: string,
-  record: CrmRecord,
+  record: StudioRecord,
   fields: string[] = [],
 ): RecordSortKey[] {
   return [
@@ -130,7 +130,7 @@ function compare(a: ReturnType<typeof scalar>, b: ReturnType<typeof scalar>) {
     return forwardText(a) < forwardText(b) ? -1 : 1;
   return a < b ? -1 : 1;
 }
-function predicate(object: CrmObject, params: URLSearchParams) {
+function predicate(object: StudioObject, params: URLSearchParams) {
   for (const key of params.keys())
     if (!supported.has(key))
       throw new Error(`Unsupported local query parameter: ${key}`);
@@ -165,7 +165,7 @@ function predicate(object: CrmObject, params: URLSearchParams) {
       ? [params.get("searchField")!]
       : []);
   const pipeline = object.config.studio?.pipeline?.field ?? "stage";
-  return (record: CrmRecord) => {
+  return (record: StudioRecord) => {
     if ((record.deleted_at != null) !== (params.get("trash") === "true"))
       return false;
     const q = params.get("q");
@@ -258,7 +258,7 @@ function predicate(object: CrmObject, params: URLSearchParams) {
 async function filteredIds(
   db: Database,
   collection: string,
-  object: CrmObject,
+  object: StudioObject,
   params: URLSearchParams,
 ) {
   const parsed = params.has("filters")
@@ -280,7 +280,7 @@ async function filteredIds(
         updated_at: "",
         [condition.field]: value,
         deleted_at: trash ? "deleted" : null,
-      } as CrmRecord),
+      } as StudioRecord),
     );
   };
   let candidates: Set<string> | undefined;
@@ -338,7 +338,7 @@ async function filteredIds(
 export async function queryRecords(
   db: Database,
   collection: string,
-  object: CrmObject,
+  object: StudioObject,
   params: URLSearchParams,
 ) {
   predicate(object, params); // Validate before any cache lookup.
@@ -380,7 +380,7 @@ export async function queryRecords(
       updated_at: "",
       [sort]: equality.value,
       deleted_at: params.get("trash") === "true" ? "deleted" : null,
-    } as CrmRecord).find((key) => key[1] === prefix[1])!;
+    } as StudioRecord).find((key) => key[1] === prefix[1])!;
     const exact = indexed.slice(0, 4);
     rows = db.records.where("sortKeys").between(exact, [...exact, []]);
   }
@@ -459,7 +459,7 @@ export async function queryRecords(
 export async function querySummary(
   db: Database,
   collection: string,
-  object: CrmObject,
+  object: StudioObject,
   params: URLSearchParams,
 ) {
   predicate(object, params);
@@ -515,7 +515,7 @@ type Relation = {
   fieldLabel: string;
   direction: "incoming" | "outgoing";
   total: number;
-  records: CrmRecord[];
+  records: StudioRecord[];
 };
 /** Detail relations only claim completeness for fully replicated collections. */
 export async function queryRecordDetail(
@@ -551,7 +551,7 @@ export async function queryRecordDetail(
         if (!available(object.name)) {
           relationsComplete = false;
         } else {
-          const records: CrmRecord[] = [];
+          const records: StudioRecord[] = [];
           let total = 0;
           const prefix = [object.name, "updated_at:DESC:active"];
           await db.records
@@ -589,7 +589,7 @@ export async function queryRecordDetail(
         const ids = (
           Array.isArray(value) ? value : value ? [value] : []
         ).filter((value): value is string => typeof value === "string");
-        const records: CrmRecord[] = [];
+        const records: StudioRecord[] = [];
         let matched = 0;
         // Foreign keys are bounded by the field's maximum of 500; fetch by primary key,
         // preserving server semantics that total counts IDs even when a target is gone.

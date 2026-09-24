@@ -50,7 +50,7 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
 - Cableado en `appearance-preferences-sync.tsx` y `app-sidebar.tsx`.
 
 ### Delta (`feat(sync): monotonic collection versions for delta refetch`)
-- Migración `0051_collection_versions.sql` + bump en el proxy dynamic-crm;
+- Migración `0051_collection_versions.sql` + bump en el proxy studio (rutas /v1/studio, alias /v1/dynamic-crm);
   la versión viaja en el evento realtime y el cliente (`collectionVersions`,
   Dexie v3) salta eventos ya cubiertos.
 - Espejo por fila rechazado: backends heterogéneos (D1 local, HubSpot, Postgres).
@@ -80,7 +80,7 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
 
 - DO `RealtimeHub` por sala (`platform`, `tenant:<id>`); tickets de un solo uso
   (`POST /v1/realtime/ticket`); eventos solo-hints (`topic`+`type`+id, sin PII).
-- Publican: mutaciones de identidad, tenants y proxy dynamic-crm (records/views).
+- Publican: mutaciones de identidad, tenants y proxy studio (records/views).
 - Hibernación (topics en tags, tickets en SQLite, ping manual — se quitó
   `WebSocketRequestResponsePair` porque rompe el workerd local viejo y tumbaba
   el API en dev). Costo estimado a su escala: **$0 extra** (dentro de la cuota).

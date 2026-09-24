@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(324);
+    expect(names).toHaveLength(144);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -52,8 +52,8 @@ describe("full D1 schema projection", () => {
         "access_grants",
         "access_assignments",
         "access_audit",
-        "crm_access_deliveries",
-        "crm_file_revisions",
+        "studio_access_deliveries",
+        "studio_file_revisions",
         "workflows",
         "workflow_versions",
         "workflow_events",
@@ -74,48 +74,50 @@ describe("full D1 schema projection", () => {
         "assistant_virtual_employee_chunks",
         "request_page_runs",
         "public_forms",
+        "public_form_short_links",
         "tenant_branding",
         "tenant_branding_assets",
         "public_form_submissions",
-        "crm_objects",
-        "crm_collection_versions",
+        "studio_objects",
+        "studio_collection_versions",
         "crm_sync_changes",
         "crm_sync_receipts",
-        "crm_record_history",
-        "crm_record_history_context",
+        "studio_record_history",
+        "studio_record_history_context",
         "offline_collection_policies",
-        "crm_solution_installations",
-        "crm_extension_installations",
+        "studio_solution_installations",
+        "studio_extension_installations",
         "extension_connections",
         "extension_connection_audit_events",
         "extension_action_runs",
         "extension_settings",
-        "crm_solution_objects",
-        "crm_business_links",
-        "crm_data_domains",
+        "plugin_store_artifacts",
+        "studio_solution_objects",
+        "studio_business_links",
+        "studio_data_domains",
         "managed_customer_extensions",
         "managed_customer_requests",
-        "crm_collection_sources",
+        "studio_collection_sources",
         "crm_collection_bindings",
-        "crm_collection_requests",
-        "crm_collection_relations",
-        "crm_record_links",
-        "crm_native_relation_overrides",
-        "crm_records",
-        "crm_views",
-        "crm_integrations",
-        "crm_audit",
-        "crm_unique_values",
-        "crm_write_guards",
-        "crm_requests",
-        "crm_schema_versions",
-        "crm_schema_data",
-        "crm_studio_settings",
-        "crm_integration_runs",
-        "crm_notes",
-        "crm_files",
-        "crm_file_revisions",
-        "crm_access_deliveries",
+        "studio_collection_requests",
+        "studio_collection_relations",
+        "studio_record_links",
+        "studio_native_relation_overrides",
+        "studio_records",
+        "studio_views",
+        "studio_integrations",
+        "studio_audit",
+        "studio_unique_values",
+        "studio_write_guards",
+        "studio_requests",
+        "studio_schema_versions",
+        "studio_schema_data",
+        "studio_settings",
+        "studio_integration_runs",
+        "studio_notes",
+        "studio_files",
+        "studio_file_revisions",
+        "studio_access_deliveries",
         "workflows",
         "workflow_versions",
         "workflow_events",
@@ -136,10 +138,10 @@ describe("full D1 schema projection", () => {
         "access_grants",
         "access_assignments",
         "access_audit",
-        "crm_file_drafts",
-        "crm_automations",
-        "crm_automation_runs",
-        "crm_tasks",
+        "studio_file_drafts",
+        "studio_automations",
+        "studio_automation_runs",
+        "studio_tasks",
         "flows",
         "flow_versions",
         "flow_variables",
@@ -152,8 +154,7 @@ describe("full D1 schema projection", () => {
         "legacy_import_streams",
         "insurer_companies",
         "customer_address",
-        "insurance_policy",
-        "operation_payment",
+        "customer_clientagency",
         "attachment_uploads",
         "identity_principal",
         "identity_global_role",
@@ -186,7 +187,6 @@ describe("full D1 schema projection", () => {
         "notification_send_limits",
         "notification_scope_settings",
         "notification_maintenance_checkpoints",
-        "user_user",
       ]),
     );
 
@@ -242,12 +242,14 @@ describe("full D1 schema projection", () => {
   });
 
   it("keeps portable types and relational constraints in the internal schema", async () => {
-    const [addressColumns, paymentColumns, paymentForeignKeys] =
+    const [addressColumns, profileColumns, profileForeignKeys] =
       await Promise.all([
         env.DB.prepare("PRAGMA table_info(customer_address)").all<TableInfo>(),
-        env.DB.prepare("PRAGMA table_info(operation_payment)").all<TableInfo>(),
         env.DB.prepare(
-          "PRAGMA foreign_key_list(operation_payment)",
+          "PRAGMA table_info(customer_clientagency)",
+        ).all<TableInfo>(),
+        env.DB.prepare(
+          "PRAGMA foreign_key_list(customer_clientagency)",
         ).all<ForeignKey>(),
       ]);
 
@@ -256,12 +258,12 @@ describe("full D1 schema projection", () => {
         expect.objectContaining({ name: "coordinates", type: "TEXT" }),
       ]),
     );
-    expect(paymentColumns.results).toEqual(
+    expect(profileColumns.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "id", type: "INTEGER" }),
       ]),
     );
-    expect(paymentForeignKeys.results.length).toBeGreaterThan(0);
+    expect(profileForeignKeys.results.length).toBeGreaterThan(0);
   });
 
   it("projects the private attachment metadata relation", async () => {

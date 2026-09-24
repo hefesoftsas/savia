@@ -43,12 +43,11 @@ export function SaviaRequestPage({
         >
           <LockKeyhole className="mt-0.5 size-5 shrink-0" />
           <div>
-            <h2 className="font-semibold">
-              Acceso de administrador de plataforma
-            </h2>
+            <h2 className="font-semibold">Acceso de administración</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Tu cuenta no tiene acceso al editor de flujos. Entra con una
-              cuenta de administrador de plataforma para utilizar Savia Request.
+              cuenta de administrador de plataforma o de administrador de tu
+              tenant para utilizar Savia Request.
             </p>
           </div>
         </div>

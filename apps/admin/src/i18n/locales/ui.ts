@@ -13,11 +13,11 @@ export const uiMessages = {
     "How can I help today?",
     "Como posso ajudar você hoje?",
   ],
-  "Browse collections, search for customers, analyze metrics, and create interactive charts from your CRM data.":
+  "Browse collections, search for customers, analyze metrics, and create interactive charts from your Studio data.":
     [
-      "Consulta colecciones, busca clientes, analiza métricas y genera gráficos interactivos sobre tus datos del CRM.",
-      "Browse collections, search for customers, analyze metrics, and create interactive charts from your CRM data.",
-      "Consulte coleções, busque clientes, analise métricas e crie gráficos interativos com os dados do CRM.",
+      "Consulta colecciones, busca clientes, analiza métricas y genera gráficos interactivos sobre tus datos de Studio.",
+      "Browse collections, search for customers, analyze metrics, and create interactive charts from your Studio data.",
+      "Consulte coleções, busque clientes, analise métricas e crie gráficos interativos com os dados do Studio.",
     ],
   "Virtual employees (@mention)": [
     "Empleados Virtuales (@mención)",

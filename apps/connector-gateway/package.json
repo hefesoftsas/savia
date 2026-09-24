@@ -7,8 +7,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@savia/crm-server": "workspace:*",
-    "@savia/crm-shared": "workspace:*",
+    "@savia/studio-server": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
     "@savia/release-catalog": "workspace:*",
     "hono": "^4.13.5"
   },

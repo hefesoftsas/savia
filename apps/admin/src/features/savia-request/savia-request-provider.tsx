@@ -14,7 +14,9 @@ import { useAppServices } from "@/features/assistant/assistant-context";
 import {
   createSaviaRequestApi,
   type SaviaRequestApi,
+  type SaviaRequestScope,
 } from "./savia-request-api";
+import { useSaviaRequestScope } from "./savia-request-scope";
 import type { FlowSummary, RequestFlow } from "./types";
 
 type WorkspaceValue = {
@@ -28,7 +30,15 @@ type WorkspaceValue = {
   busy: boolean;
   error: string | null;
   api: SaviaRequestApi;
+  scope: string | undefined;
+  scopeLabel: string;
+  scopeReady: boolean;
+  canOverrideScope: boolean;
+  scopeOptions: string[];
+  isPlatformAdmin: boolean;
+  applyScopeOverride(scope: string | null): void;
   selectFlow(id: string, stepIndex?: number): Promise<void>;
+  reloadFlow(): Promise<boolean>;
   openSecrets(): void;
   saveDraft(): Promise<boolean>;
   updateDraft(next: RequestFlow): void;
@@ -66,9 +76,13 @@ function safeStepIndex(flow: RequestFlow, step: number) {
 
 export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const services = useAppServices();
+  const scopeState = useSaviaRequestScope();
+  const scope: SaviaRequestScope | undefined = scopeState.scope
+    ? { tenant: scopeState.scope }
+    : undefined;
   const api = useMemo(
-    () => createSaviaRequestApi(services.apiClient),
-    [services.apiClient],
+    () => createSaviaRequestApi(services.apiClient, scope),
+    [services.apiClient, scopeState.scope],
   );
   const { canAccess, isPending } = useCanAccess({
     resource: "savia-request",
@@ -79,6 +93,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const active =
     Boolean(canAccess) &&
     !isPending &&
+    scopeState.ready &&
     location.pathname.startsWith("/savia-request");
   const view = requestedView(location.search);
   const [flows, setFlows] = useState<FlowSummary[]>([]);
@@ -90,6 +105,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const draftRef = useRef<RequestFlow | null>(null);
   const dirtyRef = useRef(false);
+  const scopeRef = useRef<string | undefined>(scopeState.scope);
 
   const replaceFlow = useCallback((next: RequestFlow | null) => {
     draftRef.current = next;
@@ -169,6 +185,47 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const openSecrets = useCallback(() => {
     navigate(secretsSelection());
   }, [navigate]);
+
+  const reloadFlow = useCallback(async () => {
+    const current = draftRef.current;
+    if (!current) {
+      await refreshNavigation();
+      return true;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const fresh = await api.readFlow(current.id);
+      dirtyRef.current = false;
+      setDirty(false);
+      replaceFlow(fresh);
+      setStepIndex((index) => safeStepIndex(fresh, index));
+      await refreshNavigation();
+      return true;
+    } catch (exception) {
+      setError(
+        exception instanceof Error
+          ? exception.message
+          : "No pudimos recargar el flow.",
+      );
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, [api, refreshNavigation, replaceFlow]);
+
+  useEffect(() => {
+    if (scopeRef.current === scopeState.scope) return;
+    scopeRef.current = scopeState.scope;
+    dirtyRef.current = false;
+    setDirty(false);
+    replaceFlow(null);
+    setFlows([]);
+    setFolders([]);
+    setStepIndex(0);
+    setError(null);
+    navigate("/savia-request", { replace: true });
+  }, [navigate, replaceFlow, scopeState.scope]);
 
   useEffect(() => {
     if (!active) {
@@ -303,7 +360,15 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       busy,
       error,
       api,
+      scope: scopeState.scope,
+      scopeLabel: scopeState.label,
+      scopeReady: scopeState.ready,
+      canOverrideScope: scopeState.canOverride,
+      scopeOptions: scopeState.options,
+      isPlatformAdmin: scopeState.isPlatformAdmin,
+      applyScopeOverride: scopeState.applyOverride,
       selectFlow,
+      reloadFlow,
       openSecrets,
       saveDraft,
       updateDraft,
@@ -323,12 +388,20 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       refreshNavigation,
       saveDraft,
       selectFlow,
+      reloadFlow,
       openSecrets,
       stepIndex,
       dirty,
       updateDraft,
       discardDraft,
       clearSelection,
+      scopeState.scope,
+      scopeState.label,
+      scopeState.ready,
+      scopeState.canOverride,
+      scopeState.options,
+      scopeState.isPlatformAdmin,
+      scopeState.applyOverride,
     ],
   );
 

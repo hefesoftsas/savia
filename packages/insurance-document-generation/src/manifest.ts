@@ -1,5 +1,5 @@
 import { runtime } from "@savia/insurance-communications/gateway";
-import type { ExtensionManifest } from "@savia/crm-shared/extension-package";
+import type { ExtensionManifest } from "@savia/studio-shared/extension-package";
 export const manifest = {
   format: "savia.extension",
   formatVersion: 1,

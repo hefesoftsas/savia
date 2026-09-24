@@ -412,11 +412,11 @@ export const settingsMessages = {
     "Loading maps and integrations…",
     "Carregando mapas e integrações…",
   ],
-  "No hay dominios de datos disponibles para Geoapify o integraciones del CRM.":
+  "No hay dominios de datos disponibles para Geoapify o integraciones de Studio.":
     [
-      "No hay dominios de datos disponibles para Geoapify o integraciones del CRM.",
-      "No data domains are available for Geoapify or CRM integrations.",
-      "Não há domínios de dados disponíveis para Geoapify ou integrações do CRM.",
+      "No hay dominios de datos disponibles para Geoapify o integraciones de Studio.",
+      "No data domains are available for Geoapify or Studio integrations.",
+      "Não há domínios de dados disponíveis para Geoapify ou integrações do Studio.",
     ],
   "Autocompletar de direcciones en el diseñador cuando eliges Geoapify como proveedor.":
     [
@@ -437,10 +437,10 @@ export const settingsMessages = {
     "Each external OpenAPI stores its base URL and credential separately.",
     "Cada OpenAPI externa armazena sua URL base e credencial separadamente.",
   ],
-  "Integraciones OpenAPI del CRM": [
-    "Integraciones OpenAPI del CRM",
-    "CRM OpenAPI integrations",
-    "Integrações OpenAPI do CRM",
+  "Integraciones OpenAPI de Studio": [
+    "Integraciones OpenAPI de Studio",
+    "Studio OpenAPI integrations",
+    "Integrações OpenAPI do Studio",
   ],
   "Revisa qué conexiones externas ya tienen credencial y cuáles siguen pendientes.":
     [
@@ -832,12 +832,16 @@ export const settingsMessages = {
     "Direct support for audio/voice input",
     "Suporte direto para entrada de áudio/voz",
   ],
-  "Herramientas CRM": ["Herramientas CRM", "CRM tools", "Ferramentas de CRM"],
+  "Herramientas de Studio": [
+    "Herramientas de Studio",
+    "Studio tools",
+    "Ferramentas do Studio",
+  ],
   Herramientas: ["Herramientas", "Tools", "Ferramentas"],
-  "Ejecuta consultas al CRM y llamadas a funciones": [
-    "Ejecuta consultas al CRM y llamadas a funciones",
-    "Runs CRM queries and function calls",
-    "Executa consultas ao CRM e chamadas de funções",
+  "Ejecuta consultas en Studio y llamadas a funciones": [
+    "Ejecuta consultas en Studio y llamadas a funciones",
+    "Runs Studio queries and function calls",
+    "Executa consultas no Studio e chamadas de funções",
   ],
   "Organización #%{id}": [
     "Organización #%{id}",

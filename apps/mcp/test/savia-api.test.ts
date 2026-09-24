@@ -200,16 +200,18 @@ describe("installed CRM collections", () => {
         });
       },
     );
-    expect(await client.listCrmCollections()).toEqual({ data: [crm] });
-    await client.listCrmRecords("provider_contacts", 2, 10, "a+b");
-    await client.getCrmRecord("provider_contacts", "a/b");
-    await client.createCrmRecord("provider_contacts", { email: "a@test.co" });
-    await client.updateCrmRecord("provider_contacts", "42", {
+    expect(await client.listStudioCollections()).toEqual({ data: [crm] });
+    await client.listStudioRecords("provider_contacts", 2, 10, "a+b");
+    await client.getStudioRecord("provider_contacts", "a/b");
+    await client.createStudioRecord("provider_contacts", {
+      email: "a@test.co",
+    });
+    await client.updateStudioRecord("provider_contacts", "42", {
       email: "b@test.co",
       _version: 2,
     });
-    await client.getCrmRecordLinks("provider_contacts", "42");
-    await client.deleteCrmRecord("provider_contacts", "42", 2);
+    await client.getStudioRecordLinks("provider_contacts", "42");
+    await client.deleteStudioRecord("provider_contacts", "42", 2);
     const operations = calls.filter((c) => !c.path.endsWith("/objects"));
     expect(operations.map((c) => [c.path, c.method, c.body])).toEqual([
       [
@@ -246,8 +248,8 @@ describe("installed CRM collections", () => {
     expect(calls.every((c) => c.auth === "Bearer caller")).toBe(true);
     const before = operations.length;
     for (const object of ["local", "missing", "../objects"]) {
-      await expect(client.createCrmRecord(object, {})).rejects.toThrow();
-      await expect(client.getCrmRecord(object, "42")).rejects.toThrow();
+      await expect(client.createStudioRecord(object, {})).rejects.toThrow();
+      await expect(client.getStudioRecord(object, "42")).rejects.toThrow();
     }
     expect(calls.filter((c) => !c.path.endsWith("/objects"))).toHaveLength(
       before,
@@ -282,10 +284,10 @@ it("discovers and queries authorized collections hidden only from navigation", a
       );
     },
   );
-  expect((await client.listCrmCollections({ all: true })).data).toEqual([
+  expect((await client.listStudioCollections({ all: true })).data).toEqual([
     expect.objectContaining({ name: "cotizaciones", recordCount: 1 }),
   ]);
-  expect(await client.listCrmRecords("cotizaciones", { page: 1 })).toEqual({
+  expect(await client.listStudioRecords("cotizaciones", { page: 1 })).toEqual({
     data: [{ id: "quote-1", name: "COT-1" }],
     total: 1,
   });

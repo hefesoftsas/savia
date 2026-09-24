@@ -246,7 +246,41 @@ export class SaviaApiClient {
     return response.data;
   }
 
-  async listCrmCollections(options?: { all?: boolean } | boolean): Promise<{
+  async listStoreMcpCatalog(): Promise<{
+    data: Array<{
+      pluginId: string;
+      label: string;
+      actions: Array<{
+        id: string;
+        kind: "simulation" | "http";
+        method?: string;
+        label: string;
+        summary: string;
+      }>;
+    }>;
+  }> {
+    return this.request(
+      "/v1/data-domains/platform/api/plugin-store/mcp-catalog",
+    );
+  }
+
+  async executeStoreAction(
+    pluginId: string,
+    actionId: string,
+    input: Record<string, unknown>,
+  ): Promise<unknown> {
+    const response = await this.request<{ data: { output: unknown } }>(
+      `/v1/data-domains/platform/api/extensions/${encode(pluginId)}/actions/${encode(actionId)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input }),
+      },
+    );
+    return response.data.output;
+  }
+
+  async listStudioCollections(options?: { all?: boolean } | boolean): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
     const all = typeof options === "boolean" ? options : Boolean(options?.all);
@@ -341,17 +375,17 @@ export class SaviaApiClient {
     allowAny = false,
   ): Promise<string> {
     if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(object))
-      throw new Error("Invalid CRM collection key");
-    const collections = await this.listCrmCollections({ all: allowAny });
+      throw new Error("Invalid Studio collection key");
+    const collections = await this.listStudioCollections({ all: allowAny });
     if (!collections.data.some((collection) => collection.name === object)) {
-      throw new Error("Collection is not an installed CRM collection");
+      throw new Error("Collection is not an installed Studio collection");
     }
     if (id !== undefined && (!id.trim() || id === "." || id === ".."))
-      throw new Error("Invalid CRM record identifier");
+      throw new Error("Invalid Studio record identifier");
     return `/v1/data-domains/platform/api/${resource}/${encode(object)}${id === undefined ? "" : `/${encode(id)}`}`;
   }
 
-  async listCrmRecords(
+  async listStudioRecords(
     object: string,
     pageOrOptions?:
       | number
@@ -484,7 +518,7 @@ export class SaviaApiClient {
 
   async createInsuranceQuote(rawInput: unknown) {
     const input = assistantQuoteInputSchema.parse(rawInput);
-    const collections = await this.listCrmCollections({ all: true });
+    const collections = await this.listStudioCollections({ all: true });
     if (
       !["cotizaciones", "cotizaciones_detalle"].every((name) =>
         collections.data.some((c) => c.name === name),
@@ -650,7 +684,7 @@ export class SaviaApiClient {
   }
 
   async getQuoteSummary(reference?: string) {
-    const collections = await this.listCrmCollections({ all: true });
+    const collections = await this.listStudioCollections({ all: true });
     if (
       !["cotizaciones", "cotizaciones_detalle"].every((name) =>
         collections.data.some((c) => c.name === name),
@@ -738,7 +772,7 @@ export class SaviaApiClient {
     };
   }
 
-  async aggregateCrmRecords(
+  async aggregateStudioRecords(
     object: string,
     options: {
       groupBy?: string;
@@ -777,7 +811,7 @@ export class SaviaApiClient {
     return this.request(`${path}/summary?${params}`);
   }
 
-  async getCrmRecord(
+  async getStudioRecord(
     object: string,
     id: string,
     allowAny = false,
@@ -785,7 +819,7 @@ export class SaviaApiClient {
     return this.request(await this.crmPath(object, "records", id, allowAny));
   }
 
-  async createCrmRecord(
+  async createStudioRecord(
     object: string,
     data: Record<string, unknown>,
     allowAny = false,
@@ -800,7 +834,7 @@ export class SaviaApiClient {
     );
   }
 
-  async updateCrmRecord(
+  async updateStudioRecord(
     object: string,
     id: string,
     data: Record<string, unknown>,
@@ -813,7 +847,7 @@ export class SaviaApiClient {
       Number(payload._version) < 1
     ) {
       try {
-        const existing = (await this.getCrmRecord(object, id, allowAny)) as {
+        const existing = (await this.getStudioRecord(object, id, allowAny)) as {
           data?: { _version?: number };
           _version?: number;
         };
@@ -829,7 +863,7 @@ export class SaviaApiClient {
     });
   }
 
-  async deleteCrmRecord(
+  async deleteStudioRecord(
     object: string,
     id: string,
     version?: number,
@@ -842,7 +876,7 @@ export class SaviaApiClient {
       resolvedVersion < 1
     ) {
       try {
-        const existing = (await this.getCrmRecord(object, id, allowAny)) as {
+        const existing = (await this.getStudioRecord(object, id, allowAny)) as {
           data?: { _version?: number };
           _version?: number;
         };
@@ -860,7 +894,7 @@ export class SaviaApiClient {
     );
   }
 
-  async getCrmRecordLinks(
+  async getStudioRecordLinks(
     object: string,
     id: string,
     allowAny = true,

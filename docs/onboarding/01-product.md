@@ -18,14 +18,16 @@ are optional solution packages rather than prerequisites of the core.
 ## Pieces the user sees
 
 1. **Admin web** (`apps/admin`): React Admin panel + low-code designer
-   (domains, objects, screens, forms) at `#/crm`.
+   (domains, objects, screens, forms) at `#/studio` (`#/crm` remains as
+   a legacy alias).
 2. **Quoter (savia-request)**: the advisor requests a quote; every intent and
    offer is persisted before executing against the provider; retries create
    new attempts, they never mutate the previous one.
 3. **Assistant**: bar available on authenticated screens; reads data over MCP
    and prepares changes the user explicitly confirms.
-4. **CRM**: contacts/companies, HubSpot sync per agency (manual or automatic
-   queue).
+4. **External CRM**: contacts/companies, HubSpot sync per agency (manual or
+   automatic queue). "CRM" elsewhere in the UI now means this integration —
+   the low-code designer itself is called **Studio**.
 5. **Solution packages**: configuration installable per space
    (`solutions/insurance/`); see [solution-packages.md](../solution-packages.md).
 6. **Workflows**: native record events, manual actions and schedules connected

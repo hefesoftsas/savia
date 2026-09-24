@@ -1,14 +1,14 @@
 import { InsuranceNotice } from "../notice";
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import {
   pluginIntlLocale,
   type PluginLocale,
   type PluginMessageParams,
-} from "@savia/crm-shared/plugin-localization";
+} from "@savia/studio-shared/plugin-localization";
 import { insuranceMessage } from "../messages";
 import { useInsuranceMessages } from "../localization";
 import { useEffect, useMemo, useState } from "react";
-import type { PluginExtensionActionRun } from "@savia/crm-shared/plugin-api";
+import type { PluginExtensionActionRun } from "@savia/studio-shared/plugin-api";
 import { ProviderLogo } from "./provider-logo";
 import {
   formatCop as formatLocalizedCop,

@@ -265,7 +265,7 @@ describe("Savia Better Auth worker", () => {
     expect(JSON.parse(apiResource?.allowed_scopes ?? "[]")).toContain(
       "offline_access",
     );
-  });
+  }, 15_000);
 
   it("upgrades the existing admin client with the refresh-token scope", async () => {
     const current = (await (

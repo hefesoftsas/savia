@@ -6,7 +6,7 @@ import {
   type ResourceMetadata,
   type DatabaseKind,
   type DatabaseResult,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import type { DatabaseDriver } from "./driver";
 import {
   buildDatabaseRead,

@@ -1,6 +1,6 @@
 import { localRecordLinks } from "./link-snapshots";
 import { isOfflineError } from "@/offline/offline-error";
-import { validateRecord } from "@savia/crm-shared/metadata";
+import { validateRecord } from "@savia/studio-shared/metadata";
 import type { LocalStore } from "./store";
 import type { SyncTransport } from "./contracts";
 import { queryRecords, querySummary, queryRecordDetail } from "./query";

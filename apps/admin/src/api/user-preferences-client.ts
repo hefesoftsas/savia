@@ -1,5 +1,5 @@
 import type { ApiClient } from "./api-client";
-import type { MyDayWidgetsLayout } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidgetsLayout } from "@savia/studio-shared/my-day-widgets";
 
 export const sidebarNavigationSectionIds = [
   "operation",
@@ -10,7 +10,7 @@ export const sidebarNavigationSectionIds = [
 
 export const sidebarNavigationItemIds = [
   "dashboard",
-  "dynamic-crm",
+  "studio",
   "my-day",
   "integrations",
   "provider-credentials",

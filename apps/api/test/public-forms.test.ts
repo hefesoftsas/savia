@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { beforeAll, expect, it, vi } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import {
   platformAdministratorAuthenticator,
@@ -70,13 +70,13 @@ async function object(
   domain = "demo",
 ) {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO crm_data_domains(id,label,created_by) VALUES(?,?,?)",
+    "INSERT OR IGNORE INTO studio_data_domains(id,label,created_by) VALUES(?,?,?)",
   )
     .bind(domain, domain, "test")
     .run();
   const name = "form_" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
   )
     .bind(
       "domain:" + domain,
@@ -154,7 +154,7 @@ it("publishes a safe immutable definition and creates only the server-selected c
   expect(await response.json()).toMatchObject({ ok: true });
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
       .bind("domain:demo", name)
       .first("n"),
@@ -208,6 +208,189 @@ it("requires administrator management and blocks anonymous methods, expired link
   ).toBe(200);
   expect((await submit(instance, link, { name: "Visitor" })).status).toBe(404);
 });
+it("creates a stable Savia short URL that redirects only while the form is active", async () => {
+  const instance = app();
+  const objectName = await object();
+  const link = await publish(instance, objectName);
+  const createShortUrl = () =>
+    instance.request(`https://api.test/v1/public-forms/${link.id}/short-url`, {
+      method: "POST",
+    });
+
+  const created = await createShortUrl();
+  expect(created.status, await created.clone().text()).toBe(200);
+  const { data } = (await created.json()) as { data: { shortUrl: string } };
+  expect(data.shortUrl).toMatch(
+    /^https:\/\/forms\.savia\.test\/s\/[a-f0-9]{16}$/,
+  );
+
+  const repeated = await createShortUrl();
+  expect(repeated.status).toBe(200);
+  expect(await repeated.json()).toEqual({ data });
+
+  const managed = await instance.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${objectName}`,
+  );
+  const listed = (await managed.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toBe(
+    data.shortUrl,
+  );
+
+  const redirect = await instance.request(new URL(data.shortUrl).pathname, {
+    redirect: "manual",
+  });
+  expect(redirect.status).toBe(302);
+  expect(redirect.headers.get("location")).toBe(link.url);
+  expect(redirect.headers.get("cache-control")).toBe("no-store");
+  expect(redirect.headers.get("referrer-policy")).toBe("no-referrer");
+
+  await instance.request(`https://api.test/v1/public-forms/${link.id}`, {
+    method: "DELETE",
+  });
+  expect(
+    (
+      await instance.request(new URL(data.shortUrl).pathname, {
+        redirect: "manual",
+      })
+    ).status,
+  ).toBe(404);
+  const revoked = await instance.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${objectName}`,
+  );
+  const revokedLinks = (await revoked.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(
+    revokedLinks.data.find((item) => item.id === link.id)?.shortUrl,
+  ).toBeUndefined();
+});
+it("creates and persists an external short URL when publishing and can retry it", async () => {
+  const shorten = vi.fn(
+    async (url: string) => `https://go.cloud.hefesoft.com/abc123`,
+  );
+  const instance = app({ shortener: { shorten } });
+  const name = await object();
+  const link = await publish(instance, name);
+
+  expect(shorten).toHaveBeenCalledWith(link.url);
+  expect(link.shortUrl).toBe("https://go.cloud.hefesoft.com/abc123");
+
+  const listResponse = await instance.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
+  );
+  const listed = (await listResponse.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toBe(
+    "https://go.cloud.hefesoft.com/abc123",
+  );
+
+  const retryResponse = await instance.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(retryResponse.status).toBe(200);
+  expect(await retryResponse.json()).toEqual({
+    data: { shortUrl: "https://go.cloud.hefesoft.com/abc123" },
+  });
+  expect(shorten).toHaveBeenCalledTimes(1);
+});
+it("replaces the Savia-only short URL for existing links when external shortening is enabled", async () => {
+  const name = await object();
+  const legacyApp = app();
+  const link = await publish(legacyApp, name);
+  await legacyApp.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+
+  const shorten = vi.fn(async () => "https://go.cloud.hefesoft.com/existing1");
+  const externalApp = app({ shortener: { shorten } });
+  const listing = await externalApp.request(
+    `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
+  );
+  const listed = (await listing.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(
+    listed.data.find((item) => item.id === link.id)?.shortUrl,
+  ).toBeUndefined();
+
+  const retry = await externalApp.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(retry.status).toBe(200);
+  expect(
+    ((await retry.json()) as { data: { shortUrl: string } }).data.shortUrl,
+  ).toBe("https://go.cloud.hefesoft.com/existing1");
+  expect(shorten).toHaveBeenCalledWith(link.url);
+});
+it("returns the stored winner when external shortening retries overlap", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  const resolutions: ((url: string) => void)[] = [];
+  let notifyBothCalls!: () => void;
+  const bothCalls = new Promise<void>((resolve) => {
+    notifyBothCalls = resolve;
+  });
+  const shorten = vi.fn(
+    () =>
+      new Promise<string>((resolve) => {
+        resolutions.push(resolve);
+        if (resolutions.length === 2) notifyBothCalls();
+      }),
+  );
+  const instance = app({ shortener: { shorten } });
+  const retry = () =>
+    instance.request(`https://api.test/v1/public-forms/${link.id}/short-url`, {
+      method: "POST",
+    });
+
+  const firstRequest = retry();
+  const secondRequest = retry();
+  await bothCalls;
+  resolutions[1]("https://go.cloud.hefesoft.com/winner2");
+  const secondResponse = await secondRequest;
+  resolutions[0]("https://go.cloud.hefesoft.com/loser1");
+  const firstResponse = await firstRequest;
+
+  expect((await firstResponse.json()).data).toEqual({
+    shortUrl: "https://go.cloud.hefesoft.com/winner2",
+  });
+  expect((await secondResponse.json()).data).toEqual({
+    shortUrl: "https://go.cloud.hefesoft.com/winner2",
+  });
+});
+it("keeps publishing the canonical URL when the external shortener is unavailable", async () => {
+  const instance = app({
+    shortener: {
+      shorten: vi.fn().mockRejectedValue(new Error("provider down")),
+    },
+  });
+  const name = await object();
+  const link = await publish(instance, name);
+
+  expect(link.url).toMatch(/^https:\/\/forms\.savia\.test\/public\/forms\//);
+  expect(link.shortUrl).toBeUndefined();
+
+  const retry = await instance.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(retry.status).toBe(503);
+});
+it("restricts short URL creation to platform administrators", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  const response = await app({}, false).request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(response.status).toBe(403);
+});
 it("hard-deletes only dead links and refuses active ones", async () => {
   const instance = app();
   const name = await object();
@@ -260,7 +443,7 @@ it("atomically caps concurrent submissions and replays only the original proof w
   }
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
       .bind("domain:demo", name)
       .first("n"),
@@ -309,7 +492,7 @@ it("keeps fields frozen, rejects required private fields, expired links, and for
   const name = await object();
   const link = await publish(instance, name);
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(
       JSON.stringify(
@@ -911,7 +1094,7 @@ it("closes links when their domain disappears and rejects metadata-only remote c
   const instance = app();
   const name = await object(undefined, "retired");
   const link = await publish(instance, name, { domainId: "retired" });
-  await env.DB.prepare("DELETE FROM crm_data_domains WHERE id=?")
+  await env.DB.prepare("DELETE FROM studio_data_domains WHERE id=?")
     .bind("retired")
     .run();
   expect((await submit(instance, link, { name: "One" })).status).toBe(404);
@@ -919,7 +1102,7 @@ it("closes links when their domain disappears and rejects metadata-only remote c
   const config = makeConfig({ name: { type: "Textbox", label: "Name" } });
   config.studio = { business: "customer" };
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(JSON.stringify(config), "domain:demo", remote)
     .run();
@@ -988,7 +1171,7 @@ it("binds tenant links to active commercial tenants and closes them after deacti
     .bind(880012, "public-form-tenant", "Form tenant", 1, now, now)
     .run();
   await env.DB.prepare(
-    "UPDATE crm_objects SET tenant_id=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET tenant_id=? WHERE tenant_id=? AND name=?",
   )
     .bind("agency:880012", "domain:demo", name)
     .run();
@@ -998,7 +1181,7 @@ it("binds tenant links to active commercial tenants and closes them after deacti
   ).toBe(200);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_records WHERE tenant_id=? AND object_name=?",
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
       .bind("agency:880012", name)
       .first("n"),
@@ -1033,7 +1216,7 @@ it("excludes conditional section fields and rejects required fields in those sec
     ],
   };
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(JSON.stringify(config), "domain:demo", name)
     .run();
@@ -1048,7 +1231,7 @@ it("excludes conditional section fields and rejects required fields in those sec
   ).toBe(422);
   config.fields.conditional.required = true;
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(JSON.stringify(config), "domain:demo", name)
     .run();
@@ -1190,7 +1373,7 @@ it("verifies self-hosted proof, preserves exact idempotent retries and rejects r
   );
   expect(replay.status).toBe(429);
   const count = await env.DB.prepare(
-    "SELECT count(*) AS n FROM crm_records WHERE object_name=?",
+    "SELECT count(*) AS n FROM studio_records WHERE object_name=?",
   )
     .bind(name)
     .first<{ n: number }>();

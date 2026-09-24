@@ -1,4 +1,4 @@
-import { translatePluginMessage, type PluginLocale, type PluginMessages, type PluginMessageParams } from "@savia/crm-shared/plugin-localization";
+import { translatePluginMessage, type PluginLocale, type PluginMessages, type PluginMessageParams } from "@savia/studio-shared/plugin-localization";
 export const insuranceMessages = {
   "Resultado de cotización": [
     "Resultado de cotización",

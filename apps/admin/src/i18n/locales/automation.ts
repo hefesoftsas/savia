@@ -42,10 +42,10 @@ export const automationMessages = {
     "Screen “%{value0}” permanently deleted",
     "Tela “%{value0}” excluída permanentemente",
   ],
-  "No pudimos conectar con el CRM": [
-    "No pudimos conectar con el CRM",
-    "Could not connect to the CRM",
-    "Não foi possível conectar ao CRM",
+  "No pudimos conectar con Studio": [
+    "No pudimos conectar con Studio",
+    "Could not connect to Studio",
+    "Não foi possível conectar ao Studio",
   ],
   Reintentar: ["Reintentar", "Retry", "Tentar novamente"],
   "Fuentes y colecciones": [
@@ -77,7 +77,7 @@ export const automationMessages = {
     "Edite os dados e salve suas alterações.",
   ],
   savia: ["savia", "savia", "savia"],
-  "CRM Studio": ["CRM Studio", "CRM Studio", "CRM Studio"],
+  Studio: ["Studio", "Studio", "Studio"],
   "Espacio de Savia": [
     "Espacio de Savia",
     "Savia workspace",
@@ -89,7 +89,11 @@ export const automationMessages = {
     "Demonstração local",
   ],
   "Tu negocio": ["Tu negocio", "Your business", "Seu negócio"],
-  "Módulos del CRM": ["Módulos del CRM", "CRM modules", "Módulos do CRM"],
+  "Módulos de Studio": [
+    "Módulos de Studio",
+    "Studio modules",
+    "Módulos do Studio",
+  ],
   "Eliminar pantalla %{value0}": [
     "Eliminar pantalla %{value0}",
     "Delete screen %{value0}",
@@ -138,6 +142,24 @@ export const automationMessages = {
     "Help with managing screens",
     "Ajuda para gerenciar telas",
   ],
+  "Enlace público": ["Enlace público", "Public link", "Link público"],
+  "Ayuda sobre enlaces públicos": [
+    "Ayuda sobre enlaces públicos",
+    "Help on public links",
+    "Ajuda sobre links públicos",
+  ],
+  "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.":
+    [
+      "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.",
+      "Generate secure links for external people to submit records or request quotes without signing in.",
+      "Gere links seguros para que pessoas externas enviem registros ou solicitem cotações sem iniciar sessão.",
+    ],
+  "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.":
+    [
+      "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.",
+      "Cannot publish links yet: security verification configuration is missing. Contact the administrator.",
+      "Não é possível publicar links ainda: falta configurar a verificação de segurança. Entre em contato com o administrador.",
+    ],
   "Reordena el menú de Tu negocio, crea secciones, activa u oculta pantallas y configura cómo se abren sus formularios.":
     [
       "Reordena el menú de Tu negocio, crea secciones, activa u oculta pantallas y configura cómo se abren sus formularios.",
@@ -163,10 +185,10 @@ export const automationMessages = {
     "This collection does not support listing records.",
     "Esta coleção não permite listar registros.",
   ],
-  "Tu CRM, a tu manera": [
-    "Tu CRM, a tu manera",
-    "Your CRM, your way",
-    "Seu CRM, do seu jeito",
+  "Tu Studio, a tu manera": [
+    "Tu Studio, a tu manera",
+    "Your Studio, your way",
+    "Seu Studio, do seu jeito",
   ],
   "Diseña una vez. Úsalo siempre.": [
     "Diseña una vez. Úsalo siempre.",
@@ -188,11 +210,7 @@ export const automationMessages = {
     "Create an object or restore a screen to design its form.",
     "Crie um objeto ou recupere uma tela para projetar seu formulário.",
   ],
-  "Savia CRM Studio": [
-    "Savia CRM Studio",
-    "Savia CRM Studio",
-    "Savia CRM Studio",
-  ],
+  "Savia Studio": ["Savia Studio", "Savia Studio", "Savia Studio"],
   "Entorno local · Guardado en el servidor": [
     "Entorno local · Guardado en el servidor",
     "Local environment · Saved on the server",
@@ -431,11 +449,11 @@ export const automationMessages = {
   ],
   Conectado: ["Conectado", "Connected", "Conectado"],
   Ayuda: ["Ayuda", "Help", "Ajuda"],
-  "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.":
+  "Crea las pantallas de Studio para trabajar con los registros y sus relaciones desde Savia.":
     [
-      "Crea las pantallas del CRM para trabajar con los registros y sus relaciones desde Savia.",
-      "Create CRM screens to work with records and their relationships from Savia.",
-      "Crie telas do CRM para trabalhar com registros e suas relações no Savia.",
+      "Crea las pantallas de Studio para trabajar con los registros y sus relaciones desde Savia.",
+      "Create Studio screens to work with records and their relationships from Savia.",
+      "Crie telas do Studio para trabalhar com registros e suas relações no Savia.",
     ],
   "Consultando la conexión y las pantallas disponibles…": [
     "Consultando la conexión y las pantallas disponibles…",
@@ -591,6 +609,53 @@ export const automationMessages = {
     "Reaplica los requisitos sin desactivar la extensión.",
     "Reapply requirements without disabling the extension.",
     "Reaplica os requisitos sem desativar a extensão.",
+  ],
+  "Mis plugins": ["Mis plugins", "My plugins", "Meus plugins"],
+  "Cómo funcionan los plugins del store": [
+    "Cómo funcionan los plugins del store",
+    "How store plugins work",
+    "Como funcionam os plugins da loja",
+  ],
+  "Sube un .zip con savia-extension.json y dist/plugin.js compilado. Solo es visible en este espacio.":
+    [
+      "Sube un .zip con savia-extension.json y dist/plugin.js compilado. Solo es visible en este espacio.",
+      "Upload a .zip with savia-extension.json and compiled dist/plugin.js. It is only visible in this workspace.",
+      "Envie um .zip com savia-extension.json e dist/plugin.js compilado. Ele só fica visível neste espaço.",
+    ],
+  "Subir plugin": ["Subir plugin", "Upload plugin", "Enviar plugin"],
+  "Subiendo…": ["Subiendo…", "Uploading…", "Enviando…"],
+  "Cargando plugins…": [
+    "Cargando plugins…",
+    "Loading plugins…",
+    "Carregando plugins…",
+  ],
+  "Aún no subiste plugins a este espacio.": [
+    "Aún no subiste plugins a este espacio.",
+    "No plugins uploaded to this workspace yet.",
+    "Nenhum plugin enviado para este espaço ainda.",
+  ],
+  Ver: ["Ver", "View", "Ver"],
+  Ocultar: ["Ocultar", "Hide", "Ocultar"],
+  Eliminar: ["Eliminar", "Delete", "Excluir"],
+  "Sin conexiones configuradas.": [
+    "Sin conexiones configuradas.",
+    "No connections configured.",
+    "Sem conexões configuradas.",
+  ],
+  "Ver plugin %{value0}": [
+    "Ver plugin %{value0}",
+    "View plugin %{value0}",
+    "Ver plugin %{value0}",
+  ],
+  "No se pudo actualizar el plugin. Intenta de nuevo.": [
+    "No se pudo actualizar el plugin. Intenta de nuevo.",
+    "Could not update the plugin. Try again.",
+    "Não foi possível atualizar o plugin. Tente de novo.",
+  ],
+  "Se ejecuta aislado: sin acceso a tus credenciales ni a otros espacios.": [
+    "Se ejecuta aislado: sin acceso a tus credenciales ni a otros espacios.",
+    "It runs isolated: no access to your credentials or other workspaces.",
+    "Executa isolado: sem acesso às suas credenciais ou a outros espaços.",
   ],
   Integraciones: ["Integraciones", "Integrations", "Integrações"],
   "De API a herramienta.": [
@@ -831,10 +896,10 @@ export const automationMessages = {
     "Prepare a new request",
     "Preparar uma nova solicitação",
   ],
-  "Guardar respuesta en el CRM": [
-    "Guardar respuesta en el CRM",
-    "Save response to CRM",
-    "Salvar resposta no CRM",
+  "Guardar respuesta en Studio": [
+    "Guardar respuesta en Studio",
+    "Save response to Studio",
+    "Salvar resposta no Studio",
   ],
   "Objeto de destino": [
     "Objeto de destino",
@@ -2691,23 +2756,23 @@ export const automationMessages = {
     "Domain: %{value0}",
     "Domínio: %{value0}",
   ],
-  "El dominio define qué formularios y registros ves en el CRM. Cambia de entorno aquí sin salir de esta pantalla.":
+  "El dominio define qué formularios y registros ves en Studio. Cambia de entorno aquí sin salir de esta pantalla.":
     [
-      "El dominio define qué formularios y registros ves en el CRM. Cambia de entorno aquí sin salir de esta pantalla.",
-      "The domain determines which forms and records you see in the CRM. Switch environments here without leaving this screen.",
-      "O domínio define quais formulários e registros você vê no CRM. Altere o ambiente aqui sem sair desta tela.",
+      "El dominio define qué formularios y registros ves en Studio. Cambia de entorno aquí sin salir de esta pantalla.",
+      "The domain determines which forms and records you see in Studio. Switch environments here without leaving this screen.",
+      "O domínio define quais formulários e registros você vê no Studio. Altere o ambiente aqui sem sair desta tela.",
     ],
   "Dominio de datos": ["Dominio de datos", "Data domain", "Domínio de dados"],
   "Crear dominio": ["Crear dominio", "Create domain", "Criar domínio"],
-  "El CRM está disponible para administradores de organización y plataforma.": [
-    "El CRM está disponible para administradores de organización y plataforma.",
-    "The CRM is available to organization and platform administrators.",
-    "O CRM está disponível para administradores de organização e plataforma.",
+  "Studio está disponible para administradores de organización y plataforma.": [
+    "Studio está disponible para administradores de organización y plataforma.",
+    "Studio is available to organization and platform administrators.",
+    "O Studio está disponível para administradores de organização e plataforma.",
   ],
-  "El CRM está disponible para administradores de agencia y plataforma.": [
-    "El CRM está disponible para administradores de agencia y plataforma.",
-    "The CRM is available to agency and platform administrators.",
-    "O CRM está disponível para administradores de agência e plataforma.",
+  "Studio está disponible para administradores de agencia y plataforma.": [
+    "Studio está disponible para administradores de agencia y plataforma.",
+    "Studio is available to agency and platform administrators.",
+    "O Studio está disponível para administradores de agência e plataforma.",
   ],
   CRM: ["CRM", "CRM", "CRM"],
   "Selecciona un dominio": [

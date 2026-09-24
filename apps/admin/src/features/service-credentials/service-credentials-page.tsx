@@ -2,7 +2,7 @@ import { KeyRound } from "lucide-react";
 import { useTranslate } from "ra-core";
 import type { AppServices } from "@/app-services";
 import { AssistantConfigurationPanel } from "@/features/assistant-configuration/assistant-configuration-page";
-import { CrmDomainCredentialsSection } from "./crm-domain-credentials-section";
+import { StudioDomainCredentialsSection } from "./studio-domain-credentials-section";
 import { CredentialsHelpTooltip } from "./credential-registry";
 import "./service-credentials.css";
 
@@ -35,7 +35,7 @@ export function ServiceCredentialsPage({
         </div>
       </header>
 
-      <CrmDomainCredentialsSection
+      <StudioDomainCredentialsSection
         services={services}
         globalCredentials={
           <AssistantConfigurationPanel

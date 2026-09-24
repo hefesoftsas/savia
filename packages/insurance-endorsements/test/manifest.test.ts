@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import {
   createExtensionRegistry,
   createExtensionObjectRequirements,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 import { manifest } from "../src/manifest";
 import { requirement } from "../src/object";
 it("ships a matching manifest and valid independently installable collection", () => {

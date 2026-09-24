@@ -51,6 +51,8 @@ describe("createSaviaRequestApi", () => {
       .mockResolvedValueOnce(jsonResponse({ ok: true }))
       .mockResolvedValueOnce(jsonResponse({ id: "version" }))
       .mockResolvedValueOnce(jsonResponse({ value: "secret" }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, reverted: true }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, reverted: false }))
       .mockResolvedValueOnce(jsonResponse({ version: 1, flows: [] }))
       .mockResolvedValueOnce(jsonResponse({ results: [] }));
     const api = createSaviaRequestApi(createClient(fetcher));
@@ -64,6 +66,8 @@ describe("createSaviaRequestApi", () => {
     ]);
     await api.publish("autos");
     await api.revealVariable("autos", "token");
+    await api.resetVariable("autos", "token");
+    await api.resetFlow("autos");
     await api.exportSecrets();
     await api.importSecrets({ version: 1, exportedAt: "hoy", flows: [] });
 
@@ -106,6 +110,16 @@ describe("createSaviaRequestApi", () => {
         '{"key":"token"}',
       ],
       [
+        "https://admin.test/v1/savia-request/api/flows/autos/variables/token",
+        "DELETE",
+        "{}",
+      ],
+      [
+        "https://admin.test/v1/savia-request/api/flows/autos/reset",
+        "POST",
+        undefined,
+      ],
+      [
         "https://admin.test/v1/savia-request/api/variables/export",
         "GET",
         undefined,
@@ -119,5 +133,53 @@ describe("createSaviaRequestApi", () => {
     expect(
       new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("Content-Type"),
     ).toBe("application/json");
+  });
+
+  it("scopes every endpoint to the selected tenant", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => jsonResponse([]));
+    const api = createSaviaRequestApi(createClient(fetcher), {
+      tenant: "agency:101",
+    });
+
+    await api.listFlows();
+    await api.readFlow("autos");
+
+    expect(fetcher.mock.calls.map(([url]) => url.toString())).toEqual([
+      "https://admin.test/v1/savia-request/api/flows?tenant=agency%3A101",
+      "https://admin.test/v1/savia-request/api/flows/autos?tenant=agency%3A101",
+    ]);
+  });
+
+  it("fetches bundle status and syncs through the scoped endpoints", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => jsonResponse({ ok: true }));
+    const api = createSaviaRequestApi(createClient(fetcher), {
+      tenant: "agency:101",
+    });
+
+    await api.bundleStatus();
+    await api.syncBundle({ force: true });
+
+    expect(
+      fetcher.mock.calls.map(([url, init]) => [
+        url.toString(),
+        init?.method,
+        init?.body,
+      ]),
+    ).toEqual([
+      [
+        "https://admin.test/v1/savia-request/api/bundles/insurance-auto-light/status?tenant=agency%3A101",
+        "GET",
+        undefined,
+      ],
+      [
+        "https://admin.test/v1/savia-request/api/bundles/insurance-auto-light/sync?tenant=agency%3A101",
+        "POST",
+        '{"force":true}',
+      ],
+    ]);
   });
 });

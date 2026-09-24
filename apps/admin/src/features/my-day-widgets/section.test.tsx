@@ -136,7 +136,7 @@ describe("MyDayWidgetsSection", () => {
     expect(card).toHaveTextContent("Vencida");
     expect(
       screen.getByRole("link", { name: "Ver Pólizas completa" }),
-    ).toHaveAttribute("href", "/crm?domain=platform&object=polizas");
+    ).toHaveAttribute("href", "/studio?domain=platform&object=polizas");
   });
 
   it("renders an items widget with recent records", async () => {
@@ -271,9 +271,10 @@ describe("MyDayWidgetsSection", () => {
     );
 
     await screen.findByTestId("my-day-widget-w_polizas1");
-    await user.click(
-      screen.getByRole("button", { name: "Opciones del widget Pólizas" }),
-    );
+    const optionsButton = await screen.findByRole("button", {
+      name: "Opciones del widget Pólizas",
+    });
+    await user.click(optionsButton);
     await user.click(screen.getByRole("menuitem", { name: "Quitar widget" }));
 
     await waitFor(() =>

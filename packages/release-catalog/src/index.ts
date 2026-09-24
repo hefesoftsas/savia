@@ -21,8 +21,8 @@ import { screens as activitiesScreens } from "@savia/insurance-activities/admin"
 import { screens as collectionsScreens } from "@savia/insurance-collections/admin";
 import { screens as renewalsScreens } from "@savia/insurance-renewals/admin";
 import type { ComponentType } from "react";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { insurancePortfolioScreens } from "@savia/insurance-portfolio-dashboard/admin";
 import { insurancePortfolioWidgets } from "@savia/insurance-portfolio-dashboard/admin";
 import {

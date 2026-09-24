@@ -39,7 +39,7 @@ function page(
     <link rel="stylesheet" href="/api/auth/oauth-ui.css">
   </head>
   <body${restartAttribute}>
-    <!-- THESIS: A secure OAuth step should feel like one focused workspace, not a generic identity portal. OWN-WORLD: calm Savia teal on a light operational canvas, with a deep-navy trust panel. STORY: identify the requested access, authenticate, then return to the client without losing context. FIRST VIEWPORT: login form at left, Savia assurance panel at right, action immediately below the credentials. FORM: Shadcn login-02 two-column composition, adapted for email, password and MFA. -->
+    <!-- THESIS: Login opens on Savia's identity in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy stage with teal accents. STORY: visitors see the animated logo, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the logo right; mobile puts the logo above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
     ${content}
     ${showLoginAnimation ? '<script src="/login/lottie-light.min.js" defer></script>' : ""}
     <script src="/api/auth/oauth-ui.js" defer></script>

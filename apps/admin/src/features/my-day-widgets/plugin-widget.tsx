@@ -1,6 +1,6 @@
 import { Component, useEffect, useMemo, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -9,8 +9,10 @@ import {
   parsePluginKind,
   pluginApiFor,
   pluginContributionFor,
+  storeWidgetFor,
   type ExtensionInstallation,
 } from "./plugins";
+import { CustomPluginFrame } from "../studio-engine/custom-plugin-frame";
 
 function PluginWidgetSkeleton() {
   return (
@@ -70,9 +72,11 @@ export function PluginWidgetBody({
 
   const ref = useMemo(() => parsePluginKind(widget.kind), [widget.kind]);
   const contribution = ref ? pluginContributionFor(ref) : undefined;
+  // Lo subido al store prevalece sobre lo compilado (sombra por tenant).
+  const storeWidget = ref ? storeWidgetFor(ref, extensions) : undefined;
 
   useEffect(() => {
-    if (!apiClient || !ref || !contribution) return;
+    if (!apiClient || !ref) return;
     let active = true;
     setFailed(false);
     void listWidgetExtensions(apiClient, widget.apiBasePath).then(
@@ -86,7 +90,7 @@ export function PluginWidgetBody({
     return () => {
       active = false;
     };
-  }, [apiClient, ref, contribution, widget.apiBasePath]);
+  }, [apiClient, ref, widget.apiBasePath]);
 
   const savia = useMemo(
     () =>
@@ -97,7 +101,18 @@ export function PluginWidgetBody({
   );
 
   if (!apiClient) return <PluginWidgetSkeleton />;
+  if (storeWidget) {
+    return (
+      <CustomPluginFrame
+        pluginId={storeWidget.extensionId}
+        title={storeWidget.title.es}
+        src={`/api/plugin-store/${encodeURIComponent(storeWidget.extensionId)}/widget?widget=${encodeURIComponent(storeWidget.id)}&collection=${encodeURIComponent(storeWidget.collection)}`}
+        heightClassName="h-[320px]"
+      />
+    );
+  }
   if (!ref || !contribution) {
+    if (extensions === undefined) return <PluginWidgetSkeleton />;
     return (
       <p className="text-sm text-muted-foreground">
         Este tipo de widget estará disponible próximamente. Mientras tanto

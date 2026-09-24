@@ -14,7 +14,7 @@ export function reactSandboxPlugin(): Plugin {
         entryPoints: [
           fileURLToPath(
             new URL(
-              "../src/features/crm-engine/result-react-runtime.ts",
+              "../src/features/studio-engine/result-react-runtime.ts",
               import.meta.url,
             ),
           ),

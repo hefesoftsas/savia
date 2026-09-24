@@ -103,14 +103,23 @@ describe("Savia FastMCP server", () => {
         request.url ===
         "/v1/data-domains/platform/api/extensions/insurance.portfolio-dashboard/summary"
       ) {
+        throw new Error("summary provider must not be called from the store");
+      }
+      if (request.url === "/v1/data-domains/platform/api/objects") {
+        return { data: [{ name: "polizas", label: "Pólizas" }] };
+      }
+      if (
+        request.url ===
+        "/v1/data-domains/platform/api/records/polizas?page=1&perPage=200"
+      ) {
         return {
-          data: {
-            total: 7,
-            active: 5,
-            expiring: 1,
-            premiumTotal: 486000000,
-            asOf: "2026-09-14T00:00:00.000Z",
-          },
+          data: [
+            { name: "POL-1", estado: "Vigente", prima: 1000000 },
+            { name: "POL-2", estado: "Vencida", prima: 500000 },
+          ],
+          total: 2,
+          page: 1,
+          perPage: 200,
         };
       }
       throw new Error(`Unexpected request: ${request.url}`);
@@ -122,19 +131,20 @@ describe("Savia FastMCP server", () => {
         "savia_extension_insurance_portfolio",
         {},
       );
-      expect(result.structuredContent).toEqual({
-        extension: "insurance.portfolio-dashboard",
-        summary: {
-          total: 7,
-          active: 5,
-          expiring: 1,
-          premiumTotal: 486000000,
-          asOf: "2026-09-14T00:00:00.000Z",
-        },
+      const summary = (result.structuredContent as any).summary;
+      expect((result.structuredContent as any).extension).toBe(
+        "insurance.portfolio-dashboard",
+      );
+      expect(summary).toMatchObject({
+        total: 2,
+        active: 1,
+        premiumTotal: 1000000,
       });
+      expect(typeof summary.asOf).toBe("string");
       expect(requests).toEqual([
         "/v1/data-domains/platform/api/extensions",
-        "/v1/data-domains/platform/api/extensions/insurance.portfolio-dashboard/summary",
+        "/v1/data-domains/platform/api/objects",
+        "/v1/data-domains/platform/api/records/polizas?page=1&perPage=200",
       ]);
     } finally {
       await client.close();
@@ -186,12 +196,22 @@ describe("Savia FastMCP server", () => {
     const client = await Client.connect(server);
     try {
       const tools = await client.listTools();
-      const crm = tools.filter((tool) =>
-        /savia_(list_crm|(?:get|create|update|aggregate)_crm_record)/.test(
+      const studio = tools.filter((tool) =>
+        /savia_(list_studio|(?:get|create|update|aggregate)_studio_record)/.test(
           tool.name,
         ),
       );
-      expect(crm.map((tool) => tool.name).sort()).toEqual([
+      expect(studio.map((tool) => tool.name).sort()).toEqual([
+        "savia_aggregate_studio_records",
+        "savia_create_studio_record",
+        "savia_get_studio_record",
+        "savia_get_studio_record_links",
+        "savia_list_studio_collections",
+        "savia_list_studio_records",
+        "savia_update_studio_record",
+      ]);
+      // Legacy aliases stay registered for existing MCP clients.
+      for (const legacy of [
         "savia_aggregate_crm_records",
         "savia_create_crm_record",
         "savia_get_crm_record",
@@ -199,25 +219,33 @@ describe("Savia FastMCP server", () => {
         "savia_list_crm_collections",
         "savia_list_crm_records",
         "savia_update_crm_record",
-      ]);
+      ]) {
+        expect(tools.some((tool) => tool.name === legacy)).toBe(true);
+      }
       expect(
-        tools.find((tool) => tool.name === "savia_update_crm_record")
+        tools.find((tool) => tool.name === "savia_update_studio_record")
           ?.inputSchema,
       ).toMatchObject({
         required: ["object", "id", "data"],
         properties: { data: { type: "object" } },
       });
       expect(
-        crm
+        studio
           .filter((tool) => !/create|update/.test(tool.name))
           .every((tool) => tool.annotations?.readOnlyHint),
       ).toBe(true);
+      await expect(
+        client.callTool("savia_create_studio_record", {
+          object: "local",
+          data: {},
+        }),
+      ).rejects.toThrow("not an installed Studio collection");
       await expect(
         client.callTool("savia_create_crm_record", {
           object: "local",
           data: {},
         }),
-      ).rejects.toThrow("not an installed CRM collection");
+      ).rejects.toThrow("not an installed Studio collection");
     } finally {
       await client.close();
     }

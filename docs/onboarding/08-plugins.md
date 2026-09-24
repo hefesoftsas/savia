@@ -11,13 +11,13 @@ execution exist — an explicit security decision, not a missing feature.
 
 1. **React screen** (`src/screens/`): replaces a normal CRM view (e.g.
    Pólizas). Registered explicitly in
-   `apps/admin/src/features/crm-engine/extension-screens.tsx`. Contributions
+   `apps/admin/src/features/studio-engine/extension-screens.tsx`. Contributions
    can specify `hidden: true` on `ExtensionScreenContribution` if the screen
    should not appear in the left sidebar (e.g. secondary screens only opened
    from other pages or workflows). Receives
    `{ savia }` already scoped to tenant + user + extension: no D1, no tokens,
    no credentials. In dev, Vite imports it from the workspace with hot-reload.
-2. **Host collections API** (`packages/crm-shared/src/plugin-api.ts`):
+2. **Host collections API** (`packages/studio-shared/src/plugin-api.ts`):
    versioned `list/describe/get/list/create/update/remove` +
    `services.get()` scoped to the owning extension's services (server-side
    logic without exposing endpoints).
@@ -35,7 +35,7 @@ execution exist — an explicit security decision, not a missing feature.
   a compatible existing one is kept untouched; an incompatible one fails
   install without activating. **Repair installation** re-runs the idempotent
   install.
-- **Per-tenant state** (`crm-server/src/extensions.ts`, migration
+- **Per-tenant state** (`studio-server/src/extensions.ts`, migration
   `0045_extensions.sql`): `install` → `enabled` on/off. No arbitrary hooks or
   migrations in this increment, no downgrades, no destructive uninstall, and
   anything required by another active extension cannot be disabled.
@@ -69,6 +69,12 @@ worked example in `packages/insurance-portfolio-dashboard/README.md`.
 No D1/Env/secrets access, no other tenant, no permission bypass, no generic
 filters/aggregations until a real case requires them, ordinary screens intact
 on disable.
+
+Tenant admins can additionally upload their own UI-only plugins as ZIPs
+(`custom.*` ids for third parties, or the original id when migrating a
+release plugin out) through the per-tenant store;
+they run in an `allow-scripts` sandboxed iframe and reuse the same
+install/enable flow. See [plugin-store](../plugin-store.md).
 
 ## Additional worked examples
 

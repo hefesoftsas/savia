@@ -3,8 +3,8 @@ import { beforeAll, expect, it, vi } from "vitest";
 import {
   createHubspotWorkspaceApp,
   capabilities,
-} from "../src/crm/hubspot-workspace";
-import { createCollectionSourceApp } from "../src/crm/collection-sources";
+} from "../src/external-crm/hubspot-workspace";
+import { createCollectionSourceApp } from "../src/studio/collection-sources";
 let conn: any = {
   id: "connection",
   status: "connected",
@@ -12,7 +12,7 @@ let conn: any = {
   externalAccountLabel: "Test",
   scopes: ["crm.objects.contacts.write", "crm.objects.companies.write"],
 };
-vi.mock("../src/crm/repository", () => ({
+vi.mock("../src/external-crm/repository", () => ({
   createCrmRepository: () => ({
     findActiveConnectionForPrincipal: async (_: string, principal: string) =>
       principal === "owner"
@@ -238,14 +238,14 @@ it("keeps bound field contracts immutable through generic metadata routes", asyn
 
 it("reconciles provider fields without losing screen and field labels", async () => {
   const row = await env.DB.prepare(
-    "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind(context.tenant, "hubspot_contacts")
     .first<{ config: string }>();
   const config = JSON.parse(row!.config);
   config.fields.firstname.label = "Nombre preferido";
   await env.DB.prepare(
-    "UPDATE crm_objects SET label=?,config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET label=?,config=? WHERE tenant_id=? AND name=?",
   )
     .bind(
       "Mis contactos",
@@ -258,7 +258,7 @@ it("reconciles provider fields without losing screen and field labels", async ()
     200,
   );
   const after = await env.DB.prepare(
-    "SELECT label,config FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT label,config FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind(context.tenant, "hubspot_contacts")
     .first<{ label: string; config: string }>();
@@ -362,7 +362,7 @@ it("allows explicit reinstall after same-account reconnect but rejects another a
 });
 it("does not partially update installed metadata when a later provider inspection fails", async () => {
   const before = await env.DB.prepare(
-    "SELECT version FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT version FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind(context.tenant, "hubspot_contacts")
     .first<{ version: number }>();
@@ -376,7 +376,7 @@ it("does not partially update installed metadata when a later provider inspectio
       (await request("/api/crm-workspace/install", "POST", {})).status,
     ).toBe(502);
     const after = await env.DB.prepare(
-      "SELECT version FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT version FROM studio_objects WHERE tenant_id=? AND name=?",
     )
       .bind(context.tenant, "hubspot_contacts")
       .first<{ version: number }>();
@@ -399,7 +399,7 @@ it("refreshes generated datetime labels and flags while preserving customized la
   };
   try {
     const row = await env.DB.prepare(
-      "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
     )
       .bind(context.tenant, "hubspot_contacts")
       .first<{ config: string }>();
@@ -411,7 +411,7 @@ it("refreshes generated datetime labels and flags while preserving customized la
     };
     config.fields.lastname.label = "Mi fecha personalizada";
     await env.DB.prepare(
-      "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+      "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
     )
       .bind(JSON.stringify(config), context.tenant, "hubspot_contacts")
       .run();
@@ -419,7 +419,7 @@ it("refreshes generated datetime labels and flags while preserving customized la
       (await request("/api/crm-workspace/install", "POST", {})).status,
     ).toBe(200);
     const after = await env.DB.prepare(
-      "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
     )
       .bind(context.tenant, "hubspot_contacts")
       .first<{ config: string }>();
@@ -449,7 +449,7 @@ it("shares installed collections with authorized domain users without their own 
   expect(response.status).toBe(200);
   expect(calls.at(-1).connection.id).toBe(conn.id);
   const audit = await env.DB.prepare(
-    "SELECT detail FROM crm_audit WHERE tenant_id=? AND action='hubspot.read' ORDER BY rowid DESC LIMIT 1",
+    "SELECT detail FROM studio_audit WHERE tenant_id=? AND action='hubspot.read' ORDER BY rowid DESC LIMIT 1",
   )
     .bind(context.tenant)
     .first<{ detail: string }>();
@@ -577,7 +577,7 @@ it("shares related records while excluding private targets and auditing batch re
     data.find((item: any) => item.targetObject === "hubspot_companies").records,
   ).toEqual([{ id: "9", label: "Acme" }]);
   const events = await env.DB.prepare(
-    "SELECT action,detail FROM crm_audit WHERE tenant_id=?",
+    "SELECT action,detail FROM studio_audit WHERE tenant_id=?",
   )
     .bind(member.tenant)
     .all<{ action: string; detail: string }>();

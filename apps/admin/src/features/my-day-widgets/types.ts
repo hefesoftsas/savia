@@ -1,7 +1,7 @@
 import type {
   MyDayWidget,
   MyDayWidgetsLayout,
-} from "@savia/crm-shared/my-day-widgets";
+} from "@savia/studio-shared/my-day-widgets";
 
 export type { MyDayWidget, MyDayWidgetsLayout };
 

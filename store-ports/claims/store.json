@@ -1,0 +1,288 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_claims",
+        "label": "Siniestros",
+        "description": "Avisos, documentación y seguimiento de reclamaciones de seguros.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "insurer": {
+              "type": "Textbox",
+              "label": "Aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "incident_date": {
+              "type": "DateControl",
+              "label": "Fecha del siniestro",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "notified_date": {
+              "type": "DateControl",
+              "label": "Aviso a la aseguradora",
+              "labels": {},
+              "config": {}
+            },
+            "insurer_reference": {
+              "type": "Textbox",
+              "label": "Radicado de la aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "adjuster": {
+              "type": "Textbox",
+              "label": "Ajustador",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "amount": {
+              "type": "Number",
+              "label": "Valor reclamado (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "paid": {
+              "type": "Number",
+              "label": "Indemnización recibida (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "next_follow_up": {
+              "type": "DateControl",
+              "label": "Próximo seguimiento",
+              "labels": {},
+              "config": {}
+            },
+            "outcome": {
+              "type": "Textbox",
+              "label": "Resultado del caso",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "closed",
+                    "rejected"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "reported",
+                  "label": "Reportado"
+                },
+                {
+                  "value": "documents",
+                  "label": "Documentación"
+                },
+                {
+                  "value": "assessment",
+                  "label": "En evaluación"
+                },
+                {
+                  "value": "approved",
+                  "label": "Aprobado"
+                },
+                {
+                  "value": "closed",
+                  "label": "Cerrado"
+                },
+                {
+                  "value": "rejected",
+                  "label": "Rechazado"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "policy_reference",
+            "insurer",
+            "owner",
+            "incident_date",
+            "notified_date",
+            "insurer_reference",
+            "adjuster",
+            "amount",
+            "paid",
+            "next_follow_up",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "insurer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "incident_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "notified_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "insurer_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "adjuster": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "amount": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "paid": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "next_follow_up": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "reported",
+            "documents",
+            "assessment",
+            "approved",
+            "closed",
+            "rejected"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_claims",
+      "view": "records"
+    }
+  ]
+}

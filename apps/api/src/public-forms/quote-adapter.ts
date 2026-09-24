@@ -1,16 +1,16 @@
 import { HTTPException } from "hono/http-exception";
 import { z } from "@hono/zod-openapi";
-import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
-import type { ExtensionRegistry } from "@savia/crm-shared/extension-package";
-import { isExtensionAvailable } from "@savia/crm-server/extensions";
-import { ExtensionSettingsRepository } from "@savia/crm-server/extension-settings";
-import { ExtensionConnectionRepository } from "@savia/crm-server/extension-connections";
+import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
+import type { ExtensionRegistry } from "@savia/studio-shared/extension-package";
+import { isExtensionAvailable } from "@savia/studio-server/extensions";
+import { ExtensionSettingsRepository } from "@savia/studio-server/extension-settings";
+import { ExtensionConnectionRepository } from "@savia/studio-server/extension-connections";
 import {
   createRecord,
   getRecord,
   updateRecord,
-} from "@savia/crm-server/services";
-import { historyDatabase } from "@savia/crm-server/record-history-storage";
+} from "@savia/studio-server/services";
+import { historyDatabase } from "@savia/studio-server/record-history-storage";
 import { publicQuoteContribution as contribution } from "@savia/release-catalog/public-forms";
 import { solutionOptions } from "../solutions/catalog";
 import type { PublicQuoteAdapter } from "./service";

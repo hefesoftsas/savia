@@ -79,16 +79,16 @@ describe("release catalog", () => {
         (renderer) => renderer.extensionId,
       ),
     ).toEqual(["insurance.quotes"]);
-    expect(
-      releaseCatalog.assistantExtensions.map((extension) => extension.id),
-    ).toEqual(["insurance.portfolio-dashboard"]);
+    // Assistant tools moved worker-side (apps/mcp): the catalog no
+    // longer registers them; the tool name is covered there.
+    expect(releaseCatalog.assistantExtensions).toEqual([]);
   });
 
   it("keeps industry names outside the platform hosts", async () => {
     for (const path of [
       "apps/api/src/extensions/catalog.ts",
       "apps/api/src/solutions/catalog.ts",
-      "apps/admin/src/features/crm-engine/extension-screens.tsx",
+      "apps/admin/src/features/studio-engine/extension-screens.tsx",
       "apps/mcp/src/extensions/registry.ts",
     ])
       await expect(source(path)).resolves.not.toMatch(/insurance/i);

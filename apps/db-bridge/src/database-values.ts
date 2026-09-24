@@ -1,7 +1,7 @@
 import type {
   DatabaseField,
   JsonValue,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import { DatabaseBridgeError } from "./database-errors";
 export function serializeDatabaseValue(value: unknown): JsonValue {
   if (value === null || value === undefined) return null;
