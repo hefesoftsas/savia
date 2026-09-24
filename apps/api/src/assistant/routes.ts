@@ -14,7 +14,7 @@ import {
   deleteFileVectors,
   type RagEnvironment,
 } from "./rag";
-import { disabledSolutionObjects } from "@savia/crm-server/solutions";
+import { disabledSolutionObjects } from "@savia/studio-server/solutions";
 
 const chatRequestSchema = z.object({
   messages: z.array(z.unknown()).max(100),
@@ -153,7 +153,7 @@ export function registerAssistantRoutes(
     if (agencyId) {
       const { results } = await dependencies.db
         .prepare(
-          `SELECT name, label, description, tenant_id FROM crm_objects
+          `SELECT name, label, description, tenant_id FROM studio_objects
            WHERE tenant_id IN (?, 'domain:platform')
            ORDER BY CASE WHEN tenant_id = ? THEN 0 ELSE 1 END, label ASC, name ASC`,
         )
@@ -168,7 +168,7 @@ export function registerAssistantRoutes(
     } else if (isPlatform) {
       const { results } = await dependencies.db
         .prepare(
-          `SELECT name, label, description, tenant_id FROM crm_objects
+          `SELECT name, label, description, tenant_id FROM studio_objects
            ORDER BY label ASC, name ASC`,
         )
         .all<{
@@ -186,7 +186,7 @@ export function registerAssistantRoutes(
       const placeholders = tenantIds.map(() => "?").join(",");
       const { results } = await dependencies.db
         .prepare(
-          `SELECT name, label, description, tenant_id FROM crm_objects
+          `SELECT name, label, description, tenant_id FROM studio_objects
            WHERE tenant_id IN (${placeholders})
            ORDER BY label ASC, name ASC`,
         )

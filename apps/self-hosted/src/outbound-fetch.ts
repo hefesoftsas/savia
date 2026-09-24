@@ -2,7 +2,7 @@ import { lookup as systemLookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import { isIP, type LookupFunction } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
-import { isPublicAddress } from "@savia/crm-server/integrations";
+import { isPublicAddress } from "@savia/studio-server/integrations";
 
 type Transport = (
   url: string,

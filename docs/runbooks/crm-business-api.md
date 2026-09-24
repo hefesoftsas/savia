@@ -18,7 +18,7 @@ Acceder a Savia con administración de agencia o plataforma, abrir CRM y selecci
 
 ## Contrato
 
-Base por agencia: `/v1/dynamic-crm/{agencyId}/api`.
+Base por agencia: `/v1/studio/{agencyId}/api` (`/v1/dynamic-crm/{agencyId}/api` sigue como alias heredado).
 
 - `GET /openapi.json`: OpenAPI 3.1 derivado de la metadata, privado y sin caché.
 - `GET /docs`: Scalar con ese contrato y servidores absolutos para funcionar en iframe.

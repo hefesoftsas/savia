@@ -6,7 +6,7 @@ export async function installInsuranceFixture(
   for (const tenant of tenants) {
     await db
       .prepare(
-        "INSERT INTO crm_solution_installations(tenant_id,id,version,enabled,manifest) VALUES (?, 'savia.insurance', '0.0.0', 1, ?) ON CONFLICT(tenant_id,id) DO UPDATE SET enabled=1",
+        "INSERT INTO studio_solution_installations(tenant_id,id,version,enabled,manifest) VALUES (?, 'savia.insurance', '0.0.0', 1, ?) ON CONFLICT(tenant_id,id) DO UPDATE SET enabled=1",
       )
       .bind(
         tenant,

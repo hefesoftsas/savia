@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bridgeQuerySchema } from "@savia/crm-shared/sql-sources";
+import { bridgeQuerySchema } from "@savia/studio-shared/sql-sources";
 import { buildListQuery, buildReadQuery } from "../src/pg-driver";
 
 const connection = {

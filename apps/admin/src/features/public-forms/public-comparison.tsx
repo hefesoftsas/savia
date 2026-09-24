@@ -1,6 +1,6 @@
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { publicFormsMessages } from "@/i18n/locales/public-forms";
-import { PluginLocaleProvider } from "@savia/crm-shared/plugin-locale-react";
+import { PluginLocaleProvider } from "@savia/studio-shared/plugin-locale-react";
 import {
   QuoteResults,
   type QuoteBatchItem,

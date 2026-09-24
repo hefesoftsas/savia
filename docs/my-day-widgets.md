@@ -55,7 +55,7 @@ el botón «Cerrar aviso».
 
 - El layout (`{ version: 1, widgets: [...] }`) es personal y privado por
   `principal_id` (tabla `user_my_day_widgets`). Validación con zod en
-  `packages/crm-shared/src/my-day-widgets.ts`, compartida por API y admin.
+  `packages/studio-shared/src/my-day-widgets.ts`, compartida por API y admin.
 - Cada widget lee con la API existente del dominio:
   `GET {apiBasePath}/api/records/{collection}?page&perPage&sort&order`
   (total + página), `GET .../records/{collection}/summary?group=&amountField=`
@@ -74,7 +74,7 @@ el botón «Cerrar aviso».
 
 | Área         | Archivos                                                                                                                                                                     |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Contrato     | `packages/crm-shared/src/my-day-widgets.ts`                                                                                                                                  |
+| Contrato     | `packages/studio-shared/src/my-day-widgets.ts`                                                                                                                                  |
 | Persistencia | migración `0060`, `user-preferences/{contracts,repository}.ts`, rutas `user-preferences.ts`                                                                                  |
 | Admin        | `apps/admin/src/features/my-day-widgets/` (`data`, `summarize`, `widgets`, `agenda-widget`, `add-widget-dialog`, `section`), `my-day-page.tsx`, `user-preferences-client.ts` |
 | Plugins      | `packages/release-catalog/src/index.ts` (`ExtensionWidgetContribution`), ejemplo `packages/insurance-portfolio-dashboard/src/widgets.tsx`                                    |

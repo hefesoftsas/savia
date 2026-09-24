@@ -1,4 +1,4 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 export const integrationMessages = {
   "Tu portal de seguros": [
     "Tu portal de seguros",

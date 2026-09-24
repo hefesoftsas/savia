@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { HTTPException } from "hono/http-exception";
-import { createCollectionRelationsApp } from "../src/crm/collection-relations";
+import { createCollectionRelationsApp } from "../src/studio/collection-relations";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -21,7 +21,7 @@ beforeAll(async () => {
   for (const tenant of ["relations:a", "relations:b"])
     for (const name of ["agencies_test", "clients_test", "other"])
       await env.DB.prepare(
-        "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
       )
         .bind(tenant, name, name, "{}")
         .run();
@@ -96,7 +96,7 @@ it("keeps links bidirectional, idempotent and tenant scoped; deleting definition
   ).toBe(200);
   expect(
     await env.DB.prepare(
-      "SELECT COUNT(*) total FROM crm_record_links WHERE relation_id=?",
+      "SELECT COUNT(*) total FROM studio_record_links WHERE relation_id=?",
     )
       .bind(relation.id)
       .first(),
@@ -158,7 +158,7 @@ it("validates definitions and bounded pagination, and hides unreadable collectio
     422,
   );
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name=?",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
     .bind(
       JSON.stringify({ studio: { capabilities: { read: false } } }),
@@ -181,9 +181,9 @@ it("validates definitions and bounded pagination, and hides unreadable collectio
 });
 
 it("removes local association metadata atomically when a CRM record is deleted", async () => {
-  const { createObject } = await import("@savia/crm-server/schema");
+  const { createObject } = await import("@savia/studio-server/schema");
   const { createRecord, deleteRecord, getRecord } =
-    await import("@savia/crm-server/services");
+    await import("@savia/studio-server/services");
   const tenant = "relations:delete";
   for (const name of ["a", "b"])
     await createObject(env.DB, tenant, {
@@ -226,7 +226,7 @@ it("removes local association metadata atomically when a CRM record is deleted",
   await deleteRecord(env.DB, tenant, "b", b.id, { version: b._version });
   expect(
     await env.DB.prepare(
-      "SELECT COUNT(*) total FROM crm_record_links WHERE tenant_id=?",
+      "SELECT COUNT(*) total FROM studio_record_links WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -238,7 +238,7 @@ it("returns an unlinkable tombstone for an externally deleted record, but never 
   const tenant = "relations:missing";
   for (const name of ["source", "target"])
     await env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
     )
       .bind(tenant, name, name, "{}")
       .run();
@@ -300,7 +300,7 @@ it("persists edited field mappings, computes both directions from current values
   const tenant = "relations:fields";
   for (const name of ["parents", "children"])
     await env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
     )
       .bind(
         tenant,
@@ -321,7 +321,7 @@ it("persists edited field mappings, computes both directions from current values
     ["c", "children", { parent: "A", name: "Child" }],
   ] as const)
     await env.DB.prepare(
-      "INSERT INTO crm_records(tenant_id,id,object_name,data) VALUES(?,?,?,?)",
+      "INSERT INTO studio_records(tenant_id,id,object_name,data) VALUES(?,?,?,?)",
     )
       .bind(tenant, id, object, JSON.stringify(data))
       .run();
@@ -330,7 +330,7 @@ it("persists edited field mappings, computes both directions from current values
     tenant,
     readRecord: async (object, id) => {
       const r = await env.DB.prepare(
-        "SELECT data FROM crm_records WHERE tenant_id=? AND object_name=? AND id=?",
+        "SELECT data FROM studio_records WHERE tenant_id=? AND object_name=? AND id=?",
       )
         .bind(tenant, object, id)
         .first<{ data: string }>();
@@ -370,7 +370,7 @@ it("persists edited field mappings, computes both directions from current values
     records: [{ id: "p", label: "Parent" }],
   });
   await env.DB.prepare(
-    "UPDATE crm_records SET data=json_set(data,'$.parent','B') WHERE tenant_id=? AND id='c'",
+    "UPDATE studio_records SET data=json_set(data,'$.parent','B') WHERE tenant_id=? AND id='c'",
   )
     .bind(tenant)
     .run();
@@ -458,7 +458,7 @@ it("keeps core relations independent of legacy tables and profile bindings", asy
         return (sql: string) => {
           queries.push(sql);
           if (
-            /customer_clientagency|agency-network|customer-portfolio|crm_native_relation_overrides/.test(
+            /customer_clientagency|agency-network|customer-portfolio|studio_native_relation_overrides/.test(
               sql,
             )
           )
@@ -482,7 +482,7 @@ it("keeps core relations independent of legacy tables and profile bindings", asy
   expect(
     body.data.every((group) => group.definition.storage !== "native"),
   ).toBe(true);
-  expect(queries.some((sql) => sql.includes("crm_collection_relations"))).toBe(
-    true,
-  );
+  expect(
+    queries.some((sql) => sql.includes("studio_collection_relations")),
+  ).toBe(true);
 });

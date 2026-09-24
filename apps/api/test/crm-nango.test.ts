@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AppActor } from "../src/auth/types";
-import { CrmUnavailableError, CrmUpstreamError } from "../src/crm/contracts";
-import { createNangoClient } from "../src/crm/nango";
-import { createCrmProviderRegistry } from "../src/crm/providers";
+import { CrmUnavailableError, CrmUpstreamError } from "../src/external-crm/contracts";
+import { createNangoClient } from "../src/external-crm/nango";
+import { createCrmProviderRegistry } from "../src/external-crm/providers";
 
 const actor: AppActor = {
   principal: {

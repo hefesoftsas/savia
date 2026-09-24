@@ -1,6 +1,6 @@
 import { pushQueuedBundles, resolveBundleFromServer } from "./bundle-sync";
 import { liveQuery, type Subscription } from "dexie";
-import type { CrmRecord } from "@savia/crm-shared/metadata";
+import type { StudioRecord } from "@savia/studio-shared/metadata";
 import type { CollectionManifest, PullBatch, SyncTransport } from "./contracts";
 import type { LocalStore } from "./store";
 async function json<T>(response: Response): Promise<T> {
@@ -131,12 +131,12 @@ export async function syncOnce(
           },
         );
         if (response.ok) {
-          const result = (await response.json()) as { data: CrmRecord };
+          const result = (await response.json()) as { data: StudioRecord };
           await store.acknowledge(mutation, result.data);
         } else if (response.status === 409) {
           const result = (await response.json()) as {
-            master?: CrmRecord | null;
-            data?: CrmRecord | null;
+            master?: StudioRecord | null;
+            data?: StudioRecord | null;
             error?: string | { message?: string };
           };
           await store.rejectMutation(

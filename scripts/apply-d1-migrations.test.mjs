@@ -109,7 +109,7 @@ for (const partial of [0, 34, 203]) {
       assert.equal(
         db
           .prepare(
-            "SELECT tenant_id FROM crm_solution_installations WHERE id='source.solution'",
+            "SELECT tenant_id FROM studio_solution_installations WHERE id='source.solution'",
           )
           .get().tenant_id,
         "agency:101",
@@ -117,7 +117,7 @@ for (const partial of [0, 34, 203]) {
       assert.equal(
         db
           .prepare(
-            "SELECT tenant_id FROM crm_solution_objects WHERE solution_id='source.solution'",
+            "SELECT tenant_id FROM studio_solution_objects WHERE solution_id='source.solution'",
           )
           .get().tenant_id,
         "agency:101",

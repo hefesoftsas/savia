@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { createCollectionSourceApp } from "../src/crm/collection-sources";
-import type { DatabaseBridgeClient } from "../src/crm/database-bridge";
+import { createCollectionSourceApp } from "../src/studio/collection-sources";
+import type { DatabaseBridgeClient } from "../src/studio/database-bridge";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -221,7 +221,7 @@ it("persists source policy changes into collection metadata for catalog refresh"
   });
   await call("sources/catalog", "PUT", { writeEnabled: false });
   const row = await env.DB.prepare(
-    "SELECT config FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT config FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind("database-tests", "catalog_orders")
     .first<{ config: string }>();

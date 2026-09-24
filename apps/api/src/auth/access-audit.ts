@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import type { AccessScope } from "@savia/crm-shared/access-control";
+import type { AccessScope } from "@savia/studio-shared/access-control";
 import type { AppActor } from "./types";
 import { accessAuthority } from "./access-context";
 import { AccessControlError } from "./access-registry";

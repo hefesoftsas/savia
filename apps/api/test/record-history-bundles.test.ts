@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { createRecordBundlesApp } from "../src/crm/record-bundles";
-import { historyDatabase } from "@savia/crm-server/record-history-storage";
+import { createRecordBundlesApp } from "../src/studio/record-bundles";
+import { historyDatabase } from "@savia/studio-server/record-history-storage";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -28,7 +28,7 @@ it("captures parent/child deltas once across bundle retries and rolls back uniqu
   });
   for (const name of ["parents", "children"])
     await env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
     )
       .bind(
         tenant,
@@ -51,7 +51,7 @@ it("captures parent/child deltas once across bundle retries and rolls back uniqu
       )
       .run();
   await env.DB.prepare(
-    "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES(?,?,'parents','children','Children','Parent','one-to-many')",
+    "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES(?,?,'parents','children','Children','Parent','one-to-many')",
   )
     .bind(tenant, relationId)
     .run();
@@ -74,7 +74,7 @@ it("captures parent/child deltas once across bundle retries and rolls back uniqu
   const rows = async () =>
     (
       await env.DB.prepare(
-        "SELECT * FROM crm_record_history WHERE tenant_id=? ORDER BY object_name,version",
+        "SELECT * FROM studio_record_history WHERE tenant_id=? ORDER BY object_name,version",
       )
         .bind(tenant)
         .all<any>()
@@ -123,7 +123,7 @@ it("captures parent/child deltas once across bundle retries and rolls back uniqu
   expect(await rows()).toHaveLength(4);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) n FROM crm_record_history_context",
+      "SELECT count(*) n FROM studio_record_history_context",
     ).first("n"),
   ).toBe(0);
 });

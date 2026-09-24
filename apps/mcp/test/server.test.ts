@@ -186,12 +186,22 @@ describe("Savia FastMCP server", () => {
     const client = await Client.connect(server);
     try {
       const tools = await client.listTools();
-      const crm = tools.filter((tool) =>
-        /savia_(list_crm|(?:get|create|update|aggregate)_crm_record)/.test(
+      const studio = tools.filter((tool) =>
+        /savia_(list_studio|(?:get|create|update|aggregate)_studio_record)/.test(
           tool.name,
         ),
       );
-      expect(crm.map((tool) => tool.name).sort()).toEqual([
+      expect(studio.map((tool) => tool.name).sort()).toEqual([
+        "savia_aggregate_studio_records",
+        "savia_create_studio_record",
+        "savia_get_studio_record",
+        "savia_get_studio_record_links",
+        "savia_list_studio_collections",
+        "savia_list_studio_records",
+        "savia_update_studio_record",
+      ]);
+      // Legacy aliases stay registered for existing MCP clients.
+      for (const legacy of [
         "savia_aggregate_crm_records",
         "savia_create_crm_record",
         "savia_get_crm_record",
@@ -199,25 +209,33 @@ describe("Savia FastMCP server", () => {
         "savia_list_crm_collections",
         "savia_list_crm_records",
         "savia_update_crm_record",
-      ]);
+      ]) {
+        expect(tools.some((tool) => tool.name === legacy)).toBe(true);
+      }
       expect(
-        tools.find((tool) => tool.name === "savia_update_crm_record")
+        tools.find((tool) => tool.name === "savia_update_studio_record")
           ?.inputSchema,
       ).toMatchObject({
         required: ["object", "id", "data"],
         properties: { data: { type: "object" } },
       });
       expect(
-        crm
+        studio
           .filter((tool) => !/create|update/.test(tool.name))
           .every((tool) => tool.annotations?.readOnlyHint),
       ).toBe(true);
+      await expect(
+        client.callTool("savia_create_studio_record", {
+          object: "local",
+          data: {},
+        }),
+      ).rejects.toThrow("not an installed Studio collection");
       await expect(
         client.callTool("savia_create_crm_record", {
           object: "local",
           data: {},
         }),
-      ).rejects.toThrow("not an installed CRM collection");
+      ).rejects.toThrow("not an installed Studio collection");
     } finally {
       await client.close();
     }

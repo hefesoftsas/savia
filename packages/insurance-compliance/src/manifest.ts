@@ -2,7 +2,7 @@ import { z } from "zod";
 import type {
   TrustedExtension,
   ExtensionManifest,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 export const manifest = {
   format: "savia.extension",
   formatVersion: 1,

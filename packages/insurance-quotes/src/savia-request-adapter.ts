@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ExtensionActionContext } from "@savia/crm-shared/extension-runtime";
+import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 import {
   insuranceQuotesActionId,
   insuranceQuotesExtensionId,

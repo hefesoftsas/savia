@@ -13,9 +13,9 @@ import {
   postgresTestUrl,
   postgresTestsRequired,
 } from "./postgres-fixture";
-import { buildWhere } from "@savia/crm-server/query";
-type CrmObject = Parameters<typeof buildWhere>[0];
-import { compileAccessWhere } from "@savia/crm-server/access-query";
+import { buildWhere } from "@savia/studio-server/query";
+type StudioObject = Parameters<typeof buildWhere>[0];
+import { compileAccessWhere } from "@savia/studio-server/access-query";
 type AccessPolicy = Parameters<typeof compileAccessWhere>[0];
 const values = [
   {},
@@ -88,7 +88,7 @@ async function contract(db: D1Database, dialect: SqlDialect) {
   const object = {
     name: "sample",
     config: { fields: { value: { type: "text" } } },
-  } as unknown as CrmObject;
+  } as unknown as StudioObject;
   const filters: Record<string, unknown> = {};
   for (const [op, value] of [
     ["empty", null],

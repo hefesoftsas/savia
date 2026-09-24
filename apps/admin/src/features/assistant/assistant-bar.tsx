@@ -255,14 +255,14 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
     }
   };
 
-  const isCrm =
+  const isStudioAction =
     action.domain === "crm" ||
     action.command.includes("record") ||
     action.command.includes("create") ||
     action.command.includes("update") ||
     action.command.includes("delete");
 
-  const crmCollection = String(
+  const studioCollection = String(
     action.input.collection ??
       action.input.object ??
       (action.domain !== "crm" ? action.domain : ""),
@@ -271,14 +271,14 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
   let actionTitle = isQuote
     ? "consultar las aseguradoras habilitadas"
     : `${action.domain}.${action.command}`;
-  if (isCrm && crmCollection) {
+  if (isStudioAction && studioCollection) {
     const cmd = action.command.toLowerCase();
     if (cmd.includes("create")) {
-      actionTitle = `Crear registro en "${crmCollection}"`;
+      actionTitle = `Crear registro en "${studioCollection}"`;
     } else if (cmd.includes("update") || cmd.includes("edit")) {
-      actionTitle = `Actualizar registro en "${crmCollection}"`;
+      actionTitle = `Actualizar registro en "${studioCollection}"`;
     } else if (cmd.includes("delete") || cmd.includes("remove")) {
-      actionTitle = `Eliminar registro en "${crmCollection}"`;
+      actionTitle = `Eliminar registro en "${studioCollection}"`;
     }
   }
 
@@ -404,13 +404,33 @@ const toolDescriptorConfig: Record<
   string,
   { inProgress: string; done: string }
 > = {
+  savia_list_studio_collections: {
+    inProgress: "Explorando colecciones de Studio…",
+    done: "Colecciones de Studio consultadas",
+  },
+  savia_list_studio_records: {
+    inProgress: "Consultando registros de Studio…",
+    done: "Registros de Studio obtenidos",
+  },
+  savia_aggregate_studio_records: {
+    inProgress: "Calculando estadísticas en la base de datos…",
+    done: "Métricas calculadas",
+  },
+  savia_get_studio_record: {
+    inProgress: "Consultando detalle de registro…",
+    done: "Detalle obtenido",
+  },
+  savia_get_studio_record_links: {
+    inProgress: "Consultando relaciones…",
+    done: "Relaciones obtenidas",
+  },
   savia_list_crm_collections: {
-    inProgress: "Explorando colecciones del CRM…",
-    done: "Colecciones del CRM consultadas",
+    inProgress: "Explorando colecciones de Studio…",
+    done: "Colecciones de Studio consultadas",
   },
   savia_list_crm_records: {
-    inProgress: "Consultando registros del CRM…",
-    done: "Registros del CRM obtenidos",
+    inProgress: "Consultando registros de Studio…",
+    done: "Registros de Studio obtenidos",
   },
   savia_aggregate_crm_records: {
     inProgress: "Calculando estadísticas en la base de datos…",
@@ -1481,7 +1501,7 @@ function AssistantConversation({
               </h3>
               <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
                 {t(
-                  "Browse collections, search for customers, analyze metrics, and create interactive charts from your CRM data.",
+                  "Browse collections, search for customers, analyze metrics, and create interactive charts from your Studio data.",
                 )}
               </p>
 

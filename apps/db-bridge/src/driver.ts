@@ -4,7 +4,7 @@ import type {
   BridgeQueryResult,
   BridgeTable,
   PostgresConnection,
-} from "@savia/crm-shared/sql-sources";
+} from "@savia/studio-shared/sql-sources";
 
 export type BridgeConnectionWithPassword = PostgresConnection & {
   password: string;
@@ -30,7 +30,7 @@ import type {
   DatabaseMutation,
   DatabaseResult,
   ResourceMetadata,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 export interface DatabaseDriver {
   testConnection(connection: DatabaseConnection): Promise<void>;
   listResources(

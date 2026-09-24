@@ -1,5 +1,5 @@
 import { createWorkbenchTranslator } from "./localization";
-import type { PluginLocale, PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginLocale, PluginMessages } from "@savia/studio-shared/plugin-localization";
 import { dateLabel, text, type WorkRecord } from "./data";
 import type { WorkbenchConfig, Field } from "./types";
 type CaseOptions = Pick<

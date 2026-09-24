@@ -1,4 +1,4 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 export const integrationMessages = {
   "Prepara lotes de obligaciones con débitos y créditos balanceados para revisión e importación contable.": [
     "Prepara lotes de obligaciones con débitos y créditos balanceados para revisión e importación contable.",

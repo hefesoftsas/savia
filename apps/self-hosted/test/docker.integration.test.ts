@@ -12,7 +12,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import WebSocket from "ws";
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
 
 // Run only against a disposable Docker fixture. No production/default origin.
 const origin = process.env.SAVIA_DOCKER_TEST_ORIGIN;

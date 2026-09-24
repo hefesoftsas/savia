@@ -1,5 +1,5 @@
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
-import { localizeExternalError } from "@savia/crm-shared/plugin-localization";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
+import { localizeExternalError } from "@savia/studio-shared/plugin-localization";
 import { insuranceMessage, insuranceMessages } from "./messages";
 
 /** Authored notices are localized; provider diagnostics remain available verbatim. */

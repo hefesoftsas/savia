@@ -1,4 +1,4 @@
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { cents, csv } from "@savia/insurance-workbench/data";
 export function exact(value: unknown): number {
   const n = cents(value);

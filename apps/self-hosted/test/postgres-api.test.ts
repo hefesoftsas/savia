@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { createApplication } from "../src/application";
 import { loadConfiguration } from "../src/config";
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
 import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
 function totp(uri: string) {
   const url = new URL(uri);

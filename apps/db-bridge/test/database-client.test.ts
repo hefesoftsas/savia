@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createDatabaseBridgeClient } from "../../api/src/crm/database-bridge";
+import { createDatabaseBridgeClient } from "../../api/src/studio/database-bridge";
 it("does not retry uncertain writes", async () => {
   let calls = 0;
   const client = createDatabaseBridgeClient({

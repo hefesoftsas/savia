@@ -133,12 +133,14 @@ not required on that machine.
 
 ## Available operations
 
-The existing `savia_list_crm_collections` tool discovers installed local, custom
-and CRM-provider collections and their schemas dynamically. Its name is retained
-for compatibility. Record query, read, aggregation, create, update, delete and
-relation tools call the same API used by Savia, preserving its authorization and
-provider capabilities. Adding an authorized collection does not require a new
-MCP deployment or a tool per collection.
+The `savia_list_studio_collections` tool discovers installed local, custom
+and provider collections and their schemas dynamically. Record query, read,
+aggregation, create, update, delete and relation tools (`savia_*_studio_*`)
+call the same API used by Savia, preserving its authorization and
+provider capabilities. The legacy `savia_*_crm_*` names stay registered as
+aliases for compatibility. Adding an authorized collection does not require
+a new MCP deployment or a tool per collection. `savia_get_crm_sync_status`
+keeps its name: it reports the external HubSpot synchronization.
 
 | Tool                            | Purpose                                                                                |
 | ------------------------------- | -------------------------------------------------------------------------------------- |

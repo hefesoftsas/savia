@@ -4,15 +4,15 @@ import { describe, expect, it } from "vitest";
 import { resolve } from "node:path";
 import { registerDialect } from "@savia/db/dialect";
 import { postgresDialect } from "@savia/db/postgres-dialect";
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
-import { createObject } from "@savia/crm-server/schema";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
+import { createObject } from "@savia/studio-server/schema";
 import {
   createRecord,
   deleteRecord,
   getRecord,
-} from "@savia/crm-server/services";
-import { WorkflowRepository } from "@savia/crm-server/workflows/repository";
-import { processWorkflows } from "@savia/crm-server/workflows/runtime";
+} from "@savia/studio-server/services";
+import { WorkflowRepository } from "@savia/studio-server/workflows/repository";
+import { processWorkflows } from "@savia/studio-server/workflows/runtime";
 import { migratePostgres } from "../src/postgres/migrations";
 import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
 
@@ -59,7 +59,7 @@ async function nativeFixture(run: (db: D1Database) => Promise<void>) {
         // must retain JSON numeric-vs-text semantics instead of comparing text casts.
         await db
           .prepare(
-            "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+            "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
           )
           .bind(
             "legacy-text",
@@ -134,7 +134,7 @@ async function nativeFixture(run: (db: D1Database) => Promise<void>) {
         expect(
           await db
             .prepare(
-              "SELECT count(*) AS n FROM crm_records WHERE tenant_id=? AND object_name=?",
+              "SELECT count(*) AS n FROM studio_records WHERE tenant_id=? AND object_name=?",
             )
             .bind(tenant, "requests")
             .first("n"),
@@ -190,7 +190,7 @@ async function nativeFixture(run: (db: D1Database) => Promise<void>) {
           (
             await db
               .prepare(
-                "SELECT field_name,value FROM crm_unique_values WHERE record_id=?",
+                "SELECT field_name,value FROM studio_unique_values WHERE record_id=?",
               )
               .bind(source.id)
               .all()
@@ -199,14 +199,14 @@ async function nativeFixture(run: (db: D1Database) => Promise<void>) {
         expect(
           await db
             .prepare(
-              "SELECT count(*) AS n FROM crm_audit WHERE record_id=? AND action='relation.cleared'",
+              "SELECT count(*) AS n FROM studio_audit WHERE record_id=? AND action='relation.cleared'",
             )
             .bind(source.id)
             .first("n"),
         ).toBe(1);
         expect(
           await db
-            .prepare("SELECT count(*) AS n FROM crm_write_guards")
+            .prepare("SELECT count(*) AS n FROM studio_write_guards")
             .first("n"),
         ).toBe(0);
         expect(await getRecord(db, tenant, "targets", kept.id)).toMatchObject({

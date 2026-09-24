@@ -6,7 +6,7 @@ import {
   type BridgeQuery,
   type BridgeQueryResult,
   type BridgeTable,
-} from "@savia/crm-shared/sql-sources";
+} from "@savia/studio-shared/sql-sources";
 import type { BridgeConnectionWithPassword, BridgeDriver } from "./driver";
 
 const STATEMENT_TIMEOUT_MS = 10_000;

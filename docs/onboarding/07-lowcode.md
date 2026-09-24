@@ -25,16 +25,33 @@ versioned schema. Files go to R2.
 
 ## Three runtime pieces
 
-1. **React UI** (`apps/admin/src/features/crm-engine/`): designer,
+1. **React UI** (`apps/admin/src/features/studio-engine/`): designer,
    `dynamic-form`, collection source/relation/operation panels,
-   conversational wizard.
-2. **Server** (`packages/crm-server`, `createCrmApp`): mounted by the API.
-3. **Shared metadata** (`packages/crm-shared`): zod schemas, validation,
+   conversational wizard. User-visible name: **Studio** (route `#/studio`,
+   `#/crm` kept as legacy alias).
+2. **Server** (`packages/studio-server`, `createStudioApp`): mounted by the
+   API (`apps/api/src/studio/`, external HubSpot integration isolated in
+   `apps/api/src/external-crm/`).
+3. **Shared metadata** (`packages/studio-shared`): zod schemas, validation,
    utilities — used by both admin and API.
+
+> Fase 3 note: engine D1 tables are renamed to `studio_*`
+> (`0068_rename_engine_crm_to_studio.sql`, `studio-server/0022_...`),
+> agency workspaces moved to the canonical `/v1/studio/*` API prefix
+> (legacy `/v1/dynamic-crm/*` alias kept), sidebar ids migrated
+> `dynamic-crm` → `studio` (legacy accepted and normalized on read),
+> MCP/assistant tools duplicated as `savia_*_studio_*` (legacy
+> `savia_*_crm_*` aliases kept, `domain: "crm"` still accepted),
+> and secrets dual-read `STUDIO_INTEGRATION_KEY` with
+> `CRM_INTEGRATION_KEY` fallback. Intentionally keeping old names:
+> `/v1/crm/*`, collection kind `"crm"` and `Crm*` sync types (all three
+> mean the external HubSpot integration), error codes `CRM_*`, and the
+> external sync tables (`crm_connections`, `crm_sync_*`,
+> `crm_collection_bindings`).
 
 ## Everything configurable generates its own API
 
-- `/v1/data-domains/:id/api/*` and `/v1/dynamic-crm/:agencyId/api/*`: per-object
+- `/v1/data-domains/:id/api/*` and `/v1/studio/:agencyId/api/*` (`/v1/dynamic-crm/*` alias kept): per-object
   CRUD, designer, **generated OpenAPI/Scalar with per-object endpoints**, and
   integrations (import an external OpenAPI schema, run operations, map results
   into the domain with per-domain isolated credentials).

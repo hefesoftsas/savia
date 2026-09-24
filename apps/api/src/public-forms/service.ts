@@ -1,7 +1,10 @@
-import { historyDatabase } from "@savia/crm-server/record-history-storage";
+import { historyDatabase } from "@savia/studio-server/record-history-storage";
 import { HTTPException } from "hono/http-exception";
-import { getObject, createRecord } from "@savia/crm-server/services";
-import { validateRecord, type CrmObject } from "@savia/crm-shared/metadata";
+import { getObject, createRecord } from "@savia/studio-server/services";
+import {
+  validateRecord,
+  type StudioObject,
+} from "@savia/studio-shared/metadata";
 import { z } from "@hono/zod-openapi";
 import {
   captchaConfiguration,
@@ -36,7 +39,7 @@ export interface PublicQuoteAdapter {
     db: D1Database;
     tenant: string;
     domainId: string;
-    object: CrmObject;
+    object: StudioObject;
   }): Promise<{ fields: PublicFormField[]; snapshot: unknown }>;
   validate(input: {
     snapshot: unknown;
@@ -227,7 +230,7 @@ export async function availableObject(
         .first()
     : tenant === "domain:platform" ||
       (await db
-        .prepare("SELECT 1 FROM crm_data_domains WHERE id=?")
+        .prepare("SELECT 1 FROM studio_data_domains WHERE id=?")
         .bind(tenant.slice(7))
         .first());
   if (!active) reject("Public form unavailable.", 404);
@@ -260,9 +263,9 @@ const safeTypes: Record<string, PublicFormField["type"]> = {
   Toggle: "boolean",
   Dropdown: "select",
 };
-export function projectRecordForm(object: CrmObject) {
+export function projectRecordForm(object: StudioObject) {
   const fields: PublicFormField[] = [];
-  const safeFields: CrmObject["config"]["fields"] = {};
+  const safeFields: StudioObject["config"]["fields"] = {};
   for (const [name, field] of (
     object.config.fieldOrder ?? Object.keys(object.config.fields)
   ).map((name) => [name, object.config.fields[name]] as const)) {
@@ -531,7 +534,7 @@ export async function submitPublicForm(
   validateValues(fields, input.values);
   let values: Record<string, unknown>;
   if (link.kind === "record") {
-    const validation = validateRecord(snapshot as CrmObject, input.values);
+    const validation = validateRecord(snapshot as StudioObject, input.values);
     if (Object.keys(validation.errors).length)
       reject("Values do not match the published form.");
     values = validation.data;

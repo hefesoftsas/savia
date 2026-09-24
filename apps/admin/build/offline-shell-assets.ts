@@ -4,11 +4,11 @@ const operationalRoutes = [
   "/src/app.tsx",
   "/admin/appearance-cache.ts",
   "/pwa/register-service-worker.ts",
-  "/dynamic-crm/crm-page.tsx",
-  "/crm-engine/app.tsx",
-  "/crm-engine/records.tsx",
-  "/crm-engine/record-detail.tsx",
-  "/crm-engine/collection-record-form.tsx",
+  "/studio/studio-page.tsx",
+  "/studio-engine/app.tsx",
+  "/studio-engine/records.tsx",
+  "/studio-engine/record-detail.tsx",
+  "/studio-engine/collection-record-form.tsx",
 ];
 
 type BundleItem = {

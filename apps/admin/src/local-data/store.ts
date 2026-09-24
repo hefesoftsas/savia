@@ -4,18 +4,18 @@ import {
   resolveBundle,
   pendingBundle,
 } from "./bundle-store";
-import type { RelatedRecordBundle } from "@savia/crm-shared/related-records";
+import type { RelatedRecordBundle } from "@savia/studio-shared/related-records";
 import type {
   RelationDefinition,
   RecordRelationGroup,
-} from "@savia/crm-shared/relations";
+} from "@savia/studio-shared/relations";
 import Dexie, {
   liveQuery,
   rangesOverlap,
   RangeSet,
   type ObservabilitySet,
 } from "dexie";
-import type { CrmRecord } from "@savia/crm-shared/metadata";
+import type { StudioRecord } from "@savia/studio-shared/metadata";
 import { createRecordSortKeys } from "./query";
 import { LocalDatabase } from "./database";
 import type {
@@ -25,9 +25,9 @@ import type {
   PullBatch,
 } from "./contracts";
 function overlay(
-  document: CrmRecord | undefined,
+  document: StudioRecord | undefined,
   mutation: Mutation,
-): CrmRecord {
+): StudioRecord {
   const now = new Date().toISOString();
   return {
     ...(document ?? { id: mutation.id, created_at: now, updated_at: now }),
@@ -55,7 +55,7 @@ export class LocalStore {
   constructor(readonly scope: string) {
     this.db = new LocalDatabase(scope);
   }
-  async row(collection: string, document: CrmRecord) {
+  async row(collection: string, document: StudioRecord) {
     const metadata = await this.db.collections.get(collection);
     return {
       collection,
@@ -92,8 +92,8 @@ export class LocalStore {
   acknowledgeBundle(
     mutation: Mutation,
     result: {
-      data: CrmRecord;
-      related: Array<{ relationId: string; records: CrmRecord[] }>;
+      data: StudioRecord;
+      related: Array<{ relationId: string; records: StudioRecord[] }>;
     },
   ) {
     return acknowledgeBundle(this, mutation, result);
@@ -107,7 +107,7 @@ export class LocalStore {
     masters: Array<{
       collection: string;
       id: string;
-      document: CrmRecord | null;
+      document: StudioRecord | null;
     }>,
     groups: RecordRelationGroup[],
   ) {
@@ -391,7 +391,7 @@ export class LocalStore {
       },
     );
   }
-  async acknowledge(mutation: Mutation, master: CrmRecord) {
+  async acknowledge(mutation: Mutation, master: StudioRecord) {
     if (mutation.bundle)
       throw new Error("Acknowledge the complete bundle instead");
     await this.db.transaction(
@@ -429,7 +429,7 @@ export class LocalStore {
     mutation: Mutation,
     state: "conflict" | "error",
     error: string,
-    master?: CrmRecord | null,
+    master?: StudioRecord | null,
   ) {
     await this.db.transaction(
       "rw",

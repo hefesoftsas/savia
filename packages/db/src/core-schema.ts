@@ -286,14 +286,14 @@ export const userMyDayWidgets = sqliteTable("user_my_day_widgets", {
   updatedAt: text("updated_at").notNull(),
 });
 
-export const crmStudioSettings = sqliteTable("crm_studio_settings", {
+export const studioSettings = sqliteTable("studio_settings", {
   tenantId: text("tenant_id").primaryKey().notNull(),
   menuLayout: text("menu_layout"),
   updatedAt: text("updated_at").notNull(),
 });
 
-export const crmExtensionInstallations = sqliteTable(
-  "crm_extension_installations",
+export const studioExtensionInstallations = sqliteTable(
+  "studio_extension_installations",
   {
     tenantId: text("tenant_id").notNull(),
     id: text("id").notNull(),

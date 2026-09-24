@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 import { blueprint, verifyAccess, requestInput } from "../src/domain";
-import { decideRecord, decideWrite } from "@savia/crm-shared/access-evaluator";
+import { decideRecord, decideWrite } from "@savia/studio-shared/access-evaluator";
 const policy = () => ({
   principalId: "u1",
   scope: "tenant:101" as const,

@@ -1,4 +1,4 @@
-import { apiFetch } from "../features/crm-engine/api";
+import { apiFetch } from "../features/studio-engine/api";
 
 export type ExtensionConnectionSummary = {
   connectionId: string;

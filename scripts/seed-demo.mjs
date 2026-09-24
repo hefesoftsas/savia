@@ -94,7 +94,7 @@ async function main() {
 
   const tenant = (await api(origin, cookie, "/v1/tenants", DEMO_TENANT))?.data;
   if (!tenant?.id) throw new Error("tenant creation returned no id");
-  const base = `/v1/dynamic-crm/${tenant.id}/api`;
+  const base = `/v1/studio/${tenant.id}/api`;
   console.log(`tenant ${tenant.id}`);
 
   await api(origin, cookie, `${base}/bootstrap`);

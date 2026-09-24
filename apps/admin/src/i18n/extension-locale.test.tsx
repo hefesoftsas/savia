@@ -3,7 +3,7 @@ import { afterEach, expect, it } from "vitest";
 import { memoryStore, StoreContextProvider } from "ra-core";
 import { useState } from "react";
 import { AppLocaleProvider } from "./app-locale-provider";
-import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginMessages } from "@savia/studio-shared/plugin-locale-react";
 afterEach(cleanup);
 it("bridges the host locale to extensions while retaining drafts", () => {
  const store=memoryStore({locale:"es"});

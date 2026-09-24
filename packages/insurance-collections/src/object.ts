@@ -1,4 +1,4 @@
-import type { ExtensionObjectRequirement } from "@savia/crm-shared/extension-package";
+import type { ExtensionObjectRequirement } from "@savia/studio-shared/extension-package";
 export const requirement = {
   id: "insurance.collections",
   object: {

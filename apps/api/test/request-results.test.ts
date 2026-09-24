@@ -1,4 +1,4 @@
-import { jsonPointer } from "@savia/crm-shared/collection-operations";
+import { jsonPointer } from "@savia/studio-shared/collection-operations";
 import { describe, expect, it } from "vitest";
 import { normalizeResult } from "../src/request-results/normalize";
 const run = {

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
-import { processWorkflows } from "@savia/crm-server/workflows/runtime";
+import { processWorkflows } from "@savia/studio-server/workflows/runtime";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -238,9 +238,9 @@ it("leaves reversed coverage for review instead of generating invalid issuance",
 });
 it("rejects incompatible multiple relation fields before installing any draft", async () => {
   const { prepareWorkflowBundle } =
-    await import("@savia/crm-server/workflows/bundles");
+    await import("@savia/studio-server/workflows/bundles");
   const tenant = await env.DB.prepare(
-    "SELECT tenant_id FROM crm_objects WHERE name='polizas' LIMIT 1",
+    "SELECT tenant_id FROM studio_objects WHERE name='polizas' LIMIT 1",
   ).first<{ tenant_id: string }>();
   await expect(
     prepareWorkflowBundle(env.DB, tenant!.tenant_id, "owner", {
@@ -315,11 +315,11 @@ it("rejects numeric matched-create keys during publication", async () => {
   );
 });
 it("requires design and publish rights before preparing schemas", async () => {
-  const { createCrmApp } = await import("@savia/crm-server");
+  const { createStudioApp } = await import("@savia/studio-server");
   const { runtimeReleaseCatalog } =
     await import("@savia/release-catalog/runtime");
   const bundles = runtimeReleaseCatalog.workflowBundles;
-  const app = createCrmApp("domain:unauthorized", {
+  const app = createStudioApp("domain:unauthorized", {
     principalId: "viewer",
     workflowBundles: bundles,
     authorizeWorkflow: async ({ action }) =>

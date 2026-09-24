@@ -9,7 +9,7 @@ import type { ApiClient } from "@/api/api-client";
 import {
   createMyDayWidgetId,
   type MyDayWidget,
-} from "@savia/crm-shared/my-day-widgets";
+} from "@savia/studio-shared/my-day-widgets";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

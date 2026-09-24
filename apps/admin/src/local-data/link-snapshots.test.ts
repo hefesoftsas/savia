@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, expect, it, vi } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
-import type { RelationDefinition } from "@savia/crm-shared/relations";
+import { makeConfig } from "@savia/studio-shared/metadata";
+import type { RelationDefinition } from "@savia/studio-shared/relations";
 import { openLocalStore, type LocalStore } from "./store";
 import { createLocalTransport } from "./transport";
 let store: LocalStore;

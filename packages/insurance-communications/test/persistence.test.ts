@@ -1,5 +1,5 @@
 import { it, expect, vi } from "vitest";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { saveIntegrationRecord } from "../src/persistence";
 it("updates existing drafts with the displayed record version", async () => {
   const update = vi.fn(async () => ({ id: "draft", _version: 4 }));

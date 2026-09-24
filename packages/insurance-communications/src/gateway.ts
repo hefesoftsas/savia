@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ExtensionActionContext } from "@savia/crm-shared/extension-runtime";
+import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 export type GatewayOptions = {
   allowedOrigins?: readonly string[];
   fetcher?: typeof fetch;

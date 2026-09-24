@@ -1,5 +1,5 @@
-import type { CrmRecord } from "@savia/crm-shared/metadata";
-import type { RecordRelationGroup } from "@savia/crm-shared/relations";
+import type { StudioRecord } from "@savia/studio-shared/metadata";
+import type { RecordRelationGroup } from "@savia/studio-shared/relations";
 import type { LocalStore } from "./store";
 import type { SyncTransport } from "./contracts";
 
@@ -151,7 +151,7 @@ export async function resolveBundleFromServer(
       throw new Error(
         `No se pudo cargar el registro actual (${response.status}).`,
       );
-    const body = (await response.json()) as { data: CrmRecord };
+    const body = (await response.json()) as { data: StudioRecord };
     if (!body.data || body.data.id !== member.id)
       throw new Error(
         "El registro remoto no coincide con el formulario pendiente.",
@@ -209,7 +209,7 @@ export async function resolveBundleFromServer(
         throw new Error(
           `No se pudo cargar el registro vinculado actual (${response.status}).`,
         );
-      const body = (await response.json()) as { data: CrmRecord };
+      const body = (await response.json()) as { data: StudioRecord };
       if (!body.data || body.data.id !== record.id)
         throw new Error("El registro vinculado remoto no coincide.");
       masters.push({

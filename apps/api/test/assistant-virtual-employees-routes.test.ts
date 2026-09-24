@@ -77,7 +77,7 @@ describe("Virtual Employees API Routes", () => {
   it("lists available CRM collections for virtual employees", async () => {
     const app = createTestApp();
     await env.DB.prepare(
-      "INSERT OR REPLACE INTO crm_objects (tenant_id, name, label, description, config, version) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO studio_objects (tenant_id, name, label, description, config, version) VALUES (?, ?, ?, ?, ?, ?)",
     )
       .bind(
         "domain:platform",

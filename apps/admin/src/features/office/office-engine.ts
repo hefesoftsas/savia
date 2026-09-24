@@ -1,5 +1,8 @@
 import manifest from "../../../office-runtime.json";
-import { officeFormat, validateOfficePackage } from "@savia/crm-shared/office";
+import {
+  officeFormat,
+  validateOfficePackage,
+} from "@savia/studio-shared/office";
 export type OfficeEngine = {
   open(bytes: Uint8Array, name: string): Promise<void>;
   save(): Promise<Uint8Array>;

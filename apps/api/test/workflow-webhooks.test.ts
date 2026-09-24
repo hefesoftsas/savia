@@ -2,8 +2,8 @@ import { env } from "cloudflare:workers";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeAll, it, expect } from "vitest";
 import { registerWorkflowWebhookRoutes } from "../src/workflow-webhooks";
-import { WorkflowRepository } from "@savia/crm-server/workflows/repository";
-import { WebhookEndpointRepository } from "@savia/crm-server/workflows/webhook-endpoints";
+import { WorkflowRepository } from "@savia/studio-server/workflows/repository";
+import { WebhookEndpointRepository } from "@savia/studio-server/workflows/webhook-endpoints";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,

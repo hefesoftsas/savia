@@ -47,7 +47,7 @@ beforeAll(async () => {
   });
   const row = await f.db
     .prepare(
-      "SELECT id FROM crm_records WHERE tenant_id='agency:101' AND object_name='acl_contacts'",
+      "SELECT id FROM studio_records WHERE tenant_id='agency:101' AND object_name='acl_contacts'",
     )
     .first<{ id: string }>();
   rowId = row!.id;

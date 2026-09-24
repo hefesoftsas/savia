@@ -2,7 +2,7 @@ import { dialectFor } from "@savia/db/dialect";
 import { streamingRequest } from "../lib/streaming-request";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { PLATFORM_ROOM } from "../realtime/protocol";
-import { publishRecordBundleChanges } from "../crm/record-bundle-realtime";
+import { publishRecordBundleChanges } from "../studio/record-bundle-realtime";
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   actorFromContext,
@@ -10,14 +10,14 @@ import {
 } from "../auth/middleware";
 import { AuthenticationError } from "../auth/types";
 import { loadAccessPolicy } from "../auth/access-repository";
-import { createCollectionGateway } from "../crm/collection-gateway";
-import type { SqlBridgeClient } from "../crm/sql-bridge";
-import { dynamicOpenApi } from "../crm/dynamic-openapi";
-import { dynamicScalar } from "../crm/dynamic-scalar";
-import type { CrmObject } from "@savia/crm-shared/metadata";
-import type { ExtensionActionExecutor } from "@savia/crm-shared/extension-runtime";
+import { createCollectionGateway } from "../studio/collection-gateway";
+import type { SqlBridgeClient } from "../studio/sql-bridge";
+import { dynamicOpenApi } from "../studio/dynamic-openapi";
+import { dynamicScalar } from "../studio/dynamic-scalar";
+import type { StudioObject } from "@savia/studio-shared/metadata";
+import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
 import type { CrmRouteDependencies } from "./crm";
-import type { SolutionOptions } from "@savia/crm-server/solutions";
+import type { SolutionOptions } from "@savia/studio-server/solutions";
 
 const domainSchema = z.object({
   id: z.string(),
@@ -93,7 +93,7 @@ const customDomain = (id: string, label: string) => ({
   kind: "custom" as const,
   apiBasePath: `/v1/data-domains/${id}`,
 });
-export const genericSeed: CrmObject[] = [];
+export const genericSeed: StudioObject[] = [];
 
 export function registerDataDomainRoutes(
   app: OpenAPIHono,
@@ -120,7 +120,7 @@ export function registerDataDomainRoutes(
       : (
           await db
             .prepare(
-              "SELECT d.id,d.label FROM crm_data_domains d WHERE EXISTS(SELECT 1 FROM access_assignments a JOIN access_roles r ON r.id=a.role_id AND r.scope=a.scope WHERE a.scope='domain:'||d.id AND a.principal_id=? AND r.enabled=1)",
+              "SELECT d.id,d.label FROM studio_data_domains d WHERE EXISTS(SELECT 1 FROM access_assignments a JOIN access_roles r ON r.id=a.role_id AND r.scope=a.scope WHERE a.scope='domain:'||d.id AND a.principal_id=? AND r.enabled=1)",
             )
             .bind(actor.principal.id)
             .all<{ id: string; label: string }>()
@@ -141,7 +141,9 @@ export function registerDataDomainRoutes(
         apiBasePath: "/v1/data-domains/platform",
       });
       const domains = await db
-        .prepare("SELECT id,label FROM crm_data_domains ORDER BY created_at,id")
+        .prepare(
+          "SELECT id,label FROM studio_data_domains ORDER BY created_at,id",
+        )
         .all<{ id: string; label: string }>();
       data.push(...domains.results.map((d) => customDomain(d.id, d.label)));
     }
@@ -158,7 +160,7 @@ export function registerDataDomainRoutes(
         tenantId: a.id,
         agencyId: a.id,
         kind: "tenant" as const,
-        apiBasePath: `/v1/dynamic-crm/${a.id}`,
+        apiBasePath: `/v1/studio/${a.id}`,
       })),
     );
     c.header("cache-control", "no-store");
@@ -171,8 +173,8 @@ export function registerDataDomainRoutes(
     const result = await db
       .prepare(
         dialectFor(db).name === "postgres"
-          ? "INSERT INTO crm_data_domains(id,label,created_by) VALUES (?,?,?) ON CONFLICT (id) DO NOTHING"
-          : "INSERT OR IGNORE INTO crm_data_domains(id,label,created_by) VALUES (?,?,?)",
+          ? "INSERT INTO studio_data_domains(id,label,created_by) VALUES (?,?,?) ON CONFLICT (id) DO NOTHING"
+          : "INSERT OR IGNORE INTO studio_data_domains(id,label,created_by) VALUES (?,?,?)",
       )
       .bind(input.name, input.label, actor.principal.id)
       .run();
@@ -218,7 +220,7 @@ export function registerDataDomainRoutes(
     if (
       id !== "platform" &&
       !(await db
-        .prepare("SELECT 1 FROM crm_data_domains WHERE id=?")
+        .prepare("SELECT 1 FROM studio_data_domains WHERE id=?")
         .bind(id)
         .first())
     )

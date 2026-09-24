@@ -1,7 +1,7 @@
 import type { Table } from "dexie";
-import type { CrmRecord } from "@savia/crm-shared/metadata";
+import type { StudioRecord } from "@savia/studio-shared/metadata";
 
-type Row = { collection: string; id: string; document: CrmRecord };
+type Row = { collection: string; id: string; document: StudioRecord };
 type Records = Table<Row, [string, string]>;
 export type Condition = { field: string; op: string; value?: unknown };
 const scalar = (value: unknown): string | number | null =>
