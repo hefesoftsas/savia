@@ -35,7 +35,10 @@ function Shell({
       : screen === "enroll"
         ? "Protección de cuenta"
         : "Acceso seguro";
-  const showLoginAnimation = screen === "login" && !branding?.coverUrl;
+  // A tenant's custom login animation takes precedence over its cover image.
+  const customLoginAnimation = branding?.loginAnimationUrl ?? null;
+  const showLoginAnimation =
+    screen === "login" && (!branding?.coverUrl || customLoginAnimation);
   return (
     <div
       className="oauth-screen"
@@ -57,39 +60,55 @@ function Shell({
         <div className="oauth-form-column">{children}</div>
       </section>
       <aside
-        className={`oauth-aside${branding?.coverUrl ? " has-cover" : ""}${showLoginAnimation ? " has-login-animation" : ""}`}
-        aria-label={showLoginAnimation ? "Animación de Savia" : undefined}
+        className={`oauth-aside${branding?.coverUrl && !customLoginAnimation ? " has-cover" : ""}${showLoginAnimation ? " has-login-animation" : ""}`}
+        aria-label={
+          showLoginAnimation
+            ? customLoginAnimation
+              ? `Animación de ${branding?.displayName ?? "inicio de sesión"}`
+              : "Animación de Savia"
+            : undefined
+        }
         aria-hidden={showLoginAnimation ? undefined : "true"}
       >
-        {branding?.coverUrl && (
+        {branding?.coverUrl && !customLoginAnimation && (
           <img className="oauth-aside-cover" src={branding.coverUrl} alt="" />
         )}
         {showLoginAnimation ? (
-          <div className="oauth-login-animation" data-oauth-login-animation>
+          <div
+            className="oauth-login-animation"
+            data-oauth-login-animation
+            data-oauth-login-animation-custom={
+              customLoginAnimation ? "true" : undefined
+            }
+          >
             <div
               className="oauth-login-animation-frame"
               data-oauth-login-animation-frame
-              data-src="/login/savia-logo.json"
+              data-src={customLoginAnimation ?? "/login/savia-logo.json"}
             />
-            <div
-              className="oauth-login-animation-robot"
-              data-oauth-login-robot
-              aria-hidden="true"
-            >
+            {customLoginAnimation ? null : (
               <div
-                className="oauth-login-animation-robot-frame"
-                data-oauth-login-robot-frame
-                data-src="/login/savia-chatbot-hover.json"
-              />
-            </div>
-            <p
-              className="oauth-login-animation-wordmark"
-              data-oauth-login-wordmark
-              aria-label="Savia"
-            >
-              <span>sav</span>
-              <span data-oauth-login-wordmark-ai>ia</span>
-            </p>
+                className="oauth-login-animation-robot"
+                data-oauth-login-robot
+                aria-hidden="true"
+              >
+                <div
+                  className="oauth-login-animation-robot-frame"
+                  data-oauth-login-robot-frame
+                  data-src="/login/savia-chatbot-hover.json"
+                />
+              </div>
+            )}
+            {customLoginAnimation ? null : (
+              <p
+                className="oauth-login-animation-wordmark"
+                data-oauth-login-wordmark
+                aria-label="Savia"
+              >
+                <span>sav</span>
+                <span data-oauth-login-wordmark-ai>ia</span>
+              </p>
+            )}
           </div>
         ) : (
           <>

@@ -71,7 +71,7 @@ function loginPage(
       title,
       renderOAuthSurface("login", { tenantSlug, branding }),
       restartUrl,
-      !branding?.coverUrl,
+      !!branding?.loginAnimationUrl || !branding?.coverUrl,
     ),
   );
 }

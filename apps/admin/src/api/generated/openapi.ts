@@ -6904,6 +6904,8 @@ export interface paths {
                 accentColor: string;
                 logoUrl: string | null;
                 coverUrl: string | null;
+                /** @default null */
+                loginAnimationUrl: string | null;
                 version: number;
               };
               canManage?: boolean;
@@ -6931,6 +6933,8 @@ export interface paths {
             accentColor: string;
             logoUrl: string | null;
             coverUrl: string | null;
+            /** @default null */
+            loginAnimationUrl?: string | null;
             version: number;
           };
         };
@@ -6951,6 +6955,8 @@ export interface paths {
                 accentColor: string;
                 logoUrl: string | null;
                 coverUrl: string | null;
+                /** @default null */
+                loginAnimationUrl: string | null;
                 version: number;
               };
               canManage?: boolean;
@@ -6981,7 +6987,7 @@ export interface paths {
         header?: never;
         path: {
           tenantId: number;
-          kind: "logo" | "cover";
+          kind: "logo" | "cover" | "login-animation";
         };
         cookie?: never;
       };
@@ -7046,6 +7052,8 @@ export interface paths {
                 accentColor: string;
                 logoUrl: string | null;
                 coverUrl: string | null;
+                /** @default null */
+                loginAnimationUrl: string | null;
                 version: number;
               } | null;
             };
@@ -7080,7 +7088,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Published tenant logo or cover */
+        /** @description Published tenant logo, cover or login animation */
         200: {
           headers: {
             [name: string]: unknown;
@@ -7089,6 +7097,7 @@ export interface paths {
             "image/png": string;
             "image/jpeg": string;
             "image/webp": string;
+            "application/json": string;
           };
         };
       };

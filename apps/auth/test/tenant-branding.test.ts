@@ -17,8 +17,11 @@ const branding: TenantBranding = {
     "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789012",
   coverUrl:
     "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789013",
+  loginAnimationUrl: null,
   version: 1,
 };
+const animationUrl =
+  "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789014";
 const request = (path: string) =>
   new Request(`https://example.com/api/auth/${path}`);
 
@@ -184,6 +187,26 @@ describe("tenant identity on OAuth surfaces", () => {
       "unsafe-inline",
     );
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+  it("renders a tenant login animation instead of the Savia emblem, robot and cover", async () => {
+    const response = oauthPageResponse(request("login"), {
+      branding: { ...branding, loginAnimationUrl: animationUrl },
+    })!;
+    const html = await response.text();
+    expect(html).toContain(`data-src="${animationUrl}"`);
+    expect(html).not.toContain('data-src="/login/savia-logo.json"');
+    expect(html).not.toContain("data-oauth-login-robot");
+    expect(html).not.toContain("oauth-login-animation-wordmark");
+    expect(html).not.toContain("oauth-aside-cover");
+    expect(html).toContain('src="/login/lottie-light.min.js"');
+    expect(html).toContain('data-oauth-login-animation-custom="true"');
+  });
+  it("keeps the default Savia animation when no custom animation is set", async () => {
+    const html = await oauthPageResponse(request("login"))!.text();
+    expect(html).toContain('data-src="/login/savia-logo.json"');
+    expect(html).toContain("data-oauth-login-robot");
+    expect(html).toContain("oauth-login-animation-wordmark");
+    expect(html).not.toContain("data-oauth-login-animation-custom");
   });
   it("escapes tenant text in document title and React markup", async () => {
     const html = await oauthPageResponse(request("login"), {

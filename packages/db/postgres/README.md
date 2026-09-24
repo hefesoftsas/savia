@@ -50,6 +50,11 @@ migrations; the baseline remains unchanged.
 URL on each public form. Existing installations apply it after the Savia short
 link mapping; the baseline remains unchanged.
 
+`0015_tenant_branding_login_animation.sql` widens `tenant_branding_assets` for
+per-tenant login Lottie animations, matching SQLite migration
+`0074_tenant_branding_login_animation.sql` (`login-animation` kind,
+`application/json` content type).
+
 Native pools discard failed idle connections without logging their credential-bearing
 client objects. Shutdown waits for socket removal as well as pool shutdown before
 allowing database teardown; the next query after an idle connection loss obtains

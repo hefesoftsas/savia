@@ -333,6 +333,10 @@
     {
       "filename": "0073_plugin_store_config.sql",
       "sha256": "c49c921a2cdf7894071d6338b8e60d7da48e522ad98a9d531cc738f2c29df8fc"
+    },
+    {
+      "filename": "0074_tenant_branding_login_animation.sql",
+      "sha256": "1b6380961e1aee71b07d04fa48e1d28ad69c2501a88ecd7dfbb900d2481ea341"
     }
   ],
   "objects": [

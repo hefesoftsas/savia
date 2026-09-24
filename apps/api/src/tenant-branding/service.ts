@@ -30,6 +30,8 @@ export const brandingSchema = z
     accentColor: z.string().regex(/^#[a-fA-F0-9]{6}$/),
     logoUrl: assetUrl,
     coverUrl: assetUrl,
+    // Records saved before the login animation existed omit the field.
+    loginAnimationUrl: assetUrl.default(null),
     version: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   })
   .strict();
@@ -106,6 +108,7 @@ export async function saveTenantBranding(
   for (const [kind, url] of [
     ["logo", input.logoUrl],
     ["cover", input.coverUrl],
+    ["login-animation", input.loginAnimationUrl ?? null],
   ] as const) {
     if (url === null) continue;
     const prefix = "/api/public/tenant-branding/assets/" + id + "/";
@@ -119,17 +122,18 @@ export async function saveTenantBranding(
         .first())
     )
       throw new HTTPException(400, {
-        message: "Select an image uploaded for this tenant.",
+        message: "Select a file uploaded for this tenant.",
       });
   }
   const { version, ...config } = input;
+  const loginAnimationUrl = input.loginAnimationUrl ?? null;
   const row = await db
     .prepare(
-      "INSERT INTO tenant_branding(tenant_id,config,version,updated_by,updated_at) SELECT ?,?,1,?,? WHERE (?=0 OR EXISTS(SELECT 1 FROM tenant_branding WHERE tenant_id=?)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='logo' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='cover' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) ON CONFLICT(tenant_id) DO UPDATE SET config=excluded.config,version=tenant_branding.version+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at WHERE tenant_branding.version=? RETURNING version",
+      "INSERT INTO tenant_branding(tenant_id,config,version,updated_by,updated_at) SELECT ?,?,1,?,? WHERE (?=0 OR EXISTS(SELECT 1 FROM tenant_branding WHERE tenant_id=?)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='logo' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='cover' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM tenant_branding_assets WHERE state='live' AND tenant_id=? AND kind='login-animation' AND ?='/api/public/tenant-branding/assets/'||tenant_id||'/'||id)) ON CONFLICT(tenant_id) DO UPDATE SET config=excluded.config,version=tenant_branding.version+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at WHERE tenant_branding.version=? RETURNING version",
     )
     .bind(
       id,
-      JSON.stringify(config),
+      JSON.stringify({ ...config, loginAnimationUrl }),
       actor.principal.id,
       new Date().toISOString(),
       version,
@@ -140,6 +144,9 @@ export async function saveTenantBranding(
       input.coverUrl,
       id,
       input.coverUrl,
+      loginAnimationUrl,
+      id,
+      loginAnimationUrl,
       version,
     )
     .first<{ version: number }>();
@@ -147,7 +154,7 @@ export async function saveTenantBranding(
     throw new HTTPException(409, {
       message: "Branding changed. Reload before saving.",
     });
-  return { ...config, version: row.version };
+  return { ...config, loginAnimationUrl, version: row.version };
 }
 export const MAX_ASSET_BYTES = 2 * 1024 * 1024;
 export function imageContentType(bytes: Uint8Array) {
@@ -185,11 +192,37 @@ export function imageContentType(bytes: Uint8Array) {
     message: "Upload a PNG, JPEG, or WebP image.",
   });
 }
+/** Lottie animations must stay plain validated JSON so the login player cannot load scripts. */
+export function isLoginAnimationBytes(bytes: Uint8Array): boolean {
+  if (bytes.length === 0 || bytes.length > MAX_ASSET_BYTES) return false;
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return false;
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const animation = data as Record<string, unknown>;
+  return (
+    typeof animation.v === "string" &&
+    /^\d/.test(animation.v) &&
+    typeof animation.fr === "number" &&
+    typeof animation.ip === "number" &&
+    typeof animation.op === "number" &&
+    Array.isArray(animation.layers)
+  );
+}
 export async function uploadBrandingAsset(
   db: D1Database,
   bucket: R2Bucket | undefined,
   id: number,
-  kind: "logo" | "cover",
+  kind: "logo" | "cover" | "login-animation",
   actor: AppActor,
   file: File,
 ) {
@@ -198,10 +231,22 @@ export async function uploadBrandingAsset(
     throw new HTTPException(503, { message: "Image storage unavailable." });
   if (file.size === 0 || file.size > MAX_ASSET_BYTES)
     throw new HTTPException(413, {
-      message: "Images must be no larger than 2 MB.",
+      message:
+        kind === "login-animation"
+          ? "Animations must be no larger than 2 MB."
+          : "Images must be no larger than 2 MB.",
     });
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const contentType = imageContentType(bytes),
+  const contentType =
+      kind === "login-animation"
+        ? (() => {
+            if (!isLoginAnimationBytes(bytes))
+              throw new HTTPException(400, {
+                message: "Upload a valid Lottie JSON animation.",
+              });
+            return "application/json" as const;
+          })()
+        : imageContentType(bytes),
     assetId = crypto.randomUUID(),
     key = "tenant-branding/" + id + "/" + assetId;
   // Tombstones retain their storage slot until R2 deletion succeeds. Claiming
@@ -214,6 +259,8 @@ export async function uploadBrandingAsset(
         dialectFor(db).jsonValue("b.config", "$.logoUrl") +
         "='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id OR " +
         dialectFor(db).jsonValue("b.config", "$.coverUrl") +
+        "='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id OR " +
+        dialectFor(db).jsonValue("b.config", "$.loginAnimationUrl") +
         "='/api/public/tenant-branding/assets/'||tenant_branding_assets.tenant_id||'/'||tenant_branding_assets.id))",
     )
     .bind(id, cutoff)
@@ -256,7 +303,7 @@ export async function uploadBrandingAsset(
   if (!reserved)
     throw new HTTPException(429, {
       message:
-        "Image storage limit reached. Unused uploads are released after 24 hours.",
+        "File storage limit reached. Unused uploads are released after 24 hours.",
     });
   try {
     await bucket.put(key, bytes, { httpMetadata: { contentType } });
