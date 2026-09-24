@@ -1,0 +1,284 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_opportunities",
+        "label": "Oportunidades",
+        "description": "Prospectos, negociación y seguimiento comercial de seguros.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Oportunidad",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente o prospecto",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza relacionada",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "product": {
+              "type": "Textbox",
+              "label": "Ramo o producto",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "source": {
+              "type": "Dropdown",
+              "label": "Origen",
+              "labels": {},
+              "options": [
+                {
+                  "value": "referral",
+                  "label": "Referido"
+                },
+                {
+                  "value": "inbound",
+                  "label": "Consulta entrante"
+                },
+                {
+                  "value": "outbound",
+                  "label": "Prospección"
+                },
+                {
+                  "value": "existing",
+                  "label": "Cliente actual"
+                }
+              ],
+              "config": {}
+            },
+            "target_date": {
+              "type": "DateControl",
+              "label": "Fecha esperada de cierre",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "premium": {
+              "type": "Number",
+              "label": "Prima estimada (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "probability": {
+              "type": "Number",
+              "label": "Probabilidad (%)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 100
+              }
+            },
+            "next_follow_up": {
+              "type": "DateControl",
+              "label": "Próximo seguimiento",
+              "labels": {},
+              "config": {}
+            },
+            "outcome": {
+              "type": "Textbox",
+              "label": "Póliza ganada o motivo de pérdida",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "won",
+                    "lost"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "lead",
+                  "label": "Prospecto"
+                },
+                {
+                  "value": "qualified",
+                  "label": "Calificada"
+                },
+                {
+                  "value": "proposal",
+                  "label": "Propuesta enviada"
+                },
+                {
+                  "value": "negotiation",
+                  "label": "En negociación"
+                },
+                {
+                  "value": "won",
+                  "label": "Ganada"
+                },
+                {
+                  "value": "lost",
+                  "label": "Perdida"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "policy_reference",
+            "owner",
+            "product",
+            "source",
+            "target_date",
+            "premium",
+            "probability",
+            "next_follow_up",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "product": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "source": {
+          "types": [
+            "Dropdown"
+          ],
+          "optionValues": [
+            "referral",
+            "inbound",
+            "outbound",
+            "existing"
+          ]
+        },
+        "target_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "premium": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "probability": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "next_follow_up": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "lead",
+            "qualified",
+            "proposal",
+            "negotiation",
+            "won",
+            "lost"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_opportunities",
+      "view": "records"
+    }
+  ]
+}

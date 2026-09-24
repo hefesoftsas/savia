@@ -24,6 +24,7 @@
     "favicons:generate": "node scripts/generate-favicons.mjs",
     "extension:pack": "node scripts/pack-extension.mjs",
     "store:pack": "node scripts/pack-store-plugin.mjs",
+    "store:port": "node scripts/generate-store-port.mjs",
     "savia:credentials:import": "node scripts/import-bitwarden-credentials.mjs"
   },
   "devDependencies": {

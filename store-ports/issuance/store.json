@@ -1,0 +1,318 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_issuance",
+        "label": "Emisiones",
+        "description": "Seguimiento de expedición, revisión y entrega de pólizas.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza expedida",
+              "labels": {},
+              "config": {
+                "maxLength": 120,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "issued",
+                    "delivered"
+                  ]
+                }
+              }
+            },
+            "insurer": {
+              "type": "Textbox",
+              "label": "Aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "product": {
+              "type": "Textbox",
+              "label": "Producto",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "requested_date": {
+              "type": "DateControl",
+              "label": "Fecha de solicitud",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Compromiso de entrega",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "effective_date": {
+              "type": "DateControl",
+              "label": "Inicio de vigencia",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "end_date": {
+              "type": "DateControl",
+              "label": "Fin de vigencia",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "premium": {
+              "type": "Number",
+              "label": "Prima (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0.01,
+                "maximum": 90000000000
+              }
+            },
+            "issued_date": {
+              "type": "DateControl",
+              "label": "Fecha de expedición",
+              "labels": {},
+              "config": {
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "issued",
+                    "delivered"
+                  ]
+                }
+              }
+            },
+            "delivered_date": {
+              "type": "DateControl",
+              "label": "Fecha de entrega",
+              "labels": {},
+              "config": {
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "delivered"
+                  ]
+                }
+              }
+            },
+            "outcome": {
+              "type": "Textbox",
+              "label": "Motivo de cancelación",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "cancelled"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "requested",
+                  "label": "Solicitada"
+                },
+                {
+                  "value": "underwriting",
+                  "label": "En estudio"
+                },
+                {
+                  "value": "issued",
+                  "label": "Expedida"
+                },
+                {
+                  "value": "delivered",
+                  "label": "Entregada"
+                },
+                {
+                  "value": "cancelled",
+                  "label": "Cancelada"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "policy_reference",
+            "insurer",
+            "owner",
+            "product",
+            "requested_date",
+            "due_date",
+            "effective_date",
+            "end_date",
+            "premium",
+            "issued_date",
+            "delivered_date",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "insurer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "product": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "requested_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "due_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "effective_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "end_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "premium": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "issued_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "delivered_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "requested",
+            "underwriting",
+            "issued",
+            "delivered",
+            "cancelled"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_issuance",
+      "view": "records"
+    }
+  ]
+}

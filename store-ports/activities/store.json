@@ -1,0 +1,247 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_activities",
+        "label": "Actividades",
+        "description": "Agenda operativa, responsables y seguimiento de compromisos.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Actividad",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente o prospecto",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza o caso relacionado",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "kind": {
+              "type": "Dropdown",
+              "label": "Tipo de actividad",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "call",
+                  "label": "Llamada"
+                },
+                {
+                  "value": "meeting",
+                  "label": "Reunión"
+                },
+                {
+                  "value": "task",
+                  "label": "Tarea"
+                },
+                {
+                  "value": "review",
+                  "label": "Revisión documental"
+                }
+              ],
+              "config": {}
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Fecha de compromiso",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "importance": {
+              "type": "Dropdown",
+              "label": "Prioridad",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "normal",
+                  "label": "Normal"
+                },
+                {
+                  "value": "high",
+                  "label": "Alta"
+                },
+                {
+                  "value": "urgent",
+                  "label": "Urgente"
+                }
+              ],
+              "config": {}
+            },
+            "outcome": {
+              "type": "Textbox",
+              "label": "Resultado o motivo de cancelación",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "completed",
+                    "cancelled"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "scheduled",
+                  "label": "Programada"
+                },
+                {
+                  "value": "in_progress",
+                  "label": "En curso"
+                },
+                {
+                  "value": "completed",
+                  "label": "Realizada"
+                },
+                {
+                  "value": "cancelled",
+                  "label": "Cancelada"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "policy_reference",
+            "owner",
+            "kind",
+            "due_date",
+            "importance",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "kind": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "call",
+            "meeting",
+            "task",
+            "review"
+          ]
+        },
+        "due_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "importance": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "normal",
+            "high",
+            "urgent"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "scheduled",
+            "in_progress",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_activities",
+      "view": "records"
+    }
+  ]
+}

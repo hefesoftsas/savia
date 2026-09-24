@@ -229,13 +229,23 @@ el manifiesto del store acepta cualquier id válido (`custom.*` queda
 como convención para terceros) y lo subido por el tenant prevalece
 sobre lo compilado (`shadowed: true` en el catálogo).
 
-1. Empaqueta el port con versión superior a la del release
-   (`store-ports/collections/` migra `insurance.collections`
-   1.0.0 → 1.1.0 con la misma pantalla y colección).
-2. Declara `screens[]` en `store.json` para montar el iframe en la
-   ruta normal del objeto/vista al activarse.
+1. Genera el port (`pnpm store:port insurance-renewals`) o escríbelo
+   a mano para casos especiales (`store-ports/quotes-ui`,
+   `store-ports/portfolio`).
+2. Empaqueta (`pnpm store:pack store-ports/renewals`) y verifica con
+   `node --test scripts/store-ports.test.mjs`.
 3. En el tenant: subir → instalar (migra y provisiona) → activar.
    Desactivar o eliminar el artefacto restaura lo compilado.
+
+Ports incluidos (`store-ports/`): accounting, activities, claims,
+**collections** (piloto), commissions, compliance, customer-portal,
+data-quality, documents, endorsements, **http-echo** (demo),
+issuance, opportunities, payments, **portfolio** (resumen en cliente),
+**quotes-ui** (delegación savia-request), renewals, reports, service,
+settlements. Fuera de alcance por ahora: conectores compilados con
+lógica propietaria (calendar, carriers, campaigns, communications,
+document-generation), `automation` (bundles sin UI), widgets de Mi Día
+y MCP de terceros.
 
 ## Port de referencia: Cotizaciones UI
 

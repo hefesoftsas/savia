@@ -1,0 +1,18 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.accounting",
+  "version": "1.1.0",
+  "label": "Contabilidad",
+  "description": "Prepara lotes de facturas y comprobantes balanceados.",
+  "labels": {
+    "en": "Accounting",
+    "pt": "Contabilidade"
+  },
+  "descriptions": {
+    "en": "Prepare balanced invoice and voucher batches.",
+    "pt": "Prepare lotes de faturas e comprovantes balanceados."
+  },
+  "requires": [],
+  "apiVersion": 1
+}
