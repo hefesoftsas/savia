@@ -106,9 +106,62 @@ const table_customer_naturalperson = sqliteTable(
   },
 );
 
+const table_customer_client = sqliteTable(
+  "customer_client",
+  {
+    "id": integer("id").primaryKey({ autoIncrement: true }).notNull(),
+    "id_slug": text("id_slug").notNull(),
+    "created_at": text("created_at").notNull(),
+    "updated_at": text("updated_at").notNull(),
+    "id_number": text("id_number").notNull(),
+    "migration_slug": text("migration_slug").notNull(),
+    "external_id": text("external_id").notNull(),
+  },
+);
+
+const table_customer_group = sqliteTable(
+  "customer_group",
+  {
+    "id": integer("id").primaryKey({ autoIncrement: true }).notNull(),
+    "id_slug": text("id_slug").notNull(),
+    "created_at": text("created_at").notNull(),
+    "updated_at": text("updated_at").notNull(),
+    "name": text("name").notNull(),
+    "agency_id": bigint("agency_id"),
+    "description": text("description").notNull(),
+  },
+);
+
+const table_business_commercialunit = sqliteTable(
+  "business_commercialunit",
+  {
+    "id": integer("id").primaryKey({ autoIncrement: true }).notNull(),
+    "id_slug": text("id_slug").notNull(),
+    "created_at": text("created_at").notNull(),
+    "updated_at": text("updated_at").notNull(),
+    "name": text("name").notNull(),
+    "created_by": text("created_by").notNull(),
+    "agency_id": bigint("agency_id").notNull(),
+    "edited_by": text("edited_by").notNull(),
+  },
+);
+
+const table_app_economicactivity = sqliteTable(
+  "app_economicactivity",
+  {
+    "id": integer("id").primaryKey({ autoIncrement: true }).notNull(),
+    "code": text("code").notNull(),
+    "name": text("name").notNull(),
+  },
+);
+
 export const internalTables = {
+  "app_economicactivity": table_app_economicactivity,
+  "business_commercialunit": table_business_commercialunit,
   "customer_address": table_customer_address,
+  "customer_client": table_customer_client,
   "customer_clientagency": table_customer_clientagency,
+  "customer_group": table_customer_group,
   "customer_legalperson": table_customer_legalperson,
   "customer_legalpersoncontact": table_customer_legalpersoncontact,
   "customer_naturalperson": table_customer_naturalperson,

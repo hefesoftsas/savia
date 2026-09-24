@@ -253,6 +253,7 @@ describe("Identity and access", () => {
     await env.DB.exec("DELETE FROM customer_naturalperson");
     await env.DB.exec("DELETE FROM customer_legalperson");
     await env.DB.exec("DELETE FROM customer_clientagency");
+    await env.DB.exec("DELETE FROM customer_client");
     await env.DB.exec("DELETE FROM identity_tenant_membership");
     await env.DB.exec("DELETE FROM identity_global_role");
     await env.DB.exec("DELETE FROM identity_principal");
