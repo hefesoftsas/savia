@@ -890,16 +890,17 @@ window.fetch = (resource, init) => {
   }
   return nativeFetch(resource, init);
 };
+function selectRender(module, widgetId) {
+  if (!widgetId) return module.render;
+  return module.widgets?.[widgetId] ?? module.renderWidget ?? module.render;
+}
 try {
   const module = await import(ENTRY_URL);
   const widgetId = params.get("widget") ?? "";
   const widgetCollection = params.get("collection") ?? "";
   const screenObject = params.get("screen") ?? "";
   const screenView = params.get("view") ?? "records";
-  const widgetFn =
-    (widgetId && module.widgets?.[widgetId]) ??
-    module.renderWidget ??
-    module.render;
+  const widgetFn = selectRender(module, widgetId);
   if (typeof widgetFn !== "function") throw new Error("El plugin debe exportar render(element, savia) o widgets.");
   if (widgetId) {
     await widgetFn(document.getElementById("root"), savia, {

@@ -228,6 +228,28 @@ describe("plugin store por tenant", () => {
     expect((failure as Error).constructor.name).not.toBe("SyntaxError");
   });
 
+  it("elige render para pantallas y el handler declarado para widgets", () => {
+    const source = shellBootstrapJs().match(
+      /function selectRender\(module, widgetId\) \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(source).toBeDefined();
+    const selectRender = new Function(`${source}; return selectRender;`)() as (
+      module: {
+        render?: () => void;
+        renderWidget?: () => void;
+        widgets?: Record<string, () => void>;
+      },
+      widgetId: string,
+    ) => (() => void) | undefined;
+    const render = () => undefined;
+    const renderWidget = () => undefined;
+    const summary = () => undefined;
+    const module = { render, renderWidget, widgets: { summary } };
+    expect(selectRender(module, "")).toBe(render);
+    expect(selectRender(module, "summary")).toBe(summary);
+    expect(selectRender(module, "other")).toBe(renderWidget);
+  });
+
   it("sirve el bootstrap del sandbox sin scripts inline ni unsafe-eval.", async () => {
     const tenant = "store-bootstrap";
     const bootstrap = await app(tenant).request(

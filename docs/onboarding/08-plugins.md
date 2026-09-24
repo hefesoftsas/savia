@@ -21,7 +21,9 @@ opaco + bridge `savia`), and server-side capabilities are declarative
    collections. The iframe shell, bootstrap module and ZIP entry use the
    current workspace API prefix (for example,
    `/v1/data-domains/platform/api/plugin-store/`); plugin screens must
-   not assume a root-level `/api/plugin-store/` route.
+   not assume a root-level `/api/plugin-store/` route. Screen shells invoke
+   `render`; widget shells invoke the declared `widgets[id]` handler, with
+   `renderWidget` or `render` as fallbacks.
 2. **Host collections API** (`packages/studio-shared/src/plugin-api.ts`):
    versioned `list/describe/get/create/update/remove` plus
    `settings`, `connections`, `actions` and `access` scoped to the
