@@ -66,6 +66,7 @@ export function createStudioApp(
     principalId?: string;
     accessPolicy?: AccessPolicy;
     integrationFetch?: typeof fetch;
+    apiBasePath?: string;
   } & SolutionOptions &
     ExtensionOptions &
     WorkflowOptions &

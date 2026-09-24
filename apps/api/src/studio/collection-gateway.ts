@@ -42,6 +42,7 @@ export type CollectionGatewayContext = {
   db: D1Database;
   files: R2Bucket;
   tenant: string;
+  publicApiBasePath?: string;
   actor: AppActor;
   accessPolicy?: AccessPolicy;
   integrationKey?: string;
@@ -100,6 +101,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
   const local = () =>
     createStudioApp(tenant, {
       principalId: actor.principal.id,
+      apiBasePath: context.publicApiBasePath,
       policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
       authorizeWorkflow: async ({ workspace }) =>

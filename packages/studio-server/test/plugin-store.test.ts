@@ -237,9 +237,10 @@ describe("plugin store por tenant", () => {
     );
     expect(bootstrap.status).toBe(200);
     expect(bootstrap.headers.get("content-type")).toContain("javascript");
+    expect(bootstrap.headers.get("access-control-allow-origin")).toBe("*");
     const code = await bootstrap.text();
     expect(code).toContain("import.meta.url");
-    expect(code).toContain("plugin-store");
+    expect(code).toContain("storeBasePath");
 
     const uploaded = await uploadZip(tenant, pluginZip());
     expect(uploaded.status, await uploaded.text()).toBe(200);
@@ -277,6 +278,29 @@ describe("plugin store por tenant", () => {
     expect(wizardHtml).toContain("screen=cotizador_por_pasos");
     expect(wizardHtml).toContain("view=records");
     expect(code).toContain('params.get("screen")');
+
+    const scopedShell = await createStudioApp(tenant, {
+      seedObjects: [],
+      apiBasePath: "/v1/data-domains/platform",
+    }).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos",
+      {},
+      platform.env,
+    );
+    expect(scopedShell.status).toBe(200);
+    const scopedHtml = await scopedShell.text();
+    const bootstrapPath = scopedHtml.match(
+      /<script type="module" src="([^"]+)"/,
+    )?.[1];
+    expect(bootstrapPath).toBeDefined();
+    const bootstrapUrl = new URL(bootstrapPath!, "http://localhost");
+    expect(bootstrapUrl.pathname).toBe(
+      "/v1/data-domains/platform/api/plugin-store/shell-bootstrap.js",
+    );
+    expect(bootstrapUrl.searchParams.get("entry")).toBe(
+      "/v1/data-domains/platform/api/plugin-store/custom.demo/entry?version=1.0.0",
+    );
+    expect(code).toContain("entryUrl.origin !== bootstrapUrl.origin");
   });
 
   it("sube, instala, sirve y desactiva un plugin ZIP.", async () => {

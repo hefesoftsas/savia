@@ -118,7 +118,7 @@ export function PluginWidgetBody({
       <CustomPluginFrame
         pluginId={storeWidget.extensionId}
         title={storeWidget.title.es}
-        src={`/api/plugin-store/${encodeURIComponent(storeWidget.extensionId)}/widget?widget=${encodeURIComponent(storeWidget.id)}&collection=${encodeURIComponent(storeWidget.collection)}`}
+        src={`${widget.apiBasePath}/api/plugin-store/${encodeURIComponent(storeWidget.extensionId)}/widget?widget=${encodeURIComponent(storeWidget.id)}&collection=${encodeURIComponent(storeWidget.collection)}`}
         heightClassName="h-[320px]"
       />
     );

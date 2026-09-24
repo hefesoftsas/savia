@@ -18,7 +18,10 @@ opaco + bridge `savia`), and server-side capabilities are declarative
    credentials. The optional `screen` argument contains the selected
    `{ object, view }` so a ZIP that declares multiple screens can open
    the matching view. Heavy work (summaries) computes client-side from
-   collections.
+   collections. The iframe shell, bootstrap module and ZIP entry use the
+   current workspace API prefix (for example,
+   `/v1/data-domains/platform/api/plugin-store/`); plugin screens must
+   not assume a root-level `/api/plugin-store/` route.
 2. **Host collections API** (`packages/studio-shared/src/plugin-api.ts`):
    versioned `list/describe/get/create/update/remove` plus
    `settings`, `connections`, `actions` and `access` scoped to the
