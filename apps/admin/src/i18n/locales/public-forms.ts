@@ -252,6 +252,27 @@ export const publicFormsMessages = {
     "Endereço do link público",
   ],
   "Copiar enlace": ["Copiar enlace", "Copy link", "Copiar link"],
+  "Copiar enlace corto": [
+    "Copiar enlace corto",
+    "Copy short link",
+    "Copiar link curto",
+  ],
+  "Enlace completo": ["Enlace completo", "Full link", "Link completo"],
+  "Dirección del enlace corto": [
+    "Dirección del enlace corto",
+    "Short link address",
+    "Endereço do link curto",
+  ],
+  "No se pudo generar el enlace corto.": [
+    "No se pudo generar el enlace corto.",
+    "The short link could not be generated.",
+    "Não foi possível gerar o link curto.",
+  ],
+  "Generando enlace corto…": [
+    "Generando enlace corto…",
+    "Generating short link…",
+    "Gerando link curto…",
+  ],
   "Revocando…": ["Revocando…", "Revoking…", "Revogando…"],
   "Revocar enlace": ["Revocar enlace", "Revoke link", "Revogar link"],
   "Mostrar QR": ["Mostrar QR", "Show QR", "Mostrar QR"],

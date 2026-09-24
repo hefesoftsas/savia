@@ -1302,7 +1302,7 @@ function App({
               )}
             </div>
           ) : view === "screen-public-link" ? (
-            <div className="screens-page w-full">
+            <div className="screens-page mx-auto w-full">
               <div className="page-heading">
                 <div>
                   <p className="eyebrow flex items-center gap-1.5">
