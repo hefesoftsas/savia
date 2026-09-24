@@ -888,6 +888,8 @@ try {
   const module = await import(ENTRY_URL);
   const widgetId = params.get("widget") ?? "";
   const widgetCollection = params.get("collection") ?? "";
+  const screenObject = params.get("screen") ?? "";
+  const screenView = params.get("view") ?? "records";
   const widgetFn =
     (widgetId && module.widgets?.[widgetId]) ??
     module.renderWidget ??
@@ -899,7 +901,8 @@ try {
       collection: widgetCollection,
     });
   } else {
-    await widgetFn(document.getElementById("root"), savia);
+    await widgetFn(document.getElementById("root"), savia,
+      screenObject ? { object: screenObject, view: screenView } : undefined);
   }
   parent.postMessage({ ns: "savia-plugin", type: "ready" }, "*");
 } catch (error) {
@@ -1195,13 +1198,19 @@ export function registerPluginStore(
     const manifest = JSON.parse(installed.manifest) as { label?: string };
     const base = new URL(c.req.url);
     const entryUrl = `${base.origin}/api/plugin-store/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
-    return new Response(shellHtml(id, manifest.label ?? id, entryUrl), {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "private, max-age=60",
-        "x-frame-options": "SAMEORIGIN",
+    const screen = c.req.query("screen");
+    const view = c.req.query("view");
+    const context = screen ? { screen, view: view || "records" } : undefined;
+    return new Response(
+      shellHtml(id, manifest.label ?? id, entryUrl, context),
+      {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "private, max-age=60",
+          "x-frame-options": "SAMEORIGIN",
+        },
       },
-    });
+    );
   });
 
   app.get("/api/plugin-store/:id/widget", async (c) => {

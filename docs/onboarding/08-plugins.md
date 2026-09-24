@@ -11,11 +11,13 @@ opaco + bridge `savia`), and server-side capabilities are declarative
 
 ## The plugin surfaces
 
-1. **Screen** (`dist/plugin.js` → `render(element, savia)`): replaces
+1. **Screen** (`dist/plugin.js` → `render(element, savia, screen)`): replaces
    a normal view (e.g. Pólizas) when `store.json` declares
    `screens[]` and the plugin is active. Receives `{ savia }` already
    scoped to tenant + user + extension: no D1, no tokens, no
-   credentials. Heavy work (summaries) computes client-side from
+   credentials. The optional `screen` argument contains the selected
+   `{ object, view }` so a ZIP that declares multiple screens can open
+   the matching view. Heavy work (summaries) computes client-side from
    collections.
 2. **Host collections API** (`packages/studio-shared/src/plugin-api.ts`):
    versioned `list/describe/get/create/update/remove` plus

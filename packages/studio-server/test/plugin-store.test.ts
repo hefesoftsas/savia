@@ -267,6 +267,16 @@ describe("plugin store por tenant", () => {
     expect(csp).not.toContain("unsafe-eval");
     // Sin red directa posible: el shim usa postMessage y el CSP la niega.
     expect(csp).toContain("connect-src 'none'");
+
+    const wizardShell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos&view=records",
+      {},
+      platform.env,
+    );
+    const wizardHtml = await wizardShell.text();
+    expect(wizardHtml).toContain("screen=cotizador_por_pasos");
+    expect(wizardHtml).toContain("view=records");
+    expect(code).toContain('params.get("screen")');
   });
 
   it("sube, instala, sirve y desactiva un plugin ZIP.", async () => {

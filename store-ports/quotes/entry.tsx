@@ -6,6 +6,7 @@ import {
   InsuranceQuoteWorkspaceScreen,
 } from "../../packages/insurance-quotes/src/screens/quote-screens";
 import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
+import { quoteTabForScreen, type QuoteTab } from "./entry-selection";
 
 const TABS = [
   {
@@ -25,8 +26,14 @@ const TABS = [
   },
 ] as const;
 
-function Shell({ savia }: { savia: PluginApi }) {
-  const [tab, setTab] = useState<string>(TABS[0].id);
+function Shell({
+  savia,
+  initialTab,
+}: {
+  savia: PluginApi;
+  initialTab: QuoteTab;
+}) {
+  const [tab, setTab] = useState<QuoteTab>(initialTab);
   const Active = TABS.find((t) => t.id === tab)!.Screen;
   return (
     <div>
@@ -51,6 +58,12 @@ function Shell({ savia }: { savia: PluginApi }) {
  * Adaptador del store: las 3 pantallas del cotizador con ejecución
  * nativa savia-request del host (sin delegación al release).
  */
-export function render(el: HTMLElement, savia: PluginApi) {
-  createRoot(el).render(<Shell savia={savia} />);
+export function render(
+  el: HTMLElement,
+  savia: PluginApi,
+  screen?: { object: string; view: string },
+) {
+  createRoot(el).render(
+    <Shell savia={savia} initialTab={quoteTabForScreen(screen?.object)} />,
+  );
 }

@@ -42,14 +42,21 @@ export function CustomPluginFrame({
   pluginId,
   title,
   src,
+  screen,
   heightClassName = "h-[480px]",
 }: {
   pluginId: string;
   title: string;
   src?: string;
+  screen?: { object: string; view: string };
   heightClassName?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const shellPath =
+    src ?? `/api/plugin-store/${encodeURIComponent(pluginId)}/shell`;
+  const shellUrl = screen
+    ? `${shellPath}${shellPath.includes("?") ? "&" : "?"}screen=${encodeURIComponent(screen.object)}&view=${encodeURIComponent(screen.view)}`
+    : shellPath;
 
   useEffect(() => {
     async function onMessage(event: MessageEvent) {
@@ -110,7 +117,7 @@ export function CustomPluginFrame({
   return (
     <iframe
       ref={frameRef}
-      src={src ?? `/api/plugin-store/${encodeURIComponent(pluginId)}/shell`}
+      src={shellUrl}
       sandbox="allow-scripts"
       title={title}
       className={`w-full rounded-md border bg-background ${heightClassName}`}

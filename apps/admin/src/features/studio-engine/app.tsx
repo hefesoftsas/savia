@@ -1129,6 +1129,7 @@ function App({
             <CustomPluginFrame
               pluginId={storeScreen.extensionId}
               title={object?.label ?? storeScreen.object}
+              screen={{ object: storeScreen.object, view: storeScreen.view }}
             />
           ) : ExtensionScreen ? (
             <ExtensionScreen savia={extensionApi!} />
