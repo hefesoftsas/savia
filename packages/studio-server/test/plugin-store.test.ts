@@ -371,7 +371,7 @@ describe("plugin store por tenant", () => {
 
     const wrongId = await uploadZip(
       "store-wrong-id",
-      pluginZip({ manifest: { id: "insurance.spoof" } }),
+      pluginZip({ manifest: { id: "No-valido!" } }),
     );
     expect(wrongId.status).toBe(422);
 

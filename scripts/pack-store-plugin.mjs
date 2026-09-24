@@ -36,12 +36,12 @@ function assertManifest(manifest) {
     manifest.format !== "savia.extension" ||
     manifest.formatVersion !== 1 ||
     typeof manifest.id !== "string" ||
-    !manifest.id.startsWith("custom.") ||
+    !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(manifest.id) ||
     typeof manifest.version !== "string" ||
     !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(manifest.version) ||
     manifest.apiVersion !== 1
   ) {
-    fail("savia-extension.json debe ser savia.extension v1 con id custom.*.");
+    fail("savia-extension.json debe ser savia.extension v1 con id válido.");
   }
 }
 

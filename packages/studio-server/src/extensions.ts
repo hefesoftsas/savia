@@ -17,6 +17,7 @@ import type { ExtensionConnectionRepository } from "./extension-connections";
 import { prepareExtensionObjectProvisioning } from "./extension-object-requirements";
 import type { ExtensionSettingsRepository } from "./extension-settings";
 import {
+  storeConfigFor,
   storeObjectRequirements,
   storePluginCatalog,
   storePluginManifest,
@@ -253,25 +254,36 @@ export function registerExtensions(
     tenant: string,
     id: string,
   ): Promise<{ manifest: ExtensionManifest; builtIn: boolean } | null> {
+    // Lo subido por el tenant prevalece sobre lo compilado: permite
+    // migrar un plugin fuera del release sin cambiar su id.
+    const stored = await storePluginManifest(db, tenant, id);
+    if (stored) return { manifest: stored, builtIn: false };
     const compiled = registry.get(id);
     if (compiled)
       return {
         manifest: compiled.manifest,
         builtIn: compiled.builtIn === true,
       };
-    const stored = await storePluginManifest(db, tenant, id);
-    if (stored) return { manifest: stored, builtIn: false };
     return null;
   }
 
   async function assertStoreManager(
-    c: { get(key: "tenant"): string; get(key: "principalId"): string },
+    db: D1Database,
+    tenant: string,
+    principalId: string,
     extensionId: string,
   ): Promise<void> {
-    if (registry.get(extensionId) || !options.canManageExtension) return;
+    // Solo lo subido al store exige administración; las compiladas
+    // conservan su conducta histórica.
+    if (!options.canManageExtension) return;
+    if (
+      registry.get(extensionId) &&
+      !(await storePluginManifest(db, tenant, extensionId))
+    )
+      return;
     const allowed = await options.canManageExtension({
-      tenantId: c.get("tenant"),
-      principalId: c.get("principalId"),
+      tenantId: tenant,
+      principalId: principalId,
       extensionId,
     });
     if (!allowed)
@@ -286,6 +298,8 @@ export function registerExtensions(
       .bind(tenant)
       .all<StoredInstallation>();
     const installed = new Map(rows.results.map((row) => [row.id, row]));
+    const catalog = await storePluginCatalog(c.env.DB, tenant);
+    const shadowed = new Set(catalog.map((manifest) => manifest.id));
     const compiledEntries = registry.ids().map((id) => {
       const extension = registry.get(id)!;
       return {
@@ -294,16 +308,25 @@ export function registerExtensions(
         installed: publicInstallation(installed.get(id) ?? null),
       };
     });
-    // Plugins subidos al store del tenant (no compilados en el release).
-    const storeEntries = (await storePluginCatalog(c.env.DB, tenant))
-      .filter((manifest) => !registry.get(manifest.id))
-      .map((manifest) => ({
+    // Lo subido al store reemplaza a lo compilado con el mismo id.
+    const storeEntries = [];
+    for (const manifest of catalog) {
+      const config = await storeConfigFor(c.env.DB, tenant, manifest.id);
+      storeEntries.push({
         manifest,
         builtIn: false,
         store: true as const,
+        shadowed: registry.get(manifest.id) !== undefined,
+        screens: config?.screens ?? [],
         installed: publicInstallation(installed.get(manifest.id) ?? null),
-      }));
-    return c.json({ data: [...compiledEntries, ...storeEntries] });
+      });
+    }
+    return c.json({
+      data: [
+        ...compiledEntries.filter((entry) => !shadowed.has(entry.manifest.id)),
+        ...storeEntries,
+      ],
+    });
   });
 
   app.post("/api/extensions/:id/install", async (c) => {
@@ -320,7 +343,7 @@ export function registerExtensions(
           builtIn: true,
         },
       });
-    await assertStoreManager(c, id);
+    await assertStoreManager(c.env.DB, tenant, c.get("principalId"), id);
     await assertDependencies(c.env.DB, tenant, extension.manifest, registry);
     const current = await installation(c.env.DB, tenant, id);
     const manifest = canonicalJson(extension.manifest);
@@ -431,7 +454,7 @@ export function registerExtensions(
     const current = await installation(c.env.DB, tenant, id);
     if (!current)
       return fail("La extensión no está instalada en este espacio.", 404);
-    await assertStoreManager(c, id);
+    await assertStoreManager(c.env.DB, tenant, c.get("principalId"), id);
     if (input.enabled)
       await assertDependencies(c.env.DB, tenant, extension.manifest, registry);
     else await assertCanDisable(c.env.DB, tenant, id);

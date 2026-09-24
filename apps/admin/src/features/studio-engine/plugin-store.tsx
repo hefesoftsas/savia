@@ -127,7 +127,7 @@ export default function PluginStoreManager({
             side="bottom"
           >
             {t(
-              "Sube un .zip con savia-extension.json (id custom.*) y dist/plugin.js compilado. Solo es visible en este espacio.",
+              "Sube un .zip con savia-extension.json y dist/plugin.js compilado. Solo es visible en este espacio.",
             )}
           </StudioHelpTooltip>
           <span className="ms-auto">

@@ -71,7 +71,8 @@ filters/aggregations until a real case requires them, ordinary screens intact
 on disable.
 
 Tenant admins can additionally upload their own UI-only plugins as ZIPs
-(`custom.*` + prebuilt `dist/plugin.js`) through the per-tenant store;
+(`custom.*` ids for third parties, or the original id when migrating a
+release plugin out) through the per-tenant store;
 they run in an `allow-scripts` sandboxed iframe and reuse the same
 install/enable flow. See [plugin-store](../plugin-store.md).
 

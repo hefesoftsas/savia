@@ -10,7 +10,7 @@ sigue igual; el store añade plugins privados por espacio.
 
 ```
 mi-plugin.zip
-├── savia-extension.json   # manifiesto savia.extension v1, id con prefijo custom.*
+├── savia-extension.json   # manifiesto savia.extension v1 (`custom.*` para terceros)
 ├── store.json             # opcional: acciones simuladas + defaults (savia.store v1)
 └── dist/plugin.js         # ESM autocontenido (un solo archivo)
 ```
@@ -221,6 +221,21 @@ compatible (incluidos campos y registros extra) y rechaza la
 instalación sin activarla si existe una incompatible. Reinstalar repara
 la colección faltante. No hay migraciones ni borrados: desactivar
 conserva datos.
+
+## Migración fuera del release
+
+Los plugins sectoriales pueden salir del release sin cambiar su id:
+el manifiesto del store acepta cualquier id válido (`custom.*` queda
+como convención para terceros) y lo subido por el tenant prevalece
+sobre lo compilado (`shadowed: true` en el catálogo).
+
+1. Empaqueta el port con versión superior a la del release
+   (`store-ports/collections/` migra `insurance.collections`
+   1.0.0 → 1.1.0 con la misma pantalla y colección).
+2. Declara `screens[]` en `store.json` para montar el iframe en la
+   ruta normal del objeto/vista al activarse.
+3. En el tenant: subir → instalar (migra y provisiona) → activar.
+   Desactivar o eliminar el artefacto restaura lo compilado.
 
 ## Port de referencia: Cotizaciones UI
 

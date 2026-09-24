@@ -134,7 +134,12 @@ import {
   extensionScreenFor,
   isExtensionScreenEnabled,
   isPluginScreen,
+  isStorePluginScreen,
+  storeScreenDefaultHidden,
+  storeScreenFor,
+  type StoreScreenInstallation,
 } from "./extension-screens";
+import { CustomPluginFrame } from "./custom-plugin-frame";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
 import "./screen-manager.css";
 const PublicLinkManager = lazy(() =>
@@ -368,24 +373,44 @@ function App({
     if (nextView === "screens" || nextView === "remove-screen")
       setEditing(null);
   }, [search]);
+  const extensionsQuery = useQuery({
+    queryKey: ["extension-client-screens", getStudioRuntime().domainId],
+    queryFn: () =>
+      api<{
+        data: Array<
+          StoreScreenInstallation & {
+            manifest: { id: string };
+            builtIn: boolean;
+            installed: { enabled: boolean } | null;
+          }
+        >;
+      }>("/extensions"),
+    enabled: ready,
+    staleTime: 60_000,
+  });
   const isObjectHidden = (o: StudioObject) => {
     if (o.config.studio?.screen?.hidden !== undefined) {
       return Boolean(o.config.studio?.screen?.hidden);
     }
-    return extensionScreenDefaultHidden(o.name);
+    if (extensionScreenDefaultHidden(o.name)) return true;
+    return storeScreenDefaultHidden(o.name, extensionsQuery.data?.data);
   };
   const visibleObjects = sortScreens(objects.filter((o) => !isObjectHidden(o)));
   const publishableScreens = useMemo(() => {
     return sortScreens(
       objects.filter((item) => {
-        const isQuote = ["cotizador", "cotizador_por_pasos"].includes(item.name);
+        const isQuote = ["cotizador", "cotizador_por_pasos"].includes(
+          item.name,
+        );
         return (
           isQuote ||
-          (!isPluginScreen(item.name) && !item.config.studio?.collection)
+          (!isPluginScreen(item.name) &&
+            !isStorePluginScreen(item.name, extensionsQuery.data?.data) &&
+            !item.config.studio?.collection)
         );
       }),
     );
-  }, [objects]);
+  }, [objects, extensionsQuery.data]);
   const resolvedMenuLayout = useMemo(
     () =>
       reconcileMenuLayout(
@@ -423,23 +448,11 @@ function App({
     objects.find((o) => o.name === selected) ?? visibleObjects[0] ?? objects[0];
   const resolvedObjectName = object?.name ?? selected;
   const contribution = extensionScreenFor(resolvedObjectName, view);
-  const extensionsQuery = useQuery({
-    queryKey: [
-      "extension-client-screens",
-      getStudioRuntime().domainId,
-      contribution?.extensionId,
-    ],
-    queryFn: () =>
-      api<{
-        data: Array<{
-          manifest: { id: string };
-          builtIn: boolean;
-          installed: { enabled: boolean } | null;
-        }>;
-      }>("/extensions"),
-    enabled: ready && Boolean(contribution),
-    staleTime: 60_000,
-  });
+  const storeScreen = storeScreenFor(
+    resolvedObjectName,
+    view,
+    extensionsQuery.data?.data,
+  );
   const ExtensionScreen = isExtensionScreenEnabled(
     contribution,
     extensionsQuery.data?.data,
@@ -1070,8 +1083,8 @@ function App({
                               : view === "screen-public-link"
                                 ? t("Enlace público")
                                 : view.startsWith("admin")
-                                ? t("Administración")
-                                : t("Historial")}
+                                  ? t("Administración")
+                                  : t("Historial")}
               </strong>
             </div>
             <span className="demo-label">
@@ -1106,6 +1119,11 @@ function App({
                 onTabChange={selectTab}
               />
             </Suspense>
+          ) : storeScreen ? (
+            <CustomPluginFrame
+              pluginId={storeScreen.extensionId}
+              title={object?.label ?? storeScreen.object}
+            />
           ) : ExtensionScreen ? (
             <ExtensionScreen savia={extensionApi!} />
           ) : view === "create" || view === "edit" ? (
@@ -1330,7 +1348,9 @@ function App({
                   </p>
                   <div className="page-heading-title-row">
                     <h1>{t("Enlace público")}</h1>
-                    <StudioHelpTooltip label={t("Ayuda sobre enlaces públicos")}>
+                    <StudioHelpTooltip
+                      label={t("Ayuda sobre enlaces públicos")}
+                    >
                       {t(
                         "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.",
                       )}

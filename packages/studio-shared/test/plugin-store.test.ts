@@ -31,10 +31,23 @@ describe("plugin store manifest", () => {
     expect(pluginStoreManifestSchema.parse(manifest).id).toBe("custom.demo");
   });
 
-  it("rechaza ids sin prefijo custom.", () => {
-    expect(() =>
-      pluginStoreManifestSchema.parse({ ...manifest, id: "insurance.demo" }),
-    ).toThrow(/custom/);
+  it("acepta ids originales en migración fuera del release.", () => {
+    expect(
+      pluginStoreManifestSchema.parse({ ...manifest, id: "insurance.demo" }).id,
+    ).toBe("insurance.demo");
+  });
+});
+
+describe("pantallas declaradas", () => {
+  it("acepta pantallas objeto/vista con valores por defecto.", () => {
+    const parsed = storeJsonSchema.parse({
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "cobros", hidden: true }],
+    });
+    expect(parsed.screens).toEqual([
+      { object: "cobros", view: "records", hidden: true },
+    ]);
   });
 });
 

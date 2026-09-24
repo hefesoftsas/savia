@@ -28,18 +28,15 @@ export const PLUGIN_STORE_MANIFEST_PATH = "savia-extension.json";
 export const PLUGIN_STORE_ENTRY_PATH = "dist/plugin.js";
 export const PLUGIN_STORE_CONFIG_PATH = "store.json";
 
-export const pluginStoreManifestSchema = extensionManifestSchema.superRefine(
-  (manifest, ctx) => {
-    if (!manifest.id.startsWith("custom.")) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["id"],
-        message:
-          "Los plugins del store deben usar el prefijo custom. (p. ej. custom.mi-plugin).",
-      });
-    }
-  },
-);
+/**
+ * Manifiesto del store: mismo contrato `savia.extension`, pero con
+ * cualquier id válido. Antes se exigía el prefijo `custom.`; desde la
+ * migración fuera del release, un tenant puede publicar bajo el id
+ * original (p. ej. `insurance.collections`) porque todo el estado es
+ * por tenant: solo afecta a su propio espacio. `custom.*` sigue como
+ * convención para plugins de terceros.
+ */
+export const pluginStoreManifestSchema = extensionManifestSchema;
 
 export type PluginStoreManifest = ExtensionManifest;
 
@@ -345,6 +342,21 @@ export const storeConnectorSchema = z
   });
 
 /**
+ * Pantalla aportada por el plugin: el host renderiza su iframe en la
+ * ruta normal del objeto/vista cuando el plugin está activo,
+ * reemplazando la vista CRM (igual que las pantallas compiladas).
+ */
+export const storeScreenSchema = z
+  .object({
+    object: identifier,
+    view: z.string().trim().min(1).max(100).default("records"),
+    hidden: z.boolean().default(false),
+  })
+  .strict();
+
+export type StoreScreen = z.infer<typeof storeScreenSchema>;
+
+/**
  * Requisito de colección declarado por un plugin del store. Al instalar,
  * el host crea la colección mínima si falta, conserva la compatible y
  * rechaza la instalación si existe una incompatible (igual que las
@@ -393,6 +405,7 @@ export const storeJsonSchema = z
     actions: z.array(storeActionSchema).max(20).default([]),
     connectors: z.array(storeConnectorSchema).max(10).default([]),
     collections: z.array(storeCollectionSchema).max(20).default([]),
+    screens: z.array(storeScreenSchema).max(20).default([]),
     settings: z
       .object({ defaults: z.record(z.string(), z.unknown()) })
       .strict()

@@ -616,11 +616,11 @@ export const automationMessages = {
     "How store plugins work",
     "Como funcionam os plugins da loja",
   ],
-  "Sube un .zip con savia-extension.json (id custom.*) y dist/plugin.js compilado. Solo es visible en este espacio.":
+  "Sube un .zip con savia-extension.json y dist/plugin.js compilado. Solo es visible en este espacio.":
     [
-      "Sube un .zip con savia-extension.json (id custom.*) y dist/plugin.js compilado. Solo es visible en este espacio.",
-      "Upload a .zip with savia-extension.json (custom.* id) and compiled dist/plugin.js. It is only visible in this workspace.",
-      "Envie um .zip com savia-extension.json (id custom.*) e dist/plugin.js compilado. Ele só fica visível neste espaço.",
+      "Sube un .zip con savia-extension.json y dist/plugin.js compilado. Solo es visible en este espacio.",
+      "Upload a .zip with savia-extension.json and compiled dist/plugin.js. It is only visible in this workspace.",
+      "Envie um .zip com savia-extension.json e dist/plugin.js compilado. Ele só fica visível neste espaço.",
     ],
   "Subir plugin": ["Subir plugin", "Upload plugin", "Enviar plugin"],
   "Subiendo…": ["Subiendo…", "Uploading…", "Enviando…"],
