@@ -250,6 +250,7 @@ export function registerDataDomainRoutes(
       db,
       files,
       tenant,
+      publicApiBasePath: base,
       actor: actorFromContext(c),
       accessPolicy,
       integrationKey,

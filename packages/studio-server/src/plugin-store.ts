@@ -43,6 +43,7 @@ import { audit } from "./services";
 import type { Hono } from "hono";
 
 export type PluginStoreOptions = {
+  apiBasePath?: string;
   canManageExtension?: (input: {
     tenantId: string;
     principalId: string;
@@ -753,19 +754,24 @@ export function shellBootstrapPath(
   pluginId: string,
   entryUrl: string,
   extra?: Record<string, string>,
+  storeBasePath = "/api/plugin-store",
 ): string {
   const params = new URLSearchParams({ plugin: pluginId, entry: entryUrl });
   for (const [key, value] of Object.entries(extra ?? {}))
     params.set(key, value);
-  return `/api/plugin-store/shell-bootstrap.js?${params}`;
+  return `${storeBasePath}/shell-bootstrap.js?${params}`;
 }
 
 export function shellBootstrapJs(): string {
   return `const params = new URL(import.meta.url).searchParams;
 const PLUGIN_ID = params.get("plugin") ?? "unknown";
-const ENTRY_URL = params.get("entry") ?? "";
-if (!/^https?:\\/\\/[^/]+\\/api\\/plugin-store\\//.test(ENTRY_URL))
+const bootstrapUrl = new URL(import.meta.url);
+const storeBasePath = bootstrapUrl.pathname.replace(/\\/shell-bootstrap\\.js$/, "");
+const entryUrl = new URL(params.get("entry") ?? "", bootstrapUrl);
+if (entryUrl.origin !== bootstrapUrl.origin ||
+    entryUrl.pathname !== storeBasePath + "/" + encodeURIComponent(PLUGIN_ID) + "/entry")
   throw new Error("URL de entrada no válida.");
+const ENTRY_URL = entryUrl.href;
 const pending = new Map();
 let seq = 0;
 function callHost(path, method, body) {
@@ -916,6 +922,7 @@ function shellHtml(
   pluginId: string,
   label: string,
   entryUrl: string,
+  storeBasePath: string,
   extra?: Record<string, string>,
 ): string {
   const safeLabel = label.replace(/[<>&"]/g, "");
@@ -930,7 +937,7 @@ function shellHtml(
 </head>
 <body>
 <div id="root"></div>
-<script type="module" src="${shellBootstrapPath(pluginId, entryUrl, extra)}"></script>
+<script type="module" src="${shellBootstrapPath(pluginId, entryUrl, extra, storeBasePath)}"></script>
 </body>
 </html>`;
 }
@@ -1116,6 +1123,7 @@ export function registerPluginStore(
     return new Response(shellBootstrapJs(), {
       headers: {
         "content-type": "text/javascript; charset=utf-8",
+        "access-control-allow-origin": "*",
         "cache-control": "public, max-age=3600",
         "content-security-policy": "default-src 'none';",
       },
@@ -1196,13 +1204,13 @@ export function registerPluginStore(
     if (!installed)
       return fail("El plugin no está activo en este espacio.", 404);
     const manifest = JSON.parse(installed.manifest) as { label?: string };
-    const base = new URL(c.req.url);
-    const entryUrl = `${base.origin}/api/plugin-store/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
+    const storeBasePath = `${options.apiBasePath ?? ""}/api/plugin-store`;
+    const entryUrl = `${storeBasePath}/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
     const screen = c.req.query("screen");
     const view = c.req.query("view");
     const context = screen ? { screen, view: view || "records" } : undefined;
     return new Response(
-      shellHtml(id, manifest.label ?? id, entryUrl, context),
+      shellHtml(id, manifest.label ?? id, entryUrl, storeBasePath, context),
       {
         headers: {
           "content-type": "text/html; charset=utf-8",
@@ -1230,9 +1238,9 @@ export function registerPluginStore(
     if (!widgetId || !widget)
       return fail("El widget no está declarado por el plugin.", 404);
     const manifest = JSON.parse(installed.manifest) as { label?: string };
-    const base = new URL(c.req.url);
-    const entryUrl = `${base.origin}/api/plugin-store/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
-    const html = shellHtml(id, manifest.label ?? id, entryUrl, {
+    const storeBasePath = `${options.apiBasePath ?? ""}/api/plugin-store`;
+    const entryUrl = `${storeBasePath}/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
+    const html = shellHtml(id, manifest.label ?? id, entryUrl, storeBasePath, {
       widget: widgetId,
       collection: collection || widget.collection,
     });

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { apiFetch } from "./api";
+import { getStudioRuntime } from "./runtime";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
@@ -53,7 +54,8 @@ export function CustomPluginFrame({
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const shellPath =
-    src ?? `/api/plugin-store/${encodeURIComponent(pluginId)}/shell`;
+    src ??
+    `${getStudioRuntime().apiBasePath ?? ""}/api/plugin-store/${encodeURIComponent(pluginId)}/shell`;
   const shellUrl = screen
     ? `${shellPath}${shellPath.includes("?") ? "&" : "?"}screen=${encodeURIComponent(screen.object)}&view=${encodeURIComponent(screen.view)}`
     : shellPath;

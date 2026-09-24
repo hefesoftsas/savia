@@ -243,6 +243,7 @@ export function registerStudioRoutes(
       db,
       files,
       tenant: tenantKey,
+      publicApiBasePath: routePrefix,
       actor,
       accessPolicy,
       crm: dependencies,
