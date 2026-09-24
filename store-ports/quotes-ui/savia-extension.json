@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "custom.quotes-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "label": "Cotizaciones (UI del store)",
   "description": "Cotizador directo con datos simulados. Sin ejecución live: las acciones responden con la plantilla de store.json.",
   "labels": {
