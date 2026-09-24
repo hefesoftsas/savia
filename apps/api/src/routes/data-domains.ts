@@ -16,6 +16,7 @@ import { dynamicOpenApi } from "../studio/dynamic-openapi";
 import { dynamicScalar } from "../studio/dynamic-scalar";
 import type { StudioObject } from "@savia/studio-shared/metadata";
 import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
+import type { SaviaRequestService } from "@savia/studio-shared/savia-request-quotes";
 import type { CrmRouteDependencies } from "./crm";
 import type { SolutionOptions } from "@savia/studio-server/solutions";
 
@@ -107,6 +108,7 @@ export function registerDataDomainRoutes(
   actionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   beforeInstall?: SolutionOptions["beforeInstall"],
+  saviaRequestService?: SaviaRequestService,
   realtime?: RealtimeHubClient,
 ) {
   app.openapi(listRoute, async (c) => {
@@ -279,6 +281,7 @@ export function registerDataDomainRoutes(
         : undefined,
       actionExecutor,
       beforeInstall,
+      saviaRequestService,
     });
     await gateway.prepare();
     if (

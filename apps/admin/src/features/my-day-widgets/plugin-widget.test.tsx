@@ -129,6 +129,23 @@ describe("PluginWidgetBody", () => {
     ).toBeVisible();
   });
 
+  it("shows a recoverable error when the tenant plugin catalog fails", async () => {
+    render(
+      <PluginWidgetBody
+        apiClient={
+          { get: vi.fn().mockRejectedValue(new Error("offline")) } as never
+        }
+        widget={{ ...widget, kind: "plugin:custom.demo:resumen" } as never}
+      />,
+    );
+
+    expect(
+      await screen.findByText(
+        "No pudimos verificar la extensión de este widget. Reintenta desde Actualizar.",
+      ),
+    ).toBeVisible();
+  });
+
   it("renders store widgets in an isolated iframe", async () => {
     const { container } = render(
       <PluginWidgetBody

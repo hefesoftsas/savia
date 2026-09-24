@@ -157,3 +157,39 @@ it("shows sidebar subtitles without labeling ordinary screens as compiled plugin
 
   expect(screen.queryByText("Plugin")).toBeNull();
 });
+
+it("labels an active tenant ZIP screen as a plugin", () => {
+  const objects = [
+    {
+      name: "polizas",
+      label: "Pólizas",
+      description: "",
+      version: 1,
+      config: makeConfig({ title: { type: "Textbox", label: "Título" } }),
+    },
+  ];
+
+  render(
+    <ScreenAdministration
+      objects={objects}
+      selected="polizas"
+      detail={false}
+      domainTools
+      extensions={[
+        {
+          manifest: { id: "insurance.portfolio-dashboard" },
+          builtIn: false,
+          store: true,
+          screens: [{ object: "polizas", view: "records" }],
+          installed: { enabled: true },
+        },
+      ]}
+      onNavigate={vi.fn()}
+      onVisibilityChange={vi.fn(async () => undefined)}
+      onMenuLayoutChange={vi.fn(async () => undefined)}
+      onDeletePermanent={vi.fn(async () => undefined)}
+    />,
+  );
+
+  expect(screen.getByText("Plugin")).toBeVisible();
+});

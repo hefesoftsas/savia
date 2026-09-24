@@ -105,6 +105,14 @@ export function PluginWidgetBody({
   );
 
   if (!apiClient) return <PluginWidgetSkeleton />;
+  if (failed) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No pudimos verificar la extensión de este widget. Reintenta desde
+        Actualizar.
+      </p>
+    );
+  }
   if (storeWidget) {
     return (
       <CustomPluginFrame
@@ -128,14 +136,6 @@ export function PluginWidgetBody({
       <p className="text-sm text-muted-foreground">
         Este tipo de widget estará disponible próximamente. Mientras tanto
         puedes abrir la colección completa.
-      </p>
-    );
-  }
-  if (failed) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No pudimos verificar la extensión de este widget. Reintenta desde
-        Actualizar.
       </p>
     );
   }

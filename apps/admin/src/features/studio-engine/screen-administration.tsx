@@ -67,7 +67,11 @@ import {
 import { collectionCapabilities } from "./collection-capabilities";
 import CollectionOperationsPanel from "./collection-operations-panel";
 import { sortScreens } from "./screen-metadata";
-import { isPluginScreen } from "./extension-screens";
+import {
+  isPluginScreen,
+  isStorePluginScreen,
+  type StoreScreenInstallation,
+} from "./extension-screens";
 import PluginStoreManager from "./plugin-store";
 import SolutionManager from "./solution-manager";
 import "./screen-administration.css";
@@ -85,6 +89,7 @@ export default function ScreenAdministration({
   onMenuLayoutChange,
   onDeletePermanent,
   onSolutionsChanged,
+  extensions,
   defaultTab = "screens",
   tab,
   onTabChange,
@@ -106,6 +111,7 @@ export default function ScreenAdministration({
     options: { deleteRecords: boolean },
   ) => Promise<void>;
   onSolutionsChanged?: () => void | Promise<unknown>;
+  extensions?: readonly StoreScreenInstallation[];
   defaultTab?: "screens" | "packages";
   tab?: "screens" | "packages";
   onTabChange?: (tab: "screens" | "packages") => void;
@@ -358,7 +364,8 @@ export default function ScreenAdministration({
     onNavigate(item.name, "admin-screen");
   };
   const renderScreenRowOpen = (item: StudioObject, hasSource: boolean) => {
-    const fromPlugin = isPluginScreen(item.name);
+    const fromPlugin =
+      isPluginScreen(item.name) || isStorePluginScreen(item.name, extensions);
     return (
       <button
         type="button"
@@ -638,7 +645,9 @@ export default function ScreenAdministration({
       runtime.domainId &&
       runtime.publicFormTransport &&
       (isQuote ||
-        (!isPluginScreen(screen.name) && !screen.config.studio?.collection));
+        (!isPluginScreen(screen.name) &&
+          !isStorePluginScreen(screen.name, extensions) &&
+          !screen.config.studio?.collection));
     const capabilities = collectionCapabilities(screen),
       binding = screen.config.studio?.collection,
       usesSourceFormSettings =
