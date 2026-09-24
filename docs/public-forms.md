@@ -7,8 +7,11 @@ Owner: Savia platform team. Last reviewed: 2026-09-23.
 Forms remain private until a platform administrator opens a screen's configuration,
 navigates to the dedicated **Enlace público** page, confirms the published snapshot,
 and creates a link. The administrator can set an expiration (with quick presets for 24h,
-7d, 30d, or no expiration) and a daily submission budget, copy the canonical public URL,
-generate or retry a short URL, share via the native Web Share API
+7d, 30d, or no expiration) and a daily submission budget. Publishing creates the canonical
+URL and requests a short URL in the same action. Each URL has its own copy icon; the
+remaining link actions use labeled icon controls with tooltips. If shortening fails,
+the canonical URL remains available and an icon retries the short URL. Administrators can
+share via the native Web Share API
 on mobile devices, open the form in a new tab to test it, and revoke each link independently.
 Revoked or expired links can be permanently deleted with their submission history; active links
 must be revoked first so in-flight deduplication is never dropped silently. Each active link can also

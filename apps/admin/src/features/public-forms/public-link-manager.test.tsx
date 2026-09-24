@@ -48,9 +48,11 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
   fireEvent.click(screen.getByRole("button", { name: "Publicar enlace" }));
   await screen.findByRole("button", { name: "Copiar enlace" });
   expect(
-    await screen.findByText("https://go.cloud.hefesoft.com/abc123"),
-  ).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Copiar" })).toBeEnabled();
+    screen.getByRole("textbox", { name: "Dirección del enlace corto" }),
+  ).toHaveValue("https://go.cloud.hefesoft.com/abc123");
+  expect(
+    screen.getByRole("button", { name: "Copiar enlace corto" }),
+  ).toBeEnabled();
   expect(request.mock.calls[0][0]).toBe(
     "/v1/public-forms?domainId=domain&objectName=people",
   );
@@ -291,8 +293,8 @@ it("creates a Savia short URL through the authenticated API", async () => {
 
   await waitFor(() =>
     expect(
-      screen.getByText("https://public.savia.test/s/0123456789abcdef"),
-    ).toBeInTheDocument(),
+      screen.getByRole("textbox", { name: "Dirección del enlace corto" }),
+    ).toHaveValue("https://public.savia.test/s/0123456789abcdef"),
   );
   expect(screen.getByText("Enlace corto generado.")).toBeInTheDocument();
   expect(request.mock.calls[1]).toEqual([
@@ -327,8 +329,12 @@ it("restores a published short URL when the link list reloads", async () => {
     />,
   );
 
-  expect(await screen.findByText(shortUrl)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Enlace corto" })).toBeDisabled();
+  expect(
+    await screen.findByRole("textbox", { name: "Dirección del enlace corto" }),
+  ).toHaveValue(shortUrl);
+  expect(
+    screen.queryByRole("button", { name: "Acortar URL" }),
+  ).not.toBeInTheDocument();
 });
 
 it("shows the canonical and external short links together after loading", async () => {
@@ -362,15 +368,19 @@ it("shows the canonical and external short links together after loading", async 
     />,
   );
 
-  expect(await screen.findByText(shortUrl)).toBeInTheDocument();
+  expect(
+    await screen.findByRole("textbox", { name: "Dirección del enlace corto" }),
+  ).toHaveValue(shortUrl);
   expect(
     screen.getByRole("textbox", { name: "Dirección del enlace público" }),
   ).toHaveValue(row.url);
   expect(screen.getByRole("button", { name: "Copiar enlace" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Copiar" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "Copiar enlace corto" }),
+  ).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Copiar enlace" }));
   await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(row.url));
-  fireEvent.click(screen.getByRole("button", { name: "Copiar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Copiar enlace corto" }));
   await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(shortUrl));
 });
 

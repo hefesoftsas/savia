@@ -5,6 +5,11 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { PublicLinkQr } from "./public-link-qr";
 import {
   ArrowLeft,
@@ -125,9 +130,8 @@ export function PublicLinkManager({
           setShortUrls(
             Object.fromEntries(
               body.data
-                .filter(
-                  (link): link is PublicLink & { shortUrl: string } =>
-                    Boolean(link.shortUrl),
+                .filter((link): link is PublicLink & { shortUrl: string } =>
+                  Boolean(link.shortUrl),
                 )
                 .map((link) => [link.id, link.shortUrl]),
             ),
@@ -196,6 +200,24 @@ export function PublicLinkManager({
           }));
         setConfirmed(false);
         setNotice("Enlace publicado. Puedes copiarlo y compartirlo.");
+      }
+      if (!body.data.shortUrl && current === generation.current) {
+        setShorteningId(body.data.id);
+        try {
+          const shortUrl = await requestShortUrl(body.data.id);
+          if (current === generation.current)
+            setShortUrls((previous) => ({
+              ...previous,
+              [body.data.id]: shortUrl,
+            }));
+        } catch {
+          if (current === generation.current)
+            setError(
+              "No se pudo acortar el enlace. Puedes usar el enlace completo.",
+            );
+        } finally {
+          if (current === generation.current) setShorteningId(null);
+        }
       }
     } catch (cause) {
       if (current === generation.current)
@@ -280,10 +302,11 @@ export function PublicLinkManager({
       : linkUrl(link);
     try {
       await navigator.clipboard.writeText(targetUrl);
-      setCopiedId(link.id);
+      const copyId = `${link.id}:${useShort ? "short" : "full"}`;
+      setCopiedId(copyId);
       setNotice(t("Enlace copiado."));
       setTimeout(() => {
-        setCopiedId((current) => (current === link.id ? null : current));
+        setCopiedId((current) => (current === copyId ? null : current));
       }, 2000);
     } catch {
       setError(
@@ -299,7 +322,9 @@ export function PublicLinkManager({
       if (navigator.share) {
         await navigator.share({
           title: screenTitle ? `${screenTitle} · Savia` : "Enlace público",
-          text: t("Comparte este formulario para recibir solicitudes sin iniciar sesión. Cada envío requiere una verificación de seguridad."),
+          text: t(
+            "Comparte este formulario para recibir solicitudes sin iniciar sesión. Cada envío requiere una verificación de seguridad.",
+          ),
           url: urlToShare,
         });
       } else {
@@ -312,33 +337,35 @@ export function PublicLinkManager({
     }
   }
 
+  async function requestShortUrl(linkId: string) {
+    const response = await request(
+      `/v1/public-forms/${encodeURIComponent(linkId)}/short-url`,
+      { method: "POST" },
+    );
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    const { data } = z
+      .object({ data: z.object({ shortUrl: z.string().url() }) })
+      .parse(await response.json());
+    return data.shortUrl;
+  }
+
   async function shortenUrl(link: PublicLink) {
-    const originalUrl = linkUrl(link);
-    if (!originalUrl || shorteningId) return;
+    if (!linkUrl(link) || shorteningId) return;
+    const current = generation.current;
     setShorteningId(link.id);
     setError("");
     try {
-      const response = await request(
-        `/v1/public-forms/${encodeURIComponent(link.id)}/short-url`,
-        { method: "POST" },
-      );
-      if (!response.ok) throw new Error("HTTP error " + response.status);
-      const { data } = z
-        .object({ data: z.object({ shortUrl: z.string().url() }) })
-        .parse(await response.json());
-      if (data.shortUrl) {
-        setShortUrls((previous) => ({
-          ...previous,
-          [link.id]: data.shortUrl,
-        }));
-        setNotice(t("Enlace corto generado."));
-      }
+      const shortUrl = await requestShortUrl(link.id);
+      if (current !== generation.current) return;
+      setShortUrls((previous) => ({ ...previous, [link.id]: shortUrl }));
+      setNotice(t("Enlace corto generado."));
     } catch {
-      setError(
-        "No se pudo acortar el enlace. Puedes usar el enlace completo.",
-      );
+      if (current === generation.current)
+        setError(
+          "No se pudo acortar el enlace. Puedes usar el enlace completo.",
+        );
     } finally {
-      setShorteningId(null);
+      if (current === generation.current) setShorteningId(null);
     }
   }
 
@@ -375,7 +402,10 @@ export function PublicLinkManager({
               <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Globe className="size-5" aria-hidden="true" />
               </span>
-              <h2 id={`${id}-heading`} className="text-lg sm:text-xl font-semibold tracking-tight">
+              <h2
+                id={`${id}-heading`}
+                className="text-lg sm:text-xl font-semibold tracking-tight"
+              >
                 {t("Enlace público")}
               </h2>
             </div>
@@ -412,7 +442,10 @@ export function PublicLinkManager({
             <div className="grid min-w-0 gap-2">
               <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                 <span className="flex items-center gap-1.5">
-                  <Calendar className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                  <Calendar
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <span>{t("Vence el (opcional)")}</span>
                 </span>
                 <Input
@@ -464,7 +497,10 @@ export function PublicLinkManager({
             <div className="grid min-w-0 gap-2">
               <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                 <span className="flex items-center gap-1.5">
-                  <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                  <Clock
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <span>{t("Máximo de envíos al día")}</span>
                 </span>
                 <Input
@@ -474,7 +510,9 @@ export function PublicLinkManager({
                   step={1}
                   required
                   value={dailyLimit}
-                  onChange={(event) => setDailyLimit(Number(event.target.value))}
+                  onChange={(event) =>
+                    setDailyLimit(Number(event.target.value))
+                  }
                   disabled={!!pending}
                   className="bg-background font-normal"
                 />
@@ -510,7 +548,9 @@ export function PublicLinkManager({
                 disabled={!!pending}
               />
               <span>
-                {t("Mostrar el resultado público de la cotización al finalizar.")}
+                {t(
+                  "Mostrar el resultado público de la cotización al finalizar.",
+                )}
               </span>
             </label>
           )}
@@ -565,7 +605,10 @@ export function PublicLinkManager({
           role="alert"
           className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive flex items-start gap-2.5"
         >
-          <ShieldAlert className="size-4.5 mt-0.5 shrink-0" aria-hidden="true" />
+          <ShieldAlert
+            className="size-4.5 mt-0.5 shrink-0"
+            aria-hidden="true"
+          />
           <p className="leading-relaxed">
             {Object.hasOwn(publicFormsMessages, error)
               ? t(error as keyof typeof publicFormsMessages)
@@ -579,7 +622,10 @@ export function PublicLinkManager({
           role="status"
           className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-foreground flex items-start gap-2.5"
         >
-          <Check className="size-4.5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
+          <Check
+            className="size-4.5 text-primary mt-0.5 shrink-0"
+            aria-hidden="true"
+          />
           <p className="leading-relaxed">
             {Object.hasOwn(publicFormsMessages, notice)
               ? t(notice as keyof typeof publicFormsMessages)
@@ -603,7 +649,10 @@ export function PublicLinkManager({
         </h3>
 
         {loading ? (
-          <div role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="flex items-center gap-2 py-6 text-sm text-muted-foreground"
+          >
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             <span>{t("Cargando enlaces…")}</span>
           </div>
@@ -618,7 +667,8 @@ export function PublicLinkManager({
               const shortUrl = shortUrls[link.id];
               const showingQr = !!qrVisible[link.id] && !unavailable && !!url;
               const fileBase = `form-${(link.token || link.id).slice(0, 12).replace(/[^A-Za-z0-9_-]+/g, "-")}`;
-              const isCopied = copiedId === link.id;
+              const fullCopied = copiedId === `${link.id}:full`;
+              const shortCopied = copiedId === `${link.id}:short`;
 
               return (
                 <li
@@ -639,7 +689,10 @@ export function PublicLinkManager({
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+                          <span
+                            className="size-1.5 rounded-full bg-emerald-500 animate-pulse"
+                            aria-hidden="true"
+                          />
                           <span>{t("Activo")}</span>
                         </span>
                       )}
@@ -662,154 +715,234 @@ export function PublicLinkManager({
                     </div>
                   </div>
 
-                  {/* URL Box */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        aria-label={t("Dirección del enlace público")}
-                        className="font-mono text-xs sm:text-sm bg-muted/30"
-                        value={url}
-                        readOnly
-                        onFocus={(event) => event.target.select()}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void copy(link)}
-                        disabled={unavailable}
-                        className="gap-1.5 shrink-0"
-                      >
-                        {isCopied ? (
-                          <Check className="size-3.5 text-emerald-500" aria-hidden="true" />
-                        ) : (
-                          <Copy className="size-3.5" aria-hidden="true" />
-                        )}
-                        <span>{isCopied ? t("¡Copiado!") : t("Copiar enlace")}</span>
-                      </Button>
+                  <div className="grid min-w-0 gap-3">
+                    <div className="grid min-w-0 gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t("Enlace completo")}
+                      </span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Input
+                          aria-label={t("Dirección del enlace público")}
+                          className="min-w-0 bg-muted/30 font-mono text-xs sm:text-sm"
+                          value={url}
+                          readOnly
+                          onFocus={(event) => event.target.select()}
+                        />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={t("Copiar enlace")}
+                              onClick={() => void copy(link)}
+                              disabled={unavailable || !url}
+                            >
+                              {fullCopied ? (
+                                <Check
+                                  className="size-4 text-emerald-500"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <Copy className="size-4" aria-hidden="true" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {fullCopied ? t("¡Copiado!") : t("Copiar enlace")}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
-                    {shortUrl && (
-                      <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-1.5 text-xs">
-                        <span className="font-semibold text-primary shrink-0">
-                          {t("Enlace corto")}:
-                        </span>
-                        <span className="font-mono truncate select-all">{shortUrl}</span>
+                    <div className="grid min-w-0 gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t("Enlace corto")}
+                      </span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        {shortUrl ? (
+                          <Input
+                            aria-label={t("Dirección del enlace corto")}
+                            className="min-w-0 bg-muted/30 font-mono text-xs sm:text-sm"
+                            value={shortUrl}
+                            readOnly
+                            onFocus={(event) => event.target.select()}
+                          />
+                        ) : (
+                          <span className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-dashed px-3 text-xs text-muted-foreground">
+                            {shorteningId === link.id
+                              ? t("Generando enlace corto…")
+                              : t("No se pudo generar el enlace corto.")}
+                          </span>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={t("Copiar enlace corto")}
+                              onClick={() => void copy(link, true)}
+                              disabled={unavailable || !shortUrl}
+                            >
+                              {shortCopied ? (
+                                <Check
+                                  className="size-4 text-emerald-500"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <Copy className="size-4" aria-hidden="true" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {shortCopied
+                              ? t("¡Copiado!")
+                              : t("Copiar enlace corto")}
+                          </TooltipContent>
+                        </Tooltip>
+                        {!shortUrl && !unavailable && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                aria-label={
+                                  shorteningId === link.id
+                                    ? t("Acortando…")
+                                    : t("Acortar URL")
+                                }
+                                onClick={() => void shortenUrl(link)}
+                                disabled={shorteningId === link.id}
+                              >
+                                {shorteningId === link.id ? (
+                                  <Loader2
+                                    className="size-4 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <Link2
+                                    className="size-4"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {shorteningId === link.id
+                                ? t("Acortando…")
+                                : t("Acortar URL")}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+                    {canShare && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label={t("Compartir")}
+                            onClick={() => void handleShare(link)}
+                            disabled={unavailable}
+                          >
+                            <Share2 className="size-4" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("Compartir")}</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {url && !unavailable && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            asChild
+                          >
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={t("Abrir enlace")}
+                            >
+                              <ExternalLink
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                            </a>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("Abrir enlace")}</TooltipContent>
+                      </Tooltip>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          aria-label={
+                            showingQr ? t("Ocultar QR") : t("Mostrar QR")
+                          }
+                          onClick={() => toggleQr(link.id)}
+                          disabled={unavailable || !url}
+                          aria-expanded={showingQr}
+                        >
+                          <QrCode className="size-4" aria-hidden="true" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {showingQr ? t("Ocultar QR") : t("Mostrar QR")}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs ml-auto shrink-0"
-                          onClick={() => void copy(link, true)}
+                          size="icon"
+                          aria-label={
+                            pending === link.id
+                              ? t("Revocando…")
+                              : t("Revocar enlace")
+                          }
+                          onClick={() => void revoke(link)}
+                          disabled={unavailable || !!pending}
+                          className="text-muted-foreground hover:text-destructive"
                         >
-                          {t("Copiar")}
+                          <Ban className="size-4" aria-hidden="true" />
                         </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons Toolbar */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    {/* Web Share Button */}
-                    {canShare && (
-                      <Button
-                        type="button"
-                        variant="default"
-                        size="sm"
-                        onClick={() => void handleShare(link)}
-                        disabled={unavailable}
-                        className="gap-1.5 font-medium"
-                      >
-                        <Share2 className="size-3.5" aria-hidden="true" />
-                        <span>{t("Compartir")}</span>
-                      </Button>
-                    )}
-
-                    {/* Shorten URL Button */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void shortenUrl(link)}
-                      disabled={unavailable || shorteningId === link.id || !!shortUrl}
-                      className="gap-1.5"
-                    >
-                      {shorteningId === link.id ? (
-                        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Link2 className="size-3.5" aria-hidden="true" />
-                      )}
-                      <span>
-                        {shorteningId === link.id
-                          ? t("Acortando…")
-                          : shortUrl
-                            ? t("Enlace corto")
-                            : t("Acortar URL")}
-                      </span>
-                    </Button>
-
-                    {/* Open link in new tab */}
-                    {url && !unavailable && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        asChild
-                        className="gap-1.5"
-                      >
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={t("Abrir enlace")}
-                        >
-                          <ExternalLink className="size-3.5" aria-hidden="true" />
-                          <span>{t("Abrir enlace")}</span>
-                        </a>
-                      </Button>
-                    )}
-
-                    {/* Show / Hide QR Button */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleQr(link.id)}
-                      disabled={unavailable || !url}
-                      aria-expanded={showingQr}
-                      className="gap-1.5"
-                    >
-                      <QrCode className="size-3.5" aria-hidden="true" />
-                      <span>{showingQr ? t("Ocultar QR") : t("Mostrar QR")}</span>
-                    </Button>
-
-                    {/* Revoke Link Button */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void revoke(link)}
-                      disabled={unavailable || !!pending}
-                      className="gap-1.5 text-muted-foreground hover:text-destructive"
-                    >
-                      <Ban className="size-3.5" aria-hidden="true" />
-                      <span>
-                        {pending === link.id ? t("Revocando…") : t("Revocar enlace")}
-                      </span>
-                    </Button>
-
-                    {/* Delete Link Trigger */}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {pending === link.id
+                          ? t("Revocando…")
+                          : t("Revocar enlace")}
+                      </TooltipContent>
+                    </Tooltip>
                     {unavailable && confirming !== link.id && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirming(link.id)}
-                        disabled={!!pending}
-                        className="gap-1.5 text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                        <span>{t("Eliminar enlace")}</span>
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t("Eliminar enlace")}
+                            onClick={() => setConfirming(link.id)}
+                            disabled={!!pending}
+                            className="text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("Eliminar enlace")}</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
 
