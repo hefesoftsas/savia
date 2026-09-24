@@ -17,6 +17,73 @@ export type ExtensionScreenInstallation = {
   installed: { enabled: boolean } | null;
 };
 
+export type StoreScreenDeclaration = {
+  object: string;
+  view: string;
+  hidden?: boolean;
+};
+
+export type StoreScreenInstallation = ExtensionScreenInstallation & {
+  store?: boolean;
+  screens?: StoreScreenDeclaration[];
+};
+
+export type StoreScreenContribution = {
+  extensionId: string;
+  object: string;
+  view: string;
+  hidden: boolean;
+};
+
+/** Pantallas declaradas por plugins del store activos en el tenant. */
+export function storeScreenContributions(
+  extensions: readonly StoreScreenInstallation[] | undefined,
+): StoreScreenContribution[] {
+  if (!Array.isArray(extensions)) return [];
+  const contributions: StoreScreenContribution[] = [];
+  for (const entry of extensions) {
+    if (!entry.store || entry.builtIn || entry.installed?.enabled !== true)
+      continue;
+    for (const screen of entry.screens ?? [])
+      contributions.push({
+        extensionId: entry.manifest.id,
+        object: screen.object,
+        view: screen.view || "records",
+        hidden: screen.hidden === true,
+      });
+  }
+  return contributions;
+}
+
+export function storeScreenFor(
+  object: string,
+  view: string,
+  extensions: readonly StoreScreenInstallation[] | undefined,
+): StoreScreenContribution | undefined {
+  return storeScreenContributions(extensions).find(
+    (screen) => screen.object === object && screen.view === view,
+  );
+}
+
+export function isStorePluginScreen(
+  object: string,
+  extensions: readonly StoreScreenInstallation[] | undefined,
+): boolean {
+  return storeScreenContributions(extensions).some(
+    (screen) => screen.object === object,
+  );
+}
+
+export function storeScreenDefaultHidden(
+  object: string,
+  extensions: readonly StoreScreenInstallation[] | undefined,
+): boolean {
+  const match = storeScreenContributions(extensions).find(
+    (screen) => screen.object === object,
+  );
+  return match?.hidden === true;
+}
+
 const extensionScreens: readonly ExtensionScreenContribution[] =
   releaseCatalog.extensionScreens;
 
@@ -25,7 +92,11 @@ export function extensionApiFor(
   request: PluginHostRequest,
   getLocale?: () => PluginLocale,
 ): PluginApi {
-  return createPluginApi({ extensionId: screen.extensionId, request, getLocale });
+  return createPluginApi({
+    extensionId: screen.extensionId,
+    request,
+    getLocale,
+  });
 }
 
 export function extensionScreenFor(
@@ -68,9 +139,19 @@ export function extensionScreenDefaultHidden(object: string): boolean {
 }
 
 /** Translate only unchanged built-in labels, preserving user-renamed screens. */
-export function localizedExtensionObjectLabel(name: string, label: string, locale: PluginLocale): string {
-  const requirement = releaseCatalog.extensionObjectRequirements.find(item => item.object.name === name);
+export function localizedExtensionObjectLabel(
+  name: string,
+  label: string,
+  locale: PluginLocale,
+): string {
+  const requirement = releaseCatalog.extensionObjectRequirements.find(
+    (item) => item.object.name === name,
+  );
   if (!requirement || requirement.object.label !== label) return label;
-  const manifest = releaseCatalog.extensionRegistry.get(requirement.id)?.manifest;
-  return manifest ? resolveLocalizedContent(label, manifest.labels, locale) : label;
+  const manifest = releaseCatalog.extensionRegistry.get(
+    requirement.id,
+  )?.manifest;
+  return manifest
+    ? resolveLocalizedContent(label, manifest.labels, locale)
+    : label;
 }

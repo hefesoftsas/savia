@@ -1,0 +1,18 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "custom.quotes-ui",
+  "version": "1.0.0",
+  "label": "Cotizaciones (UI del store)",
+  "description": "Cotizador directo con datos simulados. Sin ejecución live: las acciones responden con la plantilla de store.json.",
+  "labels": {
+    "en": "Quotes (store UI)",
+    "pt": "Cotações (UI da loja)"
+  },
+  "descriptions": {
+    "en": "Direct quoter with simulated data. No live execution: actions answer with the store.json template.",
+    "pt": "Cotador direto com dados simulados. Sem execução live: as ações respondem com o modelo de store.json."
+  },
+  "requires": [],
+  "apiVersion": 1
+}

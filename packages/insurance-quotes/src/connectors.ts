@@ -1,10 +1,17 @@
 import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 import { normalizeInsuranceAction } from "./normalize";
 import { ProviderExecutor } from "./provider-executor";
+import {
+  insuranceQuotesActionId,
+  insuranceQuotesConnectorId,
+  insuranceQuotesExtensionId,
+} from "./ids";
 
-export const insuranceQuotesExtensionId = "insurance.quotes";
-export const insuranceQuotesConnectorId = "insurance.quotes.provider";
-export const insuranceQuotesActionId = "quote";
+export {
+  insuranceQuotesActionId,
+  insuranceQuotesConnectorId,
+  insuranceQuotesExtensionId,
+};
 
 type ProviderQuoteResponse = {
   status: number;
@@ -87,7 +94,9 @@ function isSimulation(input: Record<string, unknown>): boolean {
   return input.mode === "mock";
 }
 
-function providerInput(input: Record<string, unknown>): Record<string, unknown> {
+function providerInput(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
   const { mode: _mode, ...rest } = input;
   return rest;
 }

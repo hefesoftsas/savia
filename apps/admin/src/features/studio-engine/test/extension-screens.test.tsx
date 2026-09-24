@@ -4,6 +4,10 @@ import {
   extensionApiFor,
   extensionScreenFor,
   isExtensionScreenEnabled,
+  isStorePluginScreen,
+  storeScreenContributions,
+  storeScreenDefaultHidden,
+  storeScreenFor,
 } from "../extension-screens";
 
 describe("trusted extension screen registry", () => {
@@ -60,9 +64,62 @@ describe("trusted extension screen registry", () => {
   });
 });
 
+describe("store screen slots", () => {
+  const entries = [
+    {
+      manifest: { id: "insurance.collections" },
+      builtIn: false,
+      store: true,
+      screens: [{ object: "cobros", view: "records", hidden: false }],
+      installed: { enabled: true },
+    },
+    {
+      manifest: { id: "custom.off" },
+      builtIn: false,
+      store: true,
+      screens: [{ object: "otros", view: "records", hidden: true }],
+      installed: { enabled: false },
+    },
+    {
+      manifest: { id: "insurance.quotes" },
+      builtIn: true,
+      installed: null,
+    },
+  ];
+
+  it("resolves screens of enabled store plugins", () => {
+    expect(storeScreenContributions(entries)).toEqual([
+      {
+        extensionId: "insurance.collections",
+        object: "cobros",
+        view: "records",
+        hidden: false,
+      },
+    ]);
+    expect(storeScreenFor("cobros", "records", entries)).toMatchObject({
+      extensionId: "insurance.collections",
+    });
+    expect(storeScreenFor("cobros", "edit", entries)).toBeUndefined();
+    expect(storeScreenFor("otros", "records", entries)).toBeUndefined();
+  });
+
+  it("detects store-owned objects and hidden screens", () => {
+    expect(isStorePluginScreen("cobros", entries)).toBe(true);
+    expect(isStorePluginScreen("polizas", entries)).toBe(false);
+    expect(isStorePluginScreen("cobros", undefined)).toBe(false);
+    expect(storeScreenDefaultHidden("cobros", entries)).toBe(false);
+  });
+});
+
 import { localizedExtensionObjectLabel } from "../extension-screens";
 it("localizes built-in navigation labels without overwriting user renames", () => {
- expect(localizedExtensionObjectLabel("insurance_claims","Siniestros","en")).toBe("Claims");
- expect(localizedExtensionObjectLabel("insurance_claims","My claims","pt")).toBe("My claims");
- expect(localizedExtensionObjectLabel("custom","Siniestros","en")).toBe("Siniestros");
+  expect(
+    localizedExtensionObjectLabel("insurance_claims", "Siniestros", "en"),
+  ).toBe("Claims");
+  expect(
+    localizedExtensionObjectLabel("insurance_claims", "My claims", "pt"),
+  ).toBe("My claims");
+  expect(localizedExtensionObjectLabel("custom", "Siniestros", "en")).toBe(
+    "Siniestros",
+  );
 });

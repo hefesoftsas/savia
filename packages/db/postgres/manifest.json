@@ -325,6 +325,14 @@
     {
       "filename": "0071_rebuild_customer_tables_drop_fk_parents.sql",
       "sha256": "46eca8c216d2b51f7b5dd10f7a8d669cd7156dea047af008d51cb0beb32bdb22"
+    },
+    {
+      "filename": "0072_plugin_store.sql",
+      "sha256": "6498fdb9e2feb2d373c189c374be3612f0b273aa3fe3db49fe1b3a5eb8079cca"
+    },
+    {
+      "filename": "0073_plugin_store_config.sql",
+      "sha256": "c49c921a2cdf7894071d6338b8e60d7da48e522ad98a9d531cc738f2c29df8fc"
     }
   ],
   "objects": [
@@ -1937,6 +1945,16 @@
       "type": "table",
       "name": "customer_group",
       "table": "customer_group"
+    },
+    {
+      "type": "table",
+      "name": "plugin_store_artifacts",
+      "table": "plugin_store_artifacts"
+    },
+    {
+      "type": "index",
+      "name": "idx_plugin_store_artifacts_tenant",
+      "table": "plugin_store_artifacts"
     }
   ],
   "tables": [
@@ -13951,6 +13969,112 @@
         }
       ],
       "checkCount": 1
+    },
+    {
+      "name": "plugin_store_artifacts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "manifest",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "entry_js",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "store_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "size_bytes",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "id",
+            "version"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 3
     }
   ],
   "mappingNotes": [

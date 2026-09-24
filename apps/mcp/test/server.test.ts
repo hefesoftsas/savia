@@ -103,14 +103,23 @@ describe("Savia FastMCP server", () => {
         request.url ===
         "/v1/data-domains/platform/api/extensions/insurance.portfolio-dashboard/summary"
       ) {
+        throw new Error("summary provider must not be called from the store");
+      }
+      if (request.url === "/v1/data-domains/platform/api/objects") {
+        return { data: [{ name: "polizas", label: "Pólizas" }] };
+      }
+      if (
+        request.url ===
+        "/v1/data-domains/platform/api/records/polizas?page=1&perPage=200"
+      ) {
         return {
-          data: {
-            total: 7,
-            active: 5,
-            expiring: 1,
-            premiumTotal: 486000000,
-            asOf: "2026-09-14T00:00:00.000Z",
-          },
+          data: [
+            { name: "POL-1", estado: "Vigente", prima: 1000000 },
+            { name: "POL-2", estado: "Vencida", prima: 500000 },
+          ],
+          total: 2,
+          page: 1,
+          perPage: 200,
         };
       }
       throw new Error(`Unexpected request: ${request.url}`);
@@ -122,19 +131,20 @@ describe("Savia FastMCP server", () => {
         "savia_extension_insurance_portfolio",
         {},
       );
-      expect(result.structuredContent).toEqual({
-        extension: "insurance.portfolio-dashboard",
-        summary: {
-          total: 7,
-          active: 5,
-          expiring: 1,
-          premiumTotal: 486000000,
-          asOf: "2026-09-14T00:00:00.000Z",
-        },
+      const summary = (result.structuredContent as any).summary;
+      expect((result.structuredContent as any).extension).toBe(
+        "insurance.portfolio-dashboard",
+      );
+      expect(summary).toMatchObject({
+        total: 2,
+        active: 1,
+        premiumTotal: 1000000,
       });
+      expect(typeof summary.asOf).toBe("string");
       expect(requests).toEqual([
         "/v1/data-domains/platform/api/extensions",
-        "/v1/data-domains/platform/api/extensions/insurance.portfolio-dashboard/summary",
+        "/v1/data-domains/platform/api/objects",
+        "/v1/data-domains/platform/api/records/polizas?page=1&perPage=200",
       ]);
     } finally {
       await client.close();

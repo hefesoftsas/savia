@@ -1,0 +1,300 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_endorsements",
+        "label": "Movimientos de póliza",
+        "description": "Solicitudes de modificación, anexos y novedades de pólizas.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "insurer": {
+              "type": "Textbox",
+              "label": "Aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "kind": {
+              "type": "Dropdown",
+              "label": "Tipo de movimiento",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "coverage",
+                  "label": "Cambio de cobertura"
+                },
+                {
+                  "value": "inclusion",
+                  "label": "Inclusión"
+                },
+                {
+                  "value": "exclusion",
+                  "label": "Exclusión"
+                },
+                {
+                  "value": "correction",
+                  "label": "Corrección"
+                },
+                {
+                  "value": "cancellation",
+                  "label": "Cancelación"
+                }
+              ],
+              "config": {}
+            },
+            "requested_date": {
+              "type": "DateControl",
+              "label": "Fecha de solicitud",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "effective_date": {
+              "type": "DateControl",
+              "label": "Fecha de efecto",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "additional_premium": {
+              "type": "Number",
+              "label": "Prima adicional (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "refund": {
+              "type": "Number",
+              "label": "Devolución de prima (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "next_follow_up": {
+              "type": "DateControl",
+              "label": "Próximo seguimiento",
+              "labels": {},
+              "config": {}
+            },
+            "outcome": {
+              "type": "Textbox",
+              "label": "Anexo expedido o motivo de rechazo",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "issued",
+                    "rejected"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "requested",
+                  "label": "Solicitado"
+                },
+                {
+                  "value": "review",
+                  "label": "En revisión"
+                },
+                {
+                  "value": "submitted",
+                  "label": "Enviado a aseguradora"
+                },
+                {
+                  "value": "issued",
+                  "label": "Expedido"
+                },
+                {
+                  "value": "rejected",
+                  "label": "Rechazado"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "policy_reference",
+            "insurer",
+            "owner",
+            "kind",
+            "requested_date",
+            "effective_date",
+            "additional_premium",
+            "refund",
+            "next_follow_up",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "insurer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "kind": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "coverage",
+            "inclusion",
+            "exclusion",
+            "correction",
+            "cancellation"
+          ]
+        },
+        "requested_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "effective_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "additional_premium": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "refund": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "next_follow_up": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "requested",
+            "review",
+            "submitted",
+            "issued",
+            "rejected"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_endorsements",
+      "view": "records"
+    }
+  ]
+}

@@ -1,0 +1,362 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_service",
+        "label": "Solicitudes de servicio",
+        "description": "Organiza consultas, reclamos y solicitudes de tus clientes hasta su respuesta.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "escalation_date": {
+              "type": "DateControl",
+              "label": "Fecha de escalamiento",
+              "labels": {},
+              "config": {}
+            },
+            "escalation_owner": {
+              "type": "Textbox",
+              "label": "Responsable de escalamiento",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "escalated_date": {
+              "type": "DateControl",
+              "label": "Escalada el",
+              "labels": {},
+              "config": {}
+            },
+            "response_date": {
+              "type": "DateControl",
+              "label": "Respuesta enviada el",
+              "labels": {},
+              "config": {}
+            },
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza o caso relacionado",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "insurer": {
+              "type": "Textbox",
+              "label": "Aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "kind": {
+              "type": "Dropdown",
+              "label": "Tipo de solicitud",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "query",
+                  "label": "Consulta"
+                },
+                {
+                  "value": "complaint",
+                  "label": "Reclamo de servicio"
+                },
+                {
+                  "value": "certificate",
+                  "label": "Solicitud de certificado"
+                },
+                {
+                  "value": "data_update",
+                  "label": "Actualización de datos"
+                },
+                {
+                  "value": "other",
+                  "label": "Otra"
+                }
+              ],
+              "config": {}
+            },
+            "channel": {
+              "type": "Dropdown",
+              "label": "Canal de recepción",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "email",
+                  "label": "Correo"
+                },
+                {
+                  "value": "phone",
+                  "label": "Teléfono"
+                },
+                {
+                  "value": "portal",
+                  "label": "Portal"
+                },
+                {
+                  "value": "in_person",
+                  "label": "Presencial"
+                }
+              ],
+              "config": {}
+            },
+            "received_date": {
+              "type": "DateControl",
+              "label": "Fecha de recepción",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Compromiso de respuesta",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "resolved_date": {
+              "type": "DateControl",
+              "label": "Fecha de resolución",
+              "labels": {},
+              "config": {
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "resolved"
+                  ]
+                }
+              }
+            },
+            "outcome": {
+              "type": "Textarea",
+              "label": "Respuesta o motivo de cancelación",
+              "labels": {},
+              "config": {
+                "maxLength": 4000,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "resolved",
+                    "cancelled"
+                  ]
+                }
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "received",
+                  "label": "Recibida"
+                },
+                {
+                  "value": "in_progress",
+                  "label": "En gestión"
+                },
+                {
+                  "value": "waiting",
+                  "label": "Esperando información"
+                },
+                {
+                  "value": "resolved",
+                  "label": "Resuelta"
+                },
+                {
+                  "value": "cancelled",
+                  "label": "Cancelada"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "escalation_date",
+            "escalation_owner",
+            "escalated_date",
+            "response_date",
+            "name",
+            "customer",
+            "policy_reference",
+            "insurer",
+            "owner",
+            "kind",
+            "channel",
+            "received_date",
+            "due_date",
+            "resolved_date",
+            "outcome",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "escalation_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "escalation_owner": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "escalated_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "response_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "insurer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "kind": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "query",
+            "complaint",
+            "certificate",
+            "data_update",
+            "other"
+          ]
+        },
+        "channel": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "email",
+            "phone",
+            "portal",
+            "in_person"
+          ]
+        },
+        "received_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "due_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "resolved_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "received",
+            "in_progress",
+            "waiting",
+            "resolved",
+            "cancelled"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_service",
+      "view": "records"
+    }
+  ]
+}

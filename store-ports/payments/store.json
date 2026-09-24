@@ -1,0 +1,50 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_payments",
+        "label": "Conciliación bancaria",
+        "description": "Importa extractos y asigna recaudos a obligaciones.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "name"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_payments",
+      "view": "records"
+    }
+  ],
+  "settings": {
+    "defaults": {
+      "transactions": [],
+      "allocations": []
+    }
+  }
+}

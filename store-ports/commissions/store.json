@@ -1,0 +1,270 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_commissions",
+        "label": "Comisiones",
+        "description": "Comisiones esperadas, recaudo y participación del vendedor.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "policy_reference": {
+              "type": "Textbox",
+              "label": "Póliza",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "insurer": {
+              "type": "Textbox",
+              "label": "Aseguradora",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "premium": {
+              "type": "Number",
+              "label": "Prima base (COP)",
+              "labels": {},
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "rate": {
+              "type": "Number",
+              "label": "Tasa de comisión (%)",
+              "labels": {},
+              "config": {
+                "minimum": 0,
+                "maximum": 100
+              }
+            },
+            "amount": {
+              "type": "Number",
+              "label": "Comisión esperada (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0.01,
+                "maximum": 90000000000
+              }
+            },
+            "paid": {
+              "type": "Number",
+              "label": "Comisión recibida (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "seller_share": {
+              "type": "Number",
+              "label": "Participación del vendedor (COP)",
+              "labels": {},
+              "required": true,
+              "config": {
+                "minimum": 0,
+                "maximum": 90000000000
+              }
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Fecha prevista de recaudo",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "last_payment_date": {
+              "type": "DateControl",
+              "label": "Último recaudo",
+              "labels": {},
+              "config": {}
+            },
+            "next_follow_up": {
+              "type": "DateControl",
+              "label": "Próximo seguimiento",
+              "labels": {},
+              "config": {}
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Etapa",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "pending",
+                  "label": "Por conciliar"
+                },
+                {
+                  "value": "confirmed",
+                  "label": "Confirmada"
+                },
+                {
+                  "value": "disputed",
+                  "label": "Diferencia por revisar"
+                }
+              ],
+              "config": {}
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notas de gestión",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "policy_reference",
+            "insurer",
+            "owner",
+            "premium",
+            "rate",
+            "amount",
+            "paid",
+            "seller_share",
+            "due_date",
+            "last_payment_date",
+            "next_follow_up",
+            "stage",
+            "notes"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "policy_reference": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "insurer": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "premium": {
+          "types": [
+            "Number"
+          ]
+        },
+        "rate": {
+          "types": [
+            "Number"
+          ]
+        },
+        "amount": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "paid": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "seller_share": {
+          "types": [
+            "Number"
+          ],
+          "required": true
+        },
+        "due_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "last_payment_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "next_follow_up": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "pending",
+            "confirmed",
+            "disputed"
+          ]
+        },
+        "notes": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_commissions",
+      "view": "records"
+    }
+  ]
+}

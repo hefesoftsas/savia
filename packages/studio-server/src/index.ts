@@ -50,6 +50,7 @@ import {
   type SolutionOptions,
 } from "./solutions";
 import { registerExtensions, type ExtensionOptions } from "./extensions";
+import { registerPluginStore } from "./plugin-store";
 import { registerExtensionActions } from "./extension-actions";
 import { registerExtensionSummaries } from "./extension-summaries";
 import { registerWorkflows, type WorkflowOptions } from "./workflows/routes";
@@ -173,6 +174,7 @@ export function createStudioApp(
   app.get("/api/access-context", (c) => c.json({ data: null }));
   registerRecordHistory(app, trigger);
   registerExtensions(app, options);
+  registerPluginStore(app, options);
   registerExtensionActions(app, options);
   registerExtensionSummaries(app, options);
   registerSolutions(app, options);

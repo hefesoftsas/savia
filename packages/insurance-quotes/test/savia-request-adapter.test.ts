@@ -41,6 +41,7 @@ describe("insurance Savia Request connector action", () => {
         "https://savia-request.internal/api/flows/sura-autos-provider/runs?tenant=tenant-a",
       );
       expect(request.headers.get("x-savia-tenant")).toBe("tenant-a");
+      expect(request.headers.get("x-savia-actor")).toBe("user-a");
       expect(await request.json()).toEqual({
         mode: "mock",
         input: { sura_test_plate: "TESTCAR" },

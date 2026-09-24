@@ -18,6 +18,12 @@ function createApiClient(
   extensions: Array<{
     manifest: { id: string };
     builtIn: boolean;
+    store?: boolean;
+    widgets?: Array<{
+      id: string;
+      collection: string;
+      title: { es: string };
+    }>;
     installed: { enabled: boolean } | null;
   }>,
 ) {
@@ -105,5 +111,41 @@ describe("PluginWidgetBody", () => {
         "Este tipo de widget estará disponible próximamente. Mientras tanto puedes abrir la colección completa.",
       ),
     ).toBeVisible();
+  });
+
+  it("renders store widgets in an isolated iframe", async () => {
+    const { container } = render(
+      <PluginWidgetBody
+        apiClient={
+          createApiClient([
+            {
+              manifest: { id: "custom.demo" },
+              builtIn: false,
+              store: true,
+              widgets: [
+                {
+                  id: "resumen",
+                  collection: "polizas",
+                  title: { es: "Resumen" },
+                },
+              ],
+              installed: { enabled: true },
+            },
+          ]) as never
+        }
+        widget={{ ...widget, kind: "plugin:custom.demo:resumen" } as never}
+      />,
+    );
+
+    const frame = await waitFor(() => {
+      const element = container.querySelector(
+        "iframe[title='Resumen']",
+      ) as HTMLIFrameElement | null;
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(frame?.getAttribute("src")).toContain(
+      "/api/plugin-store/custom.demo/widget?widget=resumen",
+    );
   });
 });

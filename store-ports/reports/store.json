@@ -1,0 +1,89 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_reports",
+        "label": "Reportes y cliente 360",
+        "description": "Consulta indicadores operativos y el expediente relacionado del cliente.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Nombre",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 160
+              }
+            },
+            "details": {
+              "type": "Textarea",
+              "label": "Detalle",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Estado",
+              "labels": {},
+              "options": [
+                {
+                  "value": "draft",
+                  "label": "Borrador"
+                },
+                {
+                  "value": "completed",
+                  "label": "Completado"
+                },
+                {
+                  "value": "failed",
+                  "label": "Con errores"
+                }
+              ],
+              "config": {}
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "details",
+            "stage"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "details": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "optionValues": [
+            "draft",
+            "completed",
+            "failed"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_reports",
+      "view": "records"
+    }
+  ]
+}

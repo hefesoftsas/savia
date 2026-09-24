@@ -1,0 +1,18 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "insurance.carriers",
+  "version": "1.1.0",
+  "label": "Aseguradoras",
+  "description": "Solicitudes y consultas mediante una conexión autorizada.",
+  "labels": {
+    "en": "Insurers",
+    "pt": "Seguradoras"
+  },
+  "descriptions": {
+    "en": "Requests and queries through an authorized connection.",
+    "pt": "Solicitações e consultas por uma conexão autorizada."
+  },
+  "requires": [],
+  "apiVersion": 1
+}

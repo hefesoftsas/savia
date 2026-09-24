@@ -3,6 +3,7 @@ import { WebhookDestinationRepository } from "./webhook-destinations";
 import { webhookDestinationSchema } from "@savia/studio-shared/workflow-webhooks";
 import { isExtensionAvailable, type ExtensionOptions } from "../extensions";
 import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
+import { storeWorkflowBundles } from "../plugin-store";
 import { prepareWorkflowBundle } from "./bundles";
 import type { Hono, Context } from "hono";
 import { z } from "zod";
@@ -49,6 +50,15 @@ export function registerWorkflows(
   app: Hono<Env>,
   options: WorkflowOptions & ExtensionOptions = {},
 ) {
+  async function effectiveBundles(
+    db: D1Database,
+    tenant: string,
+  ): Promise<readonly WorkflowBundle[]> {
+    return [
+      ...(options.workflowBundles ?? []),
+      ...(await storeWorkflowBundles(db, tenant)),
+    ];
+  }
   const repository = async (c: Context<Env>, action: WorkflowAction) => {
     const principalId = c.get("principalId"),
       workspace = c.get("tenant");
@@ -121,7 +131,7 @@ export function registerWorkflows(
       .all<{ name: string }>();
     const names = new Set(objects.results.map((o) => o.name));
     const available = [];
-    for (const bundle of options.workflowBundles ?? [])
+    for (const bundle of await effectiveBundles(c.env.DB, c.get("tenant")))
       if (
         !bundle.extensionId ||
         (await isExtensionAvailable(
@@ -145,7 +155,7 @@ export function registerWorkflows(
   app.post("/api/workflow-bundles/:id/prepare", async (c) => {
     await repository(c, "design");
     await repository(c, "publish");
-    const bundle = options.workflowBundles?.find(
+    const bundle = (await effectiveBundles(c.env.DB, c.get("tenant")))?.find(
       (b) => b.id === c.req.param("id"),
     );
     if (

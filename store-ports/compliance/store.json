@@ -1,0 +1,242 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_compliance",
+        "label": "Expedientes de cumplimiento",
+        "description": "Organiza requisitos, evidencias, revisiones y vigencias configurables.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Requisito",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 160
+              }
+            },
+            "customer": {
+              "type": "Textbox",
+              "label": "Cliente",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Responsable",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 120
+              }
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Compromiso de revisión",
+              "labels": {},
+              "required": true,
+              "config": {}
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Estado",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "pending",
+                  "label": "Pendiente"
+                },
+                {
+                  "value": "review",
+                  "label": "En revisión"
+                },
+                {
+                  "value": "approved",
+                  "label": "Aprobado"
+                },
+                {
+                  "value": "changes",
+                  "label": "Requiere ajustes"
+                },
+                {
+                  "value": "waived",
+                  "label": "Exento"
+                }
+              ],
+              "config": {}
+            },
+            "evidence": {
+              "type": "Textbox",
+              "label": "Referencia de evidencia",
+              "labels": {},
+              "config": {
+                "maxLength": 500,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "approved"
+                  ]
+                }
+              }
+            },
+            "reviewed_date": {
+              "type": "DateControl",
+              "label": "Fecha de revisión",
+              "labels": {},
+              "config": {
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "approved",
+                    "waived"
+                  ]
+                }
+              }
+            },
+            "valid_until": {
+              "type": "DateControl",
+              "label": "Válido hasta",
+              "labels": {},
+              "config": {}
+            },
+            "outcome": {
+              "type": "Textarea",
+              "label": "Resultado o motivo de exención",
+              "labels": {},
+              "config": {
+                "maxLength": 2000,
+                "requiredWhen": {
+                  "field": "stage",
+                  "op": "in",
+                  "value": [
+                    "waived",
+                    "changes"
+                  ]
+                }
+              }
+            },
+            "details": {
+              "type": "Textarea",
+              "label": "Instrucciones y notas",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "dossier_key": {
+              "type": "Textbox",
+              "label": "Clave de requisito",
+              "labels": {},
+              "config": {
+                "unique": true,
+                "maxLength": 200
+              }
+            },
+            "customer_id": {
+              "type": "Textbox",
+              "label": "Identificador del cliente",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "customer",
+            "owner",
+            "due_date",
+            "stage",
+            "evidence",
+            "reviewed_date",
+            "valid_until",
+            "outcome",
+            "details",
+            "dossier_key",
+            "customer_id"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "customer": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "owner": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "due_date": {
+          "types": [
+            "DateControl"
+          ],
+          "required": true
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "pending",
+            "review",
+            "approved",
+            "changes",
+            "waived"
+          ]
+        },
+        "evidence": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "reviewed_date": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "valid_until": {
+          "types": [
+            "DateControl"
+          ]
+        },
+        "outcome": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "details": {
+          "types": [
+            "Textarea"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_compliance",
+      "view": "records"
+    }
+  ]
+}

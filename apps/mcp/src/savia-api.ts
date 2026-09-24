@@ -246,6 +246,40 @@ export class SaviaApiClient {
     return response.data;
   }
 
+  async listStoreMcpCatalog(): Promise<{
+    data: Array<{
+      pluginId: string;
+      label: string;
+      actions: Array<{
+        id: string;
+        kind: "simulation" | "http";
+        method?: string;
+        label: string;
+        summary: string;
+      }>;
+    }>;
+  }> {
+    return this.request(
+      "/v1/data-domains/platform/api/plugin-store/mcp-catalog",
+    );
+  }
+
+  async executeStoreAction(
+    pluginId: string,
+    actionId: string,
+    input: Record<string, unknown>,
+  ): Promise<unknown> {
+    const response = await this.request<{ data: { output: unknown } }>(
+      `/v1/data-domains/platform/api/extensions/${encode(pluginId)}/actions/${encode(actionId)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input }),
+      },
+    );
+    return response.data.output;
+  }
+
   async listStudioCollections(options?: { all?: boolean } | boolean): Promise<{
     data: Array<Record<string, unknown>>;
   }> {

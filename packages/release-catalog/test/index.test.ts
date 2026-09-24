@@ -79,9 +79,9 @@ describe("release catalog", () => {
         (renderer) => renderer.extensionId,
       ),
     ).toEqual(["insurance.quotes"]);
-    expect(
-      releaseCatalog.assistantExtensions.map((extension) => extension.id),
-    ).toEqual(["insurance.portfolio-dashboard"]);
+    // Assistant tools moved worker-side (apps/mcp): the catalog no
+    // longer registers them; the tool name is covered there.
+    expect(releaseCatalog.assistantExtensions).toEqual([]);
   });
 
   it("keeps industry names outside the platform hosts", async () => {
