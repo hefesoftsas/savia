@@ -337,6 +337,10 @@
     {
       "filename": "0074_tenant_branding_login_animation.sql",
       "sha256": "1b6380961e1aee71b07d04fa48e1d28ad69c2501a88ecd7dfbb900d2481ea341"
+    },
+    {
+      "filename": "0075_savia_request_installed_bundles.sql",
+      "sha256": "d1b915cefc34aaa30c832fa9933f759065581b611235fea77cffbb8bf994c986"
     }
   ],
   "objects": [
@@ -1959,6 +1963,11 @@
       "type": "index",
       "name": "idx_plugin_store_artifacts_tenant",
       "table": "plugin_store_artifacts"
+    },
+    {
+      "type": "table",
+      "name": "installed_bundles",
+      "table": "installed_bundles"
     }
   ],
   "tables": [
@@ -14079,6 +14088,46 @@
         }
       ],
       "checkCount": 3
+    },
+    {
+      "name": "installed_bundles",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "installed_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
     }
   ],
   "mappingNotes": [
