@@ -18,10 +18,14 @@ opaco + bridge `savia`), and server-side capabilities are declarative
    credentials. The optional `screen` argument contains the selected
    `{ object, view }` so a ZIP that declares multiple screens can open
    the matching view. Heavy work (summaries) computes client-side from
-   collections. The iframe shell, bootstrap module and ZIP entry use the
-   current workspace API prefix (for example,
-   `/v1/data-domains/platform/api/plugin-store/`); plugin screens must
-   not assume a root-level `/api/plugin-store/` route.
+   collections. The authenticated iframe shell uses the current workspace
+   API prefix (for example,
+   `/v1/data-domains/platform/api/plugin-store/`). Screen shells invoke
+   `render`; widget shells invoke the declared `widgets[id]` handler, with
+   `renderWidget` or `render` as fallbacks. The authenticated shell issues a
+   two-minute signed URL for its ZIP entry module; the opaque iframe loads
+   that module without session cookies. The entry route verifies the grant
+   and requires the installation to remain active.
 2. **Host collections API** (`packages/studio-shared/src/plugin-api.ts`):
    versioned `list/describe/get/create/update/remove` plus
    `settings`, `connections`, `actions` and `access` scoped to the

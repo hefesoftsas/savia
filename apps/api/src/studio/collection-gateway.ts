@@ -102,6 +102,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
     createStudioApp(tenant, {
       principalId: actor.principal.id,
       apiBasePath: context.publicApiBasePath,
+      entryGrantSecret: integrationKey,
       policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
       authorizeWorkflow: async ({ workspace }) =>
