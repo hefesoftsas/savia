@@ -87,7 +87,7 @@ do not delete them ad hoc because that breaks replay safety.
 ## Deployment and validation
 
 Apply `packages/db/migrations/0053_local_sync.sql` before deploying the API, and
-`packages/crm-server/migrations/0015_local_sync.sql` for standalone CRM databases.
+`packages/studio-server/migrations/0015_local_sync.sql` for standalone Studio databases.
 Deploy the server protocol before the new admin. Historical offline policy tables
 are retained for migration compatibility, but their API, management screen and
 query-cache implementation are retired.

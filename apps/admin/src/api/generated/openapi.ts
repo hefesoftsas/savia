@@ -5742,7 +5742,7 @@ export interface paths {
                       items: (
                         | (
                             | "dashboard"
-                            | "dynamic-crm"
+                            | "studio"
                             | "my-day"
                             | "integrations"
                             | "provider-credentials"
@@ -5761,6 +5761,7 @@ export interface paths {
                             | "virtual-employees"
                             | "tenant-branding"
                           )
+                        | "dynamic-crm"
                         | string
                       )[];
                       collapsed: boolean;
@@ -5773,7 +5774,7 @@ export interface paths {
                       items: (
                         | (
                             | "dashboard"
-                            | "dynamic-crm"
+                            | "studio"
                             | "my-day"
                             | "integrations"
                             | "provider-credentials"
@@ -5792,6 +5793,7 @@ export interface paths {
                             | "virtual-employees"
                             | "tenant-branding"
                           )
+                        | "dynamic-crm"
                         | string
                       )[];
                       collapsed: boolean;
@@ -5800,7 +5802,7 @@ export interface paths {
                 hiddenItems?: (
                   | (
                       | "dashboard"
-                      | "dynamic-crm"
+                      | "studio"
                       | "my-day"
                       | "integrations"
                       | "provider-credentials"
@@ -5819,6 +5821,7 @@ export interface paths {
                       | "virtual-employees"
                       | "tenant-branding"
                     )
+                  | "dynamic-crm"
                   | string
                 )[];
               };
@@ -5866,7 +5869,7 @@ export interface paths {
                       items: (
                         | (
                             | "dashboard"
-                            | "dynamic-crm"
+                            | "studio"
                             | "my-day"
                             | "integrations"
                             | "provider-credentials"
@@ -5885,6 +5888,7 @@ export interface paths {
                             | "virtual-employees"
                             | "tenant-branding"
                           )
+                        | "dynamic-crm"
                         | string
                       )[];
                       collapsed: boolean;
@@ -5897,7 +5901,7 @@ export interface paths {
                       items: (
                         | (
                             | "dashboard"
-                            | "dynamic-crm"
+                            | "studio"
                             | "my-day"
                             | "integrations"
                             | "provider-credentials"
@@ -5916,6 +5920,7 @@ export interface paths {
                             | "virtual-employees"
                             | "tenant-branding"
                           )
+                        | "dynamic-crm"
                         | string
                       )[];
                       collapsed: boolean;
@@ -5924,7 +5929,7 @@ export interface paths {
                 hiddenItems?: (
                   | (
                       | "dashboard"
-                      | "dynamic-crm"
+                      | "studio"
                       | "my-day"
                       | "integrations"
                       | "provider-credentials"
@@ -5943,6 +5948,7 @@ export interface paths {
                       | "virtual-employees"
                       | "tenant-branding"
                     )
+                  | "dynamic-crm"
                   | string
                 )[];
               };

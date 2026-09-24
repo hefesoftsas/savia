@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { cents, csv, day, loadRecords } from "../src/data";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 it("validates currency and date-only values without timezone shifts", () => {
   expect(cents("0.29")).toBe(29);
   expect(cents("1.001")).toBeNull();

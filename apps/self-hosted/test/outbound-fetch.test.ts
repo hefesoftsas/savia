@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { createNativeCollectionFetch } from "../src/outbound-fetch";
-import { executeJsonApi } from "../../api/src/crm/jsonapi-adapter";
+import { executeJsonApi } from "../../api/src/studio/jsonapi-adapter";
 const close: Array<() => Promise<void>> = [];
 afterEach(async () => {
   for (const fn of close.splice(0)) await fn();

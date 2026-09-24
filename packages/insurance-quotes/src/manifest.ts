@@ -2,7 +2,7 @@ import { z } from "zod";
 import type {
   ExtensionManifest,
   TrustedExtension,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 import {
   insuranceQuotesActionId,
   insuranceQuotesConnectorId,

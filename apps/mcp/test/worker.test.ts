@@ -41,7 +41,9 @@ describe("Savia MCP Cloudflare Worker", () => {
       params: {},
     });
     expect(listed.status).toBe(200);
-    expect(await listed.text()).toContain("savia_list_crm_collections");
+    const listedBody = await listed.text();
+    expect(listedBody).toContain("savia_list_studio_collections");
+    expect(listedBody).toContain("savia_list_crm_collections");
   });
 
   it("rejects requests when credentials are missing or invalid", async () => {

@@ -710,11 +710,11 @@ export function VirtualEmployeesManagement({
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5 pr-4">
                   <Label className="text-sm font-medium">
-                    {t("Acceso a Todas las Colecciones CRM")}
+                    {t("Acceso a Todas las Colecciones de Studio")}
                   </Label>
                   <p className="text-xs text-muted-foreground">
                     {t(
-                      "Si está activo, el empleado puede consultar cualquier colección del CRM sin restricciones.",
+                      "Si está activo, el empleado puede consultar cualquier colección de Studio sin restricciones.",
                     )}
                   </p>
                 </div>

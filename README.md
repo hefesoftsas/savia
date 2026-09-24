@@ -30,7 +30,8 @@ desactivarlo y reactivarlo conservando los registros. Consulta la
 ## Componentes
 
 - `apps/admin`: frontend React con React Admin, shadcn y el diseñador low code
-  en `#/crm?domain=platform&view=admin`.
+  (Studio) en `#/studio?domain=platform&view=admin` (`#/crm` sigue como
+  alias heredado).
 - `apps/api`: API pública, contrato OpenAPI y operaciones de dominio.
 - `apps/auth`: Better Auth, login, MFA con TOTP y proveedor OAuth/OIDC.
 - `apps/mcp`: acceso MCP a la misma superficie documental de la API.
@@ -170,14 +171,16 @@ sh scripts/verify-local-stack.sh
 El contrato de la API se publica en `/openapi.json` y la documentación Scalar
 en `/docs`.
 
-## CRM por agencia
+## CRM externo por agencia (HubSpot)
 
 Los administradores de agencia pueden administrar la conexión de CRM de su
 agencia en `#/crm-connections`. La primera integración habilitada es HubSpot;
+(esto es el CRM externo — no confundir con Studio, el diseñador low-code en
+`#/studio`).
 la API ofrece operaciones normalizadas para contactos, empresas y negocios en
 `/v1/crm/*`, siempre acotadas por `agencyId` y por la membresía activa del
 usuario. Nango gestiona el consentimiento y los tokens OAuth, mientras Savia no
-recibe ni almacena credenciales de CRM. La configuración de producción y la
+recibe ni almacena credenciales de CRM externo. La configuración de producción y la
 prueba de conexión están documentadas en el
 [runbook de Nango y HubSpot](docs/runbooks/nango-hubspot.md).
 

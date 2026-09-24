@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, expect, test, vi } from "vitest";
-import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
+import type { StudioObject, StudioRecord } from "@savia/studio-shared/metadata";
 import { createRecordSortKeys, queryRecords, querySummary } from "./query";
 const object = {
   name: "deals",
@@ -14,9 +14,9 @@ const object = {
       date: { type: "DateControl" },
     },
   },
-} as unknown as CrmObject;
+} as unknown as StudioObject;
 const dbs: Dexie[] = [];
-async function setup(documents: Partial<CrmRecord>[]) {
+async function setup(documents: Partial<StudioRecord>[]) {
   const db = new Dexie(`queries-${Math.random()}`);
   db.version(1).stores({
     records: "[collection+id],collection,*sortKeys",
@@ -28,7 +28,7 @@ async function setup(documents: Partial<CrmRecord>[]) {
     {
       collection: string;
       id: string;
-      document: CrmRecord;
+      document: StudioRecord;
       sortKeys: ReturnType<typeof createRecordSortKeys>;
     },
     [string, string]
@@ -40,7 +40,7 @@ async function setup(documents: Partial<CrmRecord>[]) {
         created_at: "2026-01-01",
         updated_at: "2026-01-01",
         ...data,
-      } as CrmRecord;
+      } as StudioRecord;
       return {
         collection: "deals",
         id: document.id,
@@ -221,7 +221,7 @@ test("record detail finds scalar and array incoming links, outgoing links and ex
         },
       },
     },
-  } as unknown as CrmObject;
+  } as unknown as StudioObject;
   await db.records.bulkPut(
     [
       { id: "c1", parent: ["parent", "other"] },

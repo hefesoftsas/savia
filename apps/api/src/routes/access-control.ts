@@ -22,7 +22,7 @@ import {
   accessActions,
   type AccessScope,
   type AccessPredicate,
-} from "@savia/crm-shared/access-control";
+} from "@savia/studio-shared/access-control";
 
 const scopeQuery = z.object({ scope: z.string() });
 const revision = z.number().int().nonnegative();

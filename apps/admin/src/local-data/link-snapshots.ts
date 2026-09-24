@@ -1,4 +1,4 @@
-import type { RecordRelationGroup } from "@savia/crm-shared/relations";
+import type { RecordRelationGroup } from "@savia/studio-shared/relations";
 import type { LocalStore } from "./store";
 import type { SyncTransport } from "./contracts";
 import { isOfflineError } from "@/offline/offline-error";

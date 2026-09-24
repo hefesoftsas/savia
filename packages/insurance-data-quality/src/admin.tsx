@@ -1,10 +1,10 @@
-import { usePluginMessages } from "@savia/crm-shared/plugin-locale-react";
+import { usePluginMessages } from "@savia/studio-shared/plugin-locale-react";
 import { integrationMessages } from "./locales";
 import { useEffect, useState } from "react";
 import type {
   PluginApi,
   PluginCollectionDefinition,
-} from "@savia/crm-shared/plugin-api";
+} from "@savia/studio-shared/plugin-api";
 import {
   loadRecords,
   errorMessage,

@@ -3,7 +3,7 @@ import { objectRequirement, validateFields } from "../src/schema";
 import {
   createExtensionRegistry,
   createExtensionObjectRequirements,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 import type { Field } from "../src/types";
 const fields: Field[] = [
   { key: "name", label: "Reference", required: true },

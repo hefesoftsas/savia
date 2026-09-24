@@ -3,9 +3,9 @@ import type {
   ActiveCrmConnection,
   NangoClient,
   NangoConnectionSummary,
-} from "../src/crm/contracts";
-import { CrmUpstreamError, crmListQuerySchema } from "../src/crm/contracts";
-import { createHubSpotAdapter } from "../src/crm/hubspot";
+} from "../src/external-crm/contracts";
+import { CrmUpstreamError, crmListQuerySchema } from "../src/external-crm/contracts";
+import { createHubSpotAdapter } from "../src/external-crm/hubspot";
 
 const connection: ActiveCrmConnection = {
   id: "savia-hubspot-connection",

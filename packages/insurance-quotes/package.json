@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@savia/crm-shared": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
     "@savia/provider-contracts": "workspace:*",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.8",

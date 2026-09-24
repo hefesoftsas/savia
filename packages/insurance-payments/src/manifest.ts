@@ -1,7 +1,7 @@
 import type {
   ExtensionManifest,
   TrustedExtension,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 import { stateSchema, defaults } from "./domain";
 export const manifest = {
   format: "savia.extension",

@@ -1,4 +1,4 @@
-import type { ExtensionActionContext } from "@savia/crm-shared/extension-runtime";
+import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 import { normalizeInsuranceAction } from "./normalize";
 import { ProviderExecutor } from "./provider-executor";
 

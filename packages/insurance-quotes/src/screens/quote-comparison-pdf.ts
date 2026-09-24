@@ -1,4 +1,4 @@
-import { pluginIntlLocale, type PluginLocale, type PluginMessageParams } from "@savia/crm-shared/plugin-localization";
+import { pluginIntlLocale, type PluginLocale, type PluginMessageParams } from "@savia/studio-shared/plugin-localization";
 import { insuranceMessage } from "../messages";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { VehicleInfo } from "./quote-results";

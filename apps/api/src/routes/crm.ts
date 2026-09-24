@@ -9,16 +9,16 @@ import type {
   CrmProviderId,
   CrmRepository,
   NangoClient,
-} from "../crm/contracts";
+} from "../external-crm/contracts";
 import {
   CrmConnectionAccessError,
   CrmConnectionNotFoundError,
   CrmUnavailableError,
   CrmUpstreamError,
   isCrmProviderId,
-} from "../crm/contracts";
-import { createCrmProviderRegistry } from "../crm/providers";
-import { createCrmRepository } from "../crm/repository";
+} from "../external-crm/contracts";
+import { createCrmProviderRegistry } from "../external-crm/providers";
+import { createCrmRepository } from "../external-crm/repository";
 
 export type CrmRouteDependencies = {
   nango: NangoClient;
@@ -496,7 +496,7 @@ function providerStatus(
   return undefined;
 }
 
-export function crmErrorResponse(exception: unknown) {
+export function studioErrorResponse(exception: unknown) {
   if (exception instanceof CrmUnavailableError)
     return {
       status: 503,
@@ -606,7 +606,7 @@ function isOperationError(
   return "status" in resolution;
 }
 
-async function crmOperationErrorResponse(
+async function studioOperationErrorResponse(
   exception: unknown,
   repository: CrmRepository,
   connection: NonNullable<
@@ -636,7 +636,7 @@ async function crmOperationErrorResponse(
       ),
     } as const;
   }
-  return crmErrorResponse(exception);
+  return studioErrorResponse(exception);
 }
 
 export function registerCrmRoutes(
@@ -734,7 +734,7 @@ export function registerCrmRoutes(
       });
       return context.json({ data: session }, 200);
     } catch (exception) {
-      const response = crmErrorResponse(exception);
+      const response = studioErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);
     }
@@ -798,7 +798,7 @@ export function registerCrmRoutes(
       });
       return context.json({ data: session }, 200);
     } catch (exception) {
-      const response = crmErrorResponse(exception);
+      const response = studioErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);
     }
@@ -949,7 +949,7 @@ export function registerCrmRoutes(
       });
       return context.json({ data: connectionDocument(connection) }, 200);
     } catch (exception) {
-      const response = crmErrorResponse(exception);
+      const response = studioErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);
     }
@@ -1023,7 +1023,7 @@ export function registerCrmRoutes(
       });
       return new Response(null, { status: 204 });
     } catch (exception) {
-      const response = crmErrorResponse(exception);
+      const response = studioErrorResponse(exception);
       if (!response) throw exception;
       return context.json(response.body, response.status);
     }
@@ -1050,7 +1050,7 @@ export function registerCrmRoutes(
       );
       return context.json({ data: contacts }, 200);
     } catch (exception) {
-      const response = await crmOperationErrorResponse(
+      const response = await studioOperationErrorResponse(
         exception,
         repository,
         resolved.connection,
@@ -1087,7 +1087,7 @@ export function registerCrmRoutes(
       );
       return context.json({ data: contact }, 201);
     } catch (exception) {
-      const response = await crmOperationErrorResponse(
+      const response = await studioOperationErrorResponse(
         exception,
         repository,
         resolved.connection,
@@ -1121,7 +1121,7 @@ export function registerCrmRoutes(
       );
       return context.json({ data: contact }, 200);
     } catch (exception) {
-      const response = await crmOperationErrorResponse(
+      const response = await studioOperationErrorResponse(
         exception,
         repository,
         resolved.connection,
@@ -1153,7 +1153,7 @@ export function registerCrmRoutes(
       );
       return context.json({ data: companies }, 200);
     } catch (exception) {
-      const response = await crmOperationErrorResponse(
+      const response = await studioOperationErrorResponse(
         exception,
         repository,
         resolved.connection,
@@ -1185,7 +1185,7 @@ export function registerCrmRoutes(
       );
       return context.json({ data: deals }, 200);
     } catch (exception) {
-      const response = await crmOperationErrorResponse(
+      const response = await studioOperationErrorResponse(
         exception,
         repository,
         resolved.connection,

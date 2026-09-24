@@ -4,13 +4,16 @@ import {
   type NoticeEventInput,
   type NoticeScope,
   type NotificationPolicy,
-} from "@savia/crm-shared/notifications";
-import { processNotifications } from "@savia/crm-server/notifications/dispatcher";
-import { maintainNotifications } from "@savia/crm-server/notifications/maintenance";
+} from "@savia/studio-shared/notifications";
+import { processNotifications } from "@savia/studio-server/notifications/dispatcher";
+import { maintainNotifications } from "@savia/studio-server/notifications/maintenance";
 import { findPrincipal } from "./auth/identity-repository";
 import type { AppActor } from "./auth/types";
 import { loadActor } from "./auth/identity-repository";
-import { canAccessSharedCrm, canManageSharedCrm } from "./crm/hubspot-access";
+import {
+  canAccessSharedCrm,
+  canManageSharedCrm,
+} from "./external-crm/hubspot-access";
 
 function pageAfter(ids: string[], after: string | null, limit: number) {
   const start = after === null ? 0 : ids.findIndex((id) => id > after);
@@ -114,7 +117,7 @@ export function createNotificationPolicy(db: D1Database): NotificationPolicy {
         if (source.kind === "record") {
           const row = await db
             .prepare(
-              "SELECT 1 AS ok FROM crm_objects WHERE tenant_id=? AND name=?",
+              "SELECT 1 AS ok FROM studio_objects WHERE tenant_id=? AND name=?",
             )
             .bind(scope.id, source.collection)
             .first<number>("ok");

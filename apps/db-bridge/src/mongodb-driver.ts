@@ -14,7 +14,7 @@ import {
   type DatabaseField,
   type ResourceMetadata,
   type JsonValue,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import type { DatabaseDriver } from "./driver";
 import { ConnectionPools } from "./connection-pools";
 import { DatabaseBridgeError, databaseError } from "./database-errors";

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import {
   PUBLIC_QUOTE_CONCURRENCY,
   createPublicQuoteAdapter,
@@ -52,7 +52,7 @@ beforeAll(async () => {
       if (normalized) await env.DB.exec(normalized);
     }
   await env.DB.prepare(
-    "INSERT INTO crm_extension_installations(tenant_id,id,version,manifest) VALUES (?,'insurance.quotes','1.2.0','{}')",
+    "INSERT INTO studio_extension_installations(tenant_id,id,version,manifest) VALUES (?,'insurance.quotes','1.2.0','{}')",
   )
     .bind(tenant)
     .run();
@@ -175,7 +175,7 @@ it("fails closed for a different tenant, disabled extension, changed policy, and
     }),
   ).rejects.toThrow();
   await env.DB.prepare(
-    "UPDATE crm_extension_installations SET enabled=0 WHERE tenant_id=?",
+    "UPDATE studio_extension_installations SET enabled=0 WHERE tenant_id=?",
   )
     .bind(tenant)
     .run();
@@ -183,7 +183,7 @@ it("fails closed for a different tenant, disabled extension, changed policy, and
     adapter.publish({ db: env.DB, tenant, domainId: "test", object }),
   ).rejects.toThrow();
   await env.DB.prepare(
-    "UPDATE crm_extension_installations SET enabled=1 WHERE tenant_id=?",
+    "UPDATE studio_extension_installations SET enabled=1 WHERE tenant_id=?",
   )
     .bind(tenant)
     .run();
@@ -786,7 +786,7 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
     ],
   };
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
   )
     .bind(
       tenant,
@@ -798,7 +798,7 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
     )
     .run();
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
   )
     .bind(
       tenant,
@@ -856,7 +856,7 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
     expect(result.quotes).toHaveLength(1);
     expect(result.unavailable).toBe(1);
     const masterRow = await env.DB.prepare(
-      "SELECT id, data, created_by FROM crm_records WHERE tenant_id=? AND object_name='cotizaciones'",
+      "SELECT id, data, created_by FROM studio_records WHERE tenant_id=? AND object_name='cotizaciones'",
     )
       .bind(tenant)
       .first<{ id: string; data: string; created_by: string }>();
@@ -872,7 +872,7 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
     });
     expect(masterRow!.created_by).toBe("public-form:mirror-submission");
     const detailRows = await env.DB.prepare(
-      "SELECT data FROM crm_records WHERE tenant_id=? AND object_name='cotizaciones_detalle' ORDER BY data",
+      "SELECT data FROM studio_records WHERE tenant_id=? AND object_name='cotizaciones_detalle' ORDER BY data",
     )
       .bind(tenant)
       .all<{ data: string }>();
@@ -896,12 +896,12 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
       .bind(original, tenant)
       .run();
     await env.DB.prepare(
-      "DELETE FROM crm_records WHERE tenant_id=? AND object_name IN ('cotizaciones','cotizaciones_detalle')",
+      "DELETE FROM studio_records WHERE tenant_id=? AND object_name IN ('cotizaciones','cotizaciones_detalle')",
     )
       .bind(tenant)
       .run();
     await env.DB.prepare(
-      "DELETE FROM crm_objects WHERE tenant_id=? AND name IN ('cotizaciones','cotizaciones_detalle')",
+      "DELETE FROM studio_objects WHERE tenant_id=? AND name IN ('cotizaciones','cotizaciones_detalle')",
     )
       .bind(tenant)
       .run();

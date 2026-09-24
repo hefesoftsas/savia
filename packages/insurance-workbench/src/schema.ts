@@ -1,9 +1,9 @@
-import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import type { PluginLocale } from "@savia/studio-shared/plugin-localization";
 import { createWorkbenchTranslator } from "./localization";
 import type {
   ExtensionManifest,
   ExtensionObjectRequirement,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 import type { Field } from "./types";
 import { cents, day, text } from "./data";
 export function objectRequirement(

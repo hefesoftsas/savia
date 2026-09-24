@@ -1,9 +1,12 @@
-import { validateRecord, type CrmRecord } from "@savia/crm-shared/metadata";
-import type { RelatedRecordBundle } from "@savia/crm-shared/related-records";
+import {
+  validateRecord,
+  type StudioRecord,
+} from "@savia/studio-shared/metadata";
+import type { RelatedRecordBundle } from "@savia/studio-shared/related-records";
 import type {
   RelationDefinition,
   RecordRelationGroup,
-} from "@savia/crm-shared/relations";
+} from "@savia/studio-shared/relations";
 import type { LocalStore } from "./store";
 import type { Mutation, BundleMember, LinkSnapshot } from "./contracts";
 
@@ -153,7 +156,7 @@ export async function enqueueBundle(
         ...validated.data,
         id,
         updated_at: now,
-      } as CrmRecord;
+      } as StudioRecord;
       members.push({ collection: name, id, before, document });
       return document;
     }
@@ -248,8 +251,8 @@ export async function acknowledgeBundle(
   s: LocalStore,
   mutation: Mutation,
   result: {
-    data: CrmRecord;
-    related: Array<{ relationId: string; records: CrmRecord[] }>;
+    data: StudioRecord;
+    related: Array<{ relationId: string; records: StudioRecord[] }>;
   },
 ) {
   return bundleTransaction(s, async () => {
@@ -321,7 +324,7 @@ export async function resolveBundle(
   masters: Array<{
     collection: string;
     id: string;
-    document: CrmRecord | null;
+    document: StudioRecord | null;
   }>,
   groups: RecordRelationGroup[],
 ) {

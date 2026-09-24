@@ -7,7 +7,7 @@ import {
   type DatabaseRead,
   type DatabaseMutation,
   type ResourceMetadata,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 import { DatabaseBridgeError } from "./database-errors";
 import { validateFieldValue } from "./database-values";
 export type BuiltDatabaseQuery = { text: string; params: unknown[] };

@@ -1,9 +1,9 @@
-import type { WorkflowBundle } from "@savia/crm-shared/workflow-bundles";
+import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
 import type {
   WorkflowDefinition,
   WorkflowNode,
   WorkflowValue,
-} from "@savia/crm-shared/workflows";
+} from "@savia/studio-shared/workflows";
 const relation = (label: string, target: string, unique = false) => ({
   type: "Dropdown" as const,
   label,

@@ -1,4 +1,4 @@
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import { seedTenantAgency } from "./tenant-fixtures";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -186,6 +186,22 @@ describe("CRM inside Savia", () => {
     expect(result.status).toBe(200);
     expect(await result.json()).toEqual({ data: [], menuLayout: null });
   });
+  it("serves agency workspaces on the canonical /v1/studio prefix", async () => {
+    const app = admin();
+    expect(
+      (await app.request(prefix + "/bootstrap", { method: "POST" })).status,
+    ).toBe(200);
+    const canonical = await app.request("/v1/studio/101/api/objects");
+    expect(canonical.status).toBe(200);
+    const legacy = await app.request("/v1/dynamic-crm/101/api/objects");
+    expect(legacy.status).toBe(200);
+    expect(await canonical.json()).toEqual(await legacy.json());
+    const reference = await app.request("/v1/studio/101/api/openapi.json");
+    expect(reference.status).toBe(200);
+    expect(((await reference.json()) as any).servers?.[0]?.url ?? "").toContain(
+      "/v1/studio/101",
+    );
+  });
 });
 
 it("persists records across requests, checks versions, and isolates exports and attachments", async () => {
@@ -277,7 +293,7 @@ it("encrypts integration credentials using the configured Savia CRM key", async 
   const app = createTestApp({
     auth: agencyAdministratorAuthenticator(),
     documents: env.DOCUMENTS,
-    crmIntegrationKey: "integration-test-key-with-at-least-32-characters",
+    studioIntegrationKey: "integration-test-key-with-at-least-32-characters",
   });
   const headers = { "content-type": "application/json" };
   const created = await app.request(prefix + "/integrations", {
@@ -308,7 +324,7 @@ it("encrypts integration credentials using the configured Savia CRM key", async 
   expect(saved.status).toBe(200);
   expect(await saved.text()).not.toContain("test-private-value");
   const row = await env.DB.prepare(
-    "SELECT encrypted_secret FROM crm_integrations WHERE id=?",
+    "SELECT encrypted_secret FROM studio_integrations WHERE id=?",
   )
     .bind(id)
     .first<{ encrypted_secret: string }>();

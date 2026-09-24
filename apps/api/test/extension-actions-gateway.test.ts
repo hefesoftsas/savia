@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   connectorExecutorFromEnvironment,
   extensionConnectionsEncryptionKeyFromEnvironment,
-} from "../src/crm/connector-executor";
+} from "../src/studio/connector-executor";
 
 const context = {
   tenantId: "agency:7",

@@ -19,5 +19,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src", "vite.config.ts"],
-  "exclude": ["src/features/crm-engine/test"]
+  "exclude": ["src/features/studio-engine/test"]
 }

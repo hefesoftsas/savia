@@ -46,6 +46,12 @@ const readToolNames = new Set([
   "savia_get_quote_form",
   "savia_lookup_dane_city",
   "savia_lookup_quote_vehicle",
+  "savia_list_studio_collections",
+  "savia_list_studio_records",
+  "savia_get_studio_record",
+  "savia_get_studio_record_links",
+  "savia_aggregate_studio_records",
+  // Legacy aliases of the Studio tools above.
   "savia_list_crm_collections",
   "savia_list_crm_records",
   "savia_get_crm_record",
@@ -192,13 +198,18 @@ export function applyCollectionScoping(
     return filtered;
   };
 
-  if (scopedTools.savia_list_crm_collections) {
-    const originalList = scopedTools.savia_list_crm_collections;
-    scopedTools.savia_list_crm_collections = {
-      ...originalList,
-      execute: async (args: any, options: any) =>
-        filterDiscovery(await originalList.execute(args, options)),
-    };
+  for (const discoveryTool of [
+    "savia_list_studio_collections",
+    "savia_list_crm_collections",
+  ]) {
+    if (scopedTools[discoveryTool]) {
+      const originalList = scopedTools[discoveryTool];
+      scopedTools[discoveryTool] = {
+        ...originalList,
+        execute: async (args: any, options: any) =>
+          filterDiscovery(await originalList.execute(args, options)),
+      };
+    }
   }
 
   for (const quoteTool of [
@@ -229,6 +240,11 @@ export function applyCollectionScoping(
   }
 
   const dataTools = [
+    "savia_list_studio_records",
+    "savia_get_studio_record",
+    "savia_get_studio_record_links",
+    "savia_aggregate_studio_records",
+    // Legacy aliases, scoped identically.
     "savia_list_crm_records",
     "savia_get_crm_record",
     "savia_get_crm_record_links",
@@ -483,12 +499,16 @@ export class SaviaAssistantService implements AssistantService {
               const cmd = command.toLowerCase();
               const isCrmCommand =
                 domain === "crm" ||
+                domain === "studio" ||
                 cmd === "create-record" ||
                 cmd === "update-record" ||
                 cmd === "delete-record" ||
                 cmd === "create_crm_record" ||
                 cmd === "update_crm_record" ||
                 cmd === "delete_crm_record" ||
+                cmd === "create_studio_record" ||
+                cmd === "update_studio_record" ||
+                cmd === "delete_studio_record" ||
                 cmd === "create" ||
                 cmd === "update" ||
                 cmd === "delete" ||
@@ -499,7 +519,7 @@ export class SaviaAssistantService implements AssistantService {
                 const targetCollection = String(
                   input.collection ??
                     input.object ??
-                    (domain !== "crm" ? domain : ""),
+                    (domain !== "crm" && domain !== "studio" ? domain : ""),
                 )
                   .toLowerCase()
                   .trim();
@@ -586,12 +606,12 @@ export class SaviaAssistantService implements AssistantService {
         "For saved insurance quote counts, status or comparisons, first use savia_get_quote_summary in a single call, without collection discovery or listing all details. It returns the latest quote unless the user provides a reference. Use other authorized tools only when that summary cannot answer the question. Distinguish one master quote from its insurer proposals.",
         "When asked which insurance option suits the user, default to balancing price and coverage. Lead with a conditional recommendation based only on returned evidence. If coverage or deductibles are unavailable, say there is no justified overall winner; identify the cheapest returned priced offers and any price tie, then ask for the missing coverage/deductibles or one relevant user preference. Equal premiums do not imply equal coverage. Do not recommend failed, pending or unpriced responses, invent benefits, rank insurers by reputation, or claim suitability solely from a product name. If complete is false, explicitly limit the comparison to the analyzed offers. Keep references and raw detail rows out of the answer unless requested.",
         "Use savia_list_domains, savia_list_documents, savia_get_document, savia_get_crm_sync_status, savia_search_personal_files, savia_search_personal_messages, and savia_list_personal_events for domain documents, sync status, and personal tools. Use savia_get_crm_sync_status to explain whether automatic CRM delivery is queued, processing, synced, failed, or blocked, optionally filtered by customer. Personal tools access only the caller's connected account and return metadata, never credentials or content. When a list result includes page.total, use it as the exact count instead of requesting further pages.",
-        "For other CRM business data beyond the quote summary, such as clients or policies: first use savia_list_crm_collections to discover collections, record counts, and available fields with their types. Use savia_list_crm_records to query and filter specific records (supports text search and structured filters). Use savia_get_crm_record and savia_get_crm_record_links to inspect individual records and their relations. Use savia_aggregate_crm_records to compute totals, counts, and metric distributions grouped by fields (like city, status, category) directly.",
+        "For other Studio business data beyond the quote summary, such as clients or policies: first use savia_list_studio_collections to discover collections, record counts, and available fields with their types. Use savia_list_studio_records to query and filter specific records (supports text search and structured filters). Use savia_get_studio_record and savia_get_studio_record_links to inspect individual records and their relations. Use savia_aggregate_studio_records to compute totals, counts, and metric distributions grouped by fields (like city, status, category) directly. The savia_*_crm_* names are legacy aliases of the same tools.",
         "Use savia_present_visualization only when the user requests a table, chart or report; a quote recommendation or a count does not need it. Keep requested tables compact (at most 5 rows), summarize the rest, and never retry a failed visualization just to repeat the same information; answer briefly in text instead. Copy only values returned by the authorized tools; do not invent, estimate, or include credentials. Use charts only for finite numeric series.",
         "When the user explicitly requests a graph, chart, report, plot, or visualization, call savia_present_visualization with exact authorized data and never state that a graph was created unless that tool was called. If the authorized results do not contain a finite numeric series, say that a graph cannot be created instead of claiming one was created.",
         "To generate a NEW auto insurance quote, call savia_get_quote_form to learn requirements but NEVER recite the whole form. Start with plate and city; collect only missing data, at most 3 short questions per turn. As soon as a plate is supplied, call savia_lookup_quote_vehicle once for it and use the returned Fasecolda, year, insured value and accessories; do not ask the user to find these codes. Resolve city names with savia_lookup_dane_city, not domain discovery. Use an unambiguous official result directly (including correcting a mistyped code when the city is explicit); if multiple municipalities match, ask for the department. Ask whether circulation and residence city are the same only if unclear. Preserve all supplied and verified data. Parse natural dates, gender words/obvious typos and yes/no into form values without asking confirmation just for formatting. Do not infer sex from names, invent missing personal data or amounts, or ask for optional second surname. Never repeat the same lookup unless the plate/city changed or the user requests a retry; if it fails explain once and request only the unavailable fields. With all validated fields, call savia_prepare_command exactly once with domain insurance, command quote-auto, input {vehicle, applicant}. After the tool returns a confirmation card say only: Revisa los datos y pulsa Confirmar y cotizar. Do NOT repeat its data, ask for another yes, or add a second confirmation or warning. The card handles the real requests and saved result. Do not create quote rows through CRUD, buy or issue policies, or automatically retry confirmed quotes. Missing coverage/deductibles must be stated rather than inventing a best policy.",
         "Never execute a write directly. All writes require explicit confirmation via savia_prepare_command.",
-        "To create, update, or delete records in CRM collections (e.g. cartera, clientes, contact, account, etc.): call savia_prepare_command exactly once. Use domain: 'crm' (or the collection name) and command: 'create-record', 'update-record', or 'delete-record'. For 'create-record', supply input: { collection: '<collection_name>', data: { <field>: <value>, ... } }. For 'update-record', supply input: { collection: '<collection_name>', id: '<record_id>', data: { <field>: <value>, ... } }. For 'delete-record', supply input: { collection: '<collection_name>', id: '<record_id>' }. Before preparing an update or delete, query or read the record first with savia_get_crm_record or savia_list_crm_records to verify the target id and existing fields. Tell the user what record change is proposed and that their confirmation is required.",
+        "To create, update, or delete records in Studio collections (e.g. cartera, clientes, contact, account, etc.): call savia_prepare_command exactly once. Use domain: 'studio' (or the collection name) and command: 'create-record', 'update-record', or 'delete-record'. For 'create-record', supply input: { collection: '<collection_name>', data: { <field>: <value>, ... } }. For 'update-record', supply input: { collection: '<collection_name>', id: '<record_id>', data: { <field>: <value>, ... } }. For 'delete-record', supply input: { collection: '<collection_name>', id: '<record_id>' }. Before preparing an update or delete, query or read the record first with savia_get_studio_record or savia_list_studio_records to verify the target id and existing fields. Tell the user what record change is proposed and that their confirmation is required.",
         "To send an email or create a calendar event through a personal integration, prepare exactly one command in domain personal-integrations: send-email with provider gmail or outlook, to, subject, and body; or create-event with provider google_calendar or outlook, title, startsAt, endsAt, and optional attendees. To save a new text file, prepare upload-file with provider google_drive, onedrive_personal, or onedrive_business, name, content, and optional mimeType text/plain, text/markdown, text/csv, or application/json. Explicit confirmation is always required.",
         "Do not reveal, request, or repeat credentials, authorization headers, internal URLs, or secrets.",
       );
@@ -669,12 +689,16 @@ export class SaviaAssistantService implements AssistantService {
     const cmd = action.command.toLowerCase();
     const isCrmRecordAction =
       action.domain === "crm" ||
+      action.domain === "studio" ||
       cmd === "create-record" ||
       cmd === "update-record" ||
       cmd === "delete-record" ||
       cmd === "create_crm_record" ||
       cmd === "update_crm_record" ||
       cmd === "delete_crm_record" ||
+      cmd === "create_studio_record" ||
+      cmd === "update_studio_record" ||
+      cmd === "delete_studio_record" ||
       cmd === "create" ||
       cmd === "update" ||
       cmd === "delete" ||
@@ -685,7 +709,9 @@ export class SaviaAssistantService implements AssistantService {
       const object = String(
         action.input.collection ??
           action.input.object ??
-          (action.domain !== "crm" ? action.domain : ""),
+          (action.domain !== "crm" && action.domain !== "studio"
+            ? action.domain
+            : ""),
       ).trim();
 
       const id = action.input.id ? String(action.input.id) : undefined;
@@ -714,7 +740,7 @@ export class SaviaAssistantService implements AssistantService {
 
       if (cmd.includes("delete") || cmd.includes("remove")) {
         return {
-          name: "savia_delete_crm_record",
+          name: "savia_delete_studio_record",
           arguments: {
             object,
             id: id ?? "",
@@ -729,7 +755,7 @@ export class SaviaAssistantService implements AssistantService {
         cmd.includes("patch")
       ) {
         return {
-          name: "savia_update_crm_record",
+          name: "savia_update_studio_record",
           arguments: {
             object,
             id: id ?? "",
@@ -740,7 +766,7 @@ export class SaviaAssistantService implements AssistantService {
 
       // Default to create
       return {
-        name: "savia_create_crm_record",
+        name: "savia_create_studio_record",
         arguments: {
           object,
           data,

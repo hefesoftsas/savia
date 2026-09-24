@@ -3,11 +3,12 @@
 Entry points into the code by topic. The `*.test.ts` files next to each area
 are the executable spec: read them before the runbooks.
 
-- **CRM engine**: `apps/admin/src/features/crm-engine/` (design in
-  `DESIGN.md`, index in `README.md`) + `packages/crm-server/` (contract in
-  `API.md`, `INTEGRATIONS.md`) + `packages/crm-shared/`.
+- **Studio engine**: `apps/admin/src/features/studio-engine/` (design in
+  `DESIGN.md`, index in `README.md`) + `packages/studio-server/` (contract in
+  `API.md`, `INTEGRATIONS.md`) + `packages/studio-shared/`.
 - **Domains and collections**: `apps/api/src/routes/data-domains.ts`,
-  `dynamic-crm.ts`, `collection-relations.ts`; runbooks `data-domain-studio`,
+  `studio.ts` (`/v1/studio/*` + legacy `/v1/dynamic-crm/*`, `/v1/data-domains/*`),
+  `apps/api/src/studio/collection-relations.ts`; runbooks `data-domain-studio`,
   `collection-sources`, `collection-relations`, `collection-operation-mapping`.
 - **savia-request**: `apps/savia-request/src/server/` (`index.ts` routes,
   `runner.ts` execution, `hooks.ts` sandbox, `catalog.json` operations,

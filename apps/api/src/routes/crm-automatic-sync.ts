@@ -7,7 +7,7 @@ import {
   listSyncRules,
   retrySyncJob,
   setSyncRuleEnabled,
-} from "../crm/auto-sync";
+} from "../external-crm/auto-sync";
 
 const rule = z.object({
   id: z.string(),

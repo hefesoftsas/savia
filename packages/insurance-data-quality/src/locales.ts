@@ -1,4 +1,4 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 export const integrationMessages = {
   "Revisa el archivo antes de importar. Los registros existentes no se sobrescriben ni se fusionan automáticamente.": [
     "Revisa el archivo antes de importar. Los registros existentes no se sobrescriben ni se fusionan automáticamente.",

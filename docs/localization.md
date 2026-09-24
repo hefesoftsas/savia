@@ -67,7 +67,7 @@ brands and translation keys have exact file/text exceptions with reasons in
 `source-exceptions.json`.
 
 Shipped insurance extensions use the same ES/EN/PT contract through
-`@savia/crm-shared/plugin-localization` (`translatePluginMessage`,
+`@savia/studio-shared/plugin-localization` (`translatePluginMessage`,
 `resolveLocalizedContent`, `localizeExternalError`) and the optional
 `PluginLocaleProvider` React context. The host bridges its selected locale
 without remounting extension screens, so drafts are retained. Each extension

@@ -7,7 +7,7 @@ const sourceFiles = import.meta.glob(
   [
     "../components/admin/*.tsx",
     "../components/ui/*.tsx",
-    "../features/crm-engine/*.tsx",
+    "../features/studio-engine/*.tsx",
     "../features/access-control/*.tsx",
     "../features/assistant-configuration/*.tsx",
     "../features/public-forms/*.tsx",

@@ -1,4 +1,4 @@
-import type { PluginMessages } from "@savia/crm-shared/plugin-localization";
+import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 export const integrationMessages = {
   "Importa recaudos, revisa coincidencias y asigna importes parciales. Cada diferencia conserva su trazabilidad.": [
     "Importa recaudos, revisa coincidencias y asigna importes parciales. Cada diferencia conserva su trazabilidad.",

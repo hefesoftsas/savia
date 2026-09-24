@@ -42,7 +42,7 @@ describe("bank reconciliation", () => {
 });
 import { vi } from "vitest";
 import { saveState } from "../src/support";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 it("propagates version conflicts without automatic overwrite", async () => {
   const replace = vi.fn().mockRejectedValue(new Error("version conflict"));
   const api = { settings: { replace } } as unknown as PluginApi;

@@ -2,13 +2,13 @@ import {
   createPluginApi,
   type PluginApi,
   type PluginHostRequest,
-} from "@savia/crm-shared/plugin-api";
+} from "@savia/studio-shared/plugin-api";
 import {
   releaseCatalog,
   type ExtensionWidgetContribution,
 } from "@savia/release-catalog";
 import type { ApiClient } from "@/api/api-client";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 
 export type PluginWidgetRef = {
   extensionId: string;

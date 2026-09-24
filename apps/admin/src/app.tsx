@@ -34,9 +34,9 @@ import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 const RolePages = lazy(async () => ({
   default: (await import("@/features/access-control/role-pages")).RolePages,
 }));
-const CrmPage = lazy(async () => {
-  const module = await import("@/features/dynamic-crm/crm-page");
-  return { default: module.CrmPage };
+const StudioPage = lazy(async () => {
+  const module = await import("@/features/studio/studio-page");
+  return { default: module.StudioPage };
 });
 const PersonalIntegrationsPage = lazy(async () => {
   const module =
@@ -89,10 +89,10 @@ function SaviaRequestRoute({
   );
 }
 
-function CrmRoute({ services }: { services: AppServices }) {
+function StudioRoute({ services }: { services: AppServices }) {
   return (
     <Suspense fallback={<RouteLoading variant="screens" />}>
-      <CrmPage services={services} />
+      <StudioPage services={services} />
     </Suspense>
   );
 }
@@ -295,7 +295,15 @@ function AppContent({ services }: { services?: AppServices } = {}) {
               }
             />
             <Route path="/" element={<Navigate to="/my-day" replace />} />
-            <Route path="/crm" element={<CrmRoute services={appServices} />} />
+            <Route
+              path="/studio"
+              element={<StudioRoute services={appServices} />}
+            />
+            {/* Fase 1: alias legacy — #/crm sigue funcionando, canónica es #/studio */}
+            <Route
+              path="/crm"
+              element={<StudioRoute services={appServices} />}
+            />
             <Route
               path="/savia-request"
               element={<SaviaRequestRoute services={appServices} />}

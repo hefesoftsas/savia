@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@savia/crm-shared": "workspace:*"
+    "@savia/studio-shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

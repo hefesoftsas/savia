@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ExtensionSettingsDefinition } from "@savia/crm-shared/extension-runtime";
+import type { ExtensionSettingsDefinition } from "@savia/studio-shared/extension-runtime";
 import { defaultClientMapping } from "./client-mapping";
 import { insuranceQuotesExtensionId } from "./connectors";
 import {

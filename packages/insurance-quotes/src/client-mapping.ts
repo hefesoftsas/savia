@@ -1,4 +1,4 @@
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import type { QuoteFormValues } from "./screens/quote-input";
 
 export type ApplicantSourceKey =

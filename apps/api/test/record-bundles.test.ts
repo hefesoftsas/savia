@@ -3,7 +3,7 @@ import { platformAdministratorAuthenticator } from "./auth-fixtures";
 import { seedTenantAgency } from "./tenant-fixtures";
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { createRecordBundlesApp } from "../src/crm/record-bundles";
+import { createRecordBundlesApp } from "../src/studio/record-bundles";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -26,7 +26,7 @@ async function fixture(cardinality = "one-to-many", scope?: string) {
     relationId = crypto.randomUUID();
   for (const name of ["parents", "children"])
     await env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
     )
       .bind(
         tenant,
@@ -39,7 +39,7 @@ async function fixture(cardinality = "one-to-many", scope?: string) {
       )
       .run();
   await env.DB.prepare(
-    "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES(?,?,?,?,?,?,?)",
+    "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES(?,?,?,?,?,?,?)",
   )
     .bind(
       tenant,
@@ -86,14 +86,14 @@ it("atomically creates, replays and unlinks without deleting children", async ()
   expect(removed.status, await removed.clone().text()).toBe(200);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_record_links WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_record_links WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
   ).toEqual({ count: 0 });
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=? AND object_name='children' AND deleted_at IS NULL",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=? AND object_name='children' AND deleted_at IS NULL",
     )
       .bind(tenant)
       .first(),
@@ -114,7 +114,7 @@ it("invalid children roll back the parent and all earlier child writes", async (
   expect(await response.text()).toContain("row 2");
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -177,7 +177,7 @@ it("cardinality conflicts roll back every record", async () => {
   ).toBe(409);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -199,13 +199,13 @@ it("database cardinality and uniqueness failures leave parent and children untou
   expect(denied.status, await denied.clone().text()).toBe(409);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
   ).toEqual({ count: 2 });
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name='children'",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name='children'",
   )
     .bind(
       JSON.stringify({
@@ -237,7 +237,7 @@ it("database cardinality and uniqueness failures leave parent and children untou
   expect(duplicate.status).toBe(409);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -279,7 +279,7 @@ it("rejects stale complete selection snapshots and updates a child together with
   });
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_audit WHERE tenant_id=? AND action='record.updated'",
+      "SELECT count(*) count FROM studio_audit WHERE tenant_id=? AND action='record.updated'",
     )
       .bind(tenant)
       .first(),
@@ -304,7 +304,7 @@ it("validates required virtual relation selections and enforces server field per
     fieldOrder: ["name", "children"],
   };
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name='parents'",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name='parents'",
   )
     .bind(JSON.stringify(config), tenant)
     .run();
@@ -322,7 +322,7 @@ it("validates required virtual relation selections and enforces server field per
   ).toBe(403);
   config.fields.children.config.relationAllowCreate = true;
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=? WHERE tenant_id=? AND name='parents'",
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name='parents'",
   )
     .bind(JSON.stringify(config), tenant)
     .run();
@@ -362,7 +362,7 @@ it("guards child versions and link snapshots against changes immediately before 
       if (property === "batch")
         return async (statements: D1PreparedStatement[]) => {
           await env.DB.prepare(
-            "UPDATE crm_records SET version=version+1 WHERE tenant_id=? AND id=?",
+            "UPDATE studio_records SET version=version+1 WHERE tenant_id=? AND id=?",
           )
             .bind(tenant, child.id)
             .run();
@@ -401,7 +401,7 @@ it("guards child versions and link snapshots against changes immediately before 
   expect(response.status, await response.clone().text()).toBe(409);
   expect(
     await env.DB.prepare(
-      "SELECT version,data FROM crm_records WHERE tenant_id=? AND id=?",
+      "SELECT version,data FROM studio_records WHERE tenant_id=? AND id=?",
     )
       .bind(tenant, saved.data.id)
       .first(),
@@ -411,7 +411,7 @@ it("guards child versions and link snapshots against changes immediately before 
       if (property === "batch")
         return async (statements: D1PreparedStatement[]) => {
           await env.DB.prepare(
-            "DELETE FROM crm_record_links WHERE tenant_id=? AND relation_id=?",
+            "DELETE FROM studio_record_links WHERE tenant_id=? AND relation_id=?",
           )
             .bind(tenant, relationId)
             .run();
@@ -444,7 +444,7 @@ it("guards child versions and link snapshots against changes immediately before 
   expect(linkResponse.status).toBe(409);
   expect(
     await env.DB.prepare(
-      "SELECT version FROM crm_records WHERE tenant_id=? AND id=?",
+      "SELECT version FROM studio_records WHERE tenant_id=? AND id=?",
     )
       .bind(tenant, saved.data.id)
       .first(),
@@ -459,31 +459,31 @@ it("rejects disabled solutions and denied local capabilities, including replay",
     key = crypto.randomUUID();
   expect((await call(body, key)).status).toBe(200);
   await env.DB.prepare(
-    "INSERT INTO crm_solution_installations(tenant_id,id,version,manifest,enabled) VALUES(?,'disabled','1','{}',0)",
+    "INSERT INTO studio_solution_installations(tenant_id,id,version,manifest,enabled) VALUES(?,'disabled','1','{}',0)",
   )
     .bind(tenant)
     .run();
   await env.DB.prepare(
-    "INSERT INTO crm_solution_objects(tenant_id,solution_id,object_name,definition) VALUES(?,'disabled','children','{}')",
+    "INSERT INTO studio_solution_objects(tenant_id,solution_id,object_name,definition) VALUES(?,'disabled','children','{}')",
   )
     .bind(tenant)
     .run();
   expect((await call(body)).status).toBe(404);
   expect((await call(body, key)).status).toBe(404);
   await env.DB.prepare(
-    "UPDATE crm_solution_installations SET enabled=1 WHERE tenant_id=?",
+    "UPDATE studio_solution_installations SET enabled=1 WHERE tenant_id=?",
   )
     .bind(tenant)
     .run();
   await env.DB.prepare(
-    "UPDATE crm_objects SET config=json_set(config,'$.studio.capabilities.create',json('false')) WHERE tenant_id=? AND name='children'",
+    "UPDATE studio_objects SET config=json_set(config,'$.studio.capabilities.create',json('false')) WHERE tenant_id=? AND name='children'",
   )
     .bind(tenant)
     .run();
   expect((await call(body)).status).toBe(403);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -531,7 +531,7 @@ it("delivers automation hooks after commit and replay does not duplicate tasks",
     ["children", "Child"],
   ])
     await env.DB.prepare(
-      "INSERT INTO crm_automations(id,tenant_id,object_name,name,config,enabled) VALUES(?,?,?,?,?,1)",
+      "INSERT INTO studio_automations(id,tenant_id,object_name,name,config,enabled) VALUES(?,?,?,?,?,1)",
     )
       .bind(
         crypto.randomUUID(),
@@ -554,7 +554,7 @@ it("delivers automation hooks after commit and replay does not duplicate tasks",
   expect(invalid.status).toBe(422);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_tasks WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_tasks WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -566,26 +566,26 @@ it("delivers automation hooks after commit and replay does not duplicate tasks",
     key = crypto.randomUUID();
   expect((await call(body, key)).status).toBe(200);
   const committed = await env.DB.prepare(
-    "SELECT response FROM crm_requests WHERE tenant_id=? AND request_key=?",
+    "SELECT response FROM studio_requests WHERE tenant_id=? AND request_key=?",
   )
     .bind(tenant, key)
     .first<{ response: string }>();
   const saved = JSON.parse(committed!.response);
   expect(saved.deliveryComplete).toBe(true);
   await env.DB.prepare(
-    "UPDATE crm_automations SET version=version+1,config=json_set(config,'$.title','Changed rule') WHERE tenant_id=?",
+    "UPDATE studio_automations SET version=version+1,config=json_set(config,'$.title','Changed rule') WHERE tenant_id=?",
   )
     .bind(tenant)
     .run();
   await env.DB.prepare(
-    "INSERT INTO crm_automations(id,tenant_id,object_name,name,config,enabled) SELECT ?,tenant_id,object_name,name,config,enabled FROM crm_automations WHERE tenant_id=? LIMIT 1",
+    "INSERT INTO studio_automations(id,tenant_id,object_name,name,config,enabled) SELECT ?,tenant_id,object_name,name,config,enabled FROM studio_automations WHERE tenant_id=? LIMIT 1",
   )
     .bind(crypto.randomUUID(), tenant)
     .run();
   expect((await call(body, key)).status).toBe(200);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_tasks WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_tasks WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -593,41 +593,41 @@ it("delivers automation hooks after commit and replay does not duplicate tasks",
   // Simulate an interruption after one rule succeeded: only the missing original
   // rule may be retried, even though current definitions now differ.
   const task = await env.DB.prepare(
-    "SELECT id FROM crm_tasks WHERE tenant_id=? LIMIT 1",
+    "SELECT id FROM studio_tasks WHERE tenant_id=? LIMIT 1",
   )
     .bind(tenant)
     .first<{ id: string }>();
   await env.DB.prepare(
-    "DELETE FROM crm_automation_runs WHERE tenant_id=? AND task_id=?",
+    "DELETE FROM studio_automation_runs WHERE tenant_id=? AND task_id=?",
   )
     .bind(tenant, task!.id)
     .run();
-  await env.DB.prepare("DELETE FROM crm_tasks WHERE tenant_id=? AND id=?")
+  await env.DB.prepare("DELETE FROM studio_tasks WHERE tenant_id=? AND id=?")
     .bind(tenant, task!.id)
     .run();
   await env.DB.prepare(
-    "UPDATE crm_requests SET response=? WHERE tenant_id=? AND request_key=?",
+    "UPDATE studio_requests SET response=? WHERE tenant_id=? AND request_key=?",
   )
     .bind(JSON.stringify({ ...saved, deliveryComplete: false }), tenant, key)
     .run();
   expect((await call(body, key)).status).toBe(200);
   expect(
     (
-      await env.DB.prepare("SELECT title FROM crm_tasks WHERE tenant_id=?")
+      await env.DB.prepare("SELECT title FROM studio_tasks WHERE tenant_id=?")
         .bind(tenant)
         .all<{ title: string }>()
     ).results.every((row) => row.title.startsWith("Follow ")),
   ).toBe(true);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_tasks WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_tasks WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
   ).toEqual({ count: 2 });
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_automation_runs WHERE tenant_id=? AND status='success'",
+      "SELECT count(*) count FROM studio_automation_runs WHERE tenant_id=? AND status='success'",
     )
       .bind(tenant)
       .first(),
@@ -649,7 +649,7 @@ it("saves the maximum 100-row bundle within the bounded local transaction", asyn
   expect(response.status, await response.clone().text()).toBe(200);
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -657,7 +657,7 @@ it("saves the maximum 100-row bundle within the bounded local transaction", asyn
 });
 it("coalesces bundle realtime hints and versions to one per affected collection", async () => {
   const { publishRecordBundleChanges } =
-    await import("../src/crm/record-bundle-realtime");
+    await import("../src/studio/record-bundle-realtime");
   const { tenant, relationId, call } = await fixture();
   const response = await call({
     record: { data: { name: "Parent" } },
@@ -818,7 +818,7 @@ it("rejects malformed or edit/link client IDs without writing any records", asyn
   }
   expect(
     await env.DB.prepare(
-      "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+      "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
     )
       .bind(tenant)
       .first(),
@@ -838,7 +838,7 @@ it("rolls back a parent when a child create ID collides, including deleted recor
   for (const deleted of [false, true]) {
     if (deleted)
       await env.DB.prepare(
-        "UPDATE crm_records SET deleted_at='2026-09-19' WHERE tenant_id=? AND id=?",
+        "UPDATE studio_records SET deleted_at='2026-09-19' WHERE tenant_id=? AND id=?",
       )
         .bind(tenant, childId)
         .run();
@@ -854,14 +854,14 @@ it("rolls back a parent when a child create ID collides, including deleted recor
     expect(response.status).toBe(409);
     expect(
       await env.DB.prepare(
-        "SELECT count(*) count FROM crm_records WHERE tenant_id=?",
+        "SELECT count(*) count FROM studio_records WHERE tenant_id=?",
       )
         .bind(tenant)
         .first(),
     ).toEqual({ count: 2 });
     expect(
       await env.DB.prepare(
-        "SELECT json_extract(data,'$.name') name FROM crm_records WHERE tenant_id=? AND id=?",
+        "SELECT json_extract(data,'$.name') name FROM studio_records WHERE tenant_id=? AND id=?",
       )
         .bind(tenant, childId)
         .first(),
@@ -871,7 +871,7 @@ it("rolls back a parent when a child create ID collides, including deleted recor
 
 it("enforces scoped bundle row and field grants and projects immutable replays", async () => {
   const { accessDatabase } =
-    await import("@savia/crm-server/access-authorization");
+    await import("@savia/studio-server/access-authorization");
   const { tenant, relationId } = await fixture();
   const scope = `domain:${tenant}` as const;
   await env.DB.prepare(
@@ -941,7 +941,7 @@ it("enforces scoped bundle row and field grants and projects immutable replays",
   expect(response.status, await response.clone().text()).toBe(200);
   const saved: any = await response.json();
   const { createCollectionGateway } =
-    await import("../src/crm/collection-gateway");
+    await import("../src/studio/collection-gateway");
   const actor = await platformAdministratorAuthenticator().authenticate(
     new Request("http://test"),
     env.DB,
@@ -1014,7 +1014,7 @@ it("enforces scoped bundle row and field grants and projects immutable replays",
   expect(saved.data.name).toBe("Parent");
   expect(
     await env.DB.prepare(
-      "SELECT created_by FROM crm_records WHERE tenant_id=? AND id=?",
+      "SELECT created_by FROM studio_records WHERE tenant_id=? AND id=?",
     )
       .bind(tenant, saved.data.id)
       .first(),
@@ -1055,7 +1055,7 @@ it("enforces scoped bundle row and field grants and projects immutable replays",
   ).toBe(403);
   const unrelatedRelation = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO crm_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality,storage) VALUES(?,?,?,?,?,?,?,?)",
+    "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality,storage) VALUES(?,?,?,?,?,?,?,?)",
   )
     .bind(
       tenant,
@@ -1087,7 +1087,9 @@ it("enforces scoped bundle row and field grants and projects immutable replays",
   };
   expect((await call(stale)).status).toBe(409);
   expect(
-    await env.DB.prepare("SELECT count(*) n FROM crm_records WHERE tenant_id=?")
+    await env.DB.prepare(
+      "SELECT count(*) n FROM studio_records WHERE tenant_id=?",
+    )
       .bind(tenant)
       .first(),
   ).toEqual({ n: 2 });
@@ -1129,10 +1131,14 @@ it("journals each committed bundle member once without duplicating workflow even
   expect((await call(input, key)).status).toBe(200);
   expect((await call(input, key)).status).toBe(200);
   expect((await call(input)).status).toBe(409);
-  for (const table of ["crm_records", "workflow_events", "workflow_executions"])
+  for (const table of [
+    "studio_records",
+    "workflow_events",
+    "workflow_executions",
+  ])
     expect(
       await env.DB.prepare(
-        `SELECT count(*) n FROM ${table} WHERE ${table === "crm_records" ? "tenant_id" : "workspace_id"}=?`,
+        `SELECT count(*) n FROM ${table} WHERE ${table === "studio_records" ? "tenant_id" : "workspace_id"}=?`,
       )
         .bind(tenant)
         .first(),

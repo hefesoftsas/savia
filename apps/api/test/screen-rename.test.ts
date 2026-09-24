@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
-import { makeConfig } from "@savia/crm-shared/metadata";
+import { makeConfig } from "@savia/studio-shared/metadata";
 import {
   patchScreenMeta,
   screenMetaPatchSchema,
-} from "@savia/crm-server/schema";
+} from "@savia/studio-server/schema";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -38,7 +38,7 @@ it("renames a source page without changing its name, schema or binding and rejec
     },
   };
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
   )
     .bind(
       "rename-test",
@@ -64,7 +64,7 @@ it("renames a source page without changing its name, schema or binding and rejec
   });
   expect(
     await env.DB.prepare(
-      "SELECT label,config,version FROM crm_objects WHERE tenant_id=? AND name=?",
+      "SELECT label,config,version FROM studio_objects WHERE tenant_id=? AND name=?",
     )
       .bind("rename-test", "contacts")
       .first(),
@@ -86,7 +86,7 @@ it("allows renaming a managed page while protecting its menu placement", async (
     studio: { business: "managed-customer" },
   };
   await env.DB.prepare(
-    "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,?)",
   )
     .bind(
       "managed-rename",

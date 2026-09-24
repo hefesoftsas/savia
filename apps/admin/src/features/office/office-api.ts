@@ -19,7 +19,7 @@ export type OfficeRevision = {
 export function officeEditorUrl(base: string | undefined, file: string) {
   if (
     !base ||
-    !/^\/v1\/(?:dynamic-crm\/[1-9][0-9]*|data-domains\/[a-z][a-z0-9_-]{0,47})$/.test(
+    !/^\/v1\/(?:(?:studio|dynamic-crm)\/[1-9][0-9]*|data-domains\/[a-z][a-z0-9_-]{0,47})$/.test(
       base,
     ) ||
     !/^[A-Za-z0-9_-]{1,128}$/.test(file)

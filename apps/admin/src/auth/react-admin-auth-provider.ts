@@ -68,7 +68,7 @@ export function createReactAdminAuthProvider(
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
         );
-      if (resource === "dynamic-crm")
+      if (resource === "studio")
         return (
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"]) ||

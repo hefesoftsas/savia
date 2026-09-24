@@ -1,0 +1,1362 @@
+import { z } from "@hono/zod-openapi";
+import { databaseSourceInputSchema } from "@savia/studio-shared/database-sources";
+import type { StudioObject } from "@savia/studio-shared/metadata";
+import { disabledSolutionObjects } from "@savia/studio-server/solution-state";
+import { parseObject } from "@savia/studio-server/services";
+import { workflowDraftSchema } from "@savia/studio-shared/workflows";
+import { workflowRequests } from "@savia/studio-server/workflows/routes";
+
+type Schema = Record<string, unknown>;
+type Paths = Record<string, Record<string, unknown>>;
+const json = (schema: Schema) => ({ "application/json": { schema } });
+const ref = (name: string): Schema => ({
+  $ref: `#/components/schemas/${name}`,
+});
+const envelope = (schema: Schema): Schema => ({
+  type: "object",
+  required: ["data"],
+  properties: { data: schema },
+});
+const parameter = (
+  name: string,
+  location: "query" | "path" | "header",
+  schema: Schema,
+  required = false,
+  description?: string,
+) => ({
+  name,
+  in: location,
+  required,
+  schema,
+  ...(description ? { description } : {}),
+});
+const recordId = parameter(
+  "id",
+  "path",
+  { type: "string", format: "uuid" },
+  true,
+);
+const idempotency = parameter(
+  "Idempotency-Key",
+  "header",
+  { type: "string", minLength: 1, maxLength: 200 },
+  false,
+  "Reutiliza la misma clave y cuerpo al recuperar un envío. Una clave con otros datos devuelve 409.",
+);
+const failures = Object.fromEntries(
+  [
+    [400, "Solicitud inválida"],
+    [401, "Sesión requerida"],
+    [403, "Sin acceso a esta agencia"],
+    [404, "Objeto o registro inexistente"],
+    [409, "Conflicto de versión, unicidad o idempotencia"],
+    [413, "Solicitud demasiado grande"],
+    [422, "Validación del objeto"],
+    [428, "Versión requerida"],
+    [500, "Error interno"],
+    [503, "Servicio no disponible"],
+  ].map(([code, description]) => [
+    code,
+    { description, content: json(ref("CrmError")) },
+  ]),
+);
+function operation(
+  id: string,
+  tag: string,
+  summary: string,
+  response: Schema,
+  options: {
+    parameters?: unknown[];
+    body?: Schema;
+    status?: number;
+    description?: string;
+  } = {},
+) {
+  return {
+    operationId: id,
+    tags: [tag],
+    summary,
+    ...(options.description ? { description: options.description } : {}),
+    ...(options.parameters ? { parameters: options.parameters } : {}),
+    ...(options.body
+      ? { requestBody: { required: true, content: json(options.body) } }
+      : {}),
+    responses: {
+      ...failures,
+      [options.status ?? 200]: {
+        description: "Operación completada",
+        content: json(response),
+      },
+    },
+  };
+}
+
+function fieldSchema(field: StudioObject["config"]["fields"][string]): Schema {
+  const c = field.config ?? {};
+  let value: Schema =
+    c.multiple || field.type === "MultiSelect"
+      ? {
+          type: "array",
+          items: {
+            type: "string",
+            ...(field.type === "MultiSelect"
+              ? { enum: (field.options ?? []).map((option) => option.value) }
+              : {}),
+          },
+          ...(field.type === "MultiSelect" &&
+          field.required &&
+          !field.hidden &&
+          !c.visibleWhen
+            ? { minItems: 1 }
+            : {}),
+          maxItems: 500,
+          uniqueItems: true,
+        }
+      : {
+          type: ["Number", "Currency", "Percentage", "Rating"].includes(
+            field.type,
+          )
+            ? (c.integer && field.type !== "Percentage") ||
+              field.type === "Rating"
+              ? "integer"
+              : "number"
+            : field.type === "Toggle"
+              ? "boolean"
+              : "string",
+        };
+  if (["Number", "Currency", "Percentage", "Rating"].includes(field.type)) {
+    if (typeof c.minimum === "number") value.minimum = c.minimum;
+    if (typeof c.maximum === "number") value.maximum = c.maximum;
+  }
+  if (field.type === "Percentage") {
+    value.minimum = c.minimum ?? 0;
+    value.maximum = c.maximum ?? 100;
+    value.multipleOf = 10 ** -Number(c.decimals ?? 2);
+  }
+  if (field.type === "Rating") {
+    value.minimum = 1;
+    value.maximum = c.maximum ?? 5;
+  }
+  if (value.type === "string") {
+    value.maxLength =
+      typeof c.maxLength === "number"
+        ? c.maxLength
+        : field.type === "RichText"
+          ? 100000
+          : 10000;
+    if (typeof c.minLength === "number") value.minLength = c.minLength;
+    if (field.required && !field.hidden && !c.visibleWhen)
+      value.minLength = Math.max(
+        1,
+        typeof c.minLength === "number" ? c.minLength : 0,
+      );
+    if (typeof c.pattern === "string") value.pattern = c.pattern;
+    if (c.format === "email") value.format = "email";
+    if (c.format === "url") value.format = "uri";
+    if (field.type === "DateControl") value.format = "date";
+    if (field.type === "DateTime" || c.dateTime === true)
+      value.format = "date-time";
+    if (field.type === "Time") value.pattern = "^([01]\\d|2[0-3]):[0-5]\\d$";
+    if (field.type === "Dropdown" && !c.relation)
+      value.enum = (field.options ?? []).map((o) => o.value);
+  }
+  // Empty optional values normalize to null; conditional requirements are evaluated by the shared engine.
+  if (!field.required || field.hidden || c.visibleWhen)
+    value = {
+      anyOf: [value, { type: "null" }, { const: "" }],
+    };
+  return {
+    ...value,
+    title: field.label,
+    ...(field.description ? { description: field.description } : {}),
+    ...(field.defaultValue !== undefined
+      ? { default: field.defaultValue }
+      : {}),
+    ...(c.formula ? { readOnly: true, "x-crm-formula": c.formula } : {}),
+    ...(c.relation ? { "x-crm-relation": c.relation } : {}),
+    ...(c.unique ? { "x-crm-unique": true } : {}),
+    ...(c.visibleWhen ? { "x-crm-visible-when": c.visibleWhen } : {}),
+    ...(c.requiredWhen ? { "x-crm-required-when": c.requiredWhen } : {}),
+    ...(c.jsonSchema
+      ? {
+          description: "Texto JSON validado por el esquema indicado.",
+          "x-crm-json-schema": c.jsonSchema,
+        }
+      : {}),
+  };
+}
+
+export async function dynamicOpenApi(
+  db: D1Database,
+  agencyId: number | { tenant: string; apiBasePath: string },
+) {
+  const tenant =
+    typeof agencyId === "number" ? `agency:${agencyId}` : agencyId.tenant;
+  const apiBasePath =
+    typeof agencyId === "number"
+      ? `/v1/studio/${agencyId}`
+      : agencyId.apiBasePath;
+  const isCommercialTenant =
+    typeof agencyId === "number" ||
+    (typeof agencyId === "object" && !agencyId.tenant.startsWith("domain:"));
+  const { results } = await db
+    .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
+    .bind(tenant)
+    .all();
+  const disabled = await disabledSolutionObjects(db, tenant);
+  const objects = results
+    .map(parseObject)
+    .filter((object) => !disabled.has(object.name));
+  const paths: Paths =
+    isCommercialTenant
+      ? {}
+      : {
+          "/collection-relations": {
+            get: operation(
+              "collection_relations_list",
+              "Relaciones",
+              "Listar relaciones entre colecciones",
+              envelope({ type: "array", items: { type: "object" } }),
+            ),
+            post: operation(
+              "collection_relations_create",
+              "Relaciones",
+              "Definir una relación local",
+              envelope({ type: "object" }),
+              {
+                status: 201,
+                body: {
+                  type: "object",
+                  required: [
+                    "sourceObject",
+                    "targetObject",
+                    "sourceLabel",
+                    "targetLabel",
+                    "cardinality",
+                  ],
+                  properties: {
+                    storage: { type: "string", enum: ["local", "fields"] },
+                    sourceField: { type: "string" },
+                    targetField: { type: "string" },
+                    sourceDisplayField: { type: "string" },
+                    targetDisplayField: { type: "string" },
+                    sourceObject: { type: "string" },
+                    targetObject: { type: "string" },
+                    sourceLabel: { type: "string" },
+                    targetLabel: { type: "string" },
+                    cardinality: {
+                      type: "string",
+                      enum: ["one-to-one", "one-to-many", "many-to-many"],
+                    },
+                  },
+                },
+                description:
+                  "Guarda la definición en Savia. No modifica esquemas ni vínculos del proveedor externo.",
+              },
+            ),
+          },
+          "/collection-relations/{relationId}": {
+            put: operation(
+              "collection_relations_update",
+              "Relaciones",
+              "Editar campos y presentación de una relación",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("relationId", "path", { type: "string" }, true),
+                ],
+                body: {
+                  type: "object",
+                  required: [
+                    "version",
+                    "sourceObject",
+                    "targetObject",
+                    "sourceLabel",
+                    "targetLabel",
+                    "cardinality",
+                  ],
+                  properties: {
+                    version: { type: "integer", minimum: 1 },
+                    storage: {
+                      type: "string",
+                      enum: ["local", "fields", "native"],
+                    },
+                    sourceField: { type: "string" },
+                    targetField: { type: "string" },
+                    sourceDisplayField: { type: "string" },
+                    targetDisplayField: { type: "string" },
+                    sourceObject: { type: "string" },
+                    targetObject: { type: "string" },
+                    sourceLabel: { type: "string" },
+                    targetLabel: { type: "string" },
+                    cardinality: {
+                      type: "string",
+                      enum: ["one-to-one", "one-to-many", "many-to-many"],
+                    },
+                  },
+                },
+                description:
+                  "Requiere la versión vigente. Las relaciones nativas permiten presentación; su referencia pertenece al origen. Las relaciones por campos solo se guardan para fuentes y campos compatibles.",
+              },
+            ),
+            delete: operation(
+              "collection_relations_delete",
+              "Relaciones",
+              "Eliminar definición y vínculos locales",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("relationId", "path", { type: "string" }, true),
+                ],
+                description:
+                  "Elimina solo la relación local y sus vínculos. Conserva los registros. No elimina relaciones nativas del origen.",
+              },
+            ),
+          },
+          "/record-links/{object}/{id}": {
+            get: operation(
+              "record_links_list",
+              "Relaciones",
+              "Consultar registros relacionados",
+              envelope({ type: "array", items: { type: "object" } }),
+              {
+                parameters: [
+                  parameter("object", "path", { type: "string" }, true),
+                  parameter("id", "path", { type: "string" }, true),
+                  parameter("page", "query", { type: "integer", minimum: 1 }),
+                  parameter("perPage", "query", {
+                    type: "integer",
+                    minimum: 1,
+                    maximum: 100,
+                  }),
+                ],
+              },
+            ),
+          },
+          "/record-links/{object}/{id}/{relationId}": Object.fromEntries(
+            ["post", "delete"].map((method) => [
+              method,
+              operation(
+                `record_links_${method === "post" ? "create" : "delete"}`,
+                "Relaciones",
+                method === "post"
+                  ? "Vincular registros"
+                  : "Desvincular registros",
+                envelope({ type: "object" }),
+                {
+                  parameters: [
+                    parameter("object", "path", { type: "string" }, true),
+                    parameter("id", "path", { type: "string" }, true),
+                    parameter("relationId", "path", { type: "string" }, true),
+                  ],
+                  body: {
+                    type: "object",
+                    required: ["targetId"],
+                    properties: { targetId: { type: "string" } },
+                  },
+                  description:
+                    "Solo relaciones locales; valida existencia y cardinalidad. No elimina ni cambia datos del registro.",
+                },
+              ),
+            ]),
+          ),
+          "/sources": {
+            get: operation(
+              "collection_sources_list",
+              "Fuentes y colecciones",
+              "Listar fuentes del dominio",
+              envelope({ type: "array", items: { type: "object" } }),
+            ),
+            post: operation(
+              "collection_sources_create",
+              "Fuentes y colecciones",
+              "Configurar una fuente externa",
+              envelope({ type: "object" }),
+              {
+                status: 201,
+                body: {
+                  anyOf: [
+                    z.toJSONSchema(databaseSourceInputSchema, { io: "input" }),
+                    {
+                      type: "object",
+                      required: ["id", "label", "kind", "baseUrl"],
+                      properties: {
+                        id: { type: "string" },
+                        label: { type: "string" },
+                        kind: { const: "jsonapi" },
+                        baseUrl: { type: "string", format: "uri" },
+                        token: { type: "string", writeOnly: true },
+                        options: { type: "object" },
+                      },
+                    },
+                  ],
+                },
+              },
+            ),
+          },
+          "/sources/{id}/test": {
+            post: operation(
+              "database_source_test",
+              "Fuentes y colecciones",
+              "Probar conexión de base de datos",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+              },
+            ),
+          },
+          "/sources/{id}/inspect": {
+            post: operation(
+              "database_source_inspect",
+              "Fuentes y colecciones",
+              "Inspeccionar tablas o colecciones",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+                body: {
+                  type: "object",
+                  properties: { resource: { type: "string" } },
+                },
+              },
+            ),
+          },
+          "/sources/{id}": {
+            put: operation(
+              "database_source_update",
+              "Fuentes y colecciones",
+              "Actualizar acceso y permisos de escritura",
+              envelope({ type: "object" }),
+              {
+                parameters: [parameter("id", "path", { type: "string" }, true)],
+                body: {
+                  type: "object",
+                  properties: {
+                    label: { type: "string" },
+                    password: {
+                      type: "string",
+                      writeOnly: true,
+                      nullable: true,
+                    },
+                    writeEnabled: { type: "boolean" },
+                  },
+                },
+              },
+            ),
+          },
+          "/collection-bindings/{name}/sync": {
+            post: operation(
+              "database_source_sync",
+              "Fuentes y colecciones",
+              "Sincronizar campos desde la base",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("name", "path", { type: "string" }, true),
+                ],
+                body: {
+                  type: "object",
+                  required: ["version"],
+                  properties: {
+                    version: { type: "integer" },
+                    fields: { type: "array", items: { type: "string" } },
+                  },
+                },
+              },
+            ),
+          },
+          "/collection-catalog": {
+            get: operation(
+              "collection_catalog",
+              "Fuentes y colecciones",
+              "Consultar colecciones de negocio disponibles",
+              envelope({ type: "array", items: { type: "object" } }),
+            ),
+          },
+          "/collection-bindings/{name}/operations": {
+            get: operation(
+              "collection_operations_get",
+              "Fuentes y colecciones",
+              "Consultar endpoints y mapeos de una colección",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("name", "path", { type: "string" }, true),
+                ],
+              },
+            ),
+            put: operation(
+              "collection_operations_save",
+              "Fuentes y colecciones",
+              "Guardar operaciones y derivar capacidades",
+              envelope({ type: "object" }),
+              {
+                parameters: [
+                  parameter("name", "path", { type: "string" }, true),
+                ],
+                body: {
+                  type: "object",
+                  required: ["version", "operations"],
+                  properties: {
+                    version: { type: "integer" },
+                    operations: {
+                      type: "object",
+                      description:
+                        "list, read, create, update y delete; cada acción es null o un endpoint con method, path, format y mapeos.",
+                    },
+                  },
+                },
+              },
+            ),
+          },
+          "/collection-bindings/{name}/operations/infer": {
+            post: operation(
+              "collection_operations_infer",
+              "Fuentes y colecciones",
+              "Detectar candidatos desde OpenAPI sin ejecutarlos",
+              envelope({ type: "array", items: { type: "object" } }),
+              {
+                parameters: [
+                  parameter("name", "path", { type: "string" }, true),
+                ],
+                body: {
+                  type: "object",
+                  required: ["document"],
+                  properties: {
+                    document: {
+                      description: "Documento OpenAPI 3 JSON o YAML",
+                    },
+                  },
+                },
+              },
+            ),
+          },
+          "/collection-bindings": {
+            get: operation(
+              "collection_bindings_list",
+              "Fuentes y colecciones",
+              "Listar colecciones conectadas",
+              envelope({ type: "array", items: { type: "object" } }),
+            ),
+            post: operation(
+              "collection_bindings_create",
+              "Fuentes y colecciones",
+              "Conectar una colección a una pantalla",
+              envelope({ type: "object" }),
+              {
+                status: 201,
+                body: {
+                  type: "object",
+                  required: ["name", "label"],
+                  properties: {
+                    name: { type: "string" },
+                    label: { type: "string" },
+                    domain: { type: "string" },
+                    collection: { type: "string" },
+                    sourceId: { type: "string" },
+                    resource: { type: "string" },
+                    fields: { type: "object" },
+                    capabilities: { type: "object" },
+                  },
+                },
+                description:
+                  "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server o MongoDB. No copia los registros externos.",
+              },
+            ),
+          },
+        };
+  const bundlePath = {
+    post: operation(
+      "record_bundle_save",
+      "Relaciones",
+      "Save a parent and its related records atomically",
+      {
+        type: "object",
+        required: ["data", "related"],
+        properties: {
+          data: { type: "object" },
+          related: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["relationId", "records"],
+              properties: {
+                relationId: { type: "string" },
+                records: { type: "array", items: { type: "object" } },
+              },
+            },
+          },
+        },
+      },
+      {
+        parameters: [
+          parameter("object", "path", { type: "string" }, true),
+          { ...idempotency, required: true },
+        ],
+        description:
+          "Local collections only; one level, 100 total related rows, 10 relation groups and 1 MiB body. Each supplied relation replaces its selection. Existing parents require version and each group requires previousIds from the complete previously loaded selection. New rows may supply a UUID clientId without id or version to preserve an offline identity. X-Savia-Sync-Principal, when supplied, must match the authenticated principal. Edited children require version; id alone links an existing row. Unlinking never deletes a record. Replay the same key and body after a lost response.",
+        body: {
+          type: "object",
+          required: ["record", "relations"],
+          additionalProperties: false,
+          properties: {
+            record: {
+              type: "object",
+              required: ["data"],
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                clientId: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Optional stable create ID; requires data and forbids id and version.",
+                },
+                version: { type: "integer", minimum: 1 },
+                data: { type: "object" },
+              },
+            },
+            relations: {
+              type: "array",
+              maxItems: 10,
+              items: {
+                type: "object",
+                required: ["relationId", "rows"],
+                additionalProperties: false,
+                properties: {
+                  relationId: { type: "string" },
+                  previousIds: {
+                    type: "array",
+                    maxItems: 100,
+                    uniqueItems: true,
+                    items: { type: "string" },
+                  },
+                  rows: {
+                    type: "array",
+                    maxItems: 100,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        id: { type: "string" },
+                        clientId: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "Optional stable create ID; requires data and forbids id and version.",
+                        },
+                        version: { type: "integer", minimum: 1 },
+                        data: { type: "object" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ),
+  };
+  const schemas: Record<string, Schema> = {
+    CrmError: {
+      type: "object",
+      required: ["error"],
+      properties: {
+        error: {
+          type: "object",
+          required: ["code", "message"],
+          properties: { code: { type: "string" }, message: { type: "string" } },
+        },
+      },
+    },
+    CrmHubSpotStatus: {
+      type: "object",
+      required: ["status"],
+      properties: {
+        status: {
+          type: "string",
+          enum: [
+            "not_synced",
+            "synced",
+            "syncing",
+            "uncertain",
+            "connection_required",
+          ],
+        },
+        externalObjectId: { type: "string" },
+        url: { type: "string", format: "uri" },
+        lastSyncedAt: { type: "string" },
+        operation: { type: "string", enum: ["created", "updated"] },
+      },
+    },
+  };
+  for (const object of objects) {
+    const name = object.name;
+    const binding = object.config.studio?.collection;
+    const capabilities =
+      object.config.studio?.capabilities ?? binding?.capabilities;
+    const properties = Object.fromEntries(
+      Object.entries(object.config.fields).map(([key, field]) => [
+        key,
+        fieldSchema(field),
+      ]),
+    );
+    const required = Object.entries(object.config.fields)
+      .filter(
+        ([, f]) =>
+          f.required &&
+          !f.hidden &&
+          !f.config?.visibleWhen &&
+          !f.config?.formula &&
+          f.defaultValue === undefined,
+      )
+      .map(([key]) => key);
+    const managedAgency =
+      tenant === "domain:platform" &&
+      (name === "agencias" ||
+        name === "tenants" ||
+        name === "organizaciones" ||
+        name === "organizations");
+    const managedCustomer = tenant === "domain:platform" && name === "clientes";
+    const idSchema: Schema = binding
+      ? { type: "string", minLength: 1, maxLength: 256 }
+      : managedAgency || managedCustomer
+        ? { type: "string", pattern: "^[1-9][0-9]*$" }
+        : { type: "string", format: "uuid" };
+    const objectRecordId =
+      binding || managedAgency || managedCustomer
+        ? parameter("id", "path", idSchema, true)
+        : recordId;
+    const base: Schema = {
+      type: "object",
+      additionalProperties: false,
+      properties,
+      "x-crm-schema-version": object.version ?? 1,
+      ...(binding ? { "x-savia-collection": binding } : {}),
+    };
+    schemas[`${name}_Create`] = {
+      ...base,
+      ...(required.length ? { required } : {}),
+    };
+    schemas[`${name}_Update`] = {
+      ...base,
+      properties: { ...properties, _version: { type: "integer", minimum: 1 } },
+      required: binding ? [] : ["_version"],
+    };
+    schemas[`${name}_Record`] = {
+      ...base,
+      properties: {
+        ...properties,
+        id: idSchema,
+        ...(binding
+          ? { type: { type: "string" }, _relationships: { type: "object" } }
+          : {}),
+        _version: { type: "integer", minimum: 1 },
+        created_at: { type: "string", format: "date-time" },
+        updated_at: { type: "string", format: "date-time" },
+        deleted_at: { type: ["string", "null"] },
+      },
+      required: binding
+        ? ["id"]
+        : ["id", "_version", "created_at", "updated_at"],
+    };
+    if (!binding && !object.config.studio?.business)
+      paths[`/record-bundles/${name}`] = {
+        post: {
+          ...bundlePath.post,
+          operationId: `${name}_bundle_save`,
+          tags: [object.label],
+          parameters: [
+            { ...idempotency, required: true },
+            parameter("X-Savia-Sync-Principal", "header", { type: "string" }),
+          ],
+        },
+      };
+    const record = envelope(ref(`${name}_Record`));
+    paths[`/published/${name}`] = {
+      get: operation(
+        `${name}_list`,
+        object.label,
+        `Listar ${object.label}`,
+        {
+          type: "object",
+          required: binding ? ["data"] : ["data", "total", "page", "perPage"],
+          properties: {
+            data: { type: "array", items: ref(`${name}_Record`) },
+            total: { type: "integer" },
+            page: { type: "integer" },
+            perPage: { type: "integer" },
+          },
+        },
+        {
+          parameters: [
+            parameter("page", "query", {
+              type: "integer",
+              minimum: 1,
+              default: 1,
+            }),
+            parameter("perPage", "query", {
+              type: "integer",
+              minimum: 1,
+              maximum: 200,
+              default: 25,
+            }),
+            parameter("q", "query", { type: "string", maxLength: 200 }),
+            parameter("sort", "query", {
+              type: "string",
+              enum: [
+                ...new Set([
+                  "id",
+                  "created_at",
+                  "updated_at",
+                  ...Object.keys(properties),
+                ]),
+              ],
+              default: "updated_at",
+            }),
+            parameter("order", "query", {
+              type: "string",
+              enum: ["ASC", "DESC"],
+              default: "DESC",
+            }),
+            parameter(
+              "filters",
+              "query",
+              { type: "string" },
+              false,
+              'JSON: {"logic":"and","conditions":[{"field":"name","op":"contains","value":"Ana"}]}. Operadores: eq, ne, gt, gte, lt, lte, contains, startsWith, empty, in.',
+            ),
+          ],
+        },
+      ),
+      post: operation(
+        `${name}_create`,
+        object.label,
+        `Crear ${object.label}`,
+        record,
+        { body: ref(`${name}_Create`), parameters: [idempotency], status: 201 },
+      ),
+    };
+    paths[`/published/${name}/{id}`] = {
+      get: operation(
+        `${name}_read`,
+        object.label,
+        "Consultar registro",
+        record,
+        { parameters: [objectRecordId] },
+      ),
+      patch: operation(
+        `${name}_update`,
+        object.label,
+        "Actualizar registro",
+        record,
+        {
+          parameters: [objectRecordId],
+          body: ref(`${name}_Update`),
+          description: binding
+            ? "Actualización mediante el adaptador de la colección. Las reglas y garantías de concurrencia dependen del origen."
+            : "Actualización parcial. _version debe coincidir con la versión leída; los campos omitidos conservan su valor.",
+        },
+      ),
+      delete: operation(
+        `${name}_delete`,
+        object.label,
+        "Eliminar registro",
+        envelope({ type: "object" }),
+        {
+          parameters: [
+            objectRecordId,
+            parameter(
+              "version",
+              "query",
+              { type: "integer", minimum: 1 },
+              !binding,
+            ),
+          ],
+          description: binding
+            ? "Eliminación en el origen mediante su adaptador; no implica papelera local."
+            : managedCustomer
+              ? "Eliminación permanente del perfil, sujeta a las restricciones de relaciones. No admite restauración."
+              : "Borrado lógico sujeto a las restricciones de relaciones.",
+        },
+      ),
+    };
+    if (managedCustomer) {
+      paths["/business/managed-clientes/sync"] = {
+        get: operation(
+          "clientes_batch_sync_state",
+          object.label,
+          "Consultar conexiones CRM de la selección",
+          envelope({
+            type: "object",
+            properties: {
+              activeCustomerIds: { type: "array", items: { type: "integer" } },
+            },
+          }),
+          {
+            parameters: [
+              parameter(
+                "customerIds",
+                "query",
+                { type: "string" },
+                true,
+                "Entre 1 y 100 IDs separados por comas.",
+              ),
+            ],
+          },
+        ),
+        post: operation(
+          "clientes_batch_sync",
+          object.label,
+          "Sincronizar selección con HubSpot",
+          envelope({
+            type: "object",
+            properties: {
+              items: { type: "array", items: { type: "object" } },
+              summary: { type: "object" },
+            },
+          }),
+          {
+            body: {
+              type: "object",
+              required: ["customerIds"],
+              additionalProperties: false,
+              properties: {
+                customerIds: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 100,
+                  items: { type: "integer", minimum: 1 },
+                },
+              },
+            },
+            description:
+              "Sincronización explícita con la conexión de cada agencia; devuelve el resultado por cliente.",
+          },
+        ),
+      };
+      paths[`/business/managed-clientes/{id}/sync`] = {
+        get: operation(
+          "clientes_sync_state",
+          object.label,
+          "Consultar conexión CRM y enlaces",
+          envelope({
+            type: "object",
+            properties: {
+              active: { type: "boolean" },
+              links: { type: "array", items: { type: "object" } },
+            },
+          }),
+          { parameters: [objectRecordId] },
+        ),
+        post: operation(
+          "clientes_sync",
+          object.label,
+          "Sincronizar cliente con HubSpot",
+          envelope({
+            type: "object",
+            properties: {
+              items: { type: "array", items: { type: "object" } },
+              summary: { type: "object" },
+            },
+          }),
+          {
+            parameters: [objectRecordId],
+            description:
+              "Sincronización explícita de persona natural o jurídica con la conexión activa de su agencia.",
+          },
+        ),
+      };
+    }
+    if (managedAgency) delete paths[`/published/${name}/{id}`].delete;
+    if (binding) {
+      const listing = paths[`/published/${name}`].get as {
+        parameters?: Array<{ name: string; schema?: Record<string, unknown> }>;
+      };
+      listing.parameters = listing.parameters
+        ?.filter((parameter) => {
+          if (parameter.name === "q") return capabilities?.search === true;
+          if (["sort", "order"].includes(parameter.name))
+            return capabilities?.sort === true;
+          if (parameter.name === "filters")
+            return capabilities?.filter === true;
+          return true;
+        })
+        .map((parameter) =>
+          parameter.name === "perPage"
+            ? { ...parameter, schema: { ...parameter.schema, maximum: 100 } }
+            : parameter,
+        );
+      if (capabilities?.filter) {
+        const filter = listing.parameters?.find(
+          (p) => p.name === "filters",
+        ) as any;
+        if (filter)
+          filter.description =
+            'JSON: {"logic":"and","conditions":[{"field":"name","op":"eq","value":"Ana"}]}. Solo igualdad sobre campos declarados.';
+      }
+    }
+    if (capabilities) {
+      if (!capabilities.list) delete paths[`/published/${name}`].get;
+      if (!capabilities.create) delete paths[`/published/${name}`].post;
+      if (!capabilities.read) delete paths[`/published/${name}/{id}`].get;
+      if (!capabilities.update) delete paths[`/published/${name}/{id}`].patch;
+      if (!capabilities.delete) delete paths[`/published/${name}/{id}`].delete;
+    }
+
+    if (
+      isCommercialTenant &&
+      object.config.studio?.business === "customer"
+    ) {
+      paths[`/business/${name}/{id}/hubspot`] = {
+        get: operation(
+          `${name}_hubspot_status`,
+          object.label,
+          "Consultar vínculo con HubSpot",
+          envelope(ref("CrmHubSpotStatus")),
+          { parameters: [objectRecordId] },
+        ),
+        post: operation(
+          `${name}_hubspot_sync`,
+          object.label,
+          "Sincronizar con HubSpot",
+          envelope(ref("CrmHubSpotStatus")),
+          {
+            parameters: [objectRecordId],
+            description:
+              "Envía el registro a la conexión HubSpot de esta agencia. Acción externa explícita; no reintentar automáticamente un resultado incierto.",
+          },
+        ),
+      };
+      if (
+        objects.some(
+          (o) =>
+            o.name === "cotizaciones" &&
+            o.config.studio?.business === "quotation",
+        )
+      )
+        paths[`/business/${name}/{id}/quotations`] = {
+          post: operation(
+            `${name}_quotation_create`,
+            object.label,
+            "Crear borrador de cotización relacionado",
+            envelope(ref("cotizaciones_Record")),
+            {
+              parameters: [recordId, { ...idempotency, required: true }],
+              body: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  name: { type: "string", minLength: 1, maxLength: 200 },
+                  plate: { type: "string", maxLength: 20 },
+                },
+              },
+              status: 201,
+              description:
+                "Guarda una cotización en estado draft vinculada al cliente; no ejecuta aseguradoras.",
+            },
+          ),
+        };
+    }
+  }
+  const workflowRoutes = [
+    ["/workflows/{id}/webhook", "get", "Read webhook endpoint", null],
+    ["/workflows/{id}/webhook", "post", "Create webhook endpoint", null],
+    [
+      "/workflows/{id}/webhook/rotate",
+      "post",
+      "Rotate incoming webhook secret",
+      null,
+    ],
+    [
+      "/workflow-webhook-destinations",
+      "get",
+      "List webhook destinations",
+      null,
+    ],
+    [
+      "/workflow-webhook-destinations",
+      "post",
+      "Create webhook destination",
+      workflowRequests.destination,
+    ],
+    [
+      "/workflow-webhook-destinations/{id}",
+      "put",
+      "Update webhook destination",
+      workflowRequests.destinationUpdate,
+    ],
+    [
+      "/workflow-webhook-destinations/{id}/secret",
+      "post",
+      "Rotate destination credential",
+      workflowRequests.secret,
+    ],
+    [
+      "/workflow-webhook-destinations/{id}/enabled",
+      "post",
+      "Enable webhook destination",
+      workflowRequests.enabled,
+    ],
+
+    [
+      "/access-context",
+      "get",
+      "Read current authenticated access policy",
+      null,
+    ],
+    ["/workflow-bundles", "get", "List available workflow bundles", null],
+    [
+      "/workflow-bundles/{id}/prepare",
+      "post",
+      "Prepare additive relations and inactive workflow drafts",
+      null,
+    ],
+    ["/workflows", "get", "List workflows", null],
+    ["/workflows", "post", "Create workflow draft", workflowDraftSchema],
+    ["/workflows/{id}", "get", "Read workflow draft", null],
+    ["/workflows/{id}", "put", "Save workflow draft", workflowRequests.save],
+    [
+      "/workflows/{id}/publish",
+      "post",
+      "Publish immutable workflow version",
+      workflowRequests.publish,
+    ],
+    [
+      "/workflows/{id}/enabled",
+      "post",
+      "Change workflow activation",
+      workflowRequests.enabled,
+    ],
+    [
+      "/workflows/{id}/start",
+      "post",
+      "Start manual workflow",
+      workflowRequests.start,
+    ],
+    ["/workflows/{id}/executions", "get", "List executions", null],
+    [
+      "/workflow-executions/{id}",
+      "get",
+      "Inspect execution and step results",
+      null,
+    ],
+    ["/workflow-executions/{id}/cancel", "post", "Cancel execution", null],
+    [
+      "/workflow-executions/{id}/retry",
+      "post",
+      "Retry failed or blocked execution",
+      null,
+    ],
+    ["/workflow-inbox", "get", "Read assigned tasks and notifications", null],
+    ["/workflow-inbox/{id}/resolve", "post", "Resolve assigned item", null],
+  ] as const;
+  const notificationRoutes = [
+    ["/notifications", "get", "List personal notifications", null],
+    ["/notifications/count", "get", "Count personal notifications", null],
+    ["/notifications/read-all", "post", "Mark inbox as read", null],
+    ["/notifications/{id}/read", "post", "Mark notification read state", null],
+    ["/notifications/{id}/archive", "post", "Archive notification", null],
+    ["/notifications/{id}/resolve", "post", "Resolve notification action", null],
+    ["/notifications/action/{id}", "get", "Resolve notification action state", null],
+    ["/notifications/follows", "get", "List followed collections", null],
+    ["/notifications/follow", "post", "Follow a collection", null],
+    ["/notifications/follow/{collection}", "delete", "Unfollow a collection", null],
+  ] as const;
+  for (const [path, method, summary, body] of notificationRoutes) {
+    paths[path] ??= {};
+    paths[path][method] = {
+      summary,
+      tags: ["Notifications"],
+      parameters: path.includes("{id}") || path.includes("{collection}")
+        ? [
+            {
+              in: "path",
+              name: path.includes("{id}") ? "id" : "collection",
+              required: true,
+              schema: { type: "string" },
+            },
+          ]
+        : [],
+      ...(body
+        ? {
+            requestBody: {
+              required: true,
+              content: json(z.toJSONSchema(body)),
+            },
+          }
+        : {}),
+      responses: { 200: { description: "OK" }, 401: { description: "Unauthorized" } },
+    };
+  }
+  for (const [path, method, summary, body] of workflowRoutes) {
+    paths[path] ??= {};
+    paths[path][method] = {
+      summary,
+      tags: ["Workflows"],
+      parameters: path.includes("{id}")
+        ? [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string" },
+            },
+          ]
+        : [],
+      ...(body
+        ? {
+            requestBody: {
+              required: true,
+              content: json(z.toJSONSchema(body)),
+            },
+          }
+        : {}),
+      responses: {
+        [path.endsWith("/start")
+          ? 202
+          : method === "post" && path === "/workflows"
+            ? 201
+            : 200]: {
+          description: "Workspace-scoped result",
+          content: json(envelope({})),
+        },
+        ...failures,
+      },
+    };
+  }
+  const fileId = parameter("id", "path", { type: "string" }, true);
+  const fileVersion = parameter(
+    "version",
+    "path",
+    { type: "integer", minimum: 1 },
+    true,
+  );
+  const officeFile = {
+    type: "object",
+    required: ["id", "name", "mime", "size", "version"],
+    properties: {
+      id: { type: "string" },
+      name: { type: "string" },
+      mime: { type: "string" },
+      size: { type: "integer" },
+      version: { type: "integer", minimum: 1 },
+      field: { type: "string" },
+      object: { type: "string" },
+      recordId: { type: "string" },
+      readOnly: { type: "boolean" },
+      maxSize: { type: "integer" },
+    },
+  };
+  paths["/file/{id}/office"] = {
+    get: operation(
+      "office_file_metadata",
+      "Office attachments",
+      "Read editable attachment metadata",
+      envelope(officeFile),
+      { parameters: [fileId] },
+    ),
+  };
+  paths["/file/{id}/revisions"] = {
+    get: operation(
+      "office_file_revisions",
+      "Office attachments",
+      "List attachment revisions",
+      envelope({
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            version: { type: "integer" },
+            size: { type: "integer" },
+            created_at: { type: "string", format: "date-time" },
+            created_by: { type: ["string", "null"] },
+          },
+        },
+      }),
+      { parameters: [fileId] },
+    ),
+    post: {
+      ...operation(
+        "office_file_save",
+        "Office attachments",
+        "Save an immutable attachment revision",
+        envelope(officeFile),
+        {
+          parameters: [fileId],
+          status: 201,
+          description:
+            "Requires the current file version. A stale version returns 409 without overwriting the current revision. Maximum 5 MiB, subject to the attachment field policy.",
+        },
+      ),
+      requestBody: {
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: {
+              type: "object",
+              required: ["version", "file"],
+              properties: {
+                version: { type: "integer", minimum: 1 },
+                file: { type: "string", format: "binary" },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  paths["/file/{id}/revisions/{version}/download"] = {
+    get: {
+      operationId: "office_file_revision_download",
+      tags: ["Office attachments"],
+      summary: "Download an attachment revision",
+      parameters: [fileId, fileVersion],
+      responses: {
+        ...failures,
+        200: {
+          description: "Original Office file bytes",
+          content: {
+            "application/octet-stream": {
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        },
+      },
+    },
+  };
+  return {
+    openapi: "3.1.0" as const,
+    info: {
+      title: "CRM de Savia",
+      version: "1.0.0",
+      description:
+        "Contrato generado con los objetos y versiones actuales de este dominio de datos. Las condiciones, relaciones y unicidad se validan en el servidor. Requiere permiso de administración del dominio.",
+    },
+    servers: [{ url: `${apiBasePath}/api` }],
+    security: [{ bearerAuth: [] }],
+    tags: [
+      {
+        name: "Office attachments",
+        description: "Versioned DOCX, XLSX and PPTX attachments.",
+      },
+      ...objects.map((o) => ({ name: o.label, description: o.description })),
+      ...(isCommercialTenant
+        ? []
+        : [
+            {
+              name: "Fuentes y colecciones",
+              description:
+                "Configuración del dominio; credenciales solo en el servidor.",
+            },
+          ]),
+    ],
+    paths,
+    components: {
+      schemas,
+      securitySchemes: {
+        bearerAuth: { type: "http" as const, scheme: "bearer" },
+      },
+    },
+  };
+}

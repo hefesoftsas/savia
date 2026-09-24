@@ -128,7 +128,7 @@ const WORKER_SECRETS = {
   mcp: ["SAVIA_MCP_SHARED_SECRET"],
   api: [
     "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
-    "CRM_INTEGRATION_KEY",
+    "STUDIO_INTEGRATION_KEY",
     "SAVIA_MCP_SHARED_SECRET",
   ],
   gateway: [],
@@ -227,7 +227,7 @@ async function main() {
     BETTER_AUTH_SECRET: ephemeralSecret(),
     ENCRYPTION_KEY: ephemeralSecret(),
     ASSISTANT_SETTINGS_ENCRYPTION_KEY: ephemeralSecret(),
-    CRM_INTEGRATION_KEY: ephemeralSecret(),
+    STUDIO_INTEGRATION_KEY: ephemeralSecret(),
     SAVIA_MCP_SHARED_SECRET: ephemeralSecret(),
   };
   const bootstrap = { password: ephemeralSecret() };

@@ -5,9 +5,9 @@ import { CoreAdminContext } from "ra-core";
 import { DataTable } from "../src/components/admin/data-table";
 import { openLocalStore } from "../src/local-data/store";
 import { queryRecords } from "../src/local-data/query";
-import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
+import type { StudioObject, StudioRecord } from "@savia/studio-shared/metadata";
 import "../src/styles/globals.css";
-import "../src/features/crm-engine/style.css";
+import "../src/features/studio-engine/style.css";
 const object = {
   name: "benchmark",
   config: {
@@ -18,7 +18,7 @@ const object = {
       ]),
     ),
   },
-} as unknown as CrmObject;
+} as unknown as StudioObject;
 const store = await openLocalStore("developer-performance-fixture");
 const BenchmarkTable = memo(function BenchmarkTable({
   rows,
@@ -26,7 +26,7 @@ const BenchmarkTable = memo(function BenchmarkTable({
   onRender,
   onOpen,
 }: {
-  rows: CrmRecord[];
+  rows: StudioRecord[];
   virtual: boolean;
   onRender: React.ProfilerOnRenderCallback;
   onOpen: (name: string) => void;
@@ -56,7 +56,7 @@ const BenchmarkTable = memo(function BenchmarkTable({
 });
 async function scanBaseline() {
   let total = 0;
-  const data: CrmRecord[] = [];
+  const data: StudioRecord[] = [];
   const prefix = ["benchmark", "amount:DESC:active"];
   await store.db.records
     .where("sortKeys")
@@ -70,7 +70,7 @@ async function scanBaseline() {
   return { data, total };
 }
 function App() {
-  const [rows, setRows] = useState<CrmRecord[]>([]),
+  const [rows, setRows] = useState<StudioRecord[]>([]),
     [virtual, setVirtual] = useState(false),
     [opened, setOpened] = useState(""),
     [loading, setLoading] = useState(false);

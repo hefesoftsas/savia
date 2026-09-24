@@ -1,6 +1,6 @@
 import type { AuthService } from "./better-auth";
 import { findPrincipalBySubject } from "./identity-repository";
-import { NotificationRepository } from "@savia/crm-server/notifications/repository";
+import { NotificationRepository } from "@savia/studio-server/notifications/repository";
 
 export interface AuthNoticeEvent {
   id: string;

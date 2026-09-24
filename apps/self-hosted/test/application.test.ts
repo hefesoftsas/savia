@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { makeConfig } from "../../../packages/crm-shared/src/metadata";
+import { makeConfig } from "../../../packages/studio-shared/src/metadata";
 import { createApplication } from "../src/application";
 import { loadConfiguration } from "../src/config";
 

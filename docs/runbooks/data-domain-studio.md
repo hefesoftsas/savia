@@ -14,7 +14,7 @@ El CRM ya no necesita una agencia para abrir el diseñador. Un dominio agrupa ob
 
 - GET/POST `/v1/data-domains`: catálogo autorizado y creación de dominios independientes.
 - `/v1/data-domains/:id/api/*`: CRUD, diseñador, OpenAPI/Scalar e integraciones del dominio.
-- `/v1/dynamic-crm/:agencyId/api/*`: compatible con espacios existentes. No se trasladan sus datos.
+- `/v1/studio/:agencyId/api/*`: ruta canónica de espacios de agencia (`/v1/dynamic-crm/:agencyId/api/*` sigue como alias heredado). No se trasladan sus datos.
 - `domain:platform` y `domain:<id>` son ámbitos internos; el cliente nunca puede elegir un tenant arbitrario.
 - Los dominios nuevos y Plataforma requieren administrador de plataforma. Los administradores de agencia mantienen acceso únicamente a sus espacios autorizados. No hay todavía roles configurables por dominio independiente.
 - Integraciones/credenciales/ejecuciones se aíslan por dominio en las tablas existentes; ningún secreto se guarda en almacenamiento del navegador.

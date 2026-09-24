@@ -3,7 +3,7 @@ import type {
   PluginApi,
   PluginExtensionActionRun,
   PluginExtensionConnectionSummary,
-} from "@savia/crm-shared/plugin-api";
+} from "@savia/studio-shared/plugin-api";
 import type { Receipt } from "./gateway";
 export function useIntegration(savia: PluginApi) {
   const [connections, setConnections] = useState<

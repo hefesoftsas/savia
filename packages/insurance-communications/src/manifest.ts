@@ -1,7 +1,7 @@
 import type {
   TrustedExtension,
   ExtensionManifest,
-} from "@savia/crm-shared/extension-package";
+} from "@savia/studio-shared/extension-package";
 import { runtime } from "./gateway";
 export const manifest = {
   format: "savia.extension",

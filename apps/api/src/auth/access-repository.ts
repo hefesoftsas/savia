@@ -6,7 +6,7 @@ import {
   type AccessScope,
   type AccessGrant,
   type AccessPolicy,
-} from "@savia/crm-shared/access-control";
+} from "@savia/studio-shared/access-control";
 import type { AppActor } from "./types";
 import { accessAuthority } from "./access-context";
 import {
@@ -205,7 +205,7 @@ async function commitPolicy(
   const tenant = scope.startsWith("tenant:") ? Number(scope.slice(7)) : -1;
   const authorization = db
     .prepare(
-      "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1 AND (EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin') OR EXISTS(SELECT 1 FROM identity_tenant_membership m JOIN tenants t ON t.id=m.tenant_id WHERE m.principal_id=p.id AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND m.role IN ('tenant_admin','agency_admin')))) THEN 1 ELSE 0 END",
+      "INSERT INTO studio_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1 AND (EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin') OR EXISTS(SELECT 1 FROM identity_tenant_membership m JOIN tenants t ON t.id=m.tenant_id WHERE m.principal_id=p.id AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND m.role IN ('tenant_admin','agency_admin')))) THEN 1 ELSE 0 END",
     )
     .bind(guard, actor.principal.id, tenant);
   const revisionGuard = crypto.randomUUID();
@@ -221,7 +221,7 @@ async function commitPolicy(
         .bind(scope),
       db
         .prepare(
-          "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM access_revisions WHERE scope=? AND revision=?) THEN 1 ELSE 0 END",
+          "INSERT INTO studio_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM access_revisions WHERE scope=? AND revision=?) THEN 1 ELSE 0 END",
         )
         .bind(revisionGuard, scope, expectedRevision),
       db
@@ -244,11 +244,11 @@ async function commitPolicy(
           JSON.stringify(after),
         ),
       db
-        .prepare("DELETE FROM crm_write_guards WHERE id IN (?,?)")
+        .prepare("DELETE FROM studio_write_guards WHERE id IN (?,?)")
         .bind(guard, revisionGuard),
     ]);
   } catch (error) {
-    if (/constraint|crm_write_guards/i.test(String(error)))
+    if (/constraint|studio_write_guards/i.test(String(error)))
       throw new AccessControlError(
         409,
         "ACCESS_CHANGED",
@@ -384,7 +384,7 @@ export async function replaceAccessAssignments(
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
-        "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1) THEN 1 ELSE 0 END",
+        "INSERT INTO studio_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.is_active=1) THEN 1 ELSE 0 END",
       )
       .bind(guard, input.principalId),
     db
@@ -399,20 +399,20 @@ export async function replaceAccessAssignments(
         )
         .bind(input.scope, input.principalId, id),
     ),
-    db.prepare("DELETE FROM crm_write_guards WHERE id=?").bind(guard),
+    db.prepare("DELETE FROM studio_write_guards WHERE id=?").bind(guard),
   ];
   if (input.scope.startsWith("tenant:")) {
     const membershipGuard = crypto.randomUUID();
     statements.unshift(
       db
         .prepare(
-          "INSERT INTO crm_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_tenant_membership WHERE principal_id=? AND tenant_id=? AND is_active=1) THEN 1 ELSE 0 END",
+          "INSERT INTO studio_write_guards(id,valid) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM identity_tenant_membership WHERE principal_id=? AND tenant_id=? AND is_active=1) THEN 1 ELSE 0 END",
         )
         .bind(membershipGuard, input.principalId, Number(input.scope.slice(7))),
     );
     statements.push(
       db
-        .prepare("DELETE FROM crm_write_guards WHERE id=?")
+        .prepare("DELETE FROM studio_write_guards WHERE id=?")
         .bind(membershipGuard),
     );
   }

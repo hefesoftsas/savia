@@ -5,7 +5,7 @@ import {
   type AccessGrant,
   type AccessPolicy,
   type AccessPredicate,
-} from "@savia/crm-shared/access-control";
+} from "@savia/studio-shared/access-control";
 export const collection = "insurance_customer_portal";
 export const policyFields = [
   "name",

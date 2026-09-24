@@ -43,7 +43,7 @@ import {
 import { listWidgetCollections } from "./data";
 import { useMyDayWidgets } from "./use-my-day-widgets";
 import { WidgetCard } from "./widgets";
-import type { MyDayWidget } from "@savia/crm-shared/my-day-widgets";
+import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import { useEffect } from "react";
 
 const MAX_WIDGETS = 12;

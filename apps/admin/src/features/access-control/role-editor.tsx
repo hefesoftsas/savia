@@ -1,6 +1,6 @@
 import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
-import { accessPredicateSchema } from "@savia/crm-shared/access-control";
+import { accessPredicateSchema } from "@savia/studio-shared/access-control";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

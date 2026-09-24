@@ -1,4 +1,4 @@
-import type { NangoConfiguration } from "../crm/nango";
+import type { NangoConfiguration } from "../external-crm/nango";
 import type { AppActor } from "../auth/types";
 import type {
   PersonalIntegrationNangoClient,

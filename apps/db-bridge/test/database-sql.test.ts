@@ -8,7 +8,7 @@ import {
   databaseReadSchema,
   databaseMutationSchema,
   type ResourceMetadata,
-} from "@savia/crm-shared/database-sources";
+} from "@savia/studio-shared/database-sources";
 const fields = ["id", "name"].map((name) => ({
   name,
   nativeType: "text",

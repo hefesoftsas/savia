@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { previewRenewals, executeRenewals } from "../src/backfill";
 const policy = {
   id: "p1",

@@ -284,7 +284,7 @@ def migrate(source_path, preview_path, output_path, backup_path, report_path):
         # must not silently become attached to another business after ID reuse.
         identity_column = 'id_slug' if 'id_slug' in columns(source, 'agencies') else 'name'
         for table in sorted(preview_tables - set(selected)):
-            if table.startswith('crm_'):
+            if table.startswith(('crm_', 'studio_')):
                 continue
             for fk in preview.execute('PRAGMA foreign_key_list(' + quote(table) + ')'):
                 if fk[2] != 'agencies':
@@ -315,9 +315,12 @@ def migrate(source_path, preview_path, output_path, backup_path, report_path):
         # Independent custom domains and their metadata/records survive unchanged.
         # Agency-scoped demos are removed; platform designer metadata can remain,
         # but projections and custom values attached to demo IDs cannot.
-        platform_metadata = {'crm_objects', 'crm_schema_versions', 'crm_views'}
+        platform_metadata = {'studio_objects', 'studio_schema_versions', 'studio_views'}
         for table in sorted(preview_tables):
-            if not table.startswith('crm_') or 'tenant_id' not in columns(target, table):
+            if (
+                not table.startswith(('crm_', 'studio_'))
+                or 'tenant_id' not in columns(target, table)
+            ):
                 continue
             where = "tenant_id LIKE 'agency:%'"
             if table not in platform_metadata:

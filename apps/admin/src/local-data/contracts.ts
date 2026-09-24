@@ -1,15 +1,15 @@
-import type { RelatedRecordBundle } from "@savia/crm-shared/related-records";
-import type { RelationDefinition } from "@savia/crm-shared/relations";
-import type { CrmObject, CrmRecord } from "@savia/crm-shared/metadata";
+import type { RelatedRecordBundle } from "@savia/studio-shared/related-records";
+import type { RelationDefinition } from "@savia/studio-shared/relations";
+import type { StudioObject, StudioRecord } from "@savia/studio-shared/metadata";
 export type StoredRecord = {
   collection: string;
   id: string;
-  document: CrmRecord;
+  document: StudioRecord;
   sortKeys?: Array<[string, string, number, string | number, string]>;
 };
 export type CollectionManifest = {
   name: string;
-  object: CrmObject;
+  object: StudioObject;
   capability: "read-write" | "read-only" | "remote";
   schemaVersion: number;
   latestSequence?: number;
@@ -30,8 +30,8 @@ export type Mutation = {
   sequence: number;
   state: "pending" | "conflict" | "error";
   error?: string;
-  before?: CrmRecord;
-  localSnapshot?: CrmRecord;
+  before?: StudioRecord;
+  localSnapshot?: StudioRecord;
   quarantined?: boolean;
 };
 export type SyncState = {
@@ -48,11 +48,11 @@ export type Conflict = {
   mutationId: string;
   collection: string;
   id: string;
-  master?: CrmRecord | null;
+  master?: StudioRecord | null;
   error: string;
 };
 export type PullBatch = {
-  documents: CrmRecord[];
+  documents: StudioRecord[];
   removedIds?: string[];
   cursor: string;
   hasMore: boolean;
@@ -76,8 +76,8 @@ export type SyncTransport = (
 export type BundleMember = {
   collection: string;
   id: string;
-  before?: CrmRecord;
-  document: CrmRecord;
+  before?: StudioRecord;
+  document: StudioRecord;
 };
 export type LinkSnapshot = {
   collection: string;

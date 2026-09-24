@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { usePluginLocale } from "@savia/crm-shared/plugin-locale-react";
-import type { PluginLocale } from "@savia/crm-shared/plugin-localization";
+import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
+import type { PluginLocale } from "@savia/studio-shared/plugin-localization";
 import { createWorkbenchTranslator, localizeWorkbenchConfig } from "@savia/insurance-workbench";
 import { messages } from "./messages";
-import type { PluginApi } from "@savia/crm-shared/plugin-api";
+import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import {
   Workbench,
   money,

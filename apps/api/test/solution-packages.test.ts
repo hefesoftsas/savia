@@ -114,6 +114,8 @@ beforeAll(async () => {
   for (const [path, sql] of migrations) {
     if (path.endsWith("0041_industry_solutions.sql")) {
       await seedTenantAgency(env.DB, 101);
+      // Seeded under pre-rename names on purpose: 0064 renames the tables
+      // (and rows) to studio_* later in this same chain.
       await env.DB.prepare(
         "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES ('agency:101','polizas','Mis pólizas','Personalizadas',?)",
       )
@@ -140,7 +142,7 @@ beforeAll(async () => {
 });
 it("adopts existing insurance without rewriting schemas or records", async () => {
   const row = await env.DB.prepare(
-    "SELECT version,enabled FROM crm_solution_installations WHERE tenant_id='agency:101' AND id='savia.insurance'",
+    "SELECT version,enabled FROM studio_solution_installations WHERE tenant_id='agency:101' AND id='savia.insurance'",
   ).first();
   expect(row).toEqual({ version: "0.0.0", enabled: 1 });
   const response = await app().request(
@@ -151,7 +153,7 @@ it("adopts existing insurance without rewriting schemas or records", async () =>
   expect(
     (
       await env.DB.prepare(
-        "SELECT label FROM crm_objects WHERE tenant_id='agency:101' AND name='polizas'",
+        "SELECT label FROM studio_objects WHERE tenant_id='agency:101' AND name='polizas'",
       ).first()
     )?.label,
   ).toBe("Mis pólizas");

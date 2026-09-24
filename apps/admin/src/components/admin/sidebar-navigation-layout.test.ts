@@ -101,7 +101,7 @@ describe("sidebar navigation layout", () => {
   it("places a newly visible CRM page in its configured section", () => {
     const reconciled = reconcileSidebarNavigation(
       defaultSidebarNavigationLayout(),
-      ["dashboard", "dynamic-crm", "page:platform:administrar_seguros"],
+      ["dashboard", "studio", "page:platform:administrar_seguros"],
       { "page:platform:administrar_seguros": "administration" },
     );
 
@@ -156,7 +156,7 @@ describe("sidebar navigation layout", () => {
     const layout = normalizeSidebarNavigationLayout({
       version: 1,
       sections: {
-        operation: ["dashboard", "dynamic-crm"],
+        operation: ["dashboard", "studio"],
         productivity: ["my-day", "integrations"],
         administration: [],
         management: [],
@@ -257,7 +257,7 @@ describe("sidebar navigation layout", () => {
     );
     const reconciled = reconcileSidebarNavigation(withSection, [
       "dashboard",
-      "dynamic-crm",
+      "studio",
     ]);
     expect(
       reconciled.blocks.some(
@@ -280,8 +280,27 @@ describe("sidebar navigation layout", () => {
 
     const reconciled = reconcileSidebarNavigation(hidden, [
       "dashboard",
-      "dynamic-crm",
+      "studio",
     ]);
     expect(isNavigationItemHidden(reconciled, "dashboard")).toBe(true);
+  });
+});
+
+describe("legacy dynamic-crm item migration", () => {
+  it("maps the legacy item id to studio when normalizing stored layouts", () => {
+    const normalized = normalizeSidebarNavigationLayout({
+      version: 2,
+      blocks: [
+        {
+          kind: "builtin",
+          id: "operation",
+          items: ["my-day", "dynamic-crm"],
+          collapsed: false,
+        },
+      ],
+      hiddenItems: ["dynamic-crm"],
+    } as unknown as Parameters<typeof normalizeSidebarNavigationLayout>[0]);
+    expect(normalized.blocks[0].items).toEqual(["my-day", "studio"]);
+    expect(normalized.hiddenItems).toEqual(["studio"]);
   });
 });

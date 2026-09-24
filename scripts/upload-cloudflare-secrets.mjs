@@ -48,7 +48,7 @@ export function buildSecretUploads(environment, values) {
       "savia-agencies",
       {
         ASSISTANT_SETTINGS_ENCRYPTION_KEY: "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
-        CRM_INTEGRATION_KEY: "CRM_INTEGRATION_KEY",
+        STUDIO_INTEGRATION_KEY: "STUDIO_INTEGRATION_KEY",
         EXTENSION_CONNECTIONS_ENCRYPTION_KEY:
           "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
         NANGO_API_KEY: "NANGO_API_KEY",
@@ -56,11 +56,18 @@ export function buildSecretUploads(environment, values) {
       },
     ],
   ];
+  // Canonical worker secret is STUDIO_INTEGRATION_KEY; a local
+  // CRM_INTEGRATION_KEY value is accepted as the rotation source.
+  const resolved = {
+    ...values,
+    STUDIO_INTEGRATION_KEY:
+      values.STUDIO_INTEGRATION_KEY ?? values.CRM_INTEGRATION_KEY,
+  };
   return definitions.map(([app, name, keys]) => {
     const secrets = Object.fromEntries(
       Object.entries(keys).map(([key, source]) => {
-        if (!values[source]) throw new Error(`${source} is required`);
-        return [key, values[source]];
+        if (!resolved[source]) throw new Error(`${source} is required`);
+        return [key, resolved[source]];
       }),
     );
     if (app === "api" && values.OPENROUTER_API_KEY)
