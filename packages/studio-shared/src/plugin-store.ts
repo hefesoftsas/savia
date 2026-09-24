@@ -327,7 +327,13 @@ export const storeConnectorSchema = z
             });
         }
       }),
-    allowedHosts: z.array(storeHostSchema).min(1).max(20),
+    allowedHosts: z.array(storeHostSchema).max(20).default([]),
+    /**
+     * Permite además el host del `endpoint` configurado por el tenant.
+     * Para puertos migrados cuyo proveedor varía por tenant; exige el
+     * campo `endpoint` y nunca acepta metadatos cloud.
+     */
+    allowConfiguredHost: z.boolean().default(false),
   })
   .strict()
   .superRefine((connector, ctx) => {
@@ -339,6 +345,15 @@ export const storeConnectorSchema = z
           message: `Secreto sin declarar en el esquema: ${field}.`,
         });
     }
+    if (
+      connector.allowConfiguredHost &&
+      connector.configSchema.properties["endpoint"] === undefined
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["allowConfiguredHost"],
+        message: "Requiere el campo endpoint en el esquema.",
+      });
   });
 
 /**
@@ -562,14 +577,20 @@ export function assertStoreHttpUrl(
 }
 
 function resolveTemplatePath(
-  scopes: Record<string, Record<string, unknown>>,
+  scopes: Record<string, unknown>,
   path: string,
 ): unknown {
   const trimmed = path.trim();
   if (trimmed === "uuid") return crypto.randomUUID();
   if (trimmed === "now") return new Date().toISOString();
   const dot = trimmed.indexOf(".");
-  if (dot < 0) return undefined;
+  if (dot < 0) {
+    // Variables de contexto de ejecución (tenant, principal, ...).
+    const value = scopes[trimmed];
+    return value !== null && value !== undefined && typeof value !== "object"
+      ? value
+      : undefined;
+  }
   let current: unknown = scopes[trimmed.slice(0, dot)];
   if (current === undefined) return undefined;
   for (const segment of trimmed.slice(dot + 1).split(".")) {
@@ -583,10 +604,10 @@ function resolveTemplatePath(
 const TEMPLATE_EXPRESSION = /\{\{\s*([^{}]+?)\s*\}\}/g;
 const TEMPLATE_WHOLE = /^\{\{\s*([^{}]+?)\s*\}\}$/;
 
-/** Rellena una plantilla con scopes (`input`, `connection`). */
+/** Rellena una plantilla con scopes (`input`, `connection`, contexto). */
 export function renderTemplate(
   template: unknown,
-  scopes: Record<string, Record<string, unknown>>,
+  scopes: Record<string, unknown>,
 ): unknown {
   if (Array.isArray(template))
     return template.map((item) => renderTemplate(item, scopes));

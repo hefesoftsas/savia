@@ -40,7 +40,11 @@ function probe(packageDir) {
     lines.push(
       `try { const domain = require(${JSON.stringify(join(src, "domain"))}); if (domain.defaults !== undefined) defaults = domain.defaults; } catch {}`,
     );
-  const probeSource = `let screens = [], screenError = null, requirement = null, requirementError = null, defaults;\n${lines.join("\n")}\nconsole.log(JSON.stringify({ screens, screenError, requirement, requirementError, defaults: defaults ?? null }));\n`;
+  if (existsSync(join(src, "manifest.ts")))
+    lines.push(
+      `try { const ext = require(${JSON.stringify(join(src, "manifest"))}).extension; gatewayActions = ((ext && ext.runtime && ext.runtime.actions) ?? []).map((a) => a.actionId); gatewayConnector = ((ext && ext.runtime && ext.runtime.connectors) ?? [])[0]?.connectorId ?? null; } catch (error) { gatewayError = String((error && error.message) || error); }`,
+    );
+  const probeSource = `let screens = [], screenError = null, requirement = null, requirementError = null, defaults, gatewayActions = [], gatewayConnector = null, gatewayError = null;\n${lines.join("\n")}\nconsole.log(JSON.stringify({ screens, screenError, requirement, requirementError, defaults: defaults ?? null, gatewayActions, gatewayConnector, gatewayError }));\n`;
   const temporaryRoot = mkdtempSync(join(tmpdir(), "savia-port-probe-"));
   try {
     const probePath = join(temporaryRoot, "probe.cjs");
@@ -165,6 +169,55 @@ function generatePort({ packageDir, outDir }) {
   }));
   if (probed.defaults !== null && probed.defaults !== undefined)
     store.settings = { defaults: probed.defaults };
+  // Puertos gateway: el conector compilado es el relay genérico
+  // endpoint+token, que se declara con host configurado.
+  let gatewayCount = 0;
+  if (probed.gatewayError)
+    fail(`no se pudo leer el runtime de ${packageDir}: ${probed.gatewayError}`);
+  if (probed.gatewayActions.length) {
+    const connectorId = probed.gatewayConnector ?? `${manifest.id}.gateway`;
+    store.connectors = [
+      {
+        id: connectorId,
+        label: "Conexión de integración",
+        secretFields: ["token"],
+        configSchema: {
+          type: "object",
+          required: ["endpoint", "token"],
+          properties: {
+            endpoint: { type: "string" },
+            token: { type: "string" },
+          },
+        },
+        allowedHosts: [],
+        allowConfiguredHost: true,
+      },
+    ];
+    store.actions = probed.gatewayActions.map((actionId) => ({
+      id: actionId,
+      kind: "http",
+      connector: connectorId,
+      request: {
+        method: "POST",
+        url: "{{connection.endpoint}}",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer {{connection.token}}",
+          "Idempotency-Key":
+            "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}",
+        },
+        body: {
+          version: 1,
+          extensionId: "{{extension}}",
+          actionId: "{{action}}",
+          tenantId: "{{tenant}}",
+          principalId: "{{principal}}",
+          payload: "{{input.payload}}",
+        },
+      },
+    }));
+    gatewayCount = probed.gatewayActions.length;
+  }
   writeFileSync(join(out, "store.json"), `${JSON.stringify(store, null, 2)}\n`);
   writeFileSync(
     join(out, "README.md"),
@@ -175,6 +228,7 @@ function generatePort({ packageDir, outDir }) {
     manifest: portManifest,
     screens: probed.screens.length,
     collections: probed.requirement ? 1 : 0,
+    gatewayActions: gatewayCount,
   };
 }
 
@@ -194,7 +248,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`Port: ${result.outDir}`);
     console.log(`Plugin: ${result.manifest.id}@${result.manifest.version}`);
     console.log(
-      `Pantallas: ${result.screens}, colecciones: ${result.collections}`,
+      `Pantallas: ${result.screens}, colecciones: ${result.collections}, gateway: ${result.gatewayActions}`,
     );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

@@ -483,18 +483,59 @@ const STORE_HTTP_MAX_RESPONSE_BYTES = 1024 * 1024;
 /** Ejecuta una acción http declarativa con valores ya revelados. */
 export async function executeStoreHttpAction(input: {
   action: StoreHttpAction;
-  connector: Pick<StoreConnector, "allowedHosts" | "secretFields">;
+  connector: Pick<
+    StoreConnector,
+    "allowedHosts" | "allowConfiguredHost" | "secretFields"
+  >;
   values: Record<string, unknown>;
   actionInput: Record<string, unknown>;
+  context: {
+    tenantId: string;
+    principalId: string;
+    extensionId: string;
+    actionId: string;
+    runId: string;
+  };
   fetchImpl?: typeof fetch;
 }): Promise<unknown> {
-  const scopes = { input: input.actionInput, connection: input.values };
+  const scopes = {
+    input: input.actionInput,
+    connection: input.values,
+    tenant: input.context.tenantId,
+    principal: input.context.principalId,
+    extension: input.context.extensionId,
+    action: input.context.actionId,
+    run: input.context.runId,
+  };
   const renderedUrl = renderTemplate(input.action.request.url, scopes);
   if (typeof renderedUrl !== "string" || !renderedUrl.trim())
     throw new StoreHttpInputError("La plantilla no produjo una URL válida.");
+  const allowedHosts = [...input.connector.allowedHosts];
+  if (input.connector.allowConfiguredHost) {
+    const endpoint = input.values["endpoint"];
+    if (typeof endpoint !== "string" || !endpoint.trim())
+      throw new StoreHttpInputError("La conexión no define endpoint.");
+    let configured: URL;
+    try {
+      configured = new URL(endpoint.trim());
+    } catch {
+      throw new StoreHttpInputError("El endpoint configurado no es válido.");
+    }
+    if (
+      configured.protocol !== "https:" ||
+      configured.username ||
+      configured.password ||
+      configured.hostname === "169.254.169.254" ||
+      configured.hostname === "100.100.100.200"
+    )
+      throw new StoreHttpInputError(
+        "El endpoint configurado no está permitido.",
+      );
+    allowedHosts.push(configured.hostname.toLowerCase());
+  }
   let url: URL;
   try {
-    url = assertStoreHttpUrl(renderedUrl.trim(), input.connector.allowedHosts);
+    url = assertStoreHttpUrl(renderedUrl.trim(), allowedHosts);
   } catch (error) {
     throw new StoreHttpInputError(
       error instanceof Error ? error.message : "La URL no está permitida.",
@@ -550,6 +591,12 @@ export async function executeStoreHttpAction(input: {
     const value = input.values[field];
     return typeof value === "string" && value ? [value] : [];
   });
+  for (const secret of secrets) {
+    if (secret.length >= 8 && raw.includes(secret))
+      throw new StoreHttpProviderError(
+        "El proveedor reflejó un secreto en la respuesta.",
+      );
+  }
   return { status: response.status, data: redactSecrets(data, secrets) };
 }
 

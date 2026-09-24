@@ -279,6 +279,13 @@ export function registerExtensionActions(
           connector,
           values,
           actionInput: input.input,
+          context: {
+            tenantId,
+            principalId: c.get("principalId"),
+            extensionId,
+            actionId: stored.id,
+            runId: context.runId,
+          },
         });
         const run = await connections.completeRun(context, output);
         return c.json({ data: { run, output } }, 201);

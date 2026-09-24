@@ -60,7 +60,6 @@ function assertStoreJson(store) {
       typeof connector.id !== "string" ||
       typeof connector.label !== "string" ||
       !Array.isArray(connector.allowedHosts) ||
-      connector.allowedHosts.length === 0 ||
       typeof connector.configSchema !== "object"
     ) {
       fail("store.json tiene un conector mal declarado.");

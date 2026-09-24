@@ -829,7 +829,7 @@ describe("acciones http declarativas", () => {
       seen.push({ url: String(url), init });
       return Response.json({
         quoteNumber: "Q-1",
-        apiKey: "K-SECRETA",
+        apiKey: "OTRA-CLAVE",
         nested: { token: "T", prima: 5 },
       });
     }) as typeof fetch;
@@ -970,6 +970,95 @@ describe("acciones http declarativas", () => {
       { connectionId: "sura", input: { placa: "X" } },
     );
     expect(failed.status).toBe(502);
+  });
+
+  it("rechaza respuestas que reflejan un secreto.", async () => {
+    await setup();
+    globalThis.fetch = (async () =>
+      Response.json({ quoteNumber: "Q-1", apiKey: "K-SECRETA" })) as typeof fetch;
+    await api(tenant, "/extensions/custom.demo/connections/sura", "PUT", {
+      connectorId: "sura",
+      values: { baseUrl: "api.sura.com", apiKey: "K-SECRETA" },
+    });
+    const reflected = await api(
+      tenant,
+      "/extensions/custom.demo/actions/cotizar",
+      "POST",
+      { connectionId: "sura", input: { placa: "X" } },
+    );
+    expect(reflected.status).toBe(502);
+  });
+
+  it("permite el host configurado y usa el contexto en plantillas.", async () => {
+    const tenant = "store-http-configured";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        store: {
+          format: "savia.store",
+          formatVersion: 1,
+          connectors: [
+            {
+              id: "gw",
+              label: "Gateway",
+              secretFields: ["token"],
+              configSchema: {
+                type: "object",
+                required: ["endpoint", "token"],
+                properties: {
+                  endpoint: { type: "string" },
+                  token: { type: "string" },
+                },
+              },
+              allowedHosts: [],
+              allowConfiguredHost: true,
+            },
+          ],
+          actions: [
+            {
+              id: "enviar",
+              kind: "http",
+              connector: "gw",
+            request: {
+              method: "POST",
+              url: "{{connection.endpoint}}/enviar",
+                headers: {
+                  Authorization: "Bearer {{connection.token}}",
+                  "Idempotency-Key": "{{tenant}}:{{action}}:{{input.operationKey}}",
+                },
+                body: { operationKey: "{{input.operationKey}}" },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    await api(tenant, "/extensions/custom.demo/install", "POST");
+    await api(tenant, "/extensions/custom.demo/connections/gw", "PUT", {
+      connectorId: "gw",
+      values: { endpoint: "https://proveedor.dinamico.test", token: "T" },
+    });
+    let idempotency = "";
+    globalThis.fetch = (async (url: any, init: any) => {
+      idempotency = (init.headers as Record<string, string>)["Idempotency-Key"];
+      return Response.json({ reference: "R-1", state: "accepted" });
+    }) as typeof fetch;
+    try {
+      const result = await api(
+        tenant,
+        "/extensions/custom.demo/actions/enviar",
+        "POST",
+        { connectionId: "gw", input: { operationKey: "OP-12345678" } },
+      );
+      expect(result.status).toBe(201);
+      expect(idempotency).toBe(`${tenant}:enviar:OP-12345678`);
+      expect(result.json.data.output).toEqual({
+        status: 200,
+        data: { reference: "R-1", state: "accepted" },
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
 

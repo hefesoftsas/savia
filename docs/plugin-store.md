@@ -242,10 +242,16 @@ Ports incluidos (`store-ports/`): accounting, activities, claims,
 data-quality, documents, endorsements, **http-echo** (demo),
 issuance, opportunities, payments, **portfolio** (resumen en cliente),
 **quotes-ui** (delegación savia-request), renewals, reports, service,
-settlements. Fuera de alcance por ahora: conectores compilados con
-lógica propietaria (calendar, carriers, campaigns, communications,
-document-generation), `automation` (bundles sin UI), widgets de Mi Día
-y MCP de terceros.
+settlements, **calendar, campaigns, carriers, communications,
+document-generation** (puertos gateway: conectores `endpoint`+`token`
+con `allowConfiguredHost` y acciones con el envelope
+`{version, extensionId, actionId, tenantId, principalId, payload}` +
+`Idempotency-Key`, idéntico al release). Generados con
+`pnpm store:port <paquete>` (sondea pantallas, colecciones, defaults
+y acciones gateway) y verificados con
+`node --test scripts/store-ports.test.mjs`. Fuera de alcance por
+ahora: `automation` (bundles sin UI), widgets de Mi Día y MCP de
+terceros.
 
 ## Port de referencia: Cotizaciones UI
 

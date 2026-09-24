@@ -4,6 +4,8 @@ import { existsSync } from "node:fs";
 import { readFileSync, readdirSync } from "node:fs";
 import { createExtensionRegistry } from "@savia/crm-shared/extension-package";
 import { createCrmApp } from "../src/index";
+import { ExtensionConnectionRepository } from "../src/extension-connections";
+import { isExtensionAvailable } from "../src/extensions";
 
 const ARTIFACT = new URL(
   "../../../dist/plugin-store/insurance.collections-1.1.0.store.zip",
@@ -34,10 +36,24 @@ const compiledRegistry = createExtensionRegistry([
 ]);
 
 function app(tenant: string) {
+  const encryptionKey = btoa(
+    String.fromCharCode(...new Uint8Array(32).fill(12)),
+  );
+  const isActive = (tenantId: string, extensionId: string) =>
+    isExtensionAvailable(
+      platform.env.DB,
+      tenantId,
+      extensionId,
+      compiledRegistry,
+    );
   return createCrmApp(tenant, {
     seedObjects: [],
     principalId: "user-migrate",
     extensionRegistry: compiledRegistry,
+    connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
+      encryptionKey,
+      isExtensionActive: isActive,
+    }),
   });
 }
 
@@ -156,6 +172,107 @@ describe("migración fuera del release", () => {
       );
       expect(served.status).toBe(200);
       expect((await served.text()).length).toBeGreaterThan(10000);
+    },
+    60000,
+  );
+});
+
+const CALENDAR_ARTIFACT = new URL(
+  "../../../dist/plugin-store/insurance.calendar-1.1.0.store.zip",
+  import.meta.url,
+);
+const hasCalendarArtifact = existsSync(CALENDAR_ARTIFACT);
+const maybeCalendar = hasCalendarArtifact ? it : it.skip;
+
+describe("migración de conector gateway", () => {
+  const realFetch = globalThis.fetch;
+  maybeCalendar(
+    "ejecuta el envelope gateway contra el endpoint configurado.",
+    async () => {
+      const tenant = "migrate-calendar";
+      const zip = readFileSync(CALENDAR_ARTIFACT);
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([zip as BlobPart], "calendar.store.zip", {
+          type: "application/zip",
+        }),
+      );
+      const uploaded = await app(tenant).request(
+        "http://localhost/api/plugin-store/upload",
+        { method: "POST", body: form },
+        platform.env,
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+      const installed = await app(tenant).request(
+        "http://localhost/api/extensions/insurance.calendar/install",
+        { method: "POST", headers: { "content-type": "application/json" } },
+        platform.env,
+      );
+      expect(installed.status, await installed.text()).toBe(200);
+      const saved = await app(tenant).request(
+        "http://localhost/api/extensions/insurance.calendar/connections/insurance.calendar.gateway",
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            connectorId: "insurance.calendar.gateway",
+            values: {
+              endpoint: "https://agenda.ejemplo.test",
+              token: "TOKEN-X",
+            },
+          }),
+        },
+        platform.env,
+      );
+      expect(saved.status).toBe(204);
+
+      let seenUrl = "";
+      let seenHeaders: Record<string, string> = {};
+      let seenBody: any = null;
+      globalThis.fetch = (async (url: any, init: any) => {
+        seenUrl = String(url);
+        seenHeaders = init.headers as Record<string, string>;
+        seenBody = JSON.parse(init.body as string);
+        return Response.json({ reference: "EV-1", state: "accepted" });
+      }) as typeof fetch;
+      try {
+        const executed = await app(tenant).request(
+          "http://localhost/api/extensions/insurance.calendar/actions/sync",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              connectionId: "insurance.calendar.gateway",
+              input: {
+                operationKey: "OP-12345678",
+                payload: { id: "e1", title: "Llamada" },
+              },
+            }),
+          },
+          platform.env,
+        );
+        expect(executed.status).toBe(201);
+        expect(seenUrl).toBe("https://agenda.ejemplo.test/");
+        expect(seenHeaders["Authorization"]).toBe("Bearer TOKEN-X");
+        expect(seenHeaders["Idempotency-Key"]).toBe(
+          `${tenant}:insurance.calendar:sync:OP-12345678`,
+        );
+        expect(seenBody).toMatchObject({
+          version: 1,
+          extensionId: "insurance.calendar",
+          actionId: "sync",
+          tenantId: tenant,
+          principalId: "user-migrate",
+          payload: { id: "e1", title: "Llamada" },
+        });
+        expect(((await executed.json()) as any).data.output).toEqual({
+          status: 200,
+          data: { reference: "EV-1", state: "accepted" },
+        });
+      } finally {
+        globalThis.fetch = realFetch;
+      }
     },
     60000,
   );
