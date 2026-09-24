@@ -17,8 +17,8 @@
   "totals": {
     "sourceTables": 209,
     "existingPublicProjections": 10,
-    "generatedInternalTables": 5,
-    "resultingD1Tables": 15,
+    "generatedInternalTables": 9,
+    "resultingD1Tables": 19,
     "foreignKeys": 304,
     "indexes": 985,
     "checks": 45
@@ -1550,6 +1550,238 @@
           "maxLength": null
         }
       ]
+    },
+    {
+      "sourceTable": "app_economicactivity",
+      "internalTable": "app_economicactivity",
+      "exposure": "internal only",
+      "domain": "app",
+      "columns": [
+        {
+          "sourceName": "id",
+          "sourceType": "int4",
+          "d1Type": "INTEGER",
+          "nullable": false,
+          "identity": true,
+          "maxLength": null
+        },
+        {
+          "sourceName": "code",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 5
+        },
+        {
+          "sourceName": "name",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 500
+        }
+      ]
+    },
+    {
+      "sourceTable": "business_commercialunit",
+      "internalTable": "business_commercialunit",
+      "exposure": "internal only",
+      "domain": "business",
+      "columns": [
+        {
+          "sourceName": "id",
+          "sourceType": "int8",
+          "d1Type": "INTEGER",
+          "nullable": false,
+          "identity": true,
+          "maxLength": null
+        },
+        {
+          "sourceName": "id_slug",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 8
+        },
+        {
+          "sourceName": "created_at",
+          "sourceType": "timestamptz",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "updated_at",
+          "sourceType": "timestamptz",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "name",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 128
+        },
+        {
+          "sourceName": "created_by",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 128
+        },
+        {
+          "sourceName": "agency_id",
+          "sourceType": "int8",
+          "d1Type": "BIGINT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "edited_by",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 128
+        }
+      ]
+    },
+    {
+      "sourceTable": "customer_client",
+      "internalTable": "customer_client",
+      "exposure": "internal only",
+      "domain": "customer",
+      "columns": [
+        {
+          "sourceName": "id",
+          "sourceType": "int8",
+          "d1Type": "INTEGER",
+          "nullable": false,
+          "identity": true,
+          "maxLength": null
+        },
+        {
+          "sourceName": "id_slug",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 8
+        },
+        {
+          "sourceName": "created_at",
+          "sourceType": "timestamptz",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "updated_at",
+          "sourceType": "timestamptz",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "id_number",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 30
+        },
+        {
+          "sourceName": "migration_slug",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 50
+        },
+        {
+          "sourceName": "external_id",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 50
+        }
+      ]
+    },
+    {
+      "sourceTable": "customer_group",
+      "internalTable": "customer_group",
+      "exposure": "internal only",
+      "domain": "customer",
+      "columns": [
+        {
+          "sourceName": "id",
+          "sourceType": "int8",
+          "d1Type": "INTEGER",
+          "nullable": false,
+          "identity": true,
+          "maxLength": null
+        },
+        {
+          "sourceName": "id_slug",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 8
+        },
+        {
+          "sourceName": "created_at",
+          "sourceType": "timestamptz",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "updated_at",
+          "sourceType": "timestamptz",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "name",
+          "sourceType": "varchar",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": 128
+        },
+        {
+          "sourceName": "agency_id",
+          "sourceType": "int8",
+          "d1Type": "BIGINT",
+          "nullable": true,
+          "identity": false,
+          "maxLength": null
+        },
+        {
+          "sourceName": "description",
+          "sourceType": "text",
+          "d1Type": "TEXT",
+          "nullable": false,
+          "identity": false,
+          "maxLength": null
+        }
+      ]
     }
   ],
   "cleanup": {
@@ -1575,20 +1807,8 @@
     },
     "phase3": {
       "date": "2026-09-24",
-      "droppedTables": [
-        "customer_client",
-        "customer_group",
-        "business_commercialunit",
-        "app_economicactivity"
-      ],
-      "migration": "packages/db/migrations/0071_rebuild_customer_tables_drop_fk_parents.sql",
-      "keptLegacy": [
-        "customer_clientagency",
-        "customer_naturalperson",
-        "customer_legalperson",
-        "customer_address",
-        "customer_legalpersoncontact"
-      ]
+      "outcome": "abandoned-repair",
+      "note": "Rebuilding live tables to drop 4 FK constraints proved undeployable under D1 per-statement application (verified by a failed preview deploy). The 4 parents stay; 0071 converges every database to identical schema+triggers."
     }
   }
 }
