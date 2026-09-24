@@ -64,29 +64,6 @@ export function storeWidgetFor(
   );
 }
 
-/** Declaración aunque esté desactivado (para mensajes de activación). */
-export function storeWidgetDeclarationFor(
-  ref: PluginWidgetRef,
-  extensions: readonly ExtensionInstallation[] | undefined,
-): StoreWidgetContribution | undefined {
-  if (!Array.isArray(extensions)) return undefined;
-  for (const entry of extensions) {
-    if (!entry.store || entry.builtIn) continue;
-    const widget = (entry.widgets ?? []).find(
-      (item) =>
-        item.id === ref.widgetId && entry.manifest.id === ref.extensionId,
-    );
-    if (widget)
-      return {
-        extensionId: entry.manifest.id,
-        id: widget.id,
-        collection: widget.collection,
-        title: widget.title,
-      };
-  }
-  return undefined;
-}
-
 export function parsePluginKind(kind: string): PluginWidgetRef | null {
   const match = kind.match(/^plugin:([a-z0-9_.-]{1,64}):([a-z0-9_-]{1,64})$/);
   if (!match) return null;

@@ -1,14 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { existsSync } from "node:fs";
 import { readFileSync, readdirSync } from "node:fs";
+import { z } from "zod";
+import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
 import { createStudioApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
 
 const ARTIFACT = new URL(
-  "../../../dist/plugin-store/custom.quotes-ui-1.0.1.store.zip",
+  "../../../dist/plugin-store/custom.quotes-ui-1.0.0.store.zip",
   import.meta.url,
 );
 
@@ -22,29 +24,76 @@ let platform: Awaited<
 
 const encryptionKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
 
-// Imita a savia-request: devuelve un run mock con éxito.
-const seenUrls: string[] = [];
-const saviaRequestService = {
-  fetch: (async (request: Request) => {
-    seenUrls.push(request.url);
-    return Response.json({
-      status: "success",
-      result: {
-        quoteNumber: "SIM-SBS-PRODUCTO-8",
-        premiumTotal: "1500000",
-        currency: "COP",
-        simulated: true,
+const quotesRegistry = createExtensionRegistry([
+  {
+    manifest: {
+      format: "savia.extension",
+      formatVersion: 1,
+      id: "insurance.quotes",
+      version: "1.0.0",
+      label: "Cotizaciones de seguros",
+      description: "Conecta proveedores de seguros.",
+      requires: [],
+      apiVersion: 1,
+    },
+    runtime: {
+      connectors: [
+        {
+          extensionId: "insurance.quotes",
+          connectorId: "insurance.quotes.provider",
+          label: "Proveedor de seguros",
+          configurationSchema: z.object({ provider: z.string() }).passthrough(),
+          secretFields: [],
+        },
+      ],
+      actions: [
+        {
+          extensionId: "insurance.quotes",
+          actionId: "quote",
+          connectorId: "insurance.quotes.provider",
+          inputSchema: z.record(z.string(), z.unknown()),
+          connectionOptional: true,
+        },
+      ],
+    },
+  },
+]);
+
+// Imita al executor del release (savia-request): responde normalizado.
+const seenContexts: Array<Record<string, unknown>> = [];
+const fakeExecutor = {
+  execute: vi.fn(async (context: any, input: any) => {
+    seenContexts.push({ ...context });
+    const plate = (input as any)?.quoteInput?.vehicle?.plate ?? "SIN-PLACA";
+    return {
+      status: "succeeded" as const,
+      output: {
+        type: "quote",
+        provider: "savia-request",
+        status: "success",
+        data: {
+          quoteNumber: `LIVE-${plate}`,
+          premiumTotal: 2345678,
+          currency: "COP",
+          simulated: false,
+        },
       },
-    });
-  }) as typeof fetch,
+    };
+  }),
 };
 
 function app(tenant: string) {
   const isActive = (tenantId: string, extensionId: string) =>
-    isExtensionAvailable(platform.env.DB, tenantId, extensionId, undefined);
+    isExtensionAvailable(
+      platform.env.DB,
+      tenantId,
+      extensionId,
+      quotesRegistry,
+    );
   return createStudioApp(tenant, {
     seedObjects: [],
     principalId: "user-q",
+    extensionRegistry: quotesRegistry,
     connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
       encryptionKey,
       isExtensionActive: isActive,
@@ -52,7 +101,7 @@ function app(tenant: string) {
     settingsRepository: new ExtensionSettingsRepository(platform.env.DB, {
       isExtensionActive: isActive,
     }),
-    saviaRequestService,
+    actionExecutor: fakeExecutor,
   });
 }
 
@@ -71,15 +120,12 @@ async function call(
     },
     platform.env,
   );
-  const text = await response.text();
-  return {
-    status: response.status,
-    json: (text ? JSON.parse(text) : null) as any,
-  };
+  return { status: response.status, json: (await response.json()) as any };
 }
 
 async function uploadRealZip(tenant: string): Promise<number> {
   const zip = readFileSync(ARTIFACT);
+  console.log(`zip bytes: ${zip.length}`);
   const form = new FormData();
   form.set(
     "file",
@@ -115,14 +161,18 @@ afterAll(async () => {
   await platform?.dispose();
 });
 
-describe("port real custom.quotes-ui con ejecución nativa", () => {
+describe("port real custom.quotes-ui con delegación", () => {
   maybe(
-    "ejecuta quote sin delegar al release.",
+    "delega quote a insurance.quotes cuando está activa en el tenant.",
     async () => {
-      const tenant = "quotes-native-demo";
+      const tenant = "quotes-delegate";
       await uploadRealZip(tenant);
       expect(
         (await call(tenant, "/extensions/custom.quotes-ui/install", "POST"))
+          .status,
+      ).toBe(200);
+      expect(
+        (await call(tenant, "/extensions/insurance.quotes/install", "POST"))
           .status,
       ).toBe(200);
 
@@ -139,100 +189,37 @@ describe("port real custom.quotes-ui con ejecución nativa", () => {
         "POST",
         {
           input: {
-            mode: "mock",
+            mode: "live",
             flowId: "sbs-producto-8",
-            quoteInput: {
-              vehicle: {
-                plate: "TESTCAR",
-                fasecoldaCode: "00000000",
-                productionYear: 2024,
-                isNew: false,
-                circulationCity: "11001",
-                accessoriesValue: 0,
-                declaredValue: 50000000,
-              },
-              applicant: {
-                documentType: "CC",
-                documentNumber: "0000000000",
-                firstName: "PERSONA",
-                surname: "SIMULADA",
-                gender: "F",
-                birthDate: "1990-01-01",
-                city: "11001",
-                address: "CALLE 1",
-                phone: "3000000000",
-                email: "demo@example.invalid",
-              },
-            },
+            quoteInput: { vehicle: { plate: "TESTCAR" } },
           },
         },
       );
       expect(quote.status).toBe(201);
       expect(quote.json.data.output).toMatchObject({
         type: "quote",
-        provider: "SBS",
-        status: "success",
-        data: { quoteNumber: "SIM-SBS-PRODUCTO-8", simulated: true },
+        provider: "savia-request",
+        data: { quoteNumber: "LIVE-TESTCAR", simulated: false },
       });
-      expect(seenUrls.at(-1)).toContain("/api/flows/sbs-producto-8/runs");
+      // El contexto se reescribe al destino compilado.
+      expect(seenContexts.at(-1)).toMatchObject({
+        tenantId: tenant,
+        extensionId: "insurance.quotes",
+        actionId: "quote",
+      });
     },
-    60000,
   );
 
-  maybe("exige servicio savia-request inyectado.", async () => {
-    const tenant = "quotes-native-noservice";
+  maybe("exige activar insurance.quotes antes de delegar.", async () => {
+    const tenant = "quotes-delegate-off";
     await uploadRealZip(tenant);
     await call(tenant, "/extensions/custom.quotes-ui/install", "POST");
-    const isActive = (tenantId: string, extensionId: string) =>
-      isExtensionAvailable(platform.env.DB, tenantId, extensionId, undefined);
-    const bare = createStudioApp(tenant, {
-      seedObjects: [],
-      principalId: "user-q",
-      connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
-        encryptionKey,
-        isExtensionActive: isActive,
-      }),
-      settingsRepository: new ExtensionSettingsRepository(platform.env.DB, {
-        isExtensionActive: isActive,
-      }),
-    });
-    const response = await bare.request(
-      "http://localhost/api/extensions/custom.quotes-ui/actions/quote",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          input: {
-            mode: "mock",
-            flowId: "sbs-producto-8",
-            quoteInput: {
-              vehicle: {
-                plate: "TESTCAR",
-                fasecoldaCode: "00000000",
-                productionYear: 2024,
-                isNew: false,
-                circulationCity: "11001",
-                accessoriesValue: 0,
-                declaredValue: 50000000,
-              },
-              applicant: {
-                documentType: "CC",
-                documentNumber: "0000000000",
-                firstName: "PERSONA",
-                surname: "SIMULADA",
-                gender: "F",
-                birthDate: "1990-01-01",
-                city: "11001",
-                address: "CALLE 1",
-                phone: "3000000000",
-                email: "demo@example.invalid",
-              },
-            },
-          },
-        }),
-      },
-      platform.env,
+    const blocked = await call(
+      tenant,
+      "/extensions/custom.quotes-ui/actions/quote",
+      "POST",
+      { input: { mode: "live", flowId: "x", quoteInput: {} } },
     );
-    expect(response.status).toBe(502);
+    expect(blocked.status).toBe(409);
   });
 });

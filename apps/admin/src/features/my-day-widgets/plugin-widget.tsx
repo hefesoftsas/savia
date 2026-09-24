@@ -9,7 +9,6 @@ import {
   parsePluginKind,
   pluginApiFor,
   pluginContributionFor,
-  storeWidgetDeclarationFor,
   storeWidgetFor,
   type ExtensionInstallation,
 } from "./plugins";
@@ -75,9 +74,6 @@ export function PluginWidgetBody({
   const contribution = ref ? pluginContributionFor(ref) : undefined;
   // Lo subido al store prevalece sobre lo compilado (sombra por tenant).
   const storeWidget = ref ? storeWidgetFor(ref, extensions) : undefined;
-  const storeDeclared = ref
-    ? storeWidgetDeclarationFor(ref, extensions)
-    : undefined;
 
   useEffect(() => {
     if (!apiClient || !ref) return;
@@ -113,13 +109,6 @@ export function PluginWidgetBody({
         src={`/api/plugin-store/${encodeURIComponent(storeWidget.extensionId)}/widget?widget=${encodeURIComponent(storeWidget.id)}&collection=${encodeURIComponent(storeWidget.collection)}`}
         heightClassName="h-[320px]"
       />
-    );
-  }
-  if (storeDeclared) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Activa la extensión {storeDeclared.title.es} para ver este widget.
-      </p>
     );
   }
   if (!ref || !contribution) {

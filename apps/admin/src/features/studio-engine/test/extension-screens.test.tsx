@@ -19,9 +19,15 @@ describe("trusted extension screen registry", () => {
     Screen: () => null,
   };
 
-  it("has no compiled screens after the store migration", () => {
-    expect(extensionScreenFor("polizas", "records")).toBeUndefined();
-    expect(extensionScreenFor("cotizador", "records")).toBeUndefined();
+  it("resolves contributed screens without adding them to the host", () => {
+    expect(extensionScreenFor("polizas", "records")).toMatchObject({
+      id: "insurance.portfolio-dashboard.policies",
+      extensionId: "insurance.portfolio-dashboard",
+    });
+    expect(extensionScreenFor("cotizador", "records")).toMatchObject({
+      id: "insurance.quotes.direct",
+      extensionId: "insurance.quotes",
+    });
     expect(extensionScreenFor("inventory", "admin")).toBeUndefined();
   });
 
@@ -106,10 +112,10 @@ describe("store screen slots", () => {
 });
 
 import { localizedExtensionObjectLabel } from "../extension-screens";
-it("preserves labels without a compiled catalog to translate them", () => {
+it("localizes built-in navigation labels without overwriting user renames", () => {
   expect(
     localizedExtensionObjectLabel("insurance_claims", "Siniestros", "en"),
-  ).toBe("Siniestros");
+  ).toBe("Claims");
   expect(
     localizedExtensionObjectLabel("insurance_claims", "My claims", "pt"),
   ).toBe("My claims");

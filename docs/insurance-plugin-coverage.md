@@ -1,10 +1,9 @@
 # Optional insurance plugin coverage
 
-Owner: Savia maintainers. Last reviewed: 2026-09-24.
+Owner: Savia maintainers. Last reviewed: 2026-09-19.
 
-The 25 optional extensions ship as per-tenant store plugins
-(`store-ports/`, same ids as before). Industry code stays in
-packages as pack sources; the generic host supplies authorization,
+The release catalog now contains 25 optional extensions. Industry code stays in
+packages and release composition; the generic host supplies authorization,
 collections, files, extension actions/settings and workflows.
 
 ## New capabilities
@@ -39,9 +38,8 @@ collections, files, extension actions/settings and workflows.
 
 ## Activation and external configuration
 
-Upload the desired plugin in **Mis plugins**, install it, review its
-required collections and configure permissions. Prepare and publish
-the selected automation bundles; preparing a
+Install the desired extension, review its required collections and configure
+permissions. Prepare and publish the selected automation bundles; preparing a
 bundle never silently replaces an already edited/published workflow. Review the
 upgrade notes for legacy renewal source keys and existing workflows.
 
