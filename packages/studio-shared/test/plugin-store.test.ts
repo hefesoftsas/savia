@@ -564,7 +564,7 @@ describe("renderTemplate con conexión", () => {
 });
 
 describe("renderSimulationOutput", () => {
-  const input = { vehicle: { plate: "ABC123" }, mode: "live" };
+  const input = { vehicle: { plate: "TESTCAR" }, mode: "live" };
 
   it("sustituye rutas del input preservando tipos.", () => {
     expect(
@@ -578,8 +578,8 @@ describe("renderSimulationOutput", () => {
         input,
       ),
     ).toEqual({
-      plate: "ABC123",
-      label: "SIM-ABC123",
+      plate: "TESTCAR",
+      label: "SIM-TESTCAR",
       count: null,
       mode: "live",
     });
@@ -597,7 +597,7 @@ describe("renderSimulationOutput", () => {
 
   it("inyecta objetos completos cuando el placeholder ocupa todo el string.", () => {
     expect(renderSimulationOutput("{{input.vehicle}}", input)).toEqual({
-      plate: "ABC123",
+      plate: "TESTCAR",
     });
   });
 });

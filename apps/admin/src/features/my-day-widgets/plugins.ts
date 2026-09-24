@@ -38,7 +38,7 @@ export type StoreWidgetContribution = {
 export function storeWidgetContributions(
   extensions: readonly ExtensionInstallation[] | undefined,
 ): StoreWidgetContribution[] {
-  if (!extensions) return [];
+  if (!Array.isArray(extensions)) return [];
   const contributions: StoreWidgetContribution[] = [];
   for (const entry of extensions) {
     if (!entry.store || entry.builtIn || entry.installed?.enabled !== true)

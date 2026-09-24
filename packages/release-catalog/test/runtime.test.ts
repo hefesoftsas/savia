@@ -26,10 +26,8 @@ describe("runtime release catalog", () => {
         (provider) => provider.id,
       ),
     ).toEqual(["insurance.portfolio-dashboard"]);
-    expect(
-      runtimeReleaseCatalog.assistantExtensions.map(
-        (extension) => extension.id,
-      ),
-    ).toEqual(["insurance.portfolio-dashboard"]);
+    // Assistant tools moved worker-side (apps/mcp): the catalog no
+    // longer registers them; the tool name is covered there.
+    expect(runtimeReleaseCatalog.assistantExtensions).toEqual([]);
   });
 });

@@ -271,7 +271,7 @@ describe("cotización live vía savia-request desde el store", () => {
           flowId: "sbs-producto-8",
           quoteInput: {
             vehicle: {
-              plate: "ABC123",
+              plate: "TESTCAR",
               fasecoldaCode: "00000000",
               productionYear: 2024,
               isNew: false,
@@ -366,7 +366,7 @@ describe("port real insurance.quotes con ejecución nativa", () => {
             flowId: "sbs-producto-8",
             quoteInput: {
               vehicle: {
-                plate: "ABC123",
+                plate: "TESTCAR",
                 fasecoldaCode: "00000000",
                 productionYear: 2024,
                 isNew: false,

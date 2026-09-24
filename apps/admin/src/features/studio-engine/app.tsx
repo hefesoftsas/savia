@@ -388,12 +388,16 @@ function App({
     enabled: ready,
     staleTime: 60_000,
   });
+  // La respuesta puede no ser una lista (mocks, proxies): normalizar.
+  const extensionInstallations = Array.isArray(extensionsQuery.data?.data)
+    ? extensionsQuery.data.data
+    : undefined;
   const isObjectHidden = (o: StudioObject) => {
     if (o.config.studio?.screen?.hidden !== undefined) {
       return Boolean(o.config.studio?.screen?.hidden);
     }
     if (extensionScreenDefaultHidden(o.name)) return true;
-    return storeScreenDefaultHidden(o.name, extensionsQuery.data?.data);
+    return storeScreenDefaultHidden(o.name, extensionInstallations);
   };
   const visibleObjects = sortScreens(objects.filter((o) => !isObjectHidden(o)));
   const publishableScreens = useMemo(() => {
@@ -405,12 +409,12 @@ function App({
         return (
           isQuote ||
           (!isPluginScreen(item.name) &&
-            !isStorePluginScreen(item.name, extensionsQuery.data?.data) &&
+            !isStorePluginScreen(item.name, extensionInstallations) &&
             !item.config.studio?.collection)
         );
       }),
     );
-  }, [objects, extensionsQuery.data]);
+  }, [objects, extensionInstallations]);
   const resolvedMenuLayout = useMemo(
     () =>
       reconcileMenuLayout(
@@ -451,7 +455,7 @@ function App({
   const storeScreen = storeScreenFor(
     resolvedObjectName,
     view,
-    extensionsQuery.data?.data,
+    extensionInstallations,
   );
   const ExtensionScreen = isExtensionScreenEnabled(
     contribution,

@@ -887,7 +887,7 @@ describe("acciones http declarativas", () => {
       tenant,
       "/extensions/custom.demo/actions/cotizar",
       "POST",
-      { input: { placa: "ABC123" } },
+      { input: { placa: "TESTCAR" } },
     );
     expect(missing.status).toBe(422);
 
@@ -895,7 +895,7 @@ describe("acciones http declarativas", () => {
       tenant,
       "/extensions/custom.demo/actions/cotizar",
       "POST",
-      { connectionId: "sura", input: { placa: "ABC123" } },
+      { connectionId: "sura", input: { placa: "TESTCAR" } },
     );
     expect(quote.status).toBe(201);
     expect(seen).toHaveLength(1);
@@ -905,7 +905,7 @@ describe("acciones http declarativas", () => {
       (seen[0].init.headers as Record<string, string>)["Authorization"],
     ).toBe("Bearer K-SECRETA");
     expect(JSON.parse(seen[0].init.body as string)).toEqual({
-      placa: "ABC123",
+      placa: "TESTCAR",
       mode: "test",
     });
     expect(quote.json.data.output).toEqual({

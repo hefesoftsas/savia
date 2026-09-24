@@ -44,7 +44,7 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(143);
+    expect(names).toHaveLength(144);
     expect(names).toEqual(
       expect.arrayContaining([
         "access_revisions",
@@ -91,6 +91,7 @@ describe("full D1 schema projection", () => {
         "extension_connection_audit_events",
         "extension_action_runs",
         "extension_settings",
+        "plugin_store_artifacts",
         "studio_solution_objects",
         "studio_business_links",
         "studio_data_domains",

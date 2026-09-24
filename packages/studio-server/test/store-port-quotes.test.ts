@@ -191,7 +191,7 @@ describe("port real custom.quotes-ui con delegación", () => {
           input: {
             mode: "live",
             flowId: "sbs-producto-8",
-            quoteInput: { vehicle: { plate: "ABC123" } },
+            quoteInput: { vehicle: { plate: "TESTCAR" } },
           },
         },
       );
@@ -199,7 +199,7 @@ describe("port real custom.quotes-ui con delegación", () => {
       expect(quote.json.data.output).toMatchObject({
         type: "quote",
         provider: "savia-request",
-        data: { quoteNumber: "LIVE-ABC123", simulated: false },
+        data: { quoteNumber: "LIVE-TESTCAR", simulated: false },
       });
       // El contexto se reescribe al destino compilado.
       expect(seenContexts.at(-1)).toMatchObject({

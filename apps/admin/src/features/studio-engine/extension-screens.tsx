@@ -39,7 +39,7 @@ export type StoreScreenContribution = {
 export function storeScreenContributions(
   extensions: readonly StoreScreenInstallation[] | undefined,
 ): StoreScreenContribution[] {
-  if (!extensions) return [];
+  if (!Array.isArray(extensions)) return [];
   const contributions: StoreScreenContribution[] = [];
   for (const entry of extensions) {
     if (!entry.store || entry.builtIn || entry.installed?.enabled !== true)
