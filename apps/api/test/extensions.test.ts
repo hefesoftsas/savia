@@ -1,5 +1,9 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
+vi.mock(
+  "@savia/release-catalog/runtime",
+  async () => import("@savia/release-catalog/legacy-runtime-test-fixture"),
+);
 import { createApp } from "../src/app";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
 
