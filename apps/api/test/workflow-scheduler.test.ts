@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { expect, it, vi } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 vi.mock("../src/external-crm/auto-sync", () => ({
   processCrmSyncJobs: vi.fn(async () => {
     throw new Error("CRM sync unavailable");
@@ -20,6 +20,11 @@ vi.mock("../src/notifications", () => ({
 }));
 import worker from "../src/index";
 import { runScheduledWorkflows } from "../src/workflows";
+beforeAll(async () => {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS studio_audit(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,action TEXT NOT NULL,object_name TEXT NOT NULL,record_id TEXT,detail TEXT NOT NULL,created_at TEXT NOT NULL)",
+  ).run();
+});
 it("continues workflows when the independent CRM synchronization fails", async () => {
   await expect(
     worker.scheduled({} as ScheduledController, env),
@@ -61,4 +66,36 @@ it("passes the native webhook transport to scheduled workflows", async () => {
   expect(call[1]).toBe("test-key");
   expect(call[2] === workflowFetch).toBe(true);
   expect(workflowFetch).not.toHaveBeenCalled();
+});
+
+it("prunes domain audit history on the preview scheduled tick", async () => {
+  await env.DB.batch(
+    Array.from({ length: 201 }, (_, i) =>
+      env.DB.prepare(
+        "INSERT INTO studio_audit(id,tenant_id,action,object_name,detail,created_at) VALUES (?,?,?,?,?,?)",
+      ).bind(
+        `scheduled-${String(i).padStart(3, "0")}`,
+        "domain:scheduled-test",
+        "object.updated",
+        "example",
+        "{}",
+        "2026-09-24T12:00:00.000Z",
+      ),
+    ),
+  );
+
+  await worker.scheduled({} as ScheduledController, {
+    ...env,
+    SAVIA_WORKFLOW_ONLY_SCHEDULE: "true",
+  });
+
+  const count = await env.DB.prepare(
+    "SELECT count(*) AS total FROM studio_audit WHERE tenant_id='domain:scheduled-test'",
+  ).first<{ total: number }>();
+  expect(count?.total).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT id FROM studio_audit WHERE id='scheduled-000'",
+    ).first(),
+  ).toBeNull();
 });

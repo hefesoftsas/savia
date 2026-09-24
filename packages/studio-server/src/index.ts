@@ -2,6 +2,7 @@ import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { dialectFor } from "@savia/db/dialect";
 import { registerRecordHistory } from "./record-history";
 import { historyDatabase } from "./record-history-storage";
+import { STUDIO_AUDIT_RETENTION_LIMIT } from "./audit-retention";
 import { registerOfficeFiles } from "./office-files";
 import { Hono } from "hono";
 import { registerLocalSync } from "./local-sync";
@@ -742,13 +743,15 @@ export function createStudioApp(
     return c.json({ ok: true });
   });
   app.get("/api/audit", async (c) => {
+    const tenant = c.get("tenant");
     const { results } = await c.env.DB.prepare(
-      "SELECT id,action,object_name,record_id,created_at,detail FROM studio_audit WHERE tenant_id=? AND (CAST(? AS TEXT) IS NULL OR object_name=?) ORDER BY created_at DESC LIMIT 100",
+      "SELECT id,action,object_name,record_id,created_at,detail FROM studio_audit WHERE tenant_id=? AND (CAST(? AS TEXT) IS NULL OR object_name=?) ORDER BY created_at DESC,id DESC LIMIT ?",
     )
       .bind(
-        c.get("tenant"),
+        tenant,
         c.req.query("object") ?? null,
         c.req.query("object") ?? null,
+        tenant.startsWith("domain:") ? STUDIO_AUDIT_RETENTION_LIMIT : 100,
       )
       .all<any>();
     return c.json({

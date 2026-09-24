@@ -28,7 +28,7 @@ Strings are stored up to 2048 characters per side, explicitly marked as truncate
 
 Retention is fixed when an event is captured. Changing the duration applies to future events and never extends existing expiry. Disabling tracking stops new capture while existing events remain readable until their original expiry. Reads hide expired entries immediately. Scheduled maintenance physically deletes at most 500 expired entries per invocation using an expiry index, including history from idle or disabled collections; physical cleanup may lag if expiration volume exceeds that batch. Hard deletion of a record also deletes its history.
 
-Capture adds one history row for each relevant committed record version, plus two temporary actor-context writes per transactional batch. No Durable Objects or additional polling connections are introduced. Existing operational audit storage is unchanged and has its own lifecycle.
+Capture adds one history row for each relevant committed record version, plus two temporary actor-context writes per transactional batch. No Durable Objects or additional polling connections are introduced. The operational domain audit (`studio_audit`) has a separate lifecycle: the existing API scheduled tick retains the 200 most recent events for each `domain:*` scope by `created_at`, breaking timestamp ties by descending `id`, and deletes older events. The domain audit endpoint returns up to those 200 events. Cleanup runs once per minute in preview, production and the self-hosted runtime, so a domain can briefly exceed the limit between ticks. Agency operational audit, collection record history and access-control audit retention are unchanged.
 
 ## Deployment
 

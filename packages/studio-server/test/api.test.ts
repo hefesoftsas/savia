@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
-import app from "../src/index";
+import app, { createStudioApp } from "../src/index";
 import { makeConfig } from "@savia/studio-shared/metadata";
 import { exampleOpenApi } from "@savia/studio-shared/seed";
 let platform: Awaited<
@@ -492,4 +492,39 @@ it("reads native counts and pages in one D1 batch with matching filters and pagi
   expect(batch).toHaveBeenCalledTimes(4);
   for (const [statements] of batch.mock.calls)
     expect(statements).toHaveLength(2);
+});
+
+it("returns up to 200 domain audit events in stable date order", async () => {
+  const domainApp = createStudioApp("domain:platform");
+  for (let start = 0; start < 201; start += 100) {
+    await platform.env.DB.batch(
+      Array.from({ length: Math.min(100, 201 - start) }, (_, offset) => {
+        const id = `audit-fixture-${String(start + offset).padStart(3, "0")}`;
+        return platform.env.DB.prepare(
+          "INSERT INTO studio_audit(id,tenant_id,action,object_name,detail,created_at) VALUES (?,'domain:platform','object.updated','audit_fixture','{}','2026-09-24T12:00:00.000Z')",
+        ).bind(id);
+      }),
+    );
+  }
+  const response = await domainApp.request(
+    "http://localhost/api/audit?object=audit_fixture",
+    {},
+    platform.env,
+  );
+  expect(response.status).toBe(200);
+  const history = ((await response.json()) as any).data;
+  expect(history).toHaveLength(200);
+  expect(history[0].id).toBe("audit-fixture-200");
+  expect(history.at(-1).id).toBe("audit-fixture-001");
+
+  await platform.env.DB.batch(
+    Array.from({ length: 101 }, (_, i) =>
+      platform.env.DB.prepare(
+        "INSERT INTO studio_audit(id,tenant_id,action,object_name,detail,created_at) VALUES (?,'demo','object.updated','agency_audit_fixture','{}','2026-09-24T12:00:00.000Z')",
+      ).bind(`agency-audit-fixture-${i}`),
+    ),
+  );
+  expect((await json("/audit?object=agency_audit_fixture")).data).toHaveLength(
+    100,
+  );
 });
