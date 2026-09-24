@@ -552,8 +552,7 @@ export function WidgetCard({
   const isPlugin =
     typeof widget.kind === "string" && parsePluginKind(widget.kind) !== null;
   const isSystem = widget.kind === "agenda" || widget.kind === "quick_task";
-  const supported =
-    isBuiltInWidget(widget) || isSystem || pluginTitle !== undefined;
+  const supported = isBuiltInWidget(widget) || isSystem || isPlugin;
 
   return (
     <Card

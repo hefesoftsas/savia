@@ -4,9 +4,31 @@
   "actions": [
     {
       "id": "quote",
-      "kind": "delegate",
-      "extension": "insurance.quotes",
-      "action": "quote"
+      "kind": "savia-request",
+      "flows": [
+        "sbs-producto-8",
+        "sbs-producto-10",
+        "sbs-producto-11",
+        "equidad-basico-quote",
+        "equidad-full-quote",
+        "equidad-ligero-quote",
+        "equidad-rce-quote",
+        "liberty-basico-quote",
+        "liberty-basico-pt-quote",
+        "liberty-full-quote",
+        "liberty-integral-quote",
+        "mapfre-para-la-mujer-quote",
+        "qualitas-direct-research",
+        "qualitas-base-quote",
+        "qualitas-plus-quote",
+        "previsora-clasica-quote",
+        "previsora-preferente-quote",
+        "previsora-premium-quote",
+        "previsora-sin-asistencia-quote",
+        "sura-autos-provider",
+        "equidad-vehicle-by-plate"
+      ],
+      "normalize": "insurance-quote"
     }
   ],
   "settings": {

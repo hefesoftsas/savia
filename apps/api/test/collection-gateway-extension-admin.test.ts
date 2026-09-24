@@ -127,4 +127,25 @@ describe("extension administration authorization", () => {
       }),
     );
   });
+
+  it("forwards Savia Request to tenant ZIP actions in the Studio runtime", async () => {
+    const saviaRequestService = { fetch: vi.fn() };
+    const context = {
+      db: {} as D1Database,
+      files: {} as R2Bucket,
+      tenant: "agency:101",
+      actor: actor({ globalRoles: ["platform_admin"], memberships: [] }),
+      seedObjects: [],
+      saviaRequestService,
+    };
+
+    await createCollectionGateway(context).fetch(
+      new Request("https://crm.internal/api/health"),
+    );
+
+    expect(gatewayMocks.createStudioApp).toHaveBeenCalledWith(
+      "agency:101",
+      expect.objectContaining({ saviaRequestService }),
+    );
+  });
 });

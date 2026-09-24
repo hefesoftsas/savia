@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./test-fixtures": "./src/test-fixtures.ts",
+    "./legacy-runtime-test-fixture": "./src/legacy-runtime-test-fixture.ts",
     "./runtime": "./src/runtime.ts",
     "./assistant-contracts": "./src/assistant-contracts.ts",
     "./public-forms": "./src/public-forms.ts",

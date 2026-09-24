@@ -9,6 +9,7 @@ import {
   parsePluginKind,
   pluginApiFor,
   pluginContributionFor,
+  storeWidgetDeclarationFor,
   storeWidgetFor,
   type ExtensionInstallation,
 } from "./plugins";
@@ -74,6 +75,9 @@ export function PluginWidgetBody({
   const contribution = ref ? pluginContributionFor(ref) : undefined;
   // Lo subido al store prevalece sobre lo compilado (sombra por tenant).
   const storeWidget = ref ? storeWidgetFor(ref, extensions) : undefined;
+  const storeDeclared = ref
+    ? storeWidgetDeclarationFor(ref, extensions)
+    : undefined;
 
   useEffect(() => {
     if (!apiClient || !ref) return;
@@ -101,6 +105,14 @@ export function PluginWidgetBody({
   );
 
   if (!apiClient) return <PluginWidgetSkeleton />;
+  if (failed) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No pudimos verificar la extensión de este widget. Reintenta desde
+        Actualizar.
+      </p>
+    );
+  }
   if (storeWidget) {
     return (
       <CustomPluginFrame
@@ -111,20 +123,19 @@ export function PluginWidgetBody({
       />
     );
   }
+  if (storeDeclared) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Activa la extensión {storeDeclared.title.es} para ver este widget.
+      </p>
+    );
+  }
   if (!ref || !contribution) {
     if (extensions === undefined) return <PluginWidgetSkeleton />;
     return (
       <p className="text-sm text-muted-foreground">
         Este tipo de widget estará disponible próximamente. Mientras tanto
         puedes abrir la colección completa.
-      </p>
-    );
-  }
-  if (failed) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No pudimos verificar la extensión de este widget. Reintenta desde
-        Actualizar.
       </p>
     );
   }

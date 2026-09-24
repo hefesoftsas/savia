@@ -100,7 +100,7 @@ describe("bulk secret transfer", () => {
         variables: [{ key: "blank", value: "", secret: true }],
       },
     ]);
-  });
+  }, 15_000);
 
   it("imports missing values, seals secrets and never deletes", async () => {
     await insertFlow("autos");

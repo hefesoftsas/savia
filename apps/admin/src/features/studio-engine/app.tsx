@@ -813,6 +813,7 @@ function App({
                 onMenuLayoutChange={saveMenuLayout}
                 onDeletePermanent={deleteScreenPermanently}
                 onSolutionsChanged={refresh}
+                extensions={extensionInstallations}
                 tab={
                   location.get("tab") === "packages" ? "packages" : "screens"
                 }
@@ -1117,6 +1118,7 @@ function App({
                 onMenuLayoutChange={saveMenuLayout}
                 onDeletePermanent={deleteScreenPermanently}
                 onSolutionsChanged={refresh}
+                extensions={extensionInstallations}
                 tab={
                   location.get("tab") === "packages" ? "packages" : "screens"
                 }

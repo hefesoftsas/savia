@@ -37,7 +37,7 @@ const quotesManifest = {
   description: "Conecta proveedores de seguros para solicitar cotizaciones.",
 };
 
-it("hides extension detail and connection settings until they are requested", async () => {
+it("hides extension detail until it is requested", async () => {
   const user = userEvent.setup();
   vi.mocked(api).mockResolvedValue({
     data: [{ manifest: quotesManifest, builtIn: true, installed: null }],
@@ -62,23 +62,6 @@ it("hides extension detail and connection settings until they are requested", as
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
     quotesManifest.description,
   );
-
-  const configure = screen.getByRole("button", {
-    name: "Configurar conexión de Cotizaciones de seguros",
-  });
-  expect(configure).toHaveAttribute("aria-expanded", "false");
-  expect(
-    screen.queryByRole("region", {
-      name: "Conexiones de Cotizaciones de seguros",
-    }),
-  ).not.toBeInTheDocument();
-  await user.click(configure);
-  expect(configure).toHaveAttribute("aria-expanded", "true");
-  expect(
-    await screen.findByRole("region", {
-      name: "Conexiones de Cotizaciones de seguros",
-    }),
-  ).toBeInTheDocument();
 });
 
 it("installs the dashboard without duplicating its Pólizas screen", async () => {

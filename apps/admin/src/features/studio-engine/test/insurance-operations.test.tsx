@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { releaseCatalog } from "@savia/release-catalog";
+import { storePortScreens } from "@savia/release-catalog/test-fixtures";
 afterEach(cleanup);
 const account = {
   id: "a",
@@ -30,7 +30,7 @@ function setup(
   const api = {
     collections: { collection: () => collection },
   } as unknown as PluginApi;
-  const Screen = releaseCatalog.extensionScreens.find(
+  const Screen = storePortScreens.find(
     (item) => item.extensionId === extension,
   )!.Screen;
   render(<Screen savia={api} />);
@@ -494,7 +494,7 @@ it("selects actual related records and persists their IDs without replacing hist
       collection: (name: string) => (name === "clientes" ? clients : own),
     },
   } as unknown as PluginApi;
-  const Screen = releaseCatalog.extensionScreens.find(
+  const Screen = storePortScreens.find(
     (s) => s.extensionId === "insurance.collections",
   )!.Screen;
   render(<Screen savia={savia} />);

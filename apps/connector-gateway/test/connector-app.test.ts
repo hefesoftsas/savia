@@ -73,7 +73,7 @@ describe("private connector app", () => {
     });
   });
 
-  it("registers the optional insurance quote action through the runtime catalog", async () => {
+  it("does not register compiled insurance quote actions", async () => {
     const app = createRuntimeConnectorApp({ database: {} as D1Database });
     const response = await app.request(
       "https://savia-connectors.internal/internal/execute",
@@ -89,9 +89,9 @@ describe("private connector app", () => {
       },
     );
 
-    expect(response.status).toBe(502);
+    expect(response.status).toBe(404);
     expect(await response.json()).toEqual({
-      error: { code: "CONNECTOR_EXECUTION_FAILED" },
+      error: { code: "CONNECTOR_ACTION_NOT_FOUND" },
     });
   });
 });
