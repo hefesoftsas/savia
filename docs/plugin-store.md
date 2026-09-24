@@ -127,6 +127,29 @@ compílalo antes a un solo ESM autocontenido, por ejemplo:
 npx esbuild src/plugin.tsx --bundle --format=esm --outfile=dist/plugin.js
 ```
 
+## Publicar en ambientes
+
+`pnpm store:publish` empaqueta y sube todos los ports (o una lista)
+a un ambiente, con la sesión de un administrador del espacio:
+
+```bash
+export SAVIA_API_URL=https://api.tudominio.com
+export SAVIA_SESSION_COOKIE="$(...)"  # header Cookie completo del navegador
+
+# Solo empaquetar, sin red:
+pnpm store:publish --tenant agency:101 --dry-run
+# Subir todo:
+pnpm store:publish --tenant agency:101
+# Subir e instalar, solo algunos:
+pnpm store:publish --tenant agency:101 --install --ports quotes-ui,collections
+# Por dominio en lugar de tenant:
+pnpm store:publish --domain platform --install
+```
+
+Repite por ambiente (dev, staging, producción) cambiando
+`SAVIA_API_URL`. La cookie viaja tal cual a la API, que la valida
+contra el servicio de auth y exige administración del espacio.
+
 ## Conectores declarativos (`http`)
 
 Un `store.json` puede declarar conectores con esquema JSON propio,
