@@ -56,6 +56,9 @@ opaco + bridge `savia`), and server-side capabilities are declarative
    bundle, `dist/plugin-store/*.store.zip` + SHA-256).
 4. Upload in **Mis plugins**, install (provisions collections),
    activate. The object route renders the sandboxed screen.
+5. For a newer ZIP with the same plugin ID, upload the new version and
+   choose **Update** in **Mis plugins**. Uploading alone does not switch
+   the active installation to the new artifact.
 
 Full contract in [plugin-store](../plugin-store.md) and the worked
 ports under `store-ports/`.
