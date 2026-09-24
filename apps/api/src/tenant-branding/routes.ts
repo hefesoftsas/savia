@@ -98,7 +98,9 @@ export function registerTenantBrandingRoutes(
       path: "/v1/tenants/{tenantId}/branding/assets/{kind}",
       tags: ["Tenant branding"],
       request: {
-        params: params.extend({ kind: z.enum(["logo", "cover"]) }),
+        params: params.extend({
+          kind: z.enum(["logo", "cover", "login-animation"]),
+        }),
         body: {
           required: true,
           content: {
@@ -190,11 +192,14 @@ export function registerTenantBrandingRoutes(
       request: { params: params.extend({ assetId: z.string().uuid() }) },
       responses: {
         200: {
-          description: "Published tenant logo or cover",
+          description: "Published tenant logo, cover or login animation",
           content: {
             "image/png": { schema: z.string().openapi({ format: "binary" }) },
             "image/jpeg": { schema: z.string().openapi({ format: "binary" }) },
             "image/webp": { schema: z.string().openapi({ format: "binary" }) },
+            "application/json": {
+              schema: z.string().openapi({ format: "binary" }),
+            },
           },
         },
       },
@@ -208,6 +213,8 @@ export function registerTenantBrandingRoutes(
             dialectFor(db).jsonValue("b.config", "$.logoUrl") +
             "=? OR " +
             dialectFor(db).jsonValue("b.config", "$.coverUrl") +
+            "=? OR " +
+            dialectFor(db).jsonValue("b.config", "$.loginAnimationUrl") +
             "=?)",
         )
         .bind(
@@ -215,13 +222,14 @@ export function registerTenantBrandingRoutes(
           assetId,
           "/api/public/tenant-branding/assets/" + tenantId + "/" + assetId,
           "/api/public/tenant-branding/assets/" + tenantId + "/" + assetId,
+          "/api/public/tenant-branding/assets/" + tenantId + "/" + assetId,
         )
         .first<{ object_key: string; content_type: string }>();
       if (!row || !bucket)
-        throw new HTTPException(404, { message: "Image unavailable." });
+        throw new HTTPException(404, { message: "File unavailable." });
       const object = await bucket.get(row.object_key);
       if (!object)
-        throw new HTTPException(404, { message: "Image unavailable." });
+        throw new HTTPException(404, { message: "File unavailable." });
       return new Response(object.body, {
         headers: {
           "Content-Type": row.content_type,

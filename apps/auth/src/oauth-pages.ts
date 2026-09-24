@@ -21,7 +21,12 @@ function htmlAttribute(value: string): string {
     .replace(/</g, "&lt;");
 }
 
-function page(title: string, content: string, restartUrl?: string): string {
+function page(
+  title: string,
+  content: string,
+  restartUrl?: string,
+  showLoginAnimation = false,
+): string {
   const restartAttribute = restartUrl
     ? ` data-oauth-restart-url="${htmlAttribute(restartUrl)}"`
     : "";
@@ -36,6 +41,7 @@ function page(title: string, content: string, restartUrl?: string): string {
   <body${restartAttribute}>
     <!-- THESIS: A secure OAuth step should feel like one focused workspace, not a generic identity portal. OWN-WORLD: calm Savia teal on a light operational canvas, with a deep-navy trust panel. STORY: identify the requested access, authenticate, then return to the client without losing context. FIRST VIEWPORT: login form at left, Savia assurance panel at right, action immediately below the credentials. FORM: Shadcn login-02 two-column composition, adapted for email, password and MFA. -->
     ${content}
+    ${showLoginAnimation ? '<script src="/login/lottie-light.min.js" defer></script>' : ""}
     <script src="/api/auth/oauth-ui.js" defer></script>
   </body>
 </html>`;
@@ -65,6 +71,7 @@ function loginPage(
       title,
       renderOAuthSurface("login", { tenantSlug, branding }),
       restartUrl,
+      !!branding?.loginAnimationUrl || !branding?.coverUrl,
     ),
   );
 }
@@ -138,6 +145,113 @@ const oauthUiScript = String.raw`(() => {
   const enrollment = document.querySelector("[data-oauth-enrollment]");
   const passwordInput = document.querySelector("#password");
   const passwordToggle = document.querySelector("[data-oauth-password-toggle]");
+  const loginAnimation = document.querySelector("[data-oauth-login-animation]");
+
+  if (loginAnimation && window.lottie) {
+    const frame = loginAnimation.querySelector("[data-oauth-login-animation-frame]");
+    const robot = loginAnimation.querySelector("[data-oauth-login-robot]");
+    const robotFrame = loginAnimation.querySelector("[data-oauth-login-robot-frame]");
+    const wordmark = loginAnimation.querySelector("[data-oauth-login-wordmark]");
+    const wordmarkAI = loginAnimation.querySelector("[data-oauth-login-wordmark-ai]");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animation = window.lottie.loadAnimation({
+      container: frame,
+      renderer: "svg",
+      loop: false,
+      autoplay: false,
+      path: frame.dataset.src,
+    });
+    const robotAnimation = reducedMotion || !robot || !robotFrame ? null : window.lottie.loadAnimation({
+      container: robotFrame,
+      renderer: "svg",
+      loop: false,
+      autoplay: false,
+      path: robotFrame.dataset.src,
+    });
+    let ready = false;
+    let finished = false;
+    let robotReady = false;
+    let robotGreetingPending = false;
+    let robotTriggerTimer;
+    let robotHideTimer;
+
+    function replayClass(element, name) {
+      if (reducedMotion) return;
+      element.classList.remove(name);
+      void element.offsetWidth;
+      element.classList.add(name);
+    }
+
+    function greetWithRobot() {
+      if (!robotAnimation || !robot || document.hidden) return;
+      if (!robotReady) {
+        robotGreetingPending = true;
+        return;
+      }
+      robotGreetingPending = false;
+      clearTimeout(robotHideTimer);
+      robot.classList.remove("robot-visible");
+      void robot.offsetWidth;
+      robot.classList.add("robot-visible");
+      robotAnimation.goToAndStop(35, true);
+      robotAnimation.playSegments([35, 174], true);
+    }
+
+    function queueRobotGreeting(event) {
+      if (reducedMotion || !robotAnimation || event.pointerType === "touch" || document.hidden) return;
+      clearTimeout(robotTriggerTimer);
+      robotTriggerTimer = setTimeout(greetWithRobot, 3000);
+    }
+
+    function cancelRobotGreeting() {
+      clearTimeout(robotTriggerTimer);
+      robotGreetingPending = false;
+    }
+
+    animation.addEventListener("DOMLoaded", () => {
+      ready = true;
+      if (reducedMotion) {
+        animation.goToAndStop(animation.totalFrames - 1, true);
+        finished = true;
+      } else if (!document.hidden) animation.play();
+    });
+    animation.addEventListener("complete", () => { finished = true; });
+    robotAnimation?.addEventListener("DOMLoaded", () => {
+      robotReady = true;
+      if (robotGreetingPending) greetWithRobot();
+    });
+    robotAnimation?.addEventListener("complete", () => {
+      robotHideTimer = setTimeout(() => robot.classList.remove("robot-visible"), 1400);
+    });
+    frame.addEventListener?.("pointerenter", (event) => {
+      if (event.pointerType === "touch") return;
+      replayClass(frame, "logo-hover");
+      queueRobotGreeting(event);
+    });
+    frame.addEventListener?.("pointerleave", cancelRobotGreeting);
+    wordmark?.addEventListener("pointerenter", queueRobotGreeting);
+    wordmark?.addEventListener("pointerleave", cancelRobotGreeting);
+    wordmarkAI?.addEventListener("pointerenter", (event) => {
+      if (event.pointerType !== "touch") replayClass(wordmarkAI, "ai-hover");
+    });
+    frame.addEventListener?.("animationend", (event) => {
+      if (event.animationName === "oauth-logo-hover-pulse") frame.classList.remove("logo-hover");
+    });
+    wordmarkAI?.addEventListener("animationend", (event) => {
+      if (event.animationName === "oauth-ai-hover-pop") wordmarkAI.classList.remove("ai-hover");
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        cancelRobotGreeting();
+        clearTimeout(robotHideTimer);
+        robotAnimation?.pause();
+        robot?.classList.remove("robot-visible");
+      }
+      if (!ready || finished) return;
+      if (document.hidden) animation.pause();
+      else animation.play();
+    });
+  }
 
   function signedOAuthQuery() {
     const source = new URLSearchParams(window.location.search);

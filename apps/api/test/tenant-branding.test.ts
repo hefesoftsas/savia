@@ -168,6 +168,7 @@ it("rejects markup, unknown configuration and external image URLs", async () => 
     { primaryColor: "red;background:url(evil)" },
     { logoUrl: "https://evil.test/logo.png" },
     { coverUrl: "/api/public/tenant-branding/assets/1/not-owned" },
+    { loginAnimationUrl: "https://evil.test/animation.json" },
   ])
     expect((await put(instance, t.id, { ...data, ...change })).status).toBe(
       400,
@@ -236,6 +237,68 @@ it("stores validated images by tenant and only serves assets referenced by saved
   const current = await read(instance, t.id);
   expect(
     (await put(instance, t.id, { ...current.data, logoUrl: null })).status,
+  ).toBe(200);
+  expect((await instance.request("https://api.test" + url)).status).toBe(404);
+});
+it("stores validated Lottie animations and only serves them when referenced by saved branding", async () => {
+  const t = await tenant(),
+    instance = app(member(t.id), env.DOCUMENTS);
+  const animation = JSON.stringify({
+    v: "5.7.0",
+    fr: 60,
+    ip: 0,
+    op: 120,
+    layers: [],
+  });
+  const uploadAnimation = (body: string, type = "application/json") => {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([body] as unknown as BlobPart[], "login.json", { type }),
+    );
+    return instance.request(
+      "https://api.test/v1/tenants/" +
+        t.id +
+        "/branding/assets/login-animation",
+      { method: "POST", body: form },
+    );
+  };
+  for (const invalid of [
+    "<svg></svg>",
+    JSON.stringify({ v: "5.7.0", layers: [] }),
+    JSON.stringify({ v: "5.7.0", fr: 60, ip: 0, op: 120, layers: {} }),
+  ])
+    expect(await (await uploadAnimation(invalid)).status).toBe(400);
+  const response = await uploadAnimation(animation);
+  expect(response.status, await response.clone().text()).toBe(201);
+  const {
+    data: { url },
+  } = (await response.json()) as any;
+  expect(url).toMatch(
+    new RegExp("^/api/public/tenant-branding/assets/" + t.id + "/"),
+  );
+  expect((await instance.request("https://api.test" + url)).status).toBe(404);
+  const initial = await read(instance, t.id);
+  expect(initial.data.loginAnimationUrl).toBeNull();
+  expect(
+    (await put(instance, t.id, { ...initial.data, loginAnimationUrl: url }))
+      .status,
+  ).toBe(200);
+  const served = await instance.request("https://api.test" + url);
+  expect(served.status).toBe(200);
+  expect(served.headers.get("content-type")).toContain("application/json");
+  expect(served.headers.get("x-content-type-options")).toBe("nosniff");
+  expect(await served.json()).toEqual(JSON.parse(animation));
+  const other = await tenant();
+  const foreign = await read(app(), other.id);
+  expect(
+    (await put(app(), other.id, { ...foreign.data, loginAnimationUrl: url }))
+      .status,
+  ).toBe(400);
+  const current = await read(instance, t.id);
+  expect(
+    (await put(instance, t.id, { ...current.data, loginAnimationUrl: null }))
+      .status,
   ).toBe(200);
   expect((await instance.request("https://api.test" + url)).status).toBe(404);
 });

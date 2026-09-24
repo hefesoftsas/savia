@@ -17,11 +17,136 @@ const branding: TenantBranding = {
     "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789012",
   coverUrl:
     "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789013",
+  loginAnimationUrl: null,
   version: 1,
 };
+const animationUrl =
+  "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789014";
 const request = (path: string) =>
   new Request(`https://example.com/api/auth/${path}`);
+
+function fakeAnimation() {
+  const listeners = new Map<string, () => void>();
+  return {
+    totalFrames: 120,
+    playCalls: 0,
+    pauseCalls: 0,
+    stoppedFrames: [] as number[],
+    addEventListener(name: string, listener: () => void) {
+      listeners.set(name, listener);
+    },
+    play() {
+      this.playCalls += 1;
+    },
+    pause() {
+      this.pauseCalls += 1;
+    },
+    goToAndStop(frame: number) {
+      this.stoppedFrames.push(frame);
+    },
+    emit(name: string) {
+      listeners.get(name)?.();
+    },
+  };
+}
+
+async function startOAuthAnimation(reducedMotion = false) {
+  const animation = fakeAnimation();
+  const robotAnimation = fakeAnimation();
+  const frame = { dataset: { src: "/login/savia-logo.json" } };
+  const robot = { classList: { remove() {} } };
+  const robotFrame = { dataset: { src: "/login/savia-chatbot-hover.json" } };
+  const wordmark = { addEventListener() {} };
+  const wordmarkAI = { addEventListener() {} };
+  const elements: Record<string, object> = {
+    "[data-oauth-login-animation-frame]": frame,
+    "[data-oauth-login-robot]": robot,
+    "[data-oauth-login-robot-frame]": robotFrame,
+    "[data-oauth-login-wordmark]": wordmark,
+    "[data-oauth-login-wordmark-ai]": wordmarkAI,
+  };
+  const panel = {
+    querySelector: (selector: string) => elements[selector] ?? null,
+  };
+  const script = await oauthPageResponse(request("oauth-ui.js"))!.text();
+  let onVisibilityChange: (() => void) | undefined;
+  const document = {
+    body: { dataset: {} },
+    hidden: false,
+    querySelector: (selector: string) =>
+      selector === "[data-oauth-login-animation]" ? panel : null,
+    querySelectorAll: () => [],
+    addEventListener(_name: string, listener: () => void) {
+      onVisibilityChange = listener;
+    },
+  };
+  const paths: string[] = [];
+  new Function("document", "window", script)(document, {
+    location: { search: "" },
+    matchMedia: () => ({ matches: reducedMotion }),
+    lottie: {
+      loadAnimation(options: { path: string }) {
+        paths.push(options.path);
+        return options.path === frame.dataset.src ? animation : robotAnimation;
+      },
+    },
+  });
+  return {
+    animation,
+    paths,
+    hide() {
+      document.hidden = true;
+      onVisibilityChange?.();
+    },
+    show() {
+      document.hidden = false;
+      onVisibilityChange?.();
+    },
+  };
+}
+
 describe("tenant identity on OAuth surfaces", () => {
+  it("renders the Savia logo Lottie on the default login", async () => {
+    const html = await oauthPageResponse(request("login"))!.text();
+    const css = await oauthPageResponse(request("oauth-ui.css"))!.text();
+
+    expect(html).toContain('src="/login/lottie-light.min.js"');
+    expect(html).toContain('data-src="/login/savia-logo.json"');
+    expect(html).toContain('class="oauth-login-animation-wordmark"');
+    expect(html).toContain("data-oauth-login-animation");
+    expect(html).not.toContain("<video");
+    expect(css).not.toContain("#071421");
+  });
+
+  it("plays the logo once and pauses while the tab is hidden", async () => {
+    const { animation, paths, hide, show } = await startOAuthAnimation();
+    expect(paths).toEqual([
+      "/login/savia-logo.json",
+      "/login/savia-chatbot-hover.json",
+    ]);
+
+    animation.emit("DOMLoaded");
+    expect(animation.playCalls).toBe(1);
+    hide();
+    expect(animation.pauseCalls).toBe(1);
+    show();
+    expect(animation.playCalls).toBe(2);
+    animation.emit("complete");
+    hide();
+    show();
+    expect(animation.playCalls).toBe(2);
+  });
+
+  it("shows the completed logo without motion when requested", async () => {
+    const { animation, hide, show } = await startOAuthAnimation(true);
+    animation.emit("DOMLoaded");
+    expect(animation.playCalls).toBe(0);
+    expect(animation.stoppedFrames).toEqual([119]);
+    hide();
+    show();
+    expect(animation.playCalls).toBe(0);
+  });
+
   it("passes the internal tenant header through worker HTML and stylesheet routes", async () => {
     const headers = {
       "x-savia-tenant-branding": encodeURIComponent(JSON.stringify(branding)),
@@ -51,6 +176,8 @@ describe("tenant identity on OAuth surfaces", () => {
       expect(html).toContain(value);
     expect(html).toContain('data-oauth-form="sign-in"');
     expect(html).toContain('data-tenant-branding="true"');
+    expect(html).not.toContain("data-oauth-login-animation");
+    expect(html).not.toContain("/login/lottie-light.min.js");
     expect(html).not.toContain('style="');
     expect(response.headers.get("content-security-policy")).toContain(
       "form-action 'self'",
@@ -59,6 +186,26 @@ describe("tenant identity on OAuth surfaces", () => {
       "unsafe-inline",
     );
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+  it("renders a tenant login animation instead of the Savia emblem, robot and cover", async () => {
+    const response = oauthPageResponse(request("login"), {
+      branding: { ...branding, loginAnimationUrl: animationUrl },
+    })!;
+    const html = await response.text();
+    expect(html).toContain(`data-src="${animationUrl}"`);
+    expect(html).not.toContain('data-src="/login/savia-logo.json"');
+    expect(html).not.toContain("data-oauth-login-robot");
+    expect(html).not.toContain("oauth-login-animation-wordmark");
+    expect(html).not.toContain("oauth-aside-cover");
+    expect(html).toContain('src="/login/lottie-light.min.js"');
+    expect(html).toContain('data-oauth-login-animation-custom="true"');
+  });
+  it("keeps the default Savia animation when no custom animation is set", async () => {
+    const html = await oauthPageResponse(request("login"))!.text();
+    expect(html).toContain('data-src="/login/savia-logo.json"');
+    expect(html).toContain("data-oauth-login-robot");
+    expect(html).toContain("oauth-login-animation-wordmark");
+    expect(html).not.toContain("data-oauth-login-animation-custom");
   });
   it("escapes tenant text in document title and React markup", async () => {
     const html = await oauthPageResponse(request("login"), {

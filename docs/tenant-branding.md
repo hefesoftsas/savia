@@ -11,8 +11,9 @@ When no commercial organization is available, platform administrators can start 
 creation from this page; other users are directed to request access from a platform
 administrator.
 
-The guided editor supports a display name, logo, login cover image, welcome title,
-welcome text, primary color, and accent color. Preview changes before saving. The
+The guided editor supports a display name, logo, login cover image, login Lottie
+animation, welcome title, welcome text, primary color, and accent color. Preview
+changes before saving. The
 branding display name does not rename the tenant's legal/administrative name or slug.
 Changes are saved explicitly; a version conflict requires reloading the saved version
 before overwriting another administrator's changes.
@@ -32,6 +33,22 @@ validated, encoded public identity. Authentication pages render the brand on the
 server; arbitrary HTML, scripts, CSS and third-party images are not accepted. If a
 branding lookup fails, authentication remains available with Savia's default identity.
 
+The default web login shows Savia's animated logo and wordmark on a navy panel. The
+Lottie player, animation JSON and wordmark font are served from the admin site's
+public assets at `/login/`, under the same origin as the login. The animation plays
+once and pauses while the tab is hidden. Visitors who prefer reduced motion see its
+completed frame. A tenant can upload its own Lottie JSON animation (validated,
+up to 2 MiB) to replace Savia's emblem on its login; the Savia wordmark and robot
+greeting are hidden while the custom animation is active, and the custom animation
+takes precedence over the tenant's login cover image. Removing the animation
+restores Savia's default. Tenant title, welcome text, logo and colors remain
+unchanged.
+
+Pointer hover briefly pulses the emblem and animates the `ia` in the wordmark. Holding
+the pointer over the emblem or wordmark for three seconds reveals a second Lottie
+animation of Savia's robot greeting the visitor. Leaving before the delay cancels the
+greeting. Touch and reduced-motion visitors do not trigger the hover animations.
+
 Inside the application, a shared provider reads the public identity for the current
 host and applies its display name, logo and primary colors. Theme mode remains a
 personal preference. The personal palette selector is hidden when the tenant controls
@@ -41,11 +58,13 @@ when the provider changes host or unmounts. Branding adds no persistent browser 
 ## Images and public boundary
 
 PNG, JPEG and WebP uploads are limited to 2 MiB and checked by file signatures rather
-than the supplied MIME type alone. SVG and arbitrary URLs are not supported. Images
+than the supplied MIME type alone. SVG and arbitrary URLs are not supported. Login
+animations are Lottie JSON files limited to 2 MiB and validated as plain JSON with a
+Lottie shape (`v`, `fr`, `ip`, `op`, `layers`) rather than by MIME type alone. Files
 are stored in R2 under tenant-specific random keys, with ownership tracked in D1.
-Only an asset belonging to the same tenant and matching its logo/cover purpose can
-be saved. An uploaded image becomes publicly readable only when the saved branding
-references it; the editor uses a local preview while changes are pending.
+Only an asset belonging to the same tenant and matching its logo/cover/animation
+purpose can be saved. An uploaded file becomes publicly readable only when the saved
+branding references it; the editor uses a local preview while changes are pending.
 
 Each tenant can retain at most 20 images (40 MiB maximum). On a subsequent upload,
 unused images older than 24 hours are removed; currently published images are retained.
@@ -60,8 +79,10 @@ The generated OpenAPI/Scalar document is the API reference.
 
 ## Deployment and verification
 
-Apply migration `0055_tenant_branding.sql`, then deploy the API, auth worker and admin
-from the same revision. The feature uses the existing D1 and R2 bindings and requires
+Apply migrations `0055_tenant_branding.sql` and `0064_tenant_branding_login_animation.sql`
+(plus native PostgreSQL migration `0006_tenant_branding_login_animation.sql` for
+self-hosted installs), then deploy the API, auth worker and admin from the same
+revision. The feature uses the existing D1 and R2 bindings and requires
 no new secret or paid service. Each environment keeps its own branding configuration.
 
 Tests cover tenant ownership, active memberships, upload validation and ownership,

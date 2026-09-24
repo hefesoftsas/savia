@@ -293,6 +293,10 @@
     {
       "filename": "0063_tenant_crm_and_assistant_tables.sql",
       "sha256": "5f536cc8e6f410071c29377baabf07b99dd7af82060d02b494b43611a9d13bb3"
+    },
+    {
+      "filename": "0064_tenant_branding_login_animation.sql",
+      "sha256": "1b6380961e1aee71b07d04fa48e1d28ad69c2501a88ecd7dfbb900d2481ea341"
     }
   ],
   "objects": [

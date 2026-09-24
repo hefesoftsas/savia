@@ -76,11 +76,11 @@ export const settingsMessages = {
     "You do not have permission to change this agency's branding.",
     "Você não tem permissão para alterar a marca desta agência.",
   ],
-  "Revisa los datos y las imágenes. Se permiten PNG, JPEG o WEBP de hasta 2 MB.":
+  "Revisa los datos, las imágenes y la animación. Se permiten PNG, JPEG o WEBP y Lottie JSON de hasta 2 MB.":
     [
-      "Revisa los datos y las imágenes. Se permiten PNG, JPEG o WEBP de hasta 2 MB.",
-      "Check the details and images. PNG, JPEG or WEBP files up to 2 MB are allowed.",
-      "Revise os dados e as imagens. São permitidos arquivos PNG, JPEG ou WEBP de até 2 MB.",
+      "Revisa los datos, las imágenes y la animación. Se permiten PNG, JPEG o WEBP y Lottie JSON de hasta 2 MB.",
+      "Check the details, images and animation. PNG, JPEG or WEBP and Lottie JSON files up to 2 MB are allowed.",
+      "Revise os dados, as imagens e a animação. São permitidos arquivos PNG, JPEG ou WEBP e Lottie JSON de até 2 MB.",
     ],
   "No se pudo completar la operación. Revisa tu conexión y vuelve a intentarlo.":
     [
@@ -244,6 +244,57 @@ export const settingsMessages = {
   ],
   "Quitar logo": ["Quitar logo", "Remove logo", "Remover logo"],
   "Quitar portada": ["Quitar portada", "Remove cover", "Remover capa"],
+  "Animación de acceso": [
+    "Animación de acceso",
+    "Sign-in animation",
+    "Animação de acesso",
+  ],
+  "Archivo Lottie JSON de hasta 2 MB. Reemplaza la animación de Savia y tiene prioridad sobre la portada. Sin animación se muestra la de Savia.":
+    [
+      "Archivo Lottie JSON de hasta 2 MB. Reemplaza la animación de Savia y tiene prioridad sobre la portada. Sin animación se muestra la de Savia.",
+      "Lottie JSON file up to 2 MB. It replaces the Savia animation and takes precedence over the cover. Without an animation, Savia's is shown.",
+      "Arquivo Lottie JSON de até 2 MB. Substitui a animação da Savia e tem prioridade sobre a capa. Sem animação, a da Savia é exibida.",
+    ],
+  "Subir animación Lottie": [
+    "Subir animación Lottie",
+    "Upload Lottie animation",
+    "Enviar animação Lottie",
+  ],
+  "Subiendo animación…": [
+    "Subiendo animación…",
+    "Uploading animation…",
+    "Enviando animação…",
+  ],
+  "Usa un archivo Lottie JSON válido de hasta 2 MB.": [
+    "Usa un archivo Lottie JSON válido de hasta 2 MB.",
+    "Use a valid Lottie JSON file up to 2 MB.",
+    "Use um arquivo Lottie JSON válido de até 2 MB.",
+  ],
+  "Animación lista en la vista previa. Guarda los cambios para publicarla.": [
+    "Animación lista en la vista previa. Guarda los cambios para publicarla.",
+    "Animation ready in the preview. Save your changes to publish it.",
+    "Animação pronta na prévia. Salve as alterações para publicá-la.",
+  ],
+  "Animación personalizada activa.": [
+    "Animación personalizada activa.",
+    "Custom animation active.",
+    "Animação personalizada ativa.",
+  ],
+  "Animación seleccionada: %{name}.": [
+    "Animación seleccionada: %{name}.",
+    "Selected animation: %{name}.",
+    "Animação selecionada: %{name}.",
+  ],
+  "Restaurar animación por defecto": [
+    "Restaurar animación por defecto",
+    "Restore default animation",
+    "Restaurar animação padrão",
+  ],
+  "Se mostrará tu animación Lottie en lugar de la portada.": [
+    "Se mostrará tu animación Lottie en lugar de la portada.",
+    "Your Lottie animation will be shown instead of the cover.",
+    "Sua animação Lottie será exibida em vez da capa.",
+  ],
   "Cargar versión guardada": [
     "Cargar versión guardada",
     "Load saved version",
@@ -639,11 +690,7 @@ export const settingsMessages = {
     "Active organization",
     "Organização ativa",
   ],
-  "Agencia activa": [
-    "Agencia activa",
-    "Active agency",
-    "Agência ativa",
-  ],
+  "Agencia activa": ["Agencia activa", "Active agency", "Agência ativa"],
   "Elige una organización": [
     "Elige una organización",
     "Choose an organization",

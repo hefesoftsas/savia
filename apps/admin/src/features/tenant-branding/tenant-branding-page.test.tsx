@@ -21,8 +21,16 @@ const branding = {
   accentColor: "#d1e8d9",
   logoUrl: null,
   coverUrl: null,
+  loginAnimationUrl: null,
   version: 1,
 };
+const lottie = JSON.stringify({
+  v: "5.7.0",
+  fr: 60,
+  ip: 0,
+  op: 120,
+  layers: [],
+});
 function service(
   get: ReturnType<typeof vi.fn>,
   put = vi.fn(),
@@ -183,6 +191,49 @@ it("keeps uploaded image previews local until save and releases them on discard"
     cleanup();
     vi.unstubAllGlobals();
   }
+});
+it("rejects invalid Lottie files without uploading", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  const upload = vi.fn();
+  render(<TenantBrandingPage services={service(get, vi.fn(), upload)} />);
+  fireEvent.change(await screen.findByLabelText("Subir animación Lottie"), {
+    target: { files: [new File(["<svg/>"], "anim.json", { type: "" })] },
+  });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Lottie JSON");
+  expect(upload).not.toHaveBeenCalled();
+});
+it("uploads a Lottie animation and restores the default without images", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: 1, name: "Agencia Uno" }] })
+    .mockResolvedValueOnce({ data: branding, canManage: true });
+  const asset =
+    "/api/public/tenant-branding/assets/1/12345678-1234-4234-8234-123456789012";
+  const upload = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify({ data: { url: asset } })));
+  render(<TenantBrandingPage services={service(get, vi.fn(), upload)} />);
+  fireEvent.change(await screen.findByLabelText("Subir animación Lottie"), {
+    target: { files: [new File([lottie], "login.json", { type: "" })] },
+  });
+  expect(
+    await screen.findByText("Animación seleccionada: login.json."),
+  ).toBeInTheDocument();
+  expect(upload.mock.calls[0][0]).toBe(
+    "/v1/tenants/1/branding/assets/login-animation",
+  );
+  expect(
+    screen.getByRole("button", { name: "Restaurar animación por defecto" }),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Restaurar animación por defecto" }),
+  );
+  expect(
+    screen.queryByRole("button", { name: "Restaurar animación por defecto" }),
+  ).not.toBeInTheDocument();
 });
 it("does not accept an external image URL returned by an upload", async () => {
   const get = vi

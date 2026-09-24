@@ -29,7 +29,19 @@ type Tenant = {
   kind?: string;
   isActive?: boolean | number;
 };
-type Asset = "logo" | "cover";
+type Asset = "logo" | "cover" | "login-animation";
+function isLoginAnimationData(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const animation = value as Record<string, unknown>;
+  return (
+    typeof animation.v === "string" &&
+    /^\d/.test(animation.v) &&
+    typeof animation.fr === "number" &&
+    typeof animation.ip === "number" &&
+    typeof animation.op === "number" &&
+    Array.isArray(animation.layers)
+  );
+}
 function message(error: unknown): keyof typeof settingsMessages {
   if (error instanceof ApiClientError && error.status === 403)
     return "No tienes permisos para modificar la marca de esta organización.";
@@ -37,7 +49,7 @@ function message(error: unknown): keyof typeof settingsMessages {
     error instanceof ApiClientError &&
     [400, 413, 415, 422].includes(error.status)
   )
-    return "Revisa los datos y las imágenes. Se permiten PNG, JPEG o WEBP de hasta 2 MB.";
+    return "Revisa los datos, las imágenes y la animación. Se permiten PNG, JPEG o WEBP y Lottie JSON de hasta 2 MB.";
   return "No se pudo completar la operación. Revisa tu conexión y vuelve a intentarlo.";
 }
 export function TenantBrandingPage({ services }: { services: AppServices }) {
@@ -251,7 +263,10 @@ function BrandingEditor({
   const [notice, setNotice] = useState("");
   const [conflict, setConflict] = useState(false);
   const [reload, setReload] = useState(0);
-  const [previews, setPreviews] = useState<Partial<Record<Asset, string>>>({});
+  const [previews, setPreviews] = useState<
+    Partial<Record<"logo" | "cover", string>>
+  >({});
+  const [animationName, setAnimationName] = useState("");
   const objectUrls = useRef<Partial<Record<Asset, string>>>({});
   const alive = useRef(true);
   const busy = useRef(false);
@@ -262,6 +277,7 @@ function BrandingEditor({
       URL.revokeObjectURL(url);
     objectUrls.current = {};
     setPreviews({});
+    setAnimationName("");
   }
   useEffect(() => {
     alive.current = true;
@@ -316,7 +332,7 @@ function BrandingEditor({
     if (!draft || !canManage || !dirty || busy.current || conflict) return;
     if (!parseTenantBranding(draft)) {
       setError(
-        "Revisa los textos, los colores y las imágenes antes de guardar.",
+        "Revisa los textos, los colores, las imágenes y la animación antes de guardar.",
       );
       return;
     }
@@ -355,7 +371,22 @@ function BrandingEditor({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !draft || !canManage || busy.current) return;
-    if (
+    if (kind === "login-animation") {
+      const looksJson =
+        file.type === "application/json" ||
+        file.type === "" ||
+        /\.json$/i.test(file.name);
+      if (!looksJson || file.size > 2 * 1024 * 1024 || file.size === 0) {
+        setError("Usa un archivo Lottie JSON válido de hasta 2 MB.");
+        return;
+      }
+      try {
+        if (!isLoginAnimationData(JSON.parse(await file.text()))) throw 0;
+      } catch {
+        setError("Usa un archivo Lottie JSON válido de hasta 2 MB.");
+        return;
+      }
+    } else if (
       !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
       file.size > 2 * 1024 * 1024 ||
       file.size === 0
@@ -385,21 +416,31 @@ function BrandingEditor({
       const result = (await response.json()) as { data?: { url?: unknown } };
       if (!alive.current || controller.signal.aborted) return;
       const url = result.data?.url;
+      const urlKey =
+        kind === "login-animation" ? "loginAnimationUrl" : `${kind}Url`;
       if (
         typeof url !== "string" ||
         !url.startsWith(`/api/public/tenant-branding/assets/${tenantId}/`) ||
-        !parseTenantBranding({ ...draft, [`${kind}Url`]: url })
+        !parseTenantBranding({ ...draft, [urlKey]: url })
       )
         throw new Error("Invalid asset URL");
-      const preview = URL.createObjectURL(file);
-      if (objectUrls.current[kind])
-        URL.revokeObjectURL(objectUrls.current[kind]!);
-      objectUrls.current[kind] = preview;
-      setPreviews((previous) => ({ ...previous, [kind]: preview }));
-      edit(`${kind}Url`, url);
-      setNotice(
-        "Imagen lista en la vista previa. Guarda los cambios para publicarla.",
-      );
+      if (kind === "login-animation") {
+        setAnimationName(file.name);
+        edit("loginAnimationUrl", url);
+        setNotice(
+          "Animación lista en la vista previa. Guarda los cambios para publicarla.",
+        );
+      } else {
+        const preview = URL.createObjectURL(file);
+        if (objectUrls.current[kind])
+          URL.revokeObjectURL(objectUrls.current[kind]!);
+        objectUrls.current[kind] = preview;
+        setPreviews((previous) => ({ ...previous, [kind]: preview }));
+        edit(`${kind}Url`, url);
+        setNotice(
+          "Imagen lista en la vista previa. Guarda los cambios para publicarla.",
+        );
+      }
     } catch (cause) {
       if (alive.current && !controller.signal.aborted) setError(message(cause));
     } finally {
@@ -408,6 +449,11 @@ function BrandingEditor({
     }
   }
   function removeImage(kind: Asset) {
+    if (kind === "login-animation") {
+      setAnimationName("");
+      edit("loginAnimationUrl", null);
+      return;
+    }
     if (objectUrls.current[kind])
       URL.revokeObjectURL(objectUrls.current[kind]!);
     delete objectUrls.current[kind];
@@ -517,6 +563,46 @@ function BrandingEditor({
           </div>
         </fieldset>
         <fieldset disabled={disabled}>
+          <legend>{t("Animación de acceso")}</legend>
+          <p className="tenant-branding-help">
+            {t(
+              "Archivo Lottie JSON de hasta 2 MB. Reemplaza la animación de Savia y tiene prioridad sobre la portada. Sin animación se muestra la de Savia.",
+            )}
+          </p>
+          <div className="tenant-branding-field">
+            <label htmlFor="branding-login-animation">
+              {t("Subir animación Lottie")}
+            </label>
+            <Input
+              id="branding-login-animation"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => void upload("login-animation", event)}
+            />
+            {pending === "login-animation" && (
+              <p role="status">{t("Subiendo animación…")}</p>
+            )}
+            {draft.loginAnimationUrl && (
+              <p className="tenant-branding-help" role="status">
+                {animationName
+                  ? t("Animación seleccionada: %{name}.", {
+                      name: animationName,
+                    })
+                  : t("Animación personalizada activa.")}
+              </p>
+            )}
+            {draft.loginAnimationUrl && (
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => removeImage("login-animation")}
+              >
+                {t("Restaurar animación por defecto")}
+              </Button>
+            )}
+          </div>
+        </fieldset>
+        <fieldset disabled={disabled}>
           <legend>{t("Imágenes")}</legend>
           <p className="tenant-branding-help">
             {t(
@@ -605,12 +691,18 @@ function BrandingEditor({
           {t("Vista previa · acceso")}
         </div>
         <div className="tenant-branding-preview-content">
-          {(previews.cover ?? draft.coverUrl) && (
-            <img
-              className="tenant-branding-cover"
-              src={previews.cover ?? draft.coverUrl!}
-              alt={t("Portada de la organización")}
-            />
+          {draft.loginAnimationUrl ? (
+            <p className="tenant-branding-preview-animation" role="status">
+              {t("Se mostrará tu animación Lottie en lugar de la portada.")}
+            </p>
+          ) : (
+            (previews.cover ?? draft.coverUrl) && (
+              <img
+                className="tenant-branding-cover"
+                src={previews.cover ?? draft.coverUrl!}
+                alt={t("Portada de la organización")}
+              />
+            )
           )}
           <div className="tenant-branding-preview-form">
             <div className="tenant-branding-preview-identity">
