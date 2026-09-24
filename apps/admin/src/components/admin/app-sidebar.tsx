@@ -792,12 +792,12 @@ export function AppSidebar() {
                     <img
                       src="/savia-logo-large.png"
                       alt="Savia"
-                      className="h-6 w-auto object-contain group-data-[collapsible=icon]:hidden"
+                      className="h-6 w-auto object-contain group-data-[collapsible=icon]:hidden dark:rounded-md dark:bg-white dark:px-1.5 dark:py-0.5"
                     />
                     <img
-                      src="/favicon-32x32.png"
+                      src="/favicon-32-v3.png"
                       alt="Savia"
-                      className="hidden !size-5 rounded-[4px] object-cover group-data-[collapsible=icon]:block"
+                      className="hidden !size-5 rounded-[4px] object-cover group-data-[collapsible=icon]:block dark:bg-white"
                     />
                     <span className="sr-only">Savia</span>
                   </>
