@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { releaseCatalog } from "@savia/release-catalog";
+import { storePortScreens } from "./store-port-screen-fixtures";
 
 afterEach(cleanup);
 
@@ -141,7 +141,7 @@ function quoteScreenApi(
 function quoteScreen(
   object: "cotizador" | "cotizador_por_pasos" | "administrar_seguros",
 ) {
-  const contribution = releaseCatalog.extensionScreens.find(
+  const contribution = storePortScreens.find(
     (screen) => screen.object === object && screen.view === "records",
   );
   if (!contribution) throw new Error(`No existe la pantalla ${object}.`);

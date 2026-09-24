@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { releaseCatalog } from "@savia/release-catalog";
+import { storePortScreens } from "./store-port-screen-fixtures";
 import { ValueInput } from "../workflow-editor";
 afterEach(cleanup);
 it("clears attachments on record switch even if the next list fails", async () => {
@@ -33,7 +33,7 @@ it("clears attachments on record switch even if the next list fails", async () =
     files,
     collections: { collection: () => collection },
   } as unknown as PluginApi;
-  const Screen = releaseCatalog.extensionScreens.find(
+  const Screen = storePortScreens.find(
     (entry) => entry.extensionId === "insurance.collections",
   )!.Screen;
   render(<Screen savia={savia} />);

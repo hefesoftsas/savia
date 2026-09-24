@@ -92,6 +92,22 @@ it("keeps the selected management tab in the URL", async () => {
   expect(window.location.search).toBe("?object=clientes&view=screens&tab=menu");
 });
 
+it("shows tenant ZIP plugins without the compiled extension catalog", async () => {
+  setStudioRuntime({
+    embedded: true,
+    businessSetupEnabled: false,
+    transport: async (path: string) =>
+      Response.json({ data: path === "/api/objects" ? screens : [] }),
+  });
+
+  render(<Root embedded search="object=clientes&view=admin&tab=packages" />);
+
+  expect(
+    await screen.findByRole("heading", { name: "Mis plugins" }),
+  ).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "Extensiones" })).toBeNull();
+});
+
 it("returns direct screen removal to the screen settings tab", async () => {
   const user = userEvent.setup();
   setStudioRuntime({

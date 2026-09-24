@@ -8,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { releaseCatalog } from "@savia/release-catalog";
+import { storePortScreens } from "./store-port-screen-fixtures";
 afterEach(cleanup);
 function setup() {
   const rows: Record<string, unknown>[] = [];
@@ -36,7 +36,7 @@ function setup() {
     connections: { list: vi.fn(async () => []) },
     actions: { list: vi.fn(async () => []) },
   } as unknown as PluginApi;
-  const Calendar = releaseCatalog.extensionScreens.find(
+  const Calendar = storePortScreens.find(
     (entry) => entry.extensionId === "insurance.calendar",
   )!.Screen;
   render(<Calendar savia={savia} />);

@@ -68,19 +68,35 @@ const enabledExtension = [
 ];
 
 describe("PluginWidgetBody", () => {
-  it("renders the owning extension widget with a scoped savia object", async () => {
-    const { container } = render(
+  it("asks to enable the store extension when it is not active", async () => {
+    render(
       <PluginWidgetBody
-        apiClient={createApiClient(enabledExtension) as never}
-        widget={widget as never}
+        apiClient={
+          createApiClient([
+            {
+              manifest: { id: "custom.demo" },
+              builtIn: false,
+              store: true,
+              widgets: [
+                {
+                  id: "resumen",
+                  collection: "polizas",
+                  title: { es: "Resumen" },
+                },
+              ],
+              installed: { enabled: false },
+            },
+          ]) as never
+        }
+        widget={{ ...widget, kind: "plugin:custom.demo:resumen" } as never}
       />,
     );
 
-    await waitFor(() => expect(container).toHaveTextContent("Vigentes"));
-    expect(container).toHaveTextContent("POL-001");
     expect(
-      container.querySelector('dl[aria-label="Resumen de cartera"]'),
-    ).not.toBeNull();
+      await screen.findByText(
+        "Activa la extensión Resumen para ver este widget.",
+      ),
+    ).toBeVisible();
   });
 
   it("asks to enable the extension when it is not active", async () => {
@@ -93,7 +109,7 @@ describe("PluginWidgetBody", () => {
 
     expect(
       await screen.findByText(
-        "Activa la extensión Resumen de cartera para ver este widget.",
+        "Este tipo de widget estará disponible próximamente. Mientras tanto puedes abrir la colección completa.",
       ),
     ).toBeVisible();
   });

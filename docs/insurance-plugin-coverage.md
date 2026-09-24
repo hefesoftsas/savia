@@ -1,9 +1,10 @@
 # Optional insurance plugin coverage
 
-Owner: Savia maintainers. Last reviewed: 2026-09-19.
+Owner: Savia maintainers. Last reviewed: 2026-09-24.
 
-The release catalog now contains 25 optional extensions. Industry code stays in
-packages and release composition; the generic host supplies authorization,
+The 25 optional extensions ship as per-tenant store plugins
+(`store-ports/`, same ids as before). Industry code stays in
+packages as pack sources; the generic host supplies authorization,
 collections, files, extension actions/settings and workflows.
 
 ## New capabilities
@@ -38,8 +39,9 @@ collections, files, extension actions/settings and workflows.
 
 ## Activation and external configuration
 
-Install the desired extension, review its required collections and configure
-permissions. Prepare and publish the selected automation bundles; preparing a
+Upload the desired plugin in **Mis plugins**, install it, review its
+required collections and configure permissions. Prepare and publish
+the selected automation bundles; preparing a
 bundle never silently replaces an already edited/published workflow. Review the
 upgrade notes for legacy renewal source keys and existing workflows.
 
@@ -64,8 +66,8 @@ these distinctions in its UI and histories.
 
 ## Release
 
-Run the repository tests and typechecks, build the matching host release and pack
-the extension directories with `scripts/pack-extension.mjs`. Source ZIPs require
-this matching compiled release. Apply database migrations through the normal
-release process. No live deployment, production account provisioning or outbound
-customer messaging is performed by packaging.
+Run the repository tests and typechecks, build the host release and pack
+the store ports with `pnpm store:pack`. Upload each ZIP to the target
+tenant, then install and activate it. Apply database migrations through
+the normal release process. Packaging alone does not deploy plugins,
+provision production accounts or send customer messages.

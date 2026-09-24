@@ -68,7 +68,6 @@ import { collectionCapabilities } from "./collection-capabilities";
 import CollectionOperationsPanel from "./collection-operations-panel";
 import { sortScreens } from "./screen-metadata";
 import { isPluginScreen } from "./extension-screens";
-import ExtensionManager from "./extension-manager";
 import PluginStoreManager from "./plugin-store";
 import SolutionManager from "./solution-manager";
 import "./screen-administration.css";
@@ -1153,7 +1152,6 @@ export default function ScreenAdministration({
         >
           <div className="space-y-6">
             <SolutionManager onChanged={onSolutionsChanged ?? (() => {})} />
-            <ExtensionManager onChanged={onSolutionsChanged ?? (() => {})} />
             <PluginStoreManager onChanged={onSolutionsChanged ?? (() => {})} />
           </div>
         </TabsContent>

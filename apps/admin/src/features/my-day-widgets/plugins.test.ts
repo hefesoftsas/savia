@@ -5,6 +5,8 @@ import {
   parsePluginKind,
   pluginContributionFor,
   pluginWidgetTitle,
+  storeWidgetContributions,
+  storeWidgetFor,
 } from "./plugins";
 import { releaseCatalog } from "@savia/release-catalog";
 
@@ -27,27 +29,29 @@ describe("parsePluginKind", () => {
 });
 
 describe("plugin registry", () => {
-  it("resolves the portfolio summary contribution from the catalog", () => {
-    const ref = parsePluginKind("plugin:insurance.portfolio-dashboard:summary");
-    expect(ref).not.toBeNull();
-    const contribution = pluginContributionFor(ref!);
-    expect(contribution).toMatchObject({
-      collection: "polizas",
-      title: { es: "Resumen de cartera" },
-    });
-    expect(releaseCatalog.extensionWidgets).toContain(contribution);
+  it("ships no compiled widgets after the store migration", () => {
+    expect(releaseCatalog.extensionWidgets).toEqual([]);
+    expect(
+      pluginContributionFor({
+        extensionId: "insurance.portfolio-dashboard",
+        widgetId: "summary",
+      }),
+    ).toBeUndefined();
     expect(
       pluginWidgetTitle("plugin:insurance.portfolio-dashboard:summary"),
-    ).toBe("Resumen de cartera");
+    ).toBeUndefined();
     expect(pluginWidgetTitle("summary")).toBeUndefined();
     expect(pluginWidgetTitle("plugin:unknown:missing")).toBeUndefined();
   });
 
   it("enables widgets with the same rule as extension screens", () => {
-    const contribution = pluginContributionFor({
+    const contribution = {
+      id: "summary",
       extensionId: "insurance.portfolio-dashboard",
-      widgetId: "summary",
-    })!;
+      collection: "polizas",
+      title: { es: "Resumen de cartera" },
+      Widget: () => null,
+    };
     expect(isPluginWidgetEnabled(contribution, undefined)).toBe(false);
     expect(isPluginWidgetEnabled(contribution, [])).toBe(false);
     expect(
@@ -70,12 +74,20 @@ describe("plugin registry", () => {
     ).toBe(true);
   });
 
-  it("offers plugin widgets only for their collection and when enabled", () => {
+  it("offers store widgets for their collection when enabled", () => {
     const enabled = [
       {
         manifest: { id: "insurance.portfolio-dashboard" },
-        builtIn: true,
-        installed: null,
+        builtIn: false,
+        store: true,
+        widgets: [
+          {
+            id: "summary",
+            collection: "polizas",
+            title: { es: "Resumen de cartera" },
+          },
+        ],
+        installed: { enabled: true },
       },
     ];
     expect(
@@ -84,5 +96,21 @@ describe("plugin registry", () => {
     expect(availablePluginWidgets("clientes", enabled)).toEqual([]);
     expect(availablePluginWidgets("polizas", [])).toEqual([]);
     expect(availablePluginWidgets("polizas", undefined)).toEqual([]);
+    expect(
+      storeWidgetContributions(undefined),
+      "ignora catálogos ausentes",
+    ).toEqual([]);
+    expect(
+      storeWidgetFor(
+        { extensionId: "insurance.portfolio-dashboard", widgetId: "summary" },
+        enabled,
+      ),
+    ).toMatchObject({ collection: "polizas" });
+    expect(
+      storeWidgetFor(
+        { extensionId: "insurance.portfolio-dashboard", widgetId: "otro" },
+        enabled,
+      ),
+    ).toBeUndefined();
   });
 });
