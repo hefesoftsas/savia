@@ -8,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { storePortScreens } from "./store-port-screen-fixtures";
+import { storePortScreens } from "@savia/release-catalog/test-fixtures";
 afterEach(cleanup);
 function setup() {
   const rows: Record<string, unknown>[] = [];

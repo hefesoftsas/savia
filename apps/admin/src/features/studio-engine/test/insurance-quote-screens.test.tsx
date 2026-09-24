@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { storePortScreens } from "./store-port-screen-fixtures";
+import { storePortScreens } from "@savia/release-catalog/test-fixtures";
 
 afterEach(cleanup);
 

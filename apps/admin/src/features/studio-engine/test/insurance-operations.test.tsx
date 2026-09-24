@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { storePortScreens } from "./store-port-screen-fixtures";
+import { storePortScreens } from "@savia/release-catalog/test-fixtures";
 afterEach(cleanup);
 const account = {
   id: "a",

@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
-import { storePortScreens } from "./store-port-screen-fixtures";
+import { storePortScreens } from "@savia/release-catalog/test-fixtures";
 import { ValueInput } from "../workflow-editor";
 afterEach(cleanup);
 it("clears attachments on record switch even if the next list fails", async () => {
