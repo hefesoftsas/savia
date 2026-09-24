@@ -29,6 +29,11 @@ Each GitHub environment supplies its own `SAVIA_AUTH_D1_ID` and
 `SAVIA_DOMAIN_D1_ID`. Preview additionally supplies `SAVIA_PUBLIC_ORIGIN` and
 `SAVIA_DOCUMENTS_BUCKET`. The deployment verifies the remote database names
 before any mutation, so a production ID configured by mistake is rejected.
+
+The Savia Request Worker shares the domain D1 database. Its global
+`installed_bundles` ledger is created by
+`packages/db/migrations/0075_savia_request_installed_bundles.sql`; the
+insurance package installer needs this table to prepare quote flows.
 Generated configuration stays ignored by Git. Secret uploads use
 `upload-cloudflare-secrets.mjs`, which validates every Worker name and passes an
 explicit environment config to `wrangler secret bulk`. Do not use the

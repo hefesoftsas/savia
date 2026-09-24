@@ -55,6 +55,10 @@ per-tenant login Lottie animations, matching SQLite migration
 `0074_tenant_branding_login_animation.sql` (`login-animation` kind,
 `application/json` content type).
 
+`0016_savia_request_installed_bundles.sql` adds the Savia Request bundle ledger
+to the native core schema, matching SQLite migration
+`0075_savia_request_installed_bundles.sql` on the shared D1 database.
+
 Native pools discard failed idle connections without logging their credential-bearing
 client objects. Shutdown waits for socket removal as well as pool shutdown before
 allowing database teardown; the next query after an idle connection loss obtains

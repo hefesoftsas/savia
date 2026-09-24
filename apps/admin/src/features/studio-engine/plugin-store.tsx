@@ -1,4 +1,5 @@
 import { resolveLocalizedContent } from "@savia/studio-shared/plugin-localization";
+import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useRef, useState } from "react";
@@ -179,6 +180,10 @@ export default function PluginStoreManager({
                 locale,
               );
               const active = isActive(item);
+              const updateAvailable =
+                item.installed !== null &&
+                compareSolutionVersions(item.version, item.installed.version) >
+                  0;
               const pending = busy === item.manifest.id;
               const open = openPluginId === item.manifest.id;
               return (
@@ -240,23 +245,46 @@ export default function PluginStoreManager({
                           {t("Instalar")}
                         </Button>
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={pending}
-                          onClick={() =>
-                            void run(item.manifest.id, () =>
-                              api(`/extensions/${item.manifest.id}`, "PATCH", {
-                                enabled: !item.installed!.enabled,
-                              }),
-                            )
-                          }
-                          aria-label={`${item.installed.enabled ? t("Desactivar") : t("Activar")} ${label}`}
-                        >
-                          {item.installed.enabled
-                            ? t("Desactivar")
-                            : t("Activar")}
-                        </Button>
+                        <>
+                          {updateAvailable ? (
+                            <Button
+                              size="sm"
+                              disabled={pending}
+                              onClick={() =>
+                                void run(item.manifest.id, () =>
+                                  api(
+                                    `/extensions/${item.manifest.id}/install`,
+                                    "POST",
+                                  ),
+                                )
+                              }
+                              aria-label={`${t("Actualizar")} ${label}`}
+                            >
+                              {t("Actualizar")}
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={pending}
+                            onClick={() =>
+                              void run(item.manifest.id, () =>
+                                api(
+                                  `/extensions/${item.manifest.id}`,
+                                  "PATCH",
+                                  {
+                                    enabled: !item.installed!.enabled,
+                                  },
+                                ),
+                              )
+                            }
+                            aria-label={`${item.installed.enabled ? t("Desactivar") : t("Activar")} ${label}`}
+                          >
+                            {item.installed.enabled
+                              ? t("Desactivar")
+                              : t("Activar")}
+                          </Button>
+                        </>
                       )}
                       {active ? (
                         <Button

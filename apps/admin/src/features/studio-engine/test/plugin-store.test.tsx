@@ -96,6 +96,41 @@ it("sube un zip y desactiva un plugin activo", async () => {
   );
 });
 
+it("updates an installed plugin when a newer ZIP is available", async () => {
+  let installed = { enabled: true, version: "1.2.0" };
+  vi.mocked(api).mockImplementation(async (path, method) => {
+    if (path === "/plugin-store")
+      return {
+        data: [
+          {
+            ...item,
+            version: "1.3.0",
+            manifest: { ...item.manifest, version: "1.3.0" },
+            installed,
+          },
+        ],
+      };
+    if (path === "/extensions/custom.demo/install" && method === "POST") {
+      installed = { enabled: true, version: "1.3.0" };
+      return { data: { id: "custom.demo", ...installed } };
+    }
+    throw new Error(`Unexpected API request: ${path}`);
+  });
+  render(<PluginStoreManager onChanged={() => undefined} />);
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Actualizar Demo" }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith("/extensions/custom.demo/install", "POST"),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Actualizar Demo" }),
+    ).not.toBeInTheDocument(),
+  );
+});
+
 it("muestra el estado vacío del store", async () => {
   vi.mocked(api).mockResolvedValue({ data: [] });
   render(<PluginStoreManager onChanged={() => undefined} />);
