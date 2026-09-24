@@ -1,12 +1,101 @@
 import type { FastMCP } from "@prefecthq/fastmcp-ts/server";
 import { z } from "zod";
-import { summarizeInsurancePortfolio } from "@savia/insurance-portfolio-dashboard/summary";
 import type { SaviaApiClient } from "../savia-api";
 
 const PORTFOLIO_EXTENSION_ID = "insurance.portfolio-dashboard";
 const POLICIES_COLLECTION = "polizas";
 const SUMMARY_PER_PAGE = 200;
 const SUMMARY_MAX_PAGES = 20;
+
+// Agregación local del resumen (misma definición que el reductor puro
+// del paquete de cartera): el worker no puede importar implementaciones
+// del sector (insurance-boundary), así que la computa sobre las
+// colecciones del tenant. Cubierto por el test del tool con registros
+// fijos.
+const statusFields = ["estado", "status", "estado_poliza", "policyStatus"];
+const expirationFields = [
+  "fecha_vencimiento",
+  "fechaVencimiento",
+  "vencimiento",
+  "fin",
+  "expirationDate",
+  "expiresAt",
+];
+const premiumFields = ["prima", "premium", "valor_prima", "valorPrima"];
+const activeStatuses = new Set([
+  "vigente",
+  "activa",
+  "activo",
+  "active",
+  "in_force",
+  "in-force",
+  "en_vigor",
+]);
+
+function first(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+): unknown {
+  for (const field of fields) {
+    const value = record[field];
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function asNumber(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function summarizePolicies(
+  policies: readonly Record<string, unknown>[],
+  asOf: string,
+) {
+  const reference = new Date(asOf).getTime();
+  let active = 0;
+  let expiring = 0;
+  let premiumTotal = 0;
+  let hasPremium = false;
+  const thirtyDaysLater = reference + 30 * 24 * 60 * 60 * 1000;
+  for (const policy of policies) {
+    const status = first(policy, statusFields);
+    if (
+      typeof status !== "string" ||
+      !activeStatuses.has(status.trim().toLocaleLowerCase("es-CO"))
+    )
+      continue;
+    active += 1;
+    const expiration = first(policy, expirationFields);
+    const expiresAt =
+      typeof expiration === "string" || typeof expiration === "number"
+        ? new Date(expiration).getTime()
+        : NaN;
+    if (
+      Number.isFinite(expiresAt) &&
+      expiresAt >= reference &&
+      expiresAt <= thirtyDaysLater
+    )
+      expiring += 1;
+    const policyPremium = asNumber(first(policy, premiumFields));
+    if (policyPremium !== null) {
+      premiumTotal += policyPremium;
+      hasPremium = true;
+    }
+  }
+  return {
+    total: policies.length,
+    active,
+    expiring,
+    premiumTotal: hasPremium ? premiumTotal : null,
+    asOf,
+  };
+}
 
 type PolicyPage = {
   data: Record<string, unknown>[];
@@ -54,7 +143,7 @@ export function registerPortfolioAssistantTool(
       }
       return {
         extension: PORTFOLIO_EXTENSION_ID,
-        summary: summarizeInsurancePortfolio(records, new Date().toISOString()),
+        summary: summarizePolicies(records, new Date().toISOString()),
       };
     },
   );
