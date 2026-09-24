@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageStorePlugin } from "./pack-store-plugin.mjs";
+import { previewNames, slugifyBranch } from "./preview-environment.mjs";
 
 const workspaceRoot = resolve(import.meta.dirname, "..");
 
@@ -26,6 +27,7 @@ export function parseArguments(argv) {
     dryRun: false,
     tenant: null,
     domain: null,
+    previewBranch: null,
     apiUrl: process.env.SAVIA_API_URL,
     cookie: process.env.SAVIA_SESSION_COOKIE,
   };
@@ -39,6 +41,7 @@ export function parseArguments(argv) {
     if (arg === "--api-url") options.apiUrl = next();
     else if (arg === "--tenant") options.tenant = next();
     else if (arg === "--domain") options.domain = next();
+    else if (arg === "--preview-branch") options.previewBranch = next();
     else if (arg === "--cookie") options.cookie = next();
     else if (arg === "--ports")
       options.ports = next()
@@ -48,6 +51,10 @@ export function parseArguments(argv) {
     else if (arg === "--install") options.install = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else fail(`argumento desconocido: ${arg}.`);
+  }
+  if (options.previewBranch) {
+    const names = previewNames(slugifyBranch(options.previewBranch));
+    options.apiUrl = `https://${names.workers.api}.workers.dev`;
   }
   if (!options.apiUrl) fail("indica --api-url o SAVIA_API_URL.");
   if (!options.tenant && !options.domain)

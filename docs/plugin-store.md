@@ -154,8 +154,17 @@ pnpm store:publish --domain platform --install
 ```
 
 Repite por ambiente (dev, staging, producción) cambiando
-`SAVIA_API_URL`. La cookie viaja tal cual a la API, que la valida
+`SAVIA_API_URL`. Para un preview efímero, resuelve la URL desde la
+rama sin escribirla a mano:
+
+```bash
+pnpm store:publish --preview-branch chibchombiano26/mi-rama --tenant agency:101 --install
+# apiUrl = https://savia-agencies-preview-<slug>.workers.dev
+```
+
+La cookie viaja tal cual a la API, que la valida
 contra el servicio de auth y exige administración del espacio.
+El tenant debe existir en ese ambiente (el preview trae DB aislada).
 
 ## Conectores declarativos (`http`)
 

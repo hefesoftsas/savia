@@ -76,6 +76,20 @@ describe("publish-store-plugins", () => {
     assert.ok(logs[0].startsWith("OK http-echo"));
   });
 
+  it("resuelve la URL del ambiente preview desde la rama", () => {
+    const options = parseArguments([
+      "--preview-branch",
+      "chibchombiano26/plugin-store-epic",
+      "--tenant",
+      "agency:101",
+      "--dry-run",
+    ]);
+    assert.equal(
+      options.apiUrl,
+      "https://savia-agencies-preview-chibchombiano26-plugin-s.workers.dev",
+    );
+  });
+
   it("sube e instala contra un stub HTTP", async () => {
     const { createServer } = await import("node:http");
     const seen = [];
