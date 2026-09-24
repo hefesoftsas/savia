@@ -16,14 +16,14 @@ import {
   type StoreConnector,
   type StoreHttpAction,
   type StoreJson,
-} from "@savia/crm-shared/plugin-store";
+} from "@savia/studio-shared/plugin-store";
 import {
   canonicalJson,
   compareSolutionVersions,
-} from "@savia/crm-shared/solution-package";
-import type { ExtensionObjectRequirement } from "@savia/crm-shared/extension-package";
-import type { ExtensionConnectorDefinition } from "@savia/crm-shared/extension-runtime";
-import type { WorkflowBundle } from "@savia/crm-shared/workflow-bundles";
+} from "@savia/studio-shared/solution-package";
+import type { ExtensionObjectRequirement } from "@savia/studio-shared/extension-package";
+import type { ExtensionConnectorDefinition } from "@savia/studio-shared/extension-runtime";
+import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
 import { z } from "zod";
 import { type Env, fail } from "./context";
 import { audit } from "./services";
@@ -262,7 +262,7 @@ export async function storeWorkflowBundles(
   if (!(await storeTableExists(db))) return [];
   const installed = await db
     .prepare(
-      "SELECT id FROM crm_extension_installations WHERE tenant_id=? AND enabled=1",
+      "SELECT id FROM studio_extension_installations WHERE tenant_id=? AND enabled=1",
     )
     .bind(tenant)
     .all<{ id: string }>();
@@ -878,7 +878,7 @@ export function registerPluginStore(
       ).results.map((row) => ({ ...row, store_json: null }));
     }
     const installed = await c.env.DB.prepare(
-      "SELECT id,version,enabled FROM crm_extension_installations WHERE tenant_id=?",
+      "SELECT id,version,enabled FROM studio_extension_installations WHERE tenant_id=?",
     )
       .bind(tenant)
       .all<{ id: string; version: string; enabled: number }>();
@@ -1042,7 +1042,7 @@ export function registerPluginStore(
     const tenant = c.get("tenant");
     if (!(await storeTableExists(c.env.DB))) return c.json({ data: [] });
     const installed = await c.env.DB.prepare(
-      "SELECT id,version,enabled,manifest FROM crm_extension_installations WHERE tenant_id=? AND enabled=1",
+      "SELECT id,version,enabled,manifest FROM studio_extension_installations WHERE tenant_id=? AND enabled=1",
     )
       .bind(tenant)
       .all<{
@@ -1077,7 +1077,7 @@ export function registerPluginStore(
     let resolvedVersion = version;
     if (!resolvedVersion) {
       const installed = await c.env.DB.prepare(
-        "SELECT version FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+        "SELECT version FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
       )
         .bind(tenant, id)
         .first<{ version: string }>();
@@ -1102,7 +1102,7 @@ export function registerPluginStore(
     const tenant = c.get("tenant");
     const id = c.req.param("id");
     const installed = await c.env.DB.prepare(
-      "SELECT version,manifest FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+      "SELECT version,manifest FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
     )
       .bind(tenant, id)
       .first<{ version: string; manifest: string }>();
@@ -1126,7 +1126,7 @@ export function registerPluginStore(
     const widgetId = c.req.query("widget") ?? "";
     const collection = c.req.query("collection") ?? "";
     const installed = await c.env.DB.prepare(
-      "SELECT version,manifest FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+      "SELECT version,manifest FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
     )
       .bind(tenant, id)
       .first<{ version: string; manifest: string }>();
@@ -1158,7 +1158,7 @@ export function registerPluginStore(
     const version = c.req.query("version");
     await assertCanManage(c.get("tenant"), c.get("principalId"), options, id);
     const active = await c.env.DB.prepare(
-      "SELECT 1 FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+      "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
     )
       .bind(tenant, id)
       .first();
@@ -1178,7 +1178,7 @@ export function registerPluginStore(
         .run();
     }
     await c.env.DB.prepare(
-      "DELETE FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+      "DELETE FROM studio_extension_installations WHERE tenant_id=? AND id=?",
     )
       .bind(tenant, id)
       .run()

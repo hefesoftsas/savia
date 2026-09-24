@@ -1,4 +1,4 @@
-import { resolveLocalizedContent } from "@savia/crm-shared/plugin-localization";
+import { resolveLocalizedContent } from "@savia/studio-shared/plugin-localization";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { useEffect, useRef, useState } from "react";

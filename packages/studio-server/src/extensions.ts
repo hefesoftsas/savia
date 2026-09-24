@@ -77,7 +77,7 @@ export async function isExtensionAvailable(
     return Boolean(
       await db
         .prepare(
-          "SELECT 1 FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+          "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
         )
         .bind(tenant, id)
         .first(),
@@ -129,7 +129,7 @@ async function storeEnabledIds(
   try {
     const rows = await db
       .prepare(
-        `SELECT i.id AS id FROM crm_extension_installations i
+        `SELECT i.id AS id FROM studio_extension_installations i
          INNER JOIN plugin_store_artifacts s ON s.tenant_id=i.tenant_id AND s.id=i.id
          WHERE i.tenant_id=? AND i.enabled=1 GROUP BY i.id`,
       )

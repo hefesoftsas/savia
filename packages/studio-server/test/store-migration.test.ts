@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { existsSync } from "node:fs";
 import { readFileSync, readdirSync } from "node:fs";
-import { createExtensionRegistry } from "@savia/crm-shared/extension-package";
-import { createCrmApp } from "../src/index";
+import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
+import { createStudioApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { isExtensionAvailable } from "../src/extensions";
 
@@ -46,7 +46,7 @@ function app(tenant: string) {
       extensionId,
       compiledRegistry,
     );
-  return createCrmApp(tenant, {
+  return createStudioApp(tenant, {
     seedObjects: [],
     principalId: "user-migrate",
     extensionRegistry: compiledRegistry,
@@ -158,7 +158,7 @@ describe("migración fuera del release", () => {
       expect(migrated.status).toBe(200);
       expect(migrated.json.data.version).toBe("1.1.0");
       const collection = await platform.env.DB.prepare(
-        "SELECT name,version FROM crm_objects WHERE tenant_id=? AND name=?",
+        "SELECT name,version FROM studio_objects WHERE tenant_id=? AND name=?",
       )
         .bind(tenant, "insurance_receivables")
         .first<{ name: string; version: number }>();

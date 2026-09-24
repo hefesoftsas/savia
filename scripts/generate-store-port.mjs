@@ -80,7 +80,7 @@ function probe(packageDir) {
 
 function entrySource(screens, packageDir) {
   const header = `import { createRoot } from "react-dom/client";
-import type { PluginApi } from "../../packages/crm-shared/src/plugin-api";
+import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
 `;
   if (screens.length === 1) {
     return `${header}import { ${screens[0].component} } from "../../packages/${packageDir}/src/admin";

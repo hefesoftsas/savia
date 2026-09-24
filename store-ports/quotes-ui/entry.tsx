@@ -5,7 +5,7 @@ import {
   InsuranceQuoteWizardScreen,
   InsuranceQuoteWorkspaceScreen,
 } from "../../packages/insurance-quotes/src/screens/quote-screens";
-import type { PluginApi } from "../../packages/crm-shared/src/plugin-api";
+import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
 
 type Tab = "direct" | "wizard" | "admin";
 

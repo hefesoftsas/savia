@@ -3,7 +3,7 @@ import { join } from "node:path";
 import {
   pluginStoreManifestSchema,
   storeJsonSchema,
-} from "../packages/crm-shared/src/plugin-store";
+} from "../packages/studio-shared/src/plugin-store";
 
 /** Valida un port con los schemas reales. Imprime JSON. */
 const [portDir] = process.argv.slice(2);

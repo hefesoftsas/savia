@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { CollectionsScreen } from "../../packages/insurance-collections/src/admin";
-import type { PluginApi } from "../../packages/crm-shared/src/plugin-api";
+import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
 
 /**
  * Adaptador del store: monta la pantalla real de Cartera con el objeto

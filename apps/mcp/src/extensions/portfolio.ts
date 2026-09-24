@@ -42,7 +42,7 @@ export function registerPortfolioAssistantTool(
       let page = 1;
       let total = Number.POSITIVE_INFINITY;
       while (records.length < total && page <= SUMMARY_MAX_PAGES) {
-        const result = (await client.listCrmRecords(POLICIES_COLLECTION, {
+        const result = (await client.listStudioRecords(POLICIES_COLLECTION, {
           page,
           perPage: SUMMARY_PER_PAGE,
         })) as Partial<PolicyPage>;

@@ -3,8 +3,8 @@ import { getPlatformProxy } from "wrangler";
 import { existsSync } from "node:fs";
 import { readFileSync, readdirSync } from "node:fs";
 import { z } from "zod";
-import { createExtensionRegistry } from "@savia/crm-shared/extension-package";
-import { createCrmApp } from "../src/index";
+import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
+import { createStudioApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
@@ -90,7 +90,7 @@ function app(tenant: string) {
       extensionId,
       quotesRegistry,
     );
-  return createCrmApp(tenant, {
+  return createStudioApp(tenant, {
     seedObjects: [],
     principalId: "user-q",
     extensionRegistry: quotesRegistry,

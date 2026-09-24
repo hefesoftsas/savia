@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
 import { z } from "zod";
-import { createExtensionRegistry } from "@savia/crm-shared/extension-package";
-import { createCrmApp } from "../src/index";
+import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
+import { createStudioApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
@@ -12,7 +12,7 @@ import saviaRequestApp from "../../../apps/savia-request/src/server/index";
 import { ensureInsuranceAutoLightBundle } from "../../../apps/savia-request/src/server/store";
 import { createConnectorApp } from "../../../apps/connector-gateway/src/app";
 import { createInsuranceSaviaRequestConnectorAction } from "../../insurance-quotes/src/savia-request-adapter";
-import { connectorExecutorFromEnvironment } from "../../../apps/api/src/crm/connector-executor";
+import { connectorExecutorFromEnvironment } from "../../../apps/api/src/studio/connector-executor";
 
 let crm: Awaited<
   ReturnType<typeof getPlatformProxy<{ DB: D1Database; POC_LOCAL: string }>>
@@ -119,7 +119,7 @@ function crmApp(tenant: string) {
     database: crm.env.DB,
     actions: [createInsuranceSaviaRequestConnectorAction(saviaRequestService)],
   });
-  return createCrmApp(tenant, {
+  return createStudioApp(tenant, {
     seedObjects: [],
     principalId: "user-e2e",
     extensionRegistry: quotesRegistry,
@@ -310,6 +310,8 @@ describe("cotización live vía savia-request desde el store", () => {
       tenant,
       actor: "user-e2e",
     });
-    expect(seenRequests.at(-1)?.url).toContain("/api/flows/sbs-producto-8/runs");
+    expect(seenRequests.at(-1)?.url).toContain(
+      "/api/flows/sbs-producto-8/runs",
+    );
   }, 60000);
 });

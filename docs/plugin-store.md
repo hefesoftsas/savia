@@ -305,24 +305,24 @@ Ver ADR 0004.
 `insurance.quotes` (savia-request vía release, sin credenciales del
 tenant). Prerrequisitos del tenant: `insurance.quotes` activa +
 colecciones `clientes` (mapeo) y `savia.insurance`.
-El test `packages/crm-server/test/store-port-quotes.test.ts` verifica
+El test `packages/studio-server/test/store-port-quotes.test.ts` verifica
 el ZIP empaquetado de punta a punta (se omite si no está construido).
-El test `packages/crm-server/test/store-savia-request.test.ts` prueba la
+El test `packages/studio-server/test/store-savia-request.test.ts` prueba la
 cadena real completa sin red: plugin del store → delegación →
 connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 
 ## Referencias
 
-- Contrato + `store.json` + plantillas: `packages/crm-shared/src/plugin-store.ts`.
-- API y sandbox: `packages/crm-server/src/plugin-store.ts`.
+- Contrato + `store.json` + plantillas: `packages/studio-shared/src/plugin-store.ts`.
+- API y sandbox: `packages/studio-server/src/plugin-store.ts`.
 - Acciones simuladas y settings del store:
-  `packages/crm-server/src/extension-actions.ts`.
-- Estado por tenant: `packages/crm-server/src/extensions.ts`,
+  `packages/studio-server/src/extension-actions.ts`.
+- Estado por tenant: `packages/studio-server/src/extensions.ts`,
   migraciones `0068_plugin_store.sql` / `0022_plugin_store.sql` y
   `0069_plugin_store_config.sql` / `0023_plugin_store_config.sql`.
 - Empaquetador: `scripts/pack-store-plugin.mjs` (`pnpm store:pack`).
 - Ports: `store-ports/quotes-ui/`, `store-ports/http-echo/`.
-- UI: `apps/admin/src/features/crm-engine/plugin-store.tsx`,
+- UI: `apps/admin/src/features/studio-engine/plugin-store.tsx`,
   `custom-plugin-frame.tsx` y `store-connections.tsx`.
 - Widgets: `apps/admin/src/features/my-day-widgets/plugin-widget.tsx`.
 - MCP: `apps/mcp/src/extensions/store.ts` y `portfolio.ts`.

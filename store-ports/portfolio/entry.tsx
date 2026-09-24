@@ -2,8 +2,8 @@ import { createRoot } from "react-dom/client";
 import { InsurancePortfolioPoliciesScreen } from "../../packages/insurance-portfolio-dashboard/src/screens/policies";
 import { InsurancePortfolioSummaryWidget } from "../../packages/insurance-portfolio-dashboard/src/widgets";
 import { summarizeInsurancePortfolio } from "../../packages/insurance-portfolio-dashboard/src/summary";
-import type { PluginApi } from "../../packages/crm-shared/src/plugin-api";
-import type { MyDayWidget } from "../../packages/crm-shared/src/my-day-widgets";
+import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
+import type { MyDayWidget } from "../../packages/studio-shared/src/my-day-widgets";
 
 const MAX_SUMMARY_PAGES = 50;
 const SUMMARY_PER_PAGE = 200;

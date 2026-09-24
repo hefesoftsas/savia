@@ -3,7 +3,7 @@ import { getPlatformProxy } from "wrangler";
 import { existsSync } from "node:fs";
 import { readFileSync, readdirSync } from "node:fs";
 import { deflateRawSync } from "node:zlib";
-import { createCrmApp } from "../src/index";
+import { createStudioApp } from "../src/index";
 import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
@@ -140,13 +140,13 @@ function pluginZip(
 const encryptionKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 
 function app(tenant: string) {
-  return createCrmApp(tenant, { seedObjects: [] });
+  return createStudioApp(tenant, { seedObjects: [] });
 }
 
 function appWithRuntime(tenant: string) {
   const isActive = (tenantId: string, extensionId: string) =>
     isExtensionAvailable(platform.env.DB, tenantId, extensionId, undefined);
-  return createCrmApp(tenant, {
+  return createStudioApp(tenant, {
     seedObjects: [],
     principalId: "user-store",
     connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
@@ -672,7 +672,7 @@ const tareasStore = {
 
 async function storedObject(tenant: string, name: string) {
   return platform.env.DB.prepare(
-    "SELECT name,label,config,version FROM crm_objects WHERE tenant_id=? AND name=?",
+    "SELECT name,label,config,version FROM studio_objects WHERE tenant_id=? AND name=?",
   )
     .bind(tenant, name)
     .first<{ name: string; label: string; config: string; version: number }>();
@@ -713,7 +713,7 @@ describe("provisión de colecciones del store", () => {
   it("conserva la colección compatible y rechaza la incompatible.", async () => {
     const compatible = "store-compatible";
     await platform.env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
     )
       .bind(
         compatible,
@@ -743,7 +743,7 @@ describe("provisión de colecciones del store", () => {
 
     const incompatible = "store-incompatible";
     await platform.env.DB.prepare(
-      "INSERT INTO crm_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
     )
       .bind(
         incompatible,
@@ -765,7 +765,7 @@ describe("provisión de colecciones del store", () => {
     );
     expect(rejected.status).toBe(409);
     const installation = await platform.env.DB.prepare(
-      "SELECT count(*) as count FROM crm_extension_installations WHERE tenant_id=? AND id=?",
+      "SELECT count(*) as count FROM studio_extension_installations WHERE tenant_id=? AND id=?",
     )
       .bind(incompatible, "custom.demo")
       .first<{ count: number }>();
@@ -975,7 +975,10 @@ describe("acciones http declarativas", () => {
   it("rechaza respuestas que reflejan un secreto.", async () => {
     await setup();
     globalThis.fetch = (async () =>
-      Response.json({ quoteNumber: "Q-1", apiKey: "K-SECRETA" })) as typeof fetch;
+      Response.json({
+        quoteNumber: "Q-1",
+        apiKey: "K-SECRETA",
+      })) as typeof fetch;
     await api(tenant, "/extensions/custom.demo/connections/sura", "PUT", {
       connectorId: "sura",
       values: { baseUrl: "api.sura.com", apiKey: "K-SECRETA" },
@@ -1019,12 +1022,13 @@ describe("acciones http declarativas", () => {
               id: "enviar",
               kind: "http",
               connector: "gw",
-            request: {
-              method: "POST",
-              url: "{{connection.endpoint}}/enviar",
+              request: {
+                method: "POST",
+                url: "{{connection.endpoint}}/enviar",
                 headers: {
                   Authorization: "Bearer {{connection.token}}",
-                  "Idempotency-Key": "{{tenant}}:{{action}}:{{input.operationKey}}",
+                  "Idempotency-Key":
+                    "{{tenant}}:{{action}}:{{input.operationKey}}",
                 },
                 body: { operationKey: "{{input.operationKey}}" },
               },

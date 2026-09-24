@@ -12,7 +12,7 @@ import {
   storeWidgetFor,
   type ExtensionInstallation,
 } from "./plugins";
-import { CustomPluginFrame } from "../crm-engine/custom-plugin-frame";
+import { CustomPluginFrame } from "../studio-engine/custom-plugin-frame";
 
 function PluginWidgetSkeleton() {
   return (
