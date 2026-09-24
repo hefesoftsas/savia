@@ -18,6 +18,7 @@ import {
 import { solutionOptions } from "../solutions/catalog";
 import type { StudioObject } from "@savia/studio-shared/metadata";
 import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
+import type { SaviaRequestService } from "@savia/studio-shared/savia-request-quotes";
 import type { AppActor } from "../auth/types";
 import type { CrmRouteDependencies } from "../routes/crm";
 import {
@@ -53,6 +54,7 @@ export type CollectionGatewayContext = {
   sqlBridge?: SqlBridgeClient;
   collectionFetch?: typeof fetch;
   actionExecutor?: ExtensionActionExecutor;
+  saviaRequestService?: SaviaRequestService;
   beforeInstall?: SolutionOptions["beforeInstall"];
 };
 
@@ -109,6 +111,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       connectionRepository,
       settingsRepository,
       actionExecutor: context.actionExecutor,
+      saviaRequestService: context.saviaRequestService,
       canManageExtension: ({ tenantId }) =>
         canManageTenantExtensions(actor, tenantId),
     });

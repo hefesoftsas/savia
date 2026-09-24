@@ -107,7 +107,7 @@ it("creates a screen with sidebar visibility turned on by default", async () => 
   expect(createdPayload.config.studio?.screen?.hidden).toBeFalsy();
 });
 
-it("identifies plugin screens with a Plugin badge and shows sidebar subtitles in ScreenAdministration", () => {
+it("shows sidebar subtitles without labeling ordinary screens as compiled plugins", () => {
   const objects = [
     {
       name: "polizas",
@@ -155,6 +155,41 @@ it("identifies plugin screens with a Plugin badge and shows sidebar subtitles in
     ),
   ).toBeInTheDocument();
 
-  // Check Plugin badge is rendered for polizas
-  expect(screen.getByText("Plugin")).toBeInTheDocument();
+  expect(screen.queryByText("Plugin")).toBeNull();
+});
+
+it("labels an active tenant ZIP screen as a plugin", () => {
+  const objects = [
+    {
+      name: "polizas",
+      label: "Pólizas",
+      description: "",
+      version: 1,
+      config: makeConfig({ title: { type: "Textbox", label: "Título" } }),
+    },
+  ];
+
+  render(
+    <ScreenAdministration
+      objects={objects}
+      selected="polizas"
+      detail={false}
+      domainTools
+      extensions={[
+        {
+          manifest: { id: "insurance.portfolio-dashboard" },
+          builtIn: false,
+          store: true,
+          screens: [{ object: "polizas", view: "records" }],
+          installed: { enabled: true },
+        },
+      ]}
+      onNavigate={vi.fn()}
+      onVisibilityChange={vi.fn(async () => undefined)}
+      onMenuLayoutChange={vi.fn(async () => undefined)}
+      onDeletePermanent={vi.fn(async () => undefined)}
+    />,
+  );
+
+  expect(screen.getByText("Plugin")).toBeVisible();
 });

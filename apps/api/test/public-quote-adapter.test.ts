@@ -1,5 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
+vi.mock(
+  "@savia/release-catalog/runtime",
+  async () => import("@savia/release-catalog/legacy-runtime-test-fixture"),
+);
 import { makeConfig } from "@savia/studio-shared/metadata";
 import {
   PUBLIC_QUOTE_CONCURRENCY,

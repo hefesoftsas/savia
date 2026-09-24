@@ -1,38 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createRuntimeConnectorApp } from "../src/index";
 
-const quoteInput = {
-  vehicle: {
-    plate: "TESTCAR",
-    fasecoldaCode: "04408010",
-    productionYear: 2024,
-    isNew: false,
-    circulationCity: "11001",
-    accessoriesValue: 0,
-    declaredValue: 50000000,
-  },
-  applicant: {
-    documentType: "CC",
-    documentNumber: "12345678",
-    firstName: "Ana",
-    surname: "Pérez",
-    gender: "F",
-    birthDate: "1990-01-01",
-    city: "11001",
-    address: "Calle 1",
-    phone: "3001234567",
-    email: "ana@example.test",
-  },
-};
-
 describe("insurance Savia Request action", () => {
-  it("binds only the private Savia Request service for an optional action", async () => {
-    const fetch = vi.fn(async () =>
-      Response.json({
-        status: "success",
-        result: { response: { placa: "TESTCAR", modelo: "2024" } },
-      }),
-    );
+  it("does not call the private service through a compiled action", async () => {
+    const fetch = vi.fn();
     const app = createRuntimeConnectorApp({
       database: {} as D1Database,
       SAVIA_REQUEST: { fetch },
@@ -50,19 +21,15 @@ describe("insurance Savia Request action", () => {
           actionId: "quote",
           connectionId: "simulation",
           runId: "run-a",
-          input: { mode: "mock", flowId: "sura-autos-provider", quoteInput },
+          input: {},
         }),
       },
     );
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      status: "succeeded",
-      output: {
-        type: "vehicle_lookup",
-        data: { vehicle: { plate: "TESTCAR" } },
-      },
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: { code: "CONNECTOR_ACTION_NOT_FOUND" },
     });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

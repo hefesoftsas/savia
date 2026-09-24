@@ -3,11 +3,15 @@ import { streamingRequest } from "../lib/streaming-request";
 import { publishRecordBundleChanges } from "../studio/record-bundle-realtime";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
+import type { SaviaRequestService } from "@savia/studio-shared/savia-request-quotes";
 import { actorFromContext } from "../auth/middleware";
 import { hasCustomAccess } from "../auth/access-context";
 import { loadAccessPolicy } from "../auth/access-repository";
 import { AuthenticationError } from "../auth/types";
-import { canAccessSharedCrm, canManageSharedCrm } from "../external-crm/hubspot-access";
+import {
+  canAccessSharedCrm,
+  canManageSharedCrm,
+} from "../external-crm/hubspot-access";
 import { createCollectionGateway } from "../studio/collection-gateway";
 import type { SqlBridgeClient } from "../studio/sql-bridge";
 import { dynamicOpenApi } from "../studio/dynamic-openapi";
@@ -55,6 +59,7 @@ export function registerStudioRoutes(
   actionExecutor?: ExtensionActionExecutor,
   extensionConnectionsEncryptionKey?: string,
   beforeInstall?: SolutionOptions["beforeInstall"],
+  saviaRequestService?: SaviaRequestService,
   realtime?: RealtimeHubClient,
 ) {
   const handleStudioRequest = async (c: any) => {
@@ -269,6 +274,7 @@ export function registerStudioRoutes(
         : undefined,
       actionExecutor,
       beforeInstall,
+      saviaRequestService,
     });
     await gateway.prepare();
     const syncMatch = /^\/api\/local-sync\/push\/([^/]+)$/.exec(path);
@@ -402,4 +408,3 @@ export function registerStudioRoutes(
   app.all("/v1/dynamic-crm/:tenantId/api/*", handleStudioRequest);
   app.all("/v1/tenants/:tenantId/crm/api/*", handleStudioRequest);
 }
-

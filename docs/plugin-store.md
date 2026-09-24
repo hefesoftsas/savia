@@ -1,10 +1,10 @@
 # Store de plugins por tenant
 
-Los administradores de cada espacio pueden **subir sus propios plugins
-como ZIP**, **instalarlos y activarlos solo para su espacio**, sin
-modificar el release de Savia. Es el complemento por tenant del
-catálogo compilado (`docs/onboarding/08-plugins.md`): lo compilado
-sigue igual; el store añade plugins privados por espacio.
+Los administradores de cada espacio pueden **subir plugins como ZIP**,
+**instalarlos y activarlos solo para su espacio**, sin modificar el
+release de Savia. El store por tenant es la fuente de plugins; el release
+no publica extensiones sectoriales compiladas. Véase
+`docs/onboarding/08-plugins.md`.
 
 ## Formato del ZIP (v1)
 
@@ -17,8 +17,8 @@ mi-plugin.zip
 
 - `savia-extension.json`: mismo contrato que `extension-package.ts`
   (`format`, `formatVersion: 1`, `id`, semver, `label`, `description`,
-  `requires`, `apiVersion: 1`). El `id` **debe empezar por `custom.`**
-  para no suplantar extensiones del release.
+  `requires`, `apiVersion: 1`). Los plugins de terceros usan `custom.`;
+  los ports sectoriales conservan su id `insurance.*`.
 - `dist/plugin.js`: **ya compilado** (p. ej. con esbuild en modo
   `bundle --format=esm`), máximo **2 MB**, ZIP máximo 6 MB. Debe
   exportar `render(element, savia)`. Ver ejemplo funcional en
@@ -29,12 +29,11 @@ mi-plugin.zip
   - `simulation`: el host responde con la plantilla `output` rellena
     desde el `input` (`{{input.a.b}}`, `{{uuid}}`, `{{now}}`), sin red
     ni secretos. Ideal para UI y demos.
-  - `delegate`: el host reescribe el contexto a una acción compilada
-    del release (`{ id, kind: "delegate", extension, action }`) y la
-    ejecuta con sus secretos/servicios. Exige que la extensión destino
-    esté disponible en el tenant (si no, 409). Así `custom.quotes-ui`
-    ejecuta flujos savia-request vía `insurance.quotes` sin que el
-    tenant gestione credenciales.
+  - `delegate`: el host reescribe el contexto a una acción del host
+    (`{ id, kind: "delegate", extension, action }`). Exige que la
+    extensión destino esté disponible en el tenant (si no, 409). El
+    catálogo actual no publica acciones compiladas; los ports de
+    cotización usan `savia-request` directamente.
   - `savia-request`: ejecución nativa en el host
     (`{ id, kind: "savia-request", flows: [...], normalize:
 "insurance-quote" }`). Valida modo/flow/input, propaga
@@ -106,8 +105,8 @@ servidor quedan fuera de esta versión.
 
 Re-subir la misma versión con distinto contenido se rechaza (409):
 publica una versión semver nueva. La instalación conserva datos y
-respeta dependencias `requires` (solo built-ins o extensiones
-activas del mismo espacio) igual que las extensiones compiladas.
+respeta dependencias `requires` (solo built-ins del host o extensiones
+activas del mismo espacio).
 
 ## Empaquetar
 
@@ -263,10 +262,10 @@ conserva datos.
 
 ## Migración fuera del release
 
-Los plugins sectoriales pueden salir del release sin cambiar su id:
-el manifiesto del store acepta cualquier id válido (`custom.*` queda
-como convención para terceros) y lo subido por el tenant prevalece
-sobre lo compilado (`shadowed: true` en el catálogo).
+Los plugins sectoriales salen del release sin cambiar su id: el
+manifiesto del store acepta cualquier id válido (`custom.*` queda como
+convención para terceros). El catálogo muestra los ZIP subidos al
+espacio.
 
 1. Genera el port (`pnpm store:port insurance-renewals`) o escríbelo
    a mano para casos especiales (`store-ports/quotes-ui`,
@@ -274,13 +273,14 @@ sobre lo compilado (`shadowed: true` en el catálogo).
 2. Empaqueta (`pnpm store:pack store-ports/renewals`) y verifica con
    `node --test scripts/store-ports.test.mjs`.
 3. En el tenant: subir → instalar (migra y provisiona) → activar.
-   Desactivar o eliminar el artefacto restaura lo compilado.
+   Desactivar conserva datos; eliminar el artefacto lo quita del catálogo
+   y no restaura ninguna versión compilada.
 
 Ports incluidos (`store-ports/`): accounting, activities, claims,
 **collections** (piloto), commissions, compliance, customer-portal,
 data-quality, documents, endorsements, **http-echo** (demo),
 issuance, opportunities, payments, **portfolio** (resumen en cliente),
-**quotes-ui** (delegación savia-request), **quotes**
+**quotes-ui** (savia-request nativo), **quotes**
 (`insurance.quotes` 1.3.0 con ejecución nativa, sin release), renewals, reports, service,
 settlements, **calendar, campaigns, carriers, communications,
 document-generation** (puertos gateway: conectores `endpoint`+`token`
