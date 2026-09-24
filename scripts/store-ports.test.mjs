@@ -13,12 +13,91 @@ const ports = readdirSync(portsDir, { withFileTypes: true })
   .map((entry) => entry.name)
   .sort();
 
+function compareSemver(a, b) {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++)
+    if (left[i] !== right[i]) return left[i] < right[i] ? -1 : 1;
+  return 0;
+}
+
+const packageDirFor = {
+  portfolio: "insurance-portfolio-dashboard",
+};
+
 describe("ports del store", () => {
   it("hay ports generados para el grupo portable", () => {
     assert.ok(
       ports.length >= 17,
       `se esperaban al menos 17 ports, hay ${ports.length}: ${ports.join(", ")}`,
     );
+  });
+
+  it("valida todos los ports con los schemas reales del contrato", () => {
+    const checker = join(
+      mkdtempSync(join(tmpdir(), "savia-port-check-")),
+      "check.cjs",
+    );
+    try {
+      execFileSync(
+        join(root, "apps/admin/node_modules/.bin/esbuild"),
+        [
+          join(root, "scripts/store-port-check.ts"),
+          "--bundle",
+          "--platform=node",
+          "--format=cjs",
+          `--outfile=${checker}`,
+          "--log-level=error",
+        ],
+        {
+          cwd: root,
+          stdio: "pipe",
+          timeout: 180000,
+          env: {
+            ...process.env,
+            NODE_PATH: [
+              join(root, "apps/admin/node_modules"),
+              join(root, "node_modules"),
+            ].join(":"),
+          },
+        },
+      );
+      for (const port of ports) {
+        const result = JSON.parse(
+          execFileSync("node", [checker, join(portsDir, port)], {
+            cwd: root,
+            encoding: "utf8",
+            timeout: 60000,
+          }),
+        );
+        assert.deepEqual(
+          result.errors,
+          [],
+          `${port}: ${result.errors.join("; ")}`,
+        );
+        // Continuidad de versiones: mismo id migra hacia arriba.
+        if (!result.id.startsWith("custom.")) {
+          const packageDir = packageDirFor[port] ?? `insurance-${port}`;
+          const release = JSON.parse(
+            readFileSync(
+              join(root, "packages", packageDir, "savia-extension.json"),
+              "utf8",
+            ),
+          );
+          assert.equal(
+            result.id,
+            release.id,
+            `${port}: el id cambió respecto al release`,
+          );
+          assert.ok(
+            compareSemver(result.version, release.version) > 0,
+            `${port}: ${result.version} debe superar a ${release.version}`,
+          );
+        }
+      }
+    } finally {
+      rmSync(join(checker, ".."), { force: true, recursive: true });
+    }
   });
 
   for (const port of ports) {

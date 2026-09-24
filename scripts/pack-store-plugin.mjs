@@ -147,8 +147,11 @@ function assertBundle(source) {
     /export\s+default\b/.test(source) ||
     /export\s+(async\s+)?function\s+render\b/.test(source) ||
     /export\s+(const|let|var)\s+render\b/.test(source) ||
-    /export\s*\{[^}]*\brender\b[^}]*\}/.test(source);
-  if (!hasRenderExport) fail("dist/plugin.js debe exportar render().");
+    /export\s*\{[^}]*\brender\b[^}]*\}/.test(source) ||
+    /export\s+(const|let|var)\s+widgets\b/.test(source) ||
+    /export\s*\{[^}]*\bwidgets\b[^}]*\}/.test(source);
+  if (!hasRenderExport)
+    fail("dist/plugin.js debe exportar render() o widgets.");
 }
 
 function packageStorePlugin({ portDir, outputPath }) {
