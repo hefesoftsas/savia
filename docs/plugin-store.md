@@ -35,6 +35,13 @@ mi-plugin.zip
     esté disponible en el tenant (si no, 409). Así `custom.quotes-ui`
     ejecuta flujos savia-request vía `insurance.quotes` sin que el
     tenant gestione credenciales.
+  - `savia-request`: ejecución nativa en el host
+    (`{ id, kind: "savia-request", flows: [...], normalize:
+"insurance-quote" }`). Valida modo/flow/input, propaga
+    `x-savia-tenant` y `x-savia-actor`, y normaliza la respuesta con
+    la lógica pura compartida. Solo flows declarados; sin servicio
+    inyectado responde 502. Nunca es de lectura: excluida del
+    asistente.
   - `http`: el host ejecuta una petición declarada con la conexión del
     tenant (ver § Conectores declarativos).
 
@@ -264,7 +271,8 @@ Ports incluidos (`store-ports/`): accounting, activities, claims,
 **collections** (piloto), commissions, compliance, customer-portal,
 data-quality, documents, endorsements, **http-echo** (demo),
 issuance, opportunities, payments, **portfolio** (resumen en cliente),
-**quotes-ui** (delegación savia-request), renewals, reports, service,
+**quotes-ui** (delegación savia-request), **quotes**
+(`insurance.quotes` 1.3.0 con ejecución nativa, sin release), renewals, reports, service,
 settlements, **calendar, campaigns, carriers, communications,
 document-generation** (puertos gateway: conectores `endpoint`+`token`
 con `allowConfiguredHost` y acciones con el envelope

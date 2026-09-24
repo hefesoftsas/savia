@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { z } from "zod";
 import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
 import { createStudioApp } from "../src/index";
@@ -135,6 +136,7 @@ function crmApp(tenant: string) {
         fetch: (request: Request) => gatewayApp.request(request),
       },
     }),
+    saviaRequestService,
   });
 }
 
@@ -314,4 +316,96 @@ describe("cotización live vía savia-request desde el store", () => {
       "/api/flows/sbs-producto-8/runs",
     );
   }, 60000);
+});
+
+const QUOTES_ARTIFACT = new URL(
+  "../../../dist/plugin-store/insurance.quotes-1.3.0.store.zip",
+  import.meta.url,
+);
+const hasQuotesArtifact = existsSync(QUOTES_ARTIFACT);
+const maybeQuotes = hasQuotesArtifact ? it : it.skip;
+
+describe("port real insurance.quotes con ejecución nativa", () => {
+  maybeQuotes(
+    "ejecuta flujos sin delegar al release.",
+    async () => {
+      const tenant = "quotes-native";
+      const zip = readFileSync(QUOTES_ARTIFACT);
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([zip as BlobPart], "quotes.store.zip", {
+          type: "application/zip",
+        }),
+      );
+      const uploaded = await crmApp(tenant).request(
+        "http://localhost/api/plugin-store/upload",
+        { method: "POST", body: form },
+        crm.env,
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+      expect(
+        (await call(tenant, "/extensions/insurance.quotes/install", "POST"))
+          .status,
+      ).toBe(200);
+
+      const settings = await call(
+        tenant,
+        "/extensions/insurance.quotes/settings",
+      );
+      expect(settings.status).toBe(200);
+      expect(settings.json.data.value.products.length).toBeGreaterThan(10);
+
+      const quote = await call(
+        tenant,
+        "/extensions/insurance.quotes/actions/quote",
+        "POST",
+        {
+          input: {
+            mode: "mock",
+            flowId: "sbs-producto-8",
+            quoteInput: {
+              vehicle: {
+                plate: "ABC123",
+                fasecoldaCode: "00000000",
+                productionYear: 2024,
+                isNew: false,
+                circulationCity: "11001",
+                accessoriesValue: 0,
+                declaredValue: 50000000,
+              },
+              applicant: {
+                documentType: "CC",
+                documentNumber: "0000000000",
+                firstName: "PERSONA",
+                surname: "SIMULADA",
+                gender: "F",
+                birthDate: "1990-01-01",
+                city: "11001",
+                address: "CALLE 1",
+                phone: "3000000000",
+                email: "demo@example.invalid",
+              },
+            },
+          },
+        },
+      );
+      expect(quote.status).toBe(201);
+      expect(quote.json.data.output).toMatchObject({
+        type: "quote",
+        provider: "SBS",
+        status: "success",
+        data: {
+          quoteNumber: "SIM-SBS-PRODUCTO-8",
+          currency: "COP",
+          simulated: true,
+        },
+      });
+      expect(seenRequests.at(-1)).toMatchObject({
+        tenant,
+        actor: "user-e2e",
+      });
+    },
+    60000,
+  );
 });

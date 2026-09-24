@@ -344,6 +344,59 @@ describe("store.json declarativo", () => {
   });
 });
 
+describe("acciones savia-request", () => {
+  it("acepta flujos conocidos con normalizador insurance-quote.", () => {
+    const parsed = storeJsonSchema.parse({
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [
+        {
+          id: "quote",
+          kind: "savia-request",
+          flows: ["sbs-producto-8", "sura-autos-provider"],
+          normalize: "insurance-quote",
+        },
+      ],
+    });
+    expect(parsed.actions[0]).toMatchObject({
+      kind: "savia-request",
+      connectionOptional: true,
+    });
+  });
+
+  it("rechaza flows desconocidos y mcp en ejecución.", () => {
+    expect(() =>
+      storeJsonSchema.parse({
+        format: "savia.store",
+        formatVersion: 1,
+        actions: [
+          {
+            id: "quote",
+            kind: "savia-request",
+            flows: ["flow-inventado"],
+            normalize: "insurance-quote",
+          },
+        ],
+      }),
+    ).toThrow(/desconocido/);
+    expect(() =>
+      storeJsonSchema.parse({
+        format: "savia.store",
+        formatVersion: 1,
+        actions: [
+          {
+            id: "quote",
+            kind: "savia-request",
+            flows: ["sbs-producto-8"],
+            normalize: "insurance-quote",
+            mcp: { label: "Cotizar", summary: "Cotiza." },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+});
+
 describe("mcp declarativo y saneado", () => {
   const simulation = {
     id: "eco",

@@ -21,6 +21,7 @@ import { ExtensionRuntimeError } from "./extension-connections";
 import { isExtensionAvailable, type ExtensionOptions } from "./extensions";
 import {
   executeStoreHttpAction,
+  executeStoreSaviaRequestAction,
   storeConfigFor,
   storeConnectorDefinition,
   StoreHttpInputError,
@@ -299,6 +300,57 @@ export function registerExtensionActions(
               error instanceof Error
                 ? error.message
                 : "El proveedor no respondió.",
+          },
+          502,
+        );
+      }
+    }
+    // Acciones savia-request del store: el host ejecuta el flujo con
+    // el servicio inyectado, sin código compilado por medio.
+    if (stored?.kind === "savia-request") {
+      const context = extensionActionContextSchema.parse({
+        tenantId,
+        principalId: c.get("principalId"),
+        extensionId,
+        actionId: stored.id,
+        connectionId: input.connectionId ?? "savia-request",
+        runId: crypto.randomUUID(),
+      });
+      if (connections) await connections.startRun(context, input.input);
+      try {
+        const output = await executeStoreSaviaRequestAction({
+          action: stored,
+          actionInput: input.input,
+          context: {
+            tenantId,
+            principalId: c.get("principalId"),
+          },
+          service: options.saviaRequestService,
+        });
+        if (connections) {
+          const run = await connections.completeRun(context, output);
+          return c.json({ data: { run, output } }, 201);
+        }
+        return c.json(
+          {
+            data: {
+              run: { runId: context.runId, status: "succeeded" },
+              output,
+            },
+          },
+          201,
+        );
+      } catch (error) {
+        if (connections)
+          await connections.failRun(context, "CONNECTOR_EXECUTION_FAILED");
+        if (error instanceof StoreHttpInputError)
+          return c.json({ error: error.message }, 422);
+        return c.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Savia Request no respondió.",
           },
           502,
         );

@@ -16,7 +16,20 @@ import {
   type StoreConnector,
   type StoreHttpAction,
   type StoreJson,
+  type StoreSaviaRequestAction,
 } from "@savia/studio-shared/plugin-store";
+import {
+  insuranceSaviaRequestBundle,
+  isInsuranceSaviaRequestFlow,
+  lookupQuoteInputSchema,
+  normalizeInsuranceAction,
+  providerForFlow,
+  quoteInputSchema,
+  saviaRequestActionInputSchema,
+  saviaRequestFlowRunSchema,
+  toSaviaRequestInput,
+  type SaviaRequestService,
+} from "@savia/studio-shared/savia-request-quotes";
 import {
   canonicalJson,
   compareSolutionVersions,
@@ -638,6 +651,77 @@ export async function executeStoreHttpAction(input: {
       );
   }
   return { status: response.status, data: redactSecrets(data, secrets) };
+}
+
+/**
+ * Ejecuta una acción savia-request declarativa con el servicio del host.
+ * Réplica la ruta compilada: valida, mapea el input, propaga tenant y
+ * actor, y normaliza la respuesta.
+ */
+export async function executeStoreSaviaRequestAction(input: {
+  action: StoreSaviaRequestAction;
+  actionInput: Record<string, unknown>;
+  context: { tenantId: string; principalId: string };
+  service: SaviaRequestService | undefined;
+}): Promise<unknown> {
+  let request: {
+    mode: "mock" | "live";
+    flowId: string;
+    quoteInput: unknown;
+  };
+  try {
+    request = saviaRequestActionInputSchema.parse(input.actionInput);
+  } catch {
+    throw new StoreHttpInputError("La entrada de la acción no es válida.");
+  }
+  if (!input.action.flows.includes(request.flowId))
+    throw new StoreHttpInputError("Flow no permitido para este plugin.");
+  if (!isInsuranceSaviaRequestFlow(request.flowId))
+    throw new StoreHttpInputError("Flow de Seguros no permitido.");
+  const isLookup =
+    insuranceSaviaRequestBundle.flows.find((flow) => flow.id === request.flowId)
+      ?.role === "lookup";
+  let quoteInput: unknown;
+  try {
+    quoteInput = isLookup
+      ? lookupQuoteInputSchema.parse(request.quoteInput)
+      : quoteInputSchema.parse(request.quoteInput);
+  } catch {
+    throw new StoreHttpInputError("Los datos de cotización no son válidos.");
+  }
+  if (!input.service)
+    throw new StoreHttpProviderError("Savia Request no está disponible.");
+  let response: Response;
+  try {
+    response = await input.service.fetch(
+      new Request(
+        `https://savia-request.internal/api/flows/${request.flowId}/runs`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-savia-tenant": input.context.tenantId,
+            "x-savia-actor": input.context.principalId,
+          },
+          body: JSON.stringify({
+            mode: request.mode,
+            input: toSaviaRequestInput(request.flowId, quoteInput as never),
+          }),
+        },
+      ),
+    );
+  } catch {
+    throw new StoreHttpProviderError("Savia Request no está disponible.");
+  }
+  const body = await response.json().catch(() => null);
+  const run = saviaRequestFlowRunSchema.safeParse(body);
+  if (!response.ok || !run.success || run.data.status !== "success")
+    throw new StoreHttpProviderError("Savia Request no completó la ejecución.");
+  return normalizeInsuranceAction(
+    providerForFlow(request.flowId),
+    request.flowId,
+    run.data.result,
+  );
 }
 
 async function assertCanManage(

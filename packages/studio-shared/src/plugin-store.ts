@@ -4,6 +4,7 @@ import {
   type ExtensionManifest,
 } from "./extension-package";
 import { identifier, supportedTypes } from "./metadata";
+import { isInsuranceSaviaRequestFlow } from "./savia-request-quotes";
 import {
   solutionIdSchema,
   solutionPackageSchema,
@@ -268,10 +269,41 @@ export const storeDelegatedActionSchema = z
   })
   .strict();
 
+/**
+ * Ejecución nativa de flujos savia-request en el host. La lógica pura
+ * (validación, mapeo de input, normalización) vive en el módulo
+ * compartido; el host solo aporta el servicio y el contexto.
+ * Nunca es de lectura: excluida del asistente.
+ */
+export const storeSaviaRequestActionSchema = z
+  .object({
+    id: solutionIdSchema,
+    kind: z.literal("savia-request"),
+    flows: z.array(z.string().trim().min(1).max(200)).min(1).max(50),
+    normalize: z.literal("insurance-quote"),
+    connectionOptional: z.boolean().default(true),
+  })
+  .strict()
+  .superRefine((action, ctx) => {
+    for (const flowId of action.flows) {
+      if (!isInsuranceSaviaRequestFlow(flowId))
+        ctx.addIssue({
+          code: "custom",
+          path: ["flows"],
+          message: `Flow de Seguros desconocido: ${flowId}.`,
+        });
+    }
+  });
+
+export type StoreSaviaRequestAction = z.infer<
+  typeof storeSaviaRequestActionSchema
+>;
+
 export const storeActionSchema = z.union([
   storeSimulationActionSchema,
   storeDelegatedActionSchema,
   z.lazy(() => storeHttpActionSchema),
+  z.lazy(() => storeSaviaRequestActionSchema),
 ]);
 
 const storeHostSchema = z
@@ -515,8 +547,8 @@ export const storeJsonSchema = z
         }
       }
       // El asistente solo expone acciones de lectura declaradas
-      // (simulation o http GET con bloque mcp; delegate no admite mcp
-      // por su esquema estricto).
+      // (simulation o http GET con bloque mcp; delegate y savia-request
+      // no admiten mcp por sus esquemas estrictos).
       const mcp =
         action.kind === "simulation" || action.kind === "http"
           ? action.mcp

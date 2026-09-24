@@ -12,6 +12,7 @@ import {
   type ExtensionRegistry,
 } from "@savia/studio-shared/extension-package";
 import type { ExtensionActionExecutor } from "@savia/studio-shared/extension-runtime";
+import type { SaviaRequestService } from "@savia/studio-shared/savia-request-quotes";
 import { type Env, fail } from "./context";
 import type { ExtensionConnectionRepository } from "./extension-connections";
 import { prepareExtensionObjectProvisioning } from "./extension-object-requirements";
@@ -35,6 +36,7 @@ export type ExtensionOptions = {
   connectionRepository?: ExtensionConnectionRepository;
   settingsRepository?: ExtensionSettingsRepository;
   actionExecutor?: ExtensionActionExecutor;
+  saviaRequestService?: SaviaRequestService;
   canManageExtension?: (input: {
     tenantId: string;
     principalId: string;

@@ -4,81 +4,26 @@ import {
   insuranceQuotesActionId,
   insuranceQuotesExtensionId,
 } from "./connectors";
-import { normalizeInsuranceAction } from "./normalize";
 import {
   insuranceSaviaRequestBundle,
   isInsuranceSaviaRequestFlow,
-} from "./savia-request-bundle";
-import { toSaviaRequestInput } from "./savia-request-input";
+  lookupQuoteInputSchema,
+  normalizeInsuranceAction,
+  providerForFlow,
+  quoteInputSchema,
+  saviaRequestActionInputSchema,
+  saviaRequestFlowRunSchema,
+  toSaviaRequestInput,
+  type SaviaRequestService,
+} from "@savia/studio-shared/savia-request-quotes";
 
-const quoteInputSchema = z
-  .object({
-    vehicle: z
-      .object({
-        plate: z.string().trim().min(1),
-        fasecoldaCode: z.string().trim().min(1),
-        productionYear: z.number().int(),
-        isNew: z.boolean(),
-        circulationCity: z.string().trim().min(1),
-        accessoriesValue: z.number().finite().min(0),
-        declaredValue: z.number().finite().positive(),
-      })
-      .strict(),
-    applicant: z
-      .object({
-        documentType: z.string().trim().min(1),
-        documentNumber: z.string().trim().min(1),
-        firstName: z.string().trim().min(1),
-        surname: z.string().trim().min(1),
-        secondSurname: z.string().trim().min(1).optional(),
-        gender: z.string().trim().min(1),
-        birthDate: z.string().trim().min(1),
-        city: z.string().trim().min(1),
-        address: z.string().trim().min(1),
-        phone: z.string().trim().min(1),
-        email: z.string().trim().min(1),
-      })
-      .strict(),
-  })
-  .strict();
-
-const lookupQuoteInputSchema = z
-  .object({
-    vehicle: z.object({ plate: z.string().trim().min(1) }).passthrough(),
-  })
-  .passthrough();
-
-const actionInputSchema = z
-  .object({
-    mode: z.enum(["mock", "live"]),
-    flowId: z.string().trim().min(1),
-    quoteInput: z.unknown(),
-  })
-  .strict();
-
-const flowRunSchema = z
-  .object({
-    status: z.string(),
-    result: z.unknown().nullable(),
-  })
-  .passthrough();
-
-export type SaviaRequestService = {
-  fetch(request: Request): Response | Promise<Response>;
-};
+export type { SaviaRequestService };
 
 type ConnectorActionInput = {
   context: ExtensionActionContext;
   connection: Record<string, unknown>;
   input: Record<string, unknown>;
 };
-
-function providerFor(flowId: string): string {
-  const label = insuranceSaviaRequestBundle.flows.find(
-    (flow) => flow.id === flowId,
-  )?.label;
-  return label?.split(" · ")[0] ?? "Seguros";
-}
 
 export function createInsuranceSaviaRequestConnectorAction(
   service: SaviaRequestService | undefined,
@@ -93,7 +38,7 @@ export function createInsuranceSaviaRequestConnectorAction(
         context.actionId !== insuranceQuotesActionId
       )
         throw new Error("El contexto de cotización no es válido.");
-      const request = actionInputSchema.parse(input);
+      const request = saviaRequestActionInputSchema.parse(input);
       if (!isInsuranceSaviaRequestFlow(request.flowId))
         throw new Error("Flow de Seguros no permitido.");
       const isLookup =
@@ -128,11 +73,11 @@ export function createInsuranceSaviaRequestConnectorAction(
         throw new Error("Savia Request no está disponible.");
       }
       const body = await response.json().catch(() => null);
-      const run = flowRunSchema.safeParse(body);
+      const run = saviaRequestFlowRunSchema.safeParse(body);
       if (!response.ok || !run.success || run.data.status !== "success")
         throw new Error("Savia Request no completó la ejecución.");
       return normalizeInsuranceAction(
-        providerFor(request.flowId),
+        providerForFlow(request.flowId),
         request.flowId,
         run.data.result,
       );

@@ -94,9 +94,16 @@ function assertStoreJson(store) {
       typeof action.connector === "string" &&
       typeof action.request === "object" &&
       typeof action.request.url === "string";
-    if (!simulation && !delegation && !http) {
+    const saviaRequest =
+      action &&
+      typeof action.id === "string" &&
+      action.kind === "savia-request" &&
+      Array.isArray(action.flows) &&
+      action.flows.length > 0 &&
+      action.normalize === "insurance-quote";
+    if (!simulation && !delegation && !http && !saviaRequest) {
       fail(
-        "store.json solo soporta acciones simulation, delegate o http declarativas.",
+        "store.json solo soporta acciones simulation, delegate, http o savia-request declarativas.",
       );
     }
     if (
