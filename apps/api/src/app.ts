@@ -16,6 +16,7 @@ import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { registerRequestPageRoutes } from "./request-pages/routes";
 import { registerDataDomainRoutes } from "./routes/data-domains";
 import { registerStudioRoutes } from "./routes/studio";
+import { registerPublicPluginEntryRoutes } from "./routes/public-plugin-entry";
 import { registerTenantRoutes } from "./routes/tenants";
 
 import { OpenAPIHono } from "@hono/zod-openapi";
@@ -102,6 +103,7 @@ export function createApp(
     oauthUrls,
   );
   installRequestResultEnvelope(app);
+  registerPublicPluginEntryRoutes(app, db, studioIntegrationKey);
   registerAccessControlRoutes(app, db);
   registerAssistantRoutes(app, assistantService, {
     db,

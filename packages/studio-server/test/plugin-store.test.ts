@@ -8,6 +8,7 @@ import { ExtensionConnectionRepository } from "../src/extension-connections";
 import { ExtensionSettingsRepository } from "../src/extension-settings";
 import { isExtensionAvailable } from "../src/extensions";
 import { shellBootstrapJs } from "../src/plugin-store";
+import { verifyPluginEntryGrant } from "@savia/studio-shared/plugin-entry-grant";
 
 let platform: Awaited<
   ReturnType<typeof getPlatformProxy<{ DB: D1Database; POC_LOCAL: string }>>
@@ -323,6 +324,47 @@ describe("plugin store por tenant", () => {
       "/v1/data-domains/platform/api/plugin-store/custom.demo/entry?version=1.0.0",
     );
     expect(code).toContain("entryUrl.origin !== bootstrapUrl.origin");
+
+    const signedShell = await createStudioApp(tenant, {
+      seedObjects: [],
+      apiBasePath: "/v1/data-domains/platform",
+      entryGrantSecret: "test-secret",
+    }).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos",
+      {},
+      platform.env,
+    );
+    expect(signedShell.status).toBe(200);
+    const signedHtml = await signedShell.text();
+    const signedPath = signedHtml.match(
+      /<script type="module" src="([^"]+)"/,
+    )?.[1];
+    const signedUrl = new URL(
+      signedPath!.replaceAll("&amp;", "&"),
+      "http://localhost",
+    );
+    expect(signedUrl.pathname).toBe(
+      "/api/public/plugin-store/shell-bootstrap.js",
+    );
+    const signedEntry = new URL(
+      signedUrl.searchParams.get("entry")!,
+      "http://localhost",
+    );
+    expect(signedEntry.pathname).toBe(
+      "/api/public/plugin-store/custom.demo/entry",
+    );
+    expect(
+      await verifyPluginEntryGrant(
+        "test-secret",
+        {
+          tenantId: signedEntry.searchParams.get("tenant")!,
+          pluginId: "custom.demo",
+          version: signedEntry.searchParams.get("version")!,
+          expiresAt: Number(signedEntry.searchParams.get("expires")),
+        },
+        signedEntry.searchParams.get("signature")!,
+      ),
+    ).toBe(true);
   });
 
   it("sube, instala, sirve y desactiva un plugin ZIP.", async () => {

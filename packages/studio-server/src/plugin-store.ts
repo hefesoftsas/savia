@@ -18,6 +18,7 @@ import {
   type StoreJson,
   type StoreSaviaRequestAction,
 } from "@savia/studio-shared/plugin-store";
+import { signPluginEntryGrant } from "@savia/studio-shared/plugin-entry-grant";
 import {
   insuranceSaviaRequestBundle,
   isInsuranceSaviaRequestFlow,
@@ -44,6 +45,7 @@ import type { Hono } from "hono";
 
 export type PluginStoreOptions = {
   apiBasePath?: string;
+  entryGrantSecret?: string;
   canManageExtension?: (input: {
     tenantId: string;
     principalId: string;
@@ -943,6 +945,39 @@ function shellHtml(
 </html>`;
 }
 
+async function shellAssetPaths(
+  options: PluginStoreOptions,
+  tenantId: string,
+  pluginId: string,
+  version: string,
+) {
+  if (options.entryGrantSecret) {
+    const storeBasePath = "/api/public/plugin-store";
+    const expiresAt = Date.now() + 2 * 60_000;
+    const signature = await signPluginEntryGrant(options.entryGrantSecret, {
+      tenantId,
+      pluginId,
+      version,
+      expiresAt,
+    });
+    const query = new URLSearchParams({
+      tenant: tenantId,
+      version,
+      expires: String(expiresAt),
+      signature,
+    });
+    return {
+      storeBasePath,
+      entryUrl: `${storeBasePath}/${encodeURIComponent(pluginId)}/entry?${query}`,
+    };
+  }
+  const storeBasePath = `${options.apiBasePath ?? ""}/api/plugin-store`;
+  return {
+    storeBasePath,
+    entryUrl: `${storeBasePath}/${encodeURIComponent(pluginId)}/entry?version=${encodeURIComponent(version)}`,
+  };
+}
+
 // --- Rutas ---
 
 export function registerPluginStore(
@@ -1205,8 +1240,12 @@ export function registerPluginStore(
     if (!installed)
       return fail("El plugin no está activo en este espacio.", 404);
     const manifest = JSON.parse(installed.manifest) as { label?: string };
-    const storeBasePath = `${options.apiBasePath ?? ""}/api/plugin-store`;
-    const entryUrl = `${storeBasePath}/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
+    const { storeBasePath, entryUrl } = await shellAssetPaths(
+      options,
+      tenant,
+      id,
+      installed.version,
+    );
     const screen = c.req.query("screen");
     const view = c.req.query("view");
     const context = screen ? { screen, view: view || "records" } : undefined;
@@ -1215,7 +1254,8 @@ export function registerPluginStore(
       {
         headers: {
           "content-type": "text/html; charset=utf-8",
-          "cache-control": "private, max-age=60",
+          "cache-control": "private, no-store",
+          "referrer-policy": "no-referrer",
           "x-frame-options": "SAMEORIGIN",
         },
       },
@@ -1239,8 +1279,12 @@ export function registerPluginStore(
     if (!widgetId || !widget)
       return fail("El widget no está declarado por el plugin.", 404);
     const manifest = JSON.parse(installed.manifest) as { label?: string };
-    const storeBasePath = `${options.apiBasePath ?? ""}/api/plugin-store`;
-    const entryUrl = `${storeBasePath}/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
+    const { storeBasePath, entryUrl } = await shellAssetPaths(
+      options,
+      tenant,
+      id,
+      installed.version,
+    );
     const html = shellHtml(id, manifest.label ?? id, entryUrl, storeBasePath, {
       widget: widgetId,
       collection: collection || widget.collection,
@@ -1248,7 +1292,8 @@ export function registerPluginStore(
     return new Response(html, {
       headers: {
         "content-type": "text/html; charset=utf-8",
-        "cache-control": "private, max-age=60",
+        "cache-control": "private, no-store",
+        "referrer-policy": "no-referrer",
         "x-frame-options": "SAMEORIGIN",
       },
     });
