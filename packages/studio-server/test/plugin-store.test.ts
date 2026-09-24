@@ -1138,6 +1138,66 @@ describe("catálogo mcp del store", () => {
   });
 });
 
+describe("widgets del store", () => {
+  const widgetStore = {
+    format: "savia.store",
+    formatVersion: 1,
+    widgets: [
+      {
+        id: "resumen",
+        collection: "polizas",
+        title: { es: "Resumen" },
+      },
+    ],
+  };
+
+  it("sirve el shell del widget solo si está declarado y activo.", async () => {
+    const tenant = "store-widget";
+    await uploadZip(tenant, pluginZip({ store: widgetStore }));
+    const missing = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/widget?widget=resumen&collection=polizas",
+      {},
+      platform.env,
+    );
+    expect(missing.status).toBe(404);
+
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const shell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/widget?widget=resumen&collection=polizas",
+      {},
+      platform.env,
+    );
+    expect(shell.status).toBe(200);
+    const html = await shell.text();
+    expect(html).toContain("widget=resumen");
+
+    const unknown = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/widget?widget=otro&collection=polizas",
+      {},
+      platform.env,
+    );
+    expect(unknown.status).toBe(404);
+
+    const extensions = (await (
+      await app(tenant).request(
+        "http://localhost/api/extensions",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(
+      extensions.data.find((row: any) => row.manifest.id === "custom.demo")
+        .widgets,
+    ).toEqual([
+      { id: "resumen", collection: "polizas", title: { es: "Resumen" } },
+    ]);
+  });
+});
+
 const ECHO_ARTIFACT = new URL(
   "../../../dist/plugin-store/custom.http-echo-1.0.0.store.zip",
   import.meta.url,

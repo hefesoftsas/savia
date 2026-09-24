@@ -41,9 +41,13 @@ function isAllowed(path: string): boolean {
 export function CustomPluginFrame({
   pluginId,
   title,
+  src,
+  heightClassName = "h-[480px]",
 }: {
   pluginId: string;
   title: string;
+  src?: string;
+  heightClassName?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
 
@@ -106,10 +110,10 @@ export function CustomPluginFrame({
   return (
     <iframe
       ref={frameRef}
-      src={`/api/plugin-store/${encodeURIComponent(pluginId)}/shell`}
+      src={src ?? `/api/plugin-store/${encodeURIComponent(pluginId)}/shell`}
       sandbox="allow-scripts"
       title={title}
-      className="h-[480px] w-full rounded-md border bg-background"
+      className={`w-full rounded-md border bg-background ${heightClassName}`}
     />
   );
 }

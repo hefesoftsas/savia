@@ -318,6 +318,7 @@ export function registerExtensions(
         store: true as const,
         shadowed: registry.get(manifest.id) !== undefined,
         screens: config?.screens ?? [],
+        widgets: config?.widgets ?? [],
         installed: publicInstallation(installed.get(manifest.id) ?? null),
       });
     }

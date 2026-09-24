@@ -58,7 +58,6 @@ import {
 import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 import type { SolutionPackage } from "@savia/studio-shared/solution-package";
 import { insurancePortfolioExtensionManifest } from "@savia/insurance-portfolio-dashboard/manifest";
-import { insurancePortfolioAssistantExtension } from "@savia/insurance-portfolio-dashboard/mcp";
 import { insurancePortfolioPolicyRequirement } from "@savia/insurance-portfolio-dashboard/policy-object";
 import { summarizeInsurancePortfolio } from "@savia/insurance-portfolio-dashboard/summary";
 import {
@@ -204,7 +203,7 @@ export const runtimeReleaseCatalog: RuntimeReleaseCatalog = {
 
     renewalsRequirement,
   ],
-  assistantExtensions: [insurancePortfolioAssistantExtension],
+  assistantExtensions: [],
   connectorActions: [],
   createConnectorActions: (service, options = {}) => [
     ...communicationsActions(options),

@@ -50,6 +50,7 @@ function app(tenant: string) {
     seedObjects: [],
     principalId: "user-migrate",
     extensionRegistry: compiledRegistry,
+    authorizeWorkflow: async () => true,
     connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
       encryptionKey,
       isExtensionActive: isActive,
@@ -184,6 +185,13 @@ const CALENDAR_ARTIFACT = new URL(
 const hasCalendarArtifact = existsSync(CALENDAR_ARTIFACT);
 const maybeCalendar = hasCalendarArtifact ? it : it.skip;
 
+const AUTOMATION_ARTIFACT = new URL(
+  "../../../dist/plugin-store/insurance.automation-1.1.0.store.zip",
+  import.meta.url,
+);
+const hasAutomationArtifact = existsSync(AUTOMATION_ARTIFACT);
+const maybeAutomation = hasAutomationArtifact ? it : it.skip;
+
 describe("migración de conector gateway", () => {
   const realFetch = globalThis.fetch;
   maybeCalendar(
@@ -273,6 +281,54 @@ describe("migración de conector gateway", () => {
       } finally {
         globalThis.fetch = realFetch;
       }
+    },
+    60000,
+  );
+});
+
+describe("migración de automatizaciones", () => {
+  maybeAutomation(
+    "los bundles del store aparecen en el catálogo al instalarse.",
+    async () => {
+      const tenant = "migrate-automation";
+      const zip = readFileSync(AUTOMATION_ARTIFACT);
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([zip as BlobPart], "automation.store.zip", {
+          type: "application/zip",
+        }),
+      );
+      const uploaded = await app(tenant).request(
+        "http://localhost/api/plugin-store/upload",
+        { method: "POST", body: form },
+        platform.env,
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+      const installed = await app(tenant).request(
+        "http://localhost/api/extensions/insurance.automation/install",
+        { method: "POST", headers: { "content-type": "application/json" } },
+        platform.env,
+      );
+      expect(installed.status, await installed.text()).toBe(200);
+      const catalog = await app(tenant).request(
+        "http://localhost/api/workflow-bundles",
+        {},
+        platform.env,
+      );
+      expect(catalog.status).toBe(200);
+      const ids = (((await catalog.json()) as any).data as any[]).map(
+        (bundle) => bundle.id,
+      );
+      expect(ids).toEqual(
+        expect.arrayContaining([
+          "insurance.issuance-policy",
+          "insurance.links",
+          "insurance.policy-renewal",
+          "insurance.opportunity-issuance",
+          "insurance.renewal-followup",
+        ]),
+      );
     },
     60000,
   );

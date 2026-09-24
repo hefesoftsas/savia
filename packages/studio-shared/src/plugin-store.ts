@@ -121,14 +121,17 @@ export function validatePluginEntrySource(source: string): void {
   for (const { pattern, message } of FORBIDDEN_ENTRY_PATTERNS)
     if (pattern.test(source)) throw new Error(message);
   // Acepta fuente legible y bundles minificados (`export{Ag as render}`).
+  // Los plugins solo-widget pueden exportar `widgets` en lugar de render.
   const hasRenderExport =
     /export\s+default\b/.test(source) ||
     /export\s+(async\s+)?function\s+render\b/.test(source) ||
     /export\s+(const|let|var)\s+render\b/.test(source) ||
-    /export\s*\{[^}]*\brender\b[^}]*\}/.test(source);
+    /export\s*\{[^}]*\brender\b[^}]*\}/.test(source) ||
+    /export\s+(const|let|var)\s+widgets\b/.test(source) ||
+    /export\s*\{[^}]*\bwidgets\b[^}]*\}/.test(source);
   if (!hasRenderExport)
     throw new Error(
-      "dist/plugin.js debe exportar render(element, savia) o un default.",
+      "dist/plugin.js debe exportar render(element, savia) o widgets.",
     );
 }
 
@@ -372,11 +375,69 @@ export const storeScreenSchema = z
 export type StoreScreen = z.infer<typeof storeScreenSchema>;
 
 /**
- * Requisito de colección declarado por un plugin del store. Al instalar,
- * el host crea la colección mínima si falta, conserva la compatible y
- * rechaza la instalación si existe una incompatible (igual que las
- * extensiones compiladas; sin migraciones ni borrados).
+ * Paquete de automatización declarativo. El contenido profundo se
+ * valida al preparar (igual que los compilados); aquí solo estructura.
  */
+export const storeWorkflowBundleSchema = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    label: z.string().trim().min(1).max(200),
+    description: z.string().max(2000).default(""),
+    collections: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
+    fields: z
+      .array(
+        z
+          .object({
+            collection: z.string().trim().min(1).max(200),
+            optional: z.boolean().optional(),
+            fields: z.record(z.string(), z.unknown()),
+          })
+          .strict(),
+      )
+      .max(100)
+      .default([]),
+    workflows: z
+      .array(
+        z
+          .object({
+            key: z.string().trim().min(1).max(200),
+            name: z.string().trim().min(1).max(200),
+            definition: z.unknown(),
+          })
+          .strict(),
+      )
+      .max(100)
+      .default([]),
+  })
+  .strict();
+
+export type StoreWorkflowBundle = z.infer<typeof storeWorkflowBundleSchema>;
+
+/**
+ * Widget de Mi Día aportado por el plugin. El host lo renderiza en un
+ * iframe llamando a `widgets[id](element, savia, widget)` de la
+ * entrada (con `render` como respaldo).
+ */
+export const storeWidgetSchema = z
+  .object({
+    id: z
+      .string()
+      .trim()
+      .min(1)
+      .max(64)
+      .regex(/^[a-z0-9_-]+$/),
+    collection: identifier,
+    title: z
+      .object({
+        es: z.string().trim().min(1).max(100),
+        en: z.string().trim().min(1).max(100).optional(),
+        pt: z.string().trim().min(1).max(100).optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type StoreWidget = z.infer<typeof storeWidgetSchema>;
 export const storeCollectionSchema = z
   .object({
     object: z.unknown(),
@@ -420,6 +481,8 @@ export const storeJsonSchema = z
     actions: z.array(storeActionSchema).max(20).default([]),
     connectors: z.array(storeConnectorSchema).max(10).default([]),
     collections: z.array(storeCollectionSchema).max(20).default([]),
+    bundles: z.array(storeWorkflowBundleSchema).max(20).default([]),
+    widgets: z.array(storeWidgetSchema).max(20).default([]),
     screens: z.array(storeScreenSchema).max(20).default([]),
     settings: z
       .object({ defaults: z.record(z.string(), z.unknown()) })

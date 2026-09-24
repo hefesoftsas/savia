@@ -23,6 +23,7 @@ import {
 } from "@savia/crm-shared/solution-package";
 import type { ExtensionObjectRequirement } from "@savia/crm-shared/extension-package";
 import type { ExtensionConnectorDefinition } from "@savia/crm-shared/extension-runtime";
+import type { WorkflowBundle } from "@savia/crm-shared/workflow-bundles";
 import { z } from "zod";
 import { type Env, fail } from "./context";
 import { audit } from "./services";
@@ -250,12 +251,42 @@ export async function storeObjectRequirements(
   return requirements;
 }
 
+/**
+ * Bundles de automatización de plugins del store instalados y activos,
+ * con su extensionId sellado para el gate de disponibilidad.
+ */
+export async function storeWorkflowBundles(
+  db: D1Database,
+  tenant: string,
+): Promise<WorkflowBundle[]> {
+  if (!(await storeTableExists(db))) return [];
+  const installed = await db
+    .prepare(
+      "SELECT id FROM crm_extension_installations WHERE tenant_id=? AND enabled=1",
+    )
+    .bind(tenant)
+    .all<{ id: string }>();
+  const bundles: WorkflowBundle[] = [];
+  for (const row of installed.results) {
+    const config = await storeConfigFor(db, tenant, row.id);
+    for (const bundle of config?.bundles ?? []) {
+      bundles.push({
+        ...(bundle as unknown as WorkflowBundle),
+        extensionId: row.id,
+      });
+    }
+  }
+  return bundles;
+}
+
 /** Resumen declarativo para la UI (conectores, acciones, ajustes). */
 function storeDeclarations(storeJson: string | null | undefined) {
   const empty = {
     actions: [],
     connectors: [],
     collections: [],
+    bundles: [],
+    widgets: [],
     hasSettings: false,
   };
   try {
@@ -284,6 +315,15 @@ function storeDeclarations(storeJson: string | null | undefined) {
           return typeof object?.name === "string" ? object.name : null;
         })
         .filter((name): name is string => name !== null),
+      bundles: (config.bundles ?? []).map((bundle) => ({
+        id: bundle.id,
+        label: bundle.label,
+      })),
+      widgets: (config.widgets ?? []).map((widget) => ({
+        id: widget.id,
+        collection: widget.collection,
+        title: widget.title,
+      })),
       hasSettings: config.settings !== undefined,
     };
   } catch {
@@ -625,8 +665,14 @@ async function assertCanManage(
 const SHELL_CSP =
   "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none';";
 
-export function shellBootstrapPath(pluginId: string, entryUrl: string): string {
+export function shellBootstrapPath(
+  pluginId: string,
+  entryUrl: string,
+  extra?: Record<string, string>,
+): string {
   const params = new URLSearchParams({ plugin: pluginId, entry: entryUrl });
+  for (const [key, value] of Object.entries(extra ?? {}))
+    params.set(key, value);
   return `/api/plugin-store/shell-bootstrap.js?${params}`;
 }
 
@@ -756,9 +802,21 @@ window.fetch = (resource, init) => {
 };
 try {
   const module = await import(ENTRY_URL);
-  const render = module.render ?? module.default?.render ?? module.default;
-  if (typeof render !== "function") throw new Error("El plugin debe exportar render(element, savia).");
-  await render(document.getElementById("root"), savia);
+  const widgetId = params.get("widget") ?? "";
+  const widgetCollection = params.get("collection") ?? "";
+  const widgetFn =
+    (widgetId && module.widgets?.[widgetId]) ??
+    module.renderWidget ??
+    module.render;
+  if (typeof widgetFn !== "function") throw new Error("El plugin debe exportar render(element, savia) o widgets.");
+  if (widgetId) {
+    await widgetFn(document.getElementById("root"), savia, {
+      kind: \`plugin:\${PLUGIN_ID}:\${widgetId}\`,
+      collection: widgetCollection,
+    });
+  } else {
+    await widgetFn(document.getElementById("root"), savia);
+  }
   parent.postMessage({ ns: "savia-plugin", type: "ready" }, "*");
 } catch (error) {
   document.getElementById("root").innerHTML =
@@ -767,7 +825,12 @@ try {
 }`;
 }
 
-function shellHtml(pluginId: string, label: string, entryUrl: string): string {
+function shellHtml(
+  pluginId: string,
+  label: string,
+  entryUrl: string,
+  extra?: Record<string, string>,
+): string {
   const safeLabel = label.replace(/[<>&"]/g, "");
   return `<!doctype html>
 <html lang="es">
@@ -780,7 +843,7 @@ function shellHtml(pluginId: string, label: string, entryUrl: string): string {
 </head>
 <body>
 <div id="root"></div>
-<script type="module" src="${shellBootstrapPath(pluginId, entryUrl)}"></script>
+<script type="module" src="${shellBootstrapPath(pluginId, entryUrl, extra)}"></script>
 </body>
 </html>`;
 }
@@ -1049,6 +1112,38 @@ export function registerPluginStore(
     const base = new URL(c.req.url);
     const entryUrl = `${base.origin}/api/plugin-store/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
     return new Response(shellHtml(id, manifest.label ?? id, entryUrl), {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "private, max-age=60",
+        "x-frame-options": "SAMEORIGIN",
+      },
+    });
+  });
+
+  app.get("/api/plugin-store/:id/widget", async (c) => {
+    const tenant = c.get("tenant");
+    const id = c.req.param("id");
+    const widgetId = c.req.query("widget") ?? "";
+    const collection = c.req.query("collection") ?? "";
+    const installed = await c.env.DB.prepare(
+      "SELECT version,manifest FROM crm_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+    )
+      .bind(tenant, id)
+      .first<{ version: string; manifest: string }>();
+    if (!installed)
+      return fail("El plugin no está activo en este espacio.", 404);
+    const config = await storeConfigFor(c.env.DB, tenant, id);
+    const widget = config?.widgets.find((item) => item.id === widgetId);
+    if (!widgetId || !widget)
+      return fail("El widget no está declarado por el plugin.", 404);
+    const manifest = JSON.parse(installed.manifest) as { label?: string };
+    const base = new URL(c.req.url);
+    const entryUrl = `${base.origin}/api/plugin-store/${encodeURIComponent(id)}/entry?version=${encodeURIComponent(installed.version)}`;
+    const html = shellHtml(id, manifest.label ?? id, entryUrl, {
+      widget: widgetId,
+      collection: collection || widget.collection,
+    });
+    return new Response(html, {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "private, max-age=60",

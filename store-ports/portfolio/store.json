@@ -100,5 +100,16 @@
       "object": "polizas",
       "view": "records"
     }
+  ],
+  "widgets": [
+    {
+      "id": "summary",
+      "collection": "polizas",
+      "title": {
+        "es": "Resumen de cartera",
+        "en": "Portfolio summary",
+        "pt": "Resumo da carteira"
+      }
+    }
   ]
 }

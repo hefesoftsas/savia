@@ -551,6 +551,9 @@ importers:
       '@prefecthq/fastmcp-ts':
         specifier: ^1.7.0
         version: 1.7.0(hono@4.13.5)(supports-color@10.2.2)
+      '@savia/insurance-portfolio-dashboard':
+        specifier: workspace:*
+        version: link:../../packages/insurance-portfolio-dashboard
       '@savia/release-catalog':
         specifier: workspace:*
         version: link:../../packages/release-catalog

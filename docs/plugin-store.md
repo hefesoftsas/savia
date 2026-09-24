@@ -249,9 +249,31 @@ con `allowConfiguredHost` y acciones con el envelope
 `Idempotency-Key`, idéntico al release). Generados con
 `pnpm store:port <paquete>` (sondea pantallas, colecciones, defaults
 y acciones gateway) y verificados con
-`node --test scripts/store-ports.test.mjs`. Fuera de alcance por
-ahora: `automation` (bundles sin UI), widgets de Mi Día y MCP de
-terceros.
+`node --test scripts/store-ports.test.mjs`. `automation` viaja como
+datos (`store.json → bundles`, servidos por el host con el mismo gate).
+Fuera de alcance por ahora: MCP de terceros.
+
+## Widgets de Mi Día
+
+`store.json` acepta `widgets[]` (`id`, `collection`, `title`) y la
+entrada expone `widgets[id](element, savia, widget)` (con `render`
+como respaldo). Mi Día los ofrece al crear widgets y los renderiza en
+iframe (320 px) cuando el plugin está activo; desactivarlo restaura el
+aviso habitual. El port `portfolio` incluye el resumen como widget.
+
+## Asistente
+
+`savia_extension_insurance_portfolio` ahora se calcula en el worker
+MCP con las colecciones del tenant (sin proveedor compilado).
+`store.json` puede marcar acciones de lectura con `mcp: { label,
+summary }` (solo `simulation` y `http` GET; las escrituras no se
+exponen). El worker MCP publica dos herramientas estáticas y de solo
+lectura: `savia_store_catalog` (plugins activos y acciones con
+etiquetas saneadas y prefijo de origen) y `savia_store_execute`
+(verifica la acción contra el catálogo antes de ejecutar con la sesión
+delegada). El texto del autor se valida en la subida (sin
+instrucciones, sin enlaces, con topes) y se vuelve a sanear al servir.
+Ver ADR 0004.
 
 ## Port de referencia: Cotizaciones UI
 
@@ -279,20 +301,10 @@ connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 - Ports: `store-ports/quotes-ui/`, `store-ports/http-echo/`.
 - UI: `apps/admin/src/features/crm-engine/plugin-store.tsx`,
   `custom-plugin-frame.tsx` y `store-connections.tsx`.
+- Widgets: `apps/admin/src/features/my-day-widgets/plugin-widget.tsx`.
+- MCP: `apps/mcp/src/extensions/store.ts` y `portfolio.ts`.
 
 ## Fuera de alcance (futuro)
 
 - **R2 para entradas grandes** si D1 rechaza filas de ~1 MB en
   producción.
-
-## Asistente
-
-`store.json` puede marcar acciones de lectura con `mcp: { label,
-summary }` (solo `simulation` y `http` GET; las escrituras no se
-exponen). El worker MCP publica dos herramientas estáticas y de solo
-lectura: `savia_store_catalog` (plugins activos y acciones con
-etiquetas saneadas y prefijo de origen) y `savia_store_execute`
-(verifica la acción contra el catálogo antes de ejecutar con la sesión
-delegada). El texto del autor se valida en la subida (sin
-instrucciones, sin enlaces, con topes) y se vuelve a sanear al servir.
-Ver ADR 0004.

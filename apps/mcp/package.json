@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@prefecthq/fastmcp-ts": "^1.7.0",
+    "@savia/insurance-portfolio-dashboard": "workspace:*",
     "@savia/release-catalog": "workspace:*",
     "zod": "^4.5.4"
   },
