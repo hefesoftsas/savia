@@ -555,7 +555,7 @@ it("does not leave old unfinished history quotes loading forever", async () => {
   await getCollectionHandle("cotizaciones").create({
     id: "stale-quote",
     name: "COT-OLD",
-    placa: "OLD123",
+    placa: "SAMPLE",
     estado: "Solicitada",
   });
   await getCollectionHandle("cotizaciones_detalle").create({
