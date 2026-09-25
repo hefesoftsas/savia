@@ -9,6 +9,13 @@ import {
 } from "./record-duplication";
 import { saveRelatedRecords } from "./save-related-records";
 import { reconcileLocalQueries } from "./local-query-sync";
+import {
+  createStudioQueryClient,
+  getStudioQueryOwner,
+  isStudioBootstrapped,
+  markStudioBootstrapped,
+  markStudioBootstrapFailed,
+} from "./studio-query-cache";
 import { RecordOriginLinks } from "./record-origin-links";
 import {
   collectionCapabilities,
@@ -315,36 +322,55 @@ function App({
 
   const activeQueryClient = useQueryClient();
   const runtime = getStudioRuntime();
-  const [ready, setReady] = useState(false),
+  const [ready, setReady] = useState(() => {
+      const domainId = getStudioRuntime().domainId;
+      const owner = getStudioQueryOwner();
+      return Boolean(
+        domainId && owner && isStudioBootstrapped(domainId, owner),
+      );
+    }),
     [bootError, setBootError] = useState("");
   useEffect(() => {
     let active = true;
     const runtime = getStudioRuntime();
-    const bootstrap = async (path: string) => {
-      if (!runtime.transport) return api(path, "POST");
-      const response = await runtime.transport("/api" + path, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const body = (await response.json()) as { error?: string };
-        throw new Error(body.error ?? t("No se pudo preparar el dominio."));
-      }
-    };
-    void bootstrap("/bootstrap")
-      .then(() =>
-        active && embedded && runtime.businessSetupEnabled !== false
-          ? bootstrap("/business/setup")
-          : undefined,
-      )
-      .then(() => {
+    const domainId = runtime.domainId;
+    const owner = getStudioQueryOwner();
+    // Evita que /bootstrap bloquee cada regreso al mismo dominio: solo en
+    // la primera entrada de cada dominio (o tras recargar, fallo previo o
+    // cambio de dominio). Al regresar, el contenido conservado se muestra
+    // de inmediato y las consultas vencidas se actualizan en segundo plano.
+    if (domainId && owner && isStudioBootstrapped(domainId, owner)) {
+      setReady(true);
+      return () => {
+        active = false;
+      };
+    }
+    void (async () => {
+      const bootstrap = async (path: string) => {
+        if (!runtime.transport) return api(path, "POST");
+        const response = await runtime.transport("/api" + path, {
+          method: "POST",
+        });
+        if (!response.ok) {
+          const body = (await response.json()) as { error?: string };
+          throw new Error(body.error ?? t("No se pudo preparar el dominio."));
+        }
+      };
+      try {
+        await bootstrap("/bootstrap");
+        if (active && embedded && runtime.businessSetupEnabled !== false)
+          await bootstrap("/business/setup");
+        if (domainId && owner) markStudioBootstrapped(domainId, owner);
         if (active) setReady(true);
-      })
-      .catch((e) => {
-        if (active) setBootError(e.message);
-      });
+      } catch (e) {
+        if (domainId && owner) markStudioBootstrapFailed(domainId, owner);
+        if (active) setBootError((e as Error).message);
+      }
+    })();
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const objectsQuery = useListObjects({
     query: { enabled: ready, staleTime: 5 * 60_000 },
@@ -1930,9 +1956,11 @@ function Audit({ objectName }: { objectName?: string }) {
 export default function Root({
   embedded = false,
   search,
+  queryClient: sharedQueryClient,
 }: {
   embedded?: boolean;
   search?: string;
+  queryClient?: QueryClient;
 } = {}) {
   const t = useMessages(automationMessages);
   // Read the outer admin store directly: useAppLocale() falls back to the
@@ -1943,19 +1971,13 @@ export default function Root({
     ? outerLocaleRaw
     : defaultAppLocale;
 
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            retry: 0,
-            refetchOnWindowFocus: false,
-            networkMode: "always",
-          },
-          mutations: { networkMode: "always", retry: false },
-        },
-      }),
-  );
+  // El cliente conservado vive fuera de StudioRoot (por sesión+dominio).
+  // Solo se crea uno efímero cuando no se inyecta el compartido
+  // (tests, uso standalone). El compartido se reutiliza al volver al
+  // mismo dominio y nunca se vacía al desmontar.
+  const [ephemeralClient] = useState(() => createStudioQueryClient());
+  const queryClient = sharedQueryClient ?? ephemeralClient;
+  const isSharedClient = sharedQueryClient != null;
   const [store] = useState(() => memoryStore({ locale: outerLocale }));
   useEffect(() => {
     store.setItem("locale", outerLocale);
@@ -1974,6 +1996,11 @@ export default function Root({
       if (change.authorizationError) {
         void queryClient.cancelQueries();
         queryClient.clear();
+        // Perder autorización vacía las consultas conservadas y obliga a
+        // preparar el dominio de nuevo en la próxima entrada.
+        const domainId = getStudioRuntime().domainId;
+        const owner = getStudioQueryOwner();
+        if (domainId && owner) markStudioBootstrapFailed(domainId, owner);
         return;
       }
       void reconcileLocalQueries(
@@ -1992,13 +2019,17 @@ export default function Root({
     };
   }, [queryClient]);
 
-  useEffect(
-    () => () => {
+  // Conservar el cliente no debe dejar sincronizadores activos: la
+  // suscripción a LocalWorkspace siempre se cierra al salir, y el
+  // workspace lo cierra StudioWorkspace. Solo el cliente efímero se
+  // vacía al desmontar; el compartido se reutiliza al regresar.
+  useEffect(() => {
+    if (isSharedClient) return;
+    return () => {
       void queryClient.cancelQueries();
       queryClient.clear();
-    },
-    [queryClient],
-  );
+    };
+  }, [isSharedClient, queryClient]);
   if (authorizationError)
     return (
       <div role="alert">

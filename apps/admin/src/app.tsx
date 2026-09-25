@@ -17,6 +17,7 @@ import { CustomRoutes, memoryStore, Resource, useTranslate } from "ra-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navigate, Route } from "react-router-dom";
 import { getDefaultAppServices, type AppServices } from "@/app-services";
+import { preloadRouteModules } from "@/route-preload";
 import { tenants } from "@/features/tenants";
 import { users } from "@/features/users";
 import { PasswordResetPage } from "@/features/users/password-reset-page";
@@ -34,10 +35,17 @@ import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 const RolePages = lazy(async () => ({
   default: (await import("@/features/access-control/role-pages")).RolePages,
 }));
-const StudioPage = lazy(async () => {
+// Mismas funciones de importación para la ruta y la precarga: reintentan la
+// importación si una precarga fallida la precedió.
+export async function loadStudioPage() {
   const module = await import("@/features/studio/studio-page");
   return { default: module.StudioPage };
-});
+}
+export async function loadSaviaRequestPage() {
+  const module = await import("@/features/savia-request/savia-request-page");
+  return { default: module.SaviaRequestPage };
+}
+const StudioPage = lazy(loadStudioPage);
 const PersonalIntegrationsPage = lazy(async () => {
   const module =
     await import("@/features/personal-integrations/personal-integrations-page");
@@ -61,10 +69,7 @@ const NotificationInboxPage = lazy(async () => {
 });
 
 const adminStore = memoryStore({ locale: resolveInitialAppLocale() });
-const SaviaRequestPage = lazy(async () => {
-  const module = await import("@/features/savia-request/savia-request-page");
-  return { default: module.SaviaRequestPage };
-});
+const SaviaRequestPage = lazy(loadSaviaRequestPage);
 
 function SaviaRequestRoute({
   services,
@@ -239,6 +244,15 @@ function AppContent({ services }: { services?: AppServices } = {}) {
     window.history.replaceState({}, "", "/#/my-day");
     setHandlingCallback(false);
   }, []);
+
+  // Precarga tras la pantalla utilizable, sin bloquear la navegación.
+  useEffect(() => {
+    if (handlingCallback) return;
+    preloadRouteModules(appServices, {
+      loadStudioPage,
+      loadSaviaRequestPage,
+    });
+  }, [appServices, handlingCallback]);
 
   if (window.location.pathname === "/auth/reset-password") {
     return (
