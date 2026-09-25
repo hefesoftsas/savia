@@ -24,16 +24,33 @@ const applicant = {
 
 function mockSavia(records: Array<Record<string, unknown>> = []) {
   const store = [...records];
+  const listFn = vi.fn(
+    async ({ page = 1, perPage = 200, filters }: any = {}) => {
+      let filtered = store;
+      if (filters?.conditions) {
+        for (const condition of filters.conditions) {
+          if (condition.op === "eq") {
+            filtered = filtered.filter(
+              (item) =>
+                String(item[condition.field] ?? "") ===
+                String(condition.value ?? ""),
+            );
+          }
+        }
+      }
+      return {
+        data: filtered.slice((page - 1) * perPage, page * perPage),
+        total: filtered.length,
+        page,
+        perPage,
+      };
+    },
+  );
   return {
     savia: {
       collections: {
         collection: () => ({
-          list: vi.fn(async ({ page = 1, perPage = 200 }: any = {}) => ({
-            data: store.slice((page - 1) * perPage, page * perPage),
-            total: store.length,
-            page,
-            perPage,
-          })),
+          list: listFn,
           create: vi.fn(async (input: Record<string, unknown>) => {
             const record = { id: `clientes-${store.length + 1}`, ...input };
             store.push(record);
@@ -49,6 +66,7 @@ function mockSavia(records: Array<Record<string, unknown>> = []) {
       },
     } as unknown as PluginApi,
     store,
+    listFn,
   };
 }
 
@@ -57,9 +75,7 @@ describe("client mapping", () => {
     expect(resolveApplicantValue(applicant, "fullName")).toBe(
       "Ana López Pérez",
     );
-    expect(resolveApplicantValue(applicant, "documentNumber")).toBe(
-      "12345678",
-    );
+    expect(resolveApplicantValue(applicant, "documentNumber")).toBe("12345678");
   });
 
   it("builds a Clientes record from the default mapping", () => {
@@ -117,7 +133,11 @@ describe("client mapping", () => {
       },
     } as unknown as PluginApi;
     await expect(
-      upsertQuoteClient(savia, { clientMapping: defaultClientMapping }, applicant),
+      upsertQuoteClient(
+        savia,
+        { clientMapping: defaultClientMapping },
+        applicant,
+      ),
     ).resolves.toBeNull();
     await expect(
       upsertQuoteClient(savia, { clientMapping: null }, applicant),
@@ -132,12 +152,20 @@ describe("client mapping", () => {
   });
 
   it("fetches an existing client by the match value", async () => {
-    const { savia } = mockSavia([
+    const { savia, listFn } = mockSavia([
       { id: "clientes-9", documento: "12345678", name: "Ana López Pérez" },
     ]);
     await expect(
       fetchClientByMatch(savia, defaultClientMapping, "12345678"),
     ).resolves.toMatchObject({ id: "clientes-9" });
+    expect(listFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: {
+          conditions: [{ field: "documento", op: "eq", value: "12345678" }],
+        },
+        perPage: 1,
+      }),
+    );
     await expect(
       fetchClientByMatch(savia, defaultClientMapping, "00000000"),
     ).resolves.toBeNull();
