@@ -1207,6 +1207,7 @@ export function InsuranceQuoteWizard({
               {
                 estado: anySuccess ? "Recibida" : "Rechazada",
                 ...(bestPremium !== undefined ? { prima: bestPremium } : {}),
+                ...(resuming && quoteClientId ? { cliente: quoteClientId } : {}),
               },
               { version: createdMasterVersion },
             );
