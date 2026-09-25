@@ -953,8 +953,12 @@ function shellHtml(
   entryUrl: string,
   storeBasePath: string,
   extra?: Record<string, string>,
+  dark = false,
 ): string {
   const safeLabel = label.replace(/[<>&"]/g, "");
+  const initialTheme = dark
+    ? "color-scheme:dark;--background:oklch(0.145 0 0);--foreground:oklch(0.985 0 0);--card:oklch(0.205 0 0);--border:oklch(1 0 0 / 10%);--input:oklch(1 0 0 / 15%);--muted:oklch(0.269 0 0);--muted-foreground:oklch(0.708 0 0);--primary:oklch(0.922 0 0);--primary-foreground:oklch(0.205 0 0);--accent:oklch(0.269 0 0);--destructive:oklch(0.704 0.191 22.216);--ring:oklch(0.556 0 0)"
+    : "color-scheme:light;--background:#fff;--foreground:#171717;--card:#fff;--border:#e5e5e5;--input:#e5e5e5;--muted:#f5f5f5;--muted-foreground:#737373;--primary:#0f766e;--primary-foreground:#fff;--accent:#f5f5f5;--destructive:#dc2626;--ring:#0f766e";
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -962,7 +966,7 @@ function shellHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${SHELL_CSP}">
 <title>${safeLabel}</title>
-<style>:root{color-scheme:light;--background:#fff;--foreground:#171717;--card:#fff;--border:#e5e5e5;--input:#e5e5e5;--muted:#f5f5f5;--muted-foreground:#737373;--primary:#0f766e;--primary-foreground:#fff;--accent:#f5f5f5;--destructive:#dc2626;--ring:#0f766e}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:16px}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
+<style>:root{${initialTheme}}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:16px}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
 </head>
 <body>
 <div id="root"></div>
@@ -1276,7 +1280,14 @@ export function registerPluginStore(
     const view = c.req.query("view");
     const context = screen ? { screen, view: view || "records" } : undefined;
     return new Response(
-      shellHtml(id, manifest.label ?? id, entryUrl, storeBasePath, context),
+      shellHtml(
+        id,
+        manifest.label ?? id,
+        entryUrl,
+        storeBasePath,
+        context,
+        c.req.query("theme") === "dark",
+      ),
       {
         headers: {
           "content-type": "text/html; charset=utf-8",
@@ -1311,10 +1322,17 @@ export function registerPluginStore(
       id,
       installed.version,
     );
-    const html = shellHtml(id, manifest.label ?? id, entryUrl, storeBasePath, {
-      widget: widgetId,
-      collection: collection || widget.collection,
-    });
+    const html = shellHtml(
+      id,
+      manifest.label ?? id,
+      entryUrl,
+      storeBasePath,
+      {
+        widget: widgetId,
+        collection: collection || widget.collection,
+      },
+      c.req.query("theme") === "dark",
+    );
     return new Response(html, {
       headers: {
         "content-type": "text/html; charset=utf-8",

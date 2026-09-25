@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
 
@@ -64,12 +64,19 @@ export function CustomPluginFrame({
   heightClassName?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const shellPath =
     src ??
     `${getStudioRuntime().apiBasePath ?? ""}/api/plugin-store/${encodeURIComponent(pluginId)}/shell`;
-  const shellUrl = screen
+  const screenUrl = screen
     ? `${shellPath}${shellPath.includes("?") ? "&" : "?"}screen=${encodeURIComponent(screen.object)}&view=${encodeURIComponent(screen.view)}`
     : shellPath;
+  const initialTheme = useMemo(
+    () =>
+      document.documentElement.classList.contains("dark") ? "dark" : "light",
+    [screenUrl],
+  );
+  const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}`;
 
   useEffect(() => {
     function sendTheme() {
@@ -157,12 +164,18 @@ export function CustomPluginFrame({
   }, []);
 
   return (
-    <iframe
-      ref={frameRef}
-      src={shellUrl}
-      sandbox="allow-scripts allow-downloads"
-      title={title}
-      className={`w-full rounded-md border bg-background ${heightClassName}`}
-    />
+    <div
+      className={`w-full overflow-hidden rounded-md border bg-background ${heightClassName}`}
+    >
+      <iframe
+        key={shellUrl}
+        ref={frameRef}
+        src={shellUrl}
+        sandbox="allow-scripts allow-downloads"
+        title={title}
+        onLoad={() => setLoadedUrl(shellUrl)}
+        className={`h-full w-full border-0 ${loadedUrl === shellUrl ? "" : "invisible"}`}
+      />
+    </div>
   );
 }
