@@ -638,6 +638,7 @@ export function InsuranceQuoteWizard({
       return;
     }
     setSelectedHistoryQuoteId(quoteId);
+    setHistoricalBatchItems(null);
     try {
       const detailColl = savia.collections?.collection?.(
         "cotizaciones_detalle",
@@ -688,6 +689,7 @@ export function InsuranceQuoteWizard({
                 : undefined,
             detailId: String(d.id),
             detailVersion: recordVersion(d),
+            runId: storedText(d.run_id),
             quoteNumber,
             premium,
           };
@@ -695,7 +697,8 @@ export function InsuranceQuoteWizard({
         setHistoricalBatchItems(mapped);
       }
     } catch {
-      // ignore
+      setHistoricalBatchItems([]);
+      setNotice("No se pudo cargar la cotización guardada. Inténtalo de nuevo.");
     }
   };
 

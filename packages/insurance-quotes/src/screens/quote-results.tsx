@@ -337,18 +337,12 @@ export function QuoteResults({
     });
   };
 
-  if (loading)
-    return (
-      <p className="insurance-quote__empty" role="status">
-        {t("Actualizando resultados…")}{" "}
-      </p>
-    );
-
   return (
     <section
       aria-label={t("Comparador de cotizaciones")}
       className="insurance-results"
     >
+      {loading ? <p role="status">{t("Actualizando resultados…")}</p> : null}
       {/* 0. SELECTOR DE COTIZACIÓN ANTERIOR */}
       {showHistorySelector && historyQuotes.length > 0 ? (
         <div
@@ -848,18 +842,19 @@ export function QuoteResults({
                   className="insurance-comparator__btn insurance-comparator__btn--primary insurance-comparator__btn--icon"
                   disabled={!comparedQuotesList.length}
                   onClick={() => {
-                    void import("./quote-comparison-pdf").then(
-                      ({ downloadQuoteComparisonPdf }) =>
+                    void import("./quote-comparison-pdf")
+                      .then(({ downloadQuoteComparisonPdf }) =>
                         downloadQuoteComparisonPdf({
                           quoteReference,
                           quotes: comparedQuotesList,
                           vehicleInfo,
-                        }).catch(() =>
-                          setActionNotice(
-                            t("No se pudo generar el PDF. Inténtalo de nuevo."),
-                          ),
+                        }),
+                      )
+                      .catch(() =>
+                        setActionNotice(
+                          t("No se pudo generar el PDF. Inténtalo de nuevo."),
                         ),
-                    );
+                      );
                   }}
                   title={
                     comparedQuotesList.length

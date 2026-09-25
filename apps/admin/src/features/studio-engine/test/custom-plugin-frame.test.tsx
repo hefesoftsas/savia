@@ -24,6 +24,14 @@ it("passes the selected store screen to the plugin shell", () => {
   expect(new URL(frame.src).searchParams.get("view")).toBe("records");
 });
 
+it("allows a plugin to download a generated PDF while keeping its origin isolated", () => {
+  render(<CustomPluginFrame pluginId="insurance.quotes" title="Cotizador" />);
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const permissions = (frame.getAttribute("sandbox") ?? "").split(/\s+/);
+  expect(permissions).toContain("allow-downloads");
+  expect(permissions).not.toContain("allow-same-origin");
+});
+
 it("loads the plugin shell through the selected data domain", () => {
   setStudioRuntime({
     embedded: false,

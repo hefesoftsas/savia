@@ -69,10 +69,14 @@ or send requests directly to other origins.
 
 ## Límites del sandbox (no negociables en v1)
 
-El JS se ejecuta en un `iframe sandbox="allow-scripts"` con origen
+El JS se ejecuta en un `iframe sandbox="allow-scripts allow-downloads"` con origen
 opaco: sin acceso al DOM padre, `localStorage`, cookies ni red
 directa. Cada llamada `savia.*` viaja por `postMessage` y el host la
 reenvía a la API con la sesión y permisos del usuario actual.
+The download permission lets an installed plugin export generated files such as
+quote PDFs; the frame remains on an opaque origin.
+Saved quote details render independently of the recent action-run refresh;
+an unavailable run list must not keep the quote history behind a loading state.
 
 La subida valida el código estáticamente y **rechaza (422)**:
 

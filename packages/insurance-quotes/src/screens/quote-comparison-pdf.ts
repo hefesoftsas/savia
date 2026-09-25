@@ -184,5 +184,6 @@ export async function downloadQuoteComparisonPdf(input: QuoteComparisonPdfInput)
   anchor.download = `comparador-${reference}.pdf`;
   anchor.href = url;
   anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Let the browser consume the blob after the synthetic click before releasing it.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

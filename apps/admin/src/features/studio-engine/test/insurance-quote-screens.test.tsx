@@ -579,6 +579,37 @@ it("does not leave old unfinished history quotes loading forever", async () => {
   expect(screen.queryByText(/Cotizando con aseguradoras en vivo/)).not.toBeInTheDocument();
 });
 
+it("opens saved history while the unrelated recent-runs request is pending", async () => {
+  const user = userEvent.setup();
+  const { savia, actions, getCollectionHandle } = quoteScreenApi();
+  actions.list.mockImplementation(() => new Promise(() => {}));
+  await getCollectionHandle("cotizaciones").create({
+    id: "saved-quote",
+    name: "COT-SAVED",
+    placa: "SAMPLE",
+    estado: "Recibida",
+  });
+  await getCollectionHandle("cotizaciones_detalle").create({
+    id: "saved-detail",
+    cotizacion: "saved-quote",
+    aseguradora: "SBS",
+    producto: "SBS · Gold",
+    flow_id: "sbs-product-10",
+    estado: "Recibida",
+    prima: 1200000,
+    run_id: "saved-provider-run",
+  });
+
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(await screen.findByRole("button", { name: "Abrir opciones de cotización" }));
+  await user.click(await screen.findByRole("option", { name: /COT-SAVED/ }));
+
+  expect(await screen.findByRole("heading", { name: "SBS" })).toBeVisible();
+  expect(screen.getByText(/1\.200\.000/)).toBeVisible();
+});
+
 it("filters history options through the single autocomplete search", async () => {
   const user = userEvent.setup();
   const { savia, getCollectionHandle } = quoteScreenApi();
