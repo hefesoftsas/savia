@@ -160,7 +160,7 @@ export function CustomPluginFrame({
     <iframe
       ref={frameRef}
       src={shellUrl}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-downloads"
       title={title}
       className={`w-full rounded-md border bg-background ${heightClassName}`}
     />

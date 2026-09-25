@@ -579,6 +579,119 @@ it("does not leave old unfinished history quotes loading forever", async () => {
   expect(screen.queryByText(/Cotizando con aseguradoras en vivo/)).not.toBeInTheDocument();
 });
 
+it("retries an unfinished saved quote under its original reference", async () => {
+  const user = userEvent.setup();
+  const { savia, actions, getCollectionHandle } = quoteScreenApi();
+  const masters = getCollectionHandle("cotizaciones");
+  const details = getCollectionHandle("cotizaciones_detalle");
+  await masters.create({
+    id: "unfinished-quote",
+    name: "COT-UNFINISHED",
+    placa: "SAMPLE",
+    valor_asegurado: 30000000,
+    estado: "Solicitada",
+  });
+  await details.create({
+    id: "unfinished-detail",
+    cotizacion: "unfinished-quote",
+    aseguradora: "SBS",
+    producto: "SBS · Gold",
+    flow_id: "sbs-producto-10",
+    estado: "Solicitada",
+    updated_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+  });
+  await details.create({
+    id: "received-detail",
+    cotizacion: "unfinished-quote",
+    aseguradora: "SBS",
+    producto: "SBS · Standard",
+    flow_id: "sbs-producto-8",
+    estado: "Recibida",
+    numero_cotizacion: "EXISTING-1",
+    prima: 1100000,
+  });
+  actions.execute.mockResolvedValue({
+    run: { runId: "resumed-run", status: "succeeded" },
+    output: {
+      type: "quote",
+      provider: "SBS",
+      status: "success",
+      data: { quoteNumber: "RESUMED-1", premiumTotal: 1200000 },
+    },
+  });
+
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(screen.getByRole("button", { name: "Abrir opciones de cotización" }));
+  await user.click(await screen.findByRole("option", { name: /COT-UNFINISHED/ }));
+  await user.click(await screen.findByRole("button", { name: "Reintentar esta cotización" }));
+  expect(screen.getByLabelText("Placa")).toHaveValue("SAMPLE");
+  expect(screen.getByLabelText("Valor asegurado")).toHaveValue("30.000.000");
+
+  await user.type(screen.getByLabelText("Código Fasecolda"), "654321");
+  await user.type(screen.getByLabelText("Año del vehículo"), "2023");
+  await user.type(screen.getByLabelText("Código de ciudad de circulación"), "11001");
+  await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
+  await user.type(screen.getByLabelText("Número de documento"), "98765432");
+  await user.type(screen.getByLabelText("Nombres"), "Carlos");
+  await user.type(screen.getByLabelText("Primer apellido"), "Gómez");
+  await user.type(screen.getByLabelText("Fecha de nacimiento"), "1985-05-15");
+  await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
+  await user.type(screen.getByLabelText("Código de ciudad de residencia"), "11001");
+  await user.type(screen.getByLabelText("Dirección"), "Carrera 7 # 45-10");
+  await user.type(screen.getByLabelText("Teléfono"), "3109876543");
+  await user.type(screen.getByLabelText("Correo electrónico"), "carlos@example.test");
+  await user.click(screen.getByRole("button", { name: "Cotizar" }));
+
+  expect((await screen.findAllByText("RESUMED-1"))[0]).toBeVisible();
+  expect(screen.getByText("EXISTING-1")).toBeVisible();
+  expect(masters.create).toHaveBeenCalledTimes(1);
+  expect(actions.execute).toHaveBeenCalledTimes(1);
+  expect(
+    details.create.mock.calls.filter(
+      ([input]) => input.flow_id === "sbs-producto-10",
+    ),
+  ).toHaveLength(1);
+  expect(details.update).toHaveBeenCalledWith(
+    "unfinished-detail",
+    expect.objectContaining({ estado: "Recibida" }),
+    expect.anything(),
+  );
+  expect(details.update.mock.calls.some(([id]) => id === "received-detail")).toBe(false);
+});
+
+it("opens saved history while the unrelated recent-runs request is pending", async () => {
+  const user = userEvent.setup();
+  const { savia, actions, getCollectionHandle } = quoteScreenApi();
+  actions.list.mockImplementation(() => new Promise(() => {}));
+  await getCollectionHandle("cotizaciones").create({
+    id: "saved-quote",
+    name: "COT-SAVED",
+    placa: "SAMPLE",
+    estado: "Recibida",
+  });
+  await getCollectionHandle("cotizaciones_detalle").create({
+    id: "saved-detail",
+    cotizacion: "saved-quote",
+    aseguradora: "SBS",
+    producto: "SBS · Gold",
+    flow_id: "sbs-product-10",
+    estado: "Recibida",
+    prima: 1200000,
+    run_id: "saved-provider-run",
+  });
+
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(await screen.findByRole("button", { name: "Abrir opciones de cotización" }));
+  await user.click(await screen.findByRole("option", { name: /COT-SAVED/ }));
+
+  expect(await screen.findByRole("heading", { name: "SBS" })).toBeVisible();
+  expect(screen.getByText(/1\.200\.000/)).toBeVisible();
+});
+
 it("filters history options through the single autocomplete search", async () => {
   const user = userEvent.setup();
   const { savia, getCollectionHandle } = quoteScreenApi();

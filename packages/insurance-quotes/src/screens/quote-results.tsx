@@ -84,6 +84,7 @@ export type VehicleInfo = {
 export type HistoricalQuoteSummary = {
   id: string;
   name: string;
+  version?: number;
   placa?: string;
   ramo?: string;
   valor_asegurado?: number;
@@ -108,6 +109,7 @@ export function QuoteResults({
   onSelectHistoryQuote,
   hasSelectedQuote,
   onGoToForm,
+  onResumeHistoryQuote,
   showHistorySelector = false,
   planCatalog = false,
   hidePdfDownload = false,
@@ -127,6 +129,7 @@ export function QuoteResults({
   onSelectHistoryQuote?: (quoteId: string | null) => void;
   hasSelectedQuote?: boolean;
   onGoToForm?: () => void;
+  onResumeHistoryQuote?: () => void;
   showHistorySelector?: boolean;
   /**
    * Enrich non-simulated quotes with static plan-catalog data (badges,
@@ -337,18 +340,12 @@ export function QuoteResults({
     });
   };
 
-  if (loading)
-    return (
-      <p className="insurance-quote__empty" role="status">
-        {t("Actualizando resultados…")}{" "}
-      </p>
-    );
-
   return (
     <section
       aria-label={t("Comparador de cotizaciones")}
       className="insurance-results"
     >
+      {loading ? <p role="status">{t("Actualizando resultados…")}</p> : null}
       {/* 0. SELECTOR DE COTIZACIÓN ANTERIOR */}
       {showHistorySelector && historyQuotes.length > 0 ? (
         <div
@@ -582,6 +579,16 @@ export function QuoteResults({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {selectedHistoryQuoteId && onResumeHistoryQuote && failedCount > 0 ? (
+        <button
+          className="insurance-comparator__btn insurance-comparator__btn--primary"
+          type="button"
+          onClick={onResumeHistoryQuote}
+        >
+          {t("Reintentar esta cotización")}
+        </button>
       ) : null}
 
       {/* 1. MASTER QUOTE HEADER & VEHICLE CONTEXT (Only if quote is active) */}
@@ -848,18 +855,19 @@ export function QuoteResults({
                   className="insurance-comparator__btn insurance-comparator__btn--primary insurance-comparator__btn--icon"
                   disabled={!comparedQuotesList.length}
                   onClick={() => {
-                    void import("./quote-comparison-pdf").then(
-                      ({ downloadQuoteComparisonPdf }) =>
+                    void import("./quote-comparison-pdf")
+                      .then(({ downloadQuoteComparisonPdf }) =>
                         downloadQuoteComparisonPdf({
                           quoteReference,
                           quotes: comparedQuotesList,
                           vehicleInfo,
-                        }).catch(() =>
-                          setActionNotice(
-                            t("No se pudo generar el PDF. Inténtalo de nuevo."),
-                          ),
+                        }),
+                      )
+                      .catch(() =>
+                        setActionNotice(
+                          t("No se pudo generar el PDF. Inténtalo de nuevo."),
                         ),
-                    );
+                      );
                   }}
                   title={
                     comparedQuotesList.length
