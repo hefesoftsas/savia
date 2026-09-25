@@ -16,7 +16,16 @@ import {
   type SaviaRequestApi,
   type SaviaRequestScope,
 } from "./savia-request-api";
-import { useSaviaRequestScope } from "./savia-request-scope";
+import {
+  clearCachedTenantOptions,
+  useSaviaRequestScope,
+} from "./savia-request-scope";
+import {
+  clearAllSaviaRequestSnapshots,
+  clearSaviaRequestSnapshot,
+  readSaviaRequestSnapshot,
+  writeSaviaRequestSnapshot,
+} from "./savia-request-cache";
 import type { FlowSummary, RequestFlow } from "./types";
 
 type WorkspaceValue = {
@@ -80,6 +89,7 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const scope: SaviaRequestScope | undefined = scopeState.scope
     ? { tenant: scopeState.scope }
     : undefined;
+  const scopeKey = scopeState.scope ?? "__platform__";
   const api = useMemo(
     () => createSaviaRequestApi(services.apiClient, scope),
     [services.apiClient, scopeState.scope],
@@ -90,11 +100,9 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   });
   const location = useLocation();
   const navigate = useNavigate();
-  const active =
-    Boolean(canAccess) &&
-    !isPending &&
-    scopeState.ready &&
-    location.pathname.startsWith("/savia-request");
+  const onRoute = location.pathname.startsWith("/savia-request");
+  const authorized = Boolean(canAccess) && !isPending && scopeState.ready;
+  const active = authorized && onRoute;
   const view = requestedView(location.search);
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
@@ -106,11 +114,78 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
   const draftRef = useRef<RequestFlow | null>(null);
   const dirtyRef = useRef(false);
   const scopeRef = useRef<string | undefined>(scopeState.scope);
+  const requestRef = useRef(0);
+  const identityRef = useRef<string | null>(null);
+  // Evita revalidar la navegación dos veces seguidas: tras sincronizar la
+  // URL el efecto se re-ejecuta y caería en la rama temprana con datos
+  // recién revalidados.
+  const navRevalidatedAtRef = useRef(0);
+  // La revalidación en segundo plano corre una vez por activación
+  // (ámbito+URL+vista): los re-renders por cambios de estado no refetchean.
+  const revalidatedRef = useRef("");
 
   const replaceFlow = useCallback((next: RequestFlow | null) => {
     draftRef.current = next;
     setFlow(next);
   }, []);
+
+  const persistSnapshot = useCallback(() => {
+    writeSaviaRequestSnapshot(scopeState.scope, {
+      flows,
+      folders,
+      flow: draftRef.current,
+      stepIndex,
+      error,
+      updatedAt: Date.now(),
+    });
+  }, [error, flows, folders, scopeState.scope, stepIndex]);
+
+  // Al salir de la ruta se conserva en memoria; al cambiar de tenant,
+  // perder permisos o cerrar sesión se limpia inmediatamente.
+  useEffect(() => {
+    if (onRoute) return;
+    if (!authorized) return;
+    persistSnapshot();
+  }, [authorized, onRoute, persistSnapshot]);
+
+  // Aislamiento entre usuarios: si cambia la identidad, vacía estado y caché.
+  useEffect(() => {
+    let active = true;
+    try {
+      const session = (
+        services as { authSession?: { getIdentity?: () => Promise<unknown> } }
+      ).authSession;
+      if (!session?.getIdentity) return;
+      void session
+        .getIdentity()
+        .then((identity) => {
+          if (!active) return;
+          const id = String((identity as { id?: unknown }).id ?? "anon");
+          if (identityRef.current === null) {
+            identityRef.current = id;
+            return;
+          }
+          if (identityRef.current !== id) {
+            identityRef.current = id;
+            dirtyRef.current = false;
+            setDirty(false);
+            replaceFlow(null);
+            setFlows([]);
+            setFolders([]);
+            setStepIndex(0);
+            setError(null);
+            clearAllSaviaRequestSnapshots();
+            clearCachedTenantOptions();
+          }
+        })
+        .catch(() => undefined);
+    } catch {
+      // Fuera del proveedor de servicios (tests): sin aislamiento por usuario.
+    }
+    return () => {
+      active = false;
+    };
+  }, [replaceFlow, services]);
 
   const refreshNavigation = useCallback(async () => {
     const [nextFlows, nextFolders] = await Promise.all([
@@ -216,9 +291,16 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (scopeRef.current === scopeState.scope) return;
+    const previous = scopeRef.current;
     scopeRef.current = scopeState.scope;
+    // Cambiar de tenant limpia el estado visible y su caché de inmediato;
+    // nunca mezcla ámbitos.
+    if (previous !== undefined) clearSaviaRequestSnapshot(previous);
+    clearSaviaRequestSnapshot(scopeState.scope);
     dirtyRef.current = false;
     setDirty(false);
+    navRevalidatedAtRef.current = 0;
+    revalidatedRef.current = "";
     replaceFlow(null);
     setFlows([]);
     setFolders([]);
@@ -227,21 +309,161 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     navigate("/savia-request", { replace: true });
   }, [navigate, replaceFlow, scopeState.scope]);
 
+  // Perder permisos limpia estado y caché de inmediato (no es "salir").
   useEffect(() => {
-    if (!active) {
-      replaceFlow(null);
-      setFlows([]);
-      setFolders([]);
-      setStepIndex(0);
-      setError(null);
-      dirtyRef.current = false;
-      setDirty(false);
+    if (isPending) return;
+    if (canAccess) return;
+    dirtyRef.current = false;
+    setDirty(false);
+    navRevalidatedAtRef.current = 0;
+    revalidatedRef.current = "";
+    replaceFlow(null);
+    setFlows([]);
+    setFolders([]);
+    setStepIndex(0);
+    setError(null);
+    clearAllSaviaRequestSnapshots();
+    clearCachedTenantOptions();
+  }, [canAccess, isPending, replaceFlow]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    const effectScope = scopeState.scope;
+    const effectKey = scopeKey;
+    const requestId = ++requestRef.current;
+    const isCurrent = () =>
+      requestRef.current === requestId && scopeRef.current === effectScope;
+
+    const requestedFlowId = new URLSearchParams(location.search).get("flow");
+    const step = requestedStep(location.search);
+
+    // Al regresar al mismo ámbito, muestra lo conservado de inmediato.
+    // Salir de la ruta conserva el estado visible, así que normalmente ya
+    // está en pantalla y solo se revalida en segundo plano. Hidratar desde
+    // el snapshot solo si el estado está vacío (p. ej. remontaje).
+    const snapshot = readSaviaRequestSnapshot(effectScope);
+    const hasSnapshot =
+      Boolean(snapshot) &&
+      (snapshot!.flows.length > 0 ||
+        snapshot!.flow != null ||
+        snapshot!.folders.length > 0);
+    if (hasSnapshot && snapshot) {
+      if (flows.length === 0 && !draftRef.current && !dirtyRef.current) {
+        setFlows(snapshot.flows);
+        setFolders(snapshot.folders);
+        replaceFlow(snapshot.flow);
+        setStepIndex(snapshot.stepIndex);
+        if (snapshot.error) setError(snapshot.error);
+      }
+      if (requestedFlowId && requestedFlowId === draftRef.current?.id) {
+        const nextStep = safeStepIndex(draftRef.current, step);
+        setStepIndex(nextStep);
+        if (nextStep !== step) {
+          navigate(flowSelection(requestedFlowId, nextStep), {
+            replace: true,
+          });
+        }
+        // Revalida navegación en segundo plano sin bloquear, salvo que se
+        // acabe de revalidar (p. ej. tras sincronizar la URL).
+        if (Date.now() - navRevalidatedAtRef.current > 15_000) {
+          navRevalidatedAtRef.current = Date.now();
+          void (async () => {
+            try {
+              const [nextFlows, nextFolders] = await Promise.all([
+                api.listFlows(),
+                api.listFolders(),
+              ]);
+              if (!isCurrent()) return;
+              setFlows(nextFlows);
+              setFolders(nextFolders);
+            } catch {
+              // Conserva lo mostrado; el error se reintenta al navegar.
+            }
+          })();
+        }
+        return;
+      }
+      // Revalidación en segundo plano: no sustituye el contenido por una
+      // pantalla de carga y nunca sobrescribe un borrador con cambios.
+      // Corre una vez por activación; los re-renders por cambios de estado
+      // (p. ej. stepIndex) no refetchean. Marca el instante para que la
+      // re-ejecución tras sincronizar la URL no dispare otra revalidación.
+      const activationKey = `${effectKey}|${location.search}|${view}`;
+      if (revalidatedRef.current === activationKey) return;
+      revalidatedRef.current = activationKey;
+      navRevalidatedAtRef.current = Date.now();
+      void (async () => {
+        try {
+          if (view === "secretos") {
+            const [nextFlows, nextFolders] = await Promise.all([
+              api.listFlows(),
+              api.listFolders(),
+            ]);
+            if (!isCurrent()) return;
+            setFlows(nextFlows);
+            setFolders(nextFolders);
+            return;
+          }
+          const flowsPromise = api.listFlows();
+          const foldersPromise = api.listFolders();
+          const nextFlows = await flowsPromise;
+          if (!isCurrent()) return;
+          const summary =
+            nextFlows.find((candidate) => candidate.id === requestedFlowId) ??
+            nextFlows.find(
+              (candidate) => candidate.id === draftRef.current?.id,
+            ) ??
+            nextFlows[0];
+          const flowPromise = summary
+            ? api.readFlow(summary.id)
+            : Promise.resolve(null);
+          // Las carpetas aplican por su cuenta: nunca retrasan el detalle.
+          void foldersPromise
+            .then((nextFolders) => {
+              if (isCurrent()) setFolders(nextFolders);
+            })
+            .catch(() => undefined);
+          const nextFlow = await flowPromise;
+          if (!isCurrent()) return;
+          setFlows(nextFlows);
+          if (nextFlow && !dirtyRef.current) {
+            const currentId = draftRef.current?.id;
+            if (!currentId || currentId === nextFlow.id || !currentId) {
+              replaceFlow(nextFlow);
+              const navStep = requestedFlowId
+                ? safeStepIndex(nextFlow, step)
+                : safeStepIndex(nextFlow, snapshot.stepIndex);
+              setStepIndex(navStep);
+              dirtyRef.current = false;
+              setDirty(false);
+              if (!isCurrent()) return;
+              // La URL debe reflejar la selección visible, como en la
+              // primera carga (sin flow= el regreso quedaría sin enlace).
+              if (
+                requestedFlowId !== summary.id ||
+                (requestedFlowId != null && navStep !== step)
+              ) {
+                navigate(flowSelection(summary.id, navStep), {
+                  replace: true,
+                });
+              }
+            }
+          } else if (!summary) {
+            if (!dirtyRef.current) {
+              replaceFlow(null);
+              setStepIndex(0);
+            }
+          }
+          if (!isCurrent()) return;
+          setError(null);
+        } catch {
+          // Una respuesta tardía o fallida no reemplaza el ámbito actual.
+        }
+      })();
       return;
     }
 
-    let cancelled = false;
-    const requestedFlowId = new URLSearchParams(location.search).get("flow");
-    const step = requestedStep(location.search);
     if (requestedFlowId && requestedFlowId === draftRef.current?.id) {
       const nextStep = safeStepIndex(draftRef.current, step);
       setStepIndex(nextStep);
@@ -250,6 +472,8 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
       }
       return;
     }
+    // Sin estado conservado: primera carga con listas en paralelo y detalle
+    // en cuanto se conoce el ID, sin que carpetas bloquee el detalle.
     setBusy(true);
     setError(null);
 
@@ -262,31 +486,29 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
             api.listFlows(),
             api.listFolders(),
           ]);
-          if (cancelled) return;
+          if (!isCurrent()) return;
           setFlows(nextFlows);
           setFolders(nextFolders);
         } catch (exception) {
-          if (cancelled) return;
+          if (!isCurrent()) return;
           setError(
             exception instanceof Error
               ? exception.message
               : "No pudimos cargar los flows.",
           );
         } finally {
-          if (!cancelled) setBusy(false);
+          if (isCurrent()) setBusy(false);
         }
       })();
 
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
     void (async () => {
       try {
         if (dirtyRef.current) {
           const saved = await saveDraft();
-          if (cancelled) return;
+          if (!isCurrent()) return;
           if (!saved) {
             const current = draftRef.current;
             if (current) {
@@ -295,25 +517,33 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
             return;
           }
         }
-        const [nextFlows, nextFolders] = await Promise.all([
-          api.listFlows(),
-          api.listFolders(),
-        ]);
-        if (cancelled) return;
+        const flowsPromise = api.listFlows();
+        const foldersPromise = api.listFolders();
+        const nextFlows = await flowsPromise;
+        if (!isCurrent()) return;
         setFlows(nextFlows);
-        setFolders(nextFolders);
         const summary =
           nextFlows.find((candidate) => candidate.id === requestedFlowId) ??
           nextFlows[0];
-        if (!summary) {
+        const flowPromise = summary
+          ? api.readFlow(summary.id)
+          : Promise.resolve(null);
+        // Las carpetas aplican por su cuenta: una consulta lenta de
+        // carpetas nunca retrasa el detalle del flow seleccionado.
+        void foldersPromise
+          .then((nextFolders) => {
+            if (isCurrent()) setFolders(nextFolders);
+          })
+          .catch(() => undefined);
+        const nextFlow = await flowPromise;
+        if (!isCurrent()) return;
+        if (!summary || !nextFlow) {
           replaceFlow(null);
           setStepIndex(0);
           dirtyRef.current = false;
           setDirty(false);
           return;
         }
-        const nextFlow = await api.readFlow(summary.id);
-        if (cancelled) return;
         const nextStep = safeStepIndex(nextFlow, step);
         replaceFlow(nextFlow);
         dirtyRef.current = false;
@@ -323,27 +553,25 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
           navigate(flowSelection(summary.id, nextStep), { replace: true });
         }
       } catch (exception) {
-        if (cancelled) return;
+        if (!isCurrent()) return;
         setError(
           exception instanceof Error
             ? exception.message
             : "No pudimos cargar los flows.",
         );
       } finally {
-        if (!cancelled) setBusy(false);
+        if (isCurrent()) setBusy(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     active,
     api,
+    scopeKey,
     location.search,
     navigate,
     replaceFlow,
     saveDraft,
+    scopeState.scope,
     stepIndex,
     view,
   ]);

@@ -13,6 +13,9 @@ import { createReactAdminAuthProvider } from "./auth/react-admin-auth-provider";
 import { createLocalSession } from "./local-data/session";
 import { createWorkspaceManager } from "./local-data/workspaces";
 import { QueryClient } from "@tanstack/react-query";
+import { clearStudioQueryCache } from "@/features/studio-engine/studio-query-cache";
+import { clearAllSaviaRequestSnapshots } from "@/features/savia-request/savia-request-cache";
+import { clearCachedTenantOptions } from "@/features/savia-request/savia-request-scope";
 
 const apiUrl = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
 
@@ -33,6 +36,9 @@ export function createAppServices() {
   });
   const localData = createWorkspaceManager(authSession, apiClient, apiUrl);
   const clearOfflineData = async () => {
+    clearStudioQueryCache();
+    clearAllSaviaRequestSnapshots();
+    clearCachedTenantOptions();
     queryClient.clear();
     await localData.clear();
   };
