@@ -4,6 +4,9 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createStudioApp } from "../src/index";
 import { installSolution } from "../src/solutions";
 import { makeConfig } from "@savia/studio-shared/metadata";
+import quoterManifest from "../../../solutions/insurance-quoter/manifest.json";
+import managementManifest from "../../../solutions/insurance-management/manifest.json";
+import quotePluginManifest from "../../../store-ports/quotes/savia-extension.json";
 
 let platform: Awaited<
   ReturnType<typeof getPlatformProxy<{ DB: D1Database; POC_LOCAL: string }>>
@@ -72,6 +75,69 @@ afterAll(async () => {
 });
 
 describe("industry packages on real D1", () => {
+  it("installs the quote wizard and insurance management independently", async () => {
+    const db = platform.env.DB;
+    const quoteTenant = "split-quote-only";
+    await db
+      .prepare(
+        "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+      )
+      .bind(
+        quoteTenant,
+        quotePluginManifest.id,
+        quotePluginManifest.version,
+        JSON.stringify(quotePluginManifest),
+        "export default {}",
+        "test-hash",
+        1,
+      )
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO studio_extension_installations(tenant_id,id,version,manifest) VALUES (?,?,?,?)",
+      )
+      .bind(
+        quoteTenant,
+        quotePluginManifest.id,
+        quotePluginManifest.version,
+        JSON.stringify(quotePluginManifest),
+      )
+      .run();
+
+    await installSolution(db, quoteTenant, quoterManifest);
+    const quoteObjects = await db
+      .prepare(
+        "SELECT name,config FROM studio_objects WHERE tenant_id=? ORDER BY name",
+      )
+      .bind(quoteTenant)
+      .all<{ name: string; config: string }>();
+    expect(quoteObjects.results.map((row) => row.name)).toEqual([
+      "cotizaciones",
+      "cotizaciones_detalle",
+      "cotizador_por_pasos",
+    ]);
+    expect(
+      quoteObjects.results
+        .filter((row) => !JSON.parse(row.config).studio?.screen?.hidden)
+        .map((row) => row.name),
+    ).toEqual(["cotizador_por_pasos"]);
+
+    const managementTenant = "split-management-only";
+    await installSolution(db, managementTenant, managementManifest);
+    const managementObjects = await db
+      .prepare(
+        "SELECT name FROM studio_objects WHERE tenant_id=? ORDER BY name",
+      )
+      .bind(managementTenant)
+      .all<{ name: string }>();
+    expect(managementObjects.results.map((row) => row.name)).toEqual([
+      "aseguradoras",
+      "clientes",
+      "pagos",
+      "polizas",
+      "siniestros",
+    ]);
+  });
   it("runs an installation hook before committing a solution", async () => {
     const seen: string[] = [];
 

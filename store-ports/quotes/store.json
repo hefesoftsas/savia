@@ -34,7 +34,7 @@
   "settings": {
     "defaults": {
       "quotePages": {
-        "direct": true,
+        "direct": false,
         "wizard": true
       },
       "vehicleLookup": {
@@ -171,15 +171,7 @@
   },
   "screens": [
     {
-      "object": "cotizador",
-      "view": "records"
-    },
-    {
       "object": "cotizador_por_pasos",
-      "view": "records"
-    },
-    {
-      "object": "administrar_seguros",
       "view": "records"
     }
   ]

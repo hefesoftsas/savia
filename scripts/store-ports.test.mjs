@@ -1,7 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +32,16 @@ const packageDirFor = {
 };
 
 describe("ports del store", () => {
+  it("the quotes ZIP contributes only the step-by-step quote screen", () => {
+    const store = JSON.parse(
+      readFileSync(join(portsDir, "quotes", "store.json"), "utf8"),
+    );
+    assert.deepEqual(store.screens, [
+      { object: "cotizador_por_pasos", view: "records" },
+    ]);
+    assert.equal(store.settings.defaults.quotePages.direct, false);
+    assert.equal(store.settings.defaults.quotePages.wizard, true);
+  });
   it("hay ports generados para el grupo portable", () => {
     assert.ok(
       ports.length >= 17,
@@ -156,4 +172,36 @@ describe("ports del store", () => {
       }
     });
   }
+
+  it("includes the quotes stylesheet in the executable ZIP entry", () => {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "savia-port-css-test-"));
+    try {
+      const output = join(temporaryRoot, "quotes.store.zip");
+      execFileSync(
+        "node",
+        [
+          "scripts/pack-store-plugin.mjs",
+          "store-ports/quotes",
+          "--output",
+          output,
+        ],
+        { cwd: root, stdio: "pipe", timeout: 180000 },
+      );
+      const entry = execFileSync("unzip", ["-p", output, "dist/plugin.js"], {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+      });
+      assert.ok(
+        entry.includes(".insurance-quote__header"),
+        "el CSS del cotizador no quedó dentro del ZIP ejecutable",
+      );
+      assert.ok(
+        entry.includes("document.head.appendChild"),
+        "el ZIP no instala su CSS en el iframe",
+      );
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true });
+    }
+  });
 });

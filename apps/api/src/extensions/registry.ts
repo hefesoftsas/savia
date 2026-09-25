@@ -14,6 +14,7 @@ export async function isInsuranceEnabled(
   db: D1Database,
   tenant: string,
 ): Promise<boolean> {
-  return (await enabledExtensions(db, tenant)).includes("savia.insurance");
+  return (await enabledExtensions(db, tenant)).some((id) =>
+    ["savia.insurance", "savia.insurance-management"].includes(id),
+  );
 }
-

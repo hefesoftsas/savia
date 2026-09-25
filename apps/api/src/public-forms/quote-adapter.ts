@@ -220,6 +220,21 @@ export function createPublicQuoteAdapter(options: {
   mockProviders?: boolean;
 }): PublicQuoteAdapter {
   const registry = options.registry ?? solutionOptions.extensionRegistry;
+  const extensionVersion = async (db: D1Database, tenant: string) => {
+    const installed = await db
+      .prepare(
+        "SELECT version FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+      )
+      .bind(tenant, extensionId)
+      .first<{ version: string }>();
+    const version =
+      installed?.version ?? registry.get(extensionId)?.manifest.version;
+    if (!version)
+      throw new HTTPException(404, {
+        message: "El cotizador no está disponible.",
+      });
+    return version;
+  };
   const current = async (
     db: D1Database,
     tenant: string,
@@ -262,7 +277,7 @@ export function createPublicQuoteAdapter(options: {
     const { stored, settings } = await current(db, tenant, objectName);
     if (
       frozen.settingsVersion !== stored.version ||
-      frozen.extensionVersion !== registry.get(extensionId)?.manifest.version ||
+      frozen.extensionVersion !== (await extensionVersion(db, tenant)) ||
       frozen.products.some(
         (product) =>
           !settings.products.some(
@@ -499,7 +514,7 @@ export function createPublicQuoteAdapter(options: {
         domainId,
         objectName: object.name,
         extensionId,
-        extensionVersion: registry.get(extensionId)!.manifest.version,
+        extensionVersion: await extensionVersion(db, tenant),
         actionId: contribution.actionId,
         mode: contribution.mode,
         connectionId: contribution.connectionId,

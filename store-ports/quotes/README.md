@@ -1,18 +1,16 @@
-# Port: Cotizaciones fuera del release (`insurance.quotes` 1.3.1)
+# Quote wizard store plugin (`insurance.quotes` 2.0.0)
 
-Las tres pantallas del cotizador con **ejecución nativa savia-request
-del host** (`kind: savia-request`): no delega al release, así el
-paquete compilado puede retirarse. Requiere el servicio savia-request
-inyectado en el host (`saviaRequestService`).
+The ZIP contributes one screen, `cotizador_por_pasos`. Its wizard includes an
+inline configuration tab, so installing it does not add separate direct-quote
+or administration screens. The quote action uses the host's native Savia
+Request service (`kind: savia-request`) and keeps the provider flows needed by
+the wizard. It does not install an insurance management solution.
 
 ```bash
 pnpm store:pack store-ports/quotes
 ```
 
-`store.json` declara la acción `quote` (21 flows no internos),
-`settings.defaults` reales y las 3 pantallas. Las colecciones
-(`cotizador`, …) las provee la solución `savia.insurance`.
-El host entrega el objeto de la pantalla como tercer argumento de `render`:
-`cotizador_por_pasos` abre el wizard, `cotizador` la cotización directa y
-`administrar_seguros` la administración. En hosts previos a ese contrato,
-el ZIP abre el wizard de forma predeterminada.
+Install the separate `savia.insurance-quoter` solution for the wizard object
+and its two hidden quote-history collections. The optional
+`savia.insurance-management` solution adds customers, insurers, policies,
+payments, and claims independently.

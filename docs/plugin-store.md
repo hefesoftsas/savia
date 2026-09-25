@@ -119,7 +119,8 @@ zip -q -X -r hola-plugin.zip savia-extension.json dist/plugin.js
 ```
 
 Para código con JSX/TS o dependencias, usa el empaquetador (compila a
-un solo ESM autocontenido, valida y comprime):
+un solo ESM autocontenido, incorpora el CSS importado en `dist/plugin.js`,
+valida y comprime). El shell recibe los colores del tema del host:
 
 ```bash
 pnpm store:pack store-ports/quotes-ui
@@ -281,7 +282,7 @@ Ports incluidos (`store-ports/`): accounting, activities, claims,
 data-quality, documents, endorsements, **http-echo** (demo),
 issuance, opportunities, payments, **portfolio** (resumen en cliente),
 **quotes-ui** (savia-request nativo), **quotes**
-(`insurance.quotes` 1.3.0 con ejecución nativa, sin release), renewals, reports, service,
+(`insurance.quotes` con ejecución nativa, sin release), renewals, reports, service,
 settlements, **calendar, campaigns, carriers, communications,
 document-generation** (puertos gateway: conectores `endpoint`+`token`
 con `allowConfiguredHost` y acciones con el envelope
@@ -316,6 +317,21 @@ instrucciones, sin enlaces, con topes) y se vuelve a sanear al servir.
 Ver ADR 0004.
 
 ## Port de referencia: Cotizaciones UI
+
+For new quote installations, use `store-ports/quotes/` (`insurance.quotes`
+2.0.0). Its ZIP contributes only `cotizador_por_pasos`; the wizard's
+configuration remains inside that screen. Install the independent
+`savia.insurance-quoter` solution to create the wizard object and hidden
+quote-history collections. `savia.insurance-management` is optional and
+installs the remaining insurance management screens separately.
+Uploading a newer ZIP leaves an installed older version's screens, actions,
+and public quote links on that installed version until the extension is
+upgraded. Upgrading `insurance.quotes` to 2.0.0 intentionally removes the
+old direct-quote and administration screen bindings; their existing objects
+and records are not deleted.
+
+The older `quotes-ui` port below remains a compatibility example and still
+contributes three screens.
 
 `store-ports/quotes-ui/` monta las tres pantallas reales del cotizador
 (`Directa`, `Por pasos`, `Administrar`) y delega `quote` a

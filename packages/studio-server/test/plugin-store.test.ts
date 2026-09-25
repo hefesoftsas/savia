@@ -438,6 +438,53 @@ describe("plugin store por tenant", () => {
     expect(blocked.status).toBe(404);
   });
 
+  it("keeps installed screen bindings until a newer ZIP is installed", async () => {
+    const tenant = "store-installed-screens";
+    const oldStore = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "legacy_screen", view: "records" }],
+    };
+    const newStore = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "new_screen", view: "records" }],
+    };
+    expect(
+      (await uploadZip(tenant, pluginZip({ store: oldStore }))).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.demo/install",
+          { method: "POST", headers: { "content-type": "application/json" } },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({ manifest: { version: "1.1.0" }, store: newStore }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const extensions = (await (
+      await app(tenant).request(
+        "http://localhost/api/extensions",
+        {},
+        platform.env,
+      )
+    ).json()) as {
+      data: Array<{ manifest: { id: string }; screens: unknown }>;
+    };
+    expect(
+      extensions.data.find((row) => row.manifest.id === "custom.demo")?.screens,
+    ).toMatchObject([{ object: "legacy_screen", view: "records" }]);
+  });
+
   it("aísla el store por tenant.", async () => {
     await uploadZip("store-tenant-a", pluginZip());
     const other = (await (

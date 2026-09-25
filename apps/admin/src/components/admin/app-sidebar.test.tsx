@@ -106,6 +106,8 @@ function createServices(): AppServices {
         theme: "light",
         colorTheme: "emerald",
       }),
+      getMyDayWidgets: vi.fn().mockResolvedValue({ version: 1, widgets: [] }),
+      saveMyDayWidgets: vi.fn().mockImplementation(async (layout) => layout),
     },
     apiClient: {
       get: vi.fn().mockImplementation(async (path: string) =>

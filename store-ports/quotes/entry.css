@@ -1,0 +1,29 @@
+.store-quote__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 auto 12px;
+  max-width: 960px;
+  border-bottom: 1px solid var(--border);
+}
+
+.store-quote__tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+}
+
+.store-quote__tabs button[aria-pressed="true"] {
+  border-bottom-color: var(--primary);
+  color: var(--foreground);
+}
+
+.store-quote__tabs button:hover:not([aria-pressed="true"]) {
+  color: var(--foreground);
+}

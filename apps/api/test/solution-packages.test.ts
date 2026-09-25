@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { createApp } from "../src/app";
+import { processCrmSyncJobs } from "../src/external-crm/auto-sync";
 import type { IdentityUserAdministrator } from "../src/auth/better-auth";
 import {
   platformAdministratorAuthenticator,
@@ -158,6 +159,28 @@ it("adopts existing insurance without rewriting schemas or records", async () =>
     )?.label,
   ).toBe("Mis pólizas");
 });
+it("processes CRM jobs for a management-only insurance installation", async () => {
+  await seedTenantAgency(env.DB, 102);
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,created_at,updated_at) VALUES ('crm-sync-test','test','crm-sync-test','sync@example.test','Sync Test','2026-01-01','2026-01-01')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO agency_crm_connections(id,agency_id,created_by_principal_id,provider,nango_connection_id,nango_integration_id,status,created_at,updated_at) VALUES ('crm-sync-connection',102,'crm-sync-test','hubspot','nango-test','hubspot-test','connected','2026-01-01','2026-01-01')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO studio_solution_installations(tenant_id,id,version,manifest) VALUES ('agency:102','savia.insurance-management','1.0.0','{}')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO crm_sync_rules(id,principal_id,tenant_id,provider,connection_id,external_account_id,account_label) VALUES ('crm-sync-rule','crm-sync-test',102,'hubspot','crm-sync-connection','account-test','Test')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO crm_sync_jobs(id,rule_id,customer_id,next_attempt_at) VALUES ('crm-sync-job','crm-sync-rule',999,'2026-01-01T00:00:00.000Z')",
+  ).run();
+
+  expect(
+    await processCrmSyncJobs(env.DB, {}, { now: new Date("2030-01-01") }),
+  ).toEqual({ processed: 1 });
+});
 it("lists the optional insurance release and accepts a generic package", async () => {
   const api = app(identityUserAdministrator());
   const tenantResponse = await api.request(
@@ -187,8 +210,9 @@ it("lists the optional insurance release and accepts a generic package", async (
     catalog.data.map(
       (solution: { manifest: { id: string } }) => solution.manifest.id,
     ),
-  ).toEqual(["savia.insurance"]);
+  ).toEqual(["savia.insurance-quoter", "savia.insurance-management"]);
   expect(catalog.data[0].manifest.requires).toEqual(["insurance.quotes"]);
+  expect(catalog.data[1].manifest.requires).toEqual([]);
   const manifest = genericSolution;
   const installed = await api.request(
     base + "/solutions/install",
