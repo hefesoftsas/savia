@@ -175,6 +175,40 @@ export function createStudioApp(
   if (options?.accessPolicy)
     registerAccessMiddleware(app, options.accessPolicy);
   app.get("/api/access-context", (c) => c.json({ data: null }));
+  app.get("/api/lookups/dane", async (c) => {
+    const city = c.req.query("city") ?? "";
+    const department = c.req.query("department");
+    if (
+      city.trim().length < 2 ||
+      city.length > 100 ||
+      (department?.length ?? 0) > 100
+    )
+      return c.json({ error: "Indica una ciudad válida." }, 400);
+    if (!options?.saviaRequestService)
+      return c.json(
+        {
+          error: {
+            code: "SAVIA_REQUEST_UNAVAILABLE",
+            message: "Savia request no está disponible.",
+          },
+        },
+        503,
+      );
+    const source = new URL(c.req.url);
+    const response = await options.saviaRequestService.fetch(
+      new Request(
+        "https://savia-request.internal/api/lookups/dane" + source.search,
+        { method: "GET", headers: { "content-type": "application/json" } },
+      ),
+    );
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+      },
+    });
+  });
   registerRecordHistory(app, trigger);
   registerExtensions(app, options);
   registerPluginStore(app, options);

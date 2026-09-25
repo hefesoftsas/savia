@@ -1217,3 +1217,29 @@ it("autocompletes DANE city names and loads the 5-digit code in the quote form",
     globalThis.fetch = originalFetch;
   }
 });
+
+it("shows a city lookup error when the workspace API fails", async () => {
+  const user = userEvent.setup();
+  const { savia } = quoteScreenApi();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) =>
+    String(input).includes("/api/lookups/dane")
+      ? Response.json({ error: "No encontrada." }, { status: 404 })
+      : originalFetch(input),
+  );
+
+  try {
+    const WizardScreen = quoteScreen("cotizador_por_pasos");
+    render(<WizardScreen savia={savia} />);
+    const cityInput = await screen.findByLabelText(
+      "Código de ciudad de circulación",
+    );
+    await user.type(cityInput, "Bo");
+
+    expect(
+      await screen.findByText("No se pudieron consultar las ciudades."),
+    ).toBeVisible();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

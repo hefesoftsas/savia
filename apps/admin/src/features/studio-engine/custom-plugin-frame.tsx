@@ -26,26 +26,20 @@ const THEME_VARIABLES = [
   "--ring",
 ] as const;
 
-/**
- * Rutas que un plugin del store puede pedir al host. Todo lo demás
- * se rechaza: el iframe no tiene red propia y el padre solo reenvía
- * estas rutas con la sesión actual del usuario.
- */
-const ALLOWED_PATHS: ReadonlyArray<(path: string) => boolean> = [
-  (path) => path === "/objects",
-  (path) => path === "/access-context",
-  (path) => path.startsWith("/records/"),
-  (path) => path.startsWith("/extensions/"),
-  (path) => path.startsWith("/lookups/"),
-  (path) => path.startsWith("/geocoding/"),
-  (path) => path.startsWith("/files/"),
-  (path) => path.startsWith("/file/"),
-];
-
 function isAllowed(path: string): boolean {
-  if (!path.startsWith("/") || path.startsWith("//") || path.includes(".."))
+  let decoded = path;
+  try {
+    for (let i = 0; i < 4; i++) decoded = decodeURIComponent(decoded);
+  } catch {
     return false;
-  return ALLOWED_PATHS.some((rule) => rule(path));
+  }
+  return (
+    decoded.startsWith("/") &&
+    !decoded.startsWith("//") &&
+    !decoded.includes("..") &&
+    !decoded.includes("\\") &&
+    !/[\r\n]/.test(decoded)
+  );
 }
 
 /**
