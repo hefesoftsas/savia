@@ -64,6 +64,10 @@ connections, or flows — and returns only the plate plus those fixed vehicle
 fields; raw provider output stays hidden. The lookup needs no CAPTCHA because
 it happens before the final verification step, so it is bounded by the burst
 rate limiter and strict plate format instead of submission quotas.
+The public quote and plate-lookup flows call the bound Savia Request service
+directly through the trusted insurance adapter. They do not depend on a
+native connector-gateway action; the insurance implementation is installed
+through the ZIP package.
 
 City fields offer DANE autocomplete through
 `GET /api/public/forms/:token/cities?search=`, scoped to the same quote link.

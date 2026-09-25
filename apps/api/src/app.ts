@@ -64,6 +64,7 @@ import { betterAuthAuthenticator } from "./auth/better-auth";
 
 import { createApiShell } from "./api-shell";
 import { runtimeReleaseCatalog } from "@savia/release-catalog/runtime";
+import { createPublicQuoteExecutor } from "@savia/release-catalog/public-forms";
 export { openApiDocument } from "./api-shell";
 const localPublicAuthUrls = publicAuthUrls("http://127.0.0.1:8787");
 export function createApp(
@@ -136,7 +137,7 @@ export function createApp(
     quote:
       publicForms?.quote ??
       createPublicQuoteAdapter({
-        executor: extensionActionExecutor,
+        executor: createPublicQuoteExecutor(saviaRequestService),
         encryptionKey: extensionConnectionsEncryptionKey,
       }),
   });

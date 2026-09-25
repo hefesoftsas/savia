@@ -1,5 +1,8 @@
 import { z } from "zod";
-import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
+import type {
+  ExtensionActionContext,
+  ExtensionActionExecutor,
+} from "@savia/studio-shared/extension-runtime";
 import {
   insuranceQuotesActionId,
   insuranceQuotesExtensionId,
@@ -81,6 +84,26 @@ export function createInsuranceSaviaRequestConnectorAction(
         request.flowId,
         run.data.result,
       );
+    },
+  };
+}
+
+/** Public quote links call the trusted flow service without the retired connector gateway. */
+export function createPublicInsuranceQuoteExecutor(
+  service: SaviaRequestService | undefined,
+): ExtensionActionExecutor | undefined {
+  if (!service) return undefined;
+  const action = createInsuranceSaviaRequestConnectorAction(service);
+  return {
+    async execute(context, input) {
+      try {
+        return {
+          status: "succeeded",
+          output: await action.execute({ context, connection: {}, input }),
+        };
+      } catch {
+        return { status: "failed", output: { code: "SAVIA_REQUEST_FAILED" } };
+      }
     },
   };
 }

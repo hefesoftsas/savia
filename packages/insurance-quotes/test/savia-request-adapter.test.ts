@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInsuranceSaviaRequestConnectorAction } from "../src/savia-request-adapter";
+import {
+  createInsuranceSaviaRequestConnectorAction,
+  createPublicInsuranceQuoteExecutor,
+} from "../src/savia-request-adapter";
 
 const quoteInput = {
   vehicle: {
@@ -35,6 +38,37 @@ const context = {
 };
 
 describe("insurance Savia Request connector action", () => {
+  it("executes a public plate lookup directly through Savia Request", async () => {
+    const fetch = vi.fn(async () =>
+      Response.json({
+        status: "success",
+        result: {
+          response: {
+            placa: "TESTCAR",
+            modelo: "2024",
+            fasecolda: "04408010",
+            valorAsegurado: 65000000,
+          },
+        },
+      }),
+    );
+    const executor = createPublicInsuranceQuoteExecutor({ fetch });
+
+    const result = await executor!.execute(context, {
+      mode: "live",
+      flowId: "sura-autos-provider",
+      quoteInput,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      status: "succeeded",
+      output: {
+        type: "vehicle_lookup",
+        data: { vehicle: { plate: "TESTCAR", productionYear: 2024 } },
+      },
+    });
+  });
   it("normalizes the Sura lookup through its declared private flow", async () => {
     const fetch = vi.fn(async (request: Request) => {
       expect(request.url).toBe(
