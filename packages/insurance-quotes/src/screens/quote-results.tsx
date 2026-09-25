@@ -72,6 +72,10 @@ export type QuoteBatchItem = {
   detailVersion?: number;
   quoteNumber?: string;
   premium?: number;
+  /** Tiempo de ejecución del producto en ms (visibilidad de performance). */
+  durationMs?: number;
+  /** Snapshot normalizado persistido para renderizar el historial sin runs. */
+  snapshot?: import("../quote-snapshot").QuoteResultSnapshot;
 };
 
 export type VehicleInfo = {
@@ -93,6 +97,53 @@ export type HistoricalQuoteSummary = {
   created_at?: string;
 };
 
+function HistoryDeleteButton({
+  deleting,
+  onDelete,
+}: {
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  const t = useInsuranceMessages();
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!deleting) setConfirming(false);
+  }, [deleting]);
+  if (!confirming) {
+    return (
+      <button
+        className="insurance-comparator__btn insurance-comparator__btn--ghost"
+        type="button"
+        disabled={deleting}
+        onClick={() => setConfirming(true)}
+      >
+        {t("Eliminar cotización guardada")}
+      </button>
+    );
+  }
+  return (
+    <div className="insurance-history-delete-confirm" role="group" aria-label={t("Confirmar eliminación")}>
+      <span>{t("¿Eliminar esta cotización y sus detalles?")}</span>
+      <button
+        className="insurance-comparator__btn insurance-comparator__btn--ghost"
+        type="button"
+        disabled={deleting}
+        onClick={() => setConfirming(false)}
+      >
+        {t("Cancelar")}
+      </button>
+      <button
+        className="insurance-comparator__btn insurance-comparator__btn--primary"
+        type="button"
+        disabled={deleting}
+        onClick={onDelete}
+      >
+        {deleting ? t("Eliminando…") : t("Confirmar eliminación")}
+      </button>
+    </div>
+  );
+}
+
 export function QuoteResults({
   runs,
   loading,
@@ -113,6 +164,11 @@ export function QuoteResults({
   showHistorySelector = false,
   planCatalog = false,
   hidePdfDownload = false,
+  historyLoading = false,
+  historyError = null,
+  onDeleteHistoryQuote,
+  deletingHistory = false,
+  timings = null,
 }: {
   runs: readonly PluginExtensionActionRun[];
   loading: boolean;
@@ -140,6 +196,15 @@ export function QuoteResults({
   planCatalog?: boolean;
   /** Hide the pdf-lib download action (anonymous pages use print instead). */
   hidePdfDownload?: boolean;
+  /** Loading state while the selected quote's details load. */
+  historyLoading?: boolean;
+  /** Error state if the history read fails (never render empty as success). */
+  historyError?: string | null;
+  /** Delete action for the selected saved quote (with confirmation in UI). */
+  onDeleteHistoryQuote?: (quoteId: string) => Promise<void> | void;
+  deletingHistory?: boolean;
+  /** Timing visibility: setup/CRM per-product durations in ms. */
+  timings?: { setupMs?: number; crmMs?: number; products?: Record<string, number> } | null;
 }) {
   const t = useInsuranceMessages();
   const locale = usePluginLocale();
@@ -581,6 +646,16 @@ export function QuoteResults({
         </div>
       ) : null}
 
+      {historyLoading && selectedHistoryQuoteId ? (
+        <p role="status" className="insurance-quote__notice">
+          {t("Cargando cotización guardada…")}
+        </p>
+      ) : null}
+      {historyError && selectedHistoryQuoteId && !historyLoading ? (
+        <p role="alert" className="insurance-quote__notice">
+          <InsuranceNotice message={historyError} />
+        </p>
+      ) : null}
       {selectedHistoryQuoteId && onResumeHistoryQuote && failedCount > 0 ? (
         <button
           className="insurance-comparator__btn insurance-comparator__btn--primary"
@@ -589,6 +664,28 @@ export function QuoteResults({
         >
           {t("Reintentar esta cotización")}
         </button>
+      ) : null}
+      {selectedHistoryQuoteId && onDeleteHistoryQuote ? (
+        <HistoryDeleteButton
+          deleting={deletingHistory}
+          onDelete={() => onDeleteHistoryQuote(selectedHistoryQuoteId)}
+        />
+      ) : null}
+      {timings && (timings.setupMs !== undefined || timings.crmMs !== undefined) ? (
+        <p className="insurance-quote__timings" role="status">
+          {timings.setupMs !== undefined
+            ? t("Preparación: %{p0} ms", { p0: timings.setupMs })
+            : null}
+          {timings.setupMs !== undefined && timings.crmMs !== undefined ? " · " : null}
+          {timings.crmMs !== undefined
+            ? t("CRM: %{p0} ms", { p0: timings.crmMs })
+            : null}
+          {timings.products && Object.keys(timings.products).length > 0
+            ? ` · ${Object.entries(timings.products)
+                .map(([id, ms]) => `${id}: ${ms} ms`)
+                .join(" · ")}`
+            : null}
+        </p>
       ) : null}
 
       {/* 1. MASTER QUOTE HEADER & VEHICLE CONTEXT (Only if quote is active) */}

@@ -1047,10 +1047,12 @@ it("renders actual quote cards without an unsupported coverage comparison", asyn
   expect(screen.getByText("Placa:")).toBeVisible();
   expect(screen.getByText("REDACTD")).toBeVisible();
 
-  // Comparator cards render with scores, prices and actions
+  // Comparator cards render with scores, prices and actions.
+  // Simulated quotes persist a normalized snapshot, so the ribbon and
+  // coverage comparison render even after recent action runs expire.
   expect(
     screen.queryByText("★ Mejor relación cobertura/precio"),
-  ).not.toBeInTheDocument();
+  ).toBeInTheDocument();
   const sbsLogo = screen.getAllByRole("img", { name: "Logo de SBS" })[0];
   expect(sbsLogo.tagName).toBe("IMG");
   expect(sbsLogo).toHaveAttribute("src", expect.stringContaining("sbs"));
@@ -1058,7 +1060,7 @@ it("renders actual quote cards without an unsupported coverage comparison", asyn
     screen.queryByRole("heading", {
       name: "Matriz Detallada de Coberturas Frente a Frente",
     }),
-  ).not.toBeInTheDocument();
+  ).toBeInTheDocument();
   expect(
     screen.queryByText("✓ No informado por la aseguradora"),
   ).not.toBeInTheDocument();

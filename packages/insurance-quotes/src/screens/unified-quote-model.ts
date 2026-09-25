@@ -76,6 +76,50 @@ function buildUnifiedComparisonQuote(
     }
   }
   if (!isSimulation) {
+    // Historial persistido: si hay snapshot normalizado, renderiza oferta y
+    // coberturas sin depender de runs recientes. No reejecuta flujos.
+    if (item.snapshot) {
+      const snap = item.snapshot;
+      const premium =
+        typeof item.premium === "number" &&
+        Number.isFinite(item.premium) &&
+        item.premium > 0
+          ? Math.round(item.premium)
+          : snap.premium;
+      return {
+        id: item.productId,
+        productId: item.productId,
+        flowId: item.flowId,
+        provider: item.provider || snap.provider,
+        productName: snap.productName,
+        quoteNumber: item.quoteNumber ?? snap.quoteNumber,
+        premium,
+        monthlyInstallment:
+          snap.monthlyInstallment > 0
+            ? snap.monthlyInstallment
+            : premium > 0
+              ? Math.round(premium / 12)
+              : 0,
+        score: snap.score,
+        badges:
+          snap.badges.length > 0
+            ? snap.badges
+            : [item.quoteNumber ? "Cotización recibida" : "Respuesta recibida"],
+        coverages: snap.coverages,
+        highlights:
+          snap.highlights.length > 0
+            ? snap.highlights
+            : item.quoteNumber
+              ? [`Cotización: ${item.quoteNumber}`]
+              : [],
+        ctaText: "Copiar datos",
+        ctaSubtext: "Respuesta de la aseguradora",
+        status: item.status,
+        detailId: item.detailId,
+        error: item.error,
+        isSimulation: false,
+      };
+    }
     const unavailable = "No informado por la aseguradora";
     return {
       id: item.productId,
