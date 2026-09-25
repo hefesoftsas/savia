@@ -549,6 +549,36 @@ it("loads historical detail rows linked by the quote reference", async () => {
   expect(screen.getByText("PRE-2026-01")).toBeVisible();
 });
 
+it("does not leave old unfinished history quotes loading forever", async () => {
+  const user = userEvent.setup();
+  const { savia, getCollectionHandle } = quoteScreenApi();
+  await getCollectionHandle("cotizaciones").create({
+    id: "stale-quote",
+    name: "COT-OLD",
+    placa: "OLD123",
+    estado: "Solicitada",
+  });
+  await getCollectionHandle("cotizaciones_detalle").create({
+    id: "stale-detail",
+    cotizacion: "stale-quote",
+    aseguradora: "SBS",
+    producto: "SBS · Gold",
+    flow_id: "sbs-producto-10",
+    estado: "Solicitada",
+    updated_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+  });
+
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(screen.getByRole("button", { name: "Abrir opciones de cotización" }));
+  await user.click(await screen.findByRole("option", { name: /COT-OLD/ }));
+
+  expect(await screen.findByText(/✕ Rechazada/)).toBeVisible();
+  expect(screen.getByText(/La ejecución no se completó/)).toBeInTheDocument();
+  expect(screen.queryByText(/Cotizando con aseguradoras en vivo/)).not.toBeInTheDocument();
+});
+
 it("filters history options through the single autocomplete search", async () => {
   const user = userEvent.setup();
   const { savia, getCollectionHandle } = quoteScreenApi();

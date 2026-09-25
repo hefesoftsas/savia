@@ -1,3 +1,11 @@
+import brandEquidad from "./assets/brand-equidad.svg";
+import brandLiberty from "./assets/brand-liberty.webp";
+import brandMapfre from "./assets/brand-mapfre.png";
+import brandPrevisora from "./assets/brand-previsora.png";
+import brandQualitas from "./assets/brand-qualitas.svg";
+import brandSbs from "./assets/brand-sbs.png";
+import brandSura from "./assets/brand-sura.svg";
+
 type InsurerBrand =
   | "equidad"
   | "liberty"
@@ -9,13 +17,13 @@ type InsurerBrand =
   | "fallback";
 
 const providerLogo: Record<Exclude<InsurerBrand, "fallback">, string> = {
-  equidad: new URL("./assets/brand-equidad.svg", import.meta.url).href,
-  liberty: new URL("./assets/brand-liberty.webp", import.meta.url).href,
-  mapfre: new URL("./assets/brand-mapfre.png", import.meta.url).href,
-  previsora: new URL("./assets/brand-previsora.png", import.meta.url).href,
-  qualitas: new URL("./assets/brand-qualitas.svg", import.meta.url).href,
-  sbs: new URL("./assets/brand-sbs.png", import.meta.url).href,
-  sura: new URL("./assets/brand-sura.svg", import.meta.url).href,
+  equidad: brandEquidad,
+  liberty: brandLiberty,
+  mapfre: brandMapfre,
+  previsora: brandPrevisora,
+  qualitas: brandQualitas,
+  sbs: brandSbs,
+  sura: brandSura,
 };
 
 function normalizeProvider(provider: string): string {

@@ -200,6 +200,14 @@ describe("ports del store", () => {
         entry.includes("document.head.appendChild"),
         "el ZIP no instala su CSS en el iframe",
       );
+      assert.ok(
+        !/new URL\(["']\.\/assets\/brand-/.test(entry),
+        "los logos no deben depender de archivos ausentes del ZIP",
+      );
+      assert.ok(
+        /data:image\/(?:svg\+xml|png|webp)/.test(entry),
+        "el ZIP debe incluir los logos como imágenes integradas",
+      );
     } finally {
       rmSync(temporaryRoot, { force: true, recursive: true });
     }

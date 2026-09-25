@@ -664,14 +664,28 @@ export function InsuranceQuoteWizard({
         const mapped: QuoteBatchItem[] = filtered.map((d) => {
           const quoteNumber = storedText(d.numero_cotizacion);
           const premium = storedNumber(d.prima);
+          const recordedStatus = detailStatus(d.estado, quoteNumber, premium);
+          const updatedAt =
+            typeof d.updated_at === "string"
+              ? Date.parse(d.updated_at)
+              : typeof d.created_at === "string"
+                ? Date.parse(d.created_at)
+                : NaN;
+          const stale =
+            recordedStatus === "pending" &&
+            Number.isFinite(updatedAt) &&
+            Date.now() - updatedAt > 5 * 60_000;
           return {
             productId: String(d.producto || d.id),
             flowId: String(d.flow_id || d.producto || d.id),
             label: String(d.producto || d.name || "Póliza"),
             provider: String(d.aseguradora || "Aseguradora"),
-            status: detailStatus(d.estado, quoteNumber, premium),
-            error:
-              typeof d.error_mensaje === "string" ? d.error_mensaje : undefined,
+            status: stale ? "failed" : recordedStatus,
+            error: stale
+              ? t("La ejecución no se completó.")
+              : typeof d.error_mensaje === "string"
+                ? d.error_mensaje
+                : undefined,
             detailId: String(d.id),
             detailVersion: recordVersion(d),
             quoteNumber,
@@ -1601,8 +1615,8 @@ export function InsuranceQuoteWizard({
             setSurface("form");
             setActiveStep(0);
           }}
-          onRetryAll={retryAllFailed}
-          onRetrySingle={retrySingle}
+          onRetryAll={selectedHistoryQuoteId ? undefined : retryAllFailed}
+          onRetrySingle={selectedHistoryQuoteId ? undefined : retrySingle}
           onSelectHistoryQuote={handleSelectHistoryQuote}
           productErrors={productErrors}
           quoteReference={

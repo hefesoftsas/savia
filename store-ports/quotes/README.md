@@ -1,4 +1,4 @@
-# Quote wizard store plugin (`insurance.quotes` 2.0.0)
+# Quote wizard store plugin (`insurance.quotes` 2.0.1)
 
 The ZIP contributes one screen, `cotizador_por_pasos`. Its wizard includes an
 inline configuration tab, so installing it does not add separate direct-quote
