@@ -66,6 +66,11 @@ Other `fetch` targets are rejected during upload. The parent sends these
 requests to the selected workspace API with the current user's session.
 The API enforces permissions for each route. The iframe cannot read cookies
 or send requests directly to other origins.
+The host includes the active light or dark theme in the shell URL so the iframe
+uses the matching background on its first paint. Subsequent theme changes still
+arrive through the existing `postMessage` theme bridge. The host keeps the
+iframe hidden behind that background until the shell has loaded, avoiding a
+white blank frame while the browser fetches it.
 
 ## Límites del sandbox (no negociables en v1)
 

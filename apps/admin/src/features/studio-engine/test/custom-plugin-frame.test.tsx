@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CustomPluginFrame } from "../custom-plugin-frame";
 import { setStudioRuntime } from "../runtime";
@@ -22,6 +28,49 @@ it("passes the selected store screen to the plugin shell", () => {
     "cotizador_por_pasos",
   );
   expect(new URL(frame.src).searchParams.get("view")).toBe("records");
+});
+
+it("passes the active theme before the plugin shell loads", () => {
+  document.documentElement.classList.add("dark");
+  render(<CustomPluginFrame pluginId="insurance.quotes" title="Dark plugin" />);
+  expect(
+    new URL(
+      (screen.getByTitle("Dark plugin") as HTMLIFrameElement).src,
+    ).searchParams.get("theme"),
+  ).toBe("dark");
+  cleanup();
+  document.documentElement.classList.remove("dark");
+  render(
+    <CustomPluginFrame pluginId="insurance.quotes" title="Light plugin" />,
+  );
+  expect(
+    new URL(
+      (screen.getByTitle("Light plugin") as HTMLIFrameElement).src,
+    ).searchParams.get("theme"),
+  ).toBe("light");
+});
+
+it("covers the iframe with the host background until the shell loads", () => {
+  const { rerender } = render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Loading plugin"
+      screen={{ object: "quotes", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Loading plugin") as HTMLIFrameElement;
+  expect(frame.parentElement).toHaveClass("bg-background");
+  expect(frame).toHaveClass("invisible");
+  fireEvent.load(frame);
+  expect(frame).not.toHaveClass("invisible");
+  rerender(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Loading plugin"
+      screen={{ object: "quotes", view: "admin" }}
+    />,
+  );
+  expect(screen.getByTitle("Loading plugin")).toHaveClass("invisible");
 });
 
 it("allows a plugin to download a generated PDF while keeping its origin isolated", () => {

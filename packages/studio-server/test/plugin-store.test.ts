@@ -302,6 +302,16 @@ describe("plugin store por tenant", () => {
     expect(wizardHtml).toContain("view=records");
     expect(code).toContain('params.get("screen")');
 
+    const darkShell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?theme=dark",
+      {},
+      platform.env,
+    );
+    const darkHtml = await darkShell.text();
+    expect(darkHtml).toContain("color-scheme:dark");
+    expect(darkHtml).toContain("--background:oklch(0.145 0 0)");
+    expect(html).toContain("color-scheme:light");
+
     const scopedShell = await createStudioApp(tenant, {
       seedObjects: [],
       apiBasePath: "/v1/data-domains/platform",
