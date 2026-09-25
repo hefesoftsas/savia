@@ -901,9 +901,8 @@ const savia = {
     },
   },
 };
-// Sin red directa en el sandbox: las lecturas relativas al host
-// (/api/lookups/*, /api/geocoding/*, ...) se redirigen al padre,
-// que las ejecuta con la sesión actual si están permitidas.
+// The sandbox has no direct network access. Forward /api/* calls to
+// the parent, which uses the current user's session and permissions.
 const nativeFetch = window.fetch.bind(window);
 window.fetch = (resource, init) => {
   const url = typeof resource === "string" ? resource : resource.url;

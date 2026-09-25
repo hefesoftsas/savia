@@ -61,10 +61,11 @@ await savia.settings.replace(next, version);
 const quote = await savia.actions.execute("quote", { input: {...} });
 ```
 
-Además el shell redirige `fetch()` con **rutas relativas** (`/api/lookups/*`,
-`/api/geocoding/*`) al host; cualquier otro `fetch` se rechaza en la
-subida. El padre solo reenvía rutas permitidas (`/objects`, `/records/`,
-`/extensions/`, `/lookups/`, `/geocoding/`, `/files/`, `/file/`).
+The shell forwards `fetch()` calls to relative `/api/*` paths to the host.
+Other `fetch` targets are rejected during upload. The parent sends these
+requests to the selected workspace API with the current user's session.
+The API enforces permissions for each route. The iframe cannot read cookies
+or send requests directly to other origins.
 
 ## Límites del sandbox (no negociables en v1)
 

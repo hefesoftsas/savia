@@ -745,6 +745,11 @@ export const insuranceMessages = {
     "Searching…",
     "Consultando…"
   ],
+  "No se pudieron consultar las ciudades.": [
+    "No se pudieron consultar las ciudades.",
+    "Could not look up cities.",
+    "Não foi possível consultar as cidades."
+  ],
   "✓ DANE:": [
     "✓ DANE:",
     "✓ DANE:",

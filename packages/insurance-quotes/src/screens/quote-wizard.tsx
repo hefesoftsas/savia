@@ -261,6 +261,7 @@ function CitySelectorField({
   const [query, setQuery] = useState(value);
   const [suggestions, setSuggestions] = useState<DaneCityOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lookupError, setLookupError] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [resolvedCity, setResolvedCity] = useState<DaneCityOption | null>(null);
   const isInteractingRef = useRef(false);
@@ -319,6 +320,7 @@ function CitySelectorField({
     const trimmed = query.trim();
     if (trimmed.length < 2) {
       setSuggestions([]);
+      setLookupError(false);
       return;
     }
 
@@ -330,31 +332,39 @@ function CitySelectorField({
         trimmed === resolvedCity.code)
     ) {
       setSuggestions([]);
+      setLookupError(false);
       return;
     }
 
+    let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
+      setLookupError(false);
       try {
         const res = await fetch(
           `/api/lookups/dane?${new URLSearchParams({ city: trimmed })}`,
         );
-        if (res.ok) {
-          const data = (await res.json()) as {
-            status: string;
-            matches?: DaneCityOption[];
-          };
-          if (Array.isArray(data.matches)) {
-            setSuggestions(data.matches);
-          }
+        if (!res.ok) throw new Error(`City lookup failed: ${res.status}`);
+        const data = (await res.json()) as {
+          status: string;
+          matches?: DaneCityOption[];
+        };
+        if (active) {
+          setSuggestions(Array.isArray(data.matches) ? data.matches : []);
         }
       } catch {
-        // Fallback gracefully
+        if (active) {
+          setSuggestions([]);
+          setLookupError(true);
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }, 200);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [query, resolvedCity]);
 
   const selectCity = (item: DaneCityOption) => {
@@ -364,6 +374,7 @@ function CitySelectorField({
     onChange(item.code);
     setShowDropdown(false);
     setSuggestions([]);
+    setLookupError(false);
   };
 
   const handleClear = () => {
@@ -372,6 +383,7 @@ function CitySelectorField({
     setQuery("");
     onChange("");
     setSuggestions([]);
+    setLookupError(false);
     setShowDropdown(false);
   };
 
@@ -394,7 +406,10 @@ function CitySelectorField({
   return (
     <QuoteField
       badge={badge}
-      error={error}
+      error={
+        error ??
+        (lookupError ? t("No se pudieron consultar las ciudades.") : undefined)
+      }
       label={
         <span>
           {label}

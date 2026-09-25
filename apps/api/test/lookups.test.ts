@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { env } from "cloudflare:workers";
 import { createTestApp } from "./test-app";
 import { AuthenticationError, type Authenticator } from "../src/auth/types";
 import {
@@ -7,11 +8,54 @@ import {
 } from "./auth-fixtures";
 import type { SaviaRequestService } from "../src/routes/savia-request";
 
+const migrations = Object.entries(
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
+).sort(([a], [b]) => a.localeCompare(b));
+
+beforeAll(async () => {
+  for (const [, sql] of migrations)
+    for (const statement of sql.split("--> statement-breakpoint")) {
+      const normalized = statement
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (normalized) await env.DB.exec(normalized);
+    }
+});
+
 function appFor(auth: Authenticator, service?: SaviaRequestService) {
   return createTestApp({ auth, saviaRequestService: service });
 }
 
 describe("DANE city lookups endpoint", () => {
+  it("serves DANE lookups through the selected data domain", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        status: "matched",
+        matches: [{ code: "11001", city: "BOGOTÁ", department: "BOGOTÁ D.C." }],
+      }),
+    );
+    const app = createTestApp({
+      auth: platformAdministratorAuthenticator(),
+      documents: env.DOCUMENTS,
+      saviaRequestService: { fetch: fetcher },
+    });
+
+    const response = await app.request(
+      "/v1/data-domains/platform/api/lookups/dane?city=Bo",
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      matches: [{ code: "11001" }],
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("allows authenticated agency administrators to lookup cities", async () => {
     const fetcher = vi.fn(async (request: Request) => {
       expect(request.url).toBe(
@@ -19,9 +63,7 @@ describe("DANE city lookups endpoint", () => {
       );
       return Response.json({
         status: "matched",
-        matches: [
-          { code: "05001", city: "MEDELLÍN", department: "ANTIOQUIA" },
-        ],
+        matches: [{ code: "05001", city: "MEDELLÍN", department: "ANTIOQUIA" }],
         totalMatches: 1,
       });
     });
@@ -30,9 +72,7 @@ describe("DANE city lookups endpoint", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       status: "matched",
-      matches: [
-        { code: "05001", city: "MEDELLÍN", department: "ANTIOQUIA" },
-      ],
+      matches: [{ code: "05001", city: "MEDELLÍN", department: "ANTIOQUIA" }],
       totalMatches: 1,
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
