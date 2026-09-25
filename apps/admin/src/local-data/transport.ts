@@ -332,25 +332,39 @@ export function createLocalTransport(
     )
       return Response.json({ ok: true });
     if (method !== "GET" && result.ok) {
-      requestSync();
       if (
+        bootstrapRoute ||
+        segments[1] === "records" ||
+        segments[1] === "record-history"
+      ) {
+        requestSync();
+      }
+      if (
+        segments[1] === "objects" ||
         (segments[1] === "record-history-settings" && method === "PUT") ||
         segments[1] === "collection-bindings" ||
         segments[1] === "sources"
       ) {
-        // Bindings and source policies change the authoritative collection catalog.
+        // Bindings, source policies, and object mutations change the authoritative collection catalog.
         // Refresh every metadata fallback before navigating or editing again.
-        await removeWorkspaceMetadata(`${store.scope}:metadata:/api/objects`);
-        await removeWorkspaceMetadata(`${store.scope}:objects`);
+        const removes: Promise<unknown>[] = [
+          removeWorkspaceMetadata(`${store.scope}:metadata:/api/objects`),
+          removeWorkspaceMetadata(`${store.scope}:objects`),
+        ];
         try {
           const [principal, apiBasePath] = JSON.parse(store.scope) as [
             string,
             string,
           ];
-          await removeWorkspaceMetadata(
-            `${principal}:navigation:${apiBasePath}`,
+          removes.push(
+            removeWorkspaceMetadata(`${principal}:navigation:${apiBasePath}`),
           );
         } catch {}
+        try {
+          const [, apiBasePath] = JSON.parse(store.scope) as [string, string];
+          removes.push(removeWorkspaceMetadata(`navigation:${apiBasePath}`));
+        } catch {}
+        await Promise.allSettled(removes);
         for (const cachedKey of revalidatedMetadata.keys()) {
           if (cachedKey.startsWith(`${store.scope}:metadata:/api/objects`))
             revalidatedMetadata.delete(cachedKey);

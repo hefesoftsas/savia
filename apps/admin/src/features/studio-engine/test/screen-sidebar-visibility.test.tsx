@@ -2,7 +2,7 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { render } from "./studio-test-render";
 import userEvent from "@testing-library/user-event";
 import Root from "../app";
@@ -192,4 +192,56 @@ it("labels an active tenant ZIP screen as a plugin", () => {
   );
 
   expect(screen.getByText("Plugin")).toBeVisible();
+});
+
+it("navigates to and displays the newly created screen in the designer rather than the first screen from dropdown", async () => {
+  const user = userEvent.setup();
+  const existingObject = {
+    name: "oportunidades",
+    label: "Oportunidades",
+    description: "",
+    version: 1,
+    config: makeConfig({
+      name: { type: "Textbox" as const, label: "Nombre" },
+    }),
+  };
+  let objectsList = [existingObject];
+
+  const transport = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === "/api/objects" && init?.method === "POST") {
+      const payload = JSON.parse(init.body as string);
+      const created = {
+        name: payload.name,
+        label: payload.label,
+        description: payload.description,
+        config: payload.config,
+        version: 1,
+      };
+      objectsList = [existingObject, created];
+      return Response.json({ data: created });
+    }
+    if (path === "/api/objects") return Response.json({ data: objectsList });
+    return Response.json({ data: {} });
+  });
+
+  setStudioRuntime({
+    embedded: true,
+    transport,
+  });
+
+  render(<Root embedded search="object=oportunidades&view=new-object" />);
+
+  const labelInput = await screen.findByLabelText("Nombre visible");
+  await user.type(labelInput, "Facturación");
+
+  const submitButton = screen.getByRole("button", { name: /Crear y diseñar/i });
+  await user.click(submitButton);
+
+  // Should navigate to designer with facturacion selected, not oportunidades
+  await waitFor(() => {
+    const picker = screen.getByRole("combobox", {
+      name: "Objeto a diseñar",
+    }) as HTMLSelectElement;
+    expect(picker.value).toBe("facturacion");
+  });
 });

@@ -375,7 +375,7 @@ export function PublicLinkManager({
 
   return (
     <section
-      className="grid min-w-0 gap-6"
+      className="grid min-w-0 gap-6 pb-20"
       aria-labelledby={`${id}-heading`}
       lang={locale}
     >
@@ -651,7 +651,7 @@ export function PublicLinkManager({
         {loading ? (
           <div
             role="status"
-            className="flex items-center gap-2 py-6 text-sm text-muted-foreground"
+            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
           >
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             <span>{t("Cargando enlaces…")}</span>
@@ -995,16 +995,14 @@ export function PublicLinkManager({
             })}
           </ul>
         ) : (
-          <div className="rounded-xl border border-dashed border-border/80 p-8 text-center space-y-2">
-            <div className="flex justify-center">
-              <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Link2 className="size-5" aria-hidden="true" />
-              </span>
-            </div>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 p-8 text-center gap-2">
+            <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Link2 className="size-5" aria-hidden="true" />
+            </span>
             <p className="text-sm font-medium text-foreground">
               {t("Aún no hay enlaces publicados para este formulario.")}
             </p>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+            <p className="max-w-md text-xs text-muted-foreground text-balance !mx-auto">
               {t(
                 "Configura la vigencia y el límite de envíos arriba y haz clic en Publicar enlace para compartirlo.",
               )}

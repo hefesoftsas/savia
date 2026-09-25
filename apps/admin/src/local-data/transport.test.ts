@@ -391,6 +391,11 @@ it("refreshes local data after successful history recovery without reporting ref
 });
 
 it.each([
+  ["/api/objects", "POST"],
+  ["/api/objects/external", "PUT"],
+  ["/api/objects/external/screen", "PATCH"],
+  ["/api/objects/external", "DELETE"],
+  ["/api/objects/reorder", "PUT"],
   ["/api/collection-bindings", "POST"],
   ["/api/collection-bindings/external/sync", "POST"],
   ["/api/collection-bindings/external", "DELETE"],
