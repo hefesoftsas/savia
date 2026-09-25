@@ -46,6 +46,7 @@ import {
   type ScreenNavigationIcon,
   type ScreenNavigationSection,
   type StudioConfig,
+  type StudioObject,
 } from "@savia/studio-shared/metadata";
 import { csvLine } from "@savia/studio-shared/csv";
 import { LookupIconPicker } from "./lookup-icon-picker";
@@ -93,7 +94,10 @@ export function CollectionImportWizard({
   onSwitchToBlank,
 }: {
   onClose: () => void;
-  onCreated: (name: string) => void | Promise<void>;
+  onCreated: (
+    name: string,
+    createdObject?: StudioObject,
+  ) => void | Promise<void>;
   onSwitchToBlank?: () => void;
 }) {
   const t = useMessages(studioMessages);
@@ -332,18 +336,24 @@ export function CollectionImportWizard({
           : {}),
       };
 
-      // 1. Create Object
-      await api("/objects", "POST", {
+      const createdConfig = {
+        version: 2,
+        fields,
+        fieldOrder,
+        studio,
+      };
+      const res = await api<{ data: StudioObject }>("/objects", "POST", {
         name: collectionName,
         label: collectionLabel,
         description: collectionDescription,
-        config: {
-          version: 2,
-          fields,
-          fieldOrder,
-          studio,
-        },
+        config: createdConfig,
       });
+      const createdObject: StudioObject = res?.data ?? {
+        name: collectionName,
+        label: collectionLabel,
+        description: collectionDescription,
+        config: createdConfig,
+      };
 
       // 2. Import Initial Data with Chunked Sequential Batching (> 1,000 rows)
       if (importRows && spreadsheet && spreadsheet.rows.length > 0) {
@@ -410,7 +420,7 @@ export function CollectionImportWizard({
           v1: collectionLabel,
         }),
       );
-      await onCreated(collectionName);
+      await onCreated(collectionName, createdObject);
     } catch (e) {
       setError(
         (e as Error).message || t("Ocurrió un error al crear la colección."),
@@ -1173,7 +1183,9 @@ export function CollectionImportWizard({
                       <div className="wizard-progress-track">
                         <div
                           className="wizard-progress-bar"
-                          style={{ transform: `scaleX(${importProgress / 100})` }}
+                          style={{
+                            transform: `scaleX(${importProgress / 100})`,
+                          }}
                         />
                       </div>
                     </div>

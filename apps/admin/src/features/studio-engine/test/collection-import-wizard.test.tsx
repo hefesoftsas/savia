@@ -241,7 +241,10 @@ describe("CollectionImportWizard Component", () => {
           }),
         }),
       );
-      expect(onCreated).toHaveBeenCalledWith("cotizaciones");
+      expect(onCreated).toHaveBeenCalledWith(
+        "cotizaciones",
+        expect.objectContaining({ name: "cotizaciones" }),
+      );
     });
   });
 
@@ -335,6 +338,9 @@ describe("CollectionImportWizard Component", () => {
     expect(commitCalls[2].body.importId).toBe("import_chunk_3");
 
     // Final navigation called
-    expect(onCreated).toHaveBeenCalledWith("grandes_polizas");
+    expect(onCreated).toHaveBeenCalledWith(
+      "grandes_polizas",
+      expect.objectContaining({ name: "grandes_polizas" }),
+    );
   });
 });

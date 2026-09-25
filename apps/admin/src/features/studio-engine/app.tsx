@@ -426,6 +426,7 @@ function App({
     return storeScreenDefaultHidden(o.name, extensionInstallations);
   };
   const visibleObjects = sortScreens(objects.filter((o) => !isObjectHidden(o)));
+  const designerObjects = useMemo(() => sortScreens(objects), [objects]);
   const publishableScreens = useMemo(() => {
     return sortScreens(
       objects.filter((item) => {
@@ -475,7 +476,9 @@ function App({
   const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
   const recordId = location.get("record");
   const object =
-    objects.find((o) => o.name === selected) ?? visibleObjects[0] ?? objects[0];
+    objects.find((o) => o.name === selected) ??
+    (view === "designer" ? designerObjects[0] : visibleObjects[0]) ??
+    objects[0];
   const resolvedObjectName = object?.name ?? selected;
   const contribution = extensionScreenFor(resolvedObjectName, view);
   const storeScreen = storeScreenFor(
@@ -599,18 +602,18 @@ function App({
   useEffect(() => {
     if (
       view === "designer" &&
-      visibleObjects.length &&
-      !visibleObjects.some((o) => o.name === selected)
+      designerObjects.length &&
+      !designerObjects.some((o) => o.name === selected)
     ) {
       const params = new URLSearchParams({
-        object: visibleObjects[0].name,
+        object: designerObjects[0].name,
         view: "designer",
       });
       updateLocation(params, true);
       setLocation(params);
       setEditing(null);
     }
-  }, [view, selected, objects]);
+  }, [view, selected, designerObjects]);
   useEffect(() => {
     if (!ready || objectsQuery.isPending) return;
     window.postMessage(
@@ -856,10 +859,41 @@ function App({
               setNewObject(false);
               navigate(selected, "admin");
             }}
-            onCreated={async (name) => {
-              await refresh();
+            onCreated={async (name, createdObject) => {
+              if (createdObject) {
+                activeQueryClient.setQueryData(
+                  getListObjectsQueryKey(),
+                  (
+                    previous:
+                      | {
+                          data: StudioObject[];
+                          menuLayout?: ScreenMenuLayout | null;
+                        }
+                      | undefined,
+                  ) => {
+                    const prevList = previous?.data ?? [];
+                    return previous
+                      ? {
+                          ...previous,
+                          data: prevList.some(
+                            (item) => item.name === createdObject.name,
+                          )
+                            ? prevList.map((item) =>
+                                item.name === createdObject.name
+                                  ? createdObject
+                                  : item,
+                              )
+                            : [...prevList, createdObject],
+                        }
+                      : { data: [createdObject], menuLayout: null };
+                  },
+                );
+              }
               setNewObject(false);
-              navigate(name, "admin-screen");
+              navigate(name, "designer");
+              void activeQueryClient.refetchQueries({
+                queryKey: getListObjectsQueryKey(),
+              });
             }}
           />
         )}
@@ -1488,27 +1522,28 @@ function App({
                 <select
                   aria-label={t("Objeto a diseñar")}
                   className="select-input"
-                  disabled={!visibleObjects.length}
+                  disabled={!designerObjects.length}
                   value={
-                    visibleObjects.find((o) => o.name === selected)?.name ??
-                    visibleObjects[0]?.name ??
+                    designerObjects.find((o) => o.name === selected)?.name ??
+                    designerObjects[0]?.name ??
                     ""
                   }
                   onChange={(e) => navigate(e.target.value, "designer")}
                 >
-                  {visibleObjects.map((o) => (
+                  {designerObjects.map((o) => (
                     <option key={o.name} value={o.name}>
                       {o.label}
+                      {o.config.studio?.screen?.hidden ? t(" · Oculta") : ""}
                     </option>
                   ))}
                 </select>
               </div>
               <Suspense fallback={<Loading />}>
-                {visibleObjects.length ? (
+                {designerObjects.length ? (
                   <Designer
                     object={
-                      visibleObjects.find((o) => o.name === selected) ??
-                      visibleObjects[0]
+                      designerObjects.find((o) => o.name === selected) ??
+                      designerObjects[0]
                     }
                     onSaved={refresh}
                   />
@@ -1579,10 +1614,41 @@ function App({
             if (view === "new-object" || view === "import-spreadsheet")
               navigate(object.name);
           }}
-          onCreated={async (name) => {
-            await refresh();
+          onCreated={async (name, createdObject) => {
+            if (createdObject) {
+              activeQueryClient.setQueryData(
+                getListObjectsQueryKey(),
+                (
+                  previous:
+                    | {
+                        data: StudioObject[];
+                        menuLayout?: ScreenMenuLayout | null;
+                      }
+                    | undefined,
+                ) => {
+                  const prevList = previous?.data ?? [];
+                  return previous
+                    ? {
+                        ...previous,
+                        data: prevList.some(
+                          (item) => item.name === createdObject.name,
+                        )
+                          ? prevList.map((item) =>
+                              item.name === createdObject.name
+                                ? createdObject
+                                : item,
+                            )
+                          : [...prevList, createdObject],
+                      }
+                    : { data: [createdObject], menuLayout: null };
+                },
+              );
+            }
             setNewObject(false);
             navigate(name, "designer");
+            void activeQueryClient.refetchQueries({
+              queryKey: getListObjectsQueryKey(),
+            });
           }}
         />
       )}
@@ -1708,7 +1774,10 @@ function NewObject({
   initialMode = "blank",
 }: {
   onClose: () => void;
-  onCreated: (name: string) => void | Promise<void>;
+  onCreated: (
+    name: string,
+    createdObject?: StudioObject,
+  ) => void | Promise<void>;
   initialMode?: "spreadsheet" | "blank";
 }) {
   const t = useMessages(automationMessages);
@@ -1763,23 +1832,30 @@ function NewObject({
             const baseConfig = makeConfig({
               name: { type: "Textbox", label: t("Nombre"), required: true },
             });
-            await api("/objects", "POST", {
+            const finalConfig = showInSidebar
+              ? baseConfig
+              : {
+                  ...baseConfig,
+                  studio: {
+                    screen: {
+                      hidden: true,
+                    },
+                  },
+                };
+            const res = await api<{ data: StudioObject }>("/objects", "POST", {
               name,
               label,
               description,
-              config: showInSidebar
-                ? baseConfig
-                : {
-                    ...baseConfig,
-                    studio: {
-                      screen: {
-                        hidden: true,
-                      },
-                    },
-                  },
+              config: finalConfig,
             });
+            const createdObject: StudioObject = res?.data ?? {
+              name,
+              label,
+              description,
+              config: finalConfig,
+            };
             toast.success(t("Objeto creado"));
-            await onCreated(name);
+            await onCreated(name, createdObject);
           } catch (e) {
             setError((e as Error).message);
           } finally {
