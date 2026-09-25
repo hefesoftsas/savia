@@ -1,3 +1,4 @@
+/// <reference path="./assets.d.ts" />
 import brandEquidad from "./assets/brand-equidad.svg";
 import brandLiberty from "./assets/brand-liberty.webp";
 import brandMapfre from "./assets/brand-mapfre.png";
