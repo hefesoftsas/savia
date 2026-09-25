@@ -835,6 +835,12 @@ function collection(name) {
         sort: options.sort ?? "updated_at",
         order: options.order ?? "DESC",
       });
+      if (options.filters) {
+        params.set("filters", JSON.stringify(options.filters));
+      }
+      if (options.q) {
+        params.set("q", options.q);
+      }
       return callHost("/records/" + resource + "?" + params, "GET");
     },
     async get(id) {

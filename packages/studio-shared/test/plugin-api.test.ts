@@ -241,6 +241,35 @@ describe("plugin collection API", () => {
     ]);
   });
 
+  it("serializes structured filters and search queries to collection list requests", async () => {
+    let capturedPath = "";
+    const savia = createPluginApi({
+      extensionId: "insurance.portfolio-dashboard",
+      request: async (path) => {
+        capturedPath = path;
+        return { data: [], total: 0, page: 1, perPage: 25 };
+      },
+    });
+
+    await savia.collections.collection("polizas").list({
+      filters: {
+        logic: "and",
+        conditions: [{ field: "documento", op: "eq", value: "12345" }],
+      },
+      q: "búsqueda",
+      perPage: 5,
+    });
+
+    const url = new URL("https://host" + capturedPath);
+    expect(url.pathname).toBe("/records/polizas");
+    expect(url.searchParams.get("perPage")).toBe("5");
+    expect(url.searchParams.get("q")).toBe("búsqueda");
+    expect(JSON.parse(url.searchParams.get("filters") ?? "{}")).toEqual({
+      logic: "and",
+      conditions: [{ field: "documento", op: "eq", value: "12345" }],
+    });
+  });
+
   it("scopes extension services to the plugin that owns the screen", async () => {
     const savia = createPluginApi({
       extensionId: "insurance.portfolio-dashboard",

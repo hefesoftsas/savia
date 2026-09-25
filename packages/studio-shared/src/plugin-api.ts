@@ -1,4 +1,12 @@
-import { normalizePluginLocale, translatePluginMessage, localizeExternalError, type PluginLocale, type PluginMessages, type PluginMessageParams, type LocalizedExternalError } from "./plugin-localization";
+import {
+  normalizePluginLocale,
+  translatePluginMessage,
+  localizeExternalError,
+  type PluginLocale,
+  type PluginMessages,
+  type PluginMessageParams,
+  type LocalizedExternalError,
+} from "./plugin-localization";
 import type { AccessPolicy } from "./access-control";
 import type { StudioObject } from "./metadata";
 
@@ -21,11 +29,37 @@ export type PluginRecordPage<T> = {
   perPage: number;
 };
 
+export type PluginQueryFilterOperator =
+  | "eq"
+  | "ne"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "startsWith"
+  | "endsWith"
+  | "empty"
+  | "in";
+
+export type PluginQueryCondition = {
+  field: string;
+  op: PluginQueryFilterOperator;
+  value?: unknown;
+};
+
+export type PluginQueryFilters = {
+  logic?: "and" | "or";
+  conditions: PluginQueryCondition[];
+};
+
 export type PluginCollectionListOptions = {
   page?: number;
   perPage?: number;
   sort?: string;
   order?: "ASC" | "DESC";
+  filters?: PluginQueryFilters;
+  q?: string;
 };
 
 export type PluginRecordVersion = { version?: number };
@@ -91,8 +125,12 @@ export type PluginFiles = {
 export type PluginApi = {
   i18n?: {
     readonly locale: PluginLocale;
-    translate<C extends PluginMessages>(catalog:C,key:keyof C & string,params?:PluginMessageParams):string;
-    error(error:unknown):LocalizedExternalError;
+    translate<C extends PluginMessages>(
+      catalog: C,
+      key: keyof C & string,
+      params?: PluginMessageParams,
+    ): string;
+    error(error: unknown): LocalizedExternalError;
   };
   files?: PluginFiles;
   access?: { effective(): Promise<AccessPolicy | null> };
@@ -163,6 +201,12 @@ export function createPluginApi({
             sort: options.sort ?? "updated_at",
             order: options.order ?? "DESC",
           });
+          if (options.filters) {
+            parameters.set("filters", JSON.stringify(options.filters));
+          }
+          if (options.q) {
+            parameters.set("q", options.q);
+          }
           return request<PluginRecordPage<TRecord>>(
             `/records/${resource}?${parameters}`,
             "GET",
@@ -217,9 +261,18 @@ export function createPluginApi({
 
   return {
     i18n: {
-      get locale() { return normalizePluginLocale(getLocale()); },
-      translate: (catalog,key,params) => translatePluginMessage(catalog,key,normalizePluginLocale(getLocale()),params),
-      error: error => localizeExternalError(error,normalizePluginLocale(getLocale())),
+      get locale() {
+        return normalizePluginLocale(getLocale());
+      },
+      translate: (catalog, key, params) =>
+        translatePluginMessage(
+          catalog,
+          key,
+          normalizePluginLocale(getLocale()),
+          params,
+        ),
+      error: (error) =>
+        localizeExternalError(error, normalizePluginLocale(getLocale())),
     },
     access: {
       async effective() {

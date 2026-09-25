@@ -2,8 +2,7 @@ import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import type { QuoteFormValues } from "./screens/quote-input";
 
 export type ApplicantSourceKey =
-  | "fullName"
-  | keyof QuoteFormValues["applicant"];
+  "fullName" | keyof QuoteFormValues["applicant"];
 
 export const APPLICANT_SOURCE_OPTIONS: Array<{
   value: ApplicantSourceKey;
@@ -50,8 +49,7 @@ export function resolveApplicantValue(
       .filter(Boolean)
       .join(" ");
   }
-  const value =
-    (applicant as Record<string, unknown>)[source];
+  const value = (applicant as Record<string, unknown>)[source];
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -84,38 +82,17 @@ function recordText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function listAllRecords(
-  handle: { list: (options?: { page?: number; perPage?: number }) => Promise<{ data: unknown[]; total: number; page: number; perPage: number }> },
-): Promise<Array<Record<string, unknown>>> {
-  const perPage = 200;
-  const first = await handle.list({ page: 1, perPage });
-  const pages = Math.min(
-    10,
-    Math.max(1, Math.ceil(first.total / first.perPage)),
-  );
-  const rest = await Promise.all(
-    Array.from({ length: pages - 1 }, (_, index) =>
-      handle.list({ page: index + 2, perPage: first.perPage }),
-    ),
-  );
-  const records: Array<Record<string, unknown>> = [];
-  for (const page of [first, ...rest]) {
-    for (const item of page.data) {
-      if (item && typeof item === "object" && !Array.isArray(item)) {
-        records.push(item as Record<string, unknown>);
-      }
-    }
-  }
-  return records;
-}
-
 async function findClientByMatch(
   savia: PluginApi,
   collection: string,
   matchField: string,
   matchValue: string,
 ): Promise<string | null> {
-  const record = await fetchClientByMatch(savia, { collection, matchField }, matchValue);
+  const record = await fetchClientByMatch(
+    savia,
+    { collection, matchField },
+    matchValue,
+  );
   return record ? recordId(record) : null;
 }
 
@@ -128,13 +105,34 @@ export async function fetchClientByMatch(
   mapping: Pick<ClientMapping, "collection" | "matchField">,
   matchValue: string,
 ): Promise<Record<string, unknown> | null> {
-  const handle = savia.collections.collection(mapping.collection);
-  const records = await listAllRecords(handle);
   const wanted = matchValue.trim();
-  return (
-    records.find((item) => recordText(item[mapping.matchField]) === wanted) ??
-    null
-  );
+  if (!wanted) return null;
+  const handle = savia.collections.collection(mapping.collection);
+  const page = await handle.list({
+    filters: {
+      conditions: [{ field: mapping.matchField, op: "eq", value: wanted }],
+    },
+    perPage: 1,
+  });
+  const first = page?.data?.[0];
+  if (first && typeof first === "object" && !Array.isArray(first)) {
+    const record = first as Record<string, unknown>;
+    if (recordText(record[mapping.matchField]) === wanted) {
+      return record;
+    }
+  }
+  // Fallback si el host devolvió registros pero ignoró el filtro
+  if (page?.data?.length) {
+    for (const item of page.data) {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const record = item as Record<string, unknown>;
+        if (recordText(record[mapping.matchField]) === wanted) {
+          return record;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -175,7 +173,9 @@ export function applyClientRecord(
     if (!raw || !source.trim()) continue;
     if (source === "fullName") {
       const [first, second, ...rest] = raw.split(/\s+/).filter(Boolean);
-      const parts: Array<[keyof QuoteFormValues["applicant"], string | undefined]> = [
+      const parts: Array<
+        [keyof QuoteFormValues["applicant"], string | undefined]
+      > = [
         ["firstName", first],
         ["surname", second],
         ["secondSurname", rest.length ? rest.join(" ") : undefined],
