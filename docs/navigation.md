@@ -29,6 +29,20 @@ The layout schema remains version 2 and accepts optional `presetVersion: 2`. A l
 
 The historical section IDs remain stable: `operation` = Work, `productivity` = Build, `administration` = Administration, `management` = Platform. Screen configuration and spreadsheet import use the same display labels.
 
+## Return speed (in-memory only)
+
+Studio keeps one query client in memory per session+domain and reuses it when
+returning to the same domain; it is cleared on logout, user change, lost
+authorization or domain deletion. `/bootstrap` runs on the first entry per
+domain (again after reload, failure or domain change), never blocking a
+return. Savia Request keeps folders, summaries, the open flow and the step in
+memory when leaving the route, and revalidates them in the background on
+return; tenant, permission or session changes clear them immediately. Studio
+and Savia Request modules preload when the browser is idle and the user has
+access. The API stays the source of truth; compare returns with
+`scripts/navigation-perf/measure-navigation.mjs` and
+`scripts/navigation-perf/baseline.json`.
+
 ## Direct destinations
 
 Domain tool links retain the current domain. Workflows and reports open specific operations tabs, packages open their administration tab, and AI employees open their integrations tab. Tab selection is URL-addressable and browser Back/Forward restores it. See [screen administration](runbooks/screen-administration.md#addressable-navigation-tabs) for supported query parameters.

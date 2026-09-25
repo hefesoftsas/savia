@@ -21,7 +21,6 @@ import {
   listAuditEvents,
   listFolders,
   listRuns,
-  listScopedFlowIds,
   listScopedFlows,
   listVersions,
   publishFlow,
@@ -228,8 +227,7 @@ app.delete("/api/folders", async (c) => {
   const { path } = await c.req.json();
   if (typeof path !== "string" || !path.trim())
     return c.json({ error: "Carpeta inválida." }, 400);
-  for (const id of await listScopedFlowIds(c.env, scope)) {
-    const flow = await getFlow(c.env, id, scope);
+  for (const flow of await listScopedFlows(c.env, scope)) {
     if (flow?.folderPath === path || flow?.folderPath?.startsWith(path + "/"))
       return c.json(
         {

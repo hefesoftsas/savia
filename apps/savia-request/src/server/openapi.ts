@@ -1,7 +1,7 @@
 import { inputHint } from './input-hints';
 import type { Env } from './env';
 import type { Flow } from './types';
-import {getFlow,listScopedFlowIds,seedOnce} from './store';
+import {listScopedFlows,seedOnce} from './store';
 import { scopeTenant } from './tenant';
 type Schema=Record<string,unknown>;
 function shape(value:unknown):Schema {
@@ -17,13 +17,13 @@ function inputs(flow:Flow):Schema {return {type:'object',additionalProperties:fa
 }))}}
 export async function openApi(env:Env,tenant=''){
  const scope=scopeTenant(tenant);
- await seedOnce(env);const ids=await listScopedFlowIds(env,scope);
+ await seedOnce(env);const flows=await listScopedFlows(env,scope);
  const paths:Record<string,unknown>={},schemas:Record<string,unknown>={
  Trace:{type:'object',properties:{name:{type:'string'},status:{type:'string'},httpStatus:{type:'integer'},durationMs:{type:'number'},responseJson:{description:'JSON original o XML convertido. Credenciales y sesiones ocultas.'},extracted:{type:'array',items:{type:'string'}},error:{type:'string'}}},
  Run:{type:'object',properties:{id:{type:'string'},flowId:{type:'string'},versionId:{type:['string','null']},mode:{type:'string',enum:['mock','live']},status:{type:'string',enum:['success','failed','running']},createdAt:{type:'string',format:'date-time'},steps:{type:'array',items:{$ref:'#/components/schemas/Trace'}},result:{type:['object','null'],additionalProperties:true,description:'Resultado del flow. Prima en COP cuando el proveedor la entrega; no todos los flows cotizan.'},error:{type:'string'}}}
  };
  const response={description:'Revisa status y responseJson: HTTP 200 no garantiza una cotización aceptada.',content:{'application/json':{schema:{$ref:'#/components/schemas/Run'}}}};
- for(const id of ids){const flow=await getFlow(env,id,scope);if(!flow)continue;
+ for(const flow of flows){if(!flow)continue;
  const tag=flow.provider??flow.folderPath?.split('/').filter(Boolean).at(-1)??'Requests';const key='Input_'+flow.id;schemas[key]=inputs(flow);
  // Expose nested JSON structures independently too, since the execution API accepts strings.
  for(const [name,value] of Object.entries(flow.input))if(name.endsWith('_request_body'))try{schemas[key+'_'+name]=shape(JSON.parse(value))}catch{}

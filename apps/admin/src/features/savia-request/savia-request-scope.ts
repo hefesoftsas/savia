@@ -98,12 +98,24 @@ export type TenantOptionsState = {
 /**
  * Commercial tenants a platform administrator may inspect, for the scope
  * picker. Never throws: outside providers it stays idle.
+ *
+ * La lista se conserva en memoria mientras la sesión y los permisos sigan
+ * siendo los mismos: entrar y salir de la ruta no repite la consulta.
  */
+let cachedTenantOptions: TenantOption[] | null = null;
+let cachedTenantClient: unknown = null;
+
+export function clearCachedTenantOptions(): void {
+  cachedTenantOptions = null;
+  cachedTenantClient = null;
+}
+
 export function useTenantOptions(enabled: boolean): TenantOptionsState {
-  const [state, setState] = useState<TenantOptionsState>({
-    status: "idle",
-    options: [],
-  });
+  const [state, setState] = useState<TenantOptionsState>(() =>
+    enabled && cachedTenantOptions
+      ? { status: "ready", options: cachedTenantOptions }
+      : { status: "idle", options: [] },
+  );
 
   let apiClient: { get: (path: string) => Promise<unknown> } | undefined;
   try {
@@ -116,8 +128,17 @@ export function useTenantOptions(enabled: boolean): TenantOptionsState {
 
   useEffect(() => {
     if (!enabled || !apiClient) return;
+    // Reutiliza la lista conservada si el cliente (sesión) no cambió.
+    if (cachedTenantOptions && cachedTenantClient === apiClient) {
+      setState({ status: "ready", options: cachedTenantOptions });
+      return;
+    }
     let cancelled = false;
-    setState({ status: "loading", options: [] });
+    setState((previous) =>
+      previous.status === "ready" && previous.options.length
+        ? previous
+        : { status: "loading", options: [] },
+    );
     apiClient
       .get("/v1/tenants")
       .then((response) => {
@@ -138,6 +159,8 @@ export function useTenantOptions(enabled: boolean): TenantOptionsState {
             scope: scopeForTenantId(row.id),
           }))
           .sort((left, right) => left.name.localeCompare(right.name));
+        cachedTenantOptions = options;
+        cachedTenantClient = apiClient;
         setState({ status: "ready", options });
       })
       .catch(() => {

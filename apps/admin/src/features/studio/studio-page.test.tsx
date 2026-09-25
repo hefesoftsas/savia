@@ -241,6 +241,40 @@ describe("Studio domain integration", () => {
     mount(services);
     expect(await screen.findByRole("alert")).toHaveTextContent("Sin conexión");
   });
+  it("closes the local workspace when leaving Studio", async () => {
+    const close = vi.fn();
+    const fakeStore = {
+      status: vi.fn(async () => ({})),
+      subscribe: vi.fn(() => () => undefined),
+      db: {
+        outbox: { toArray: vi.fn(async () => []) },
+        syncState: { toArray: vi.fn(async () => []) },
+        collections: { toArray: vi.fn(async () => []) },
+        conflicts: { toArray: vi.fn(async () => []) },
+      },
+    };
+    const services = {
+      ...servicesFor([platform], true),
+      authSession: {
+        getPermissions: async () => ({
+          canManageIdentity: true,
+          memberships: [],
+        }),
+        getIdentity: async () => ({ id: "user-1" }),
+      },
+      localData: {
+        open: vi.fn(async () => ({ close, store: fakeStore })),
+        cachedMetadata: vi.fn(async (_name: string, load: () => unknown) =>
+          load(),
+        ),
+      },
+    } as unknown as AppServices;
+    const mounted = mount(services, "/studio?domain=platform&view=records");
+    await screen.findByText(/Espacio CRM/);
+    expect(services.localData.open).toHaveBeenCalledWith(platform.apiBasePath);
+    mounted.unmount();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Studio Savia theme bridge", () => {

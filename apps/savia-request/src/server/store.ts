@@ -91,7 +91,34 @@ function withFolderFallback(
   return flow;
 }
 
+export function catalogFingerprint(): string {
+  const ids = [
+    (seed as Flow).id,
+    ...(catalog as unknown as Flow[]).map((flow) => flow.id),
+    daneCityFlow.id,
+  ].sort();
+  return ids.join("|");
+}
+
+let seededCatalogFingerprint: string | null = null;
+
+/** Solo para tests: olvida la siembra conservada en memoria. */
+export function resetSeedCache(): void {
+  seededCatalogFingerprint = null;
+}
+
 export async function seedOnce(env: Env) {
+  const fingerprint = catalogFingerprint();
+  if (seededCatalogFingerprint === fingerprint) {
+    // Evita trabajo de siembra repetido por petición: una sola lectura
+    // ligera verifica que el catálogo siga presente (p. ej. tras un
+    // vaciado en tests). Un despliegue con nuevas definiciones cambia el
+    // fingerprint y vuelve a sembrar.
+    const probe = await env.DB.prepare("SELECT id FROM flows LIMIT 1").first<{
+      id: string;
+    }>();
+    if (probe) return;
+  }
   for (const flow of [
     seed as Flow,
     ...(catalog as unknown as Flow[]),
@@ -116,6 +143,7 @@ export async function seedOnce(env: Env) {
         ),
       );
   }
+  seededCatalogFingerprint = fingerprint;
 }
 function insuranceAutoLightFlows() {
   return (catalog as unknown as Flow[]).filter((flow) =>
@@ -685,12 +713,62 @@ export async function listScopedFlowIds(
   return [...ids].sort();
 }
 
-/** Every visible flow definition in scope. */
+/** Every visible flow definition in scope (batched, no N+1). */
 export async function listScopedFlows(env: Env, tenant = ""): Promise<Flow[]> {
+  const scope = scopeTenant(tenant);
+  if (isPlatformTenant(scope)) {
+    // Una sola consulta conjunta de definiciones globales.
+    const rows = await env.DB.prepare(
+      "SELECT definition FROM flows ORDER BY id",
+    ).all<{ definition: string }>();
+    const flows: Flow[] = [];
+    for (const row of rows.results) {
+      const flow = parseFlowDefinition(row.definition);
+      if (!flow || flow.deleted) continue;
+      flows.push({ ...(withFolderFallback(flow) as Flow), customized: false });
+    }
+    return flows;
+  }
+  // Dos consultas conjuntas (globales + overlays del tenant) y resolución
+  // en memoria de precedencia, eliminaciones y orden estable. Misma forma
+  // de respuesta y semántica que el patrón anterior por IDs.
+  const [globals, overlays] = await Promise.all([
+    env.DB.prepare("SELECT id, definition FROM flows").all<{
+      id: string;
+      definition: string;
+    }>(),
+    env.DB.prepare(
+      "SELECT flow_id, definition FROM tenant_flows WHERE tenant_id=?",
+    )
+      .bind(scope)
+      .all<{ flow_id: string; definition: string }>(),
+  ]);
+  const globalById = new Map(
+    globals.results.map((row) => [row.id, row.definition] as const),
+  );
+  const overlayById = new Map(
+    overlays.results.map((row) => [row.flow_id, row.definition] as const),
+  );
+  const ids = [
+    ...new Set([...globalById.keys(), ...overlayById.keys()]),
+  ].sort();
   const flows: Flow[] = [];
-  for (const id of await listScopedFlowIds(env, tenant)) {
-    const flow = await getFlow(env, id, tenant);
-    if (flow) flows.push(flow);
+  for (const id of ids) {
+    const overlayDefinition = overlayById.get(id);
+    if (overlayDefinition !== undefined) {
+      const overlay = parseFlowDefinition(overlayDefinition);
+      if (!overlay || overlay.deleted) continue;
+      flows.push({
+        ...(withFolderFallback(overlay) as Flow),
+        customized: true,
+      });
+      continue;
+    }
+    const globalDefinition = globalById.get(id);
+    if (!globalDefinition) continue;
+    const flow = parseFlowDefinition(globalDefinition);
+    if (!flow || flow.deleted) continue;
+    flows.push({ ...(withFolderFallback(flow) as Flow), customized: false });
   }
   return flows;
 }

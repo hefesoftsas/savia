@@ -31,6 +31,13 @@ import {
   type StudioDomain,
 } from "./studio-domains";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
+import {
+  getStudioQueryClient,
+  pruneStudioQueryCache,
+  setStudioQueryOwner,
+  studioCacheOwner,
+} from "@/features/studio-engine/studio-query-cache";
+import type { QueryClient } from "@tanstack/react-query";
 import { LocalSyncStatus } from "@/local-data/sync-status";
 import type { LocalWorkspace } from "@/local-data/workspaces";
 import "./embedded.css";
@@ -59,12 +66,29 @@ export function StudioPage({ services }: { services: AppServices }) {
   const saveInFlight = useRef(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const knownDomainIds = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!canAccess) return;
     let active = true;
     void services.authSession.getPermissions?.().then((permissions) => {
       if (active) setCanCreateDomain(Boolean(permissions?.canManageIdentity));
     });
+    // Aislamiento entre usuarios: fija el propietario de la caché de Studio
+    // y vacía todo si cambió de usuario.
+    try {
+      void services.authSession
+        ?.getIdentity?.()
+        ?.then((identity) => {
+          if (!active) return;
+          const id = (identity as { id?: unknown }).id;
+          setStudioQueryOwner(
+            studioCacheOwner(window.location.origin, String(id ?? "anon")),
+          );
+        })
+        ?.catch(() => undefined);
+    } catch {
+      // Fuera del proveedor de servicios (tests): sin propietario.
+    }
     let request = 0;
     const refreshDomains = () => {
       const currentRequest = ++request;
@@ -73,6 +97,12 @@ export function StudioPage({ services }: { services: AppServices }) {
           if (active && currentRequest === request) {
             setDomains(result);
             setError("");
+            // Elimina la caché del dominio eliminado sin tocar los demás.
+            const ids = new Set(result.map((domain) => domain.id));
+            if (knownDomainIds.current) {
+              pruneStudioQueryCache(ids);
+            }
+            knownDomainIds.current = ids;
           }
         })
         .catch((cause) => {
@@ -431,9 +461,41 @@ function StudioWorkspace({
   );
   const [workspace, setWorkspace] = useState<LocalWorkspace>();
   const [startupError, setStartupError] = useState<string>();
+  const [studioClient, setStudioClient] = useState<QueryClient | null>(null);
   useLayoutEffect(() => {
     let active = true;
     let opened: LocalWorkspace | undefined;
+    // El propietario aísla usuarios: si cambia, la caché se vacía.
+    // Se resuelve junto a la apertura del espacio local para no bloquear
+    // el regreso con una pantalla de carga adicional.
+    try {
+      const identityPromise = (
+        services as {
+          authSession?: { getIdentity?: () => Promise<unknown> };
+        }
+      ).authSession?.getIdentity?.();
+      if (!identityPromise) {
+        setStudioClient(() => getStudioQueryClient(domain.id, "anon"));
+      } else {
+        void identityPromise
+          .then((identity) => {
+            if (!active) return;
+            const id = (identity as { id?: unknown }).id;
+            const owner = studioCacheOwner(
+              window.location.origin,
+              String(id ?? "anon"),
+            );
+            setStudioQueryOwner(owner);
+            setStudioClient(() => getStudioQueryClient(domain.id, owner));
+          })
+          .catch(() => {
+            if (!active) return;
+            setStudioClient(() => getStudioQueryClient(domain.id, "anon"));
+          });
+      }
+    } catch {
+      setStudioClient(() => getStudioQueryClient(domain.id, "anon"));
+    }
     const install = (local?: LocalWorkspace) => {
       if (!active) {
         local?.close();
@@ -471,6 +533,8 @@ function StudioWorkspace({
     } else install();
     return () => {
       active = false;
+      // Al salir de Studio se cierra LocalWorkspace y sus suscripciones;
+      // el cliente de consultas conservado no deja sincronizadores activos.
       opened?.close();
       setStudioRuntime({ embedded: false });
     };
@@ -482,12 +546,13 @@ function StudioWorkspace({
         {t("Recarga para reintentar. No se guardaron cambios localmente.")}
       </div>
     );
-  if (readyTransport !== transport) return <RouteLoading variant="screens" />;
+  if (readyTransport !== transport || !studioClient)
+    return <RouteLoading variant="screens" />;
   return (
     <div className="min-w-0 w-full" title={t("Estudio del dominio de datos")}>
       {workspace && <LocalSyncStatus workspace={workspace} />}
       <Suspense fallback={<RouteLoading variant="screens" />}>
-        <StudioRoot embedded search={query} />
+        <StudioRoot embedded search={query} queryClient={studioClient} />
       </Suspense>
     </div>
   );
