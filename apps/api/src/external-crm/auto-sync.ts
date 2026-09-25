@@ -353,7 +353,7 @@ export async function processCrmSyncJobs(
     .run();
   const due = await db
     .prepare(
-      `SELECT j.id FROM crm_sync_jobs j JOIN crm_sync_rules r ON r.id=j.rule_id WHERE r.enabled=1 AND EXISTS (SELECT 1 FROM studio_solution_installations i WHERE i.tenant_id='agency:' || r.tenant_id AND i.id='savia.insurance' AND i.enabled=1) AND j.status IN ('pending','failed') AND j.attempts<5 AND j.next_attempt_at<=? ORDER BY j.next_attempt_at,j.id LIMIT ?`,
+      `SELECT j.id FROM crm_sync_jobs j JOIN crm_sync_rules r ON r.id=j.rule_id WHERE r.enabled=1 AND EXISTS (SELECT 1 FROM studio_solution_installations i WHERE i.tenant_id='agency:' || r.tenant_id AND i.id IN ('savia.insurance','savia.insurance-management') AND i.enabled=1) AND j.status IN ('pending','failed') AND j.attempts<5 AND j.next_attempt_at<=? ORDER BY j.next_attempt_at,j.id LIMIT ?`,
     )
     .bind(stamp, Math.min(20, Math.max(1, options.limit ?? 5)))
     .all<{ id: string }>();

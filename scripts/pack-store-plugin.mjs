@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -200,6 +201,15 @@ function packageStorePlugin({ portDir, outputPath }) {
         },
       },
     );
+    const stylesheetPath = join(stagingRoot, "dist", "plugin.css");
+    if (existsSync(stylesheetPath)) {
+      const stylesheet = readFileSync(stylesheetPath, "utf8");
+      const entryJs = readFileSync(bundlePath, "utf8");
+      writeFileSync(
+        bundlePath,
+        `const saviaPluginStyle = document.createElement("style");\nsaviaPluginStyle.textContent = ${JSON.stringify(stylesheet)};\ndocument.head.appendChild(saviaPluginStyle);\n${entryJs}`,
+      );
+    }
     assertBundle(readFileSync(bundlePath, "utf8"));
     cpSync(
       join(portRoot, "savia-extension.json"),

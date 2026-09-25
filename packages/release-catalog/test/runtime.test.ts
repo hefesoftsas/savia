@@ -5,7 +5,7 @@ describe("runtime release catalog", () => {
   it("ships no compiled contributions after the store migration", () => {
     expect(
       runtimeReleaseCatalog.solutionCatalog.map((solution) => solution.id),
-    ).toEqual(["savia.insurance"]);
+    ).toEqual(["savia.insurance-quoter", "savia.insurance-management"]);
     expect(runtimeReleaseCatalog.connectorActions).toEqual([]);
     expect(runtimeReleaseCatalog.createConnectorActions(undefined)).toEqual([]);
     expect(runtimeReleaseCatalog.extensionSummaryProviders).toEqual([]);

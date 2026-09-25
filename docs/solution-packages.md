@@ -1,5 +1,24 @@
 # Paquetes de soluciones
 
+## Current insurance packages
+
+New installations have two independent choices in the catalog:
+
+- **Cotizador** (`savia.insurance-quoter`) installs the step-by-step wizard
+  and two hidden collections for quote history. It requires the
+  `insurance.quotes` ZIP plugin, whose only contributed screen is the wizard.
+  Install and enable that ZIP before installing the solution.
+- **Seguros** (`savia.insurance-management`) installs customers, insurers,
+  policies, payments, and claims. It can be installed without the quote plugin.
+  Policy records keep an optional quote reference as text, so the two packages
+  can be installed independently or together. It also enables the existing
+  CRM synchronization worker for its tenant.
+
+The previous all-in-one `savia.insurance` manifest remains available to
+existing installations. This split does not delete, transfer, or rewrite
+their objects or records. The legacy guidance below describes that historical
+package; new installations should use the two catalog entries above.
+
 Savia distingue el motor low code de la configuración sectorial. Este diseño
 se inspira en los [plugins de NocoBase](https://docs.nocobase.com/plugin-development/server/)
 y sus [migraciones versionadas](https://docs.nocobase.com/plugin-development/server/migration).
@@ -264,12 +283,12 @@ sectoriales existentes. Registra una instalación de compatibilidad sin
 recrear pantallas ni reescribir datos. En la interfaz aparece como
 **Configuración existente**; internamente utiliza versión `0.0.0`.
 
-El paquete público `savia.insurance` crea seis colecciones locales para una
-organización nueva, incluso sin perfil de agencia. La extensión
-`insurance.quotes` aporta de manera opcional las conexiones y acciones de
-cotización. La migración `0048_insurance_quotes_extension.sql` actualiza las
-instalaciones de compatibilidad para que requieran esta extensión; no conserva
-un runtime ni rutas `legacy`.
+The historical `savia.insurance` package created the full insurance model for
+new organizations. It is retained only for existing installations; new
+organizations use the two packages described above. The `insurance.quotes`
+extension supplies quote actions and provider flows. Migration
+`0048_insurance_quotes_extension.sql` made historical compatibility
+installations require that extension without retaining a legacy runtime.
 
 La actualización de una instalación existente detecta colisiones y cambios
 incompatibles en lugar de reemplazar las personalizaciones. Su exportación

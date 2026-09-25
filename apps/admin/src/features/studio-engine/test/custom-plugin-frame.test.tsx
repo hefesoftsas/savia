@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { CustomPluginFrame } from "../custom-plugin-frame";
 import { setStudioRuntime } from "../runtime";
 
@@ -40,4 +40,26 @@ it("loads the plugin shell through the selected data domain", () => {
   expect(new URL(frame.src).pathname).toBe(
     "/v1/data-domains/platform/api/plugin-store/insurance.quotes/shell",
   );
+});
+
+it("sends the current host theme when the plugin becomes ready", () => {
+  document.documentElement.style.setProperty("--foreground", "rgb(20 30 40)");
+  render(<CustomPluginFrame pluginId="insurance.quotes" title="Cotizador" />);
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin", type: "ready" },
+    }),
+  );
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      ns: "savia-plugin",
+      type: "theme",
+      vars: expect.objectContaining({ "--foreground": "rgb(20 30 40)" }),
+    }),
+    "*",
+  );
+  document.documentElement.style.removeProperty("--foreground");
 });

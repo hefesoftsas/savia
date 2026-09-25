@@ -7,7 +7,10 @@ import type { ExtensionActionContext } from "@savia/studio-shared/extension-runt
 import type { SolutionPackage } from "@savia/studio-shared/solution-package";
 import type { SaviaRequestService } from "@savia/studio-shared/savia-request-quotes";
 import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
-import { insuranceSolution } from "@savia/insurance-quotes/solution";
+import {
+  insuranceQuoterSolution,
+  insuranceManagementSolution,
+} from "@savia/insurance-quotes/solution";
 
 export type AssistantExtensionContribution = {
   id: string;
@@ -51,10 +54,10 @@ function createInsuranceBeforeInstall(
   service: SaviaRequestService | undefined,
 ) {
   return async (manifest: SolutionPackage) => {
-    if (manifest.id !== insuranceSolution.id) return;
+    if (manifest.id !== insuranceQuoterSolution.id) return;
     if (!service)
       throw new Error(
-        "Savia Request no está disponible para instalar Seguros.",
+        "Savia Request no está disponible para instalar el Cotizador.",
       );
     let response: Response;
     try {
@@ -69,10 +72,10 @@ function createInsuranceBeforeInstall(
         ),
       );
     } catch {
-      throw new Error("No se pudo preparar Savia Request para Seguros.");
+      throw new Error("No se pudo preparar Savia Request para el Cotizador.");
     }
     if (!response.ok)
-      throw new Error("No se pudo preparar Savia Request para Seguros.");
+      throw new Error("No se pudo preparar Savia Request para el Cotizador.");
   };
 }
 
@@ -84,7 +87,7 @@ function createInsuranceBeforeInstall(
  * instalador de Seguros.
  */
 export const runtimeReleaseCatalog: RuntimeReleaseCatalog = {
-  solutionCatalog: [insuranceSolution],
+  solutionCatalog: [insuranceQuoterSolution, insuranceManagementSolution],
   workflowBundles: [],
   extensionRegistry: createExtensionRegistry([]),
   extensionSummaryProviders: [],

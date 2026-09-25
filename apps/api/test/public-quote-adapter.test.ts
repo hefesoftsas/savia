@@ -5,6 +5,8 @@ vi.mock(
   async () => import("@savia/release-catalog/legacy-runtime-test-fixture"),
 );
 import { makeConfig } from "@savia/studio-shared/metadata";
+import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
+import quoteStoreManifest from "../../../store-ports/quotes/savia-extension.json";
 import {
   PUBLIC_QUOTE_CONCURRENCY,
   createPublicQuoteAdapter,
@@ -77,6 +79,84 @@ beforeAll(async () => {
   )
     .bind(tenant, JSON.stringify(settings))
     .run();
+});
+it("keeps public links bound to the installed ZIP after a newer upload", async () => {
+  const storeTenant = "public-quote-zip-test";
+  await env.DB.prepare(
+    "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+  )
+    .bind(
+      storeTenant,
+      quoteStoreManifest.id,
+      quoteStoreManifest.version,
+      JSON.stringify(quoteStoreManifest),
+      "export default {}",
+      "test-hash",
+      1,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO studio_extension_installations(tenant_id,id,version,manifest) VALUES (?,?,?,?)",
+  )
+    .bind(
+      storeTenant,
+      quoteStoreManifest.id,
+      quoteStoreManifest.version,
+      JSON.stringify(quoteStoreManifest),
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO extension_settings(tenant_id,extension_id,value,version,updated_at,updated_by_principal_id,created_at,created_by_principal_id) VALUES (?,?,?,1,'now','admin','now','admin')",
+  )
+    .bind(storeTenant, quoteStoreManifest.id, JSON.stringify(settings))
+    .run();
+  const adapter = createPublicQuoteAdapter({
+    registry: createExtensionRegistry([]),
+    executor: { execute: vi.fn() },
+    mockProviders: true,
+  });
+  const { snapshot } = await adapter.publish({
+    db: env.DB,
+    tenant: storeTenant,
+    domainId: "platform",
+    object: { ...object, name: "cotizador_por_pasos" },
+  });
+  expect(snapshot).toMatchObject({
+    extensionVersion: quoteStoreManifest.version,
+  });
+  const uploadedManifest = { ...quoteStoreManifest, version: "2.0.1" };
+  await env.DB.prepare(
+    "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+  )
+    .bind(
+      storeTenant,
+      uploadedManifest.id,
+      uploadedManifest.version,
+      JSON.stringify(uploadedManifest),
+      "export default {}",
+      "newer-hash",
+      1,
+    )
+    .run();
+  await expect(
+    adapter.assertAvailable?.({
+      db: env.DB,
+      tenant: storeTenant,
+      domainId: "platform",
+      objectName: "cotizador_por_pasos",
+      snapshot,
+    }),
+  ).resolves.toBeUndefined();
+  await expect(
+    adapter.publish({
+      db: env.DB,
+      tenant: storeTenant,
+      domainId: "platform",
+      object: { ...object, name: "cotizador_por_pasos" },
+    }),
+  ).resolves.toMatchObject({
+    snapshot: { extensionVersion: quoteStoreManifest.version },
+  });
 });
 it("freezes only quote products and validates public inputs before executing a fixed server-owned action", async () => {
   const execute = vi.fn(async () => ({

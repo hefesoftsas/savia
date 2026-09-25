@@ -253,7 +253,7 @@ export async function storeObjectRequirements(
   tenant: string,
   extensionId: string,
 ): Promise<ExtensionObjectRequirement[]> {
-  const config = await storeConfigFor(db, tenant, extensionId);
+  const config = await storeConfigFor(db, tenant, extensionId, "latest");
   if (!config) return [];
   const requirements: ExtensionObjectRequirement[] = [];
   for (const collection of config.collections ?? []) {
@@ -453,21 +453,38 @@ async function storeEntryJs(
 }
 
 /**
- * Configuración declarativa (`store.json`) del artefacto más reciente.
- * Devuelve null si la tabla/columna no existe o el plugin no declara una.
+ * Declarative configuration of the installed artifact. Catalog and install
+ * preparation can request the latest uploaded artifact explicitly.
  */
 export async function storeConfigFor(
   db: D1Database,
   tenant: string,
   id: string,
+  selection: "installed" | "latest" = "installed",
 ): Promise<StoreJson | null> {
   try {
-    const row = await latestArtifactRow<{ store_json: string | null }>(
-      db,
-      tenant,
-      id,
-      "version,store_json",
-    );
+    const installed =
+      selection === "installed"
+        ? await db
+            .prepare(
+              "SELECT version FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+            )
+            .bind(tenant, id)
+            .first<{ version: string }>()
+        : null;
+    const row = installed
+      ? await db
+          .prepare(
+            "SELECT store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+          )
+          .bind(tenant, id, installed.version)
+          .first<{ store_json: string | null }>()
+      : await latestArtifactRow<{ store_json: string | null }>(
+          db,
+          tenant,
+          id,
+          "version,store_json",
+        );
     if (!row?.store_json) return null;
     return storeJsonSchema.parse(JSON.parse(row.store_json));
   } catch {
@@ -791,6 +808,16 @@ function callHost(path, method, body) {
 }
 addEventListener("message", (event) => {
   const message = event.data;
+  if (message?.ns === "savia-plugin" && message.type === "theme") {
+    const allowed = ["--background", "--foreground", "--card", "--border", "--input", "--muted", "--muted-foreground", "--primary", "--primary-foreground", "--accent", "--destructive", "--ring"];
+    for (const name of allowed) {
+      const value = message.vars?.[name];
+      if (typeof value === "string" && value.length < 200)
+        document.documentElement.style.setProperty(name, value);
+    }
+    document.documentElement.style.colorScheme = message.dark ? "dark" : "light";
+    return;
+  }
   if (!message || message.ns !== "savia-plugin" || message.type !== "response") return;
   const slot = pending.get(message.id);
   if (!slot) return;
@@ -936,7 +963,7 @@ function shellHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${SHELL_CSP}">
 <title>${safeLabel}</title>
-<style>body{margin:0;font-family:system-ui,sans-serif}#root{padding:16px}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
+<style>:root{color-scheme:light;--background:#fff;--foreground:#171717;--card:#fff;--border:#e5e5e5;--input:#e5e5e5;--muted:#f5f5f5;--muted-foreground:#737373;--primary:#0f766e;--primary-foreground:#fff;--accent:#f5f5f5;--destructive:#dc2626;--ring:#0f766e}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:16px}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
 </head>
 <body>
 <div id="root"></div>

@@ -36,7 +36,9 @@ or arbitrary plugin actions. Existing CRM validation also applies at submission.
 
 The insurance quote screens support a dedicated public form. Configure the plugin
 and enabled products before publishing. The server freezes the allowed products
-and checks the installed extension and settings version on use. Changing that
+and checks the installed extension and settings version on use. For a ZIP-installed
+quote plugin, the version comes from the tenant's enabled installation rather
+than the latest ZIP upload or compiled extension registry. Changing that
 configuration requires republishing. Visitors cannot choose connections, actions,
 execution mode, or provider flows. They enter vehicle and applicant information
 manually; private vehicle lookup endpoints remain protected.
@@ -125,7 +127,9 @@ credentials. The bypass is honored only when `SAVIA_PUBLIC_ORIGIN` is a localhos
 origin; with any other origin the flag is ignored and the normal provider
 configuration applies. Preview and production therefore always fail closed when
 unconfigured. The public page reports `captchaProvider: "disabled"`, mounts no
-widget, and submits immediately. Never set `SAVIA_DISABLE_CAPTCHA` outside local
+widget, and submits immediately. The admin Vite server proxies local `/s/` short
+links to the API so they resolve to the same public form as the canonical link.
+Never set `SAVIA_DISABLE_CAPTCHA` outside local
 development.
 
 For the same reason, `pnpm dev` sets `SAVIA_MOCK_QUOTES=1` (override with

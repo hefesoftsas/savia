@@ -3,41 +3,28 @@ import { createRoot } from "react-dom/client";
 import {
   InsurancePackageAdminScreen,
   InsuranceQuoteWizardScreen,
-  InsuranceQuoteWorkspaceScreen,
 } from "../../packages/insurance-quotes/src/screens/quote-screens";
 import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
-import { quoteTabForScreen, type QuoteTab } from "./entry-selection";
+import "./entry.css";
 
 const TABS = [
   {
-    id: "direct",
-    label: "Directa",
-    Screen: InsuranceQuoteWorkspaceScreen,
-  },
-  {
     id: "wizard",
-    label: "Por pasos",
-    Screen: InsuranceQuoteWizardScreen,
+    label: "Cotizador",
   },
   {
     id: "admin",
-    label: "Administrar",
-    Screen: InsurancePackageAdminScreen,
+    label: "Configurar",
   },
 ] as const;
 
-function Shell({
-  savia,
-  initialTab,
-}: {
-  savia: PluginApi;
-  initialTab: QuoteTab;
-}) {
-  const [tab, setTab] = useState<QuoteTab>(initialTab);
-  const Active = TABS.find((t) => t.id === tab)!.Screen;
+type QuoteTab = (typeof TABS)[number]["id"];
+
+function Shell({ savia }: { savia: PluginApi }) {
+  const [tab, setTab] = useState<QuoteTab>("wizard");
   return (
-    <div>
-      <nav aria-label="Cotizador">
+    <div className="store-quote">
+      <nav className="store-quote__tabs" aria-label="Cotizador">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -49,21 +36,18 @@ function Shell({
           </button>
         ))}
       </nav>
-      <Active savia={savia} />
+      {tab === "admin" ? (
+        <InsurancePackageAdminScreen savia={savia} showScreenToggles={false} />
+      ) : (
+        <InsuranceQuoteWizardScreen savia={savia} />
+      )}
     </div>
   );
 }
 
 /**
- * Adaptador del store: las 3 pantallas del cotizador con ejecución
- * nativa savia-request del host (sin delegación al release).
+ * Store adapter for the quote wizard and its inline configuration.
  */
-export function render(
-  el: HTMLElement,
-  savia: PluginApi,
-  screen?: { object: string; view: string },
-) {
-  createRoot(el).render(
-    <Shell savia={savia} initialTab={quoteTabForScreen(screen?.object)} />,
-  );
+export function render(el: HTMLElement, savia: PluginApi) {
+  createRoot(el).render(<Shell savia={savia} />);
 }

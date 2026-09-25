@@ -1,0 +1,346 @@
+{
+  "format": "savia.solution",
+  "formatVersion": 1,
+  "id": "savia.insurance-quoter",
+  "version": "1.0.0",
+  "label": "Cotizador",
+  "description": "Cotizador de autos por pasos con historial de cotizaciones. Los proveedores se configuran por separado.",
+  "requires": ["insurance.quotes"],
+  "objects": [
+    {
+      "name": "cotizaciones",
+      "label": "Cotizaciones",
+      "description": "Solicitudes y propuestas de seguro.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Nombre",
+            "required": true,
+            "labels": {
+              "en": "Name",
+              "pt": "Nome"
+            }
+          },
+          "cliente": {
+            "type": "Textbox",
+            "label": "Cliente",
+            "labels": {
+              "en": "Customer",
+              "pt": "Cliente"
+            }
+          },
+          "aseguradora": {
+            "type": "Textbox",
+            "label": "Aseguradora",
+            "labels": {
+              "en": "Insurer",
+              "pt": "Seguradora"
+            }
+          },
+          "ramo": {
+            "type": "Textbox",
+            "label": "Ramo",
+            "labels": {
+              "en": "Insurance line",
+              "pt": "Ramo"
+            }
+          },
+          "placa": {
+            "type": "Textbox",
+            "label": "Placa",
+            "labels": {
+              "en": "Plate",
+              "pt": "Placa"
+            }
+          },
+          "valor_asegurado": {
+            "type": "Number",
+            "label": "Valor asegurado",
+            "config": {
+              "format": "currency"
+            },
+            "labels": {
+              "en": "Insured value",
+              "pt": "Valor segurado"
+            }
+          },
+          "prima": {
+            "type": "Number",
+            "label": "Prima",
+            "config": {
+              "format": "currency"
+            },
+            "labels": {
+              "en": "Premium",
+              "pt": "Prêmio"
+            }
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Borrador",
+                "value": "Borrador",
+                "labels": {
+                  "en": "Draft",
+                  "pt": "Rascunho"
+                }
+              },
+              {
+                "label": "Solicitada",
+                "value": "Solicitada",
+                "labels": {
+                  "en": "Requested",
+                  "pt": "Solicitada"
+                }
+              },
+              {
+                "label": "Recibida",
+                "value": "Recibida",
+                "labels": {
+                  "en": "Received",
+                  "pt": "Recebida"
+                }
+              },
+              {
+                "label": "Aceptada",
+                "value": "Aceptada",
+                "labels": {
+                  "en": "Accepted",
+                  "pt": "Aceita"
+                }
+              },
+              {
+                "label": "Rechazada",
+                "value": "Rechazada",
+                "labels": {
+                  "en": "Rejected",
+                  "pt": "Rejeitada"
+                }
+              }
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
+          }
+        },
+        "fieldOrder": [
+          "name",
+          "cliente",
+          "aseguradora",
+          "placa",
+          "ramo",
+          "valor_asegurado",
+          "prima",
+          "estado"
+        ],
+        "studio": {
+          "screen": {
+            "hidden": true,
+            "icon": "file-text"
+          }
+        }
+      },
+      "labels": {
+        "en": "Quotes",
+        "pt": "Cotações"
+      },
+      "descriptions": {
+        "en": "Insurance requests and proposals.",
+        "pt": "Solicitações e propostas de seguro."
+      }
+    },
+    {
+      "name": "cotizaciones_detalle",
+      "label": "Detalles de cotización",
+      "description": "Propuestas y respuestas individuales por aseguradora y producto.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "name": {
+            "type": "Textbox",
+            "label": "Referencia",
+            "required": true,
+            "labels": {
+              "en": "Reference",
+              "pt": "Referência"
+            }
+          },
+          "cotizacion": {
+            "type": "Dropdown",
+            "label": "Cotización",
+            "options": [],
+            "config": {
+              "relation": "cotizaciones"
+            },
+            "labels": {
+              "en": "Quote",
+              "pt": "Cotação"
+            }
+          },
+          "aseguradora": {
+            "type": "Textbox",
+            "label": "Aseguradora",
+            "labels": {
+              "en": "Insurer",
+              "pt": "Seguradora"
+            }
+          },
+          "producto": {
+            "type": "Textbox",
+            "label": "Producto",
+            "labels": {
+              "en": "Product",
+              "pt": "Produto"
+            }
+          },
+          "flow_id": {
+            "type": "Textbox",
+            "label": "Flow ID"
+          },
+          "estado": {
+            "type": "Dropdown",
+            "label": "Estado",
+            "options": [
+              {
+                "label": "Solicitada",
+                "value": "Solicitada",
+                "labels": {
+                  "en": "Requested",
+                  "pt": "Solicitada"
+                }
+              },
+              {
+                "label": "Recibida",
+                "value": "Recibida",
+                "labels": {
+                  "en": "Received",
+                  "pt": "Recebida"
+                }
+              },
+              {
+                "label": "Error",
+                "value": "Error",
+                "labels": {
+                  "en": "Error",
+                  "pt": "Erro"
+                }
+              }
+            ],
+            "labels": {
+              "en": "Status",
+              "pt": "Status"
+            }
+          },
+          "prima": {
+            "type": "Number",
+            "label": "Prima",
+            "config": {
+              "format": "currency"
+            },
+            "labels": {
+              "en": "Premium",
+              "pt": "Prêmio"
+            }
+          },
+          "numero_cotizacion": {
+            "type": "Textbox",
+            "label": "Número de cotización",
+            "labels": {
+              "en": "Quote number",
+              "pt": "Número da cotação"
+            }
+          },
+          "error_mensaje": {
+            "type": "Textarea",
+            "label": "Mensaje de error",
+            "labels": {
+              "en": "Error message",
+              "pt": "Mensagem de erro"
+            }
+          },
+          "run_id": {
+            "type": "Textbox",
+            "label": "ID de ejecución",
+            "labels": {
+              "en": "Run ID",
+              "pt": "ID de execução"
+            }
+          }
+        },
+        "fieldOrder": [
+          "name",
+          "cotizacion",
+          "aseguradora",
+          "producto",
+          "flow_id",
+          "estado",
+          "prima",
+          "numero_cotizacion",
+          "error_mensaje",
+          "run_id"
+        ],
+        "studio": {
+          "screen": {
+            "hidden": true,
+            "icon": "files"
+          }
+        }
+      },
+      "labels": {
+        "en": "Quote details",
+        "pt": "Detalhes da cotação"
+      },
+      "descriptions": {
+        "en": "Individual proposals and responses per insurer and product.",
+        "pt": "Propostas e respostas individuais por seguradora e produto."
+      }
+    },
+    {
+      "name": "cotizador_por_pasos",
+      "label": "Cotizador por pasos",
+      "description": "Cotiza seguros guiando el proceso paso a paso.",
+      "config": {
+        "version": 2,
+        "fields": {
+          "extension_surface": {
+            "type": "Textbox",
+            "label": "Superficie de extensión",
+            "hidden": true,
+            "labels": {
+              "en": "Extension surface",
+              "pt": "Superfície da extensão"
+            }
+          }
+        },
+        "studio": {
+          "screen": {
+            "section": "operation",
+            "icon": "list-ordered"
+          }
+        },
+        "fieldOrder": ["extension_surface"]
+      },
+      "labels": {
+        "en": "Step-by-step quote tool",
+        "pt": "Cotador por etapas"
+      },
+      "descriptions": {
+        "en": "Quotes insurance through guided steps.",
+        "pt": "Cota seguros guiando o processo passo a passo."
+      }
+    }
+  ],
+  "labels": {
+    "en": "Quote wizard",
+    "pt": "Cotador"
+  },
+  "descriptions": {
+    "en": "Step-by-step auto quote wizard with quote history. Providers are configured separately.",
+    "pt": "Cotador de automóveis por etapas com histórico de cotações. Os provedores são configurados separadamente."
+  }
+}

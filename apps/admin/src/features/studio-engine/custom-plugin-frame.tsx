@@ -4,12 +4,27 @@ import { getStudioRuntime } from "./runtime";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
-  type: "request";
+  type: "request" | "ready";
   id: string;
   path: string;
   method?: string;
   body?: unknown;
 };
+
+const THEME_VARIABLES = [
+  "--background",
+  "--foreground",
+  "--card",
+  "--border",
+  "--input",
+  "--muted",
+  "--muted-foreground",
+  "--primary",
+  "--primary-foreground",
+  "--accent",
+  "--destructive",
+  "--ring",
+] as const;
 
 /**
  * Rutas que un plugin del store puede pedir al host. Todo lo demás
@@ -44,7 +59,9 @@ export function CustomPluginFrame({
   title,
   src,
   screen,
-  heightClassName = "h-[480px]",
+  heightClassName = screen
+    ? "h-[calc(100dvh-7rem)] min-h-[32rem]"
+    : "h-[480px]",
 }: {
   pluginId: string;
   title: string;
@@ -61,10 +78,31 @@ export function CustomPluginFrame({
     : shellPath;
 
   useEffect(() => {
+    function sendTheme() {
+      const host = getComputedStyle(document.documentElement);
+      frameRef.current?.contentWindow?.postMessage(
+        {
+          ns: "savia-plugin",
+          type: "theme",
+          vars: Object.fromEntries(
+            THEME_VARIABLES.map((name) => [
+              name,
+              host.getPropertyValue(name).trim(),
+            ]),
+          ),
+          dark: document.documentElement.classList.contains("dark"),
+        },
+        "*",
+      );
+    }
     async function onMessage(event: MessageEvent) {
       if (event.source !== frameRef.current?.contentWindow) return;
       const message = event.data as Partial<PluginFrameRequest>;
       if (!message || message.ns !== "savia-plugin") return;
+      if (message.type === "ready") {
+        sendTheme();
+        return;
+      }
       if (message.type !== "request" || typeof message.id !== "string") return;
       if (typeof message.path !== "string" || !isAllowed(message.path)) {
         frameRef.current?.contentWindow?.postMessage(
@@ -113,7 +151,15 @@ export function CustomPluginFrame({
       }
     }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    const observer = new MutationObserver(sendTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style", "data-color-theme"],
+    });
+    return () => {
+      window.removeEventListener("message", onMessage);
+      observer.disconnect();
+    };
   }, []);
 
   return (

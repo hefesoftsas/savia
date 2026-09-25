@@ -26,10 +26,10 @@ describe("release catalog", () => {
     expect(releaseCatalog.assistantExtensions).toEqual([]);
   });
 
-  it("keeps the data-only insurance solution catalog", () => {
+  it("keeps the independent data-only insurance solution catalog", () => {
     expect(
       releaseCatalog.solutionCatalog.map((solution) => solution.id),
-    ).toEqual(["savia.insurance"]);
+    ).toEqual(["savia.insurance-quoter", "savia.insurance-management"]);
   });
 
   it("keeps industry names outside the platform hosts", async () => {

@@ -72,7 +72,7 @@ async function main() {
   console.log(`Seed plan for ${origin}:`);
   console.log(`  1. sign in as ${email}`);
   console.log(`  2. create tenant ${DEMO_TENANT.idSlug}`);
-  console.log(`  3. bootstrap + install savia.insurance`);
+  console.log(`  3. bootstrap + install savia.insurance-management`);
   console.log(`  4. create ${DEMO_CUSTOMERS.length} sample clientes`);
   if (dryRun) return;
 
@@ -100,12 +100,14 @@ async function main() {
   await api(origin, cookie, `${base}/bootstrap`);
   const catalog = await api(origin, cookie, `${base}/solutions`);
   const manifest = (catalog?.data ?? []).find(
-    (entry) => entry?.manifest?.id === "savia.insurance",
+    (entry) => entry?.manifest?.id === "savia.insurance-management",
   )?.manifest;
   if (!manifest)
-    throw new Error("savia.insurance not found in solutions catalog");
+    throw new Error(
+      "savia.insurance-management not found in solutions catalog",
+    );
   await api(origin, cookie, `${base}/solutions/install`, manifest);
-  console.log("installed savia.insurance");
+  console.log("installed savia.insurance-management");
 
   for (const customer of DEMO_CUSTOMERS) {
     await api(origin, cookie, `${base}/records/clientes`, customer);

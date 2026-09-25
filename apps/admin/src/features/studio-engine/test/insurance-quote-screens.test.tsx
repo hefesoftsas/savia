@@ -8,6 +8,18 @@ import { storePortScreens } from "@savia/release-catalog/test-fixtures";
 
 afterEach(cleanup);
 
+it("keeps standalone quote configuration focused on products", async () => {
+  const { savia } = quoteScreenApi();
+  const AdminScreen = quoteScreen("administrar_seguros");
+  render(<AdminScreen savia={savia} showScreenToggles={false} />);
+  expect(
+    await screen.findByRole("region", { name: "Productos" }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("region", { name: "Disponibilidad del paquete" }),
+  ).not.toBeInTheDocument();
+});
+
 function quoteScreenApi(
   options: {
     connections?: unknown[];

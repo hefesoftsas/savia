@@ -192,6 +192,10 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      "^/s/": {
+        target: "http://127.0.0.1:8787",
+        changeOrigin: true,
+      },
       "/.well-known": {
         target: "http://127.0.0.1:8787",
         changeOrigin: true,
