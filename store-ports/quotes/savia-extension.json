@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.quotes",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "label": "Cotizaciones de seguros",
   "description": "Conecta proveedores de seguros para solicitar cotizaciones.",
   "labels": {

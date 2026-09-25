@@ -572,6 +572,10 @@ export function InsuranceQuoteWizard({
   const [historicalBatchItems, setHistoricalBatchItems] = useState<
     QuoteBatchItem[] | null
   >(null);
+  const [resumeQuote, setResumeQuote] = useState<{
+    summary: HistoricalQuoteSummary;
+    items: QuoteBatchItem[];
+  } | null>(null);
 
   const products = useMemo(
     () =>
@@ -609,6 +613,7 @@ export function InsuranceQuoteWizard({
         const parsed: HistoricalQuoteSummary[] = records.map((r) => ({
           id: String(r.id),
           name: String(r.name || r.id),
+          version: recordVersion(r),
           placa: typeof r.placa === "string" ? r.placa : undefined,
           ramo: typeof r.ramo === "string" ? r.ramo : undefined,
           valor_asegurado:
@@ -635,9 +640,11 @@ export function InsuranceQuoteWizard({
     if (!quoteId || quoteId === "current") {
       setSelectedHistoryQuoteId(null);
       setHistoricalBatchItems(null);
+      setResumeQuote(null);
       return;
     }
     setSelectedHistoryQuoteId(quoteId);
+    setResumeQuote(null);
     setHistoricalBatchItems(null);
     try {
       const detailColl = savia.collections?.collection?.(
@@ -936,7 +943,8 @@ export function InsuranceQuoteWizard({
     setProductErrors([]);
     setNotice("");
 
-    const ref = generateQuoteReference();
+    const resuming = resumeQuote;
+    const ref = resuming?.summary.name ?? generateQuoteReference();
     setQuoteReference(ref);
 
     // Guarda el solicitante en la colección CRM configurada (no bloquea).
@@ -952,30 +960,36 @@ export function InsuranceQuoteWizard({
       // Non-blocking fallback
     }
 
-    let createdMasterId: string | null = null;
-    let createdMasterVersion: number | undefined;
-    try {
-      const cotizaciones = savia.collections?.collection?.("cotizaciones");
-      if (cotizaciones?.create) {
-        const master = await cotizaciones.create({
-          name: ref,
-          ramo: "Automóviles",
-          placa: values.vehicle.plate || undefined,
-          valor_asegurado: values.vehicle.declaredValue
-            ? Number(values.vehicle.declaredValue)
-            : undefined,
-          estado: "Solicitada",
-          ...(quoteClientId ? { cliente: quoteClientId } : {}),
-        });
-        if (master && typeof master === "object" && "id" in master) {
-          createdMasterId = String(master.id);
-          createdMasterVersion = recordVersion(master);
-          setMasterQuoteId(createdMasterId);
-          setMasterQuoteVersion(createdMasterVersion);
+    let createdMasterId: string | null = resuming?.summary.id ?? null;
+    let createdMasterVersion: number | undefined = resuming?.summary.version;
+    if (resuming) {
+      setMasterQuoteId(createdMasterId);
+      setMasterQuoteVersion(createdMasterVersion);
+    }
+    if (!resuming) {
+      try {
+        const cotizaciones = savia.collections?.collection?.("cotizaciones");
+        if (cotizaciones?.create) {
+          const master = await cotizaciones.create({
+            name: ref,
+            ramo: "Automóviles",
+            placa: values.vehicle.plate || undefined,
+            valor_asegurado: values.vehicle.declaredValue
+              ? Number(values.vehicle.declaredValue)
+              : undefined,
+            estado: "Solicitada",
+            ...(quoteClientId ? { cliente: quoteClientId } : {}),
+          });
+          if (master && typeof master === "object" && "id" in master) {
+            createdMasterId = String(master.id);
+            createdMasterVersion = recordVersion(master);
+            setMasterQuoteId(createdMasterId);
+            setMasterQuoteVersion(createdMasterVersion);
+          }
         }
+      } catch {
+        // The provider responses remain usable even if CRM persistence fails.
       }
-    } catch {
-      // The provider responses remain usable even if CRM persistence fails.
     }
     if (!createdMasterId) {
       setNotice(
@@ -987,6 +1001,19 @@ export function InsuranceQuoteWizard({
       string,
       { id: string; version: number | undefined } | undefined
     > = {};
+    if (resuming) {
+      for (const product of selected) {
+        const saved = resuming.items.find(
+          (item) => item.flowId === product.flowId && item.detailId,
+        );
+        if (saved?.detailId) {
+          details[product.id] = {
+            id: saved.detailId,
+            version: saved.detailVersion,
+          };
+        }
+      }
+    }
     try {
       const cotizacionesDetalle = savia.collections?.collection?.(
         "cotizaciones_detalle",
@@ -994,6 +1021,7 @@ export function InsuranceQuoteWizard({
       if (cotizacionesDetalle?.create) {
         await Promise.all(
           selected.map(async (product) => {
+            if (details[product.id]) return;
             try {
               const rec = await cotizacionesDetalle.create({
                 name: `${ref}-${product.id}`,
@@ -1019,17 +1047,22 @@ export function InsuranceQuoteWizard({
       // Non-blocking fallback
     }
 
-    const initialItems: QuoteBatchItem[] = selected.map((product) => ({
-      productId: product.id,
-      flowId: product.flowId,
-      label: product.label,
-      provider: product.label.split(" · ")[0] ?? "Seguros",
-      status: "pending",
-      detailId: details[product.id]?.id,
-      detailVersion: details[product.id]?.version,
-    }));
+    const initialItems: QuoteBatchItem[] = [
+      ...(resuming?.items.filter((item) => item.status === "succeeded") ?? []),
+      ...selected.map((product) => ({
+        productId: product.id,
+        flowId: product.flowId,
+        label: product.label,
+        provider: product.label.split(" · ")[0] ?? "Seguros",
+        status: "pending" as const,
+        detailId: details[product.id]?.id,
+        detailVersion: details[product.id]?.version,
+      })),
+    ];
 
     setBatchItems(initialItems);
+    setSelectedHistoryQuoteId(null);
+    setResumeQuote(null);
     setSurface("results");
 
     try {
@@ -1615,9 +1648,52 @@ export function InsuranceQuoteWizard({
               : (masterQuoteId ?? undefined)
           }
           onGoToForm={() => {
+            setResumeQuote(null);
             setSurface("form");
             setActiveStep(0);
           }}
+          onResumeHistoryQuote={
+            selectedHistoryQuoteId && historicalBatchItems
+              ? () => {
+                  const summary = historyQuotes.find(
+                    (item) => item.id === selectedHistoryQuoteId,
+                  );
+                  if (!summary) return;
+                  setResumeQuote({
+                    summary,
+                    items: historicalBatchItems,
+                  });
+                  setSelectedProducts(
+                    products
+                      .filter((product) =>
+                        historicalBatchItems.some(
+                          (item) =>
+                            item.flowId === product.flowId &&
+                            item.status !== "succeeded",
+                        ),
+                      )
+                      .map((product) => product.id),
+                  );
+                  setValues((current) => ({
+                    ...current,
+                    vehicle: {
+                      ...current.vehicle,
+                      plate: summary.placa ?? "",
+                      declaredValue:
+                        summary.valor_asegurado === undefined
+                          ? ""
+                          : String(summary.valor_asegurado),
+                    },
+                  }));
+                  setSelectedHistoryQuoteId(null);
+                  setSurface("form");
+                  setActiveStep(0);
+                  setNotice(
+                    "Completa los datos faltantes para reintentar la cotización guardada.",
+                  );
+                }
+              : undefined
+          }
           onRetryAll={selectedHistoryQuoteId ? undefined : retryAllFailed}
           onRetrySingle={selectedHistoryQuoteId ? undefined : retrySingle}
           onSelectHistoryQuote={handleSelectHistoryQuote}

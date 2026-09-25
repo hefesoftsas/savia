@@ -84,6 +84,7 @@ export type VehicleInfo = {
 export type HistoricalQuoteSummary = {
   id: string;
   name: string;
+  version?: number;
   placa?: string;
   ramo?: string;
   valor_asegurado?: number;
@@ -108,6 +109,7 @@ export function QuoteResults({
   onSelectHistoryQuote,
   hasSelectedQuote,
   onGoToForm,
+  onResumeHistoryQuote,
   showHistorySelector = false,
   planCatalog = false,
   hidePdfDownload = false,
@@ -127,6 +129,7 @@ export function QuoteResults({
   onSelectHistoryQuote?: (quoteId: string | null) => void;
   hasSelectedQuote?: boolean;
   onGoToForm?: () => void;
+  onResumeHistoryQuote?: () => void;
   showHistorySelector?: boolean;
   /**
    * Enrich non-simulated quotes with static plan-catalog data (badges,
@@ -576,6 +579,16 @@ export function QuoteResults({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {selectedHistoryQuoteId && onResumeHistoryQuote && failedCount > 0 ? (
+        <button
+          className="insurance-comparator__btn insurance-comparator__btn--primary"
+          type="button"
+          onClick={onResumeHistoryQuote}
+        >
+          {t("Reintentar esta cotización")}
+        </button>
       ) : null}
 
       {/* 1. MASTER QUOTE HEADER & VEHICLE CONTEXT (Only if quote is active) */}
