@@ -124,7 +124,13 @@ it("keeps public links bound to the installed ZIP after a newer upload", async (
   expect(snapshot).toMatchObject({
     extensionVersion: quoteStoreManifest.version,
   });
-  const uploadedManifest = { ...quoteStoreManifest, version: "2.0.2" };
+  const [major, minor, patch] = quoteStoreManifest.version
+    .split(".")
+    .map(Number);
+  const uploadedManifest = {
+    ...quoteStoreManifest,
+    version: `${major}.${minor}.${patch + 1}`,
+  };
   await env.DB.prepare(
     "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
   )
