@@ -270,6 +270,22 @@
               "en": "Run ID",
               "pt": "ID de execução"
             }
+          },
+          "resultado_snapshot": {
+            "type": "Textarea",
+            "label": "Snapshot del resultado",
+            "labels": {
+              "en": "Result snapshot",
+              "pt": "Snapshot do resultado"
+            }
+          },
+          "duracion_ms": {
+            "type": "Number",
+            "label": "Duración (ms)",
+            "labels": {
+              "en": "Duration (ms)",
+              "pt": "Duração (ms)"
+            }
           }
         },
         "fieldOrder": [
@@ -282,7 +298,9 @@
           "prima",
           "numero_cotizacion",
           "error_mensaje",
-          "run_id"
+          "run_id",
+          "resultado_snapshot",
+          "duracion_ms"
         ],
         "studio": {
           "screen": {

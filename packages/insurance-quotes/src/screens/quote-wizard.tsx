@@ -1,10 +1,6 @@
 import { InsuranceNotice } from "../notice";
 import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
-import {
-  pluginIntlLocale,
-  type PluginLocale,
-  type PluginMessageParams,
-} from "@savia/studio-shared/plugin-localization";
+import { pluginIntlLocale, type PluginLocale, type PluginMessageParams } from "@savia/studio-shared/plugin-localization";
 import { insuranceMessage } from "../messages";
 import { useInsuranceMessages } from "../localization";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +23,16 @@ import {
   type QuoteBatchItem,
   type HistoricalQuoteSummary,
 } from "./quote-results";
+import {
+  deleteQuoteHistory,
+  fetchDetailsForQuote,
+  mapDetailToBatchItem,
+} from "../quote-history";
+import {
+  buildResultSnapshot,
+  serializeSnapshot,
+} from "../quote-snapshot";
+import { toUnifiedComparisonQuote } from "./unified-quote-model";
 import {
   applyVehicleLookup,
   defaultQuoteFormValues,
@@ -131,22 +137,6 @@ function extractQuoteData(output: unknown): {
   return { quoteNumber, premium };
 }
 
-function storedNumber(value: unknown): number | undefined {
-  const numeric =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && value.trim()
-        ? Number(value)
-        : Number.NaN;
-  return Number.isFinite(numeric) ? numeric : undefined;
-}
-
-function storedText(value: unknown): string | undefined {
-  if (typeof value === "string" && value.trim()) return value;
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return undefined;
-}
-
 function recordVersion(value: unknown): number | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -155,41 +145,6 @@ function recordVersion(value: unknown): number | undefined {
   return typeof version === "number" && Number.isInteger(version) && version > 0
     ? version
     : undefined;
-}
-
-function detailStatus(
-  value: unknown,
-  quoteNumber: string | undefined,
-  premium: number | undefined,
-): QuoteBatchItem["status"] {
-  const normalized =
-    typeof value === "string" ? value.trim().toLocaleLowerCase("es-CO") : "";
-  if (
-    ["error", "fallida", "fallido", "rechazada", "rechazado"].includes(
-      normalized,
-    )
-  ) {
-    return "failed";
-  }
-  if (
-    [
-      "recibida",
-      "recibido",
-      "cotizada",
-      "cotizado",
-      "completada",
-      "completado",
-      "exitosa",
-      "exitoso",
-      "success",
-      "succeeded",
-    ].includes(normalized) ||
-    quoteNumber ||
-    (premium !== undefined && premium > 0)
-  ) {
-    return "succeeded";
-  }
-  return "pending";
 }
 
 function calculateAge(dateStr: string): number | null {
@@ -397,14 +352,13 @@ function CitySelectorField({
         aria-hidden="true"
         className="insurance-spinner insurance-spinner--xs"
       />{" "}
-      {t("Consultando…")}{" "}
-    </span>
+       {t("Consultando…")} </span>
   ) : resolvedCity ? (
     <span
       className="insurance-field-synced"
-      title={t("Código DANE: %{p0}", { p0: resolvedCity.code })}
+      title={t("Código DANE: %{p0}", {p0: resolvedCity.code})}
     >
-      {t("✓ DANE:")} {resolvedCity.code}
+       {t("✓ DANE:")} {resolvedCity.code}
     </span>
   ) : undefined;
 
@@ -577,6 +531,14 @@ export function InsuranceQuoteWizard({
   const [historicalBatchItems, setHistoricalBatchItems] = useState<
     QuoteBatchItem[] | null
   >(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [deletingHistory, setDeletingHistory] = useState(false);
+  const [quoteTimings, setQuoteTimings] = useState<{
+    setupMs?: number;
+    crmMs?: number;
+    products?: Record<string, number>;
+  } | null>(null);
   const [resumeQuote, setResumeQuote] = useState<{
     summary: HistoricalQuoteSummary;
     items: QuoteBatchItem[];
@@ -645,83 +607,86 @@ export function InsuranceQuoteWizard({
     if (!quoteId || quoteId === "current") {
       setSelectedHistoryQuoteId(null);
       setHistoricalBatchItems(null);
+      setHistoryError(null);
       setResumeQuote(null);
       return;
     }
+    // Solo lecturas: nunca invoca acciones de cotización ni lookups.
     setSelectedHistoryQuoteId(quoteId);
     setResumeQuote(null);
     setHistoricalBatchItems(null);
+    setHistoryError(null);
+    setHistoryLoading(true);
     try {
       const detailColl = savia.collections?.collection?.(
         "cotizaciones_detalle",
       );
-      if (detailColl?.list) {
+      if (detailColl) {
         const quoteReference = historyQuotes.find(
           (quote) => quote.id === quoteId,
         )?.name;
-        const res = await detailColl.list({
-          filters: {
-            logic: "or",
-            conditions: [
-              { field: "cotizacion", op: "eq", value: quoteId },
-              ...(quoteReference && quoteReference !== quoteId
-                ? [
-                    {
-                      field: "cotizacion",
-                      op: "eq" as const,
-                      value: quoteReference,
-                    },
-                  ]
-                : []),
-            ],
-          },
-          perPage: 100,
-        });
-        const items = (res?.data ?? []) as Array<Record<string, unknown>>;
-        const filtered = items.filter(
-          (detail) =>
-            detail.cotizacion === quoteId ||
-            detail.cotizacion === quoteReference,
+        const details = await fetchDetailsForQuote(
+          detailColl as unknown as Parameters<typeof fetchDetailsForQuote>[0],
+          quoteId,
+          quoteReference,
         );
-        const mapped: QuoteBatchItem[] = filtered.map((d) => {
-          const quoteNumber = storedText(d.numero_cotizacion);
-          const premium = storedNumber(d.prima);
-          const recordedStatus = detailStatus(d.estado, quoteNumber, premium);
-          const updatedAt =
-            typeof d.updated_at === "string"
-              ? Date.parse(d.updated_at)
-              : typeof d.created_at === "string"
-                ? Date.parse(d.created_at)
-                : NaN;
-          const stale =
-            recordedStatus === "pending" &&
-            Number.isFinite(updatedAt) &&
-            Date.now() - updatedAt > 5 * 60_000;
-          return {
-            productId: String(d.producto || d.id),
-            flowId: String(d.flow_id || d.producto || d.id),
-            label: String(d.producto || d.name || "Póliza"),
-            provider: String(d.aseguradora || "Aseguradora"),
-            status: stale ? "failed" : recordedStatus,
-            error: stale
-              ? t("La ejecución no se completó.")
-              : typeof d.error_mensaje === "string"
-                ? d.error_mensaje
-                : undefined,
-            detailId: String(d.id),
-            detailVersion: recordVersion(d),
-            runId: storedText(d.run_id),
-            quoteNumber,
-            premium,
-          };
-        });
+        const mapped: QuoteBatchItem[] = details.map((d) =>
+          mapDetailToBatchItem(
+            d,
+            t("La ejecución no se completó."),
+          ),
+        );
         setHistoricalBatchItems(mapped);
+      } else {
+        setHistoricalBatchItems([]);
       }
     } catch {
-      setHistoricalBatchItems([]);
-      setNotice(
-        "No se pudo cargar la cotización guardada. Inténtalo de nuevo.",
+      // No presentar un resultado vacío como carga exitosa.
+      setHistoricalBatchItems(null);
+      setHistoryError(t("No se pudo cargar la cotización guardada. Inténtalo de nuevo."));
+      setNotice(t("No se pudo cargar la cotización guardada. Inténtalo de nuevo."));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleDeleteHistoryQuote = async (quoteId: string) => {
+    if (deletingHistory) return;
+    const summary = historyQuotes.find((quote) => quote.id === quoteId);
+    if (!summary) return;
+    setDeletingHistory(true);
+    try {
+      const detailColl = savia.collections?.collection?.("cotizaciones_detalle");
+      const masterColl = savia.collections?.collection?.("cotizaciones");
+      if (!detailColl || !masterColl) {
+        setNotice(t("No se pudo eliminar la cotización guardada."));
+        return;
+      }
+      const result = await deleteQuoteHistory(
+        detailColl as unknown as Parameters<typeof deleteQuoteHistory>[0],
+        masterColl as unknown as Parameters<typeof deleteQuoteHistory>[1],
+        quoteId,
+        summary.version,
+        summary.name,
       );
+      if (!result.ok) {
+        // Si falla un hijo, se conserva el master para recuperación.
+        setNotice(
+          t("No se pudo eliminar la cotización guardada. Inténtalo de nuevo."),
+        );
+        return;
+      }
+      await refreshHistoricalQuotes();
+      if (selectedHistoryQuoteId === quoteId) {
+        setSelectedHistoryQuoteId(null);
+        setHistoricalBatchItems(null);
+        setHistoryError(null);
+        setResumeQuote(null);
+      }
+    } catch {
+      setNotice(t("No se pudo eliminar la cotización guardada."));
+    } finally {
+      setDeletingHistory(false);
     }
   };
 
@@ -958,23 +923,42 @@ export function InsuranceQuoteWizard({
     setQuoting(true);
     setProductErrors([]);
     setNotice("");
+    setQuoteTimings(null);
 
     const resuming = resumeQuote;
     const ref = resuming?.summary.name ?? generateQuoteReference();
     setQuoteReference(ref);
 
-    // Guarda el solicitante en la colección CRM configurada (no bloquea).
+    // CRM no bloqueante: arranca en paralelo y nunca retrasa los flujos.
+    // Se resuelve por consulta filtrada server-side; si no se resuelve
+    // pronto, la cotización continúa y el fallo queda visible.
+    const setupStart = Date.now();
+    const crmStart = Date.now();
+    let crmMs: number | undefined;
+    const clientPromise = (async () => {
+      try {
+        const upserted = await upsertQuoteClient(
+          savia,
+          settings,
+          values.applicant,
+        );
+        crmMs = Date.now() - crmStart;
+        return upserted;
+      } catch {
+        crmMs = Date.now() - crmStart;
+        return null;
+      }
+    })();
+    // Timeout de seguridad: si el CRM tarda (escaneo grande), no bloquea.
+    const clientTimeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), 4000);
+    });
     let quoteClientId: string | null = null;
-    try {
-      const upserted = await upsertQuoteClient(
-        savia,
-        settings,
-        values.applicant,
-      );
-      if (upserted) quoteClientId = upserted.id;
-    } catch {
-      // Non-blocking fallback
-    }
+    let crmFailed = false;
+    // No esperamos al CRM antes de crear el master: el master se crea de
+    // inmediato y el vínculo `cliente` se adjunta cuando el CRM responda.
+    const earlyClient = await Promise.race([clientPromise, clientTimeout]);
+    if (earlyClient) quoteClientId = earlyClient.id;
 
     let createdMasterId: string | null = resuming?.summary.id ?? null;
     let createdMasterVersion: number | undefined = resuming?.summary.version;
@@ -1007,6 +991,32 @@ export function InsuranceQuoteWizard({
         // The provider responses remain usable even if CRM persistence fails.
       }
     }
+    // Si el CRM responde tarde, adjunta el cliente sin bloquear los flujos.
+    void clientPromise.then(async (upserted) => {
+      if (!upserted) {
+        crmFailed = true;
+        return;
+      }
+      quoteClientId = upserted.id;
+      if (createdMasterId && createdMasterVersion !== undefined && !resuming) {
+        try {
+          const patched = await savia.collections
+            ?.collection?.("cotizaciones")
+            ?.update?.(
+              createdMasterId,
+              { cliente: upserted.id },
+              { version: createdMasterVersion },
+            );
+          const nextVersion = recordVersion(patched);
+          if (nextVersion !== undefined) {
+            createdMasterVersion = nextVersion;
+            setMasterQuoteVersion(nextVersion);
+          }
+        } catch {
+          // El vínculo CRM es accesorio: no bloquea la cotización.
+        }
+      }
+    });
     if (!createdMasterId) {
       setNotice(
         "No se pudo guardar la cotización en el historial. Puedes consultar las ofertas recibidas en esta pantalla.",
@@ -1062,6 +1072,8 @@ export function InsuranceQuoteWizard({
     } catch {
       // Non-blocking fallback
     }
+    const setupMs = Date.now() - setupStart;
+    setQuoteTimings((current) => ({ ...(current ?? {}), setupMs }));
 
     const initialItems: QuoteBatchItem[] = [
       ...(resuming?.items.filter((item) => item.status === "succeeded") ?? []),
@@ -1092,6 +1104,7 @@ export function InsuranceQuoteWizard({
         const detailId = detail?.id;
         let detailVersion = detail?.version;
         const provider = product.label.split(" · ")[0] ?? "Seguros";
+        const productStart = Date.now();
 
         try {
           const response = await savia.actions.execute<{
@@ -1107,8 +1120,54 @@ export function InsuranceQuoteWizard({
             },
           });
 
-          const run = runFromResponse(response.run, response.output);
-          const { quoteNumber, premium } = extractQuoteData(response.output);
+          const run = runFromResponse(
+            response.run,
+            response.output,
+          );
+          const { quoteNumber, premium } = extractQuoteData(
+            response.output,
+          );
+          const durationMs = Date.now() - productStart;
+          setQuoteTimings((current) => ({
+            ...(current ?? {}),
+            products: { ...(current?.products ?? {}), [product.id]: durationMs },
+          }));
+
+          // Snapshot allowlisted para historial sin depender de runs recientes.
+          const provisional: QuoteBatchItem = {
+            productId: product.id,
+            flowId: product.flowId,
+            label: product.label,
+            provider,
+            status: "succeeded",
+            runId: run.runId,
+            detailId,
+            detailVersion,
+            quoteNumber,
+            premium,
+            durationMs,
+          };
+          let snapshotText: string | undefined;
+          try {
+            const unified = toUnifiedComparisonQuote(provisional, run, "es");
+            const snapshot = buildResultSnapshot({
+              provider: unified.provider,
+              productName: unified.productName,
+              premium: unified.premium > 0 ? unified.premium : (premium ?? 0),
+              quoteNumber: unified.quoteNumber ?? quoteNumber,
+              monthlyInstallment: unified.monthlyInstallment,
+              score: unified.score,
+              badges: unified.badges,
+              coverages: unified.coverages,
+              highlights: unified.highlights,
+            });
+            if (snapshot) {
+              provisional.snapshot = snapshot;
+              snapshotText = serializeSnapshot(snapshot);
+            }
+          } catch {
+            // Snapshot accesorio: no bloquea la cotización.
+          }
 
           if (detailId && detailVersion !== undefined) {
             try {
@@ -1122,25 +1181,17 @@ export function InsuranceQuoteWizard({
                     prima: premium,
                     run_id: run.runId,
                     error_mensaje: undefined,
+                    ...(snapshotText ? { resultado_snapshot: snapshotText } : {}),
+                    duracion_ms: durationMs,
                   },
                   { version: detailVersion },
                 );
               detailVersion = recordVersion(updated) ?? detailVersion + 1;
+              provisional.detailVersion = detailVersion;
             } catch {}
           }
 
-          const updatedItem: QuoteBatchItem = {
-            productId: product.id,
-            flowId: product.flowId,
-            label: product.label,
-            provider,
-            status: "succeeded",
-            runId: run.runId,
-            detailId,
-            detailVersion,
-            quoteNumber,
-            premium,
-          };
+          const updatedItem: QuoteBatchItem = provisional;
           itemsMap.set(product.id, updatedItem);
 
           setRuns((current) => [run, ...current]);
@@ -1157,10 +1208,12 @@ export function InsuranceQuoteWizard({
             "El conector no pudo completar la acción.",
           );
           failures.push(`${product.label}: ${err}`);
-          setProductErrors((current) => [
-            ...current,
-            `${product.label}: ${err}`,
-          ]);
+          setProductErrors((current) => [...current, `${product.label}: ${err}`]);
+          const durationMs = Date.now() - productStart;
+          setQuoteTimings((current) => ({
+            ...(current ?? {}),
+            products: { ...(current?.products ?? {}), [product.id]: durationMs },
+          }));
 
           if (detailId && detailVersion !== undefined) {
             try {
@@ -1171,6 +1224,7 @@ export function InsuranceQuoteWizard({
                   {
                     estado: "Error",
                     error_mensaje: err,
+                    duracion_ms: durationMs,
                   },
                   { version: detailVersion },
                 );
@@ -1187,6 +1241,7 @@ export function InsuranceQuoteWizard({
             error: err,
             detailId,
             detailVersion,
+            durationMs,
           };
           itemsMap.set(product.id, updatedItem);
 
@@ -1203,6 +1258,34 @@ export function InsuranceQuoteWizard({
       await Promise.allSettled(quotePromises);
 
       const finalItems = Array.from(itemsMap.values());
+      // CRM: registra el tiempo real aunque haya respondido tarde; si falló,
+      // queda visible sin haber bloqueado los flujos.
+      try {
+        const settled = await Promise.race([
+          clientPromise.then((value) => ({ value })),
+          new Promise<{ value: null }>((resolve) => {
+            setTimeout(() => resolve({ value: null }), 2000);
+          }),
+        ]);
+        if (crmMs === undefined) crmMs = Date.now() - crmStart;
+        setQuoteTimings((current) => ({ ...(current ?? {}), crmMs }));
+        if (!settled.value) {
+          crmFailed = true;
+        } else if (settled.value) {
+          quoteClientId = settled.value.id;
+        }
+      } catch {
+        crmFailed = true;
+        if (crmMs === undefined) {
+          const measured = Date.now() - crmStart;
+          setQuoteTimings((current) => ({ ...(current ?? {}), crmMs: measured }));
+        }
+      }
+      if (crmFailed && createdMasterId) {
+        setNotice(
+          t("La cotización continuó sin guardar el cliente en el CRM. Revisa la colección de clientes."),
+        );
+      }
       if (createdMasterId && createdMasterVersion !== undefined) {
         try {
           const anySuccess = finalItems.some(
@@ -1221,9 +1304,7 @@ export function InsuranceQuoteWizard({
               {
                 estado: anySuccess ? "Recibida" : "Rechazada",
                 ...(bestPremium !== undefined ? { prima: bestPremium } : {}),
-                ...(resuming && quoteClientId
-                  ? { cliente: quoteClientId }
-                  : {}),
+                ...(quoteClientId ? { cliente: quoteClientId } : {}),
               },
               { version: createdMasterVersion },
             );
@@ -1269,6 +1350,7 @@ export function InsuranceQuoteWizard({
       } catch {}
     }
 
+    const retryStart = Date.now();
     try {
       const response = await savia.actions.execute<{
         type?: unknown;
@@ -1284,6 +1366,38 @@ export function InsuranceQuoteWizard({
       });
       const newRun = runFromResponse(response.run, response.output);
       const { quoteNumber, premium } = extractQuoteData(response.output);
+      const durationMs = Date.now() - retryStart;
+
+      let snapshotText: string | undefined;
+      let snapshot: QuoteBatchItem["snapshot"];
+      try {
+        const provisional: QuoteBatchItem = {
+          ...item,
+          status: "succeeded",
+          runId: newRun.runId,
+          quoteNumber,
+          premium,
+          durationMs,
+        };
+        const unified = toUnifiedComparisonQuote(provisional, newRun, "es");
+        const built = buildResultSnapshot({
+          provider: unified.provider,
+          productName: unified.productName,
+          premium: unified.premium > 0 ? unified.premium : (premium ?? 0),
+          quoteNumber: unified.quoteNumber ?? quoteNumber,
+          monthlyInstallment: unified.monthlyInstallment,
+          score: unified.score,
+          badges: unified.badges,
+          coverages: unified.coverages,
+          highlights: unified.highlights,
+        });
+        if (built) {
+          snapshot = built;
+          snapshotText = serializeSnapshot(built);
+        }
+      } catch {
+        // Snapshot accesorio.
+      }
 
       if (item.detailId && detailVersion !== undefined) {
         try {
@@ -1297,6 +1411,8 @@ export function InsuranceQuoteWizard({
                 prima: premium,
                 run_id: newRun.runId,
                 error_mensaje: undefined,
+                ...(snapshotText ? { resultado_snapshot: snapshotText } : {}),
+                duracion_ms: durationMs,
               },
               { version: detailVersion },
             );
@@ -1316,6 +1432,8 @@ export function InsuranceQuoteWizard({
                 quoteNumber,
                 premium,
                 error: undefined,
+                durationMs,
+                ...(snapshot ? { snapshot } : {}),
               }
             : b,
         ),
@@ -1345,6 +1463,7 @@ export function InsuranceQuoteWizard({
         reason,
         "El conector no pudo completar la acción.",
       );
+      const durationMs = Date.now() - retryStart;
       if (item.detailId && detailVersion !== undefined) {
         try {
           const updated = await savia.collections
@@ -1354,6 +1473,7 @@ export function InsuranceQuoteWizard({
               {
                 estado: "Error",
                 error_mensaje: err,
+                duracion_ms: durationMs,
               },
               { version: detailVersion },
             );
@@ -1363,7 +1483,7 @@ export function InsuranceQuoteWizard({
       setBatchItems((current) =>
         current.map((b) =>
           b.productId === productId
-            ? { ...b, status: "failed", error: err, detailVersion }
+            ? { ...b, status: "failed", error: err, detailVersion, durationMs }
             : b,
         ),
       );
@@ -1413,6 +1533,7 @@ export function InsuranceQuoteWizard({
       const retryPromises = failed.map(async (item) => {
         let detailVersion =
           resetDetailVersions.get(item.productId) ?? item.detailVersion;
+        const retryStart = Date.now();
         try {
           const res = await savia.actions.execute<{
             type?: unknown;
@@ -1429,6 +1550,38 @@ export function InsuranceQuoteWizard({
           anySucceeded = true;
           const newRun = runFromResponse(res.run, res.output);
           const { quoteNumber, premium } = extractQuoteData(res.output);
+          const durationMs = Date.now() - retryStart;
+
+          let snapshotText: string | undefined;
+          let snapshot: QuoteBatchItem["snapshot"];
+          try {
+            const provisional: QuoteBatchItem = {
+              ...item,
+              status: "succeeded",
+              runId: newRun.runId,
+              quoteNumber,
+              premium,
+              durationMs,
+            };
+            const unified = toUnifiedComparisonQuote(provisional, newRun, "es");
+            const built = buildResultSnapshot({
+              provider: unified.provider,
+              productName: unified.productName,
+              premium: unified.premium > 0 ? unified.premium : (premium ?? 0),
+              quoteNumber: unified.quoteNumber ?? quoteNumber,
+              monthlyInstallment: unified.monthlyInstallment,
+              score: unified.score,
+              badges: unified.badges,
+              coverages: unified.coverages,
+              highlights: unified.highlights,
+            });
+            if (built) {
+              snapshot = built;
+              snapshotText = serializeSnapshot(built);
+            }
+          } catch {
+            // Snapshot accesorio.
+          }
 
           if (item.detailId && detailVersion !== undefined) {
             try {
@@ -1442,6 +1595,8 @@ export function InsuranceQuoteWizard({
                     prima: premium,
                     run_id: newRun.runId,
                     error_mensaje: undefined,
+                    ...(snapshotText ? { resultado_snapshot: snapshotText } : {}),
+                    duracion_ms: durationMs,
                   },
                   { version: detailVersion },
                 );
@@ -1457,6 +1612,8 @@ export function InsuranceQuoteWizard({
             quoteNumber,
             premium,
             error: undefined,
+            durationMs,
+            ...(snapshot ? { snapshot } : {}),
           };
 
           setRuns((current) => [newRun, ...current]);
@@ -1474,6 +1631,7 @@ export function InsuranceQuoteWizard({
             reason,
             "El conector no pudo completar la acción.",
           );
+          const durationMs = Date.now() - retryStart;
           if (item.detailId && detailVersion !== undefined) {
             try {
               const updated = await savia.collections
@@ -1483,6 +1641,7 @@ export function InsuranceQuoteWizard({
                   {
                     estado: "Error",
                     error_mensaje: err,
+                    duracion_ms: durationMs,
                   },
                   { version: detailVersion },
                 );
@@ -1494,6 +1653,7 @@ export function InsuranceQuoteWizard({
             status: "failed",
             error: err,
             detailVersion,
+            durationMs,
           };
           setBatchItems((current) =>
             current.map((b) =>
@@ -1551,33 +1711,24 @@ export function InsuranceQuoteWizard({
     return (
       <main
         className="insurance-quote"
-        aria-label={
-          entry === "direct" ? t("Cotizador") : t("Cotizador por pasos")
-        }
+        aria-label={entry === "direct" ? t("Cotizador") : t("Cotizador por pasos")}
       >
         <p className="insurance-quote__empty">
-          {t("Esta pantalla está desactivada para este tenant.")}{" "}
-        </p>
+           {t("Esta pantalla está desactivada para este tenant.")} </p>
       </main>
     );
 
   return (
     <main
       className="insurance-quote"
-      aria-label={
-        entry === "direct" ? t("Cotizador") : t("Cotizador por pasos")
-      }
+      aria-label={entry === "direct" ? t("Cotizador") : t("Cotizador por pasos")}
       data-testid="insurance-quote-screen"
     >
       <header className="insurance-quote__header">
         <div className="insurance-quote__title-wrap">
-          <p className="insurance-quote__eyebrow">
-            {t("Seguros · Autos livianos")}
-          </p>
+          <p className="insurance-quote__eyebrow">{t("Seguros · Autos livianos")}</p>
           <div className="insurance-quote__heading">
-            <h1>
-              {entry === "direct" ? t("Cotizador") : t("Cotizador por pasos")}
-            </h1>
+            <h1>{entry === "direct" ? t("Cotizador") : t("Cotizador por pasos")}</h1>
             <span className="insurance-quote__info">
               <button
                 aria-describedby="insurance-quote-description"
@@ -1606,10 +1757,7 @@ export function InsuranceQuoteWizard({
                 id="insurance-quote-description"
                 role="tooltip"
               >
-                {t(
-                  "Vehículo, tomador y comparador en un solo flujo en línea.",
-                )}{" "}
-              </span>
+                 {t("Vehículo, tomador y comparador en un solo flujo en línea.")} </span>
             </span>
           </div>
         </div>
@@ -1621,9 +1769,7 @@ export function InsuranceQuoteWizard({
           onClick={() => setSurface("form")}
           type="button"
         >
-          <span className="insurance-tabs__label">
-            {t("Preparar cotización")}
-          </span>
+          <span className="insurance-tabs__label">{t("Preparar cotización")}</span>
         </button>
         <button
           aria-pressed={surface === "results"}
@@ -1635,8 +1781,7 @@ export function InsuranceQuoteWizard({
           type="button"
         >
           <span className="insurance-tabs__label">
-            {t("Cotizaciones")}{" "}
-            {activeQuoteOffersCount > 0 ? (
+             {t("Cotizaciones")} {activeQuoteOffersCount > 0 ? (
               <span aria-hidden="true" className="insurance-tabs__count">
                 {activeQuoteOffersCount}
               </span>
@@ -1650,8 +1795,7 @@ export function InsuranceQuoteWizard({
           type="button"
         >
           <span className="insurance-tabs__label">
-            {t("Historial")}{" "}
-            {historyQuotes.length > 0 ? (
+             {t("Historial")} {historyQuotes.length > 0 ? (
               <span
                 aria-hidden="true"
                 className="insurance-tabs__count insurance-tabs__count--muted"
@@ -1730,6 +1874,11 @@ export function InsuranceQuoteWizard({
           onRetryAll={selectedHistoryQuoteId ? undefined : retryAllFailed}
           onRetrySingle={selectedHistoryQuoteId ? undefined : retrySingle}
           onSelectHistoryQuote={handleSelectHistoryQuote}
+          onDeleteHistoryQuote={handleDeleteHistoryQuote}
+          deletingHistory={deletingHistory}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          timings={quoteTimings}
           productErrors={productErrors}
           quoteReference={
             selectedHistoryQuoteId
@@ -1797,10 +1946,7 @@ export function InsuranceQuoteWizard({
               ))}
             </fieldset>
           </details>
-          <nav
-            aria-label={t("Pasos del formulario")}
-            className="insurance-steps"
-          >
+          <nav aria-label={t("Pasos del formulario")} className="insurance-steps">
             <ol>
               {quoteSteps.map((step, index) => {
                 const isCurrent = index === activeStep;
@@ -1819,8 +1965,7 @@ export function InsuranceQuoteWizard({
             </ol>
           </nav>
           <h2>
-            {t("Paso")} {activeStep + 1} {t("de")} {quoteSteps.length}:{" "}
-            {t(currentStep.title)}
+             {t("Paso")} {activeStep + 1}  {t("de")} {quoteSteps.length}: {t(currentStep.title)}
           </h2>
           <fieldset className="insurance-quote__step-fields" disabled={quoting}>
             {activeStep === 0 ? (
@@ -1901,14 +2046,12 @@ export function InsuranceQuoteWizard({
                           aria-hidden="true"
                           className="insurance-spinner insurance-spinner--xs"
                         />{" "}
-                        {t("Consultando…")}{" "}
-                      </span>
+                         {t("Consultando…")} </span>
                     ) : values.vehicle.lookupFields.includes(
                         "fasecoldaCode",
                       ) ? (
                       <span className="insurance-field-synced">
-                        {t("✓ Autocompletado")}{" "}
-                      </span>
+                         {t("✓ Autocompletado")} </span>
                     ) : undefined
                   }
                   error={errors["vehicle.fasecoldaCode"]}
@@ -1921,9 +2064,7 @@ export function InsuranceQuoteWizard({
                       update("vehicle.fasecoldaCode", event.target.value)
                     }
                     placeholder={
-                      lookingUpPlate
-                        ? t("Consultando Fasecolda…")
-                        : t("Ej. 123456")
+                      lookingUpPlate ? t("Consultando Fasecolda…") : t("Ej. 123456")
                     }
                     value={values.vehicle.fasecoldaCode}
                   />
@@ -1936,14 +2077,12 @@ export function InsuranceQuoteWizard({
                           aria-hidden="true"
                           className="insurance-spinner insurance-spinner--xs"
                         />{" "}
-                        {t("Consultando…")}{" "}
-                      </span>
+                         {t("Consultando…")} </span>
                     ) : values.vehicle.lookupFields.includes(
                         "productionYear",
                       ) ? (
                       <span className="insurance-field-synced">
-                        {t("✓ Autocompletado")}{" "}
-                      </span>
+                         {t("✓ Autocompletado")} </span>
                     ) : undefined
                   }
                   error={errors["vehicle.productionYear"]}
@@ -1955,9 +2094,7 @@ export function InsuranceQuoteWizard({
                     onChange={(event) =>
                       update("vehicle.productionYear", event.target.value)
                     }
-                    placeholder={
-                      lookingUpPlate ? t("Consultando…") : t("Ej. 2024")
-                    }
+                    placeholder={lookingUpPlate ? t("Consultando…") : t("Ej. 2024")}
                     type="number"
                     value={values.vehicle.productionYear}
                   />
@@ -1977,14 +2114,12 @@ export function InsuranceQuoteWizard({
                   error={errors["vehicle.circulationCity"]}
                   label={
                     <span>
-                      {t("Ciudad de circulación")}{" "}
+                       {t("Ciudad de circulación")}{" "}
                       <span className="insurance-city-dane-hint">(DANE)</span>
                     </span>
                   }
                   onChange={(code) => update("vehicle.circulationCity", code)}
-                  placeholder={t(
-                    "Buscar ciudad (ej. Bogotá, Medellín, Cali)...",
-                  )}
+                  placeholder={t("Buscar ciudad (ej. Bogotá, Medellín, Cali)...")}
                   testLabel="Código de ciudad de circulación"
                   value={values.vehicle.circulationCity}
                 />
@@ -1996,14 +2131,12 @@ export function InsuranceQuoteWizard({
                           aria-hidden="true"
                           className="insurance-spinner insurance-spinner--xs"
                         />{" "}
-                        {t("Consultando…")}{" "}
-                      </span>
+                         {t("Consultando…")} </span>
                     ) : values.vehicle.lookupFields.includes(
                         "accessoriesValue",
                       ) ? (
                       <span className="insurance-field-synced">
-                        {t("✓ Autocompletado")}{" "}
-                      </span>
+                         {t("✓ Autocompletado")} </span>
                     ) : undefined
                   }
                   error={errors["vehicle.accessoriesValue"]}
@@ -2027,8 +2160,7 @@ export function InsuranceQuoteWizard({
                         accessoriesValueFocused
                           ? values.vehicle.accessoriesValue
                           : formatCurrencyNumber(
-                              values.vehicle.accessoriesValue,
-                              locale,
+                              values.vehicle.accessoriesValue, locale,
                             )
                       }
                     />
@@ -2043,14 +2175,12 @@ export function InsuranceQuoteWizard({
                           aria-hidden="true"
                           className="insurance-spinner insurance-spinner--xs"
                         />{" "}
-                        {t("Consultando…")}{" "}
-                      </span>
+                         {t("Consultando…")} </span>
                     ) : values.vehicle.lookupFields.includes(
                         "declaredValue",
                       ) ? (
                       <span className="insurance-field-synced">
-                        {t("✓ Autocompletado")}{" "}
-                      </span>
+                         {t("✓ Autocompletado")} </span>
                     ) : undefined
                   }
                   error={errors["vehicle.declaredValue"]}
@@ -2075,10 +2205,7 @@ export function InsuranceQuoteWizard({
                       value={
                         declaredValueFocused
                           ? values.vehicle.declaredValue
-                          : formatCurrencyNumber(
-                              values.vehicle.declaredValue,
-                              locale,
-                            )
+                          : formatCurrencyNumber(values.vehicle.declaredValue, locale)
                       }
                     />
                     <span className="insurance-currency-suffix">COP</span>
@@ -2144,10 +2271,7 @@ export function InsuranceQuoteWizard({
                     value={values.applicant.secondSurname}
                   />
                 </QuoteField>
-                <QuoteField
-                  error={errors["applicant.gender"]}
-                  label={t("Sexo")}
-                >
+                <QuoteField error={errors["applicant.gender"]} label={t("Sexo")}>
                   <select
                     onChange={(event) =>
                       update("applicant.gender", event.target.value)
@@ -2177,13 +2301,10 @@ export function InsuranceQuoteWizard({
                   </QuoteField>
                   <div className="insurance-age-selector">
                     <span className="insurance-age-selector__label">
-                      {t("Edad:")}{" "}
+                       {t("Edad:")}{" "}
                       <strong>
                         {calculateAge(values.applicant.birthDate) !== null
-                          ? t("%{p0} años", {
-                              p0:
-                                calculateAge(values.applicant.birthDate) ?? "",
-                            })
+                          ? t("%{p0} años", {p0: calculateAge(values.applicant.birthDate) ?? ""})
                           : t("Seleccionar")}
                       </strong>
                     </span>
@@ -2219,14 +2340,12 @@ export function InsuranceQuoteWizard({
                   error={errors["applicant.city"]}
                   label={
                     <span>
-                      {t("Ciudad de residencia")}{" "}
+                       {t("Ciudad de residencia")}{" "}
                       <span className="insurance-city-dane-hint">(DANE)</span>
                     </span>
                   }
                   onChange={(code) => update("applicant.city", code)}
-                  placeholder={t(
-                    "Buscar ciudad (ej. Bogotá, Medellín, Cali)...",
-                  )}
+                  placeholder={t("Buscar ciudad (ej. Bogotá, Medellín, Cali)...")}
                   testLabel="Código de ciudad de residencia"
                   value={values.applicant.city}
                 />
@@ -2290,10 +2409,7 @@ export function InsuranceQuoteWizard({
                     ) : null}
                   </div>
                 </QuoteField>
-                <QuoteField
-                  error={errors["applicant.phone"]}
-                  label={t("Teléfono")}
-                >
+                <QuoteField error={errors["applicant.phone"]} label={t("Teléfono")}>
                   <input
                     onChange={(event) =>
                       update("applicant.phone", event.target.value)
@@ -2318,9 +2434,7 @@ export function InsuranceQuoteWizard({
                           ...current,
                           "applicant.email": isValid
                             ? undefined
-                            : t(
-                                "Ingresa un correo válido (ej. nombre@correo.com)",
-                              ),
+                            : t("Ingresa un correo válido (ej. nombre@correo.com)"),
                         }));
                       }
                     }}
@@ -2367,17 +2481,13 @@ export function InsuranceQuoteWizard({
                 </div>
                 <div className="insurance-busy-indicator__content">
                   <strong className="insurance-busy-indicator__title">
-                    {t("Cotizando con")} {selectedProducts.length}{" "}
+                     {t("Cotizando con")} {selectedProducts.length}{" "}
                     {selectedProducts.length === 1
                       ? "aseguradora"
                       : "aseguradoras"}{" "}
-                    {t("en vivo…")}{" "}
-                  </strong>
+                     {t("en vivo…")} </strong>
                   <span className="insurance-busy-indicator__subtitle">
-                    {t(
-                      "Consultando tarifas y coberturas oficiales. Esto puede tomar unos segundos.",
-                    )}{" "}
-                  </span>
+                     {t("Consultando tarifas y coberturas oficiales. Esto puede tomar unos segundos.")} </span>
                 </div>
               </div>
               <div aria-hidden="true" className="insurance-progress-track">
@@ -2394,8 +2504,7 @@ export function InsuranceQuoteWizard({
               title={t("Volver al paso anterior sin perder los datos")}
               type="button"
             >
-              {t("Anterior")}{" "}
-            </button>
+               {t("Anterior")} </button>
             {activeStep < quoteSteps.length - 1 ? (
               <button
                 disabled={busy || Object.keys(currentErrors).length > 0}
@@ -2403,15 +2512,11 @@ export function InsuranceQuoteWizard({
                 title={
                   Object.keys(currentErrors).length > 0
                     ? t("Completa los campos requeridos para continuar")
-                    : t("Continuar al paso %{p0} de %{p1}", {
-                        p0: activeStep + 2,
-                        p1: quoteSteps.length,
-                      })
+                    : t("Continuar al paso %{p0} de %{p1}", {p0: activeStep + 2, p1: quoteSteps.length})
                 }
                 type="button"
               >
-                {t("Siguiente paso")}{" "}
-              </button>
+                 {t("Siguiente paso")} </button>
             ) : (
               <button
                 className={quoting ? "is-busy" : ""}
@@ -2420,16 +2525,7 @@ export function InsuranceQuoteWizard({
                 title={
                   quoting
                     ? t("Consultando aseguradoras en vivo…")
-                    : t(
-                        "Consultar aseguradoras con los datos ingresados (%{p0} %{p1})",
-                        {
-                          p0: selectedProducts.length,
-                          p1:
-                            selectedProducts.length === 1
-                              ? t("producto")
-                              : t("productos"),
-                        },
-                      )
+                    : t("Consultar aseguradoras con los datos ingresados (%{p0} %{p1})", {p0: selectedProducts.length, p1: selectedProducts.length === 1 ? t("producto") : t("productos")})
                 }
                 type="button"
               >
