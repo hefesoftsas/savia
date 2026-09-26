@@ -108,15 +108,30 @@ export default defineConfig({
           "*.{ico,png,svg,webp,webmanifest}",
         ],
         manifestTransforms: [
-          async (entries) => ({
-            manifest: [
-              ...entries,
+          async (entries) => {
+            // dist ships thousands of lazy chunks: precaching `assets/*.js`
+            // verbatim forces every deployment to download tens of MB before
+            // the replacement worker can activate, which times out the
+            // post-deploy recovery on mobile networks. Keep only the boot
+            // shell closure (+ index, css, top-level statics); the rest stays
+            // on-demand via runtimeCaching.
+            const shell = new Set(offlineShellAssets.keys());
+            const manifest = [
+              ...entries.filter((entry) => {
+                if (entry.url === "index.html") return true;
+                if (shell.has(entry.url)) return true;
+                if (!entry.url.startsWith("assets/")) return true;
+                // Boot CSS is not part of the JS closure walk; it stays
+                // precached (few small files) so first paint is styled.
+                if (entry.url.endsWith(".css")) return true;
+                return false;
+              }),
               ...[...offlineShellAssets]
                 .filter(([url]) => !entries.some((entry) => entry.url === url))
                 .map(([url, size]) => ({ url, size, revision: null })),
-            ],
-            warnings: [],
-          }),
+            ];
+            return { manifest, warnings: [] };
+          },
         ],
         runtimeCaching: [
           {
