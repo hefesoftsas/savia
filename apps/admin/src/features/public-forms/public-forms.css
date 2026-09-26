@@ -19,13 +19,11 @@
 }
 .public-form-logo {
   display: block;
-  max-width: min(100%, 22rem);
-  max-height: 4.5rem;
-  width: auto;
-  height: auto;
+  max-width: 100%;
+  width: 10rem;
+  height: 5rem;
   object-fit: contain;
   margin-bottom: 1.25rem;
-  border-radius: 0.5rem;
   background: transparent;
 }
 .public-form-heading h1,

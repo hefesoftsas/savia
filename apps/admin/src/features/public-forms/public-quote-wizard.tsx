@@ -861,14 +861,16 @@ export function PublicQuoteForm({
   return (
     <section className="public-quote" aria-label={heading}>
       <div className="public-quote-shell">
-        <QuoteLogo src={definition.logoImage} alt={definition.title} />
-        <p className="public-quote-eyebrow">{eyebrow}</p>
-        <h1 className="public-quote-title">{heading}</h1>
-        <p className="public-quote-products">
-          {products.length === 1
-            ? t("%{count} producto", { count: products.length })
-            : t("%{count} productos", { count: products.length })}
-        </p>
+        <header className="public-quote-heading">
+          <QuoteLogo src={definition.logoImage} alt={definition.title} />
+          <p className="public-quote-eyebrow">{eyebrow}</p>
+          <h1 className="public-quote-title">{heading}</h1>
+          <p className="public-quote-products">
+            {products.length === 1
+              ? t("%{count} producto", { count: products.length })
+              : t("%{count} productos", { count: products.length })}
+          </p>
+        </header>
         <ol className="public-quote-steps">
           {steps.map((s, index) => (
             <li
