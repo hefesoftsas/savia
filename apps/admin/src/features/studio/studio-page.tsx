@@ -30,6 +30,7 @@ import {
   selectStudioDomain,
   type StudioDomain,
 } from "./studio-domains";
+import { invalidateSharedDataDomains } from "@/api/domain-client";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
 import {
   getStudioQueryClient,
@@ -147,6 +148,7 @@ export function StudioPage({ services }: { services: AppServices }) {
         "/v1/data-domains",
         { name, label },
       );
+      invalidateSharedDataDomains();
       setDomains(await listStudioDomains(services));
       window.dispatchEvent(new Event(STUDIO_DOMAINS_CHANGED));
       setParams({ domain: result.data.id, view: "new-object" });

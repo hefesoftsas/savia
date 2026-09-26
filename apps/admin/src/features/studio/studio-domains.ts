@@ -1,4 +1,5 @@
 import type { AppServices } from "@/app-services";
+import { fetchDataDomains } from "@/api/domain-client";
 
 export type StudioDomain = {
   id: string;
@@ -13,8 +14,7 @@ export async function listStudioDomains(
   services: AppServices,
 ): Promise<StudioDomain[]> {
   const load = async () =>
-    (await services.apiClient.get<{ data: StudioDomain[] }>("/v1/data-domains"))
-      .data;
+    (await fetchDataDomains(services.apiClient)) as StudioDomain[];
   return services.localData
     ? services.localData.cachedMetadata("domains", load)
     : load();

@@ -2,7 +2,11 @@ import { RequestResultClient } from "./api/request-result-client";
 import { ApiClient } from "./api/api-client";
 import { AssistantConfigurationClient } from "./api/assistant-configuration-client";
 import { CrmClient } from "./api/crm-client";
-import { DomainClient } from "./api/domain-client";
+import {
+  DomainClient,
+  fetchDataDomains,
+  invalidateSharedDataDomains,
+} from "./api/domain-client";
 import { PersonalIntegrationsClient } from "./api/personal-integrations-client";
 import { VirtualEmployeesClient } from "./api/virtual-employees-client";
 import { SaviaCommands } from "./api/savia-commands";
@@ -42,6 +46,7 @@ export function createAppServices() {
   });
   const localData = createWorkspaceManager(authSession, apiClient, apiUrl);
   const clearOfflineData = async () => {
+    invalidateSharedDataDomains();
     clearStudioQueryCache();
     clearAllSaviaRequestSnapshots();
     clearCachedTenantOptions();
@@ -54,9 +59,7 @@ export function createAppServices() {
     authProvider: createReactAdminAuthProvider(authSession, {
       onLogout: clearOfflineData,
       canAccessCrm: async () => {
-        const { data } = await apiClient.get<{
-          data: Array<{ id: string; kind: string }>;
-        }>("/v1/data-domains");
+        const data = await fetchDataDomains(apiClient);
         for (const domain of data) {
           const scope =
             domain.kind === "custom" ? "domain:" + domain.id : domain.id;
