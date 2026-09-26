@@ -1,5 +1,58 @@
 // Built-in automation, integration, and workspace messages. Protocol and brand names retain their spelling.
 export const automationMessages = {
+  Tenant: ["Tenant", "Tenant", "Tenant"],
+  "Selecciona un tenant": [
+    "Selecciona un tenant",
+    "Select a tenant",
+    "Selecione um tenant",
+  ],
+  "Las pantallas y los plugins que administras pertenecen a este tenant.": [
+    "Las pantallas y los plugins que administras pertenecen a este tenant.",
+    "The screens and plugins you manage belong to this tenant.",
+    "As telas e os plugins que você administra pertencem a este tenant.",
+  ],
+  "Selecciona un tenant para administrar sus pantallas y plugins.": [
+    "Selecciona un tenant para administrar sus pantallas y plugins.",
+    "Select a tenant to manage its screens and plugins.",
+    "Selecione um tenant para administrar suas telas e plugins.",
+  ],
+  "No tienes tenants disponibles. Solicita acceso a un administrador.": [
+    "No tienes tenants disponibles. Solicita acceso a un administrador.",
+    "You have no available tenants. Ask an administrator for access.",
+    "Você não tem tenants disponíveis. Solicite acesso a um administrador.",
+  ],
+  "Administración avanzada": [
+    "Administración avanzada",
+    "Advanced administration",
+    "Administração avançada",
+  ],
+  "Dominio activo: %{value0}": [
+    "Dominio activo: %{value0}",
+    "Active domain: %{value0}",
+    "Domínio ativo: %{value0}",
+  ],
+  "Plataforma y dominios independientes. Crear un dominio no crea un tenant.": [
+    "Plataforma y dominios independientes. Crear un dominio no crea un tenant.",
+    "Platform and independent domains. Creating a domain does not create a tenant.",
+    "Plataforma e domínios independentes. Criar um domínio não cria um tenant.",
+  ],
+  "Tenant o dominio": [
+    "Tenant o dominio",
+    "Tenant or domain",
+    "Tenant ou domínio",
+  ],
+  Tenants: ["Tenants", "Tenants", "Tenants"],
+  "Dominios independientes": [
+    "Dominios independientes",
+    "Independent domains",
+    "Domínios independentes",
+  ],
+  "Las pantallas y los plugins que administras pertenecen a este espacio.": [
+    "Las pantallas y los plugins que administras pertenecen a este espacio.",
+    "The screens and plugins you manage belong to this workspace.",
+    "As telas e os plugins que você administra pertencem a este espaço.",
+  ],
+  Plugins: ["Plugins", "Plugins", "Plugins"],
   "Cargando espacio de trabajo…": [
     "Cargando espacio de trabajo…",
     "Loading workspace…",
