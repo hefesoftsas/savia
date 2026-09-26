@@ -54,6 +54,7 @@ export function MyDayPage({
         apiClient={services.apiClient}
         userPreferences={services.userPreferences}
         personalIntegrations={services.personalIntegrations}
+        agenda={agenda}
       />
     </main>
   );

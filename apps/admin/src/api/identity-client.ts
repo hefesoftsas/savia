@@ -25,6 +25,11 @@ export class IdentityClient {
   private listPromise: Promise<ManagedIdentityUser[]> | null = null;
   private listCache: { data: ManagedIdentityUser[]; timestamp: number } | null =
     null;
+  private mePromise: Promise<CurrentIdentityResponse["data"]> | null = null;
+  private meCache: {
+    data: CurrentIdentityResponse["data"];
+    timestamp: number;
+  } | null = null;
 
   constructor(private readonly client: ApiClient) {}
 
@@ -33,9 +38,32 @@ export class IdentityClient {
     this.listPromise = null;
   }
 
+  invalidateMe(): void {
+    this.meCache = null;
+    this.mePromise = null;
+  }
+
   async me(): Promise<CurrentIdentityResponse["data"]> {
-    return (await this.client.get<CurrentIdentityResponse>("/v1/identity/me"))
-      .data;
+    // El HAR muestra /v1/identity/me x2 en el mismo ms (doble montaje en
+    // StrictMode): comparte el vuelo y cachea 30s como en list().
+    if (this.meCache && Date.now() - this.meCache.timestamp < 30_000) {
+      return this.meCache.data;
+    }
+    if (this.mePromise) {
+      return this.mePromise;
+    }
+    this.mePromise = this.client
+      .get<CurrentIdentityResponse>("/v1/identity/me")
+      .then((res) => {
+        this.meCache = { data: res.data, timestamp: Date.now() };
+        this.mePromise = null;
+        return res.data;
+      })
+      .catch((err) => {
+        this.mePromise = null;
+        throw err;
+      });
+    return this.mePromise;
   }
 
   async list(): Promise<ManagedIdentityUser[]> {

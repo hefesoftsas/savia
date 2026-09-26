@@ -199,6 +199,10 @@ export const Layout = (props: CoreLayoutProps) => {
       <Notification />
       <PwaInstallBanner />
       <CookieConsentBanner />
+      {/* Intencionadamente inmediato: el contrato (app.test.tsx) exige el
+          trigger "Abrir asistente" disponible sin esperar al idle. Ya es un
+          chunk lazy no bloqueante y ahora con caché immutable + iconos
+          agrupados. */}
       <Suspense fallback={null}>
         <AssistantBar />
       </Suspense>

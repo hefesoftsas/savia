@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   gatewayFetch,
+  isImmutableAsset,
   isServicePath,
+  staticAssetCacheControl,
   TENANT_SLUG_HEADER,
   tenantSlugFromRequest,
 } from "./edge-gateway";
@@ -39,6 +41,99 @@ describe("edge gateway", () => {
 
     expect(await response.text()).toBe("admin");
     expect(assets.fetch).toHaveBeenCalledOnce();
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
+  it("marks fingerprinted assets as immutable", () => {
+    expect(isImmutableAsset("/assets/main-CfLYpzF0.js")).toBe(true);
+    expect(isImmutableAsset("/assets/main-DbU_fhi5.css")).toBe(true);
+    expect(isImmutableAsset("/assets/react-SPdNq8mu.js")).toBe(true);
+    expect(isImmutableAsset("/assets/app-DBD_8wTe.js")).toBe(true);
+    expect(isImmutableAsset("/assets/icons-Ab12cd.js")).toBe(true);
+    expect(isImmutableAsset("/")).toBe(false);
+    expect(isImmutableAsset("/index.html")).toBe(false);
+    expect(isImmutableAsset("/site.webmanifest")).toBe(false);
+    expect(isImmutableAsset("/savia-logo-large.png")).toBe(false);
+    expect(isImmutableAsset("/assets/logo.png")).toBe(false);
+  });
+
+  it("serves fingerprinted assets with immutable cache headers", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = {
+      fetch: vi.fn(async () => new Response("js", {
+        headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+      })),
+    };
+
+    const response = await gatewayFetch(
+      new Request("https://savia.example.workers.dev/assets/main-CfLYpzF0.js"),
+      { API: api, ASSETS: assets },
+    );
+
+    expect(await response.text()).toBe("js");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps must-revalidate on non-fingerprinted assets", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = {
+      fetch: vi.fn(async () => new Response("html", {
+        headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+      })),
+    };
+
+    const response = await gatewayFetch(
+      new Request("https://savia.example.workers.dev/savia-logo-large.png"),
+      { API: api, ASSETS: assets },
+    );
+
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=0, must-revalidate",
+    );
+  });
+
+  it("caches versioned root statics immutably and manifest hourly", () => {
+    expect(staticAssetCacheControl("/savia-icon-192-v3.png")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    expect(staticAssetCacheControl("/favicon-32-v3.png")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    expect(staticAssetCacheControl("/apple-touch-icon-v3.png")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    expect(staticAssetCacheControl("/favicon.svg")).toBe(
+      "public, max-age=86400, must-revalidate",
+    );
+    expect(staticAssetCacheControl("/site.webmanifest")).toBe(
+      "public, max-age=3600, must-revalidate",
+    );
+    expect(staticAssetCacheControl("/savia-logo-large-480.webp")).toBe(
+      "public, max-age=3600, must-revalidate",
+    );
+    expect(staticAssetCacheControl("/savia-logo-large.png")).toBeNull();
+    expect(staticAssetCacheControl("/")).toBeNull();
+  });
+
+  it("serves the manifest with hourly cache headers", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = {
+      fetch: vi.fn(async () => new Response("{}", {
+        headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+      })),
+    };
+
+    const response = await gatewayFetch(
+      new Request("https://savia.example.workers.dev/site.webmanifest"),
+      { API: api, ASSETS: assets },
+    );
+
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=3600, must-revalidate",
+    );
     expect(api.fetch).not.toHaveBeenCalled();
   });
 
