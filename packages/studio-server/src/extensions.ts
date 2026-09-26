@@ -247,7 +247,13 @@ export function registerExtensions(
     if (!declared.length) return objectRequirements;
     return new Map([
       ...objectRequirements,
-      ...declared.map((requirement) => [requirement.id, requirement] as const),
+      ...declared.map(
+        (requirement) =>
+          [
+            `${requirement.id}:${requirement.object.name}`,
+            requirement,
+          ] as const,
+      ),
     ]);
   }
 

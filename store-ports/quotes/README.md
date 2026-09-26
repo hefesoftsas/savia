@@ -11,8 +11,9 @@ pnpm store:pack store-ports/quotes
 ```
 
 The plugin declares the two hidden quote-history collections, including the
-optional result snapshot and duration fields. Existing collection schemas are
-preserved on installation. On older schemas, the wizard saves the core result
+optional result snapshot and duration fields. Installation preserves existing
+fields and custom layouts, and adds missing optional fields with a schema version
+update. Required or conditionally required additions need an explicit migration. On older schemas, the wizard saves the core result
 fields and reports when detailed snapshots cannot be stored.
 
 Install the separate `savia.insurance-quoter` solution for the wizard object. The optional

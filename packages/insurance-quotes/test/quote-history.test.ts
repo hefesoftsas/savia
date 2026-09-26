@@ -282,3 +282,25 @@ describe("history isolation and current delete versions", () => {
     expect(master.remove).toHaveBeenCalledWith("m1", { version: 5 });
   });
 });
+
+it("does not delete a detail linked to another master just because its name matches", async () => {
+  const records = [
+    { id: "ours", cotizacion: "m1", name: "COT-1-gold" },
+    { id: "other", cotizacion: "m2", name: "COT-1-copied" },
+  ];
+  const details = {
+    list: vi.fn(async () => ({
+      data: records,
+      total: 2,
+      page: 1,
+      perPage: 200,
+    })),
+    remove: vi.fn(async () => {}),
+  };
+  const master = { remove: vi.fn(async () => {}) };
+  const { deleteQuoteHistory } = await import("../src/quote-history");
+  await deleteQuoteHistory(details, master, "m1", 1, "COT-1");
+  expect(details.remove.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+    "ours",
+  ]);
+});

@@ -18,8 +18,8 @@ concurrently and each provider flow executes its steps sequentially.
   records) remains only as a compatibility fallback for hosts without filter
   support.
 - Quote execution never waits for a full CRM scan before launching product
-  flows. The master record is created immediately; the `cliente` link is
-  patched when the CRM responds. A 4s early-client race avoids holding
+  flows. After a bounded initial CRM wait, the master record is created; a late
+  `cliente` link is saved together with its final summary. A 4s early-client race avoids holding
   providers on slow CRM collections. CRM failures are visible
   ("La cotización continuó sin guardar el cliente en el CRM…") instead of
   silently blocking providers.
@@ -72,7 +72,8 @@ keep the honest "No informado por la aseguradora" view.
 ## Compatibility and recovery
 
 - The quote plugin declares the master and detail collections for new installations.
-  Existing collection definitions are preserved. Before saving optional snapshots
+  Existing fields and custom layouts are preserved; installation adds missing
+  optional fields with a versioned schema update. Before saving optional snapshots
   and durations, the wizard reads the actual detail schema (once per mounted
   collection handle). On older schemas it saves core status, premium, quote number,
   and run reference, and explicitly warns when coverage details cannot be stored.
@@ -86,3 +87,11 @@ keep the honest "No informado por la aseguradora" view.
   them. Version conflicts remain visible; deletion never retries a conflict without
   the required version. Client-side ownership checks also isolate results returned
   by legacy hosts that ignore collection filters.
+
+- Retrying one or all providers recalculates the master premium from all successful
+  offers, so a more expensive retry cannot replace the best price. Summary writes
+  are serialized and read the current master version before saving.
+- Resuming a quote replaces reselected provider flows instead of duplicating them.
+  Starting a new quote or deleting the active quote is blocked while retries run.
+- Changing saved quotes resets the insurer filter. A deleted quote's deep link is
+  cleared, and deleting one quote cannot clear a newer selection.

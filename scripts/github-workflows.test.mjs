@@ -113,13 +113,9 @@ test("preview deploys only successful same-repository main CI and uses its own e
   );
 });
 
-test("store updates use each gateway origin after deployment and before verification", async () => {
-  for (const [name, origin] of [
-    ["deploy-cloudflare.yml", "https://savia.app.hefesoft.com"],
-    ["deploy-preview.yml", "https://savia-preview.hefesoft.com"],
-  ]) {
+test("release plugins deploy to all workspaces using existing environment credentials", async () => {
+  for (const name of ["deploy-cloudflare.yml", "deploy-preview.yml"]) {
     const source = await workflow(name);
-    assert.ok(source.includes(`SAVIA_API_URL: ${origin}`));
     assert.ok(
       source.indexOf("name: Deploy savia gateway") <
         source.indexOf("run: node scripts/deploy-store-plugins.mjs"),
@@ -128,8 +124,15 @@ test("store updates use each gateway origin after deployment and before verifica
       source.indexOf("run: node scripts/deploy-store-plugins.mjs") <
         source.indexOf("name: Verify deployed gateway"),
     );
-    assert.ok(source.includes("vars.SAVIA_PLUGIN_TARGETS"));
-    assert.ok(source.includes("secrets.SAVIA_DEPLOY_EMAIL"));
-    assert.ok(source.includes("secrets.SAVIA_DEPLOY_PASSWORD"));
+    const step = source.slice(
+      source.indexOf("name: Deploy release plugin ZIPs"),
+      source.indexOf("name: Verify deployed gateway"),
+    );
+    assert.match(step, /CLOUDFLARE_API_TOKEN/);
+    assert.match(step, /CLOUDFLARE_DATABASE_ID.*vars.SAVIA_DOMAIN_D1_ID/);
+    assert.doesNotMatch(
+      step,
+      /SAVIA_PLUGIN_TARGETS|SAVIA_DEPLOY_EMAIL|SAVIA_DEPLOY_PASSWORD/,
+    );
   }
 });

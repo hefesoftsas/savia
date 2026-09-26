@@ -351,7 +351,7 @@ export function QuoteResults({
       });
     }
     return [];
-  }, [isQuoteActive, effectiveBatchItems, runs, locale]);
+  }, [isQuoteActive, effectiveBatchItems, runs, locale, planCatalog]);
 
   const uniqueProviders = useMemo(() => {
     const list: string[] = [];
@@ -373,6 +373,8 @@ export function QuoteResults({
 
   useEffect(() => {
     setSelectedQuoteIds(null);
+    setSelectedProvider(null);
+    setActionNotice("");
   }, [masterQuoteId, selectedHistoryQuoteId]);
 
   const filteredQuotes = useMemo(() => {
@@ -717,12 +719,14 @@ export function QuoteResults({
               </span>
               <span className="insurance-fact-status">
                 {pendingCount > 0
-                  ? succeededCount > 0
-                    ? t("↻ Recibiendo… (%{p0}/%{p1})", {
-                        p0: completedCount,
-                        p1: totalCount,
-                      })
-                    : t("↻ Solicitada…")
+                  ? selectedHistoryQuoteId
+                    ? t("Pendiente")
+                    : succeededCount > 0
+                      ? t("↻ Recibiendo… (%{p0}/%{p1})", {
+                          p0: completedCount,
+                          p1: totalCount,
+                        })
+                      : t("↻ Solicitada…")
                   : succeededCount > 0
                     ? t("✓ Recibida")
                     : failedCount > 0
@@ -823,45 +827,53 @@ export function QuoteResults({
             marginBottom: "24px",
           }}
         >
-          {effectiveBatchItems.map((item) => (
-            <div
-              key={item.productId}
-              style={{
-                borderRadius: "12px",
-                border: "1px solid var(--border)",
-                padding: "20px",
-                background: "var(--card, #ffffff)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-              }}
-            >
+          {effectiveBatchItems
+            .filter(
+              (item) =>
+                item.status === "pending" ||
+                retryingIds.includes(item.productId),
+            )
+            .map((item) => (
               <div
+                key={item.productId}
                 style={{
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  padding: "20px",
+                  background: "var(--card, #ffffff)",
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  flexDirection: "column",
+                  gap: "12px",
                 }}
               >
-                <strong style={{ fontSize: "0.875rem" }}>{item.label}</strong>
-                <span className="insurance-status-badge insurance-status-badge--pending">
-                  {t("↻ En progreso")}{" "}
-                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <strong style={{ fontSize: "0.875rem" }}>{item.label}</strong>
+                  <span className="insurance-status-badge insurance-status-badge--pending">
+                    {selectedHistoryQuoteId
+                      ? t("Pendiente")
+                      : t("↻ En progreso")}{" "}
+                  </span>
+                </div>
+                <div
+                  className="quote-skeleton"
+                  style={{ height: "16px", width: "60%" }}
+                />
+                <div
+                  className="quote-skeleton"
+                  style={{ height: "32px", width: "45%", borderRadius: "6px" }}
+                />
+                <div
+                  className="quote-skeleton"
+                  style={{ height: "12px", width: "80%" }}
+                />
               </div>
-              <div
-                className="quote-skeleton"
-                style={{ height: "16px", width: "60%" }}
-              />
-              <div
-                className="quote-skeleton"
-                style={{ height: "32px", width: "45%", borderRadius: "6px" }}
-              />
-              <div
-                className="quote-skeleton"
-                style={{ height: "12px", width: "80%" }}
-              />
-            </div>
-          ))}
+            ))}
         </div>
       ) : null}
 
@@ -1663,7 +1675,9 @@ export function QuoteResults({
                             </span>
                           ) : item.status === "pending" || isRetrying ? (
                             <span className="insurance-status-badge insurance-status-badge--pending">
-                              {t("↻ En progreso")}{" "}
+                              {selectedHistoryQuoteId
+                                ? t("Pendiente")
+                                : t("↻ En progreso")}{" "}
                             </span>
                           ) : (
                             <span className="insurance-status-badge insurance-status-badge--failed">
@@ -1696,7 +1710,9 @@ export function QuoteResults({
                             </span>
                           ) : (
                             <span className="insurance-batch-pending-text">
-                              {t("Consultando proveedor…")}{" "}
+                              {selectedHistoryQuoteId
+                                ? t("Sin respuesta guardada")
+                                : t("Consultando proveedor…")}{" "}
                             </span>
                           )}
                         </td>

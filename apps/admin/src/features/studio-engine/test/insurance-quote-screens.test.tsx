@@ -124,11 +124,9 @@ function quoteScreenApi(
           };
         }),
         remove: vi.fn(async () => {}),
-        describe: vi
-          .fn()
-          .mockResolvedValue({
-            config: { fields: { resultado_snapshot: {}, duracion_ms: {} } },
-          }),
+        describe: vi.fn().mockResolvedValue({
+          config: { fields: { resultado_snapshot: {}, duracion_ms: {} } },
+        }),
       };
     }
     return mockCollectionHandles[name];
@@ -820,11 +818,17 @@ it("renders failed requests table and allows retrying without re-entering form d
   const user = userEvent.setup();
   const { actions, savia } = quoteScreenApi();
   let sbsFailed = true;
+  let pauseRetry = false;
+  let finishRetry!: () => void;
   actions.execute.mockImplementation(async (_actionId, options: any) => {
     if (options?.input?.flowId === "sbs-producto-8" && sbsFailed) {
       sbsFailed = false;
       throw new Error("El conector no pudo completar la acción.");
     }
+    if (pauseRetry)
+      await new Promise<void>((resolve) => {
+        finishRetry = resolve;
+      });
     return {
       run: { runId: "quote-retry", status: "succeeded" },
       output: {
@@ -875,7 +879,12 @@ it("renders failed requests table and allows retrying without re-entering form d
   const retryButtons = screen.getAllByRole("button", { name: "Reintentar" });
   expect(retryButtons.length).toBe(1);
 
+  pauseRetry = true;
   await user.click(retryButtons[0]);
+  await user.click(screen.getByRole("button", { name: "Preparar cotización" }));
+  expect(screen.getByLabelText("Dirección")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Cotizar" })).toBeDisabled();
+  await act(async () => finishRetry());
   expect(actions.execute).toHaveBeenCalledWith(
     "quote",
     expect.objectContaining({
@@ -888,141 +897,160 @@ it("renders failed requests table and allows retrying without re-entering form d
   );
 });
 
-it("persists quotes in cotizaciones master and cotizaciones_detalle child collections and tracks retries", async () => {
-  const user = userEvent.setup();
-  const { actions, savia, getCollectionHandle } = quoteScreenApi();
-  const cotizaciones = getCollectionHandle("cotizaciones");
-  const cotizacionesDetalle = getCollectionHandle("cotizaciones_detalle");
+it.each(["single", "all"] as const)(
+  "persists quote results and recomputes the best premium after %s retries",
+  async (retryMode) => {
+    const user = userEvent.setup();
+    const { actions, savia, getCollectionHandle } = quoteScreenApi();
+    const cotizaciones = getCollectionHandle("cotizaciones");
+    const cotizacionesDetalle = getCollectionHandle("cotizaciones_detalle");
 
-  let callCount = 0;
-  let sbsFailed = true;
-  actions.execute.mockImplementation(async (_actionId, options: any) => {
-    callCount++;
-    if (options?.input?.flowId === "sbs-producto-8" && sbsFailed) {
-      sbsFailed = false;
-      throw new Error("El conector no pudo completar la acción.");
-    }
-    return {
-      run: { runId: `run-${callCount}`, status: "succeeded" },
-      output: {
-        type: "quote",
-        provider: "SBS",
-        status: "success",
-        data: {
-          quoteNumber: `SIM-${callCount}`,
-          premiumTotal: 1000000 + callCount * 50000,
-          simulated: true,
+    let callCount = 0;
+    let sbsFailed = true;
+    actions.execute.mockImplementation(async (_actionId, options: any) => {
+      callCount++;
+      if (options?.input?.flowId === "sbs-producto-8" && sbsFailed) {
+        sbsFailed = false;
+        throw new Error("El conector no pudo completar la acción.");
+      }
+      return {
+        run: { runId: `run-${callCount}`, status: "succeeded" },
+        output: {
+          type: "quote",
+          provider: "SBS",
+          status: "success",
+          data: {
+            quoteNumber: `SIM-${callCount}`,
+            premiumTotal:
+              retryMode === "all" && options?.input?.flowId === "sbs-producto-8"
+                ? 500000
+                : 1000000 + callCount * 50000,
+            simulated: true,
+          },
         },
+      };
+    });
+
+    const DirectScreen = quoteScreen("cotizador");
+    render(<DirectScreen savia={savia} />);
+
+    await screen.findByRole("heading", { name: "Paso 1 de 3: Vehículo" });
+    await user.type(screen.getByLabelText("Placa"), "TESTALT");
+    await user.type(screen.getByLabelText("Código Fasecolda"), "654321");
+    await user.type(screen.getByLabelText("Año del vehículo"), "2023");
+    await user.type(
+      screen.getByLabelText("Código de ciudad de circulación"),
+      "11001",
+    );
+    await user.type(screen.getByLabelText("Valor asegurado"), "60000000");
+    await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
+    await user.type(screen.getByLabelText("Número de documento"), "98765432");
+    await user.type(screen.getByLabelText("Nombres"), "Carlos");
+    await user.type(screen.getByLabelText("Primer apellido"), "Gómez");
+    await user.type(screen.getByLabelText("Fecha de nacimiento"), "1985-05-15");
+    await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
+    await user.type(
+      screen.getByLabelText("Código de ciudad de residencia"),
+      "11001",
+    );
+    await user.type(screen.getByLabelText("Dirección"), "Carrera 7 # 45-10");
+    await user.type(screen.getByLabelText("Teléfono"), "3109876543");
+    await user.type(
+      screen.getByLabelText("Correo electrónico"),
+      "carlos@example.test",
+    );
+    await user.click(screen.getByRole("button", { name: "Cotizar" }));
+
+    await user.click(await screen.findByText("Solicitudes de cotización"));
+
+    // Verify master record was created in cotizaciones
+    expect(cotizaciones.create).toHaveBeenCalledTimes(1);
+    expect(cotizaciones.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: expect.stringMatching(/^COT-\d{8}-[A-Z0-9]+$/),
+        ramo: "Automóviles",
+        placa: "TESTALT",
+        valor_asegurado: 60000000,
+        estado: "Solicitada",
+      }),
+    );
+
+    // Verify the applicant was mapped into the Clientes collection and linked
+    const clientes = getCollectionHandle("clientes");
+    expect(clientes.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Carlos Gómez",
+        documento: "98765432",
+        email: "carlos@example.test",
+        telefono: "3109876543",
+      }),
+    );
+    expect(cotizaciones.create).toHaveBeenCalledWith(
+      expect.objectContaining({ cliente: "clientes-1" }),
+    );
+
+    // Verify detail records were created in cotizaciones_detalle for each product (19 enabled by default)
+    expect(cotizacionesDetalle.create).toHaveBeenCalledTimes(19);
+    expect(cotizacionesDetalle.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cotizacion: "cotizaciones-1",
+        estado: "Solicitada",
+      }),
+    );
+
+    // Verify detail records were updated with their responses (one failed, others succeeded)
+    expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        estado: "Error",
+        error_mensaje: "El conector no pudo completar la acción.",
+      }),
+      { version: 1 },
+    );
+    expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        estado: "Recibida",
+        numero_cotizacion: expect.stringMatching(/^SIM-\d+$/),
+      }),
+      { version: 1 },
+    );
+
+    const beforeRetry = await cotizaciones.get("cotizaciones-1");
+    // Simulate an unrelated master edit since the original quote completed.
+    await cotizaciones.update("cotizaciones-1", { estado: "Recibida" });
+    const currentMaster = await cotizaciones.get("cotizaciones-1");
+    const retryBtn = screen.getByRole("button", {
+      name: retryMode === "all" ? "Reintentar fallidos (1)" : "Reintentar",
+    });
+    await user.click(retryBtn);
+    expect(cotizaciones.update).toHaveBeenLastCalledWith(
+      "cotizaciones-1",
+      {
+        estado: "Recibida",
+        prima: retryMode === "all" ? 500000 : beforeRetry.prima,
       },
-    };
-  });
+      { version: currentMaster._version },
+    );
 
-  const DirectScreen = quoteScreen("cotizador");
-  render(<DirectScreen savia={savia} />);
-
-  await screen.findByRole("heading", { name: "Paso 1 de 3: Vehículo" });
-  await user.type(screen.getByLabelText("Placa"), "TESTALT");
-  await user.type(screen.getByLabelText("Código Fasecolda"), "654321");
-  await user.type(screen.getByLabelText("Año del vehículo"), "2023");
-  await user.type(
-    screen.getByLabelText("Código de ciudad de circulación"),
-    "11001",
-  );
-  await user.type(screen.getByLabelText("Valor asegurado"), "60000000");
-  await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
-  await user.type(screen.getByLabelText("Número de documento"), "98765432");
-  await user.type(screen.getByLabelText("Nombres"), "Carlos");
-  await user.type(screen.getByLabelText("Primer apellido"), "Gómez");
-  await user.type(screen.getByLabelText("Fecha de nacimiento"), "1985-05-15");
-  await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
-  await user.type(
-    screen.getByLabelText("Código de ciudad de residencia"),
-    "11001",
-  );
-  await user.type(screen.getByLabelText("Dirección"), "Carrera 7 # 45-10");
-  await user.type(screen.getByLabelText("Teléfono"), "3109876543");
-  await user.type(
-    screen.getByLabelText("Correo electrónico"),
-    "carlos@example.test",
-  );
-  await user.click(screen.getByRole("button", { name: "Cotizar" }));
-
-  await user.click(await screen.findByText("Solicitudes de cotización"));
-
-  // Verify master record was created in cotizaciones
-  expect(cotizaciones.create).toHaveBeenCalledTimes(1);
-  expect(cotizaciones.create).toHaveBeenCalledWith(
-    expect.objectContaining({
-      name: expect.stringMatching(/^COT-\d{8}-[A-Z0-9]+$/),
-      ramo: "Automóviles",
-      placa: "TESTALT",
-      valor_asegurado: 60000000,
-      estado: "Solicitada",
-    }),
-  );
-
-  // Verify the applicant was mapped into the Clientes collection and linked
-  const clientes = getCollectionHandle("clientes");
-  expect(clientes.create).toHaveBeenCalledWith(
-    expect.objectContaining({
-      name: "Carlos Gómez",
-      documento: "98765432",
-      email: "carlos@example.test",
-      telefono: "3109876543",
-    }),
-  );
-  expect(cotizaciones.create).toHaveBeenCalledWith(
-    expect.objectContaining({ cliente: "clientes-1" }),
-  );
-
-  // Verify detail records were created in cotizaciones_detalle for each product (19 enabled by default)
-  expect(cotizacionesDetalle.create).toHaveBeenCalledTimes(19);
-  expect(cotizacionesDetalle.create).toHaveBeenCalledWith(
-    expect.objectContaining({
-      cotizacion: "cotizaciones-1",
-      estado: "Solicitada",
-    }),
-  );
-
-  // Verify detail records were updated with their responses (one failed, others succeeded)
-  expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({
-      estado: "Error",
-      error_mensaje: "El conector no pudo completar la acción.",
-    }),
-    { version: 1 },
-  );
-  expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({
-      estado: "Recibida",
-      numero_cotizacion: expect.stringMatching(/^SIM-\d+$/),
-    }),
-    { version: 1 },
-  );
-
-  // Retry the failed item
-  const retryBtn = screen.getByRole("button", { name: "Reintentar" });
-  await user.click(retryBtn);
-
-  // Verify detail was reset to Solicitada before retry and then updated to Recibida
-  expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({
-      estado: "Solicitada",
-    }),
-    { version: 2 },
-  );
-  expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({
-      estado: "Recibida",
-      numero_cotizacion: expect.stringMatching(/^SIM-\d+$/),
-    }),
-    { version: 3 },
-  );
-});
+    // Verify detail was reset to Solicitada before retry and then updated to Recibida
+    expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        estado: "Solicitada",
+      }),
+      { version: 2 },
+    );
+    expect(cotizacionesDetalle.update).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        estado: "Recibida",
+        numero_cotizacion: expect.stringMatching(/^SIM-\d+$/),
+      }),
+      { version: 3 },
+    );
+  },
+);
 
 it("renders actual quote cards without an unsupported coverage comparison", async () => {
   const user = userEvent.setup();
@@ -1536,7 +1564,6 @@ it("keeps diagnostics and unrelated recent runs out of an empty saved quote", ()
   ).not.toBeInTheDocument();
 });
 
-
 it("keeps the new history selection when an earlier quote finishes deleting", async () => {
   const user = userEvent.setup();
   const { savia, getCollectionHandle } = quoteScreenApi();
@@ -1544,18 +1571,33 @@ it("keeps the new history selection when an earlier quote finishes deleting", as
   const details = getCollectionHandle("cotizaciones_detalle");
   for (const id of ["a", "b"]) {
     await masters.create({ id, name: `COT-${id}` });
-    await details.create({ id: `detail-${id}`, cotizacion: id, estado: "Recibida", numero_cotizacion: `RESULT-${id}`, prima: 1200000 });
+    await details.create({
+      id: `detail-${id}`,
+      cotizacion: id,
+      estado: "Recibida",
+      numero_cotizacion: `RESULT-${id}`,
+      prima: 1200000,
+    });
   }
   let finishDelete!: () => void;
-  masters.remove.mockImplementation(() => new Promise<void>(resolve => { finishDelete = resolve; }));
+  masters.remove.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finishDelete = resolve;
+      }),
+  );
   const WizardScreen = quoteScreen("cotizador_por_pasos");
   render(<WizardScreen savia={savia} />);
   await user.click(await screen.findByRole("button", { name: "Historial" }));
   await user.click(screen.getByLabelText("Seleccionar cotización anterior"));
   await user.click(await screen.findByRole("option", { name: /COT-a/ }));
   await screen.findByText("RESULT-a");
-  await user.click(screen.getByRole("button", { name: "Eliminar cotización guardada" }));
-  await user.click(screen.getByRole("button", { name: "Confirmar eliminación" }));
+  await user.click(
+    screen.getByRole("button", { name: "Eliminar cotización guardada" }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Confirmar eliminación" }),
+  );
   await user.click(screen.getByLabelText("Seleccionar cotización anterior"));
   await user.click(await screen.findByRole("option", { name: /COT-b/ }));
   await screen.findByText("RESULT-b");

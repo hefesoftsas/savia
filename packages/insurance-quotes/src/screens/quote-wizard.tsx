@@ -1,3 +1,8 @@
+import {
+  quoteSummaryPatch,
+  resumedQuoteItems,
+  persistQuoteSummary,
+} from "../quote-batch";
 import { persistQuoteDetail } from "../quote-persistence";
 import { InsuranceNotice } from "../notice";
 import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
@@ -494,6 +499,10 @@ export function InsuranceQuoteWizard({
 }: QuoteWizardProps) {
   const t = useInsuranceMessages();
   const locale = usePluginLocale();
+  const masterCollection = useMemo(
+    () => savia.collections.collection("cotizaciones"),
+    [savia],
+  );
   const detailCollection = useMemo(
     () => savia.collections.collection("cotizaciones_detalle"),
     [savia],
@@ -511,13 +520,21 @@ export function InsuranceQuoteWizard({
         options,
       );
       if (omittedFields.includes("resultado_snapshot")) {
-        setPersistenceNotice((current) => current || t(
-          "La oferta se guardó, pero este historial aún no admite el detalle de coberturas.",
-        ));
+        setPersistenceNotice(
+          (current) =>
+            current ||
+            t(
+              "La oferta se guardó, pero este historial aún no admite el detalle de coberturas.",
+            ),
+        );
       }
       return record;
     } catch (error) {
-      setPersistenceNotice(t("No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo."));
+      setPersistenceNotice(
+        t(
+          "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+        ),
+      );
       throw error;
     }
   };
@@ -537,7 +554,6 @@ export function InsuranceQuoteWizard({
   );
   const [lastClientLookup, setLastClientLookup] = useState<string | null>(null);
   const [quoting, setQuoting] = useState(false);
-  const busy = lookingUpPlate || quoting;
   const [addressSuggestions, setAddressSuggestions] = useState<
     Array<{ label: string; value: string }>
   >([]);
@@ -548,11 +564,22 @@ export function InsuranceQuoteWizard({
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [runs, setRuns] = useState<PluginExtensionActionRun[]>([]);
   const [productErrors, setProductErrors] = useState<string[]>([]);
-  const [batchItems, setBatchItems] = useState<QuoteBatchItem[]>([]);
+  const [batchItems, setBatchItemsState] = useState<QuoteBatchItem[]>([]);
+  const batchItemsRef = useRef<QuoteBatchItem[]>([]);
+  // Provider promises may settle before React renders. Summary writes must see
+  // all completed results, including completions in the same render batch.
+  const setBatchItems = (
+    next: QuoteBatchItem[] | ((current: QuoteBatchItem[]) => QuoteBatchItem[]),
+  ) => {
+    const items =
+      typeof next === "function" ? next(batchItemsRef.current) : next;
+    batchItemsRef.current = items;
+    setBatchItemsState(items);
+  };
   const [retryingIds, setRetryingIds] = useState<string[]>([]);
+  const busy = lookingUpPlate || quoting || retryingIds.length > 0;
   const [quoteReference, setQuoteReference] = useState<string | null>(null);
   const [masterQuoteId, setMasterQuoteId] = useState<string | null>(null);
-  const [masterQuoteVersion, setMasterQuoteVersion] = useState<number>();
   const [historyQuotes, setHistoryQuotes] = useState<HistoricalQuoteSummary[]>(
     [],
   );
@@ -732,7 +759,7 @@ export function InsuranceQuoteWizard({
   };
 
   const handleDeleteHistoryQuote = async (quoteId: string) => {
-    if (deletingHistory) return;
+    if (deletingHistory || (busy && quoteId === masterQuoteId)) return;
     const summary = historyQuotes.find((quote) => quote.id === quoteId);
     if (!summary) return;
     setDeletingHistory(true);
@@ -766,13 +793,25 @@ export function InsuranceQuoteWizard({
         );
         setNotice(`${message}${reason ? ` (${reason.trim()})` : ""}`);
         // Releer por si se eliminaron hijos aunque el master sobrevivió.
+        const [hashPath, hashQuery = ""] = window.location.hash.split("?");
+        const params = new URLSearchParams(hashQuery);
+        if (params.get("quote") === quoteId) {
+          params.delete("quote");
+          const query = params.toString();
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${window.location.pathname}${window.location.search}${hashPath}${query ? `?${query}` : ""}`,
+          );
+          appliedQuoteLink.current = null;
+          appliedQuoteLinkRef.current = "";
+        }
         await refreshHistoricalQuotes();
         return;
       }
       await refreshHistoricalQuotes();
       if (currentMaster.current === quoteId) {
         setMasterQuoteId(null);
-        setMasterQuoteVersion(undefined);
         setQuoteReference(null);
         setBatchItems([]);
       }
@@ -1023,6 +1062,7 @@ export function InsuranceQuoteWizard({
   };
 
   const quote = async () => {
+    if (quoting || retryingIds.length > 0) return;
     const nextErrors = validateQuote(values);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
@@ -1081,10 +1121,8 @@ export function InsuranceQuoteWizard({
     if (earlyClient) quoteClientId = earlyClient.id;
 
     let createdMasterId: string | null = resuming?.summary.id ?? null;
-    let createdMasterVersion: number | undefined = resuming?.summary.version;
     if (resuming) {
       setMasterQuoteId(createdMasterId);
-      setMasterQuoteVersion(createdMasterVersion);
     }
     if (!resuming) {
       try {
@@ -1102,9 +1140,7 @@ export function InsuranceQuoteWizard({
           });
           if (master && typeof master === "object" && "id" in master) {
             createdMasterId = String(master.id);
-            createdMasterVersion = recordVersion(master);
             setMasterQuoteId(createdMasterId);
-            setMasterQuoteVersion(createdMasterVersion);
           }
         }
       } catch {
@@ -1160,7 +1196,11 @@ export function InsuranceQuoteWizard({
                 };
               }
             } catch {
-              setPersistenceNotice(t("No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo."));
+              setPersistenceNotice(
+                t(
+                  "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+                ),
+              );
             }
           }),
         );
@@ -1171,9 +1211,9 @@ export function InsuranceQuoteWizard({
     const setupMs = Date.now() - setupStart;
     setQuoteTimings((current) => ({ ...(current ?? {}), setupMs }));
 
-    const initialItems: QuoteBatchItem[] = [
-      ...(resuming?.items.filter((item) => item.status === "succeeded") ?? []),
-      ...selected.map((product) => ({
+    const initialItems = resumedQuoteItems(
+      resuming?.items ?? [],
+      selected.map((product) => ({
         productId: product.id,
         flowId: product.flowId,
         label: product.label,
@@ -1182,7 +1222,7 @@ export function InsuranceQuoteWizard({
         detailId: details[product.id]?.id,
         detailVersion: details[product.id]?.version,
       })),
-    ];
+    );
 
     historyRequest.current += 1;
     setHistoryLoading(false);
@@ -1192,9 +1232,6 @@ export function InsuranceQuoteWizard({
     setSurface("results");
 
     try {
-      const itemsMap = new Map<string, QuoteBatchItem>(
-        initialItems.map((item) => [item.productId, item]),
-      );
       const failures: string[] = [];
 
       const quotePromises = selected.map(async (product) => {
@@ -1286,7 +1323,6 @@ export function InsuranceQuoteWizard({
           }
 
           const updatedItem: QuoteBatchItem = provisional;
-          itemsMap.set(product.id, updatedItem);
 
           setRuns((current) => [run, ...current]);
           setBatchItems((current) =>
@@ -1341,7 +1377,6 @@ export function InsuranceQuoteWizard({
             detailVersion,
             durationMs,
           };
-          itemsMap.set(product.id, updatedItem);
 
           setBatchItems((current) =>
             current.map((item) =>
@@ -1355,7 +1390,6 @@ export function InsuranceQuoteWizard({
 
       await Promise.allSettled(quotePromises);
 
-      const finalItems = Array.from(itemsMap.values());
       // CRM: registra el tiempo real aunque haya respondido tarde; si falló,
       // queda visible sin haber bloqueado los flujos.
       try {
@@ -1389,34 +1423,19 @@ export function InsuranceQuoteWizard({
           ),
         );
       }
-      if (createdMasterId && createdMasterVersion !== undefined) {
+      if (createdMasterId) {
         try {
-          const anySuccess = finalItems.some(
-            (item) => item.status === "succeeded",
-          );
-          const validPremiums = finalItems
-            .map((item) => item.premium)
-            .filter((p): p is number => typeof p === "number" && p > 0);
-          const bestPremium = validPremiums.length
-            ? Math.min(...validPremiums)
-            : undefined;
-          const updatedMaster = await savia.collections
-            ?.collection?.("cotizaciones")
-            ?.update?.(
-              createdMasterId,
-              {
-                estado: anySuccess ? "Recibida" : "Rechazada",
-                ...(bestPremium !== undefined ? { prima: bestPremium } : {}),
-                ...(quoteClientId ? { cliente: quoteClientId } : {}),
-              },
-              { version: createdMasterVersion },
-            );
-          setMasterQuoteVersion(
-            recordVersion(updatedMaster) ?? createdMasterVersion + 1,
-          );
+          await persistQuoteSummary(masterCollection, createdMasterId, () => ({
+            ...quoteSummaryPatch(batchItemsRef.current),
+            ...(quoteClientId ? { cliente: quoteClientId } : {}),
+          }));
           void refreshHistoricalQuotes();
         } catch {
-          setPersistenceNotice(t("No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo."));
+          setPersistenceNotice(
+            t(
+              "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+            ),
+          );
         }
       }
 
@@ -1540,22 +1559,19 @@ export function InsuranceQuoteWizard({
         ),
       );
 
-      if (masterQuoteId && masterQuoteVersion !== undefined) {
+      if (masterQuoteId) {
         try {
-          const updatedMaster = await savia.collections
-            ?.collection?.("cotizaciones")
-            ?.update?.(
-              masterQuoteId,
-              {
-                estado: "Recibida",
-                ...(premium ? { prima: premium } : {}),
-              },
-              { version: masterQuoteVersion },
-            );
-          setMasterQuoteVersion(
-            recordVersion(updatedMaster) ?? masterQuoteVersion + 1,
+          await persistQuoteSummary(masterCollection, masterQuoteId, () =>
+            quoteSummaryPatch(batchItemsRef.current),
           );
-        } catch {}
+          void refreshHistoricalQuotes();
+        } catch {
+          setPersistenceNotice(
+            t(
+              "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+            ),
+          );
+        }
       }
 
       void refreshRuns();
@@ -1626,7 +1642,6 @@ export function InsuranceQuoteWizard({
     );
 
     try {
-      let anySucceeded = false;
       const retryPromises = failed.map(async (item) => {
         let detailVersion =
           resetDetailVersions.get(item.productId) ?? item.detailVersion;
@@ -1644,7 +1659,6 @@ export function InsuranceQuoteWizard({
               quoteInput: toAutoLightQuoteInput(values),
             },
           });
-          anySucceeded = true;
           const newRun = runFromResponse(res.run, res.output);
           const { quoteNumber, premium } = extractQuoteData(res.output);
           const durationMs = Date.now() - retryStart;
@@ -1717,9 +1731,6 @@ export function InsuranceQuoteWizard({
               b.productId === item.productId ? updatedItem : b,
             ),
           );
-          setRetryingIds((current) =>
-            current.filter((id) => id !== item.productId),
-          );
           return updatedItem;
         } catch (reason) {
           const err = errorMessage(
@@ -1753,30 +1764,25 @@ export function InsuranceQuoteWizard({
               b.productId === item.productId ? updatedItem : b,
             ),
           );
-          setRetryingIds((current) =>
-            current.filter((id) => id !== item.productId),
-          );
           return updatedItem;
         }
       });
 
       await Promise.allSettled(retryPromises);
 
-      if (anySucceeded && masterQuoteId && masterQuoteVersion !== undefined) {
+      if (masterQuoteId) {
         try {
-          const updatedMaster = await savia.collections
-            ?.collection?.("cotizaciones")
-            ?.update?.(
-              masterQuoteId,
-              {
-                estado: "Recibida",
-              },
-              { version: masterQuoteVersion },
-            );
-          setMasterQuoteVersion(
-            recordVersion(updatedMaster) ?? masterQuoteVersion + 1,
+          await persistQuoteSummary(masterCollection, masterQuoteId, () =>
+            quoteSummaryPatch(batchItemsRef.current),
           );
-        } catch {}
+          void refreshHistoricalQuotes();
+        } catch {
+          setPersistenceNotice(
+            t(
+              "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+            ),
+          );
+        }
       }
 
       void refreshRuns();
@@ -1916,7 +1922,9 @@ export function InsuranceQuoteWizard({
         </button>
       </nav>
       {persistenceNotice && surface !== "form" && !selectedHistoryQuoteId ? (
-        <p className="insurance-quote__notice" role="alert">{persistenceNotice}</p>
+        <p className="insurance-quote__notice" role="alert">
+          {persistenceNotice}
+        </p>
       ) : null}
       {notice && surface !== "form" ? (
         <p className="insurance-quote__notice" role="status">
@@ -1987,7 +1995,10 @@ export function InsuranceQuoteWizard({
           onRetrySingle={selectedHistoryQuoteId ? undefined : retrySingle}
           onSelectHistoryQuote={handleSelectHistoryQuote}
           onDeleteHistoryQuote={handleDeleteHistoryQuote}
-          deletingHistory={deletingHistory}
+          deletingHistory={
+            deletingHistory ||
+            (busy && selectedHistoryQuoteId === masterQuoteId)
+          }
           historyLoading={historyLoading}
           historyError={historyError}
           timings={quoteTimings}
@@ -2083,7 +2094,10 @@ export function InsuranceQuoteWizard({
             {t("Paso")} {activeStep + 1} {t("de")} {quoteSteps.length}:{" "}
             {t(currentStep.title)}
           </h2>
-          <fieldset className="insurance-quote__step-fields" disabled={quoting}>
+          <fieldset
+            className="insurance-quote__step-fields"
+            disabled={quoting || retryingIds.length > 0}
+          >
             {activeStep === 0 ? (
               <div className="insurance-fields">
                 <QuoteField error={errors["vehicle.plate"]} label={t("Placa")}>

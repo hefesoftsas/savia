@@ -1,5 +1,7 @@
 import { translatePluginMessage, type PluginLocale, type PluginMessages, type PluginMessageParams } from "@savia/studio-shared/plugin-localization";
 export const insuranceMessages = {
+  "Pendiente": ["Pendiente", "Pending", "Pendente"],
+  "Sin respuesta guardada": ["Sin respuesta guardada", "No saved response", "Sem resposta salva"],
   "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.":
     [
       "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",

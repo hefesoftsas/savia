@@ -103,17 +103,17 @@ function detailMatchesQuote(
   const candidates = [quoteId, quoteReference].filter(
     (value): value is string => typeof value === "string" && value.length > 0,
   );
-  if (typeof raw === "string") {
-    const normalized = raw.trim();
-    if (candidates.some((candidate) => normalized === candidate.trim())) {
-      return true;
-    }
-  } else if (raw != null) {
-    if (candidates.some((candidate) => String(raw) === candidate)) return true;
+  const relationId =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>).id
+      : raw;
+  if (relationId != null && String(relationId).trim()) {
+    return candidates.some(
+      (candidate) => String(relationId).trim() === candidate.trim(),
+    );
   }
-  // Respaldo histórico: el detalle se crea como `${ref}-${productId}`. Si la
-  // relación se perdió o se guardó la referencia en otro formato, el nombre
-  // todavía permite recuperar los hijos para lectura y borrado.
+  // Names recover orphaned legacy details only. An explicit foreign relation
+  // always wins, preventing deletion of a copied detail belonging to another quote.
   if (quoteReference && typeof detail.name === "string") {
     const name = detail.name.trim();
     const ref = quoteReference.trim();

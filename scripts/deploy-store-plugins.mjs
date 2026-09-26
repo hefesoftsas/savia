@@ -1,120 +1,233 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { listPorts, publishPorts } from "./publish-store-plugins.mjs";
+import { packageStorePlugin } from "./pack-store-plugin.mjs";
 
-export function deploymentTargets(raw) {
-  if (!raw?.trim()) return [];
-  const targets = JSON.parse(raw);
-  if (!Array.isArray(targets))
-    throw new Error("SAVIA_PLUGIN_TARGETS must be an array.");
-  for (const target of targets) {
+const root = resolve(import.meta.dirname, "..");
+
+export function releaseArtifacts(directory = join(root, "deployment/plugins")) {
+  mkdirSync(directory, { recursive: true });
+  const sourcePath = join(directory, "sources.json");
+  if (existsSync(sourcePath)) {
+    const sources = JSON.parse(readFileSync(sourcePath, "utf8"));
     if (
-      !target ||
-      Boolean(target.tenant) === Boolean(target.domain) ||
-      (target.tenant && typeof target.tenant !== "string") ||
-      (target.domain && typeof target.domain !== "string") ||
-      (target.ports !== undefined &&
-        (!Array.isArray(target.ports) || !target.ports.length)) ||
-      (target.artifactDirectory !== undefined &&
-        typeof target.artifactDirectory !== "string")
+      !Array.isArray(sources.ports) ||
+      sources.ports.some(
+        (port) => typeof port !== "string" || !/^[a-z0-9-]+$/.test(port),
+      )
     )
       throw new Error(
-        "Each target requires exactly one tenant or domain and optional ports/artifactDirectory.",
+        "Plugin sources.json requires a ports array of directory names.",
       );
-    listPorts(target.ports ?? null);
+    for (const port of sources.ports)
+      packageStorePlugin({
+        portDir: `store-ports/${port}`,
+        outputPath: join(directory, `${port}.store.zip`),
+      });
   }
-  return targets;
+  const artifacts = readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".zip"))
+    .map((entry) => {
+      const path = join(directory, entry.name);
+      const manifest = JSON.parse(
+        execFileSync("unzip", ["-p", path, "savia-extension.json"], {
+          encoding: "utf8",
+          maxBuffer: 1024 * 1024,
+        }),
+      );
+      if (typeof manifest.id !== "string" || !Array.isArray(manifest.requires))
+        throw new Error(`Invalid plugin manifest in ${entry.name}.`);
+      return { path, manifest };
+    });
+  const byId = new Map();
+  for (const artifact of artifacts) {
+    if (byId.has(artifact.manifest.id))
+      throw new Error(
+        `Multiple deployment ZIPs for ${artifact.manifest.id}. Keep one version per release.`,
+      );
+    byId.set(artifact.manifest.id, artifact);
+  }
+  const ordered = [],
+    visiting = new Set(),
+    visited = new Set();
+  function visit(id) {
+    if (visited.has(id) || !byId.has(id)) return;
+    if (visiting.has(id)) throw new Error(`Circular plugin dependency: ${id}.`);
+    visiting.add(id);
+    const artifact = byId.get(id);
+    for (const dependency of artifact.manifest.requires) visit(dependency);
+    visiting.delete(id);
+    visited.add(id);
+    ordered.push(artifact);
+  }
+  for (const id of [...byId.keys()].sort()) visit(id);
+  return ordered;
 }
 
-export async function deployStorePlugins(env = process.env, io = {}) {
-  const log = io.log ?? console.log;
-  const targets = deploymentTargets(env.SAVIA_PLUGIN_TARGETS);
-  if (!targets.length) {
-    log(
-      "Plugin deployment skipped: SAVIA_PLUGIN_TARGETS has no opted-in workspaces.",
-    );
-    return [];
+export function deploymentConfig(env, session) {
+  for (const name of [
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_DATABASE_ID",
+  ])
+    if (!env[name]?.trim())
+      throw new Error(`${name} is required for plugin deployment.`);
+  if (!["preview", "production"].includes(env.SAVIA_DEPLOY_ENVIRONMENT))
+    throw new Error("SAVIA_DEPLOY_ENVIRONMENT must be preview or production.");
+  return {
+    name: `savia-${env.SAVIA_DEPLOY_ENVIRONMENT}-plugin-deployment-session`,
+    main: join(root, "scripts/plugin-deployment/worker.ts"),
+    compatibility_date: "2026-09-01",
+    compatibility_flags: ["nodejs_compat"],
+    workers_dev: false,
+    preview_urls: false,
+    vars: { DEPLOYMENT_SESSION: session },
+    d1_databases: [
+      {
+        binding: "DB",
+        database_name: `savia-${env.SAVIA_DEPLOY_ENVIRONMENT}-deployment`,
+        database_id: env.CLOUDFLARE_DATABASE_ID,
+        preview_database_id: env.CLOUDFLARE_DATABASE_ID,
+      },
+    ],
+  };
+}
+
+export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
+  const request = io.fetch ?? fetch,
+    log = io.log ?? console.log;
+  async function call(path, init = {}) {
+    const response = await request(`${baseUrl}${path}`, {
+      ...init,
+      redirect: "error",
+      signal: AbortSignal.timeout(120_000),
+      headers: { ...init.headers, authorization: `Bearer ${session}` },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok)
+      throw new Error(
+        `Plugin deployment ${path} failed (HTTP ${response.status}): ${JSON.stringify(payload?.error ?? "unavailable")}`,
+      );
+    return payload;
   }
-  const origin = new URL(env.SAVIA_API_URL).origin;
-  if (!env.SAVIA_DEPLOY_EMAIL || !env.SAVIA_DEPLOY_PASSWORD)
-    throw new Error(
-      "Configured plugin targets require SAVIA_DEPLOY_EMAIL and SAVIA_DEPLOY_PASSWORD.",
-    );
-  const request = io.fetch ?? fetch;
-  const session = await request(`${origin}/api/auth/sign-in/email`, {
-    method: "POST",
-    redirect: "error",
-    signal: AbortSignal.timeout(30_000),
-    headers: { "content-type": "application/json", origin },
-    body: JSON.stringify({
-      email: env.SAVIA_DEPLOY_EMAIL,
-      password: env.SAVIA_DEPLOY_PASSWORD,
-    }),
+  const { tenants } = await call("/tenants");
+  if (!Array.isArray(tenants))
+    throw new Error("Deployment worker returned an invalid tenant list.");
+  for (const tenant of tenants) {
+    // Upload every dependency before installing in topological order.
+    for (const artifact of artifacts) {
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([readFileSync(artifact.path)], basename(artifact.path), {
+          type: "application/zip",
+        }),
+      );
+      await call(`/upload?tenant=${encodeURIComponent(tenant)}`, {
+        method: "POST",
+        body: form,
+      });
+    }
+    for (const artifact of artifacts) {
+      const installed = await call(
+        `/install?tenant=${encodeURIComponent(tenant)}&id=${encodeURIComponent(artifact.manifest.id)}`,
+        { method: "POST" },
+      );
+      log(
+        `Activated ${artifact.manifest.id}@${installed?.data?.version ?? artifact.manifest.version} in ${tenant}`,
+      );
+    }
+  }
+  log(
+    `Deployed ${artifacts.length} release plugins to ${tenants.length} workspaces.`,
+  );
+  return { plugins: artifacts.length, tenants: tenants.length };
+}
+
+export async function deployStorePlugins(env = process.env) {
+  const artifacts = releaseArtifacts(env.SAVIA_PLUGIN_DIRECTORY);
+  if (!artifacts.length) {
+    console.log("No deployment plugin ZIPs found.");
+    return;
+  }
+  const session = randomBytes(32).toString("hex");
+  const config = deploymentConfig(env, session);
+  const temporary = mkdtempSync(join(tmpdir(), "savia-plugin-deployment-"));
+  const configPath = join(temporary, "wrangler.json");
+  writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
+  const port = 18877;
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const child = spawn(
+    "pnpm",
+    [
+      "--dir",
+      "apps/api",
+      "exec",
+      "wrangler",
+      "dev",
+      "--remote",
+      "--config",
+      configPath,
+      "--ip",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--inspector-port",
+      "0",
+      "--show-interactive-dev-session=false",
+    ],
+    { cwd: root, env, detached: true, stdio: "ignore" },
+  );
+  let exited = false;
+  child.on("exit", () => {
+    exited = true;
   });
-  if (!session.ok)
-    throw new Error(`Deployment sign-in failed (HTTP ${session.status}).`);
-  const body = await session.json();
-  if (body.twoFactorRedirect)
-    throw new Error(
-      "Deployment account requires interactive MFA; no plugins were deployed.",
-    );
-  const cookie = session.headers
-    .getSetCookie()
-    .map((value) => value.split(";", 1)[0])
-    .join("; ");
-  if (!cookie)
-    throw new Error("Deployment sign-in did not return a session cookie.");
-  const results = [];
+  child.on("error", () => {
+    exited = true;
+  });
   try {
-    for (const target of targets) {
-      const common = {
-        apiUrl: origin,
-        cookie,
-        tenant: target.tenant,
-        domain: target.domain,
-        updateInstalled: true,
-      };
-      if (!target.artifactDirectory || target.ports) {
-        results.push(
-          ...(await (io.publish ?? publishPorts)(
-            { ...common, ports: target.ports },
-            { log },
-          )),
-        );
+    let ready = false;
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline && !exited) {
+      try {
+        const response = await fetch(`${baseUrl}/health`, {
+          headers: { authorization: `Bearer ${session}` },
+          signal: AbortSignal.timeout(5_000),
+          redirect: "error",
+        });
+        if (response.ok && (await response.json()).status === "ok") {
+          ready = true;
+          break;
+        }
+      } catch {
+        /* Wrangler remote session is starting. */
       }
-      if (target.artifactDirectory) {
-        const artifacts = readdirSync(target.artifactDirectory, {
-          withFileTypes: true,
-        })
-          .filter((entry) => entry.isFile() && entry.name.endsWith(".zip"))
-          .map((entry) => join(target.artifactDirectory, entry.name))
-          .sort();
-        if (!artifacts.length)
-          throw new Error(`No ZIP artifacts in ${target.artifactDirectory}.`);
-        results.push(
-          ...(await (io.publish ?? publishPorts)(
-            { ...common, artifacts },
-            { log },
-          )),
-        );
+      await delay(2_000);
+    }
+    if (!ready || exited)
+      throw new Error("Authenticated plugin deployment session did not start.");
+    return await deployArtifacts(artifacts, baseUrl, session);
+  } finally {
+    if (child.pid) {
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        /* Already stopped. */
       }
     }
-    if (results.some((result) => result.error))
-      throw new Error(
-        "Plugin deployment failed; inspect the per-plugin results.",
-      );
-    return results;
-  } finally {
-    const signedOut = await request(`${origin}/api/auth/sign-out`, {
-      method: "POST",
-      redirect: "error",
-      signal: AbortSignal.timeout(30_000),
-      headers: { cookie, origin, "content-type": "application/json" },
-      body: "{}",
-    });
-    if (!signedOut.ok)
-      throw new Error(`Deployment sign-out failed (HTTP ${signedOut.status}).`);
+    rmSync(temporary, { recursive: true, force: true });
   }
 }
 

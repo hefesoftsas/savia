@@ -217,6 +217,8 @@ export async function parsePluginStoreZip(
       store = storeJsonSchema.parse(
         JSON.parse(new TextDecoder().decode(storeEntry.data)),
       );
+      for (const collection of store.collections ?? [])
+        sanitizeStoreCollection(collection);
     } catch {
       throw new Error("store.json no cumple el contrato savia.store v1.");
     }
