@@ -10,7 +10,11 @@ the wizard. It does not install an insurance management solution.
 pnpm store:pack store-ports/quotes
 ```
 
-Install the separate `savia.insurance-quoter` solution for the wizard object
-and its two hidden quote-history collections. The optional
+The plugin declares the two hidden quote-history collections, including the
+optional result snapshot and duration fields. Existing collection schemas are
+preserved on installation. On older schemas, the wizard saves the core result
+fields and reports when detailed snapshots cannot be stored.
+
+Install the separate `savia.insurance-quoter` solution for the wizard object. The optional
 `savia.insurance-management` solution adds customers, insurers, policies,
 payments, and claims independently.

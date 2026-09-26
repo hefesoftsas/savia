@@ -112,3 +112,24 @@ test("preview deploys only successful same-repository main CI and uses its own e
     /wrangler\.production\.jsonc|reset-d1|environment: production/,
   );
 });
+
+test("store updates use each gateway origin after deployment and before verification", async () => {
+  for (const [name, origin] of [
+    ["deploy-cloudflare.yml", "https://savia.app.hefesoft.com"],
+    ["deploy-preview.yml", "https://savia-preview.hefesoft.com"],
+  ]) {
+    const source = await workflow(name);
+    assert.ok(source.includes(`SAVIA_API_URL: ${origin}`));
+    assert.ok(
+      source.indexOf("name: Deploy savia gateway") <
+        source.indexOf("run: node scripts/deploy-store-plugins.mjs"),
+    );
+    assert.ok(
+      source.indexOf("run: node scripts/deploy-store-plugins.mjs") <
+        source.indexOf("name: Verify deployed gateway"),
+    );
+    assert.ok(source.includes("vars.SAVIA_PLUGIN_TARGETS"));
+    assert.ok(source.includes("secrets.SAVIA_DEPLOY_EMAIL"));
+    assert.ok(source.includes("secrets.SAVIA_DEPLOY_PASSWORD"));
+  }
+});

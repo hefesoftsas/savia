@@ -4,13 +4,22 @@ import type { QuoteBatchItem } from "./screens/quote-results";
 type DetailRecord = Record<string, unknown> & { id: string };
 
 type DetailCollectionHandle = {
+  get?: (id: string) => Promise<unknown>;
   list: (options?: {
     page?: number;
     perPage?: number;
     sort?: string;
     order?: "ASC" | "DESC";
-    filters?: { logic?: "and" | "or"; conditions: Array<{ field: string; op: string; value?: unknown }> };
-  }) => Promise<{ data: unknown[]; total: number; page: number; perPage: number }>;
+    filters?: {
+      logic?: "and" | "or";
+      conditions: Array<{ field: string; op: string; value?: unknown }>;
+    };
+  }) => Promise<{
+    data: unknown[];
+    total: number;
+    page: number;
+    perPage: number;
+  }>;
   remove: (id: string, options?: { version?: number }) => Promise<void>;
 };
 
@@ -31,7 +40,8 @@ function storedText(value: unknown): string | undefined {
 }
 
 function recordVersion(value: unknown): number | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   const version = (value as Record<string, unknown>)._version;
   return typeof version === "number" && Number.isInteger(version) && version > 0
     ? version
@@ -43,8 +53,13 @@ function detailStatus(
   quoteNumber: string | undefined,
   premium: number | undefined,
 ): QuoteBatchItem["status"] {
-  const normalized = typeof value === "string" ? value.trim().toLocaleLowerCase("es-CO") : "";
-  if (["error", "fallida", "fallido", "rechazada", "rechazado"].includes(normalized)) {
+  const normalized =
+    typeof value === "string" ? value.trim().toLocaleLowerCase("es-CO") : "";
+  if (
+    ["error", "fallida", "fallido", "rechazada", "rechazado"].includes(
+      normalized,
+    )
+  ) {
     return "failed";
   }
   if (
@@ -110,7 +125,10 @@ function detailMatchesQuote(
 async function listFiltered(
   detailColl: DetailCollectionHandle,
   filters:
-    | { logic?: "and" | "or"; conditions: Array<{ field: string; op: string; value?: unknown }> }
+    | {
+        logic?: "and" | "or";
+        conditions: Array<{ field: string; op: string; value?: unknown }>;
+      }
     | undefined,
   perPage: number,
 ): Promise<DetailRecord[]> {
@@ -163,7 +181,10 @@ export async function fetchDetailsForQuote(
   const perPage = 200;
   try {
     const filtered = await listFiltered(detailColl, conditions, perPage);
-    if (filtered.length > 0) return filtered;
+    if (filtered.length > 0)
+      return filtered.filter((detail) =>
+        detailMatchesQuote(detail, quoteId, quoteReference),
+      );
   } catch {
     // El filtro server-side no está disponible: continuar con el respaldo.
   }
@@ -179,7 +200,8 @@ export async function fetchDetailsForQuote(
         fallback.push(record);
       }
     }
-    const total = typeof chunk.total === "number" ? chunk.total : records.length;
+    const total =
+      typeof chunk.total === "number" ? chunk.total : records.length;
     if (page * perPage >= total || records.length === 0) break;
     // Si ya encontramos todo lo filtrado y el total sugiere que no hay más
     // páginas relevantes, no seguimos escaneando.
@@ -206,9 +228,13 @@ export function mapDetailToBatchItem(
     (!Number.isFinite(pendingSince) || now - pendingSince > 5 * 60_000);
   const snapshotRaw =
     typeof d.resultado_snapshot === "string" ? d.resultado_snapshot : undefined;
-  const snapshot = snapshotRaw ? parseResultSnapshot(snapshotRaw) ?? undefined : undefined;
+  const snapshot = snapshotRaw
+    ? (parseResultSnapshot(snapshotRaw) ?? undefined)
+    : undefined;
   const durationMs =
-    typeof d.duracion_ms === "number" && Number.isFinite(d.duracion_ms) && d.duracion_ms >= 0
+    typeof d.duracion_ms === "number" &&
+    Number.isFinite(d.duracion_ms) &&
+    d.duracion_ms >= 0
       ? Math.round(d.duracion_ms)
       : undefined;
   return {
@@ -234,7 +260,12 @@ export function mapDetailToBatchItem(
 
 export type DeleteQuoteHistoryResult =
   | { ok: true; deletedDetails: number }
-  | { ok: false; failedDetailId: string; error: string; deletedDetails: number };
+  | {
+      ok: false;
+      failedDetailId: string;
+      error: string;
+      deletedDetails: number;
+    };
 
 /**
  * Elimina el historial en orden de dependencias: primero todos los detalles
@@ -247,7 +278,10 @@ export type DeleteQuoteHistoryResult =
  */
 export async function deleteQuoteHistory(
   detailColl: DetailCollectionHandle,
-  masterColl: { remove: (id: string, options?: { version?: number }) => Promise<void> },
+  masterColl: {
+    get?: (id: string) => Promise<unknown>;
+    remove: (id: string, options?: { version?: number }) => Promise<void>;
+  },
   quoteId: string,
   masterVersion: number | undefined,
   quoteReference?: string,
@@ -259,32 +293,26 @@ export async function deleteQuoteHistory(
     return {
       ok: false,
       failedDetailId: "",
-      error: reason instanceof Error && reason.message ? reason.message : "No se pudieron leer los detalles.",
+      error:
+        reason instanceof Error && reason.message
+          ? reason.message
+          : "No se pudieron leer los detalles.",
       deletedDetails: 0,
     };
   }
   let deleted = 0;
   const deleteOneDetail = async (detail: DetailRecord) => {
-    const version = recordVersion(detail);
-    try {
-      if (version === undefined) {
-        await detailColl.remove(detail.id);
-      } else {
-        await detailColl.remove(detail.id, { version });
-      }
-      deleted += 1;
-    } catch (reason) {
-      // Reintento sin versión para transportes que la resuelven localmente
-      // (el borrado local ignora el query param y usa la versión vigente).
-      const message =
-        reason instanceof Error && reason.message ? reason.message : "";
-      if (version !== undefined && /versi[oó]n/i.test(message)) {
-        await detailColl.remove(detail.id);
-        deleted += 1;
-        return;
-      }
-      throw reason;
+    // Resolve the current version immediately before deletion. Never retry
+    // without a version: the API requires optimistic concurrency protection.
+    const version = detailColl.get
+      ? recordVersion(await detailColl.get(detail.id))
+      : recordVersion(detail);
+    if (version === undefined) {
+      await detailColl.remove(detail.id);
+    } else {
+      await detailColl.remove(detail.id, { version });
     }
+    deleted += 1;
   };
   for (const detail of details) {
     try {
@@ -302,6 +330,9 @@ export async function deleteQuoteHistory(
     }
   }
   const removeMaster = async () => {
+    if (masterColl.get) {
+      masterVersion = recordVersion(await masterColl.get(quoteId));
+    }
     if (masterVersion === undefined) {
       await masterColl.remove(quoteId);
     } else {
@@ -323,11 +354,7 @@ export async function deleteQuoteHistory(
           quoteReference,
         );
         for (const detail of remaining) {
-          try {
-            await deleteOneDetail(detail);
-          } catch {
-            // Si un restante falla, se reporta abajo con el error original.
-          }
+          await deleteOneDetail(detail);
         }
         await removeMaster();
         return { ok: true, deletedDetails: deleted };

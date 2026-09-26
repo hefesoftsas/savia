@@ -1,5 +1,27 @@
 import { translatePluginMessage, type PluginLocale, type PluginMessages, type PluginMessageParams } from "@savia/studio-shared/plugin-localization";
 export const insuranceMessages = {
+  "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.":
+    [
+      "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+      "A result could not be saved to history. Keep this screen open and try again.",
+      "Não foi possível salvar um resultado no histórico. Mantenha esta tela aberta e tente novamente.",
+    ],
+  "La oferta se guardó, pero este historial aún no admite el detalle de coberturas.":
+    [
+      "La oferta se guardó, pero este historial aún no admite el detalle de coberturas.",
+      "The offer was saved, but this history does not yet support coverage details.",
+      "A oferta foi salva, mas este histórico ainda não permite detalhes de cobertura.",
+    ],
+  "Esta cotización tiene resultados pendientes de guardar.": [
+    "Esta cotización tiene resultados pendientes de guardar.",
+    "This saved quote has results that have not been saved yet.",
+    "Esta cotação tem resultados pendentes de salvar.",
+  ],
+  "Actualizar cotización guardada": [
+    "Actualizar cotización guardada",
+    "Refresh saved quote",
+    "Atualizar cotação salva",
+  ],
   "Resultado de cotización": [
     "Resultado de cotización",
     "Quote result",

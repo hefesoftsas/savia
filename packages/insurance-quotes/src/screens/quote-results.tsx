@@ -122,7 +122,11 @@ function HistoryDeleteButton({
     );
   }
   return (
-    <div className="insurance-history-delete-confirm" role="group" aria-label={t("Confirmar eliminación")}>
+    <div
+      className="insurance-history-delete-confirm"
+      role="group"
+      aria-label={t("Confirmar eliminación")}
+    >
       <span>{t("¿Eliminar esta cotización y sus detalles?")}</span>
       <button
         className="insurance-comparator__btn insurance-comparator__btn--ghost"
@@ -168,7 +172,6 @@ export function QuoteResults({
   historyError = null,
   onDeleteHistoryQuote,
   deletingHistory = false,
-  timings = null,
 }: {
   runs: readonly PluginExtensionActionRun[];
   loading: boolean;
@@ -203,8 +206,12 @@ export function QuoteResults({
   /** Delete action for the selected saved quote (with confirmation in UI). */
   onDeleteHistoryQuote?: (quoteId: string) => Promise<void> | void;
   deletingHistory?: boolean;
-  /** Timing visibility: setup/CRM per-product durations in ms. */
-  timings?: { setupMs?: number; crmMs?: number; products?: Record<string, number> } | null;
+  /** Legacy diagnostics input; intentionally not rendered in customer results. */
+  timings?: {
+    setupMs?: number;
+    crmMs?: number;
+    products?: Record<string, number>;
+  } | null;
 }) {
   const t = useInsuranceMessages();
   const locale = usePluginLocale();
@@ -266,7 +273,7 @@ export function QuoteResults({
   // Derive batch items from runs only if batchItems is empty AND runs is a small test set (e.g. <= 5)
   const effectiveBatchItems: readonly QuoteBatchItem[] = useMemo(() => {
     if (batchItems.length > 0) return batchItems;
-    if (runs.length > 0 && runs.length <= 5) {
+    if (!selectedHistoryQuoteId && runs.length > 0 && runs.length <= 5) {
       return runs
         .filter((r) => r.actionId === "quote")
         .map((r) => {
@@ -303,7 +310,7 @@ export function QuoteResults({
         });
     }
     return [];
-  }, [batchItems, runs]);
+  }, [batchItems, runs, selectedHistoryQuoteId]);
 
   const isQuoteActive =
     hasSelectedQuote ??
@@ -671,22 +678,6 @@ export function QuoteResults({
           onDelete={() => onDeleteHistoryQuote(selectedHistoryQuoteId)}
         />
       ) : null}
-      {timings && (timings.setupMs !== undefined || timings.crmMs !== undefined) ? (
-        <p className="insurance-quote__timings" role="status">
-          {timings.setupMs !== undefined
-            ? t("Preparación: %{p0} ms", { p0: timings.setupMs })
-            : null}
-          {timings.setupMs !== undefined && timings.crmMs !== undefined ? " · " : null}
-          {timings.crmMs !== undefined
-            ? t("CRM: %{p0} ms", { p0: timings.crmMs })
-            : null}
-          {timings.products && Object.keys(timings.products).length > 0
-            ? ` · ${Object.entries(timings.products)
-                .map(([id, ms]) => `${id}: ${ms} ms`)
-                .join(" · ")}`
-            : null}
-        </p>
-      ) : null}
 
       {/* 1. MASTER QUOTE HEADER & VEHICLE CONTEXT (Only if quote is active) */}
       {isQuoteActive &&
@@ -751,8 +742,25 @@ export function QuoteResults({
         </header>
       ) : null}
 
+      {selectedHistoryQuoteId && !historyLoading ? (
+        <div className="insurance-quote__notice">
+          {pendingCount > 0 ? (
+            <p>
+              {t("Esta cotización tiene resultados pendientes de guardar.")}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="insurance-comparator__btn"
+            onClick={() => onSelectHistoryQuote?.(selectedHistoryQuoteId)}
+          >
+            {t("Actualizar cotización guardada")}
+          </button>
+        </div>
+      ) : null}
+
       {/* Indicador de progreso en vivo */}
-      {isQuoteActive && pendingCount > 0 ? (
+      {isQuoteActive && !selectedHistoryQuoteId && pendingCount > 0 ? (
         <div
           aria-live="polite"
           className="insurance-busy-indicator"
@@ -802,7 +810,10 @@ export function QuoteResults({
       ) : null}
 
       {/* Skeletons cuando está cotizando pero aún no ha llegado la primera oferta */}
-      {isQuoteActive && unifiedQuotes.length === 0 && pendingCount > 0 ? (
+      {isQuoteActive &&
+      !selectedHistoryQuoteId &&
+      unifiedQuotes.length === 0 &&
+      pendingCount > 0 ? (
         <div
           style={{
             display: "grid",

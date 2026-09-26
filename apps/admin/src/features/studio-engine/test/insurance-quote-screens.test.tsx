@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { storePortScreens } from "@savia/release-catalog/test-fixtures";
+
+import { StorePortQuoteResults as QuoteResults } from "@savia/release-catalog/test-fixtures";
 
 afterEach(cleanup);
 
@@ -122,7 +124,11 @@ function quoteScreenApi(
           };
         }),
         remove: vi.fn(async () => {}),
-        describe: vi.fn(),
+        describe: vi
+          .fn()
+          .mockResolvedValue({
+            config: { fields: { resultado_snapshot: {}, duracion_ms: {} } },
+          }),
       };
     }
     return mockCollectionHandles[name];
@@ -571,12 +577,16 @@ it("does not leave old unfinished history quotes loading forever", async () => {
   const WizardScreen = quoteScreen("cotizador_por_pasos");
   render(<WizardScreen savia={savia} />);
   await user.click(await screen.findByRole("button", { name: "Historial" }));
-  await user.click(screen.getByRole("button", { name: "Abrir opciones de cotización" }));
+  await user.click(
+    screen.getByRole("button", { name: "Abrir opciones de cotización" }),
+  );
   await user.click(await screen.findByRole("option", { name: /COT-OLD/ }));
 
   expect(await screen.findByText(/✕ Rechazada/)).toBeVisible();
   expect(screen.getByText(/La ejecución no se completó/)).toBeInTheDocument();
-  expect(screen.queryByText(/Cotizando con aseguradoras en vivo/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Cotizando con aseguradoras en vivo/),
+  ).not.toBeInTheDocument();
 });
 
 it("retries an unfinished saved quote under its original reference", async () => {
@@ -623,25 +633,40 @@ it("retries an unfinished saved quote under its original reference", async () =>
   const WizardScreen = quoteScreen("cotizador_por_pasos");
   render(<WizardScreen savia={savia} />);
   await user.click(await screen.findByRole("button", { name: "Historial" }));
-  await user.click(screen.getByRole("button", { name: "Abrir opciones de cotización" }));
-  await user.click(await screen.findByRole("option", { name: /COT-UNFINISHED/ }));
-  await user.click(await screen.findByRole("button", { name: "Reintentar esta cotización" }));
+  await user.click(
+    screen.getByRole("button", { name: "Abrir opciones de cotización" }),
+  );
+  await user.click(
+    await screen.findByRole("option", { name: /COT-UNFINISHED/ }),
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "Reintentar esta cotización" }),
+  );
   expect(screen.getByLabelText("Placa")).toHaveValue("SAMPLE");
   expect(screen.getByLabelText("Valor asegurado")).toHaveValue("30.000.000");
 
   await user.type(screen.getByLabelText("Código Fasecolda"), "654321");
   await user.type(screen.getByLabelText("Año del vehículo"), "2023");
-  await user.type(screen.getByLabelText("Código de ciudad de circulación"), "11001");
+  await user.type(
+    screen.getByLabelText("Código de ciudad de circulación"),
+    "11001",
+  );
   await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
   await user.type(screen.getByLabelText("Número de documento"), "98765432");
   await user.type(screen.getByLabelText("Nombres"), "Carlos");
   await user.type(screen.getByLabelText("Primer apellido"), "Gómez");
   await user.type(screen.getByLabelText("Fecha de nacimiento"), "1985-05-15");
   await user.click(screen.getByRole("button", { name: "Siguiente paso" }));
-  await user.type(screen.getByLabelText("Código de ciudad de residencia"), "11001");
+  await user.type(
+    screen.getByLabelText("Código de ciudad de residencia"),
+    "11001",
+  );
   await user.type(screen.getByLabelText("Dirección"), "Carrera 7 # 45-10");
   await user.type(screen.getByLabelText("Teléfono"), "3109876543");
-  await user.type(screen.getByLabelText("Correo electrónico"), "carlos@example.test");
+  await user.type(
+    screen.getByLabelText("Correo electrónico"),
+    "carlos@example.test",
+  );
   await user.click(screen.getByRole("button", { name: "Cotizar" }));
 
   expect((await screen.findAllByText("RESUMED-1"))[0]).toBeVisible();
@@ -658,7 +683,9 @@ it("retries an unfinished saved quote under its original reference", async () =>
     expect.objectContaining({ estado: "Recibida" }),
     expect.anything(),
   );
-  expect(details.update.mock.calls.some(([id]) => id === "received-detail")).toBe(false);
+  expect(
+    details.update.mock.calls.some(([id]) => id === "received-detail"),
+  ).toBe(false);
 });
 
 it("opens saved history while the unrelated recent-runs request is pending", async () => {
@@ -685,7 +712,9 @@ it("opens saved history while the unrelated recent-runs request is pending", asy
   const WizardScreen = quoteScreen("cotizador_por_pasos");
   render(<WizardScreen savia={savia} />);
   await user.click(await screen.findByRole("button", { name: "Historial" }));
-  await user.click(await screen.findByRole("button", { name: "Abrir opciones de cotización" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Abrir opciones de cotización" }),
+  );
   await user.click(await screen.findByRole("option", { name: /COT-SAVED/ }));
 
   expect(await screen.findByRole("heading", { name: "SBS" })).toBeVisible();
@@ -1387,4 +1416,149 @@ it("shows a city lookup error when the workspace API fails", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+it("does not pretend a saved pending quote is executing live", async () => {
+  const user = userEvent.setup();
+  const { savia, actions, getCollectionHandle } = quoteScreenApi();
+  await getCollectionHandle("cotizaciones").create({
+    id: "pending-master",
+    name: "COT-PENDING",
+  });
+  await getCollectionHandle("cotizaciones_detalle").create({
+    id: "pending-detail",
+    cotizacion: "pending-master",
+    producto: "SBS · Gold",
+    estado: "Solicitada",
+    created_at: new Date().toISOString(),
+  });
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(
+    screen.getByRole("button", { name: "Abrir opciones de cotización" }),
+  );
+  await user.click(await screen.findByRole("option", { name: /COT-PENDING/ }));
+  expect(
+    await screen.findByRole("button", {
+      name: "Actualizar cotización guardada",
+    }),
+  ).toBeVisible();
+  expect(
+    screen.queryByText(/Cotizando con aseguradoras en vivo/),
+  ).not.toBeInTheDocument();
+  expect(actions.execute).not.toHaveBeenCalled();
+});
+
+it("ignores a slow response for a previously selected history quote", async () => {
+  const user = userEvent.setup();
+  const { savia, getCollectionHandle } = quoteScreenApi();
+  const masters = getCollectionHandle("cotizaciones");
+  await masters.create({ id: "a", name: "COT-A" });
+  await masters.create({ id: "b", name: "COT-B" });
+  let resolveFirst!: (value: unknown) => void;
+  const details = getCollectionHandle("cotizaciones_detalle");
+  details.list
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    )
+    .mockResolvedValue({
+      data: [
+        {
+          id: "db",
+          cotizacion: "b",
+          producto: "B",
+          estado: "Recibida",
+          numero_cotizacion: "RESULT-B",
+          prima: 1230000,
+        },
+      ],
+      total: 1,
+    });
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(
+    screen.getByRole("button", { name: "Abrir opciones de cotización" }),
+  );
+  await user.click(await screen.findByRole("option", { name: /COT-A/ }));
+  await user.click(screen.getByLabelText("Seleccionar cotización anterior"));
+  await user.click(await screen.findByRole("option", { name: /COT-B/ }));
+  expect(await screen.findByText("RESULT-B")).toBeVisible();
+  await act(async () =>
+    resolveFirst({
+      data: [
+        {
+          id: "da",
+          cotizacion: "a",
+          producto: "A",
+          estado: "Recibida",
+          numero_cotizacion: "RESULT-A",
+          prima: 4560000,
+        },
+      ],
+      total: 1,
+    }),
+  );
+  expect(screen.getByText("RESULT-B")).toBeVisible();
+  expect(screen.queryByText("RESULT-A")).not.toBeInTheDocument();
+});
+
+it("keeps diagnostics and unrelated recent runs out of an empty saved quote", () => {
+  render(
+    <QuoteResults
+      loading={false}
+      selectedHistoryQuoteId="empty"
+      hasSelectedQuote
+      batchItems={[]}
+      timings={{ setupMs: 42, crmMs: 84, products: { "internal-flow": 100 } }}
+      runs={[
+        {
+          runId: "unrelated",
+          actionId: "quote",
+          status: "succeeded",
+          output: {
+            type: "quote",
+            provider: "SBS",
+            status: "success",
+            data: { quoteNumber: "UNRELATED-OFFER", premiumTotal: 1000000 },
+          },
+        } as never,
+      ]}
+    />,
+  );
+  expect(screen.queryByText("UNRELATED-OFFER")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Preparación:|CRM:|internal-flow/),
+  ).not.toBeInTheDocument();
+});
+
+
+it("keeps the new history selection when an earlier quote finishes deleting", async () => {
+  const user = userEvent.setup();
+  const { savia, getCollectionHandle } = quoteScreenApi();
+  const masters = getCollectionHandle("cotizaciones");
+  const details = getCollectionHandle("cotizaciones_detalle");
+  for (const id of ["a", "b"]) {
+    await masters.create({ id, name: `COT-${id}` });
+    await details.create({ id: `detail-${id}`, cotizacion: id, estado: "Recibida", numero_cotizacion: `RESULT-${id}`, prima: 1200000 });
+  }
+  let finishDelete!: () => void;
+  masters.remove.mockImplementation(() => new Promise<void>(resolve => { finishDelete = resolve; }));
+  const WizardScreen = quoteScreen("cotizador_por_pasos");
+  render(<WizardScreen savia={savia} />);
+  await user.click(await screen.findByRole("button", { name: "Historial" }));
+  await user.click(screen.getByLabelText("Seleccionar cotización anterior"));
+  await user.click(await screen.findByRole("option", { name: /COT-a/ }));
+  await screen.findByText("RESULT-a");
+  await user.click(screen.getByRole("button", { name: "Eliminar cotización guardada" }));
+  await user.click(screen.getByRole("button", { name: "Confirmar eliminación" }));
+  await user.click(screen.getByLabelText("Seleccionar cotización anterior"));
+  await user.click(await screen.findByRole("option", { name: /COT-b/ }));
+  await screen.findByText("RESULT-b");
+  await act(async () => finishDelete());
+  expect(screen.getByText("RESULT-b")).toBeVisible();
 });

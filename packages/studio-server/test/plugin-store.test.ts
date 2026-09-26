@@ -592,6 +592,62 @@ describe("plugin store por tenant", () => {
     expect(different.status).toBe(409);
   });
 
+  it("rejects changed JavaScript or settings under an immutable version", async () => {
+    const tenant = "store-immutable-code";
+    expect((await uploadZip(tenant, pluginZip())).status).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            entry: 'export function render(el) { el.textContent = "changed"; }',
+          }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            store: {
+              format: "savia.store",
+              formatVersion: 1,
+              settings: { defaults: { changed: true } },
+            },
+          }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (await uploadZip(tenant, pluginZip({}, { deflate: true }))).status,
+    ).toBe(200);
+  });
+
+  it("deployment updates never install or enable optional plugins", async () => {
+    const tenant = "store-deploy-update";
+    await uploadZip(tenant, pluginZip());
+    const request = (path: string, init: RequestInit = { method: "POST" }) =>
+      app(tenant).request(
+        `http://localhost/api/extensions/custom.demo${path}`,
+        init,
+        platform.env,
+      );
+    expect((await request("/install?update=enabled")).status).toBe(409);
+    expect((await request("/install")).status).toBe(200);
+    expect((await request("/install?update=enabled")).status).toBe(200);
+    expect(
+      (
+        await request("", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled: false }),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await request("/install?update=enabled")).status).toBe(409);
+  });
+
   it("exige desactivar antes de eliminar.", async () => {
     const tenant = "store-delete";
     await uploadZip(tenant, pluginZip());

@@ -10,8 +10,8 @@ concurrently and each provider flow executes its steps sequentially.
 
 - Quote startup records elapsed time for setup (`setupMs`), CRM persistence
   (`crmMs`) and each product flow (`duracion_ms` per detail, surfaced as
-  `products[productId]`). The UI shows preparation vs CRM vs per-provider time;
-  it does not change which products run or how they are isolated.
+  `products[productId]`). These diagnostics are not printed in the customer results view.
+  Provider durations remain available in persisted details.
 - The configured client is resolved with a server-side match query
   (`filters: { logic: "and", conditions: [{ field, op: "eq", value }] }`)
   through the plugin collection API. The full collection scan (up to 2,000
@@ -68,3 +68,21 @@ keep the honest "No informado por la aseguradora" view.
 - Plugin collection `list()` accepts `filters` and `q`, forwarded as
   `?filters=JSON&q=` to `GET /api/records/:object`, which already supports
   `eq/ne/contains/in/…` via `buildWhere`.
+
+## Compatibility and recovery
+
+- The quote plugin declares the master and detail collections for new installations.
+  Existing collection definitions are preserved. Before saving optional snapshots
+  and durations, the wizard reads the actual detail schema (once per mounted
+  collection handle). On older schemas it saves core status, premium, quote number,
+  and run reference, and explicitly warns when coverage details cannot be stored.
+  Failed writes are surfaced instead of silently leaving history pending.
+- Late CRM linking is saved with the terminal master update, avoiding concurrent
+  writes using the same version.
+- History ignores responses from an earlier selection. Empty saved quotes never
+  borrow unrelated recent runs. Saved pending details show a refresh action rather
+  than claiming a live provider request is running.
+- Deletion reads current child and master versions immediately before removing
+  them. Version conflicts remain visible; deletion never retries a conflict without
+  the required version. Client-side ownership checks also isolate results returned
+  by legacy hosts that ignore collection filters.

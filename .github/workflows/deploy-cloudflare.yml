@@ -170,6 +170,14 @@ jobs:
           workingDirectory: apps/api
           wranglerVersion: 4.127.1
 
+      - name: Update opted-in installed store plugins
+        run: node scripts/deploy-store-plugins.mjs
+        env:
+          SAVIA_API_URL: https://savia.app.hefesoft.com
+          SAVIA_PLUGIN_TARGETS: ${{ vars.SAVIA_PLUGIN_TARGETS }}
+          SAVIA_DEPLOY_EMAIL: ${{ secrets.SAVIA_DEPLOY_EMAIL }}
+          SAVIA_DEPLOY_PASSWORD: ${{ secrets.SAVIA_DEPLOY_PASSWORD }}
+
       - name: Verify deployed gateway
         uses: cloudflare/wrangler-action@v4
         with:

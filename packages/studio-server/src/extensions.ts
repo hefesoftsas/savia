@@ -349,6 +349,9 @@ export function registerExtensions(
     await assertStoreManager(c.env.DB, tenant, c.get("principalId"), id);
     await assertDependencies(c.env.DB, tenant, extension.manifest, registry);
     const current = await installation(c.env.DB, tenant, id);
+    // Deployment updates must never install an optional plugin or re-enable it.
+    if (c.req.query("update") === "enabled" && current?.enabled !== 1)
+      return fail("Deployment updates require an enabled installation.", 409);
     const manifest = canonicalJson(extension.manifest);
     if (current) {
       const order = compareSolutionVersions(
