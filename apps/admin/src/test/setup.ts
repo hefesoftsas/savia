@@ -1,4 +1,6 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
+import { invalidateSharedDataDomains } from "@/api/domain-client";
 
 class ResizeObserverStub {
   observe() {}
@@ -31,3 +33,7 @@ if (typeof window !== "undefined")
       dispatchEvent: () => false,
     }),
   });
+
+afterEach(() => {
+  invalidateSharedDataDomains();
+});

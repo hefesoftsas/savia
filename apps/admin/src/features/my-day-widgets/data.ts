@@ -1,4 +1,5 @@
 import type { ApiClient } from "@/api/api-client";
+import { fetchDataDomains } from "@/api/domain-client";
 import { matchAgencyApiBasePath } from "@/features/studio/studio-navigation";
 import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import type {
@@ -96,7 +97,7 @@ function recordsPath(widget: MyDayWidget): string {
 export async function listWidgetDomains(
   apiClient: ApiClient,
 ): Promise<WidgetDomain[]> {
-  return (await apiClient.get<DomainsResponse>("/v1/data-domains")).data;
+  return (await fetchDataDomains(apiClient)) as WidgetDomain[];
 }
 
 export async function listWidgetCollections(

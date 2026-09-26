@@ -197,15 +197,13 @@ export function mapDetailToBatchItem(
   const premium = storedNumber(d.prima);
   const recordedStatus = detailStatus(d.estado, quoteNumber, premium);
   const updatedAt =
-    typeof d.updated_at === "string"
-      ? Date.parse(d.updated_at)
-      : typeof d.created_at === "string"
-        ? Date.parse(d.created_at)
-        : NaN;
+    typeof d.updated_at === "string" ? Date.parse(d.updated_at) : NaN;
+  const createdAt =
+    typeof d.created_at === "string" ? Date.parse(d.created_at) : NaN;
+  const pendingSince = Number.isFinite(updatedAt) ? updatedAt : createdAt;
   const stale =
     recordedStatus === "pending" &&
-    Number.isFinite(updatedAt) &&
-    now - updatedAt > 5 * 60_000;
+    (!Number.isFinite(pendingSince) || now - pendingSince > 5 * 60_000);
   const snapshotRaw =
     typeof d.resultado_snapshot === "string" ? d.resultado_snapshot : undefined;
   const snapshot = snapshotRaw ? parseResultSnapshot(snapshotRaw) ?? undefined : undefined;

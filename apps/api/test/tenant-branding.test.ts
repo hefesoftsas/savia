@@ -115,6 +115,9 @@ it("saves own tenant branding with optimistic concurrency and safe host projecti
   const publicResponse = await instance.request(
     "https://" + t.slug + ".savia.test/api/public/tenant-branding",
   );
+  expect(publicResponse.headers.get("cache-control")).toBe(
+    "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+  );
   expect(await publicResponse.json()).toEqual({ data: current.data });
   expect(
     await (
@@ -220,6 +223,9 @@ it("stores validated images by tenant and only serves assets referenced by saved
   const image = await instance.request("https://api.test" + url);
   expect(image.status).toBe(200);
   expect(image.headers.get("content-type")).toBe("image/png");
+  expect(image.headers.get("cache-control")).toBe(
+    "public, max-age=31536000, immutable",
+  );
   expect(image.headers.get("x-content-type-options")).toBe("nosniff");
   expect(new Uint8Array(await image.arrayBuffer())).toEqual(png());
   expect(

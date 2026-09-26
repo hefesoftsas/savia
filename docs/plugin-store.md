@@ -333,7 +333,7 @@ Ver ADR 0004.
 ## Port de referencia: Cotizaciones UI
 
 For new quote installations, use `store-ports/quotes/` (`insurance.quotes`
-2.0.2). Its ZIP contributes only `cotizador_por_pasos`; the wizard's
+2.0.3). Its ZIP contributes only `cotizador_por_pasos`; the wizard's
 configuration remains inside that screen. Install the independent
 `savia.insurance-quoter` solution to create the wizard object and hidden
 quote-history collections. `savia.insurance-management` is optional and

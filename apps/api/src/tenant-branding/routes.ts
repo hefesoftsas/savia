@@ -170,7 +170,10 @@ export function registerTenantBrandingRoutes(
       },
     }),
     async (c) => {
-      c.header("Cache-Control", "no-store");
+      c.header(
+        "Cache-Control",
+        "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+      );
       return c.json(
         {
           data: await readTenantBrandingForRequest(
@@ -234,7 +237,7 @@ export function registerTenantBrandingRoutes(
         headers: {
           "Content-Type": row.content_type,
           "Content-Length": String(object.size),
-          "Cache-Control": "no-store",
+          "Cache-Control": "public, max-age=31536000, immutable",
           "X-Content-Type-Options": "nosniff",
           "Content-Security-Policy": "default-src 'none'; sandbox",
           "Content-Disposition": "inline",
