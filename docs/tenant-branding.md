@@ -74,7 +74,10 @@ failure leaves the tenant inactive and requires retrying deletion.
 
 Public endpoints expose only branding and published images. They cannot list tenants,
 read tenant records or retrieve arbitrary R2 objects. Responses prevent MIME sniffing,
-and uploaded images are served as images with a restrictive content security policy.
+uploaded images are served as images with a restrictive content security policy,
+public branding is served with edge caching (`public, max-age=60, s-maxage=300, stale-while-revalidate=600`),
+and published assets are cached immutably (`public, max-age=31536000, immutable`)
+keyed by their unique asset UUID. The editor reloads the fresh configuration immediately on save.
 The generated OpenAPI/Scalar document is the API reference.
 
 ## Deployment and verification

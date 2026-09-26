@@ -15,7 +15,7 @@ import {
 
 type BrandingContext = {
   branding: TenantBranding | null;
-  refetch: () => Promise<void>;
+  refetch: (options?: { reload?: boolean }) => Promise<void>;
 };
 const Context = createContext<BrandingContext>({
   branding: null,
@@ -32,24 +32,32 @@ export function TenantBrandingProvider({
   }>();
   const request = useRef<AbortController | null>(null);
   const branding = snapshot?.hostname === hostname ? snapshot.branding : null;
-  const refetch = useCallback(async () => {
-    request.current?.abort();
-    const controller = new AbortController();
-    request.current = controller;
-    try {
-      const response = await fetch(
-        new URL("/api/public/tenant-branding", window.location.origin).href,
-        { credentials: "omit", cache: "no-store", signal: controller.signal },
-      );
-      if (!response.ok) throw new Error("Branding unavailable");
-      const body = (await response.json()) as { data?: unknown };
-      const value = parseTenantBranding(body?.data);
-      if (!controller.signal.aborted)
-        setSnapshot({ hostname, branding: value });
-    } catch {
-      if (!controller.signal.aborted) setSnapshot({ hostname, branding: null });
-    }
-  }, [hostname]);
+  const refetch = useCallback(
+    async (options?: { reload?: boolean }) => {
+      request.current?.abort();
+      const controller = new AbortController();
+      request.current = controller;
+      try {
+        const response = await fetch(
+          new URL("/api/public/tenant-branding", window.location.origin).href,
+          {
+            credentials: "omit",
+            cache: options?.reload ? "reload" : "default",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) throw new Error("Branding unavailable");
+        const body = (await response.json()) as { data?: unknown };
+        const value = parseTenantBranding(body?.data);
+        if (!controller.signal.aborted)
+          setSnapshot({ hostname, branding: value });
+      } catch {
+        if (!controller.signal.aborted)
+          setSnapshot({ hostname, branding: null });
+      }
+    },
+    [hostname],
+  );
   useEffect(() => {
     void refetch();
     return () => request.current?.abort();

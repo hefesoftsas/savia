@@ -352,7 +352,7 @@ function BrandingEditor({
       setDraft(value);
       clearPreviews();
       setNotice("Marca guardada.");
-      void refetch();
+      void refetch({ reload: true });
     } catch (cause) {
       if (alive.current) {
         if (cause instanceof ApiClientError && cause.status === 409) {

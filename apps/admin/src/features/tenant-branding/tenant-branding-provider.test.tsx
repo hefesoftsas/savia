@@ -46,6 +46,7 @@ it("loads only public host branding and restores its variables on unmount", asyn
   );
   expect(fetcher.mock.calls[0][0]).toContain("/api/public/tenant-branding");
   expect(fetcher.mock.calls[0][1].credentials).toBe("omit");
+  expect(fetcher.mock.calls[0][1].cache).toBe("default");
   view.unmount();
   expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
     "original",
@@ -141,4 +142,32 @@ it("ignores unsafe public image configuration without applying its colors", asyn
   await act(async () => undefined);
   expect(screen.getByText("Sin marca")).toBeInTheDocument();
   expect(document.documentElement.style.getPropertyValue("--primary")).toBe("");
+});
+
+it("passes reload cache mode when refetch is called with reload option", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify({ data: branding })));
+  vi.stubGlobal("fetch", fetcher);
+
+  function RefetchButton() {
+    const { refetch } = useTenantBranding();
+    return (
+      <button onClick={() => void refetch({ reload: true })}>Refetch</button>
+    );
+  }
+
+  render(
+    <TenantBrandingProvider>
+      <RefetchButton />
+    </TenantBrandingProvider>,
+  );
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+  expect(fetcher.mock.calls[0][1].cache).toBe("default");
+
+  await act(async () => {
+    screen.getByRole("button", { name: "Refetch" }).click();
+  });
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls[1][1].cache).toBe("reload");
 });
