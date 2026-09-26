@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "pnpm run typecheck && vite build",
+    "build:assets": "vite build",
     "build:worker": "pnpm run build",
     "generate:api": "tsx scripts/generate-openapi-types.ts && prettier --write src/api/generated/openapi.ts",
     "generate:studio-api": "orval --config src/features/studio-engine/orval.config.ts && prettier --write src/features/studio-engine/generated/studio.ts",
