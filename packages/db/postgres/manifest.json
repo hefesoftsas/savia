@@ -341,6 +341,10 @@
     {
       "filename": "0075_savia_request_installed_bundles.sql",
       "sha256": "d1b915cefc34aaa30c832fa9933f759065581b611235fea77cffbb8bf994c986"
+    },
+    {
+      "filename": "0076_public_form_logo.sql",
+      "sha256": "2ef677b61a53a3d5200b11f40d7146361309b40a3a938961ffaca84b8ac23ed0"
     }
   ],
   "objects": [
@@ -8283,6 +8287,14 @@
         {
           "cid": 16,
           "name": "short_url",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 17,
+          "name": "logo_image",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,
