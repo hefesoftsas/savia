@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   admin:
-    name: Admin unit tests (shard 1/4)
+    name: Admin unit tests (shard 1/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -40,10 +40,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 1/4' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 1/6' pnpm run test:unit:admin
 
   admin-2:
-    name: Admin unit tests (shard 2/4)
+    name: Admin unit tests (shard 2/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -67,10 +67,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 2/4' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 2/6' pnpm run test:unit:admin
 
   admin-3:
-    name: Admin unit tests (shard 3/4)
+    name: Admin unit tests (shard 3/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -94,10 +94,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 3/4' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 3/6' pnpm run test:unit:admin
 
   admin-4:
-    name: Admin unit tests (shard 4/4)
+    name: Admin unit tests (shard 4/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -121,10 +121,64 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 4/4' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 4/6' pnpm run test:unit:admin
+
+  admin-5:
+    name: Admin unit tests (shard 5/6)
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Admin unit tests
+        run: VITEST_SHARD_ARGS='--shard 5/6' pnpm run test:unit:admin
+
+  admin-6:
+    name: Admin unit tests (shard 6/6)
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Admin unit tests
+        run: VITEST_SHARD_ARGS='--shard 6/6' pnpm run test:unit:admin
 
   api:
-    name: API unit tests (shard 1/2)
+    name: API unit tests (shard 1/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -148,10 +202,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run API unit tests
-        run: VITEST_SHARD_ARGS='--shard 1/2' pnpm run test:unit:api
+        run: VITEST_SHARD_ARGS='--shard 1/3' pnpm run test:unit:api
 
   api-2:
-    name: API unit tests (shard 2/2)
+    name: API unit tests (shard 2/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -175,7 +229,34 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run API unit tests
-        run: VITEST_SHARD_ARGS='--shard 2/2' pnpm run test:unit:api
+        run: VITEST_SHARD_ARGS='--shard 2/3' pnpm run test:unit:api
+
+  api-3:
+    name: API unit tests (shard 3/3)
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run API unit tests
+        run: VITEST_SHARD_ARGS='--shard 3/3' pnpm run test:unit:api
 
   workspace:
     name: Workspace unit tests (Core packages)
