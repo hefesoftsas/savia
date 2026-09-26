@@ -3245,4 +3245,14 @@ export const automationMessages = {
     "Mostrando %{value0} de %{value1} plugins",
   ],
   Tamaño: ["Tamaño", "Size", "Tamanho"],
+  "%{value0} versiones": [
+    "%{value0} versiones",
+    "%{value0} versions",
+    "%{value0} versões",
+  ],
+  "Se eliminarán %{value0} versiones.": [
+    "Se eliminarán %{value0} versiones.",
+    "This will delete %{value0} versions.",
+    "Isso excluirá %{value0} versões.",
+  ],
 } as const;

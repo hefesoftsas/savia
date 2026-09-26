@@ -49,6 +49,12 @@ type StoreItem = {
 
 type StatusFilter = "all" | "active" | "inactive" | "available" | "updates";
 
+type GroupedPlugin = {
+  id: string;
+  latest: StoreItem;
+  versions: StoreItem[];
+};
+
 function isActive(item: StoreItem) {
   return item.installed?.enabled === true;
 }
@@ -75,6 +81,33 @@ function formatBytes(sizeBytes: number) {
   return `${mb.toFixed(mb < 10 ? 2 : 1)} MB`;
 }
 
+/**
+ * El backend devuelve un artefacto por versión subida; la UI agrupa por
+ * id y muestra solo la última versión para no repetir la misma tarjeta.
+ */
+function groupById(items: StoreItem[]): GroupedPlugin[] {
+  const byId = new Map<string, StoreItem[]>();
+  for (const item of items) {
+    const list = byId.get(item.manifest.id);
+    if (list) list.push(item);
+    else byId.set(item.manifest.id, [item]);
+  }
+  return [...byId.entries()].map(([id, versions]) => {
+    let latest = versions[0];
+    for (const candidate of versions) {
+      if (compareSolutionVersions(candidate.version, latest.version) > 0)
+        latest = candidate;
+    }
+    return {
+      id,
+      latest,
+      versions: [...versions].sort((a, b) =>
+        compareSolutionVersions(b.version, a.version),
+      ),
+    };
+  });
+}
+
 export default function PluginStoreManager({
   onChanged,
 }: {
@@ -92,7 +125,7 @@ export default function PluginStoreManager({
   const [openPluginId, setOpenPluginId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [deleteTarget, setDeleteTarget] = useState<StoreItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GroupedPlugin | null>(null);
 
   const message = (reason: unknown) =>
     reason instanceof Error
@@ -170,9 +203,11 @@ export default function PluginStoreManager({
     }
   }
 
+  const grouped = useMemo(() => groupById(items), [items]);
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const list = items.filter((item) => {
+    const list = grouped.filter(({ latest: item }) => {
       if (statusFilter === "active" && statusOf(item) !== "active")
         return false;
       if (statusFilter === "inactive" && statusOf(item) !== "inactive")
@@ -197,18 +232,18 @@ export default function PluginStoreManager({
     });
     return [...list].sort((a, b) => {
       const labelA = resolveLocalizedContent(
-        a.manifest.label,
-        a.manifest.labels as never,
+        a.latest.manifest.label,
+        a.latest.manifest.labels as never,
         locale,
       );
       const labelB = resolveLocalizedContent(
-        b.manifest.label,
-        b.manifest.labels as never,
+        b.latest.manifest.label,
+        b.latest.manifest.labels as never,
         locale,
       );
       return labelA.localeCompare(labelB, locale);
     });
-  }, [items, query, statusFilter, locale]);
+  }, [grouped, query, statusFilter, locale]);
 
   const isFiltering = query.trim() !== "" || statusFilter !== "all";
 
@@ -219,8 +254,8 @@ export default function PluginStoreManager({
 
   const deleteLabel = deleteTarget
     ? resolveLocalizedContent(
-        deleteTarget.manifest.label,
-        deleteTarget.manifest.labels as never,
+        deleteTarget.latest.manifest.label,
+        deleteTarget.latest.manifest.labels as never,
         locale,
       )
     : "";
@@ -326,14 +361,14 @@ export default function PluginStoreManager({
           </div>
         </div>
 
-        {!loading && items.length > 0 ? (
+        {!loading && grouped.length > 0 ? (
           <p
             aria-live="polite"
             className="px-6 pt-4 text-xs text-muted-foreground"
           >
             {t("Mostrando %{value0} de %{value1} plugins", {
               value0: filtered.length,
-              value1: items.length,
+              value1: grouped.length,
             })}
           </p>
         ) : null}
@@ -372,7 +407,7 @@ export default function PluginStoreManager({
               ))}
             </div>
           </div>
-        ) : items.length === 0 ? (
+        ) : grouped.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
             <span className="flex size-11 items-center justify-center rounded-full bg-muted">
               <PackageOpen
@@ -425,7 +460,8 @@ export default function PluginStoreManager({
             className="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3"
             role="list"
           >
-            {filtered.map((item) => {
+            {filtered.map((group) => {
+              const item = group.latest;
               const label = resolveLocalizedContent(
                 item.manifest.label,
                 item.manifest.labels as never,
@@ -442,7 +478,7 @@ export default function PluginStoreManager({
               const open = openPluginId === item.manifest.id;
               return (
                 <article
-                  key={`${item.manifest.id}@${item.version}`}
+                  key={group.id}
                   role="listitem"
                   className="flex min-w-0 flex-col rounded-xl border bg-card p-5 shadow-xs"
                 >
@@ -499,6 +535,15 @@ export default function PluginStoreManager({
                         <dd className="break-words">
                           {t(" · Requiere: %{value0}", {
                             value0: item.manifest.requires.join(", "),
+                          })}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {group.versions.length > 1 ? (
+                      <div className="flex flex-wrap gap-x-1">
+                        <dd>
+                          {t("%{value0} versiones", {
+                            value0: group.versions.length,
                           })}
                         </dd>
                       </div>
@@ -597,7 +642,7 @@ export default function PluginStoreManager({
                           size="sm"
                           variant="ghost"
                           disabled={pending}
-                          onClick={() => setDeleteTarget(item)}
+                          onClick={() => setDeleteTarget(group)}
                           aria-label={t("Eliminar %{value0}", {
                             value0: label,
                           })}
@@ -640,8 +685,16 @@ export default function PluginStoreManager({
             <DialogDescription>
               {t(
                 "Esta acción eliminará %{value0} de este espacio. No podrás deshacerla.",
-                { value0: deleteLabel || deleteTarget?.manifest.id || "" },
+                { value0: deleteLabel || deleteTarget?.id || "" },
               )}
+              {(deleteTarget?.versions.length ?? 0) > 1 ? (
+                <>
+                  <br />
+                  {t("Se eliminarán %{value0} versiones.", {
+                    value0: deleteTarget?.versions.length ?? 0,
+                  })}
+                </>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -655,16 +708,13 @@ export default function PluginStoreManager({
             <Button
               type="button"
               variant="destructive"
-              disabled={!deleteTarget || busy === deleteTarget.manifest.id}
+              disabled={!deleteTarget || busy === deleteTarget.id}
               onClick={() => {
                 const target = deleteTarget;
                 if (!target) return;
                 setDeleteTarget(null);
-                void run(target.manifest.id, () =>
-                  api(
-                    `/plugin-store/${target.manifest.id}?version=${encodeURIComponent(target.version)}`,
-                    "DELETE",
-                  ),
+                void run(target.id, () =>
+                  api(`/plugin-store/${target.id}`, "DELETE"),
                 );
               }}
             >

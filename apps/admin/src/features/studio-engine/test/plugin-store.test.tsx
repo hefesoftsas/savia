@@ -138,3 +138,23 @@ it("muestra el estado vacío del store", async () => {
     await screen.findByText("Aún no subiste plugins a este espacio."),
   ).toBeInTheDocument();
 });
+
+it("agrupa varias versiones del mismo plugin en una sola tarjeta", async () => {
+  const installed = { enabled: true, version: "2.0.3" };
+  const versions = ["1.3.0", "1.3.1", "2.0.0", "2.0.3"].map((version) => ({
+    ...item,
+    version,
+    manifest: { ...item.manifest, version },
+    installed,
+  }));
+  vi.mocked(api).mockResolvedValue({ data: versions });
+  render(<PluginStoreManager onChanged={() => undefined} />);
+
+  expect(await screen.findByText("Demo")).toBeInTheDocument();
+  expect(screen.getAllByText("Demo")).toHaveLength(1);
+  expect(screen.getByText("2.0.3")).toBeInTheDocument();
+  expect(screen.getByText("4 versiones")).toBeInTheDocument();
+  expect(
+    screen.getByText("Mostrando 1 de 1 plugins"),
+  ).toBeInTheDocument();
+});
