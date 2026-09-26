@@ -67,10 +67,19 @@ keep the honest "No informado por la aseguradora" view.
 
 ## Deleting history
 
-- The history view offers delete with a confirmation step.
+- The history view groups retry and delete actions. Delete uses a quiet trash
+  action and a separate confirmation with the selected reference and a
+  destructive submit button; mobile controls have full-width confirmation actions.
 - Deletion removes child details first, then soft-deletes the master with its
   current version. Child deletion failure retains the master for recovery;
-  the history list refreshes and the selection clears only after success.
+  the selection clears immediately with a pending notice. The master is restored
+  to the history list on failure, and the server state is refreshed for recovery.
+- Supported hosts submit child deletions through the existing versioned bulk API
+  in groups of up to 200. A 19-product quote normally uses four requests (list,
+  bulk delete, master read, master delete), instead of about 41 sequential requests.
+  Version conflicts remain visible and prevent deletion of the master.
+- This is optimistic UI backed by online commits, not a durable offline delete
+  queue. Reloading during a pending operation reads the actual server state.
 
 ## Data model
 

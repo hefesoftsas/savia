@@ -864,6 +864,9 @@ function collection(name) {
     async describe() {
       return (await callHost("/objects", "GET")).data.find((c) => c.name === name);
     },
+    async removeMany(records) {
+      return (await callHost("/records/" + resource + "/bulk", "POST", { action: "delete", records })).data;
+    },
   };
 }
 const extensionPath = "/extensions/" + encodeURIComponent(PLUGIN_ID);

@@ -513,29 +513,60 @@ export function PublicQuoteForm({
   // interval so fast submissions never emit one. Failures keep the last
   // known progress; the submit response stays the source of truth.
   useEffect(() => {
-    if (!controller.pending || !lastStep || !controller.submissionId) return;
+    if (
+      (!controller.pending && !controller.uncertain && !controller.receipt) ||
+      !lastStep ||
+      !controller.submissionId
+    )
+      return;
+    if (controller.receipt?.result !== undefined) return;
     const submissionId = controller.submissionId;
     let stopped = false;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight || stopped) return;
+      inFlight = true;
       try {
         const response = await fetch(
           `${endpoint}/status/${encodeURIComponent(submissionId)}`,
           { credentials: "omit", cache: "no-store" },
         );
         if (stopped || !response.ok) return;
-        const data = (await response.json()) as { items?: unknown };
+        const data = (await response.json()) as {
+          items?: unknown;
+          state?: string;
+          receipt?: unknown;
+        };
         if (!stopped && Array.isArray(data.items))
           setProgress(parseStatusItems(data.items));
+        if (!stopped && data.state === "complete" && !controller.receipt) {
+          controller.completeFromStatus(submissionId, data.receipt);
+        }
       } catch {
         // Keep the previous progress; the submit lifecycle reports errors.
+      } finally {
+        inFlight = false;
       }
     };
+    if (controller.receipt) {
+      void load();
+      return () => {
+        stopped = true;
+      };
+    }
     const timer = window.setInterval(load, 3000);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [controller.pending, controller.submissionId, endpoint, lastStep]);
+  }, [
+    controller.pending,
+    controller.uncertain,
+    controller.receipt,
+    controller.submissionId,
+    endpoint,
+    lastStep,
+  ]);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupFields, setLookupFields] = useState<string[]>([]);
 
@@ -818,7 +849,11 @@ export function PublicQuoteForm({
           )}
         </p>
         <p className="public-form-reference">{receipt.reference}</p>
-        <PublicReceiptResult result={receipt.result} />
+        {receipt.result !== undefined ? (
+          <PublicReceiptResult result={receipt.result} />
+        ) : progress?.length ? (
+          <PublicComparison items={progress} />
+        ) : null}
         <div className="public-quote-notice-actions">
           <Button
             type="button"
@@ -1137,9 +1172,6 @@ export function PublicQuoteForm({
                     {t("Han pasado %{count} segundos.", { count: elapsed })}
                   </p>
                 </div>
-              </div>
-              <div aria-hidden="true" className="public-quote-progress">
-                <div className="public-quote-progress-bar" />
               </div>
               {progress && progress.length > 0 ? (
                 <PublicComparison items={progress} />

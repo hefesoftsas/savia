@@ -100,9 +100,11 @@ export type HistoricalQuoteSummary = {
 function HistoryDeleteButton({
   deleting,
   onDelete,
+  reference,
 }: {
   deleting: boolean;
   onDelete: () => void;
+  reference?: string;
 }) {
   const t = useInsuranceMessages();
   const [confirming, setConfirming] = useState(false);
@@ -112,12 +114,24 @@ function HistoryDeleteButton({
   if (!confirming) {
     return (
       <button
-        className="insurance-comparator__btn insurance-comparator__btn--ghost"
+        className="insurance-comparator__btn insurance-history-delete-trigger"
         type="button"
+        aria-label={t("Eliminar cotización guardada")}
         disabled={deleting}
         onClick={() => setConfirming(true)}
       >
-        {t("Eliminar cotización guardada")}
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          aria-hidden="true"
+        >
+          <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+        </svg>
+        {t("Eliminar")}
       </button>
     );
   }
@@ -127,23 +141,29 @@ function HistoryDeleteButton({
       role="group"
       aria-label={t("Confirmar eliminación")}
     >
-      <span>{t("¿Eliminar esta cotización y sus detalles?")}</span>
-      <button
-        className="insurance-comparator__btn insurance-comparator__btn--ghost"
-        type="button"
-        disabled={deleting}
-        onClick={() => setConfirming(false)}
-      >
-        {t("Cancelar")}
-      </button>
-      <button
-        className="insurance-comparator__btn insurance-comparator__btn--primary"
-        type="button"
-        disabled={deleting}
-        onClick={onDelete}
-      >
-        {deleting ? t("Eliminando…") : t("Confirmar eliminación")}
-      </button>
+      <div className="insurance-history-delete-confirm__copy">
+        <strong>{t("¿Eliminar esta cotización y sus detalles?")}</strong>
+        {reference ? <p>{reference}</p> : null}
+      </div>
+      <div className="insurance-history-delete-confirm__actions">
+        <button
+          className="insurance-comparator__btn insurance-comparator__btn--ghost"
+          type="button"
+          disabled={deleting}
+          onClick={() => setConfirming(false)}
+        >
+          {t("Cancelar")}
+        </button>
+        <button
+          className="insurance-comparator__btn insurance-history-delete-confirm__danger"
+          type="button"
+          aria-label={t("Confirmar eliminación")}
+          disabled={deleting}
+          onClick={onDelete}
+        >
+          {deleting ? t("Eliminando…") : t("Eliminar")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -168,6 +188,7 @@ export function QuoteResults({
   showHistorySelector = false,
   planCatalog = false,
   hidePdfDownload = false,
+  hideProgress = false,
   historyLoading = false,
   historyError = null,
   onDeleteHistoryQuote,
@@ -199,6 +220,7 @@ export function QuoteResults({
   planCatalog?: boolean;
   /** Hide the pdf-lib download action (anonymous pages use print instead). */
   hidePdfDownload?: boolean;
+  hideProgress?: boolean;
   /** Loading state while the selected quote's details load. */
   historyLoading?: boolean;
   /** Error state if the history read fails (never render empty as success). */
@@ -665,20 +687,30 @@ export function QuoteResults({
           <InsuranceNotice message={historyError} />
         </p>
       ) : null}
-      {selectedHistoryQuoteId && onResumeHistoryQuote && failedCount > 0 ? (
-        <button
-          className="insurance-comparator__btn insurance-comparator__btn--primary"
-          type="button"
-          onClick={onResumeHistoryQuote}
-        >
-          {t("Reintentar esta cotización")}
-        </button>
-      ) : null}
-      {selectedHistoryQuoteId && onDeleteHistoryQuote ? (
-        <HistoryDeleteButton
-          deleting={deletingHistory}
-          onDelete={() => onDeleteHistoryQuote(selectedHistoryQuoteId)}
-        />
+      {selectedHistoryQuoteId ? (
+        <div className="insurance-history-actions">
+          {onResumeHistoryQuote && failedCount > 0 ? (
+            <button
+              className="insurance-comparator__btn insurance-comparator__btn--ghost"
+              type="button"
+              onClick={onResumeHistoryQuote}
+            >
+              {t("Reintentar esta cotización")}
+            </button>
+          ) : null}
+          {selectedHistoryQuoteId && onDeleteHistoryQuote ? (
+            <HistoryDeleteButton
+              key={selectedHistoryQuoteId}
+              reference={
+                historyQuotes.find(
+                  (quote) => quote.id === selectedHistoryQuoteId,
+                )?.name
+              }
+              deleting={deletingHistory}
+              onDelete={() => onDeleteHistoryQuote(selectedHistoryQuoteId)}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {/* 1. MASTER QUOTE HEADER & VEHICLE CONTEXT (Only if quote is active) */}
@@ -759,7 +791,10 @@ export function QuoteResults({
       ) : null}
 
       {/* Indicador de progreso en vivo */}
-      {isQuoteActive && !selectedHistoryQuoteId && pendingCount > 0 ? (
+      {!hideProgress &&
+      isQuoteActive &&
+      !selectedHistoryQuoteId &&
+      pendingCount > 0 ? (
         <div
           aria-live="polite"
           className="insurance-busy-indicator"

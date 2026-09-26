@@ -46,6 +46,7 @@ export function PublicComparison({ items }: { items: PublicComparisonItem[] }) {
           hasSelectedQuote={batchItems.length > 0}
           planCatalog
           hidePdfDownload
+          hideProgress
         />
       </div>
     </PluginLocaleProvider>
