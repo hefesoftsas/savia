@@ -1,3 +1,29 @@
 {
-  "ports": ["quotes"]
+  "ports": ["quotes"],
+  "optional": [
+    "accounting",
+    "activities",
+    "automation",
+    "calendar",
+    "campaigns",
+    "carriers",
+    "claims",
+    "collections",
+    "commissions",
+    "communications",
+    "compliance",
+    "customer-portal",
+    "data-quality",
+    "document-generation",
+    "documents",
+    "endorsements",
+    "issuance",
+    "opportunities",
+    "payments",
+    "portfolio",
+    "renewals",
+    "reports",
+    "service",
+    "settlements"
+  ]
 }
