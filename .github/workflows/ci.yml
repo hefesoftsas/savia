@@ -178,7 +178,7 @@ jobs:
         run: VITEST_SHARD_ARGS='--shard 2/2' pnpm run test:unit:api
 
   workspace:
-    name: Workspace unit tests
+    name: Workspace unit tests (Core & Studio)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
     env:
@@ -202,7 +202,34 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run workspace unit tests
-        run: pnpm run test:unit:workspace
+        run: pnpm run test:unit:workspace:core
+
+  workspace-2:
+    name: Workspace unit tests (Insurance solutions)
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run workspace unit tests
+        run: pnpm run test:unit:workspace:insurance
 
   contracts:
     name: Contract tests
@@ -232,7 +259,7 @@ jobs:
         run: pnpm run test:contracts
 
   typecheck:
-    name: Type-check
+    name: Type-check (Core & Apps)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
     env:
@@ -256,7 +283,34 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type-check
-        run: pnpm run typecheck
+        run: pnpm run typecheck:core
+
+  typecheck-2:
+    name: Type-check (Insurance solutions)
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm run typecheck:insurance
 
   publication-safety:
     name: Public source safety

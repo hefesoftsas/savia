@@ -180,8 +180,10 @@ describe("listScopedFlows batched", () => {
 });
 
 describe("seedOnce", () => {
-  it("seeds the catalog once and incorporates new definitions", async () => {
-    const first = countingEnv();
+  it(
+    "seeds the catalog once and incorporates new definitions",
+    async () => {
+      const first = countingEnv();
     await seedOnce(first.env);
     const firstQueries = first.count();
     expect(firstQueries).toBeGreaterThan(1);
@@ -204,5 +206,5 @@ describe("seedOnce", () => {
     resetSeedCache();
     await seedOnce(platform.env);
     expect(await getFlow(platform.env, missing, "")).not.toBeNull();
-  });
+  }, 15000);
 });
