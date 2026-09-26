@@ -3187,4 +3187,62 @@ export const automationMessages = {
   producto: ["producto", "product", "produto"],
   productos: ["productos", "products", "produtos"],
   finalizado: ["finalizado", "finished", "finalizado"],
+  "Buscar plugins": ["Buscar plugins", "Search plugins", "Pesquisar plugins"],
+  "Buscar por nombre, descripción o ID…": [
+    "Buscar por nombre, descripción o ID…",
+    "Search by name, description, or ID…",
+    "Pesquisar por nome, descrição ou ID…",
+  ],
+  "Limpiar búsqueda": ["Limpiar búsqueda", "Clear search", "Limpar pesquisa"],
+  "Filtrar por estado": [
+    "Filtrar por estado",
+    "Filter by status",
+    "Filtrar por status",
+  ],
+  Todos: ["Todos", "All", "Todos"],
+  Activos: ["Activos", "Active", "Ativos"],
+  Inactivos: ["Inactivos", "Inactive", "Inativos"],
+  "Con actualización": ["Con actualización", "With update", "Com atualização"],
+  "Actualización disponible": [
+    "Actualización disponible",
+    "Update available",
+    "Atualização disponível",
+  ],
+  "Eliminar plugin": ["Eliminar plugin", "Delete plugin", "Excluir plugin"],
+  "Esta acción eliminará %{value0} de este espacio. No podrás deshacerla.": [
+    "Esta acción eliminará %{value0} de este espacio. No podrás deshacerla.",
+    "This action will delete %{value0} from this workspace. You cannot undo it.",
+    "Esta ação excluirá %{value0} deste espaço. Não será possível desfazê-la.",
+  ],
+  "Eliminar definitivamente": [
+    "Eliminar definitivamente",
+    "Delete permanently",
+    "Excluir definitivamente",
+  ],
+  "No hay coincidencias para esta búsqueda.": [
+    "No hay coincidencias para esta búsqueda.",
+    "No matches for this search.",
+    "Sem correspondências para esta pesquisa.",
+  ],
+  "Limpiar búsqueda y filtros": [
+    "Limpiar búsqueda y filtros",
+    "Clear search and filters",
+    "Limpar pesquisa e filtros",
+  ],
+  "El archivo debe ser un .zip válido.": [
+    "El archivo debe ser un .zip válido.",
+    "The file must be a valid .zip file.",
+    "O arquivo deve ser um .zip válido.",
+  ],
+  "Sube tu primer plugin para ampliar las capacidades de este espacio.": [
+    "Sube tu primer plugin para ampliar las capacidades de este espacio.",
+    "Upload your first plugin to extend this workspace.",
+    "Envie seu primeiro plugin para ampliar os recursos deste espaço.",
+  ],
+  "Mostrando %{value0} de %{value1} plugins": [
+    "Mostrando %{value0} de %{value1} plugins",
+    "Showing %{value0} of %{value1} plugins",
+    "Mostrando %{value0} de %{value1} plugins",
+  ],
+  Tamaño: ["Tamaño", "Size", "Tamanho"],
 } as const;
