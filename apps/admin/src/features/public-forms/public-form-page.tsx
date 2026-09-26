@@ -19,12 +19,41 @@ const publicQuotePresentation = z
   })
   .strict();
 
+const publicFormLogo = z
+  .string()
+  .max(720_000)
+  .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
+  .optional();
+
+function isSafePublicLogo(value: string | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 720_000 &&
+    /^data:image\/(png|jpeg|webp);base64,/.test(value)
+  );
+}
+
+/** Optional per-link logo shown above the public form heading. */
+export function PublicFormLogo({ src, alt }: { src: string; alt: string }) {
+  if (!isSafePublicLogo(src)) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="public-form-logo"
+      loading="lazy"
+      decoding="async"
+    />
+  );
+}
+
 const publicDefinition = z
   .object({
     id: z.string().min(1),
     title: z.string().min(1),
     description: z.string().optional(),
     kind: z.enum(["record", "quote"]),
+    logoImage: publicFormLogo,
     captchaProvider: z
       .enum(["turnstile", "altcha", "disabled"])
       .default("turnstile"),
@@ -211,6 +240,9 @@ function SubmissionForm({
   return (
     <>
       <header className="public-form-heading">
+        {isSafePublicLogo(definition.logoImage) && (
+          <PublicFormLogo src={definition.logoImage} alt={definition.title} />
+        )}
         <h1>{definition.title}</h1>
         {definition.description && <p>{definition.description}</p>}
       </header>

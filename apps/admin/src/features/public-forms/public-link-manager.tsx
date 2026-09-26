@@ -20,6 +20,7 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  ImagePlus,
   Link2,
   Loader2,
   QrCode,
@@ -28,8 +29,64 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import "./public-forms.css";
+
+const MAX_LOGO_CHARS = 720_000;
+const LOGO_PREVIEW_PATTERN = /^data:image\/(png|jpeg|webp);base64,/;
+
+function isSafeLogoImage(value: string | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= MAX_LOGO_CHARS &&
+    LOGO_PREVIEW_PATTERN.test(value)
+  );
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("invalid image"));
+    image.src = url;
+  });
+}
+
+/** Downscale to max 512px so the inline logo stays light for D1 + public load. */
+async function fileToLogoImage(file: File): Promise<string> {
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
+    throw new Error("Sube un logo PNG, JPEG o WebP.");
+  if (file.size === 0 || file.size > 2 * 1024 * 1024)
+    throw new Error("El logo debe pesar 2 MB o menos.");
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(objectUrl);
+    const scale = Math.min(1, 512 / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("No se pudo procesar el logo.");
+    context.drawImage(image, 0, 0, width, height);
+    const output =
+      file.type === "image/png"
+        ? "image/png"
+        : file.type === "image/webp"
+          ? "image/webp"
+          : "image/jpeg";
+    const dataUrl = canvas.toDataURL(output, 0.85);
+    if (!isSafeLogoImage(dataUrl) || dataUrl.length > MAX_LOGO_CHARS)
+      throw new Error(
+        "El logo es demasiado grande. Usa una imagen más pequeña.",
+      );
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 const linkSchema = z.object({
   id: z.string(),
@@ -40,6 +97,7 @@ const linkSchema = z.object({
   expiresAt: z.string().nullable().optional(),
   revokedAt: z.string().nullable().optional(),
   dailyLimit: z.number(),
+  logoImage: z.string().optional(),
   shortUrl: z.string().url().optional(),
 });
 type PublicLink = z.infer<typeof linkSchema>;
@@ -97,6 +155,10 @@ export function PublicLinkManager({
   const [dailyLimit, setDailyLimit] = useState(25);
   const [expiresAt, setExpiresAt] = useState("");
   const [returnResult, setReturnResult] = useState(false);
+  const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState("");
+  const [logoLoading, setLogoLoading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [qrVisible, setQrVisible] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shortUrls, setShortUrls] = useState<Record<string, string>>({});
@@ -187,6 +249,7 @@ export function PublicLinkManager({
             ? { expiresAt: new Date(expiresAt).toISOString() }
             : {}),
           ...(kind === "quote" ? { returnResult } : {}),
+          ...(logoImage ? { logoImage } : {}),
         }),
       });
       if (!response.ok) throw new Error(managementError(response.status));
@@ -373,6 +436,29 @@ export function PublicLinkManager({
     setQrVisible((previous) => ({ ...previous, [linkId]: !previous[linkId] }));
   }
 
+  async function handleLogoFile(file: File | undefined) {
+    if (!file) return;
+    setLogoLoading(true);
+    setLogoError("");
+    try {
+      setLogoImage(await fileToLogoImage(file));
+    } catch (cause) {
+      setLogoError(
+        cause instanceof Error ? cause.message : "No se pudo leer el logo.",
+      );
+      setLogoImage(null);
+    } finally {
+      setLogoLoading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  function clearLogo() {
+    setLogoImage(null);
+    setLogoError("");
+    if (logoInputRef.current) logoInputRef.current.value = "";
+  }
+
   return (
     <section
       className="grid min-w-0 gap-6 pb-20"
@@ -555,6 +641,81 @@ export function PublicLinkManager({
             </label>
           )}
 
+          <div className="grid min-w-0 gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-medium">
+              <ImagePlus
+                className="size-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span>{t("Logo del formulario (opcional)")}</span>
+            </span>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              aria-label={t("Logo del formulario (opcional)")}
+              disabled={!!pending || logoLoading}
+              onChange={(event) => void handleLogoFile(event.target.files?.[0])}
+            />
+            {logoImage && isSafeLogoImage(logoImage) ? (
+              <div className="flex items-center gap-3 rounded-xl border border-border/80 bg-muted/20 p-3">
+                <img
+                  src={logoImage}
+                  alt={t("Vista previa del logo")}
+                  className="h-12 w-auto max-w-40 rounded-md border border-border/60 bg-background object-contain"
+                />
+                <div className="grid gap-1">
+                  <p className="text-xs text-muted-foreground">
+                    {t("Este logo se mostrará en el formulario público.")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearLogo}
+                    disabled={!!pending || logoLoading}
+                    className="inline-flex w-fit items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                    <span>{t("Quitar logo")}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={!!pending || logoLoading}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {logoLoading ? (
+                    <Loader2
+                      className="size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <ImagePlus className="size-4" aria-hidden="true" />
+                  )}
+                  <span>
+                    {logoLoading ? t("Procesando logo…") : t("Adjuntar logo")}
+                  </span>
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {t("PNG, JPEG o WebP de 2 MB o menos.")}
+                </span>
+              </div>
+            )}
+            {logoError && (
+              <p role="alert" className="text-xs text-destructive">
+                {Object.hasOwn(publicFormsMessages, logoError)
+                  ? t(logoError as keyof typeof publicFormsMessages)
+                  : logoError}
+              </p>
+            )}
+          </div>
+
           <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
             <label className="flex items-start gap-2.5 text-sm leading-normal cursor-pointer">
               <Checkbox
@@ -712,6 +873,18 @@ export function PublicLinkManager({
                             })
                           : t("Sin vencimiento")}
                       </span>
+                      {isSafeLogoImage(link.logoImage) && (
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-1.5 py-0.5">
+                          <img
+                            src={link.logoImage}
+                            alt={t("Logo del formulario")}
+                            className="h-5 w-auto max-w-16 object-contain"
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {t("Con logo")}
+                          </span>
+                        </span>
+                      )}
                     </div>
                   </div>
 

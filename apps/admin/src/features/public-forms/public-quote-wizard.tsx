@@ -27,6 +27,27 @@ export type PublicQuoteFormProps = {
   endpoint: string;
 };
 
+function isSafeQuoteLogo(value: string | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 720_000 &&
+    /^data:image\/(png|jpeg|webp);base64,/.test(value)
+  );
+}
+
+function QuoteLogo({ src, alt }: { src: string | undefined; alt: string }) {
+  if (!isSafeQuoteLogo(src)) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="public-form-logo"
+      loading="lazy"
+      decoding="async"
+    />
+  );
+}
+
 type QuoteField = PublicFormDefinition["fields"][number];
 
 const APPLICANT_STEP_NAMES = new Set([
@@ -788,6 +809,7 @@ export function PublicQuoteForm({
         className="public-quote-notice"
         role="status"
       >
+        <QuoteLogo src={definition.logoImage} alt={definition.title} />
         <p className="public-quote-eyebrow">{eyebrow}</p>
         <h1 id="public-quote-success">{t("Solicitud recibida")}</h1>
         <p>
@@ -816,6 +838,7 @@ export function PublicQuoteForm({
   if (duplicate) {
     return (
       <section className="public-quote-notice" role="status">
+        <QuoteLogo src={definition.logoImage} alt={definition.title} />
         <p className="public-quote-eyebrow">{eyebrow}</p>
         <h2>{t("Envío registrado")}</h2>
         <p>
@@ -838,6 +861,7 @@ export function PublicQuoteForm({
   return (
     <section className="public-quote" aria-label={heading}>
       <div className="public-quote-shell">
+        <QuoteLogo src={definition.logoImage} alt={definition.title} />
         <p className="public-quote-eyebrow">{eyebrow}</p>
         <h1 className="public-quote-title">{heading}</h1>
         <p className="public-quote-products">
