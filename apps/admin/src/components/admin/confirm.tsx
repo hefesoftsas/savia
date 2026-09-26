@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle } from "lucide-react";
+import { CheckCircle, Trash2, LoaderCircle } from "lucide-react";
 import { useTranslate } from "ra-core";
 import * as React from "react";
 import type { ComponentType, MouseEventHandler } from "react";
@@ -76,8 +76,8 @@ export const Confirm = (props: ConfirmProps) => {
     cancel = "ra.action.cancel",
     confirm = "ra.action.confirm",
     confirmColor = "primary",
-    ConfirmIcon = CheckCircle,
-    CancelIcon = AlertCircle,
+    ConfirmIcon = confirmColor === "warning" ? Trash2 : CheckCircle,
+    CancelIcon,
     onClose,
     onConfirm,
     translateOptions = {},
@@ -101,8 +101,18 @@ export const Confirm = (props: ConfirmProps) => {
   }, []);
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className={className} onClick={handleClick} {...rest}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={() => {
+        if (!loading) onClose();
+      }}
+    >
+      <DialogContent
+        className={`gap-6 sm:max-w-md ${className ?? ""}`}
+        onClick={handleClick}
+        aria-busy={loading}
+        {...rest}
+      >
         <DialogHeader>
           <DialogTitle>
             {typeof title === "string"
@@ -110,7 +120,7 @@ export const Confirm = (props: ConfirmProps) => {
               : title}
           </DialogTitle>
           {typeof content === "string" ? (
-            <DialogDescription>
+            <DialogDescription className="leading-relaxed break-words">
               {translate(content, {
                 _: content,
                 ...contentTranslateOptions,
@@ -120,23 +130,30 @@ export const Confirm = (props: ConfirmProps) => {
             content
           )}
         </DialogHeader>
-        <DialogFooter>
+        <DialogFooter className="gap-3">
           <Button
-            variant="ghost"
+            variant="outline"
             disabled={loading}
             onClick={onClose}
-            className="gap-1"
+            className="min-h-11 gap-2"
           >
-            <CancelIcon className="h-5 w-5" />
+            {CancelIcon ? <CancelIcon className="h-4 w-4" /> : null}
             {translate(cancel, { _: cancel })}
           </Button>
           <Button
             disabled={loading}
             onClick={handleConfirm}
-            className="gap-1"
+            className="min-h-11 gap-2"
             variant={confirmColor === "warning" ? "destructive" : "default"}
           >
-            <ConfirmIcon className="h-5 w-5" />
+            {loading ? (
+              <LoaderCircle
+                className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              <ConfirmIcon className="h-4 w-4" />
+            )}
             {translate(confirm, { _: confirm })}
           </Button>
         </DialogFooter>
@@ -150,8 +167,8 @@ export interface ConfirmProps {
   className?: string;
   confirm?: string;
   confirmColor?: "primary" | "warning";
-  ConfirmIcon?: ComponentType;
-  CancelIcon?: ComponentType;
+  ConfirmIcon?: ComponentType<{ className?: string }>;
+  CancelIcon?: ComponentType<{ className?: string }>;
   content?: React.ReactNode;
   isOpen?: boolean;
   loading?: boolean;

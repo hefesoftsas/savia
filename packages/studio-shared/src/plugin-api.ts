@@ -105,6 +105,9 @@ export type PluginCollection<TRecord, TInput = Partial<TRecord>> = {
     options?: PluginRecordVersion,
   ): Promise<TRecord>;
   remove(id: string, options?: PluginRecordVersion): Promise<void>;
+  removeMany?(
+    records: Array<{ id: string; version: number }>,
+  ): Promise<Array<{ id: string; ok: boolean; error?: string }>>;
   describe(): Promise<PluginCollectionDefinition | undefined>;
 };
 
@@ -253,6 +256,16 @@ export function createPluginApi({
             }`,
             "DELETE",
           );
+        },
+        async removeMany(records) {
+          return (
+            await request<
+              HostData<Array<{ id: string; ok: boolean; error?: string }>>
+            >(`/records/${resource}/bulk`, "POST", {
+              action: "delete",
+              records,
+            })
+          ).data;
         },
         describe,
       };

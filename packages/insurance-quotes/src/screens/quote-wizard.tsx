@@ -668,7 +668,11 @@ export function InsuranceQuoteWizard({
           created_at:
             typeof r.created_at === "string" ? r.created_at : undefined,
         }));
-        setHistoryQuotes(parsed.reverse());
+        setHistoryQuotes(
+          parsed
+            .reverse()
+            .filter((quote) => !pendingHistoryDeletes.current.has(quote.id)),
+        );
       }
     } catch {
       // ignore
@@ -758,11 +762,45 @@ export function InsuranceQuoteWizard({
     }
   };
 
+  const pendingHistoryDeletes = useRef(new Set<string>());
   const handleDeleteHistoryQuote = async (quoteId: string) => {
     if (deletingHistory || (busy && quoteId === masterQuoteId)) return;
     const summary = historyQuotes.find((quote) => quote.id === quoteId);
     if (!summary) return;
     setDeletingHistory(true);
+    pendingHistoryDeletes.current.add(quoteId);
+    setHistoryQuotes((current) =>
+      current.filter((quote) => quote.id !== quoteId),
+    );
+    if (historySelection.current === quoteId) {
+      historyRequest.current += 1;
+      setHistoryLoading(false);
+      setSelectedHistoryQuoteId(null);
+      setHistoricalBatchItems(null);
+      setHistoryError(null);
+      setResumeQuote(null);
+    }
+    if (currentMaster.current === quoteId) {
+      setMasterQuoteId(null);
+      setQuoteReference(null);
+      setBatchItems([]);
+    }
+    // Remove the selected deep link so it cannot reopen the pending deletion.
+    const [hashPath, hashQuery = ""] = window.location.hash.split("?");
+    const params = new URLSearchParams(hashQuery);
+    if (params.get("quote") === quoteId) {
+      params.delete("quote");
+      const query = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${window.location.search}${hashPath}${query ? `?${query}` : ""}`,
+      );
+      appliedQuoteLink.current = null;
+      appliedQuoteLinkRef.current = "";
+    }
+    setNotice(t("Eliminando…"));
+    let deleted = false;
     try {
       const detailColl = savia.collections?.collection?.(
         "cotizaciones_detalle",
@@ -792,24 +830,11 @@ export function InsuranceQuoteWizard({
           "No se pudo eliminar la cotización guardada. Inténtalo de nuevo.",
         );
         setNotice(`${message}${reason ? ` (${reason.trim()})` : ""}`);
-        // Releer por si se eliminaron hijos aunque el master sobrevivió.
-        const [hashPath, hashQuery = ""] = window.location.hash.split("?");
-        const params = new URLSearchParams(hashQuery);
-        if (params.get("quote") === quoteId) {
-          params.delete("quote");
-          const query = params.toString();
-          window.history.replaceState(
-            window.history.state,
-            "",
-            `${window.location.pathname}${window.location.search}${hashPath}${query ? `?${query}` : ""}`,
-          );
-          appliedQuoteLink.current = null;
-          appliedQuoteLinkRef.current = "";
-        }
         await refreshHistoricalQuotes();
         return;
       }
-      await refreshHistoricalQuotes();
+      deleted = true;
+      setNotice("");
       if (currentMaster.current === quoteId) {
         setMasterQuoteId(null);
         setQuoteReference(null);
@@ -826,6 +851,15 @@ export function InsuranceQuoteWizard({
     } catch {
       setNotice(t("No se pudo eliminar la cotización guardada."));
     } finally {
+      if (!deleted) {
+        pendingHistoryDeletes.current.delete(quoteId);
+        setHistoryQuotes((current) =>
+          current.some((quote) => quote.id === quoteId)
+            ? current
+            : [summary, ...current],
+        );
+        void refreshHistoricalQuotes();
+      }
       setDeletingHistory(false);
     }
   };
@@ -1338,9 +1372,11 @@ export function InsuranceQuoteWizard({
                 quoteSummaryPatch(batchItemsRef.current),
               );
             } catch {
-              setPersistenceNotice(t(
-                "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
-              ));
+              setPersistenceNotice(
+                t(
+                  "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+                ),
+              );
             }
           }
 
