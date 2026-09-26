@@ -10,6 +10,8 @@ import {
   type QuoteFormValues,
 } from "./screens/quote-input";
 import { publicPlanHighlights } from "./plan-profiles";
+import { toUnifiedComparisonQuote } from "./screens/unified-quote-model";
+import { buildResultSnapshot, serializeSnapshot } from "./quote-snapshot";
 export {
   insuranceQuoteSettingsDefinition,
   insurancePackageSettingsSchema,
@@ -286,6 +288,21 @@ function projectPublicQuoteResult(flowId: string, output: unknown) {
 
 /** Trusted industry contribution consumed by the generic public form host. */
 export const insurancePublicQuoteContribution = {
+  reference(submissionId: string, createdAt: string) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Bogota",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date(createdAt));
+    const value = (type: string) =>
+      parts.find((part) => part.type === type)!.value;
+    return `COT-${value("year")}${value("month")}${value("day")}-${value("hour")}${value("minute")}${value("second")}-${submissionId.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
+  },
   extensionId: "insurance.quotes",
   actionId: "quote",
   mode: "live",
@@ -325,4 +342,30 @@ export const insurancePublicQuoteContribution = {
     };
   },
   projectResult: projectPublicQuoteResult,
+  /** Internal history projection; never return provider payloads to visitors. */
+  projectHistoryResult(flowId: string, output: unknown) {
+    const safe = projectPublicQuoteResult(flowId, output);
+    const quote = toUnifiedComparisonQuote(
+      {
+        productId: flowId,
+        flowId,
+        label: safe.product,
+        provider: safe.insurer,
+        status: "succeeded",
+        premium: safe.premiumTotal ?? undefined,
+      },
+      {
+        runId: "",
+        actionId: "quote",
+        connectionId: "",
+        status: "succeeded",
+        output,
+        errorCode: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    );
+    const snapshot = buildResultSnapshot({ ...quote, quoteNumber: undefined });
+    return snapshot ? serializeSnapshot(snapshot) : undefined;
+  },
 } as const;

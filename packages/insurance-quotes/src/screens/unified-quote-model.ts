@@ -4,7 +4,7 @@ import {
 } from "@savia/studio-shared/plugin-localization";
 import { insuranceMessage } from "../messages";
 import type { PluginExtensionActionRun } from "@savia/studio-shared/plugin-api";
-import type { QuoteBatchItem } from "./quote-results";
+import type { QuoteBatchItem } from "./quote-batch-item";
 import { defaultProfiles, type UnifiedQuoteCoverage } from "../plan-profiles";
 
 export type { UnifiedQuoteCoverage } from "../plan-profiles";
