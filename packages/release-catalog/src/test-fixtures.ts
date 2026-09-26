@@ -27,3 +27,5 @@ export const storePortScreens = [
   ...calendarScreens,
   ...insuranceQuoteScreens,
 ];
+
+export { QuoteResults as StorePortQuoteResults } from "@savia/insurance-quotes/quote-results";

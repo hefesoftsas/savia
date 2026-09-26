@@ -10,16 +10,16 @@ concurrently and each provider flow executes its steps sequentially.
 
 - Quote startup records elapsed time for setup (`setupMs`), CRM persistence
   (`crmMs`) and each product flow (`duracion_ms` per detail, surfaced as
-  `products[productId]`). The UI shows preparation vs CRM vs per-provider time;
-  it does not change which products run or how they are isolated.
+  `products[productId]`). These diagnostics are not printed in the customer results view.
+  Provider durations remain available in persisted details.
 - The configured client is resolved with a server-side match query
   (`filters: { logic: "and", conditions: [{ field, op: "eq", value }] }`)
   through the plugin collection API. The full collection scan (up to 2,000
   records) remains only as a compatibility fallback for hosts without filter
   support.
 - Quote execution never waits for a full CRM scan before launching product
-  flows. The master record is created immediately; the `cliente` link is
-  patched when the CRM responds. A 4s early-client race avoids holding
+  flows. After a bounded initial CRM wait, the master record is created; a late
+  `cliente` link is saved together with its final summary. A 4s early-client race avoids holding
   providers on slow CRM collections. CRM failures are visible
   ("La cotización continuó sin guardar el cliente en el CRM…") instead of
   silently blocking providers.
@@ -68,3 +68,30 @@ keep the honest "No informado por la aseguradora" view.
 - Plugin collection `list()` accepts `filters` and `q`, forwarded as
   `?filters=JSON&q=` to `GET /api/records/:object`, which already supports
   `eq/ne/contains/in/…` via `buildWhere`.
+
+## Compatibility and recovery
+
+- The quote plugin declares the master and detail collections for new installations.
+  Existing fields and custom layouts are preserved; installation adds missing
+  optional fields with a versioned schema update. Before saving optional snapshots
+  and durations, the wizard reads the actual detail schema (once per mounted
+  collection handle). On older schemas it saves core status, premium, quote number,
+  and run reference, and explicitly warns when coverage details cannot be stored.
+  Failed writes are surfaced instead of silently leaving history pending.
+- Late CRM linking is saved with the terminal master update, avoiding concurrent
+  writes using the same version.
+- History ignores responses from an earlier selection. Empty saved quotes never
+  borrow unrelated recent runs. Saved pending details show a refresh action rather
+  than claiming a live provider request is running.
+- Deletion reads current child and master versions immediately before removing
+  them. Version conflicts remain visible; deletion never retries a conflict without
+  the required version. Client-side ownership checks also isolate results returned
+  by legacy hosts that ignore collection filters.
+
+- Retrying one or all providers recalculates the master premium from all successful
+  offers, so a more expensive retry cannot replace the best price. Summary writes
+  are serialized and read the current master version before saving.
+- Resuming a quote replaces reselected provider flows instead of duplicating them.
+  Starting a new quote or deleting the active quote is blocked while retries run.
+- Changing saved quotes resets the insurer filter. A deleted quote's deep link is
+  cleared, and deleting one quote cannot clear a newer selection.

@@ -1,3 +1,4 @@
+import { configSchema } from "@savia/studio-shared/metadata";
 import type { ExtensionObjectRequirement } from "@savia/studio-shared/extension-package";
 import { fail } from "./context";
 import { audit, guard } from "./services";
@@ -86,8 +87,28 @@ export async function prepareExtensionObjectProvisioning(
   requirements: ReadonlyMap<string, ExtensionObjectRequirement>,
   extensionId: string,
 ): Promise<PreparedProvisioning> {
-  const requirement = requirements.get(extensionId);
-  if (!requirement) return { starts: [], writes: [], ends: [] };
+  const combined: PreparedProvisioning = { starts: [], writes: [], ends: [] };
+  for (const requirement of requirements.values()) {
+    if (requirement.id !== extensionId) continue;
+    const prepared = await prepareObjectProvisioning(
+      db,
+      tenant,
+      requirement,
+      extensionId,
+    );
+    combined.starts.push(...prepared.starts);
+    combined.writes.push(...prepared.writes);
+    combined.ends.push(...prepared.ends);
+  }
+  return combined;
+}
+
+async function prepareObjectProvisioning(
+  db: D1Database,
+  tenant: string,
+  requirement: ExtensionObjectRequirement,
+  extensionId: string,
+): Promise<PreparedProvisioning> {
   const existing = await storedObject(db, tenant, requirement.object.name);
   if (existing) {
     if (!compatible(existing, requirement))
@@ -107,7 +128,67 @@ export async function prepareExtensionObjectProvisioning(
         requirement.object.name,
       ],
     );
-    return { starts: [unchanged.start], writes: [], ends: [unchanged.end] };
+    const config = JSON.parse(existing.config);
+    const additions = Object.entries(requirement.object.config.fields).filter(
+      ([name, field]) =>
+        !Object.hasOwn(config.fields, name) &&
+        !field.required &&
+        !field.config?.requiredWhen,
+    );
+    if (!additions.length)
+      return { starts: [unchanged.start], writes: [], ends: [unchanged.end] };
+    // Add optional fields only; existing types, labels, layouts and required
+    // fields belong to the workspace and must not be replaced by an upgrade.
+    const nextConfig = {
+      ...config,
+      fields: { ...config.fields, ...Object.fromEntries(additions) },
+      fieldOrder: [
+        ...new Set([
+          ...(config.fieldOrder ?? Object.keys(config.fields)),
+          ...additions.map(([name]) => name),
+        ]),
+      ],
+    };
+    configSchema.parse(nextConfig);
+    const next = {
+      ...existing,
+      config: nextConfig,
+      version: existing.version + 1,
+    };
+    return {
+      starts: [unchanged.start],
+      writes: [
+        db
+          .prepare(
+            "UPDATE studio_objects SET config=?,version=? WHERE tenant_id=? AND name=?",
+          )
+          .bind(
+            JSON.stringify(nextConfig),
+            next.version,
+            tenant,
+            existing.name,
+          ),
+        db
+          .prepare(
+            "INSERT INTO studio_schema_versions(tenant_id,object_name,version,definition) VALUES (?,?,?,?)",
+          )
+          .bind(tenant, existing.name, next.version, JSON.stringify(next)),
+        audit(
+          db,
+          tenant,
+          "extension.collection.upgraded",
+          existing.name,
+          null,
+          {
+            previousVersion: existing.version,
+            extensionId,
+            version: next.version,
+            addedFields: additions.map(([name]) => name),
+          },
+        ),
+      ],
+      ends: [unchanged.end],
+    };
   }
   const object = { ...requirement.object, version: 1 };
   const absent = guard(

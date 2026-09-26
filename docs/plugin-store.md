@@ -378,3 +378,47 @@ connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 
 - **R2 para entradas grandes** si D1 rechaza filas de ~1 MB en
   producción.
+
+## Automatic deployment of release plugin ZIPs
+
+Preview and production workflows discover every `.zip` file directly inside
+`deployment/plugins/` and install/update **and activate** each plugin in every
+existing tenant and data domain, including the implicit platform domain. This
+folder is the explicit release policy:
+placing a ZIP there opts that plugin into deployment across all workspaces,
+including workspaces where it was previously disabled or absent. Tenant settings,
+connections, secrets, and records are preserved by the existing installation API.
+Plugins outside this folder are not managed by this deployment step.
+
+`deployment/plugins/sources.json` optionally lists repository ports to package into
+the same folder before deployment. The initial release includes the `quotes` port;
+its ZIP is generated from the current checked-out source, so quote fixes ship
+with the application. Add other ready-made ZIPs directly to the folder, or add
+port directory names to `ports`. Keep one ZIP per plugin id. Dependencies included
+in the folder are installed first; missing dependencies still follow normal
+installation validation and fail the deployment when unavailable in a workspace.
+
+The runner uses the existing Cloudflare deployment credentials and environment
+D1 database id. It starts an authenticated, temporary Wrangler remote session,
+uses the normal ZIP upload and extension installation handlers, and terminates
+the session afterward. No workspace account, copied cookie, per-tenant target list,
+or public deployment endpoint is required. The session accepts a random one-run
+secret and can only upload/install against workspaces discovered in that database.
+
+Version numbers remain immutable: bump the manifest version when changing code
+or `store.json`. Repeated deployment of identical content is safe. Upload rejects
+changed JavaScript or configuration under an existing version, even if its
+manifest is unchanged. ZIP metadata/timestamps do not count as content changes.
+Newer tenant versions are retained and activated instead of being downgraded.
+
+A failure in any workspace fails the release workflow. Workspaces are updated
+sequentially, so the process is not globally atomic; rerun after resolving the
+error. Existing store quotas and object compatibility checks apply. Removing a
+ZIP from the folder does not uninstall it or delete data. Tenants created after a
+deployment receive these plugins at the next deployment.
+
+Plugin installation provisions every declared collection. For existing collections,
+new optional fields are added with a versioned schema update; existing fields,
+labels, layouts and customizations are preserved. Required and conditionally
+required fields are not added automatically because existing records may not
+satisfy them. Invalid collection declarations are rejected during ZIP upload.

@@ -217,6 +217,8 @@ export async function parsePluginStoreZip(
       store = storeJsonSchema.parse(
         JSON.parse(new TextDecoder().decode(storeEntry.data)),
       );
+      for (const collection of store.collections ?? [])
+        sanitizeStoreCollection(collection);
     } catch {
       throw new Error("store.json no cumple el contrato savia.store v1.");
     }
@@ -1095,14 +1097,22 @@ export function registerPluginStore(
       parsed.manifest.id,
     );
     const existing = await c.env.DB.prepare(
-      "SELECT manifest FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+      "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
     )
       .bind(tenant, parsed.manifest.id, parsed.manifest.version)
-      .first<{ manifest: string }>();
+      .first<{
+        manifest: string;
+        entry_js: string;
+        store_json?: string | null;
+      }>();
     if (existing) {
       if (
         canonicalJson(JSON.parse(existing.manifest)) !==
-        canonicalJson(parsed.manifest)
+          canonicalJson(parsed.manifest) ||
+        existing.entry_js !== parsed.entryJs ||
+        canonicalJson(
+          existing.store_json ? JSON.parse(existing.store_json) : null,
+        ) !== canonicalJson(parsed.store ?? null)
       )
         return fail(
           "Esta versión ya existe con otro contenido. Publica una versión nueva.",
