@@ -136,3 +136,54 @@ describe("publish-store-plugins", () => {
     }
   });
 });
+
+it("deployment updates ZIPs only for enabled installations and retains source artifacts", async () => {
+  const { createServer } = await import("node:http");
+  const { mkdtempSync, existsSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { packageStorePlugin } = await import("./pack-store-plugin.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "savia-deploy-test-"));
+  const { artifactPath } = packageStorePlugin({
+    portDir: "store-ports/http-echo",
+    outputPath: join(dir, "echo.zip"),
+  });
+  const seen = [];
+  let enabled = false;
+  const server = createServer(async (request, response) => {
+    for await (const chunk of request) {
+      /* drain upload */
+    }
+    seen.push(`${request.method} ${request.url}`);
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        data:
+          request.method === "GET"
+            ? [{ manifest: { id: "custom.http-echo" }, installed: { enabled } }]
+            : {},
+      }),
+    );
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const options = {
+      apiUrl: `http://127.0.0.1:${server.address().port}`,
+      tenant: "agency:1",
+      cookie: "session=test",
+      artifacts: [artifactPath],
+      updateInstalled: true,
+    };
+    const skipped = await publishPorts(options, { log() {} });
+    assert.equal(skipped[0].skipped, "not-enabled");
+    assert.equal(seen.length, 1);
+    enabled = true;
+    const updated = await publishPorts(options, { log() {} });
+    assert.equal(updated[0].installed, true);
+    assert.ok(seen.at(-1).endsWith("/install?update=enabled"));
+    assert.ok(existsSync(artifactPath));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

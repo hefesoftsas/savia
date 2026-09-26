@@ -1,6 +1,6 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./combined-app";
 import { createRealtimeHubClient } from "../src/realtime/hub-client";
 import {
@@ -525,20 +525,44 @@ describe("Realtime hub", () => {
       error: { code: "REALTIME_LIMIT" },
     });
 
+    // The emulated binding resets on wall-clock minute boundaries. Control
+    // its decision here so CI crossing a minute cannot reset the test burst.
+    // The route must still scope attempts to the actor and enforce both the
+    // rate-limit response and membership checks when requests are allowed.
+    const limit = vi
+      .fn<RateLimit["limit"]>()
+      .mockResolvedValue({ success: true });
+    const rateLimitEnv = { ...env, REALTIME_RATE_LIMITER: { limit } };
     for (let i = 0; i < 30; i++) {
       const response = await memberApp.request(
         `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
         { headers: { Upgrade: "websocket" } },
-        env,
+        rateLimitEnv,
       );
       expect(response.status).toBe(403);
     }
+    limit.mockResolvedValueOnce({ success: false });
     const throttled = await memberApp.request(
       `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
       { headers: { Upgrade: "websocket" } },
-      env,
+      rateLimitEnv,
     );
     expect(throttled.status).toBe(429);
     expect(throttled.headers.get("Retry-After")).toBe("60");
+    expect(await throttled.json()).toMatchObject({
+      error: { code: "REALTIME_LIMIT" },
+    });
+    const recovered = await memberApp.request(
+      `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+      rateLimitEnv,
+    );
+    expect(recovered.status).toBe(403);
+    expect(limit).toHaveBeenCalledTimes(32);
+    expect(
+      limit.mock.calls.every(
+        ([input]) => input.key === "principal:test-agency-member",
+      ),
+    ).toBe(true);
   });
 });

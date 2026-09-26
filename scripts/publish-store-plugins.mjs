@@ -1,6 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageStorePlugin } from "./pack-store-plugin.mjs";
 import { previewNames, slugifyBranch } from "./preview-environment.mjs";
@@ -24,6 +26,7 @@ export function parseArguments(argv) {
   const options = {
     ports: null,
     install: false,
+    updateInstalled: false,
     dryRun: false,
     tenant: null,
     domain: null,
@@ -49,6 +52,7 @@ export function parseArguments(argv) {
         .map((p) => p.trim())
         .filter(Boolean);
     else if (arg === "--install") options.install = true;
+    else if (arg === "--update-installed") options.updateInstalled = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else fail(`argumento desconocido: ${arg}.`);
   }
@@ -83,6 +87,8 @@ export function listPorts(only) {
 async function apiFetch(url, cookie, init = {}) {
   const response = await fetch(url, {
     ...init,
+    redirect: "error",
+    signal: AbortSignal.timeout(60_000),
     headers: {
       ...(init.body instanceof FormData
         ? {}
@@ -106,7 +112,20 @@ export async function publishPorts(options, io = {}) {
   const log = io.log ?? console.log;
   const prefix = apiPrefix(options.apiUrl, options);
   const results = [];
-  for (const port of listPorts(options.ports)) {
+  let enabledIds = null;
+  if (options.updateInstalled && !options.dryRun) {
+    const catalog = await apiFetch(`${prefix}/extensions`, options.cookie);
+    if (catalog.status !== 200 || !Array.isArray(catalog.payload?.data))
+      throw new Error(
+        `Cannot read installed plugins (HTTP ${catalog.status}).`,
+      );
+    enabledIds = new Set(
+      catalog.payload.data
+        .filter((entry) => entry.installed?.enabled === true)
+        .map((entry) => entry.manifest.id),
+    );
+  }
+  for (const port of options.artifacts ?? listPorts(options.ports)) {
     const entry = {
       port,
       id: null,
@@ -118,14 +137,37 @@ export async function publishPorts(options, io = {}) {
     };
     let artifactPath = null;
     try {
-      const packed = packageStorePlugin({
-        portDir: join("store-ports", port),
-        outputPath: join(tmpdir(), `savia-publish-${Date.now()}-${port}.zip`),
-      });
-      artifactPath = packed.artifactPath;
+      const packed = options.artifacts
+        ? {
+            artifactPath: resolve(port),
+            manifest: JSON.parse(
+              execFileSync(
+                "unzip",
+                ["-p", resolve(port), "savia-extension.json"],
+                { encoding: "utf8", maxBuffer: 1024 * 1024 },
+              ),
+            ),
+            sha256: createHash("sha256")
+              .update(readFileSync(port))
+              .digest("hex"),
+          }
+        : packageStorePlugin({
+            portDir: join("store-ports", port),
+            outputPath: join(
+              tmpdir(),
+              `savia-publish-${Date.now()}-${port}.zip`,
+            ),
+          });
+      artifactPath = options.artifacts ? null : packed.artifactPath;
       entry.id = packed.manifest.id;
       entry.version = packed.manifest.version;
       entry.sha256 = packed.sha256;
+      if (enabledIds && !enabledIds.has(entry.id)) {
+        entry.skipped = "not-enabled";
+        log(`SKIP ${port}: not installed and enabled`);
+        results.push(entry);
+        continue;
+      }
       if (options.dryRun) {
         entry.uploaded = "dry-run";
         log(`OK ${port} ${entry.id}@${entry.version} (dry-run)`);
@@ -135,9 +177,13 @@ export async function publishPorts(options, io = {}) {
       const form = new FormData();
       form.set(
         "file",
-        new File([readFileSync(artifactPath)], `${port}.store.zip`, {
-          type: "application/zip",
-        }),
+        new File(
+          [readFileSync(packed.artifactPath)],
+          `${basename(port)}.store.zip`,
+          {
+            type: "application/zip",
+          },
+        ),
       );
       const uploaded = await apiFetch(
         `${prefix}/plugin-store/upload`,
@@ -153,9 +199,9 @@ export async function publishPorts(options, io = {}) {
       }
       entry.uploaded = true;
       if (uploaded.payload?.data?.deduped) entry.uploaded = "deduped";
-      if (options.install) {
+      if (options.install || options.updateInstalled) {
         const installed = await apiFetch(
-          `${prefix}/extensions/${encodeURIComponent(entry.id)}/install`,
+          `${prefix}/extensions/${encodeURIComponent(entry.id)}/install${options.updateInstalled ? "?update=enabled" : ""}`,
           options.cookie,
           { method: "POST" },
         );

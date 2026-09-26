@@ -161,6 +161,14 @@ jobs:
           workingDirectory: apps/api
           wranglerVersion: 4.127.1
 
+      - name: Deploy release plugin ZIPs to all workspaces
+        run: node scripts/deploy-store-plugins.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DATABASE_ID: ${{ vars.SAVIA_DOMAIN_D1_ID }}
+
       - name: Verify deployed gateway
         uses: cloudflare/wrangler-action@v4
         with:

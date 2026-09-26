@@ -1,3 +1,6 @@
+import deploymentWorker, {
+  deploymentTenants,
+} from "../../../scripts/plugin-deployment/worker";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { existsSync } from "node:fs";
@@ -592,6 +595,62 @@ describe("plugin store por tenant", () => {
     expect(different.status).toBe(409);
   });
 
+  it("rejects changed JavaScript or settings under an immutable version", async () => {
+    const tenant = "store-immutable-code";
+    expect((await uploadZip(tenant, pluginZip())).status).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            entry: 'export function render(el) { el.textContent = "changed"; }',
+          }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            store: {
+              format: "savia.store",
+              formatVersion: 1,
+              settings: { defaults: { changed: true } },
+            },
+          }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (await uploadZip(tenant, pluginZip({}, { deflate: true }))).status,
+    ).toBe(200);
+  });
+
+  it("deployment updates never install or enable optional plugins", async () => {
+    const tenant = "store-deploy-update";
+    await uploadZip(tenant, pluginZip());
+    const request = (path: string, init: RequestInit = { method: "POST" }) =>
+      app(tenant).request(
+        `http://localhost/api/extensions/custom.demo${path}`,
+        init,
+        platform.env,
+      );
+    expect((await request("/install?update=enabled")).status).toBe(409);
+    expect((await request("/install")).status).toBe(200);
+    expect((await request("/install?update=enabled")).status).toBe(200);
+    expect(
+      (
+        await request("", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled: false }),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await request("/install?update=enabled")).status).toBe(409);
+  });
+
   it("exige desactivar antes de eliminar.", async () => {
     const tenant = "store-delete";
     await uploadZip(tenant, pluginZip());
@@ -834,6 +893,143 @@ async function storedObject(tenant: string, name: string) {
 }
 
 describe("provisión de colecciones del store", () => {
+  it("rejects invalid collection declarations instead of silently omitting them", async () => {
+    const tasks = tareasStore.collections[0];
+    const store = {
+      ...tareasStore,
+      collections: [
+        {
+          ...tasks,
+          object: {
+            ...tasks.object,
+            config: { ...tasks.object.config, fieldOrder: ["missing"] },
+          },
+        },
+      ],
+    };
+    const uploaded = await uploadZip(
+      "store-invalid-collection",
+      pluginZip({ store }),
+    );
+    expect(uploaded.status).toBe(422);
+  });
+
+  it("adds missing optional fields on upgrade without replacing custom fields", async () => {
+    const tenant = "store-additive-upgrade";
+    await uploadZip(tenant, pluginZip({ store: tareasStore }));
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    const object = tareasStore.collections[0].object;
+    const customConfig = {
+      ...object.config,
+      fields: {
+        ...object.config.fields,
+        name: { ...object.config.fields.name, label: "Custom name" },
+        custom_tag: { type: "Textbox", label: "Custom tag" },
+      },
+      fieldOrder: ["name", "custom_tag"],
+    };
+    await platform.env.DB.prepare(
+      "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name='tareas'",
+    )
+      .bind(JSON.stringify(customConfig), tenant)
+      .run();
+    const store = {
+      ...tareasStore,
+      collections: [
+        {
+          ...tareasStore.collections[0],
+          object: {
+            ...object,
+            config: {
+              ...object.config,
+              fields: {
+                ...object.config.fields,
+                snapshot: { type: "Textarea", label: "Snapshot" },
+                conditional_new: {
+                  type: "Textbox",
+                  label: "Conditional new",
+                  config: {
+                    requiredWhen: {
+                      field: "name",
+                      op: "eq",
+                      value: "Required",
+                    },
+                  },
+                },
+                required_new: {
+                  type: "Textbox",
+                  label: "Required new",
+                  required: true,
+                },
+              },
+              fieldOrder: [
+                "name",
+                "snapshot",
+                "required_new",
+                "conditional_new",
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const uploaded = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.0.1" }, store }),
+    );
+    expect(uploaded.status).toBe(200);
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    const upgraded = await storedObject(tenant, "tareas");
+    expect(upgraded?.version).toBe(2);
+    const config = JSON.parse(upgraded!.config);
+    expect(config.fields.name).toEqual(customConfig.fields.name);
+    expect(config.fields.custom_tag).toEqual(customConfig.fields.custom_tag);
+    expect(config.fields.snapshot).toEqual({
+      type: "Textarea",
+      label: "Snapshot",
+    });
+    expect(config.fields.required_new).toBeUndefined();
+    expect(config.fields.conditional_new).toBeUndefined();
+    expect(config.fieldOrder).toEqual(["name", "custom_tag", "snapshot"]);
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    expect((await storedObject(tenant, "tareas"))?.version).toBe(2);
+  });
+
+  it("provisions every collection declared by one plugin", async () => {
+    const tenant = "store-multiple-collections";
+    const tasks = tareasStore.collections[0];
+    const store = {
+      ...tareasStore,
+      collections: [
+        tasks,
+        {
+          ...tasks,
+          object: {
+            ...tasks.object,
+            name: "task_details",
+            label: "Task details",
+          },
+        },
+      ],
+    };
+    const uploaded = await uploadZip(tenant, pluginZip({ store }));
+    expect(uploaded.status, await uploaded.text()).toBe(200);
+    const installed = await api(
+      tenant,
+      "/extensions/custom.demo/install",
+      "POST",
+    );
+    expect(installed.status).toBe(200);
+    expect(await storedObject(tenant, "tareas")).not.toBeNull();
+    expect(await storedObject(tenant, "task_details")).not.toBeNull();
+  });
+
   it("crea la colección al instalar y la repara al reinstalar.", async () => {
     const tenant = "store-provision";
     await uploadZip(tenant, pluginZip({ store: tareasStore }));
@@ -1422,4 +1618,137 @@ describe("port real custom.http-echo", () => {
       }
     },
   );
+});
+
+describe("release deployment worker", () => {
+  it("discovers all tenant scopes and installs, updates and reactivates without changing settings", async () => {
+    const db = platform.env.DB;
+    await db
+      .prepare("CREATE TABLE IF NOT EXISTS tenants(id INTEGER PRIMARY KEY)")
+      .run();
+    await db
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS studio_data_domains(id TEXT PRIMARY KEY)",
+      )
+      .run();
+    await db.prepare("INSERT INTO tenants(id) VALUES (901),(902),(903)").run();
+    await db
+      .prepare("INSERT INTO studio_data_domains(id) VALUES ('deployment-test')")
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES ('agency:902','example','Example','{}'),('tenant:903','example','Example','{}')",
+      )
+      .run();
+    expect(await deploymentTenants(db)).toEqual([
+      "agency:902",
+      "domain:deployment-test",
+      "domain:platform",
+      "tenant:901",
+      "tenant:903",
+    ]);
+    const env = {
+      ...platform.env,
+      DEPLOYMENT_SESSION: "deployment-test-secret",
+    };
+    const call = (path: string, init: RequestInit = {}) =>
+      deploymentWorker.fetch(
+        new Request(`https://deployment.internal${path}`, {
+          ...init,
+          headers: {
+            ...init.headers,
+            authorization: "Bearer deployment-test-secret",
+          },
+        }),
+        env,
+      );
+    expect(
+      (
+        await deploymentWorker.fetch(
+          new Request("https://deployment.internal/tenants"),
+          env,
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await call("/install?tenant=tenant:999&id=custom.demo", {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(404);
+    for (const tenant of await deploymentTenants(db)) {
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([pluginZip({ store: quoteStore }) as BlobPart], "demo.zip"),
+      );
+      const uploaded = await call(
+        `/upload?tenant=${encodeURIComponent(tenant)}`,
+        { method: "POST", body: form },
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+      const installed = await call(
+        `/install?tenant=${encodeURIComponent(tenant)}&id=custom.demo`,
+        { method: "POST" },
+      );
+      expect(installed.status, await installed.text()).toBe(200);
+    }
+    const tenant = "tenant:901";
+    const changed = await api(
+      tenant,
+      "/extensions/custom.demo/settings",
+      "PUT",
+      {
+        value: {
+          quotePages: { direct: false, wizard: true },
+          vehicleLookup: { enabled: false },
+        },
+        version: 0,
+      },
+    );
+    expect(changed.status).toBe(200);
+    expect(
+      (
+        await api(tenant, "/extensions/custom.demo", "PATCH", {
+          enabled: false,
+        })
+      ).status,
+    ).toBe(200);
+    const form = new FormData();
+    form.set(
+      "file",
+      new File(
+        [
+          pluginZip({
+            store: quoteStore,
+            manifest: { version: "1.1.0" },
+          }) as BlobPart,
+        ],
+        "demo.zip",
+      ),
+    );
+    expect(
+      (await call(`/upload?tenant=${tenant}`, { method: "POST", body: form }))
+        .status,
+    ).toBe(200);
+    const updated = await call(`/install?tenant=${tenant}&id=custom.demo`, {
+      method: "POST",
+    });
+    expect(updated.status).toBe(200);
+    expect(((await updated.json()) as any).data).toMatchObject({
+      enabled: true,
+      version: "1.1.0",
+    });
+    const settings = await api(tenant, "/extensions/custom.demo/settings");
+    expect(settings.json.data.value).toEqual(changed.json.data.value);
+    expect(settings.json.data.version).toBe(1);
+    expect(
+      (
+        await call(`/install?tenant=${tenant}&id=custom.demo`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(200);
+  });
 });

@@ -112,3 +112,27 @@ test("preview deploys only successful same-repository main CI and uses its own e
     /wrangler\.production\.jsonc|reset-d1|environment: production/,
   );
 });
+
+test("release plugins deploy to all workspaces using existing environment credentials", async () => {
+  for (const name of ["deploy-cloudflare.yml", "deploy-preview.yml"]) {
+    const source = await workflow(name);
+    assert.ok(
+      source.indexOf("name: Deploy savia gateway") <
+        source.indexOf("run: node scripts/deploy-store-plugins.mjs"),
+    );
+    assert.ok(
+      source.indexOf("run: node scripts/deploy-store-plugins.mjs") <
+        source.indexOf("name: Verify deployed gateway"),
+    );
+    const step = source.slice(
+      source.indexOf("name: Deploy release plugin ZIPs"),
+      source.indexOf("name: Verify deployed gateway"),
+    );
+    assert.match(step, /CLOUDFLARE_API_TOKEN/);
+    assert.match(step, /CLOUDFLARE_DATABASE_ID.*vars.SAVIA_DOMAIN_D1_ID/);
+    assert.doesNotMatch(
+      step,
+      /SAVIA_PLUGIN_TARGETS|SAVIA_DEPLOY_EMAIL|SAVIA_DEPLOY_PASSWORD/,
+    );
+  }
+});
