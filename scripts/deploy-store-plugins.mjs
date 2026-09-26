@@ -17,21 +17,41 @@ import { packageStorePlugin } from "./pack-store-plugin.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 
+const PORT_NAME_PATTERN = /^[a-z0-9-]+$/;
+
+function normalizePortList(value, field) {
+  if (!Array.isArray(value))
+    throw new Error(
+      `Plugin sources.json requires a ${field} array of directory names.`,
+    );
+  for (const port of value) {
+    if (typeof port !== "string" || !PORT_NAME_PATTERN.test(port))
+      throw new Error(
+        `Plugin sources.json requires a ${field} array of directory names.`,
+      );
+  }
+  return value;
+}
+
 export function releaseArtifacts(directory = join(root, "deployment/plugins")) {
   mkdirSync(directory, { recursive: true });
   const sourcePath = join(directory, "sources.json");
+  // Ports listed under `optional` are packaged and uploaded to every
+  // workspace catalog, but never auto-installed: tenants enable them on
+  // demand from their own plugin store. Ports under `ports` keep the
+  // historical behavior (upload + install and activate everywhere).
+  let optionalPorts = new Set();
   if (existsSync(sourcePath)) {
     const sources = JSON.parse(readFileSync(sourcePath, "utf8"));
-    if (
-      !Array.isArray(sources.ports) ||
-      sources.ports.some(
-        (port) => typeof port !== "string" || !/^[a-z0-9-]+$/.test(port),
-      )
-    )
+    const ports = normalizePortList(sources.ports ?? [], "ports");
+    const optional = normalizePortList(sources.optional ?? [], "optional");
+    const overlap = ports.filter((port) => optional.includes(port));
+    if (overlap.length)
       throw new Error(
-        "Plugin sources.json requires a ports array of directory names.",
+        `Plugin sources.json lists ${overlap[0]} as required and optional.`,
       );
-    for (const port of sources.ports)
+    optionalPorts = new Set(optional);
+    for (const port of [...ports, ...optional])
       packageStorePlugin({
         portDir: `store-ports/${port}`,
         outputPath: join(directory, `${port}.store.zip`),
@@ -49,7 +69,17 @@ export function releaseArtifacts(directory = join(root, "deployment/plugins")) {
       );
       if (typeof manifest.id !== "string" || !Array.isArray(manifest.requires))
         throw new Error(`Invalid plugin manifest in ${entry.name}.`);
-      return { path, manifest };
+      // Only ports generated from sources.json carry the `.store.zip`
+      // suffix with their directory name; hand-placed ZIPs keep the
+      // historical behavior and are always auto-installed.
+      const portName = entry.name.endsWith(".store.zip")
+        ? entry.name.slice(0, -".store.zip".length)
+        : null;
+      return {
+        path,
+        manifest,
+        optional: portName !== null && optionalPorts.has(portName),
+      };
     });
   const byId = new Map();
   for (const artifact of artifacts) {
@@ -127,6 +157,8 @@ export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
     throw new Error("Deployment worker returned an invalid tenant list.");
   for (const tenant of tenants) {
     // Upload every dependency before installing in topological order.
+    // Optional plugins are uploaded so they show up as installable in
+    // the workspace catalog, but they are never auto-installed.
     for (const artifact of artifacts) {
       const form = new FormData();
       form.set(
@@ -141,6 +173,12 @@ export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
       });
     }
     for (const artifact of artifacts) {
+      if (artifact.optional) {
+        log(
+          `Available ${artifact.manifest.id}@${artifact.manifest.version} in ${tenant} (optional, not installed)`,
+        );
+        continue;
+      }
       const installed = await call(
         `/install?tenant=${encodeURIComponent(tenant)}&id=${encodeURIComponent(artifact.manifest.id)}`,
         { method: "POST" },
@@ -150,10 +188,17 @@ export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
       );
     }
   }
+  const installed = artifacts.filter((artifact) => !artifact.optional).length;
+  const optional = artifacts.length - installed;
   log(
-    `Deployed ${artifacts.length} release plugins to ${tenants.length} workspaces.`,
+    `Deployed ${artifacts.length} release plugins to ${tenants.length} workspaces (${installed} installed, ${optional} optional).`,
   );
-  return { plugins: artifacts.length, tenants: tenants.length };
+  return {
+    plugins: artifacts.length,
+    tenants: tenants.length,
+    installed,
+    optional,
+  };
 }
 
 export async function deployStorePlugins(env = process.env) {

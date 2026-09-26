@@ -382,19 +382,26 @@ connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 ## Automatic deployment of release plugin ZIPs
 
 Preview and production workflows discover every `.zip` file directly inside
-`deployment/plugins/` and install/update **and activate** each plugin in every
-existing tenant and data domain, including the implicit platform domain. This
-folder is the explicit release policy:
+`deployment/plugins/`. Required plugins are installed/updated **and
+activated** in every existing tenant and data domain, including the implicit
+platform domain. Plugins listed under `optional` in
+`deployment/plugins/sources.json` are uploaded to every workspace catalog but
+never auto-installed: they show up as installable in **Mis plugins** and each
+workspace enables them on demand. This folder is the explicit release policy:
 placing a ZIP there opts that plugin into deployment across all workspaces,
 including workspaces where it was previously disabled or absent. Tenant settings,
 connections, secrets, and records are preserved by the existing installation API.
 Plugins outside this folder are not managed by this deployment step.
 
 `deployment/plugins/sources.json` optionally lists repository ports to package into
-the same folder before deployment. The initial release includes the `quotes` port;
-its ZIP is generated from the current checked-out source, so quote fixes ship
-with the application. Add other ready-made ZIPs directly to the folder, or add
-port directory names to `ports`. Keep one ZIP per plugin id. Dependencies included
+the same folder before deployment. `ports` are required (upload + install and
+activate everywhere); `optional` ports are packaged and uploaded only, so workspaces
+can install them on demand without receiving them by default. The initial release
+includes the `quotes` port as required and the remaining insurance ports as
+optional; their ZIPs are generated from the current checked-out source, so plugin
+fixes ship with the application. Add other ready-made ZIPs directly to the folder
+(hand-placed ZIPs are always auto-installed), or add port directory names to
+`ports` or `optional`. Keep one ZIP per plugin id. Dependencies included
 in the folder are installed first; missing dependencies still follow normal
 installation validation and fail the deployment when unavailable in a workspace.
 
