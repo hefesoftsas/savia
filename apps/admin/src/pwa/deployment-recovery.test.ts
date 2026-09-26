@@ -54,36 +54,60 @@ it("waits for the replacement worker to activate before allowing reload", async 
 it("does not reload after update failure, redundant installation or offline requests", async () => {
   environment({
     update: vi.fn().mockRejectedValue(new Error("Update unavailable")),
+    unregister: vi.fn(),
   });
   await expect(prepareAppReload()).rejects.toThrow("Update unavailable");
   const worker = new Worker();
+  const unregister = vi.fn().mockResolvedValue(true);
   environment({
     update: vi.fn().mockResolvedValue(undefined),
     installing: worker,
+    unregister,
   });
   const pending = prepareAppReload();
-  const rejected = expect(pending).rejects.toThrow(/instalar/);
   await vi.waitFor(() =>
     expect(navigator.serviceWorker.register).toHaveBeenCalled(),
   );
   await Promise.resolve();
   await Promise.resolve();
   worker.transition("redundant");
-  await rejected;
+  // Redundant install drops worker control and lets the caller reload from
+  // the network instead of stranding the user on the timeout screen.
+  await pending;
+  expect(unregister).toHaveBeenCalledOnce();
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
   await expect(prepareAppReload()).rejects.toThrow(/conexión/);
 });
-it("times out a stalled worker instead of leaving recovery pending forever", async () => {
+it("drops a stalled worker and reloads from network instead of stranding on timeout", async () => {
   vi.useFakeTimers();
   try {
+    const unregister = vi.fn().mockResolvedValue(true);
     environment({
       update: vi.fn().mockResolvedValue(undefined),
       installing: new Worker(),
+      unregister,
     });
     const pending = prepareAppReload();
-    const rejected = expect(pending).rejects.toThrow(/tiempo/);
-    await vi.advanceTimersByTimeAsync(15000);
-    await rejected;
+    await vi.advanceTimersByTimeAsync(30_000);
+    await pending;
+    expect(unregister).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("keeps update failures retryable without unregistering", async () => {
+  vi.useFakeTimers();
+  try {
+    const unregister = vi.fn();
+    environment({
+      update: vi.fn().mockRejectedValue(new Error("Update unavailable")),
+      unregister,
+    });
+    const pending = prepareAppReload();
+    const assertion = expect(pending).rejects.toThrow("Update unavailable");
+    await vi.advanceTimersByTimeAsync(30_000);
+    await assertion;
+    expect(unregister).not.toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
   }

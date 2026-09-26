@@ -4,6 +4,7 @@ import {
   gatewayFetch,
   isImmutableAsset,
   isServicePath,
+  serviceWorkerCacheControl,
   staticAssetCacheControl,
   TENANT_SLUG_HEADER,
   tenantSlugFromRequest,
@@ -134,6 +135,24 @@ describe("edge gateway", () => {
     expect(response.headers.get("Cache-Control")).toBe(
       "public, max-age=3600, must-revalidate",
     );
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
+  it("serves the worker script with no-store so updates are found", async () => {
+    expect(serviceWorkerCacheControl("/sw.js")).toBe("no-store");
+    expect(serviceWorkerCacheControl("/dev-sw.js")).toBe("no-store");
+    expect(serviceWorkerCacheControl("/assets/main-CfLYpzF0.js")).toBeNull();
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = {
+      fetch: vi.fn(async () => new Response("worker", {
+        headers: { "Cache-Control": "public, max-age=3600" },
+      })),
+    };
+    const response = await gatewayFetch(
+      new Request("https://savia.example.workers.dev/sw.js"),
+      { API: api, ASSETS: assets },
+    );
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(api.fetch).not.toHaveBeenCalled();
   });
 

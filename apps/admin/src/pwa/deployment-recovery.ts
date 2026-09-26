@@ -6,6 +6,11 @@ export function isModuleLoadError(error: unknown): boolean {
   );
 }
 
+/** Hard deadline for the worker replacement. Boot shell precache is small by
+ * design; 30s still covers slow 4G while keeping recovery retryable instead
+ * of hanging forever. */
+export const UPDATE_DEADLINE_MS = 30_000;
+
 function waitForActivation(
   worker: ServiceWorker,
   signal: AbortSignal,
@@ -65,18 +70,21 @@ export async function prepareAppReload(): Promise<void> {
       );
       controller.abort(error);
       reject(error);
-    }, 15000);
+    }, UPDATE_DEADLINE_MS);
   });
+  let registration: ServiceWorkerRegistration | undefined;
+  let updateReachedServer = false;
   try {
     await Promise.race([
       deadline,
       (async () => {
-        const registration = await navigator.serviceWorker.register(
+        registration = await navigator.serviceWorker.register(
           import.meta.env.DEV ? "/dev-sw.js?dev-sw" : "/sw.js",
           { scope: "/", updateViaCache: "none" },
         );
         if (controller.signal.aborted) throw controller.signal.reason;
         await registration.update();
+        updateReachedServer = true;
         if (controller.signal.aborted) throw controller.signal.reason;
         const worker =
           registration.installing ??
@@ -89,6 +97,30 @@ export async function prepareAppReload(): Promise<void> {
         await waitForActivation(worker, controller.signal);
       })(),
     ]);
+  } catch (error) {
+    // The replacement worker was found on the server but its install stalled
+    // (slow network, failed precache, redundant). The old controller would
+    // keep serving the retired index.html, so every retry would hit the same
+    // missing chunk. Drop service-worker control and let the caller reload
+    // from the network, which already serves the new deployment. IndexedDB
+    // replicas, outbox queues, caches and credentials are untouched: only
+    // the worker registration is removed, and the next boot re-registers it.
+    // Failures before reaching the server (offline, DNS, edge down) stay
+    // retryable instead: reloading there would only show the browser offline
+    // page and is worse than staying on this screen.
+    if (
+      updateReachedServer &&
+      error instanceof Error &&
+      !error.message.includes("todavía no está disponible")
+    ) {
+      try {
+        await registration?.unregister();
+      } catch {
+        // ignore: the plain reload below is still the right recovery.
+      }
+      return;
+    }
+    throw error;
   } finally {
     clearTimeout(timer!);
     controller.abort();
