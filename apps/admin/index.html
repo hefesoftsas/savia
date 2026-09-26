@@ -4,15 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Savia</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32-v3.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16-v3.png" />
+    <!-- Un solo favicon descubierto por el parser (SVG moderno): el HAR
+         mostraba ico + 32 + 16 + svg descargados a la vez. El PNG de 32px
+         sigue en /public para el sidebar colapsado y el .ico como fallback
+         automático de navegadores viejos. -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
     <link
       rel="apple-touch-icon"
       sizes="180x180"
       href="/apple-touch-icon-v3.png"
     />
-    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#0d9488" />
     <meta name="mobile-web-app-capable" content="yes" />

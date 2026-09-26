@@ -54,6 +54,40 @@ export function isServicePath(pathname: string): boolean {
   );
 }
 
+/**
+ * Vite/Rolldown fingerprinted build assets (`/assets/name-HASH.js|css`).
+ * The hash changes on every content change, so these are safe to cache
+ * immutably for a year. Everything else (index.html, manifest, icons)
+ * keeps the platform default (must-revalidate) so deploys take effect.
+ */
+export function isImmutableAsset(pathname: string): boolean {
+  if (!pathname.startsWith("/assets/")) return false;
+  return /-[A-Za-z0-9_-]{6,}\.(js|css|woff2?|ttf|eot)$/.test(pathname);
+}
+
+/**
+ * Estáticos raíz sin hash pero de cambio infrecuente. En el HAR el
+ * manifest tardó 867ms y savia-icon-192 se pidió 2 veces, todo con
+ * `max-age=0`: cada visita revalida. Versionados (v3) → immutable;
+ * manifest y logo webp → 1h (el nombre versionado se bumpéa al cambiar).
+ */
+export function staticAssetCacheControl(pathname: string): string | null {
+  if (
+    /^\/(favicon|apple-touch-icon|savia-icon|savia-maskable)(-[^/]*)?\.png$/.test(
+      pathname,
+    )
+  )
+    return "public, max-age=31536000, immutable";
+  if (pathname === "/favicon.svg")
+    return "public, max-age=86400, must-revalidate";
+  if (
+    pathname === "/site.webmanifest" ||
+    pathname === "/savia-logo-large-480.webp"
+  )
+    return "public, max-age=3600, must-revalidate";
+  return null;
+}
+
 export async function gatewayFetch(
   request: Request,
   env: GatewayEnv,
@@ -76,6 +110,20 @@ export async function gatewayFetch(
       publicPage.headers.set("Referrer-Policy", "no-referrer");
       publicPage.headers.set("X-Robots-Tag", "noindex, nofollow");
       return publicPage;
+    }
+    if (isImmutableAsset(pathname)) {
+      const immutable = new Response(response.body, response);
+      immutable.headers.set(
+        "Cache-Control",
+        "public, max-age=31536000, immutable",
+      );
+      return immutable;
+    }
+    const staticCache = staticAssetCacheControl(pathname);
+    if (staticCache) {
+      const cached = new Response(response.body, response);
+      cached.headers.set("Cache-Control", staticCache);
+      return cached;
     }
     return response;
   }

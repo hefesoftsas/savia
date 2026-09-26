@@ -83,6 +83,7 @@ import {
 } from "@/features/studio-engine/lucide-lookup-icon";
 import { UserMenu } from "@/components/admin/user-menu";
 import { SidebarFlowsSkeleton } from "@/components/admin/page-skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import { useSaviaRequestWorkspace } from "@/features/savia-request/savia-request-provider";
@@ -543,6 +544,11 @@ export function AppSidebar() {
   const closeMobileSidebar = () => {
     if (openMobile) setOpenMobile(false);
   };
+  // Mientras las preferencias no llegan se muestra un esqueleto de altura
+  // fija en lugar del layout fallback: así el paso a fallback→guardado no
+  // reordena ítems visibles (CLS 0.07 en el trace) sino esqueleto→final.
+  const preferencesLoading =
+    layout === null && Boolean(services.userPreferences);
 
   const persistLayout = async (nextLayout: SidebarNavigationLayout) => {
     const lastConfirmed = confirmedLayout ?? displayedLayout;
@@ -789,11 +795,21 @@ export function AppSidebar() {
                   </>
                 ) : (
                   <>
-                    <img
-                      src="/savia-logo-large.png"
-                      alt="Savia"
-                      className="h-6 w-auto object-contain group-data-[collapsible=icon]:hidden dark:rounded-md dark:bg-white dark:px-1.5 dark:py-0.5"
-                    />
+                    <picture className="contents">
+                      <source
+                        srcSet="/savia-logo-large-480.webp"
+                        type="image/webp"
+                      />
+                      <img
+                        src="/savia-logo-large.png"
+                        alt="Savia"
+                        width={480}
+                        height={139}
+                        fetchPriority="high"
+                        decoding="async"
+                        className="h-6 w-auto object-contain group-data-[collapsible=icon]:hidden dark:rounded-md dark:bg-white dark:px-1.5 dark:py-0.5"
+                      />
+                    </picture>
                     <img
                       src="/favicon-32-v3.png"
                       alt="Savia"
@@ -909,6 +925,20 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent className="gap-0">
+        {preferencesLoading ? (
+          <div
+            role="status"
+            aria-label={translate("savia.sidebar.loadingNavigation")}
+            className="flex flex-col gap-1 px-2 py-2"
+          >
+            <span className="sr-only">
+              {translate("savia.sidebar.loadingNavigation")}
+            </span>
+            {Array.from({ length: 9 }, (_, index) => (
+              <Skeleton key={index} className="h-8 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
         <DndContext
           collisionDetection={closestCenter}
           onDragCancel={handleDragCancel}
@@ -1041,6 +1071,7 @@ export function AppSidebar() {
             ) : null}
           </DragOverlay>
         </DndContext>
+        )}
         {!organizationMode &&
         !isLoading &&
         searching &&

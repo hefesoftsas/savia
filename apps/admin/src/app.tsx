@@ -221,7 +221,15 @@ function AppContent({ services }: { services?: AppServices } = {}) {
       appServices.queryClient ??
       new QueryClient({
         defaultOptions: {
-          queries: { networkMode: "always", retry: false },
+          queries: {
+            networkMode: "always",
+            retry: false,
+            // Sin staleTime cada montaje (StrictMode = x2) refetcheaba:
+            // de ahí identity/me y connections duplicados en el HAR.
+            staleTime: 30_000,
+            gcTime: 5 * 60_000,
+            refetchOnWindowFocus: false,
+          },
           mutations: { networkMode: "always", retry: false },
         },
       }),

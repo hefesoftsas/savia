@@ -30,7 +30,13 @@ export function createAppServices() {
   });
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: { networkMode: "always", retry: 1 },
+      queries: {
+        networkMode: "always",
+        retry: 1,
+        staleTime: 30_000,
+        gcTime: 5 * 60_000,
+        refetchOnWindowFocus: false,
+      },
       mutations: { networkMode: "always", retry: false },
     },
   });

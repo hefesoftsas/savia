@@ -173,7 +173,46 @@ export default defineConfig({
         office: fileURLToPath(new URL("./office/index.html", import.meta.url)),
       },
       output: {
-        // manualChunks removed
+        // Agrupa vendors compartidos para evitar decenas de chunks
+        // diminutos (un icono = un roundtrip de ~130ms en el HAR).
+        // El código de rutas sigue con code-splitting por lazy().
+        // Excepción: los iconos de lookup por `import.meta.glob`
+        // (lucide dist/esm/icons, @thesvg dist) DEBEN quedar divididos:
+        // fusionarlos crea un único chunk eager de ~32 MB.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          const sep = String.raw`[/\\]`;
+          if (
+            new RegExp(`lucide-react${sep}dist${sep}esm${sep}icons${sep}`).test(
+              id,
+            )
+          )
+            return undefined;
+          if (new RegExp(`@thesvg${sep}react${sep}dist${sep}`).test(id))
+            return undefined;
+          if (
+            id.includes("lucide-react") ||
+            id.includes("@thesvg") ||
+            id.includes("lucide")
+          )
+            return "icons";
+          if (
+            id.includes("react-router") ||
+            id.includes("react-dom") ||
+            id.includes("/react/") ||
+            id.endsWith("/react")
+          )
+            return "react-vendor";
+          if (id.includes("@tanstack/react-query")) return "query-vendor";
+          if (id.includes("@dnd-kit")) return "dnd-vendor";
+          if (
+            id.includes("@radix-ui") ||
+            id.includes("sonner") ||
+            id.includes("tailwind")
+          )
+            return "ui-vendor";
+          return "vendor";
+        },
       },
     },
   },

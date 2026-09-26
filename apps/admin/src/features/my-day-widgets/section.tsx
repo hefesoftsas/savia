@@ -38,6 +38,7 @@ import {
   CALENDAR_CONNECT_MESSAGE,
   QuickTaskWidgetBody,
   useMyDayAgenda,
+  type AgendaState,
   type PersonalIntegrationsLike,
 } from "./agenda-widget";
 import { listWidgetCollections } from "./data";
@@ -133,10 +134,12 @@ export function MyDayWidgetsSection({
   apiClient,
   userPreferences,
   personalIntegrations,
+  agenda: agendaProp,
 }: {
   apiClient?: ApiClient;
   userPreferences?: UserPreferencesClient;
   personalIntegrations?: PersonalIntegrationsLike;
+  agenda?: AgendaState;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const {
@@ -154,7 +157,10 @@ export function MyDayWidgetsSection({
     hasSystemWidget,
   } = useMyDayWidgets(userPreferences);
   const labels = useCollectionLabels(apiClient, widgets);
-  const agenda = useMyDayAgenda(personalIntegrations);
+  // La página ya posee una instancia (header): reutilizarla evita duplicar
+  // /connections y /events x2 en el mismo ms.
+  const fallbackAgenda = useMyDayAgenda(agendaProp ? undefined : personalIntegrations);
+  const agenda = agendaProp ?? fallbackAgenda;
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -314,15 +320,21 @@ export function MyDayWidgetsSection({
 
       {loading ? (
         <div
-          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+          className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
           role="status"
           aria-label="Cargando widgets…"
         >
           <span className="sr-only">Cargando widgets…</span>
+          {/* Misma retícula y alturas que el contenido final (la agenda ocupa
+              2 columnas y min-h-44): evita el salto del grid a los ~7s. */}
           {[0, 1, 2].map((index) => (
             <div
               key={index}
-              className="space-y-2 rounded-2xl border border-border/60 bg-card p-5 shadow-sm"
+              className={
+                index === 0
+                  ? "min-h-44 space-y-2 rounded-2xl border border-border/60 bg-card p-5 shadow-sm md:col-span-2 xl:col-span-2"
+                  : "min-h-44 space-y-2 rounded-2xl border border-border/60 bg-card p-5 shadow-sm"
+              }
             >
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-8 w-20" />
