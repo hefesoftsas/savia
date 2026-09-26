@@ -123,4 +123,55 @@ describe("ordered deletion", () => {
   });
 });
 
+describe("fallback history reads", () => {
+  it("falls back to a tolerant scan when the filtered read fails", async () => {
+    const records = [
+      { id: "d1", cotizacion: "m1", producto: "SBS · Gold" },
+      { id: "d2", cotizacion: "m2", producto: "Otro" },
+    ];
+    const coll = {
+      list: vi.fn(async (options: { filters?: unknown } = {}) => {
+        if (options.filters) throw new Error("Campo de filtro desconocido.");
+        return { data: records, total: records.length, page: 1, perPage: 200 };
+      }),
+      remove: vi.fn(async () => {}),
+    };
+    const { fetchDetailsForQuote } = await import("../src/quote-history");
+    const details = await fetchDetailsForQuote(coll as never, "m1", "COT-1");
+    expect(details.map((d) => d.id)).toEqual(["d1"]);
+  });
+
+  it("recovers details by reference name when the relation was lost", async () => {
+    const records = [
+      { id: "d1", name: "COT-9-producto-8", cotizacion: null, producto: "SBS · Gold" },
+      { id: "d2", name: "OTHER-1", cotizacion: "other", producto: "Otro" },
+    ];
+    const coll = {
+      list: vi.fn(async (options: { filters?: unknown } = {}) => {
+        if (options.filters) return { data: [], total: 0, page: 1, perPage: 200 };
+        return { data: records, total: records.length, page: 1, perPage: 200 };
+      }),
+      remove: vi.fn(async () => {}),
+    };
+    const { fetchDetailsForQuote } = await import("../src/quote-history");
+    const details = await fetchDetailsForQuote(coll as never, "missing-id", "COT-9");
+    expect(details.map((d) => d.id)).toEqual(["d1"]);
+  });
+
+  it("retries the master after clearing remaining relations", async () => {
+    const details = detailColl([{ id: "d1", cotizacion: "m1", _version: 1 }]);
+    let masterAttempts = 0;
+    const master = {
+      remove: vi.fn(async () => {
+        masterAttempts += 1;
+        if (masterAttempts === 1) throw new Error("Hay relaciones desde Detalles.");
+      }),
+    };
+    const { deleteQuoteHistory } = await import("../src/quote-history");
+    const result = await deleteQuoteHistory(details as never, master as never, "m1", 4, "COT-1");
+    expect(result.ok).toBe(true);
+    expect(master.remove).toHaveBeenCalledTimes(2);
+  });
+});
+
 
