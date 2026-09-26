@@ -157,7 +157,7 @@ jobs:
           wranglerVersion: 4.127.1
 
       - name: Build admin assets
-        run: pnpm --filter @savia/admin run build
+        run: pnpm --filter @savia/admin run build:assets
         env:
           NODE_OPTIONS: "--max-old-space-size=1536"
 

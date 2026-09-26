@@ -39,7 +39,7 @@ function precompressionPlugin(): Plugin {
                 writeFileSync(`${fullPath}.gz`, gz);
                 const br = brotliCompressSync(content, {
                   params: {
-                    [constants.BROTLI_PARAM_QUALITY]: 11,
+                    [constants.BROTLI_PARAM_QUALITY]: 5,
                   },
                 });
                 writeFileSync(`${fullPath}.br`, br);
@@ -103,7 +103,7 @@ export default defineConfig({
         // same-origin assets cache on first use below.
         globPatterns: [
           "index.html",
-          "assets/index-*.js",
+          "assets/*.js",
           "assets/*.css",
           "*.{ico,png,svg,webp,webmanifest}",
         ],
