@@ -17,6 +17,17 @@
 .public-form-heading {
   margin: 2.5rem 0 2rem;
 }
+.public-form-logo {
+  display: block;
+  max-width: min(100%, 22rem);
+  max-height: 4.5rem;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: 1.25rem;
+  border-radius: 0.5rem;
+  background: transparent;
+}
 .public-form-heading h1,
 .public-form-notice h1 {
   font-size: clamp(1.65rem, 4vw, 2.2rem);

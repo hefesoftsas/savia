@@ -360,6 +360,7 @@ export function registerPublicFormRoutes(
           ...(row.description ? { description: row.description } : {}),
           kind: row.kind,
           fields: JSON.parse(row.fields),
+          ...(row.logo_image ? { logoImage: row.logo_image } : {}),
           ...(presentation !== undefined ? { presentation } : {}),
           captchaProvider: config.provider,
           ...(config.provider === "turnstile"

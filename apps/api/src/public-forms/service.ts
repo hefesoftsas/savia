@@ -105,6 +105,81 @@ export const domainIdSchema = z
   .string()
   .regex(/^(?:[a-z][a-z0-9_-]{0,47}|tenant:[1-9][0-9]*)$/);
 export const objectNameSchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
+
+/**
+ * Optional per-link logo, stored as an inline data URL so no extra R2
+ * binding or public asset route is needed. PNG, JPEG and WebP only,
+ * checked by file signature (not the claimed MIME type), max 512 KiB
+ * of decoded bytes to keep the public definition light.
+ */
+export const MAX_PUBLIC_FORM_LOGO_BYTES = 512 * 1024;
+export const MAX_PUBLIC_FORM_LOGO_CHARS = 720_000;
+const logoDataUrlPattern =
+  /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/;
+
+function logoBytesFromDataUrl(value: string): Uint8Array | null {
+  const match = logoDataUrlPattern.exec(value);
+  if (!match) return null;
+  const binary = match[2];
+  if (value.length > MAX_PUBLIC_FORM_LOGO_CHARS) return null;
+  let text: string;
+  try {
+    // atob is available in Workers, browsers and Node; Buffer is not
+    // guaranteed under the worker compatibility flags.
+    text = atob(binary);
+  } catch {
+    return null;
+  }
+  if (text.length === 0 || text.length > MAX_PUBLIC_FORM_LOGO_BYTES)
+    return null;
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
+  return bytes;
+}
+
+function isPublicLogoBytes(bytes: Uint8Array, mime: string): boolean {
+  const starts = (signature: number[]) =>
+    signature.every((value, index) => bytes[index] === value);
+  if (mime === "image/png")
+    return (
+      bytes.length >= 16 &&
+      starts([137, 80, 78, 71, 13, 10, 26, 10]) &&
+      String.fromCharCode(...bytes.slice(12, 16)) === "IHDR"
+    );
+  if (mime === "image/jpeg")
+    return (
+      bytes.length >= 4 &&
+      starts([255, 216, 255]) &&
+      bytes[bytes.length - 2] === 255 &&
+      bytes[bytes.length - 1] === 217
+    );
+  if (mime === "image/webp")
+    return (
+      bytes.length >= 16 &&
+      String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
+      String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
+    );
+  return false;
+}
+
+export const publicFormLogoSchema = z
+  .string()
+  .max(MAX_PUBLIC_FORM_LOGO_CHARS)
+  .refine((value) => {
+    const match = logoDataUrlPattern.exec(value);
+    if (!match) return false;
+    const bytes = logoBytesFromDataUrl(value);
+    return !!bytes && isPublicLogoBytes(bytes, match[1]);
+  }, "Upload a PNG, JPEG, or WebP logo.");
+
+export function normalizePublicFormLogo(
+  value: string | undefined | null,
+): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = publicFormLogoSchema.safeParse(value);
+  if (!parsed.success) reject("Upload a PNG, JPEG, or WebP logo.");
+  return parsed.data;
+}
 export const publishSchema = z
   .object({
     domainId: domainIdSchema,
@@ -113,6 +188,7 @@ export const publishSchema = z
     expiresAt: z.string().datetime().optional(),
     dailyLimit: z.number().int().min(1).max(1000).default(25),
     returnResult: z.boolean().default(false),
+    logoImage: publicFormLogoSchema.optional(),
   })
   .strict();
 export const submissionSchema = z
@@ -143,6 +219,7 @@ export type PublicFormRow = {
   snapshot: string;
   daily_limit: number;
   return_result: number;
+  logo_image?: string | null;
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
@@ -194,6 +271,7 @@ export function managedForm(
     revokedAt: row.revoked_at,
     dailyLimit: row.daily_limit,
     returnResult: Boolean(row.return_result),
+    ...(row.logo_image ? { logoImage: row.logo_image } : {}),
     createdAt: row.created_at,
   };
 }
@@ -440,9 +518,10 @@ export async function publishPublicForm(
     token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
       byte.toString(16).padStart(2, "0"),
     ).join("");
+  const logoImage = normalizePublicFormLogo(input.logoImage ?? null);
   await db
     .prepare(
-      "INSERT INTO public_forms(id,token,tenant_id,domain_id,object_name,kind,title,description,fields,snapshot,daily_limit,return_result,expires_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO public_forms(id,token,tenant_id,domain_id,object_name,kind,title,description,fields,snapshot,daily_limit,return_result,logo_image,expires_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(
       id,
@@ -457,6 +536,7 @@ export async function publishPublicForm(
       JSON.stringify(projected.snapshot),
       input.dailyLimit,
       input.kind === "quote" && input.returnResult ? 1 : 0,
+      logoImage,
       input.expiresAt ? new Date(input.expiresAt).toISOString() : null,
       owner,
       new Date().toISOString(),

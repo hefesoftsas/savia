@@ -59,6 +59,11 @@ per-tenant login Lottie animations, matching SQLite migration
 to the native core schema, matching SQLite migration
 `0075_savia_request_installed_bundles.sql` on the shared D1 database.
 
+`0017_public_form_logo.sql` stores the optional per-link logo (inline data URL)
+on each public form, matching SQLite migration `0076_public_form_logo.sql`.
+Existing installations apply it after the installed bundles migration; the
+baseline remains unchanged.
+
 Native pools discard failed idle connections without logging their credential-bearing
 client objects. Shutdown waits for socket removal as well as pool shutdown before
 allowing database teardown; the next query after an idle connection loss obtains

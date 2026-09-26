@@ -7,7 +7,10 @@ Owner: Savia platform team. Last reviewed: 2026-09-23.
 Forms remain private until a platform administrator opens a screen's configuration,
 navigates to the dedicated **Enlace público** page, confirms the published snapshot,
 and creates a link. The administrator can set an expiration (with quick presets for 24h,
-7d, 30d, or no expiration) and a daily submission budget. Publishing creates the canonical
+7d, 30d, or no expiration) and a daily submission budget. Administrators may
+optionally attach a logo (PNG, JPEG, or WebP up to 2 MB, downscaled to 512px):
+it is frozen with the published snapshot and shown at the top of the public
+form for both record and quote links. Publishing creates the canonical
 URL and requests a short URL in the same action. Each URL has its own copy icon; the
 remaining link actions use labeled icon controls with tooltips. If shortening fails,
 the canonical URL remains available and an icon retries the short URL. Administrators can
@@ -101,8 +104,10 @@ provider calls; start with a small budget for public quotations.
 
 ## Deployment configuration
 
-1. Apply D1 migrations `0064_public_form_short_links.sql` and
-   `0065_public_form_external_short_url.sql` using the normal migration pipeline.
+1. Apply D1 migrations `0064_public_form_short_links.sql`,
+   `0065_public_form_external_short_url.sql` and `0076_public_form_logo.sql`
+   (plus native PostgreSQL migration `0017_public_form_logo.sql` for
+   self-hosted installs) using the normal migration pipeline.
    Active public forms receive an external short URL automatically when the
    provider succeeds; the full link remains available if it is unavailable.
    The provider receives the complete public URL, including its bearer token.

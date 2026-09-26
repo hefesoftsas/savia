@@ -500,4 +500,52 @@ export const publicFormsMessages = {
   "Edad:": ["Edad:", "Age:", "Idade:"],
   "%{p0} años": ["%{p0} años", "%{p0} years old", "%{p0} anos"],
   Seleccionar: ["Seleccionar", "Select", "Selecionar"],
+  "Logo del formulario (opcional)": [
+    "Logo del formulario (opcional)",
+    "Form logo (optional)",
+    "Logo do formulário (opcional)",
+  ],
+  "Vista previa del logo": [
+    "Vista previa del logo",
+    "Logo preview",
+    "Prévia do logo",
+  ],
+  "Este logo se mostrará en el formulario público.": [
+    "Este logo se mostrará en el formulario público.",
+    "This logo will appear on the public form.",
+    "Este logo será exibido no formulário público.",
+  ],
+  "Quitar logo": ["Quitar logo", "Remove logo", "Remover logo"],
+  "Adjuntar logo": ["Adjuntar logo", "Attach logo", "Anexar logo"],
+  "Procesando logo…": [
+    "Procesando logo…",
+    "Processing logo…",
+    "Processando logo…",
+  ],
+  "PNG, JPEG o WebP de 2 MB o menos.": [
+    "PNG, JPEG o WebP de 2 MB o menos.",
+    "PNG, JPEG, or WebP up to 2 MB.",
+    "PNG, JPEG ou WebP de até 2 MB.",
+  ],
+  "Logo del formulario": [
+    "Logo del formulario",
+    "Form logo",
+    "Logo do formulário",
+  ],
+  "Con logo": ["Con logo", "With logo", "Com logo"],
+  "Sube un logo PNG, JPEG o WebP.": [
+    "Sube un logo PNG, JPEG o WebP.",
+    "Upload a PNG, JPEG, or WebP logo.",
+    "Envie um logo PNG, JPEG ou WebP.",
+  ],
+  "El logo debe pesar 2 MB o menos.": [
+    "El logo debe pesar 2 MB o menos.",
+    "The logo must be 2 MB or smaller.",
+    "O logo deve ter 2 MB ou menos.",
+  ],
+  "El logo es demasiado grande. Usa una imagen más pequeña.": [
+    "El logo es demasiado grande. Usa una imagen más pequeña.",
+    "The logo is too large. Use a smaller image.",
+    "O logo é grande demais. Use uma imagem menor.",
+  ],
 } as const;

@@ -168,6 +168,49 @@ it("publishes a safe immutable definition and creates only the server-selected c
     ).status,
   ).toBe(422);
 });
+it("publishes an optional logo and exposes it on the public form", async () => {
+  const instance = app();
+  const name = await object();
+  const logoImage =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const link = await publish(instance, name, { logoImage });
+  expect(link.logoImage).toBe(logoImage);
+  const definition = (await (
+    await instance.request("https://api.test/api/public/forms/" + link.token)
+  ).json()) as any;
+  expect(definition.logoImage).toBe(logoImage);
+  // Links without a logo keep working and omit the field entirely.
+  const plain = await publish(instance, name);
+  expect(plain.logoImage).toBeUndefined();
+  const plainDefinition = (await (
+    await instance.request("https://api.test/api/public/forms/" + plain.token)
+  ).json()) as any;
+  expect(plainDefinition.logoImage).toBeUndefined();
+});
+it("rejects non-image logos when publishing", async () => {
+  const instance = app();
+  const name = await object();
+  for (const logoImage of [
+    "https://example.test/logo.png",
+    "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+    "data:image/png;base64,!!!not-base64!!!",
+  ]) {
+    const response = await instance.request(
+      "https://api.test/v1/public-forms",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          domainId: "demo",
+          objectName: name,
+          kind: "record",
+          logoImage,
+        }),
+      },
+    );
+    expect(response.status).toBe(400);
+  }
+});
 it("verifies captchas with worker-supported fetch options", async () => {
   const instance = app();
   const link = await publish(instance, await object());
