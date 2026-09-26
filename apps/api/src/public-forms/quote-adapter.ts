@@ -8,6 +8,7 @@ import { ExtensionConnectionRepository } from "@savia/studio-server/extension-co
 import {
   createRecord,
   getRecord,
+  getObject,
   updateRecord,
 } from "@savia/studio-server/services";
 import { historyDatabase } from "@savia/studio-server/record-history-storage";
@@ -128,11 +129,13 @@ async function createQuoteMirror(input: {
   db: D1Database;
   tenant: string;
   submission: string;
+  reference: string;
   publicationId: string;
   values: Record<string, unknown>;
   products: readonly { flowId: string }[];
 }): Promise<QuoteMirror | null> {
-  const { db, tenant, submission, publicationId, values, products } = input;
+  const { db, tenant, submission, reference, publicationId, values, products } =
+    input;
   try {
     const hdb = historyDatabase(db, tenant, {
       kind: "public-form",
@@ -145,7 +148,7 @@ async function createQuoteMirror(input: {
       tenant,
       "cotizaciones",
       {
-        name: submission,
+        name: reference,
         ramo: "Automóviles",
         placa: values["vehicle_plate"],
         valor_asegurado: values["vehicle_declaredValue"],
@@ -173,7 +176,7 @@ async function createQuoteMirror(input: {
         tenant,
         "cotizaciones_detalle",
         {
-          name: `${submission}-${product.flowId}`,
+          name: `${reference}-${product.flowId}`,
           cotizacion: masterId,
           aseguradora: label.split(" · ")[0] ?? "Seguros",
           producto: label,
@@ -428,6 +431,7 @@ export function createPublicQuoteAdapter(options: {
     }
   }
   return {
+    reference: contribution.reference,
     presentation,
     lookupVehicle,
     async quoteStatus({
@@ -592,10 +596,18 @@ export function createPublicQuoteAdapter(options: {
         db: input.db,
         tenant: input.tenant,
         submission,
+        reference: input.reference ?? submission,
         publicationId: frozen.publicationId,
         values,
         products: frozen.products,
       });
+      const mirrorDefinition = mirror
+        ? await getObject(
+            mirror.db,
+            input.tenant,
+            "cotizaciones_detalle",
+          ).catch(() => undefined)
+        : undefined;
       const outcomes = await mapWithConcurrency(
         frozen.products,
         PUBLIC_QUOTE_CONCURRENCY,
@@ -638,6 +650,10 @@ export function createPublicQuoteAdapter(options: {
             await runs.completeRun(context, safe);
             if (mirror && mirrorDetail && detailVersion !== undefined) {
               try {
+                const snapshot = contribution.projectHistoryResult(
+                  product.flowId,
+                  result.output,
+                );
                 const updated = await updateRecord(
                   mirror.db,
                   input.tenant,
@@ -648,11 +664,23 @@ export function createPublicQuoteAdapter(options: {
                     prima: safe.premiumTotal ?? undefined,
                     run_id: context.runId,
                     error_mensaje: undefined,
+                    ...(snapshot &&
+                    mirrorDefinition?.config.fields.resultado_snapshot
+                      ? { resultado_snapshot: snapshot }
+                      : {}),
                   },
                   { version: detailVersion },
                 );
                 detailVersion = storedVersion(updated) ?? detailVersion + 1;
-              } catch {}
+              } catch {
+                console.error(
+                  JSON.stringify({
+                    event: "public-form-quote-detail-save-failed",
+                    submission,
+                    flowId: product.flowId,
+                  }),
+                );
+              }
             }
             return safe;
           } catch {

@@ -1154,10 +1154,6 @@ export function PublicQuoteForm({
               className="public-quote-waiting"
             >
               <div className="public-quote-waiting-head">
-                <span
-                  aria-hidden="true"
-                  className="public-quote-spinner public-quote-spinner--md"
-                />
                 <div>
                   <p>
                     <strong>{t("Cotizando con aseguradoras en vivo…")}</strong>
@@ -1172,6 +1168,9 @@ export function PublicQuoteForm({
                     {t("Han pasado %{count} segundos.", { count: elapsed })}
                   </p>
                 </div>
+              </div>
+              <div aria-hidden="true" className="public-quote-progress">
+                <div className="public-quote-progress-bar" />
               </div>
               {progress && progress.length > 0 ? (
                 <PublicComparison items={progress} />
