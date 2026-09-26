@@ -88,6 +88,17 @@ export function staticAssetCacheControl(pathname: string): string | null {
   return null;
 }
 
+/**
+ * The worker script itself must never be HTTP-cached: `registration.update()`
+ * relies on a fresh `sw.js` to discover a deployment. Prebuilt hashed chunks
+ * stay immutable; this covers only the unhashed entry scripts.
+ */
+export function serviceWorkerCacheControl(pathname: string): string | null {
+  if (pathname === "/sw.js" || pathname === "/dev-sw.js")
+    return "public, max-age=0, must-revalidate";
+  return null;
+}
+
 export async function gatewayFetch(
   request: Request,
   env: GatewayEnv,
@@ -118,6 +129,12 @@ export async function gatewayFetch(
         "public, max-age=31536000, immutable",
       );
       return immutable;
+    }
+    const workerCache = serviceWorkerCacheControl(pathname);
+    if (workerCache) {
+      const worker = new Response(response.body, response);
+      worker.headers.set("Cache-Control", workerCache);
+      return worker;
     }
     const staticCache = staticAssetCacheControl(pathname);
     if (staticCache) {
