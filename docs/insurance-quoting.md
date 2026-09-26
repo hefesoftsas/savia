@@ -34,6 +34,9 @@ concurrently and each provider flow executes its steps sequentially.
   quote's details.
 - The UI shows a loading state while details load and an error state on
   failure; an empty result is never presented as a successful load.
+- Pending details older than five minutes, or without a usable update/create
+  timestamp, are treated as stale failures in history so they can be retried
+  instead of remaining "in progress" indefinitely.
 
 ## Result snapshots
 

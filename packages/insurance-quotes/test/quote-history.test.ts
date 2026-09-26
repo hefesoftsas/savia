@@ -25,6 +25,18 @@ function detailColl(records: Array<Record<string, unknown>>) {
 }
 
 describe("filtered history reads", () => {
+  it("treats pending details without a usable timestamp as stale", async () => {
+    const { mapDetailToBatchItem } = await import("../src/quote-history");
+    const item = mapDetailToBatchItem(
+      { id: "d-pending", producto: "SBS · Gold", estado: "Solicitada" },
+      "La ejecución no se completó.",
+      Date.parse("2026-09-25T12:00:00.000Z"),
+    );
+
+    expect(item.status).toBe("failed");
+    expect(item.error).toBe("La ejecución no se completó.");
+  });
+
   it("fetches only details for the selected master", async () => {
     const coll = detailColl([
       { id: "d1", cotizacion: "m1", producto: "SBS · Gold", flow_id: "sbs-producto-10", aseguradora: "SBS", estado: "Recibida", prima: 100, numero_cotizacion: "Q1" },
@@ -173,5 +185,4 @@ describe("fallback history reads", () => {
     expect(master.remove).toHaveBeenCalledTimes(2);
   });
 });
-
 
