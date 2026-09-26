@@ -312,7 +312,7 @@ export function usePublicFormSubmission({
     } finally {
       window.clearTimeout(timeout);
       if (activePost.current === abort) activePost.current = null;
-      if (submission.current?.id !== id) return;
+      if (submission.current && submission.current.id !== id) return;
       busy.current = false;
       if (alive.current) {
         setPending(false);
