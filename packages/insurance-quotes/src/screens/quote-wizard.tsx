@@ -1331,6 +1331,19 @@ export function InsuranceQuoteWizard({
             ),
           );
 
+          // Commit the partial summary before waiting for other providers.
+          if (createdMasterId) {
+            try {
+              await persistQuoteSummary(masterCollection, createdMasterId, () =>
+                quoteSummaryPatch(batchItemsRef.current),
+              );
+            } catch {
+              setPersistenceNotice(t(
+                "No se pudo guardar un resultado en el historial. Conserva esta pantalla y vuelve a intentarlo.",
+              ));
+            }
+          }
+
           return { status: "fulfilled" as const, product, item: updatedItem };
         } catch (reason) {
           const err = errorMessage(

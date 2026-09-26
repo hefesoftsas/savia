@@ -104,7 +104,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { CollectionImportWizard } from "./collection-import-wizard";
-import { api, dataProvider } from "./api";
+import { api, pluginApi, dataProvider } from "./api";
 import {
   attachTemporaryR2Attachments,
   deleteTemporaryR2Attachments,
@@ -495,7 +495,7 @@ function App({
   const extensionApi = useMemo(
     () =>
       contribution
-        ? extensionApiFor(contribution, api, () => extensionLocaleRef.current)
+        ? extensionApiFor(contribution, pluginApi, () => extensionLocaleRef.current)
         : null,
     [contribution?.extensionId],
   );

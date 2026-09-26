@@ -26,6 +26,18 @@ concurrently and each provider flow executes its steps sequentially.
 
 ## History loading
 
+- Plugin collection requests use the authenticated backend transport, including
+  ZIP iframe plugins. A browser outbox acknowledgement is not a committed quote:
+  local creates have no server version and previously caused result updates to
+  be skipped. Both history reads and writes now use the server source of truth.
+- Each successful provider saves its detail and updates the master summary
+  without waiting for the remaining providers. One successful offer means
+  `Recibida`, even when other products remain pending or fail. Pending products
+  retain their own status and do not hide completed offers.
+- This change prevents new results from being lost on reload. Earlier detail
+  rows that contain no saved response cannot be reconstructed by refreshing
+  history; they require an explicit retry.
+
 - Selecting a saved quote performs reads only and never invokes a quote
   action or lookup flow. Retries stay explicit via retry controls.
 - History loads only the child details of the selected master with a
