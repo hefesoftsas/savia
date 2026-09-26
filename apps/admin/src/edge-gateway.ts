@@ -89,13 +89,13 @@ export function staticAssetCacheControl(pathname: string): string | null {
 }
 
 /**
- * The worker script itself must never be HTTP-cached: `registration.update()`
- * relies on a fresh `sw.js` to discover a deployment. Prebuilt hashed chunks
- * stay immutable; this covers only the unhashed entry scripts.
+ * The worker script itself must never be cached: `registration.update()`
+ * relies on a fresh `sw.js` to discover a deployment. Same `no-store`
+ * convention as the self-hosted HTTP server. Prebuilt hashed chunks stay
+ * immutable; this covers only the unhashed entry scripts.
  */
 export function serviceWorkerCacheControl(pathname: string): string | null {
-  if (pathname === "/sw.js" || pathname === "/dev-sw.js")
-    return "public, max-age=0, must-revalidate";
+  if (pathname === "/sw.js" || pathname === "/dev-sw.js") return "no-store";
   return null;
 }
 

@@ -138,13 +138,9 @@ describe("edge gateway", () => {
     expect(api.fetch).not.toHaveBeenCalled();
   });
 
-  it("serves the worker script with must-revalidate so updates are found", async () => {
-    expect(serviceWorkerCacheControl("/sw.js")).toBe(
-      "public, max-age=0, must-revalidate",
-    );
-    expect(serviceWorkerCacheControl("/dev-sw.js")).toBe(
-      "public, max-age=0, must-revalidate",
-    );
+  it("serves the worker script with no-store so updates are found", async () => {
+    expect(serviceWorkerCacheControl("/sw.js")).toBe("no-store");
+    expect(serviceWorkerCacheControl("/dev-sw.js")).toBe("no-store");
     expect(serviceWorkerCacheControl("/assets/main-CfLYpzF0.js")).toBeNull();
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = {
@@ -156,9 +152,7 @@ describe("edge gateway", () => {
       new Request("https://savia.example.workers.dev/sw.js"),
       { API: api, ASSETS: assets },
     );
-    expect(response.headers.get("Cache-Control")).toBe(
-      "public, max-age=0, must-revalidate",
-    );
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(api.fetch).not.toHaveBeenCalled();
   });
 
