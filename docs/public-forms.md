@@ -214,3 +214,14 @@ When a link supplies a logo, it replaces the standalone Savia heading. The logo
 is grouped with the form title; quote forms center the logo, title, and product
 count in one compact header. Images retain their original aspect ratio without
 cropping. The Savia attribution remains in the footer.
+
+### Completing public quote submissions
+
+The status endpoint includes the committed public receipt once a submission is
+complete. The client accepts that receipt even if the original POST is still
+waiting, and stops the duplicate request. A bounded POST wait retains the same
+submission identity for recovery. Status polling never executes provider flows.
+The final screen keeps the safe comparison already exposed by the public status
+endpoint when the receipt contains only a reference. Private record identifiers
+and payloads remain unavailable. One outer progress indicator owns the waiting
+state; the embedded comparator does not duplicate it.

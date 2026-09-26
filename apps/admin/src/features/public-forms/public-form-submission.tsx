@@ -26,6 +26,7 @@ export type PublicSubmissionController = {
   receipt?: { reference: string; result?: unknown };
   /** Current submission identity for progress polling; null before submit. */
   submissionId: string | null;
+  completeFromStatus(id: string, value: unknown): void;
   submit(values: PublicSubmissionValues): Promise<void>;
   startNew(): void;
 };
@@ -104,6 +105,7 @@ export function usePublicFormSubmission({
   const retryProof = useRef(false);
   const form = useRef<HTMLFormElement | null>(null);
   const busy = useRef(false);
+  const activePost = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const submission = useRef<{
     id: string;
@@ -125,6 +127,7 @@ export function usePublicFormSubmission({
     alive.current = true;
     return () => {
       alive.current = false;
+      activePost.current?.abort();
     };
   }, []);
 
@@ -229,6 +232,24 @@ export function usePublicFormSubmission({
     duplicate,
   ]);
 
+  function completeFromStatus(id: string, value: unknown) {
+    if (!alive.current || submission.current?.id !== id) return;
+    const parsed = z
+      .object({
+        ok: z.literal(true),
+        reference: z.string(),
+        result: z.unknown().optional(),
+      })
+      .safeParse(value);
+    if (!parsed.success) return;
+    setReceipt(parsed.data);
+    setPending(false);
+    setUncertain(false);
+    setError("");
+    busy.current = false;
+    activePost.current?.abort();
+  }
+
   async function submit(values: PublicSubmissionValues) {
     if (busy.current || !captcha || receipt || duplicate) return;
     if (!submission.current) {
@@ -238,10 +259,15 @@ export function usePublicFormSubmission({
     busy.current = true;
     setPending(true);
     setError("");
+    const id = submission.current.id;
+    const abort = new AbortController();
+    activePost.current = abort;
+    const timeout = window.setTimeout(() => abort.abort(), 180_000);
     let keepProof = false;
     try {
       const response = await fetch(endpoint, {
         method: "POST",
+        signal: abort.signal,
         credentials: "omit",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
@@ -251,7 +277,7 @@ export function usePublicFormSubmission({
           values: submission.current.values,
         }),
       });
-      if (!alive.current) return;
+      if (!alive.current || submission.current?.id !== id) return;
       if (response.status === 409) {
         setDuplicate(true);
         return;
@@ -271,8 +297,9 @@ export function usePublicFormSubmission({
           result: z.unknown().optional(),
         })
         .parse(await response.json());
-      if (alive.current) setReceipt(result);
+      if (alive.current && submission.current?.id === id) setReceipt(result);
     } catch {
+      if (!busy.current || submission.current?.id !== id) return;
       keepProof = true;
       if (alive.current) {
         setUncertain(true);
@@ -283,6 +310,9 @@ export function usePublicFormSubmission({
         );
       }
     } finally {
+      window.clearTimeout(timeout);
+      if (activePost.current === abort) activePost.current = null;
+      if (submission.current?.id !== id) return;
       busy.current = false;
       if (alive.current) {
         setPending(false);
@@ -323,6 +353,7 @@ export function usePublicFormSubmission({
     duplicate,
     receipt,
     submissionId,
+    completeFromStatus,
     submit,
     startNew,
   };

@@ -187,6 +187,7 @@ export function QuoteResults({
   showHistorySelector = false,
   planCatalog = false,
   hidePdfDownload = false,
+  hideProgress = false,
   historyLoading = false,
   historyError = null,
   onDeleteHistoryQuote,
@@ -218,6 +219,7 @@ export function QuoteResults({
   planCatalog?: boolean;
   /** Hide the pdf-lib download action (anonymous pages use print instead). */
   hidePdfDownload?: boolean;
+  hideProgress?: boolean;
   /** Loading state while the selected quote's details load. */
   historyLoading?: boolean;
   /** Error state if the history read fails (never render empty as success). */
@@ -788,7 +790,10 @@ export function QuoteResults({
       ) : null}
 
       {/* Indicador de progreso en vivo */}
-      {isQuoteActive && !selectedHistoryQuoteId && pendingCount > 0 ? (
+      {!hideProgress &&
+      isQuoteActive &&
+      !selectedHistoryQuoteId &&
+      pendingCount > 0 ? (
         <div
           aria-live="polite"
           className="insurance-busy-indicator"
