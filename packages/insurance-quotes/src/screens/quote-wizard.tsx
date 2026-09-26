@@ -575,8 +575,22 @@ export function InsuranceQuoteWizard({
     try {
       const coll = savia.collections?.collection?.("cotizaciones");
       if (coll?.list) {
-        const res = await coll.list();
-        const records = (res?.data ?? []) as Array<Record<string, unknown>>;
+        const perPage = 200;
+        const first = await coll.list({ page: 1, perPage });
+        const records = [...((first?.data ?? []) as Array<Record<string, unknown>>)];
+        const total =
+          typeof first?.total === "number" ? first.total : records.length;
+        const pages = Math.max(1, Math.ceil(total / perPage));
+        if (pages > 1) {
+          const rest = await Promise.all(
+            Array.from({ length: Math.min(pages - 1, 9) }, (_, index) =>
+              coll.list({ page: index + 2, perPage }),
+            ),
+          );
+          for (const chunk of rest) {
+            records.push(...((chunk?.data ?? []) as Array<Record<string, unknown>>));
+          }
+        }
         const parsed: HistoricalQuoteSummary[] = records.map((r) => ({
           id: String(r.id),
           name: String(r.name || r.id),
@@ -603,7 +617,10 @@ export function InsuranceQuoteWizard({
     void refreshHistoricalQuotes();
   }, [refreshHistoricalQuotes]);
 
-  const handleSelectHistoryQuote = async (quoteId: string | null) => {
+  const handleSelectHistoryQuote = async (
+    quoteId: string | null,
+    explicitReference?: string,
+  ) => {
     if (!quoteId || quoteId === "current") {
       setSelectedHistoryQuoteId(null);
       setHistoricalBatchItems(null);
@@ -622,14 +639,25 @@ export function InsuranceQuoteWizard({
         "cotizaciones_detalle",
       );
       if (detailColl) {
-        const quoteReference = historyQuotes.find(
-          (quote) => quote.id === quoteId,
-        )?.name;
+        const quoteReference =
+          explicitReference ??
+          historyQuotes.find((quote) => quote.id === quoteId)?.name;
         const details = await fetchDetailsForQuote(
           detailColl as unknown as Parameters<typeof fetchDetailsForQuote>[0],
           quoteId,
           quoteReference,
         );
+        if (!details.length) {
+          // No presentar un vacío como éxito: el usuario reporta que los
+          // detalles "no llegan" y el borrado posterior falla por relaciones.
+          setHistoricalBatchItems([]);
+          const emptyMessage = t(
+            "No se encontraron detalles para esta cotización. Es posible que aún se esté sincronizando; reintenta en unos segundos.",
+          );
+          setHistoryError(emptyMessage);
+          setNotice(emptyMessage);
+          return;
+        }
         const mapped: QuoteBatchItem[] = details.map((d) =>
           mapDetailToBatchItem(
             d,
@@ -662,18 +690,39 @@ export function InsuranceQuoteWizard({
         setNotice(t("No se pudo eliminar la cotización guardada."));
         return;
       }
+      let masterVersion = summary.version;
+      if (masterVersion === undefined && masterColl.get) {
+        try {
+          const fresh = (await masterColl.get(quoteId)) as unknown as Record<
+            string,
+            unknown
+          >;
+          masterVersion = recordVersion(fresh);
+        } catch {
+          // Se intenta el borrado sin versión (transporte local).
+        }
+      }
       const result = await deleteQuoteHistory(
         detailColl as unknown as Parameters<typeof deleteQuoteHistory>[0],
         masterColl as unknown as Parameters<typeof deleteQuoteHistory>[1],
         quoteId,
-        summary.version,
+        masterVersion,
         summary.name,
       );
       if (!result.ok) {
         // Si falla un hijo, se conserva el master para recuperación.
-        setNotice(
-          t("No se pudo eliminar la cotización guardada. Inténtalo de nuevo."),
+        // Muestra el motivo real (relaciones, versión, permisos) en vez de
+        // un genérico para poder diagnosticar en preview.
+        const reason =
+          result.error && !/No se pudo eliminar/i.test(result.error)
+            ? ` ${result.error}`
+            : "";
+        const message = t(
+          "No se pudo eliminar la cotización guardada. Inténtalo de nuevo.",
         );
+        setNotice(`${message}${reason ? ` (${reason.trim()})` : ""}`);
+        // Releer por si se eliminaron hijos aunque el master sobrevivió.
+        await refreshHistoricalQuotes();
         return;
       }
       await refreshHistoricalQuotes();
@@ -691,23 +740,41 @@ export function InsuranceQuoteWizard({
   };
 
   const appliedQuoteLink = useRef<string | null>(null);
+  const appliedQuoteLinkRef = useRef("");
   useEffect(() => {
     const selectLinkedQuote = () => {
       const query = new URLSearchParams(
         window.location.hash.split("?")[1] ?? "",
       );
       const id = query.get("quote");
-      if (id && appliedQuoteLink.current !== id) {
-        appliedQuoteLink.current = id;
-        setSurface("results");
-        void handleSelectHistoryQuote(id);
+      if (!id) {
+        appliedQuoteLink.current = null;
+        appliedQuoteLinkRef.current = "";
+        return;
       }
-      if (!id) appliedQuoteLink.current = null;
+      const reference =
+        historyQuotes.find((quote) => quote.id === id)?.name ?? undefined;
+      // Reintenta cuando el historial ya trae la referencia o cuando el
+      // intento anterior quedó sin detalles (colección aún sincronizando).
+      const attemptKey = `${id}::${reference ?? ""}`;
+      const needsRetry =
+        appliedQuoteLink.current !== id ||
+        (appliedQuoteLinkRef.current !== attemptKey &&
+          (reference !== undefined ||
+            historicalBatchItems?.length === 0 ||
+            historyError !== null));
+      if (id && needsRetry) {
+        appliedQuoteLink.current = id;
+        appliedQuoteLinkRef.current = attemptKey;
+        setSurface("results");
+        void handleSelectHistoryQuote(id, reference);
+      }
     };
     selectLinkedQuote();
     window.addEventListener("hashchange", selectLinkedQuote);
     return () => window.removeEventListener("hashchange", selectLinkedQuote);
-  }, [historyQuotes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyQuotes, historicalBatchItems, historyError]);
 
   const refreshRuns = useCallback(async () => {
     setLoadingRuns(true);

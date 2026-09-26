@@ -68,10 +68,79 @@ function detailStatus(
   return "pending";
 }
 
+function toDetailRecords(items: unknown[]): DetailRecord[] {
+  const all: DetailRecord[] = [];
+  for (const item of items ?? []) {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const rec = item as Record<string, unknown>;
+      if (typeof rec.id === "string") all.push({ ...rec, id: rec.id });
+    }
+  }
+  return all;
+}
+
+function detailMatchesQuote(
+  detail: DetailRecord,
+  quoteId: string,
+  quoteReference?: string,
+): boolean {
+  const raw = detail.cotizacion;
+  const candidates = [quoteId, quoteReference].filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
+  if (typeof raw === "string") {
+    const normalized = raw.trim();
+    if (candidates.some((candidate) => normalized === candidate.trim())) {
+      return true;
+    }
+  } else if (raw != null) {
+    if (candidates.some((candidate) => String(raw) === candidate)) return true;
+  }
+  // Respaldo histórico: el detalle se crea como `${ref}-${productId}`. Si la
+  // relación se perdió o se guardó la referencia en otro formato, el nombre
+  // todavía permite recuperar los hijos para lectura y borrado.
+  if (quoteReference && typeof detail.name === "string") {
+    const name = detail.name.trim();
+    const ref = quoteReference.trim();
+    if (name === ref || name.startsWith(`${ref}-`)) return true;
+  }
+  return false;
+}
+
+async function listFiltered(
+  detailColl: DetailCollectionHandle,
+  filters:
+    | { logic?: "and" | "or"; conditions: Array<{ field: string; op: string; value?: unknown }> }
+    | undefined,
+  perPage: number,
+): Promise<DetailRecord[]> {
+  const first = await detailColl.list({ page: 1, perPage, filters });
+  const all = toDetailRecords(first.data ?? []);
+  const total = typeof first.total === "number" ? first.total : all.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  if (pages > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: pages - 1 }, (_, index) =>
+        detailColl.list({ page: index + 2, perPage, filters }),
+      ),
+    );
+    for (const page of rest) {
+      all.push(...toDetailRecords(page.data ?? []));
+    }
+  }
+  return all;
+}
+
 /**
  * Lee solo los detalles del master indicado usando un filtro server-side
  * (`cotizacion eq quoteId`, o `or` con la referencia histórica). Pagina la
  * respuesta filtrada en lugar de recorrer toda la colección.
+ *
+ * Si el filtro server-side falla (campo desconocido en esquemas viejos,
+ * colección aún sin hidratar en el transporte local) o devuelve vacío por
+ * diferencias de formato (espacios, referencia guardada en `name`), cae a
+ * un barrido paginado con coincidencia tolerante en cliente para no dejar
+ * la cotización sin detalles ni sin borrado.
  */
 export async function fetchDetailsForQuote(
   detailColl: DetailCollectionHandle,
@@ -92,32 +161,31 @@ export async function fetchDetailsForQuote(
           conditions: [{ field: "cotizacion", op: "eq", value: quoteId }],
         };
   const perPage = 200;
-  const first = await detailColl.list({ page: 1, perPage, filters: conditions });
-  const all: DetailRecord[] = [];
-  for (const item of first.data ?? []) {
-    if (item && typeof item === "object" && !Array.isArray(item)) {
-      const rec = item as Record<string, unknown>;
-      if (typeof rec.id === "string") all.push({ ...rec, id: rec.id });
-    }
+  try {
+    const filtered = await listFiltered(detailColl, conditions, perPage);
+    if (filtered.length > 0) return filtered;
+  } catch {
+    // El filtro server-side no está disponible: continuar con el respaldo.
   }
-  const total = typeof first.total === "number" ? first.total : all.length;
-  const pages = Math.max(1, Math.ceil(total / perPage));
-  if (pages > 1) {
-    const rest = await Promise.all(
-      Array.from({ length: pages - 1 }, (_, index) =>
-        detailColl.list({ page: index + 2, perPage, filters: conditions }),
-      ),
-    );
-    for (const page of rest) {
-      for (const item of page.data ?? []) {
-        if (item && typeof item === "object" && !Array.isArray(item)) {
-          const rec = item as Record<string, unknown>;
-          if (typeof rec.id === "string") all.push({ ...rec, id: rec.id });
-        }
+  // Respaldo: barrido paginado (acotado para no recorrer colecciones enormes)
+  // con coincidencia tolerante en cliente.
+  const fallback: DetailRecord[] = [];
+  const maxPages = 10;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const chunk = await detailColl.list({ page, perPage });
+    const records = toDetailRecords(chunk.data ?? []);
+    for (const record of records) {
+      if (detailMatchesQuote(record, quoteId, quoteReference)) {
+        fallback.push(record);
       }
     }
+    const total = typeof chunk.total === "number" ? chunk.total : records.length;
+    if (page * perPage >= total || records.length === 0) break;
+    // Si ya encontramos todo lo filtrado y el total sugiere que no hay más
+    // páginas relevantes, no seguimos escaneando.
+    if (fallback.length > 0 && chunk.data.length < perPage) break;
   }
-  return all;
+  return fallback;
 }
 
 export function mapDetailToBatchItem(
@@ -174,6 +242,10 @@ export type DeleteQuoteHistoryResult =
  * Elimina el historial en orden de dependencias: primero todos los detalles
  * hijos, luego el master. Si un hijo falla, conserva el master para
  * recuperación y reporta el fallo sin ocultar el master.
+ *
+ * Tolera versiones ausentes (transporte local) y reintenta el master cuando
+ * el backend bloquea por relaciones que quedaron sin barrer en el primer
+ * intento.
  */
 export async function deleteQuoteHistory(
   detailColl: DetailCollectionHandle,
@@ -194,10 +266,31 @@ export async function deleteQuoteHistory(
     };
   }
   let deleted = 0;
+  const deleteOneDetail = async (detail: DetailRecord) => {
+    const version = recordVersion(detail);
+    try {
+      if (version === undefined) {
+        await detailColl.remove(detail.id);
+      } else {
+        await detailColl.remove(detail.id, { version });
+      }
+      deleted += 1;
+    } catch (reason) {
+      // Reintento sin versión para transportes que la resuelven localmente
+      // (el borrado local ignora el query param y usa la versión vigente).
+      const message =
+        reason instanceof Error && reason.message ? reason.message : "";
+      if (version !== undefined && /versi[oó]n/i.test(message)) {
+        await detailColl.remove(detail.id);
+        deleted += 1;
+        return;
+      }
+      throw reason;
+    }
+  };
   for (const detail of details) {
     try {
-      await detailColl.remove(detail.id, { version: recordVersion(detail) });
-      deleted += 1;
+      await deleteOneDetail(detail);
     } catch (reason) {
       return {
         ok: false,
@@ -210,16 +303,52 @@ export async function deleteQuoteHistory(
       };
     }
   }
+  const removeMaster = async () => {
+    if (masterVersion === undefined) {
+      await masterColl.remove(quoteId);
+    } else {
+      await masterColl.remove(quoteId, { version: masterVersion });
+    }
+  };
   try {
-    await masterColl.remove(quoteId, { version: masterVersion });
+    await removeMaster();
   } catch (reason) {
+    const message =
+      reason instanceof Error && reason.message ? reason.message : "";
+    // El backend bloquea el master mientras queden hijos (`Hay relaciones…`).
+    // Rebarre con el fallback tolerante y reintenta una vez antes de fallar.
+    if (/relacion/i.test(message)) {
+      try {
+        const remaining = await fetchDetailsForQuote(
+          detailColl,
+          quoteId,
+          quoteReference,
+        );
+        for (const detail of remaining) {
+          try {
+            await deleteOneDetail(detail);
+          } catch {
+            // Si un restante falla, se reporta abajo con el error original.
+          }
+        }
+        await removeMaster();
+        return { ok: true, deletedDetails: deleted };
+      } catch (retryReason) {
+        return {
+          ok: false,
+          failedDetailId: quoteId,
+          error:
+            retryReason instanceof Error && retryReason.message
+              ? retryReason.message
+              : message || "No se pudo eliminar la cotización.",
+          deletedDetails: deleted,
+        };
+      }
+    }
     return {
       ok: false,
       failedDetailId: quoteId,
-      error:
-        reason instanceof Error && reason.message
-          ? reason.message
-          : "No se pudo eliminar la cotización.",
+      error: message || "No se pudo eliminar la cotización.",
       deletedDetails: deleted,
     };
   }
