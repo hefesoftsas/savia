@@ -10,6 +10,24 @@
   text-align: center;
 }
 
+.public-quote-heading {
+  display: grid;
+  justify-items: center;
+  gap: .625rem;
+  padding-block: .5rem 1rem;
+}
+.public-quote-heading .public-form-logo {
+  margin: 0 0 .5rem;
+}
+.public-quote-heading .public-quote-eyebrow,
+.public-quote-heading .public-quote-title,
+.public-quote-heading .public-quote-products {
+  margin: 0;
+}
+.public-quote-notice .public-form-logo {
+  margin-inline: auto;
+}
+
 .public-quote-eyebrow {
   font-size: 0.75rem;
   font-weight: 700;

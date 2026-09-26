@@ -207,3 +207,10 @@ customer forms are required for verification.
 ## Self-hosted Docker CAPTCHA
 
 The native Docker runtime uses ALTCHA instead of requiring Turnstile credentials. Challenges are generated and verified locally, expire after five minutes, and are bound to the form, public origin and submission action. The receipt stores a canonical proof identity to prevent replay via alternate encodings. An uncertain retry keeps the exact original proof and submission ID so a saved receipt can be returned after expiry. The widget and its worker are bundled locally. The existing submission-only API, field validation, rate limits and quotas remain enforced. Cloudflare keeps Turnstile as its default. See the [Docker deployment guide](guides/self-hosted-docker.md).
+
+### Public form brand layout
+
+When a link supplies a logo, it replaces the standalone Savia heading. The logo
+is grouped with the form title; quote forms center the logo, title, and product
+count in one compact header. Images retain their original aspect ratio without
+cropping. The Savia attribution remains in the footer.

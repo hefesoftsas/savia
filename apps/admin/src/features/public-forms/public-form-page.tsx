@@ -142,7 +142,9 @@ export function PublicFormPage({ token }: { token: string }) {
   return (
     <main className="public-form-page" lang={locale}>
       <div className="public-form-shell">
-        <p className="public-form-brand">Savia</p>
+        {!isSafePublicLogo(definition?.logoImage) && (
+          <p className="public-form-brand">Savia</p>
+        )}
         {loading ? (
           <p role="status">{t("Cargando formulario…")}</p>
         ) : error ? (
