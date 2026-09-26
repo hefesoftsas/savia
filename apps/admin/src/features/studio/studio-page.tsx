@@ -510,6 +510,7 @@ function StudioWorkspace({
         businessSetupEnabled: domain.kind === "agency",
         apiBasePath: domain.apiBasePath,
         transport: local?.transport ?? transport,
+        pluginTransport: transport,
         localWorkspace: local,
         publicFormTransport: (path, init) =>
           services.apiClient.requestResponse(path, init),

@@ -3,9 +3,10 @@ import { getStudioRuntime } from "./runtime";
 export async function apiFetch<T>(
   url: string,
   options?: RequestInit & { responseType?: "blob" },
+  transport = studioFetch,
 ): Promise<T> {
   const { responseType, ...init } = options ?? {};
-  const response = await studioFetch(url, {
+  const response = await transport(url, {
     ...init,
     headers: {
       ...(init.body instanceof FormData
@@ -33,6 +34,31 @@ export async function apiFetch<T>(
   const data: any = await response.json();
   return data as T;
 }
+
+/** Plugin writes succeed only after the backend commits and returns a version. */
+export function pluginApiFetch<T>(
+  url: string,
+  options?: RequestInit & { responseType?: "blob" },
+): Promise<T> {
+  const runtime = getStudioRuntime();
+  if (runtime.localWorkspace && !runtime.pluginTransport) {
+    return Promise.reject(new Error("The plugin backend transport is unavailable."));
+  }
+  return apiFetch<T>(url, options, runtime.pluginTransport ?? studioFetch);
+}
+
+export const pluginApi = <T = unknown>(
+  url: string,
+  method = "GET",
+  data?: unknown,
+  options?: RequestInit & { responseType?: "blob" },
+) => pluginApiFetch<T>("/api" + url, {
+  ...options,
+  method,
+  ...(data === undefined ? {} : {
+    body: data instanceof FormData ? data : JSON.stringify(data),
+  }),
+});
 export const api = <T = any>(
   url: string,
   method = "GET",

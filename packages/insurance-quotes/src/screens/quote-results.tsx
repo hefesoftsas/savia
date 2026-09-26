@@ -718,17 +718,12 @@ export function QuoteResults({
                 <strong>{t("Ramo:")}</strong> {t("Automóviles Livianos")}{" "}
               </span>
               <span className="insurance-fact-status">
-                {pendingCount > 0
-                  ? selectedHistoryQuoteId
-                    ? t("Pendiente")
-                    : succeededCount > 0
-                      ? t("↻ Recibiendo… (%{p0}/%{p1})", {
-                          p0: completedCount,
-                          p1: totalCount,
-                        })
+                {succeededCount > 0
+                  ? t("✓ Recibida")
+                  : pendingCount > 0
+                    ? selectedHistoryQuoteId
+                      ? t("Pendiente")
                       : t("↻ Solicitada…")
-                  : succeededCount > 0
-                    ? t("✓ Recibida")
                     : failedCount > 0
                       ? t("✕ Rechazada")
                       : "Solicitada"}

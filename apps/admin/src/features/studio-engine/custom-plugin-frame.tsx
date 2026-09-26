@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { apiFetch } from "./api";
+import { pluginApiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
 
 type PluginFrameRequest = {
@@ -119,7 +119,7 @@ export function CustomPluginFrame({
         return;
       }
       try {
-        const data = await apiFetch<unknown>(
+        const data = await pluginApiFetch<unknown>(
           "/api" + message.path,
           message.body === undefined
             ? { method: message.method ?? "GET" }

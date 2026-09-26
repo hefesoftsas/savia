@@ -11,6 +11,8 @@ export type StudioRuntime = {
   domainId?: string;
   businessSetupEnabled?: boolean;
   transport?: StudioTransport;
+  /** Authenticated backend transport for plugins requiring committed records. */
+  pluginTransport?: StudioTransport;
   requestTransport?: StudioTransport;
   publicFormTransport?: StudioTransport;
   navigate?: (query: string, replace?: boolean) => void;
