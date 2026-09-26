@@ -157,6 +157,7 @@ function HistoryDeleteButton({
         <button
           className="insurance-comparator__btn insurance-history-delete-confirm__danger"
           type="button"
+          aria-label={t("Confirmar eliminación")}
           disabled={deleting}
           onClick={onDelete}
         >
