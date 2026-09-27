@@ -1,5 +1,34 @@
 # Store de plugins por tenant
 
+## Selecting a workspace in Screens
+
+Screens has a visible **Tenant** selector and direct **Screens** and **Plugins**
+buttons. Select the tenant first, then open Screens to create or manage its
+screens, or Plugins to install, enable or disable its packages. When opening
+Screens without a workspace in the URL, a single authorized tenant is selected
+automatically; multiple tenants require a choice.
+
+The platform and independent domains are available under **Advanced
+administration**, together with domain creation. They never appear in the Tenant
+selector. An active independent domain is explicitly labeled, and existing domain
+links remain supported. Creating an independent domain does not create a tenant.
+
+The workspace selector reloads its authorized catalog from the API when opened;
+new tenants are not hidden behind the persistent metadata cache.
+
+Switching workspaces preserves the screen administration or packages tab, but
+discards the previous workspace's object, record, filters and editing context.
+Object-specific administration returns to the destination's administration list.
+Screens, plugin installations and their settings use the selected workspace API;
+they are not shared merely because the same user administers both tenants.
+Successful extension and plugin-store mutations invalidate the selected
+workspace's cached extension catalog before refreshing the menu, so immediate
+refreshes cannot reuse the previous activation state while invalidation runs.
+
+Release-managed ZIP plugins still follow the automatic deployment policy below:
+the next deployment activates them in every workspace, including installations
+that a tenant disabled. This policy is separate from interactive tenant changes.
+
 Los administradores de cada espacio pueden **subir plugins como ZIP**,
 **instalarlos y activarlos solo para su espacio**, sin modificar el
 release de Savia. El store por tenant es la fuente de plugins; el release

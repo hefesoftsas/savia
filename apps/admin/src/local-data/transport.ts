@@ -370,8 +370,12 @@ export function createLocalTransport(
             revalidatedMetadata.delete(cachedKey);
         }
       }
-      if (segments[1] === "extensions") {
-        void removeWorkspaceMetadata(`${store.scope}:metadata:/api/extensions`);
+      if (segments[1] === "extensions" || segments[1] === "plugin-store") {
+        // Package installs and removals change the same tenant extension catalog.
+        // Finish invalidation before the caller refreshes the screen menu.
+        await removeWorkspaceMetadata(
+          `${store.scope}:metadata:/api/extensions`,
+        );
         for (const k of revalidatedMetadata.keys()) {
           if (k.startsWith(`${store.scope}:metadata:/api/extensions`)) {
             revalidatedMetadata.delete(k);

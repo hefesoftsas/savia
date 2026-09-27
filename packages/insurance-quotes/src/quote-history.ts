@@ -4,6 +4,9 @@ import type { QuoteBatchItem } from "./screens/quote-results";
 type DetailRecord = Record<string, unknown> & { id: string };
 
 type DetailCollectionHandle = {
+  removeMany?: (
+    records: Array<{ id: string; version: number }>,
+  ) => Promise<Array<{ id: string; ok: boolean; error?: string }>>;
   get?: (id: string) => Promise<unknown>;
   list: (options?: {
     page?: number;
@@ -314,21 +317,61 @@ export async function deleteQuoteHistory(
     }
     deleted += 1;
   };
-  for (const detail of details) {
+  if (
+    detailColl.removeMany &&
+    details.every((detail) => recordVersion(detail) !== undefined)
+  ) {
     try {
-      await deleteOneDetail(detail);
+      for (let offset = 0; offset < details.length; offset += 200) {
+        const records = details.slice(offset, offset + 200).map((detail) => ({
+          id: detail.id,
+          version: recordVersion(detail)!,
+        }));
+        const outcomes = await detailColl.removeMany(records);
+        const failed = records.find(
+          (record) =>
+            !outcomes.some((outcome) => outcome.id === record.id && outcome.ok),
+        );
+        deleted += records.filter((record) =>
+          outcomes.some((outcome) => outcome.id === record.id && outcome.ok),
+        ).length;
+        if (failed)
+          return {
+            ok: false,
+            failedDetailId: failed.id,
+            error:
+              outcomes.find((outcome) => outcome.id === failed.id)?.error ??
+              "No se pudo eliminar un detalle.",
+            deletedDetails: deleted,
+          };
+      }
     } catch (reason) {
       return {
         ok: false,
-        failedDetailId: detail.id,
+        failedDetailId: "",
         error:
-          reason instanceof Error && reason.message
+          reason instanceof Error
             ? reason.message
-            : "No se pudo eliminar un detalle.",
+            : "No se pudieron eliminar los detalles.",
         deletedDetails: deleted,
       };
     }
-  }
+  } else
+    for (const detail of details) {
+      try {
+        await deleteOneDetail(detail);
+      } catch (reason) {
+        return {
+          ok: false,
+          failedDetailId: detail.id,
+          error:
+            reason instanceof Error && reason.message
+              ? reason.message
+              : "No se pudo eliminar un detalle.",
+          deletedDetails: deleted,
+        };
+      }
+    }
   const removeMaster = async () => {
     if (masterColl.get) {
       masterVersion = recordVersion(await masterColl.get(quoteId));

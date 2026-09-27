@@ -80,41 +80,32 @@ describe("Studio domain integration", () => {
   it("opens the platform designer without an agency", async () => {
     mount(
       servicesFor([platform], true),
-      "/studio?view=designer&object=agencias",
+      "/studio?domain=platform&view=designer&object=agencias",
     );
     expect(await screen.findByText(/Espacio CRM/)).toHaveTextContent(
       "domain=platform",
     );
     expect(getStudioRuntime().apiBasePath).toBe(platform.apiBasePath);
     expect(getStudioRuntime().businessSetupEnabled).toBe(false);
-    expect(
-      screen.getByRole("button", {
-        name: "Dominio: Plataforma",
-      }),
-    ).toBeVisible();
+    expect(screen.getByText("Dominio activo: Plataforma")).toBeVisible();
   });
-  it("shows the active domain name in its contextual control", async () => {
+  it("separates tenant selection from advanced domains", async () => {
     mount(
-      servicesFor([platform], true),
-      "/studio?domain=platform&object=agency_profiles&view=records",
+      servicesFor([platform, agency], true),
+      "/studio?domain=platform&view=admin",
     );
     await screen.findByText(/Espacio CRM/);
-    expect(document.querySelector("#crm-domain")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Tenant")).toHaveValue("");
+    expect(screen.getByLabelText("Dominio de datos")).toHaveValue("platform");
     expect(
-      screen.getByRole("button", { name: "Dominio: Plataforma" }),
-    ).toHaveTextContent("Plataforma");
-    expect(
-      screen
-        .getByRole("button", {
-          name: "Dominio: Plataforma",
-        })
-        .closest("#header-actions"),
-    ).toBeVisible();
+      screen.getByLabelText("Tenant").querySelector('option[value="platform"]'),
+    ).toBeNull();
     expect(
       screen
-        .getByRole("button", { name: "Crear dominio" })
-        .closest('[role="dialog"]'),
-    ).toBeTruthy();
+        .getByLabelText("Dominio de datos")
+        .querySelector('option[value="agency:101"]'),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Crear dominio" })).toBeVisible();
   });
   it("converts legacy agency links to a domain while preserving the requested tool", async () => {
     mount(
@@ -133,7 +124,7 @@ describe("Studio domain integration", () => {
   it("does not fall back to a different domain for an unauthorized URL", async () => {
     mount(servicesFor([agency]), "/studio?domain=platform");
     expect(
-      await screen.findByText(/Selecciona un dominio de datos disponible/),
+      (await screen.findAllByText(/Selecciona un tenant para administrar/))[0],
     ).toBeVisible();
     expect(screen.queryByText(/Espacio CRM/)).not.toBeInTheDocument();
   });
@@ -144,15 +135,7 @@ describe("Studio domain integration", () => {
     );
     await screen.findByText(/Espacio CRM/);
     const user = userEvent.setup();
-    await user.click(
-      screen.getByRole("button", {
-        name: "Dominio: Plataforma",
-      }),
-    );
-    await user.selectOptions(
-      screen.getByLabelText("Dominio de datos"),
-      agency.id,
-    );
+    await user.selectOptions(screen.getByLabelText("Tenant"), agency.id);
     expect(screen.getByText(/Espacio CRM/)).not.toHaveTextContent(
       "object=agencias",
     );
@@ -174,7 +157,7 @@ describe("Studio domain integration", () => {
     const user = userEvent.setup();
     await user.click(
       await screen.findByRole("button", {
-        name: "Dominio: Plataforma",
+        name: "Administración avanzada",
       }),
     );
     await user.click(screen.getByRole("button", { name: "Crear dominio" }));
@@ -199,11 +182,6 @@ describe("Studio domain integration", () => {
       .mockResolvedValue({ data: [platform, agency] });
     mount(services, "/studio?domain=platform&view=admin");
     await screen.findByText(/Espacio CRM/);
-    await userEvent.setup().click(
-      screen.getByRole("button", {
-        name: "Dominio: Plataforma",
-      }),
-    );
     expect(
       screen.queryByRole("option", { name: "Norte" }),
     ).not.toBeInTheDocument();
@@ -220,7 +198,7 @@ describe("Studio domain integration", () => {
     const user = userEvent.setup();
     await user.click(
       await screen.findByRole("button", {
-        name: "Dominio: Plataforma",
+        name: "Administración avanzada",
       }),
     );
     await user.click(screen.getByRole("button", { name: "Crear dominio" }));

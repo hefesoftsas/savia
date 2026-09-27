@@ -35,6 +35,7 @@ export type PublicVehicleLookup = {
 };
 
 export interface PublicQuoteAdapter {
+  reference?(submissionId: string, createdAt: string): string;
   publish(input: {
     db: D1Database;
     tenant: string;
@@ -51,6 +52,7 @@ export interface PublicQuoteAdapter {
     domainId: string;
     objectName: string;
     submissionId: string;
+    reference?: string;
     snapshot: unknown;
     values: Record<string, unknown>;
     returnResult: boolean;
@@ -749,13 +751,18 @@ export async function submitPublicForm(
         domainId: link.domain_id,
         objectName: link.object_name,
         submissionId: input.submissionId,
+        reference: options.quote!.reference?.(input.submissionId, now),
         snapshot,
         values,
         returnResult: Boolean(link.return_result),
       });
     const response = {
       ok: true as const,
-      reference: input.submissionId,
+      reference:
+        link.kind === "quote"
+          ? (options.quote?.reference?.(input.submissionId, now) ??
+            input.submissionId)
+          : input.submissionId,
       ...(link.return_result && result !== undefined ? { result } : {}),
     };
     await db

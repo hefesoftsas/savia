@@ -8,6 +8,37 @@ export const STUDIO_NAVIGATION_MESSAGE = "savia-studio-navigation";
 /** Legacy alias from Fase 1 (savia-crm-navigation); accepted during rollout. */
 export const STUDIO_NAVIGATION_MESSAGE_LEGACY = "savia-crm-navigation";
 
+/** Carry navigation intent across workspaces, never a record or screen identity. */
+export function studioDomainSearch(current: URLSearchParams, domain: string) {
+  const next = new URLSearchParams();
+  if (domain) next.set("domain", domain);
+  const view = current.get("view") ?? "records";
+  const workspaceViews = new Set([
+    "admin",
+    "screens",
+    "new-object",
+    "integrations",
+    "operations",
+    "audit",
+    "collection-sources",
+    "service-credentials",
+    "import-spreadsheet",
+    "request-page-generator",
+  ]);
+  const target = view.startsWith("admin")
+    ? "admin"
+    : workspaceViews.has(view)
+      ? view
+      : "records";
+  next.set("view", target);
+  const tab = current.get("tab");
+  if (target === "admin" && (tab === "screens" || tab === "packages"))
+    next.set("tab", tab);
+  if (target === "screens" && (tab === "screens" || tab === "menu"))
+    next.set("tab", tab);
+  return next;
+}
+
 export type StudioNavigationObject = {
   name: string;
   label: string;

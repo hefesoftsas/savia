@@ -214,3 +214,29 @@ When a link supplies a logo, it replaces the standalone Savia heading. The logo
 is grouped with the form title; quote forms center the logo, title, and product
 count in one compact header. Images retain their original aspect ratio without
 cropping. The Savia attribution remains in the footer.
+
+### Completing public quote submissions
+
+The status endpoint includes the committed public receipt once a submission is
+complete. The client accepts that receipt even if the original POST is still
+waiting, and stops the duplicate request. A bounded POST wait retains the same
+submission identity for recovery. Status polling never executes provider flows.
+The final screen keeps the safe comparison already exposed by the public status
+endpoint when the receipt contains only a reference. Private record identifiers
+and payloads remain unavailable. One outer progress indicator owns the waiting
+state; the embedded comparator does not duplicate it.
+
+### Quote history details
+
+Public quote submissions save the same normalized coverage snapshot as the
+internal quote wizard in `cotizaciones_detalle.resultado_snapshot`. The projection
+is computed from the provider response before public fields are restricted; raw
+payloads and provider quote identifiers are not exposed publicly. Older schemas
+continue to save core results. Historical records without snapshots cannot regain
+missing provider details by reloading. The public waiting state uses one progress
+bar, without a duplicate circular busy indicator.
+
+Public quote references use `COT-YYYYMMDD-HHmmss-XXXXXXXX`, with date and time in
+America/Bogota and a submission-derived suffix. The receipt and CRM master use
+the same reference; the UUID remains the internal idempotency and status identity.
+Existing references are not renamed.

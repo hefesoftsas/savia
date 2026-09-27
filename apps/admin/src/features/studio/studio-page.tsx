@@ -9,21 +9,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
-import { ChevronDown } from "lucide-react";
 import { useCanAccess } from "ra-core";
 import { useSearchParams } from "react-router-dom";
 import type { AppServices } from "@/app-services";
 import { createEmbeddedTransport } from "@/api/embedded-transport";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { RouteLoading } from "@/components/admin/route-loading";
-import { studioItems } from "./studio-navigation";
+import { studioDomainSearch, studioItems } from "./studio-navigation";
 import {
   STUDIO_DOMAINS_CHANGED,
   listStudioDomains,
@@ -125,11 +118,28 @@ export function StudioPage({ services }: { services: AppServices }) {
       window.removeEventListener(STUDIO_DOMAINS_CHANGED, refreshDomains);
     };
   }, [canAccess, services]);
-  const selected = selectStudioDomain(
-    domains,
-    params.get("domain"),
-    Number(params.get("agencyId")) || undefined,
+  const tenantDomains = domains.filter(
+    (domain) => domain.kind === "tenant" || domain.kind === "agency",
   );
+  const independentDomains = domains.filter(
+    (domain) => domain.kind !== "tenant" && domain.kind !== "agency",
+  );
+  const hasRequestedScope = params.has("domain") || params.has("agencyId");
+  const selected = hasRequestedScope
+    ? selectStudioDomain(
+        domains,
+        params.get("domain"),
+        Number(params.get("agencyId")) || undefined,
+      )
+    : tenantDomains.length === 1
+      ? tenantDomains[0]
+      : undefined;
+  const selectedTenant = tenantDomains.some(
+    (domain) => domain.id === selected?.id,
+  );
+  useEffect(() => {
+    setContextOpen(Boolean(selected && !selectedTenant));
+  }, [selected?.id, selectedTenant]);
   useEffect(() => {
     if (!selected || params.get("domain") === selected.id) return;
     const next = new URLSearchParams(params);
@@ -168,127 +178,18 @@ export function StudioPage({ services }: { services: AppServices }) {
     }
   }
   function changeDomain(id: string) {
-    const next = new URLSearchParams(params);
-    if (id) next.set("domain", id);
-    else next.delete("domain");
-    next.delete("agencyId");
-    next.delete("object");
-    next.delete("view");
+    const next = studioDomainSearch(params, id);
     setCreating(false);
     setContextOpen(false);
     setParams(next);
   }
+  function openAdministration(tab: "screens" | "packages") {
+    if (!selected) return;
+    setParams({ domain: selected.id, view: "admin", tab });
+  }
   const requestedTool = studioItems.find(
     (item) => item.view === params.get("view"),
   );
-  const headerActions =
-    typeof document === "undefined"
-      ? null
-      : document.getElementById("header-actions");
-  const domainContext = selected ? (
-    <>
-      <Popover
-        open={contextOpen}
-        onOpenChange={(open) => {
-          setContextOpen(open);
-          if (!open) setCreating(false);
-        }}
-      >
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="crm-domain-context-trigger h-8 min-w-0 max-w-[40vw] gap-1.5 px-2 sm:max-w-64"
-            aria-label={t("Dominio: %{value0}", { value0: selected.label })}
-            title={t("Dominio: %{value0}", { value0: selected.label })}
-          >
-            <span className="truncate">{selected.label}</span>
-            <ChevronDown aria-hidden="true" className="shrink-0" size={16} />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          sideOffset={6}
-          className="crm-domain-context-panel w-[min(20rem,92vw)] p-0"
-        >
-          <div className="border-b px-3 py-2.5">
-            <p className="text-xs font-semibold text-foreground">
-              {selected.label}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {t(
-                "El dominio define qué formularios y registros ves en Studio. Cambia de entorno aquí sin salir de esta pantalla.",
-              )}
-            </p>
-          </div>
-          <div className="grid gap-3 p-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="crm-context-domain">
-                {t("Dominio de datos")}
-              </Label>
-              <select
-                id="crm-context-domain"
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                value={selected.id}
-                onChange={(event) => changeDomain(event.target.value)}
-              >
-                {domains.map((domain) => (
-                  <option value={domain.id} key={domain.id}>
-                    {domain.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {canCreateDomain && (
-              <div className="border-t pt-3">
-                {creating ? (
-                  <DomainCreationForm
-                    label={label}
-                    name={name}
-                    saving={saving}
-                    onLabelChange={setLabel}
-                    onNameChange={setName}
-                    onSubmit={createDomain}
-                  />
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCreating(true)}
-                  >
-                    {t("Crear dominio")}
-                  </Button>
-                )}
-              </div>
-            )}
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            {contextOpen && (
-              <Suspense
-                fallback={
-                  <RouteLoading compact label={t("Cargando integraciones…")} />
-                }
-              >
-                <BusinessPanel
-                  className="rounded-md border p-3"
-                  onInstalled={() =>
-                    window.dispatchEvent(
-                      new Event("savia-studio-objects-changed"),
-                    )
-                  }
-                />
-              </Suspense>
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
-    </>
-  ) : null;
   if (isPending) return <RouteLoading variant="screens" />;
   if (!canAccess)
     return (
@@ -300,53 +201,142 @@ export function StudioPage({ services }: { services: AppServices }) {
     );
   return (
     <section className="@container min-w-0 w-full">
-      {selected ? (
-        headerActions && params.get("view") !== "audit" ? (
-          createPortal(domainContext, headerActions)
-        ) : null
-      ) : (
-        <>
-          <header className="mb-2 flex flex-col gap-3 @min-[36rem]:flex-row @min-[36rem]:items-center">
-            <h1 className="sr-only">{t("Studio")}</h1>
-            <div className="grid min-w-0 flex-1 gap-1.5">
-              <Label htmlFor="crm-domain">{t("Dominio de datos")}</Label>
-              <select
-                id="crm-domain"
-                className="h-9 w-full min-w-0 max-w-full rounded-md border bg-background px-3 text-sm @min-[36rem]:max-w-md"
-                value=""
-                onChange={(event) => changeDomain(event.target.value)}
-              >
-                <option value="">{t("Selecciona un dominio")}</option>
-                {domains.map((domain) => (
-                  <option value={domain.id} key={domain.id}>
-                    {domain.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {canCreateDomain && (
+      <div className="mb-4 grid gap-3 border-b pb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="grid min-w-0 flex-1 gap-1.5">
+            <Label htmlFor="studio-tenant">{t("Tenant")}</Label>
+            <select
+              id="studio-tenant"
+              className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
+              value={selectedTenant ? selected?.id : ""}
+              disabled={loading || !tenantDomains.length}
+              onChange={(event) => changeDomain(event.target.value)}
+            >
+              <option value="" disabled>
+                {t("Selecciona un tenant")}
+              </option>
+              {tenantDomains.map((domain) => (
+                <option key={domain.id} value={domain.id}>
+                  {domain.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {selectedTenant
+                ? t(
+                    "Las pantallas y los plugins que administras pertenecen a este tenant.",
+                  )
+                : t(
+                    "Selecciona un tenant para administrar sus pantallas y plugins.",
+                  )}
+            </p>
+          </div>
+          {selected && (
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setCreating(!creating)}
+                size="sm"
+                onClick={() => openAdministration("screens")}
               >
-                {t("Crear dominio")}
+                {t("Pantallas")}
               </Button>
-            )}
-          </header>
-          {creating && (
-            <DomainCreationForm
-              className="mb-4 flex flex-wrap items-end gap-3 rounded-md border p-4"
-              label={label}
-              name={name}
-              saving={saving}
-              onLabelChange={setLabel}
-              onNameChange={setName}
-              onSubmit={createDomain}
-            />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => openAdministration("packages")}
+              >
+                {t("Plugins")}
+              </Button>
+            </div>
           )}
-        </>
-      )}
+        </div>
+        {!loading && !tenantDomains.length && (
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "No tienes tenants disponibles. Solicita acceso a un administrador.",
+            )}
+          </p>
+        )}
+        {(independentDomains.length > 0 || canCreateDomain) && (
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-expanded={contextOpen}
+              aria-controls="studio-advanced"
+              onClick={() => {
+                setContextOpen(!contextOpen);
+                setCreating(false);
+              }}
+            >
+              {t("Administración avanzada")}
+            </Button>
+            {selected && !selectedTenant && (
+              <p className="mt-1 text-sm font-medium">
+                {t("Dominio activo: %{value0}", { value0: selected.label })}
+              </p>
+            )}
+            {contextOpen && (
+              <div
+                id="studio-advanced"
+                className="mt-2 grid gap-3 rounded-md border p-3"
+              >
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    "Plataforma y dominios independientes. Crear un dominio no crea un tenant.",
+                  )}
+                </p>
+                <Label htmlFor="studio-independent-domain">
+                  {t("Dominio de datos")}
+                </Label>
+                <select
+                  id="studio-independent-domain"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  value={selected && !selectedTenant ? selected.id : ""}
+                  onChange={(event) => changeDomain(event.target.value)}
+                >
+                  <option value="" disabled>
+                    {t("Selecciona un dominio")}
+                  </option>
+                  {independentDomains.map((domain) => (
+                    <option key={domain.id} value={domain.id}>
+                      {domain.label}
+                    </option>
+                  ))}
+                </select>
+                {canCreateDomain &&
+                  (creating ? (
+                    <DomainCreationForm
+                      label={label}
+                      name={name}
+                      saving={saving}
+                      onLabelChange={setLabel}
+                      onNameChange={setName}
+                      onSubmit={createDomain}
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreating(true)}
+                    >
+                      {t("Crear dominio")}
+                    </Button>
+                  ))}
+                {error && selected && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       {error && !selected ? (
         <p role="alert">{error}</p>
       ) : loading ? (
@@ -355,6 +345,7 @@ export function StudioPage({ services }: { services: AppServices }) {
         <StudioWorkspace
           key={selected.id}
           services={services}
+          showBusinessPanel={contextOpen}
           domain={selected}
           query={(() => {
             const next = new URLSearchParams(params);
@@ -372,14 +363,13 @@ export function StudioPage({ services }: { services: AppServices }) {
       ) : (
         <div className="py-8 text-muted-foreground">
           <h2 className="mb-2 text-lg font-semibold text-foreground">
-            {requestedTool?.label ??
-              (params.get("object") === "cotizaciones"
-                ? t("Cotizaciones")
-                : t("Clientes"))}
+            {requestedTool?.label ?? t("Pantallas")}
           </h2>
           <p>
             {domains.length
-              ? t("Selecciona un dominio de datos disponible para trabajar.")
+              ? t(
+                  "Selecciona un tenant para administrar sus pantallas y plugins.",
+                )
               : t(
                   "No tienes dominios de datos disponibles. Solicita acceso a un administrador.",
                 )}
@@ -441,12 +431,14 @@ function DomainCreationForm({
 
 function StudioWorkspace({
   services,
+  showBusinessPanel,
   domain,
   query,
   onNavigate,
 }: {
   services: AppServices;
   domain: StudioDomain;
+  showBusinessPanel: boolean;
   query: string;
   onNavigate: (query: string, replace?: boolean) => void;
 }) {
@@ -554,6 +546,20 @@ function StudioWorkspace({
   return (
     <div className="min-w-0 w-full" title={t("Estudio del dominio de datos")}>
       {workspace && <LocalSyncStatus workspace={workspace} />}
+      {showBusinessPanel && (
+        <Suspense
+          fallback={
+            <RouteLoading compact label={t("Cargando integraciones…")} />
+          }
+        >
+          <BusinessPanel
+            className="mb-3 rounded-md border p-3"
+            onInstalled={() =>
+              window.dispatchEvent(new Event("savia-studio-objects-changed"))
+            }
+          />
+        </Suspense>
+      )}
       <Suspense fallback={<RouteLoading variant="screens" />}>
         <StudioRoot embedded search={query} queryClient={studioClient} />
       </Suspense>

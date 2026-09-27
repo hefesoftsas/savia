@@ -452,21 +452,27 @@ export function registerPublicFormRoutes(
       // without revealing whether the link itself exists beyond the token.
       const submission = await db
         .prepare(
-          "SELECT 1 FROM public_form_submissions WHERE form_id=? AND submission_id=?",
+          "SELECT state,response FROM public_form_submissions WHERE form_id=? AND submission_id=?",
         )
         .bind(row.id, c.req.valid("param").submissionId)
-        .first();
+        .first<{ state: string; response: string | null }>();
       if (!submission)
         throw new HTTPException(404, { message: "Public form unavailable." });
+      // Return only the committed public receipt, with its original result policy.
       return c.json(
-        await options.quote.quoteStatus({
-          db,
-          tenant: row.tenant_id,
-          domainId: row.domain_id,
-          objectName: row.object_name,
-          snapshot: JSON.parse(row.snapshot),
-          submission: c.req.valid("param").submissionId,
-        }),
+        {
+          ...(submission.state === "complete" && submission.response
+            ? { state: "complete", receipt: JSON.parse(submission.response) }
+            : {}),
+          ...(await options.quote.quoteStatus({
+            db,
+            tenant: row.tenant_id,
+            domainId: row.domain_id,
+            objectName: row.object_name,
+            snapshot: JSON.parse(row.snapshot),
+            submission: c.req.valid("param").submissionId,
+          })),
+        },
         200,
       );
     },
