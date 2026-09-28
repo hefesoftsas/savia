@@ -87,7 +87,9 @@ describe("Studio domain integration", () => {
     );
     expect(getStudioRuntime().apiBasePath).toBe(platform.apiBasePath);
     expect(getStudioRuntime().businessSetupEnabled).toBe(false);
-    expect(screen.getByText("Dominio activo: Plataforma")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Dominio: Plataforma" }),
+    ).toBeVisible();
   });
   it("separates tenant selection from advanced domains", async () => {
     mount(
