@@ -80,7 +80,12 @@ test("deploys and activates every release ZIP in all discovered workspaces", asy
         },
       },
     );
-    assert.deepEqual(result, { plugins: 1, tenants: 3 });
+    assert.deepEqual(result, {
+      plugins: 1,
+      tenants: 3,
+      installed: 1,
+      optional: 0,
+    });
     assert.equal(calls.filter(({ url }) => url.includes("/upload?")).length, 3);
     assert.equal(
       calls.filter(({ url }) => url.includes("/install?")).length,
@@ -100,6 +105,74 @@ test("deploys and activates every release ZIP in all discovered workspaces", asy
   }
 });
 
+test("optional release plugins are uploaded but never auto-installed", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "savia-deploy-optional-"));
+  const requiredPath = join(directory, "required.zip");
+  const optionalPath = join(directory, "optional.zip");
+  writeFileSync(requiredPath, "required bytes");
+  writeFileSync(optionalPath, "optional bytes");
+  const calls = [];
+  const artifacts = [
+    {
+      path: requiredPath,
+      manifest: { id: "custom.required", version: "1.0.0" },
+    },
+    {
+      path: optionalPath,
+      manifest: { id: "insurance.opportunities", version: "1.1.0" },
+      optional: true,
+    },
+  ];
+  try {
+    const result = await deployArtifacts(
+      artifacts,
+      "http://127.0.0.1",
+      "session",
+      {
+        log() {},
+        fetch: async (url) => {
+          calls.push(url);
+          return Response.json(
+            url.endsWith("/tenants")
+              ? { tenants: ["tenant:1"] }
+              : { data: {} },
+          );
+        },
+      },
+    );
+    assert.deepEqual(result, {
+      plugins: 2,
+      tenants: 1,
+      installed: 1,
+      optional: 1,
+    });
+    assert.equal(
+      calls.filter((url) => url.includes("/upload?")).length,
+      2,
+    );
+    const installs = calls.filter((url) => url.includes("/install?"));
+    assert.equal(installs.length, 1);
+    assert.ok(installs[0].includes("custom.required"));
+    assert.ok(
+      !installs.some((url) => url.includes("insurance.opportunities")),
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("sources.json rejects a port listed as required and optional", () => {
+  const directory = mkdtempSync(join(tmpdir(), "savia-release-overlap-"));
+  try {
+    writeFileSync(
+      join(directory, "sources.json"),
+      JSON.stringify({ ports: ["http-echo"], optional: ["http-echo"] }),
+    );
+    assert.throws(() => releaseArtifacts(directory), /required and optional/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 test("release ZIP dependency ordering rejects cycles and duplicate plugin IDs", async () => {
   const { execFileSync } = await import("node:child_process");
   const directory = mkdtempSync(join(tmpdir(), "savia-release-order-"));
