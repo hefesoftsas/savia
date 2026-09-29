@@ -1,4 +1,30 @@
 export const settingsMessages = {
+  "Tu URL de Savia": ["Tu URL de Savia", "Your Savia URL", "Sua URL do Savia"],
+  "Savia asigna esta URL a tu organización. No se puede editar aquí. Compártela para acceder a tu espacio.":
+    [
+      "Savia asigna esta URL a tu organización. No se puede editar aquí. Compártela para acceder a tu espacio.",
+      "Savia assigns this URL to your organization. It cannot be edited here. Share it to access your workspace.",
+      "O Savia atribui esta URL à sua organização. Ela não pode ser editada aqui. Compartilhe-a para acessar seu espaço.",
+    ],
+  "Copiar enlace": ["Copiar enlace", "Copy link", "Copiar link"],
+  "Compartir enlace": ["Compartir enlace", "Share link", "Compartilhar link"],
+  "Enlace copiado.": ["Enlace copiado.", "Link copied.", "Link copiado."],
+  "Enlace compartido.": [
+    "Enlace compartido.",
+    "Link shared.",
+    "Link compartilhado.",
+  ],
+  "No se pudo copiar el enlace. Selecciona la URL y cópiala manualmente.": [
+    "No se pudo copiar el enlace. Selecciona la URL y cópiala manualmente.",
+    "Unable to copy the link. Select the URL and copy it manually.",
+    "Não foi possível copiar o link. Selecione a URL e copie-a manualmente.",
+  ],
+  "No se pudo compartir el enlace. Usa Copiar enlace para compartirlo.": [
+    "No se pudo compartir el enlace. Usa Copiar enlace para compartirlo.",
+    "Unable to share the link. Use Copy link to share it.",
+    "Não foi possível compartilhar o link. Use Copiar link para compartilhá-lo.",
+  ],
+
   "No fue posible subir tu avatar. Inténtalo de nuevo.": [
     "No fue posible subir tu avatar. Inténtalo de nuevo.",
     "Unable to upload your avatar. Try again.",

@@ -274,3 +274,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+.tenant-branding-access {
+  margin-bottom: 2rem;
+  max-width: 54rem;
+}
+.tenant-branding-access-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.tenant-branding-access-controls > input {
+  flex: 1 1 22rem;
+  min-width: 0;
+}

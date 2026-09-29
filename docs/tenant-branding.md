@@ -1,6 +1,6 @@
 # Tenant branding
 
-Owner: Savia platform team. Last reviewed: 2026-09-19.
+Owner: Savia platform team. Last reviewed: 2026-09-29.
 
 Commercial tenants can customize their public identity without changing authentication
 or access to application data. Open **Administración → Identidad del espacio** from the sidebar.
@@ -10,6 +10,15 @@ Other members may read the saved configuration but cannot change it or upload im
 When no commercial organization is available, platform administrators can start tenant
 creation from this page; other users are directed to request access from a platform
 administrator.
+
+The page shows the selected organization's assigned Savia URL in a selectable,
+read-only field above the editor. **Copy link** copies the URL with confirmation;
+**Share link** uses the device's native share sheet, falling back to copying when
+native sharing is unavailable. Clipboard failures explain how to copy manually.
+These actions are also available to read-only members and never save branding or
+change the tenant slug. Switching organizations updates the URL and clears feedback.
+Preview and production use their respective canonical hosts. If the saved slug or
+a recognized Savia hostname is unavailable, no URL is fabricated.
 
 The guided editor supports a display name, logo, login cover image, login Lottie
 animation, welcome title, welcome text, primary color, and accent color. Preview

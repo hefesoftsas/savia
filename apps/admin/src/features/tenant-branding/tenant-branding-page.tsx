@@ -10,6 +10,7 @@ import {
   type FormEvent,
 } from "react";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host";
+import { TenantAccessUrl } from "./tenant-access-url";
 import { Building2, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -27,6 +28,7 @@ import "./tenant-branding.css";
 type Tenant = {
   id: number;
   name: string;
+  idSlug?: string | null;
   kind?: string;
   isActive?: boolean | number;
 };
@@ -79,6 +81,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
               id: unknown;
               name: unknown;
               kind: unknown;
+              slug?: string | null;
             };
           }>("/v1/tenants/current", { signal: controller.signal });
           if (controller.signal.aborted) return;
@@ -94,6 +97,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
                     id: current.id as number,
                     name: current.name as string,
                     kind: current.kind as string,
+                    idSlug: current.slug,
                     isActive: true as const,
                   },
                 ]
@@ -203,6 +207,14 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
                 )}
               </p>
             </div>
+          )}
+          {selected && (
+            <TenantAccessUrl
+              key={`url-${selected}`}
+              slug={
+                tenants.find((tenant) => String(tenant.id) === selected)?.idSlug
+              }
+            />
           )}
           {selected && (
             <BrandingEditor
