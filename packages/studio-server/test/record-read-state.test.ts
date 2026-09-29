@@ -13,28 +13,37 @@ beforeAll(async () => {
     persist: false,
   });
   db = platform.env.DB;
-  await db
-    .prepare(
-      `
-    CREATE TABLE studio_records (
-      id TEXT NOT NULL,
-      tenant_id TEXT NOT NULL,
-      object_name TEXT NOT NULL,
-      data TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      deleted_at TEXT,
-      PRIMARY KEY (tenant_id, id)
-    )
-  `,
-    )
-    .run();
+  for (const baseline of ["0001_initial.sql", "0002_bootstrap.sql"]) {
+    const source = readFileSync(`../db/migrations/${baseline}`, "utf8");
+    for (const sql of migrationStatements(source)) await db.prepare(sql).run();
+  }
   await db.batch([
     db
-      .prepare("INSERT INTO studio_records VALUES(?,?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      )
+      .bind("tenant-a", "items", "Items", "{}"),
+    db
+      .prepare(
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      )
+      .bind("tenant-b", "items", "Items", "{}"),
+    db
+      .prepare(
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES(?,?,?,?)",
+      )
+      .bind("tenant-b", "archive", "Archive", "{}"),
+  ]);
+  await db.batch([
+    db
+      .prepare(
+        "INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?)",
+      )
       .bind("a1", "tenant-a", "items", "{}", "2026-01-01", "2026-01-01", null),
     db
-      .prepare("INSERT INTO studio_records VALUES(?,?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?)",
+      )
       .bind(
         "a2",
         "tenant-a",
@@ -45,14 +54,11 @@ beforeAll(async () => {
         "2026-02-01",
       ),
     db
-      .prepare("INSERT INTO studio_records VALUES(?,?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?)",
+      )
       .bind("b1", "tenant-b", "items", "{}", "2026-01-01", "2026-01-01", null),
   ]);
-  const migration = readFileSync(
-    "../db/migrations/0079_record_read_state.sql",
-    "utf8",
-  );
-  for (const sql of migrationStatements(migration)) await db.prepare(sql).run();
 });
 
 afterAll(async () => {
@@ -74,7 +80,7 @@ it("backfills and maintains exact active/trash counts through transitions and mo
 
   await db
     .prepare(
-      `INSERT INTO studio_records VALUES
+      `INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,deleted_at) VALUES
        ('a3','tenant-a','items','{}','2026-01-03','2026-01-03',NULL)`,
     )
     .run();
@@ -150,7 +156,7 @@ it("isolates tenant/object counts and invalidates cached reads by record revisio
 
   await db
     .prepare(
-      `INSERT INTO studio_records VALUES
+      `INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,deleted_at) VALUES
        ('a4','tenant-a','items','{}','2026-04-01','2026-04-01',NULL)`,
     )
     .run();
@@ -166,7 +172,7 @@ it("does not cache a computation under a revision changed while it ran", async (
       if (computes === 1) {
         await db
           .prepare(
-            `INSERT INTO studio_records VALUES
+            `INSERT INTO studio_records(id,tenant_id,object_name,data,created_at,updated_at,deleted_at) VALUES
              ('a5','tenant-a','items','{}','2026-05-01','2026-05-01',NULL)`,
           )
           .run();

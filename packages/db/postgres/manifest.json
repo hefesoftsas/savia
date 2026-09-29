@@ -1,370 +1,14 @@
 {
   "format": 1,
-  "baseline": "0001_baseline.sql",
+  "baseline": "0001_initial.sql",
   "sourceMigrations": [
     {
-      "filename": "0000_agencies.sql",
-      "sha256": "4725d80bd35c399ceadd15c32387cd15b9d56c4acc1a5c6d29c8f53fb214c335"
+      "filename": "0001_initial.sql",
+      "sha256": "e9f071fcd39a7e45d4c646f3f18985dd7b9680f2ccca21dd9d7dd6b1632a8e2c"
     },
     {
-      "filename": "0001_magenta_moira_mactaggert.sql",
-      "sha256": "62b84e0b528d858ed7cea3fe3a9bd283afbf9307d89191873571322686114c1c"
-    },
-    {
-      "filename": "0002_geographic_catalogs.sql",
-      "sha256": "f9a4602d60f89ea58b6913834c4ecbd994882d90ddaeb0ad51ca9aca2b51d386"
-    },
-    {
-      "filename": "0003_business_taxonomy.sql",
-      "sha256": "be7c9beabe288d5ce37afe01808621737c3bc59fc057c1c3d4f0560a19fed048"
-    },
-    {
-      "filename": "0004_agency_branches.sql",
-      "sha256": "a41fb885dffa0535689de64d362c5f12efb20b9b9c582fe88d68f6e332d467cc"
-    },
-    {
-      "filename": "0005_insurer_companies.sql",
-      "sha256": "3019fd67dd63aee9b5b4b4d5b0de38d499f3559777cdd899f7991f35af861a1c"
-    },
-    {
-      "filename": "0006_full_source_schema.sql",
-      "sha256": "0fabdd66a51b20dacde17affaa56678895175588beaf924e22553375939ba406"
-    },
-    {
-      "filename": "0007_private_attachments.sql",
-      "sha256": "6fcb39aef406a0c18c0c25ebb63189588a2c5c3d339a2e045490418c1051ff64"
-    },
-    {
-      "filename": "0008_identity_access.sql",
-      "sha256": "8090226fff208da7016f0530a8ec8b5073f6191d660ac87bf7264980a164b135"
-    },
-    {
-      "filename": "0009_document_ownership.sql",
-      "sha256": "fcb561ba9f4b3c93ceed9beaecf024542cf8e9f011f1520bf7de2b5807f2f0d7"
-    },
-    {
-      "filename": "0010_server_id_sequences.sql",
-      "sha256": "61b0f15d9fb46fc3de10537ba72a4b9a7294f1a056685ec63c51248b88507721"
-    },
-    {
-      "filename": "0011_admin_oauth_transactions.sql",
-      "sha256": "c8c8ed4d6be10a28e238da90fbb5691057506801542bd3df1eb7348fde9d2354"
-    },
-    {
-      "filename": "0012_legacy_import_manifest.sql",
-      "sha256": "c2ba860ad7fd3e753cb83b77477668bb6cf58da8017df187a6f8cf89a1b5094e"
-    },
-    {
-      "filename": "0012_remove_legacy_identities.sql",
-      "sha256": "75386820deffd681c008581a74fb0b2fda1fb6f23881866ca652aa34e4cc84e8"
-    },
-    {
-      "filename": "0013_backfill_document_ownership.sql",
-      "sha256": "2e3aaa98e4ed5d90acececd5a4b8b87337411f75850bdc5281371a41f7aaed72"
-    },
-    {
-      "filename": "0014_assistant_pending_actions.sql",
-      "sha256": "e4c0e03754c9297ed498f6ce1f23818b0cb203c741639676e64a0a98c1d4b8be"
-    },
-    {
-      "filename": "0014_auto_light_quotes.sql",
-      "sha256": "75a9aad1de4cc9f772447e88e967c4f892a2ea09f7989acc6567a3a8fb6af270"
-    },
-    {
-      "filename": "0015_agency_crm_connections.sql",
-      "sha256": "7eb8e45f38ac5cc80f6229a396c31a4f9dbda86ba0196d69c41b0c02dd3d33f9"
-    },
-    {
-      "filename": "0015_assistant_openrouter_configuration.sql",
-      "sha256": "15b95d0a92b75f37a832a359f7d6f7a4dda02418dbab69b7a4a7ddebba963d7c"
-    },
-    {
-      "filename": "0016_assistant_openrouter_configuration_cascades.sql",
-      "sha256": "295cadc119ecf58f27510db3c63d1b5e91a9b4b7b2d06b6e86de7d42cd6852f5"
-    },
-    {
-      "filename": "0017_customer_crm_sync.sql",
-      "sha256": "253966a0cc2f9b500212c4e5f6babe05608e699de543f9c2bf65c9ad87d15c1a"
-    },
-    {
-      "filename": "0018_agency_provider_credentials.sql",
-      "sha256": "d2c44d1b42d9be462ebc1d47c343fdbf92c3a099ab5093d285a149419fb35e76"
-    },
-    {
-      "filename": "0019_provider_credential_reveals.sql",
-      "sha256": "198f97bb944b849e179e0ce883a1a6d609feb7c10df578061505014d83331c40"
-    },
-    {
-      "filename": "0020_personal_nango_integrations.sql",
-      "sha256": "0ad6e87ce3f5bd46b2a5e5d05cacbb859ae4169062b919992334c2fb92dc5192"
-    },
-    {
-      "filename": "0020_savia_request.sql",
-      "sha256": "801b532e4080558426f637ace7305394a01a78db4dbb4b66f82dd26510086b05"
-    },
-    {
-      "filename": "0021_user_navigation_preferences.sql",
-      "sha256": "f1895e3ba113cc449ba7fabef590ab9952f58658c5a739a775a8ac255a434a95"
-    },
-    {
-      "filename": "0022_dynamic_crm.sql",
-      "sha256": "9e4522886d96777aa06a0699800fa39a7dd0db269d74aed2eede0040520fe50c"
-    },
-    {
-      "filename": "0023_dynamic_crm_business.sql",
-      "sha256": "7042ca3175ce6bb4b4e5860afb09b9ed540bacbce49b773fd1e11ba2c75f57ad"
-    },
-    {
-      "filename": "0024_data_domains.sql",
-      "sha256": "83c47b7c6e419042ed4a9c77a96bffb090dd72209c96e6c515e52587a70c62b4"
-    },
-    {
-      "filename": "0025_managed_customers.sql",
-      "sha256": "bb1db184d9400ad3f417b94d1b7bbbdba4b59eb3e1f0e1436244c370b2be81d3"
-    },
-    {
-      "filename": "0026_collection_sources.sql",
-      "sha256": "126f93471da7f00bacc44f0ad5c1017c630e14b07c6c49f37ca45a2551233cb5"
-    },
-    {
-      "filename": "0027_collection_relations.sql",
-      "sha256": "a66f8f84f9b4ddd898f096c68cc9a8ab1ad5b63ed52fc89d54c464cde74df30a"
-    },
-    {
-      "filename": "0028_relation_fields.sql",
-      "sha256": "e555cf11f66b50a9adccc1121be2e2fa1dee03fbc110dea77f6007bbb6afaa00"
-    },
-    {
-      "filename": "0029_customer_agency_reference.sql",
-      "sha256": "efaa1e958369ee46be0e5f3bf935b8a8a4972f8d5441d63e8a73231671c2ed7e"
-    },
-    {
-      "filename": "0030_agency_profile_query_capabilities.sql",
-      "sha256": "a4ed62f46fe5087578114504e16a59cdc796cd00f1e79447ccf20ad14f385ef2"
-    },
-    {
-      "filename": "0031_temporary_r2_attachments.sql",
-      "sha256": "ea861d2148bb5da3e0f9756abf8167317f752bc37f151e7ef0cf35d389f838e9"
-    },
-    {
-      "filename": "0032_r2_attachment_file_fields.sql",
-      "sha256": "0e3c39e428a44f07e3512b87bbe98c9b662b7d2823f5a3ebbc2216f2f8c8b389"
-    },
-    {
-      "filename": "0034_tenant_platform.sql",
-      "sha256": "07070a1b00cecaed944dc39d15b0cc08cb553282b03ee6ffec14fc16e2a91cdd"
-    },
-    {
-      "filename": "0035_user_owned_integrations.sql",
-      "sha256": "c24572fa9ab0d749061f8610ca738895ea107b18dd62c107bae9423aeeddd3a0"
-    },
-    {
-      "filename": "0036_user_owned_provider_credentials.sql",
-      "sha256": "6daef2e2935cfb44d5d88d9539d7d5ee59f2be5b2704819b447195a402fda659"
-    },
-    {
-      "filename": "0037_generated_request_pages.sql",
-      "sha256": "4d34eb56306ce36d6bf1c04bcf5bfb971911071b36a82fad78d29a6ef06bfa43"
-    },
-    {
-      "filename": "0038_user_appearance_preferences.sql",
-      "sha256": "631fcbd0354b3f03cb6363045b19c26f7400d54dde6ed33b0c73c817878d4698"
-    },
-    {
-      "filename": "0039_crm_studio_settings.sql",
-      "sha256": "e4bf1a41be433e4717f1fcead10513d7736a7ff7942abc2207471fd108403c43"
-    },
-    {
-      "filename": "0040_crm_auto_sync.sql",
-      "sha256": "daf972196d2bd6b2abb71cdf34bd2ce48130105ae8faa9331c985562e638ab6f"
-    },
-    {
-      "filename": "0041_industry_solutions.sql",
-      "sha256": "219627231662aef979673e794f695c5d0600c698a86cc31a69769ee368f0c6a4"
-    },
-    {
-      "filename": "0042_tenant_crm_sync.sql",
-      "sha256": "5d776eada3dd16c6a1e41b1e3fba73a251ed06a40fa8a392c70c1944a82f0181"
-    },
-    {
-      "filename": "0043_assistant_tenant_references.sql",
-      "sha256": "fc9ea149b5d3397864de2e1a0587d27b2d3511c3f514a8bda2f2511cd20b56e4"
-    },
-    {
-      "filename": "0044_assistant_virtual_employees.sql",
-      "sha256": "a85db60a6a8b5d97172358029214b54aed0cb36a2aa4fc810ef256253c52d945"
-    },
-    {
-      "filename": "0045_crm_geocoding_settings.sql",
-      "sha256": "53cf92bd10ad2ed36bd7bdaa90cf9148afc3c04ef4dc59fad7f405a6e00037a4"
-    },
-    {
-      "filename": "0045_extensions.sql",
-      "sha256": "902a8c8b0b97d354255d1b11fc3827d94fb6bce23efd347d9a972eda77f53197"
-    },
-    {
-      "filename": "0046_tenant_user_invariant.sql",
-      "sha256": "fdd1daccc18fae224140bdb0f5a481d7798f2358398f7088e8cbdb623df6a60a"
-    },
-    {
-      "filename": "0047_extension_runtime.sql",
-      "sha256": "0e555845e0126a2c6bb8115abccb14e630b49e02462b10b54b0b5ed0223bc17e"
-    },
-    {
-      "filename": "0048_insurance_quotes_extension.sql",
-      "sha256": "62632a2764a10bb7c7c0c6f5d8238cdfa80e210fce2c225a1a8e1598c0f85bc8"
-    },
-    {
-      "filename": "0049_extension_settings.sql",
-      "sha256": "2c5d445a8b3725855e984fdcb79a6386829ee5e465262dfe8f120673aeb91227"
-    },
-    {
-      "filename": "0050_collection_sql_sources.sql",
-      "sha256": "ea28a60f92b8ccf8176092afaafea8f54f66fce93f88d4bd80568b644bd3f2a9"
-    },
-    {
-      "filename": "0051_collection_versions.sql",
-      "sha256": "9b0cd35480f925a68154dd69b39e89422acdabdbe6fdbb49ffee720b20da14df"
-    },
-    {
-      "filename": "0052_offline_collection_policies.sql",
-      "sha256": "a8b29caa90afd94aec7c6e4edc3539e0b6d2c5922443325240ab2db72db12dbb"
-    },
-    {
-      "filename": "0053_local_sync.sql",
-      "sha256": "fbaab1d6c8c816c20c8445eb3bec646abbf66c02381772a3ac87c9ba7d41f36f"
-    },
-    {
-      "filename": "0054_public_forms.sql",
-      "sha256": "0665ecee2eef448b8afcc49ba9b218514839ec31c8477565d588c706e424c523"
-    },
-    {
-      "filename": "0054_workflows.sql",
-      "sha256": "8d02e947de2e378ca172a5b1bbea2711df7e24b173da28db031eda326e5e36e1"
-    },
-    {
-      "filename": "0055_access_control.sql",
-      "sha256": "e23d48bffcc1b61ee0fc6abe8b4c0d64d9cb4e9c482dabfadbb737644535e6ef"
-    },
-    {
-      "filename": "0055_collection_database_sources.sql",
-      "sha256": "0da1cf6482f9cf43f4cd915bedba38d1e671108cce9c04d442b3fa654897de36"
-    },
-    {
-      "filename": "0055_office_revisions.sql",
-      "sha256": "1fd30979ac928442ad34cf5176b4b18527cb7e96c131606ed6e49e1a208e3e45"
-    },
-    {
-      "filename": "0055_tenant_branding.sql",
-      "sha256": "d604ec27210438ebf5a3388f79d529b423fa0169365f8b60dc84b8b13cc7b5f0"
-    },
-    {
-      "filename": "0056_access_sync.sql",
-      "sha256": "8f1ebe23c9dbc9f72e621d25595f02fa9c806a30cdf4c818f3c593566d347635"
-    },
-    {
-      "filename": "0057_access_tenant_lifecycle.sql",
-      "sha256": "6b9d62ab8a6db8527c5c42343e50cb34923f0fd6cb33687be64596c7101aab65"
-    },
-    {
-      "filename": "0057_record_history.sql",
-      "sha256": "b8a8d658cf47f4f7424bd2a0ba8441eb0b19a8c0ecd78fe1d49cd9686925a343"
-    },
-    {
-      "filename": "0058_workflow_webhooks.sql",
-      "sha256": "955436fd89fcc0a02d83d752514981367b8e9ad79f9d3eb98925a93249be58f5"
-    },
-    {
-      "filename": "0059_workflow_collection_triggers.sql",
-      "sha256": "19c8be7f15e970b339ac13f81d85e784fc46d59aa84ab57256652a7f32bbac92"
-    },
-    {
-      "filename": "0060_user_my_day_widgets.sql",
-      "sha256": "93742d90fefe11e91ec9ea72dd9455a6706683cbdbf9ce551a2f4d172eb228a9"
-    },
-    {
-      "filename": "0061_notifications.sql",
-      "sha256": "e175a19f27ae5a4b682db464008b460f174c27f0cbabc4c6b04e64af76ddeb80"
-    },
-    {
-      "filename": "0062_notification_collection_triggers.sql",
-      "sha256": "5c93b9122bf71b96f3d90abc730abc59f8c1c34aa3ceb488b5ac2dfb97176506"
-    },
-    {
-      "filename": "0063_tenant_crm_and_assistant_tables.sql",
-      "sha256": "4c98a3910dcb6b310595bd3077dfc8e74f8ce38add6a60009404ea8b9d37eaf1"
-    },
-    {
-      "filename": "0064_public_form_short_links.sql",
-      "sha256": "f96354311a624afc3463ba1508587dd0dc45d94e61c58108c0df9497fd7c9d64"
-    },
-    {
-      "filename": "0065_public_form_external_short_url.sql",
-      "sha256": "2c458d5960805843833c569c7d18c86779a3204f3a9d9a93205425a5eced4b07"
-    },
-    {
-      "filename": "0066_savia_request_tenant_scope.sql",
-      "sha256": "a29c3d61c64874c4100054ac2b1cc8d6ec7a3ad9d066ac2fef4690babc9b6e44"
-    },
-    {
-      "filename": "0067_savia_request_audit.sql",
-      "sha256": "c3ef60c41eee4fc951efebbef03b8f2fc06b8567698c7142fa2e7155d0c48e96"
-    },
-    {
-      "filename": "0068_rename_engine_crm_to_studio.sql",
-      "sha256": "621b044f99fa8f72112cad68d6f3aa3c8246600d48a2e4f5a5b5bf0726c4448b"
-    },
-    {
-      "filename": "0069_drop_unused_legacy_tables.sql",
-      "sha256": "66f24c15df9e6c550bae6d5926f316a427c341a002b50b72c3f1558c7a6d23f3"
-    },
-    {
-      "filename": "0070_drop_remaining_legacy_tables.sql",
-      "sha256": "ba52cba316aca0c6ecb7525a6acd2b01e6a88ea252a9fa474a30618a13ef5337"
-    },
-    {
-      "filename": "0071_rebuild_customer_tables_drop_fk_parents.sql",
-      "sha256": "46eca8c216d2b51f7b5dd10f7a8d669cd7156dea047af008d51cb0beb32bdb22"
-    },
-    {
-      "filename": "0072_plugin_store.sql",
-      "sha256": "6498fdb9e2feb2d373c189c374be3612f0b273aa3fe3db49fe1b3a5eb8079cca"
-    },
-    {
-      "filename": "0073_plugin_store_config.sql",
-      "sha256": "c49c921a2cdf7894071d6338b8e60d7da48e522ad98a9d531cc738f2c29df8fc"
-    },
-    {
-      "filename": "0074_tenant_branding_login_animation.sql",
-      "sha256": "1b6380961e1aee71b07d04fa48e1d28ad69c2501a88ecd7dfbb900d2481ea341"
-    },
-    {
-      "filename": "0075_savia_request_installed_bundles.sql",
-      "sha256": "d1b915cefc34aaa30c832fa9933f759065581b611235fea77cffbb8bf994c986"
-    },
-    {
-      "filename": "0076_public_form_logo.sql",
-      "sha256": "2ef677b61a53a3d5200b11f40d7146361309b40a3a938961ffaca84b8ac23ed0"
-    },
-    {
-      "filename": "0077_tenant_only_isolation.sql",
-      "sha256": "2e362839d13fc1dff5653bd63ba3da779843f71d77ed23f4a3c4aa1d31afa212"
-    },
-    {
-      "filename": "0078_identity_principal_email_uniqueness.sql",
-      "sha256": "9d7d5db677dc8a4f3dccfd0d570c8214203f56f5a34accd562ec0a29d6f2513c"
-    },
-    {
-      "filename": "0079_record_read_state.sql",
-      "sha256": "8d3f152ad169f5292d595a6d6cfebee6ddf5d18408f8a43c1b832028a142a0f5"
-    },
-    {
-      "filename": "0080_studio_record_search.sql",
-      "sha256": "25788d3119fa014c0d92cc70bd86462d88d604426a31b50abd510c1e84f6bcdd"
-    },
-    {
-      "filename": "0081_record_summaries.sql",
-      "sha256": "8002fd79fa4df8731b1e5c16b2cac107fbf04cfbdbcefb74f41b99cd5f809729"
+      "filename": "0002_bootstrap.sql",
+      "sha256": "cf05c98786d2c0efb599b28d01d2c322855de4888cef9557d9b46b15994a2bb3"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -447,7 +91,22 @@
     },
     {
       "type": "index",
+      "name": "app_economicactivity_code_a9ea7a57_like",
+      "table": "app_economicactivity"
+    },
+    {
+      "type": "index",
+      "name": "app_economicactivity_code_key",
+      "table": "app_economicactivity"
+    },
+    {
+      "type": "index",
       "name": "assistant_active_agencies_agency_index",
+      "table": "assistant_active_tenants"
+    },
+    {
+      "type": "index",
+      "name": "assistant_active_tenants_tenant_index",
       "table": "assistant_active_tenants"
     },
     {
@@ -512,6 +171,21 @@
     },
     {
       "type": "index",
+      "name": "business_commercialunit_agency_id_3f578aee",
+      "table": "business_commercialunit"
+    },
+    {
+      "type": "index",
+      "name": "business_commercialunit_id_slug_93b24ac2_like",
+      "table": "business_commercialunit"
+    },
+    {
+      "type": "index",
+      "name": "business_commercialunit_id_slug_key",
+      "table": "business_commercialunit"
+    },
+    {
+      "type": "index",
       "name": "categories_id_slug_unique",
       "table": "categories"
     },
@@ -537,61 +211,6 @@
     },
     {
       "type": "index",
-      "name": "studio_file_drafts_expiry",
-      "table": "studio_file_drafts"
-    },
-    {
-      "type": "index",
-      "name": "studio_files_record",
-      "table": "studio_files"
-    },
-    {
-      "type": "index",
-      "name": "studio_files_record_field",
-      "table": "studio_files"
-    },
-    {
-      "type": "index",
-      "name": "studio_integration_runs_history",
-      "table": "studio_integration_runs"
-    },
-    {
-      "type": "index",
-      "name": "studio_integration_runs_idempotency",
-      "table": "studio_integration_runs"
-    },
-    {
-      "type": "index",
-      "name": "studio_integrations_owner_index",
-      "table": "studio_integrations"
-    },
-    {
-      "type": "index",
-      "name": "studio_notes_record",
-      "table": "studio_notes"
-    },
-    {
-      "type": "index",
-      "name": "studio_record_history_expiry",
-      "table": "studio_record_history"
-    },
-    {
-      "type": "index",
-      "name": "studio_record_links_incoming",
-      "table": "studio_record_links"
-    },
-    {
-      "type": "index",
-      "name": "studio_records_active",
-      "table": "studio_records"
-    },
-    {
-      "type": "index",
-      "name": "studio_records_object",
-      "table": "studio_records"
-    },
-    {
-      "type": "index",
       "name": "crm_sync_changes_scope",
       "table": "crm_sync_changes"
     },
@@ -602,16 +221,6 @@
     },
     {
       "type": "index",
-      "name": "studio_tasks_due",
-      "table": "studio_tasks"
-    },
-    {
-      "type": "index",
-      "name": "studio_unique_record",
-      "table": "studio_unique_values"
-    },
-    {
-      "type": "index",
       "name": "customer_address_city_id_121281ad",
       "table": "customer_address"
     },
@@ -619,6 +228,36 @@
       "type": "index",
       "name": "customer_address_coordinates_0b250f3d_id",
       "table": "customer_address"
+    },
+    {
+      "type": "index",
+      "name": "customer_client_external_id_ff2ecb68",
+      "table": "customer_client"
+    },
+    {
+      "type": "index",
+      "name": "customer_client_external_id_ff2ecb68_like",
+      "table": "customer_client"
+    },
+    {
+      "type": "index",
+      "name": "customer_client_id_slug_51651e62_like",
+      "table": "customer_client"
+    },
+    {
+      "type": "index",
+      "name": "customer_client_id_slug_key",
+      "table": "customer_client"
+    },
+    {
+      "type": "index",
+      "name": "customer_client_migration_slug_87cd0ef0",
+      "table": "customer_client"
+    },
+    {
+      "type": "index",
+      "name": "customer_client_migration_slug_87cd0ef0_like",
+      "table": "customer_client"
     },
     {
       "type": "index",
@@ -669,6 +308,21 @@
       "type": "index",
       "name": "customer_crm_sync_records_customer_provider_index",
       "table": "customer_crm_sync_records"
+    },
+    {
+      "type": "index",
+      "name": "customer_group_agency_id_3b3c328d",
+      "table": "customer_group"
+    },
+    {
+      "type": "index",
+      "name": "customer_group_id_slug_07cbc3f2_like",
+      "table": "customer_group"
+    },
+    {
+      "type": "index",
+      "name": "customer_group_id_slug_key",
+      "table": "customer_group"
     },
     {
       "type": "index",
@@ -817,6 +471,11 @@
     },
     {
       "type": "index",
+      "name": "idx_plugin_store_artifacts_tenant",
+      "table": "plugin_store_artifacts"
+    },
+    {
+      "type": "index",
       "name": "insurer_companies_collection_reconciliation_type_index",
       "table": "insurer_companies"
     },
@@ -829,6 +488,36 @@
       "type": "index",
       "name": "insurer_companies_reconciliation_type_index",
       "table": "insurer_companies"
+    },
+    {
+      "type": "index",
+      "name": "notification_audit_scope",
+      "table": "notification_admin_audit"
+    },
+    {
+      "type": "index",
+      "name": "notification_events_due",
+      "table": "notification_events"
+    },
+    {
+      "type": "index",
+      "name": "notification_followers",
+      "table": "notification_subscriptions"
+    },
+    {
+      "type": "index",
+      "name": "notification_inbox",
+      "table": "notification_deliveries"
+    },
+    {
+      "type": "index",
+      "name": "notification_retries_due",
+      "table": "notification_recipient_retries"
+    },
+    {
+      "type": "index",
+      "name": "notification_unread",
+      "table": "notification_deliveries"
     },
     {
       "type": "index",
@@ -887,6 +576,86 @@
     },
     {
       "type": "index",
+      "name": "savia_request_audit_scope_idx",
+      "table": "savia_request_audit"
+    },
+    {
+      "type": "index",
+      "name": "studio_file_drafts_expiry",
+      "table": "studio_file_drafts"
+    },
+    {
+      "type": "index",
+      "name": "studio_files_record",
+      "table": "studio_files"
+    },
+    {
+      "type": "index",
+      "name": "studio_files_record_field",
+      "table": "studio_files"
+    },
+    {
+      "type": "index",
+      "name": "studio_integration_runs_history",
+      "table": "studio_integration_runs"
+    },
+    {
+      "type": "index",
+      "name": "studio_integration_runs_idempotency",
+      "table": "studio_integration_runs"
+    },
+    {
+      "type": "index",
+      "name": "studio_integrations_owner_index",
+      "table": "studio_integrations"
+    },
+    {
+      "type": "index",
+      "name": "studio_notes_record",
+      "table": "studio_notes"
+    },
+    {
+      "type": "index",
+      "name": "studio_record_history_expiry",
+      "table": "studio_record_history"
+    },
+    {
+      "type": "index",
+      "name": "studio_record_links_incoming",
+      "table": "studio_record_links"
+    },
+    {
+      "type": "index",
+      "name": "studio_records_active",
+      "table": "studio_records"
+    },
+    {
+      "type": "index",
+      "name": "studio_records_active_created_order",
+      "table": "studio_records"
+    },
+    {
+      "type": "index",
+      "name": "studio_records_active_updated_order",
+      "table": "studio_records"
+    },
+    {
+      "type": "index",
+      "name": "studio_records_object",
+      "table": "studio_records"
+    },
+    {
+      "type": "index",
+      "name": "studio_tasks_due",
+      "table": "studio_tasks"
+    },
+    {
+      "type": "index",
+      "name": "studio_unique_record",
+      "table": "studio_unique_values"
+    },
+    {
+      "type": "index",
       "name": "sub_ramos_category_id_index",
       "table": "sub_ramos"
     },
@@ -899,6 +668,51 @@
       "type": "index",
       "name": "tenant_branding_assets_tenant",
       "table": "tenant_branding_assets"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connection_audit_events_connection_created_at_index",
+      "table": "tenant_crm_connection_audit_events"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connection_audit_events_tenant_created_at_index",
+      "table": "tenant_crm_connection_audit_events"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_active_unique",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_owner_index",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_tenant_provider_index",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_flow_runs_scope_idx",
+      "table": "tenant_flow_runs"
+    },
+    {
+      "type": "index",
+      "name": "tenant_flow_versions_scope_idx",
+      "table": "tenant_flow_versions"
+    },
+    {
+      "type": "index",
+      "name": "unique_agency_commercial_unit",
+      "table": "business_commercialunit"
+    },
+    {
+      "type": "index",
+      "name": "unique_id_number",
+      "table": "customer_client"
     },
     {
       "type": "index",
@@ -977,6 +791,16 @@
     },
     {
       "type": "table",
+      "name": "app_economicactivity",
+      "table": "app_economicactivity"
+    },
+    {
+      "type": "table",
+      "name": "assistant_active_tenants",
+      "table": "assistant_active_tenants"
+    },
+    {
+      "type": "table",
       "name": "assistant_openrouter_settings",
       "table": "assistant_openrouter_settings"
     },
@@ -1017,6 +841,16 @@
     },
     {
       "type": "table",
+      "name": "bundle_flow_state",
+      "table": "bundle_flow_state"
+    },
+    {
+      "type": "table",
+      "name": "business_commercialunit",
+      "table": "business_commercialunit"
+    },
+    {
+      "type": "table",
       "name": "categories",
       "table": "categories"
     },
@@ -1029,6 +863,271 @@
       "type": "table",
       "name": "countries",
       "table": "countries"
+    },
+    {
+      "type": "table",
+      "name": "crm_collection_bindings",
+      "table": "crm_collection_bindings"
+    },
+    {
+      "type": "table",
+      "name": "crm_sync_changes",
+      "table": "crm_sync_changes"
+    },
+    {
+      "type": "table",
+      "name": "crm_sync_jobs",
+      "table": "crm_sync_jobs"
+    },
+    {
+      "type": "table",
+      "name": "crm_sync_mappings",
+      "table": "crm_sync_mappings"
+    },
+    {
+      "type": "table",
+      "name": "crm_sync_receipts",
+      "table": "crm_sync_receipts"
+    },
+    {
+      "type": "table",
+      "name": "crm_sync_rules",
+      "table": "crm_sync_rules"
+    },
+    {
+      "type": "table",
+      "name": "customer_address",
+      "table": "customer_address"
+    },
+    {
+      "type": "table",
+      "name": "customer_client",
+      "table": "customer_client"
+    },
+    {
+      "type": "table",
+      "name": "customer_clientagency",
+      "table": "customer_clientagency"
+    },
+    {
+      "type": "table",
+      "name": "customer_crm_sync_records",
+      "table": "customer_crm_sync_records"
+    },
+    {
+      "type": "table",
+      "name": "customer_group",
+      "table": "customer_group"
+    },
+    {
+      "type": "table",
+      "name": "customer_legalperson",
+      "table": "customer_legalperson"
+    },
+    {
+      "type": "table",
+      "name": "customer_legalpersoncontact",
+      "table": "customer_legalpersoncontact"
+    },
+    {
+      "type": "table",
+      "name": "customer_naturalperson",
+      "table": "customer_naturalperson"
+    },
+    {
+      "type": "table",
+      "name": "departments",
+      "table": "departments"
+    },
+    {
+      "type": "table",
+      "name": "document_ownership",
+      "table": "document_ownership"
+    },
+    {
+      "type": "table",
+      "name": "extension_action_runs",
+      "table": "extension_action_runs"
+    },
+    {
+      "type": "table",
+      "name": "extension_connection_audit_events",
+      "table": "extension_connection_audit_events"
+    },
+    {
+      "type": "table",
+      "name": "extension_connections",
+      "table": "extension_connections"
+    },
+    {
+      "type": "table",
+      "name": "extension_settings",
+      "table": "extension_settings"
+    },
+    {
+      "type": "table",
+      "name": "flow_runs",
+      "table": "flow_runs"
+    },
+    {
+      "type": "table",
+      "name": "flow_variables",
+      "table": "flow_variables"
+    },
+    {
+      "type": "table",
+      "name": "flow_versions",
+      "table": "flow_versions"
+    },
+    {
+      "type": "table",
+      "name": "flows",
+      "table": "flows"
+    },
+    {
+      "type": "table",
+      "name": "folders",
+      "table": "folders"
+    },
+    {
+      "type": "table",
+      "name": "identity_global_role",
+      "table": "identity_global_role"
+    },
+    {
+      "type": "table",
+      "name": "identity_principal",
+      "table": "identity_principal"
+    },
+    {
+      "type": "table",
+      "name": "identity_tenant_membership",
+      "table": "identity_tenant_membership"
+    },
+    {
+      "type": "table",
+      "name": "installed_bundles",
+      "table": "installed_bundles"
+    },
+    {
+      "type": "table",
+      "name": "insurer_companies",
+      "table": "insurer_companies"
+    },
+    {
+      "type": "table",
+      "name": "legacy_import_snapshots",
+      "table": "legacy_import_snapshots"
+    },
+    {
+      "type": "table",
+      "name": "legacy_import_streams",
+      "table": "legacy_import_streams"
+    },
+    {
+      "type": "table",
+      "name": "managed_customer_extensions",
+      "table": "managed_customer_extensions"
+    },
+    {
+      "type": "table",
+      "name": "managed_customer_requests",
+      "table": "managed_customer_requests"
+    },
+    {
+      "type": "table",
+      "name": "notification_admin_audit",
+      "table": "notification_admin_audit"
+    },
+    {
+      "type": "table",
+      "name": "notification_deliveries",
+      "table": "notification_deliveries"
+    },
+    {
+      "type": "table",
+      "name": "notification_events",
+      "table": "notification_events"
+    },
+    {
+      "type": "table",
+      "name": "notification_maintenance_checkpoints",
+      "table": "notification_maintenance_checkpoints"
+    },
+    {
+      "type": "table",
+      "name": "notification_recipient_retries",
+      "table": "notification_recipient_retries"
+    },
+    {
+      "type": "table",
+      "name": "notification_scope_settings",
+      "table": "notification_scope_settings"
+    },
+    {
+      "type": "table",
+      "name": "notification_send_limits",
+      "table": "notification_send_limits"
+    },
+    {
+      "type": "table",
+      "name": "notification_subscriptions",
+      "table": "notification_subscriptions"
+    },
+    {
+      "type": "table",
+      "name": "offline_collection_policies",
+      "table": "offline_collection_policies"
+    },
+    {
+      "type": "table",
+      "name": "personal_integration_audit_events",
+      "table": "personal_integration_audit_events"
+    },
+    {
+      "type": "table",
+      "name": "personal_integration_connections",
+      "table": "personal_integration_connections"
+    },
+    {
+      "type": "table",
+      "name": "plugin_store_artifacts",
+      "table": "plugin_store_artifacts"
+    },
+    {
+      "type": "table",
+      "name": "public_form_short_links",
+      "table": "public_form_short_links"
+    },
+    {
+      "type": "table",
+      "name": "public_form_submissions",
+      "table": "public_form_submissions"
+    },
+    {
+      "type": "table",
+      "name": "public_forms",
+      "table": "public_forms"
+    },
+    {
+      "type": "table",
+      "name": "ramos",
+      "table": "ramos"
+    },
+    {
+      "type": "table",
+      "name": "request_page_runs",
+      "table": "request_page_runs"
+    },
+    {
+      "type": "table",
+      "name": "savia_request_audit",
+      "table": "savia_request_audit"
+    },
+    {
+      "type": "table",
+      "name": "server_id_sequences",
+      "table": "server_id_sequences"
     },
     {
       "type": "table",
@@ -1054,11 +1153,6 @@
       "type": "table",
       "name": "studio_business_links",
       "table": "studio_business_links"
-    },
-    {
-      "type": "table",
-      "name": "crm_collection_bindings",
-      "table": "crm_collection_bindings"
     },
     {
       "type": "table",
@@ -1167,6 +1261,11 @@
     },
     {
       "type": "table",
+      "name": "studio_settings",
+      "table": "studio_settings"
+    },
+    {
+      "type": "table",
       "name": "studio_solution_installations",
       "table": "studio_solution_installations"
     },
@@ -1174,36 +1273,6 @@
       "type": "table",
       "name": "studio_solution_objects",
       "table": "studio_solution_objects"
-    },
-    {
-      "type": "table",
-      "name": "studio_settings",
-      "table": "studio_settings"
-    },
-    {
-      "type": "table",
-      "name": "crm_sync_changes",
-      "table": "crm_sync_changes"
-    },
-    {
-      "type": "table",
-      "name": "crm_sync_jobs",
-      "table": "crm_sync_jobs"
-    },
-    {
-      "type": "table",
-      "name": "crm_sync_mappings",
-      "table": "crm_sync_mappings"
-    },
-    {
-      "type": "table",
-      "name": "crm_sync_receipts",
-      "table": "crm_sync_receipts"
-    },
-    {
-      "type": "table",
-      "name": "crm_sync_rules",
-      "table": "crm_sync_rules"
     },
     {
       "type": "table",
@@ -1227,226 +1296,6 @@
     },
     {
       "type": "table",
-      "name": "customer_address",
-      "table": "customer_address"
-    },
-    {
-      "type": "table",
-      "name": "customer_clientagency",
-      "table": "customer_clientagency"
-    },
-    {
-      "type": "table",
-      "name": "customer_crm_sync_records",
-      "table": "customer_crm_sync_records"
-    },
-    {
-      "type": "table",
-      "name": "customer_legalperson",
-      "table": "customer_legalperson"
-    },
-    {
-      "type": "table",
-      "name": "customer_legalpersoncontact",
-      "table": "customer_legalpersoncontact"
-    },
-    {
-      "type": "table",
-      "name": "customer_naturalperson",
-      "table": "customer_naturalperson"
-    },
-    {
-      "type": "table",
-      "name": "departments",
-      "table": "departments"
-    },
-    {
-      "type": "table",
-      "name": "document_ownership",
-      "table": "document_ownership"
-    },
-    {
-      "type": "table",
-      "name": "extension_action_runs",
-      "table": "extension_action_runs"
-    },
-    {
-      "type": "table",
-      "name": "extension_connection_audit_events",
-      "table": "extension_connection_audit_events"
-    },
-    {
-      "type": "table",
-      "name": "extension_connections",
-      "table": "extension_connections"
-    },
-    {
-      "type": "table",
-      "name": "extension_settings",
-      "table": "extension_settings"
-    },
-    {
-      "type": "table",
-      "name": "flow_runs",
-      "table": "flow_runs"
-    },
-    {
-      "type": "table",
-      "name": "flow_variables",
-      "table": "flow_variables"
-    },
-    {
-      "type": "table",
-      "name": "flow_versions",
-      "table": "flow_versions"
-    },
-    {
-      "type": "table",
-      "name": "flows",
-      "table": "flows"
-    },
-    {
-      "type": "table",
-      "name": "folders",
-      "table": "folders"
-    },
-    {
-      "type": "table",
-      "name": "tenant_flows",
-      "table": "tenant_flows"
-    },
-    {
-      "type": "table",
-      "name": "tenant_flow_variables",
-      "table": "tenant_flow_variables"
-    },
-    {
-      "type": "table",
-      "name": "tenant_flow_versions",
-      "table": "tenant_flow_versions"
-    },
-    {
-      "type": "index",
-      "name": "tenant_flow_versions_scope_idx",
-      "table": "tenant_flow_versions"
-    },
-    {
-      "type": "table",
-      "name": "tenant_flow_runs",
-      "table": "tenant_flow_runs"
-    },
-    {
-      "type": "index",
-      "name": "tenant_flow_runs_scope_idx",
-      "table": "tenant_flow_runs"
-    },
-    {
-      "type": "table",
-      "name": "tenant_folders",
-      "table": "tenant_folders"
-    },
-    {
-      "type": "table",
-      "name": "tenant_bundles",
-      "table": "tenant_bundles"
-    },
-    {
-      "type": "table",
-      "name": "bundle_flow_state",
-      "table": "bundle_flow_state"
-    },
-    {
-      "type": "table",
-      "name": "savia_request_audit",
-      "table": "savia_request_audit"
-    },
-    {
-      "type": "index",
-      "name": "savia_request_audit_scope_idx",
-      "table": "savia_request_audit"
-    },
-    {
-      "type": "table",
-      "name": "identity_global_role",
-      "table": "identity_global_role"
-    },
-    {
-      "type": "table",
-      "name": "identity_principal",
-      "table": "identity_principal"
-    },
-    {
-      "type": "table",
-      "name": "identity_tenant_membership",
-      "table": "identity_tenant_membership"
-    },
-    {
-      "type": "table",
-      "name": "insurer_companies",
-      "table": "insurer_companies"
-    },
-    {
-      "type": "table",
-      "name": "legacy_import_snapshots",
-      "table": "legacy_import_snapshots"
-    },
-    {
-      "type": "table",
-      "name": "legacy_import_streams",
-      "table": "legacy_import_streams"
-    },
-    {
-      "type": "table",
-      "name": "managed_customer_extensions",
-      "table": "managed_customer_extensions"
-    },
-    {
-      "type": "table",
-      "name": "managed_customer_requests",
-      "table": "managed_customer_requests"
-    },
-    {
-      "type": "table",
-      "name": "offline_collection_policies",
-      "table": "offline_collection_policies"
-    },
-    {
-      "type": "table",
-      "name": "personal_integration_audit_events",
-      "table": "personal_integration_audit_events"
-    },
-    {
-      "type": "table",
-      "name": "personal_integration_connections",
-      "table": "personal_integration_connections"
-    },
-    {
-      "type": "table",
-      "name": "public_form_submissions",
-      "table": "public_form_submissions"
-    },
-    {
-      "type": "table",
-      "name": "public_forms",
-      "table": "public_forms"
-    },
-    {
-      "type": "table",
-      "name": "ramos",
-      "table": "ramos"
-    },
-    {
-      "type": "table",
-      "name": "request_page_runs",
-      "table": "request_page_runs"
-    },
-    {
-      "type": "table",
-      "name": "server_id_sequences",
-      "table": "server_id_sequences"
-    },
-    {
-      "type": "table",
       "name": "sub_ramos",
       "table": "sub_ramos"
     },
@@ -1459,6 +1308,11 @@
       "type": "table",
       "name": "tenant_branding_assets",
       "table": "tenant_branding_assets"
+    },
+    {
+      "type": "table",
+      "name": "tenant_bundles",
+      "table": "tenant_bundles"
     },
     {
       "type": "table",
@@ -1477,6 +1331,46 @@
     },
     {
       "type": "table",
+      "name": "tenant_crm_connection_audit_events",
+      "table": "tenant_crm_connection_audit_events"
+    },
+    {
+      "type": "table",
+      "name": "tenant_crm_connections",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flow_runs",
+      "table": "tenant_flow_runs"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flow_variables",
+      "table": "tenant_flow_variables"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flow_versions",
+      "table": "tenant_flow_versions"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flows",
+      "table": "tenant_flows"
+    },
+    {
+      "type": "table",
+      "name": "tenant_folders",
+      "table": "tenant_folders"
+    },
+    {
+      "type": "table",
+      "name": "tenant_namespace_migrations",
+      "table": "tenant_namespace_migrations"
+    },
+    {
+      "type": "table",
       "name": "tenants",
       "table": "tenants"
     },
@@ -1484,6 +1378,11 @@
       "type": "table",
       "name": "user_appearance_preferences",
       "table": "user_appearance_preferences"
+    },
+    {
+      "type": "table",
+      "name": "user_my_day_widgets",
+      "table": "user_my_day_widgets"
     },
     {
       "type": "table",
@@ -1627,6 +1526,26 @@
     },
     {
       "type": "trigger",
+      "name": "agency_crm_connection_audit_events_insert",
+      "table": "agency_crm_connection_audit_events"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connections_delete",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connections_insert",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connections_update",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "trigger",
       "name": "agency_tenant_create",
       "table": "agencies"
     },
@@ -1647,33 +1566,13 @@
     },
     {
       "type": "trigger",
-      "name": "studio_history_delete",
-      "table": "studio_records"
+      "name": "assistant_active_agencies_delete",
+      "table": "assistant_active_agencies"
     },
     {
       "type": "trigger",
-      "name": "studio_history_insert",
-      "table": "studio_records"
-    },
-    {
-      "type": "trigger",
-      "name": "studio_history_update",
-      "table": "studio_records"
-    },
-    {
-      "type": "trigger",
-      "name": "studio_record_links_cardinality",
-      "table": "studio_record_links"
-    },
-    {
-      "type": "trigger",
-      "name": "studio_record_links_storage",
-      "table": "studio_record_links"
-    },
-    {
-      "type": "trigger",
-      "name": "studio_relation_definition_update",
-      "table": "studio_collection_relations"
+      "name": "assistant_active_agencies_insert",
+      "table": "assistant_active_agencies"
     },
     {
       "type": "trigger",
@@ -1757,6 +1656,116 @@
     },
     {
       "type": "trigger",
+      "name": "identity_principal_active_email_insert",
+      "table": "identity_principal"
+    },
+    {
+      "type": "trigger",
+      "name": "identity_principal_active_email_update",
+      "table": "identity_principal"
+    },
+    {
+      "type": "trigger",
+      "name": "notification_event_fanout",
+      "table": "notification_events"
+    },
+    {
+      "type": "trigger",
+      "name": "notification_record_insert",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "notification_record_purge",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "notification_record_update",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_history_delete",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_history_insert",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_history_update",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_counts_delete",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_counts_insert",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_counts_update_new",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_counts_update_old",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_links_cardinality",
+      "table": "studio_record_links"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_links_storage",
+      "table": "studio_record_links"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_search_delete",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_search_insert",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_search_update",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_summary_delete",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_summary_insert",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_record_summary_update",
+      "table": "studio_records"
+    },
+    {
+      "type": "trigger",
+      "name": "studio_relation_definition_update",
+      "table": "studio_collection_relations"
+    },
+    {
+      "type": "trigger",
       "name": "tenant_agency_update",
       "table": "tenants"
     },
@@ -1787,311 +1796,6 @@
     },
     {
       "type": "view",
-      "name": "studio_record_history_fields",
-      "table": "studio_record_history_fields"
-    },
-    {
-      "type": "table",
-      "name": "user_my_day_widgets",
-      "table": "user_my_day_widgets"
-    },
-    {
-      "type": "index",
-      "name": "notification_events_due",
-      "table": "notification_events"
-    },
-    {
-      "type": "index",
-      "name": "notification_inbox",
-      "table": "notification_deliveries"
-    },
-    {
-      "type": "index",
-      "name": "notification_unread",
-      "table": "notification_deliveries"
-    },
-    {
-      "type": "index",
-      "name": "notification_retries_due",
-      "table": "notification_recipient_retries"
-    },
-    {
-      "type": "index",
-      "name": "notification_followers",
-      "table": "notification_subscriptions"
-    },
-    {
-      "type": "index",
-      "name": "notification_audit_scope",
-      "table": "notification_admin_audit"
-    },
-    {
-      "type": "trigger",
-      "name": "notification_record_insert",
-      "table": "studio_records"
-    },
-    {
-      "type": "trigger",
-      "name": "notification_record_update",
-      "table": "studio_records"
-    },
-    {
-      "type": "trigger",
-      "name": "notification_record_purge",
-      "table": "studio_records"
-    },
-    {
-      "type": "trigger",
-      "name": "notification_event_fanout",
-      "table": "notification_events"
-    },
-    {
-      "type": "index",
-      "name": "app_economicactivity_code_a9ea7a57_like",
-      "table": "app_economicactivity"
-    },
-    {
-      "type": "index",
-      "name": "app_economicactivity_code_key",
-      "table": "app_economicactivity"
-    },
-    {
-      "type": "index",
-      "name": "business_commercialunit_agency_id_3f578aee",
-      "table": "business_commercialunit"
-    },
-    {
-      "type": "index",
-      "name": "business_commercialunit_id_slug_93b24ac2_like",
-      "table": "business_commercialunit"
-    },
-    {
-      "type": "index",
-      "name": "business_commercialunit_id_slug_key",
-      "table": "business_commercialunit"
-    },
-    {
-      "type": "index",
-      "name": "customer_client_external_id_ff2ecb68",
-      "table": "customer_client"
-    },
-    {
-      "type": "index",
-      "name": "customer_client_external_id_ff2ecb68_like",
-      "table": "customer_client"
-    },
-    {
-      "type": "index",
-      "name": "customer_client_id_slug_51651e62_like",
-      "table": "customer_client"
-    },
-    {
-      "type": "index",
-      "name": "customer_client_id_slug_key",
-      "table": "customer_client"
-    },
-    {
-      "type": "index",
-      "name": "customer_client_migration_slug_87cd0ef0",
-      "table": "customer_client"
-    },
-    {
-      "type": "index",
-      "name": "customer_client_migration_slug_87cd0ef0_like",
-      "table": "customer_client"
-    },
-    {
-      "type": "index",
-      "name": "customer_group_agency_id_3b3c328d",
-      "table": "customer_group"
-    },
-    {
-      "type": "index",
-      "name": "customer_group_id_slug_07cbc3f2_like",
-      "table": "customer_group"
-    },
-    {
-      "type": "index",
-      "name": "customer_group_id_slug_key",
-      "table": "customer_group"
-    },
-    {
-      "type": "index",
-      "name": "unique_agency_commercial_unit",
-      "table": "business_commercialunit"
-    },
-    {
-      "type": "index",
-      "name": "unique_id_number",
-      "table": "customer_client"
-    },
-    {
-      "type": "table",
-      "name": "app_economicactivity",
-      "table": "app_economicactivity"
-    },
-    {
-      "type": "table",
-      "name": "business_commercialunit",
-      "table": "business_commercialunit"
-    },
-    {
-      "type": "table",
-      "name": "customer_client",
-      "table": "customer_client"
-    },
-    {
-      "type": "table",
-      "name": "customer_group",
-      "table": "customer_group"
-    },
-    {
-      "type": "table",
-      "name": "plugin_store_artifacts",
-      "table": "plugin_store_artifacts"
-    },
-    {
-      "type": "index",
-      "name": "idx_plugin_store_artifacts_tenant",
-      "table": "plugin_store_artifacts"
-    },
-    {
-      "type": "table",
-      "name": "installed_bundles",
-      "table": "installed_bundles"
-    },
-    {
-      "type": "index",
-      "name": "assistant_active_tenants_tenant_index",
-      "table": "assistant_active_tenants"
-    },
-    {
-      "type": "index",
-      "name": "tenant_crm_connection_audit_events_connection_created_at_index",
-      "table": "tenant_crm_connection_audit_events"
-    },
-    {
-      "type": "index",
-      "name": "tenant_crm_connection_audit_events_tenant_created_at_index",
-      "table": "tenant_crm_connection_audit_events"
-    },
-    {
-      "type": "index",
-      "name": "tenant_crm_connections_active_unique",
-      "table": "tenant_crm_connections"
-    },
-    {
-      "type": "index",
-      "name": "tenant_crm_connections_owner_index",
-      "table": "tenant_crm_connections"
-    },
-    {
-      "type": "index",
-      "name": "tenant_crm_connections_tenant_provider_index",
-      "table": "tenant_crm_connections"
-    },
-    {
-      "type": "table",
-      "name": "assistant_active_tenants",
-      "table": "assistant_active_tenants"
-    },
-    {
-      "type": "table",
-      "name": "notification_admin_audit",
-      "table": "notification_admin_audit"
-    },
-    {
-      "type": "table",
-      "name": "notification_deliveries",
-      "table": "notification_deliveries"
-    },
-    {
-      "type": "table",
-      "name": "notification_events",
-      "table": "notification_events"
-    },
-    {
-      "type": "table",
-      "name": "notification_maintenance_checkpoints",
-      "table": "notification_maintenance_checkpoints"
-    },
-    {
-      "type": "table",
-      "name": "notification_recipient_retries",
-      "table": "notification_recipient_retries"
-    },
-    {
-      "type": "table",
-      "name": "notification_scope_settings",
-      "table": "notification_scope_settings"
-    },
-    {
-      "type": "table",
-      "name": "notification_send_limits",
-      "table": "notification_send_limits"
-    },
-    {
-      "type": "table",
-      "name": "notification_subscriptions",
-      "table": "notification_subscriptions"
-    },
-    {
-      "type": "table",
-      "name": "public_form_short_links",
-      "table": "public_form_short_links"
-    },
-    {
-      "type": "table",
-      "name": "tenant_crm_connection_audit_events",
-      "table": "tenant_crm_connection_audit_events"
-    },
-    {
-      "type": "table",
-      "name": "tenant_crm_connections",
-      "table": "tenant_crm_connections"
-    },
-    {
-      "type": "table",
-      "name": "tenant_namespace_migrations",
-      "table": "tenant_namespace_migrations"
-    },
-    {
-      "type": "trigger",
-      "name": "agency_crm_connection_audit_events_insert",
-      "table": "agency_crm_connection_audit_events"
-    },
-    {
-      "type": "trigger",
-      "name": "agency_crm_connections_delete",
-      "table": "agency_crm_connections"
-    },
-    {
-      "type": "trigger",
-      "name": "agency_crm_connections_insert",
-      "table": "agency_crm_connections"
-    },
-    {
-      "type": "trigger",
-      "name": "agency_crm_connections_update",
-      "table": "agency_crm_connections"
-    },
-    {
-      "type": "trigger",
-      "name": "assistant_active_agencies_delete",
-      "table": "assistant_active_agencies"
-    },
-    {
-      "type": "trigger",
-      "name": "assistant_active_agencies_insert",
-      "table": "assistant_active_agencies"
-    },
-    {
-      "type": "trigger",
-      "name": "identity_principal_active_email_guard",
-      "table": "identity_principal"
-    },
-    {
-      "type": "view",
       "name": "agency_crm_connection_audit_events",
       "table": "agency_crm_connection_audit_events"
     },
@@ -2104,6 +1808,11 @@
       "type": "view",
       "name": "assistant_active_agencies",
       "table": "assistant_active_agencies"
+    },
+    {
+      "type": "view",
+      "name": "studio_record_history_fields",
+      "table": "studio_record_history_fields"
     }
   ],
   "tables": [
@@ -2377,7 +2086,9 @@
       "seedRows": 2,
       "uniqueKeys": [
         {
-          "columns": ["scope"],
+          "columns": [
+            "scope"
+          ],
           "origin": "pk"
         }
       ],
@@ -3113,6 +2824,67 @@
             "code"
           ],
           "origin": "c"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "assistant_active_tenants",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "principal_id"
+          ],
+          "origin": "pk"
         }
       ],
       "checkCount": 0
@@ -5011,11 +4783,19 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["principal_id", "tenant_id", "provider", "connection_id", "external_account_id"],
+          "columns": [
+            "principal_id",
+            "tenant_id",
+            "provider",
+            "connection_id",
+            "external_account_id"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -7058,6 +6838,46 @@
       "checkCount": 1
     },
     {
+      "name": "installed_bundles",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "installed_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
       "name": "insurer_companies",
       "columns": [
         {
@@ -7464,6 +7284,569 @@
       "checkCount": 1
     },
     {
+      "name": "notification_admin_audit",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "actor_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "action",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "notification_deliveries",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "event_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "scope_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "scope_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "recipient_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "channel",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'in-app'",
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "read_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "archived_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "resolved_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "notification_events",
+          "from": "event_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "event_id",
+            "recipient_id",
+            "channel"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "notification_events",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "scope_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "scope_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "expires_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'pending'",
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "cursor",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "next_retry",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "lease_until",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "scope_kind",
+            "scope_id",
+            "event_key"
+          ],
+          "origin": "u"
+        },
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "notification_maintenance_checkpoints",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cursor",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "name"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "notification_recipient_retries",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "event_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "recipient_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "next_retry",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'pending'",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "notification_events",
+          "from": "event_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "event_id",
+            "recipient_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "notification_scope_settings",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "read_days",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "90",
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "unread_days",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "180",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "workspace_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "notification_send_limits",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "actor_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "window_start",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "workspace_id",
+            "actor_id",
+            "window_start"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "notification_subscriptions",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "collection",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "workspace_id",
+            "principal_id",
+            "collection"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
       "name": "offline_collection_policies",
       "columns": [
         {
@@ -7766,6 +8149,112 @@
         }
       ],
       "checkCount": 2
+    },
+    {
+      "name": "plugin_store_artifacts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "manifest",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "entry_js",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "size_bytes",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "store_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "id",
+            "version"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 3
     },
     {
       "name": "public_form_short_links",
@@ -8082,11 +8571,15 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["token"],
+          "columns": [
+            "token"
+          ],
           "origin": "u"
         },
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -8365,7 +8858,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -11500,6 +11995,282 @@
       "checkCount": 0
     },
     {
+      "name": "tenant_crm_connection_audit_events",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "event_type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "outcome",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "error_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "tenant_crm_connections",
+          "from": "connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_crm_connections",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_by_principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "nango_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "nango_integration_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "external_account_label",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "scopes",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "last_validated_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "disconnected_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "external_account_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "created_by_principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "created_by_principal_id",
+            "tenant_id",
+            "provider"
+          ],
+          "origin": "c"
+        },
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
       "name": "tenant_flow_runs",
       "columns": [
         {
@@ -11777,6 +12548,38 @@
           "columns": [
             "tenant_id",
             "path"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_namespace_migrations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "old_key",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 2,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "old_key"
           ],
           "origin": "pk"
         }
@@ -13717,1040 +14520,14 @@
         }
       ],
       "checkCount": 1
-    },
-    {
-      "name": "plugin_store_artifacts",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "tenant_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 2
-        },
-        {
-          "cid": 2,
-          "name": "version",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 3
-        },
-        {
-          "cid": 3,
-          "name": "manifest",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "entry_js",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "sha256",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "size_bytes",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "created_by",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "updated_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "store_json",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["tenant_id", "id", "version"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 3
-    },
-    {
-      "name": "installed_bundles",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "version",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "installed_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": [
-            "id"
-          ],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "assistant_active_tenants",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "tenant_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "updated_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "tenants",
-          "from": "tenant_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["principal_id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "notification_admin_audit",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "workspace_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "actor_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "event_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "action",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "created_at",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "notification_deliveries",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "event_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "scope_kind",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "scope_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "recipient_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "channel",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "'in-app'",
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "created_at",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "read_at",
-          "type": "BIGINT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "archived_at",
-          "type": "BIGINT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "resolved_at",
-          "type": "BIGINT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "notification_events",
-          "from": "event_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["event_id", "recipient_id", "channel"],
-          "origin": "u"
-        },
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 1
-    },
-    {
-      "name": "notification_events",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "scope_kind",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "scope_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "event_key",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "payload",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "created_at",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "expires_at",
-          "type": "BIGINT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "'pending'",
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "cursor",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "attempts",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": "0",
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "next_retry",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": "0",
-          "pk": 0
-        },
-        {
-          "cid": 11,
-          "name": "lease_token",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 12,
-          "name": "lease_until",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": "0",
-          "pk": 0
-        },
-        {
-          "cid": 13,
-          "name": "error",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["scope_kind", "scope_id", "event_key"],
-          "origin": "u"
-        },
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 2
-    },
-    {
-      "name": "notification_maintenance_checkpoints",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "name",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "cursor",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["name"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "notification_recipient_retries",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "event_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "recipient_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 2
-        },
-        {
-          "cid": 2,
-          "name": "attempts",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": "0",
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "next_retry",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "error",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "'pending'",
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "notification_events",
-          "from": "event_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["event_id", "recipient_id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 1
-    },
-    {
-      "name": "notification_scope_settings",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "workspace_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "read_days",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": "90",
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "unread_days",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": "180",
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["workspace_id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 2
-    },
-    {
-      "name": "notification_send_limits",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "workspace_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "actor_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 2
-        },
-        {
-          "cid": 2,
-          "name": "window_start",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 3
-        },
-        {
-          "cid": 3,
-          "name": "count",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["workspace_id", "actor_id", "window_start"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 1
-    },
-    {
-      "name": "notification_subscriptions",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "workspace_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 2
-        },
-        {
-          "cid": 2,
-          "name": "collection",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 3
-        },
-        {
-          "cid": 3,
-          "name": "created_at",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["workspace_id", "principal_id", "collection"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "tenant_crm_connection_audit_events",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "connection_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "tenant_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "provider",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "event_type",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "outcome",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "error_code",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "tenants",
-          "from": "tenant_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        },
-        {
-          "id": 2,
-          "seq": 0,
-          "table": "tenant_crm_connections",
-          "from": "connection_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "tenant_crm_connections",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "tenant_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "created_by_principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "provider",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "nango_connection_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "nango_integration_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "external_account_label",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "scopes",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "'[]'",
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "last_validated_at",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "disconnected_at",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 11,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 12,
-          "name": "updated_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 13,
-          "name": "external_account_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "created_by_principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "tenants",
-          "from": "tenant_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["created_by_principal_id", "tenant_id", "provider"],
-          "origin": "c"
-        },
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 2
-    },
-    {
-      "name": "tenant_namespace_migrations",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "old_key",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "tenant_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 2,
-      "uniqueKeys": [
-        {
-          "columns": ["old_key"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
     }
   ],
-  "mappingNotes": ["All SQLite INTEGER/BIGINT values map to PostgreSQL BIGINT; flags remain integer values, JSON and timestamps remain text.", "A single-column INTEGER primary key maps to GENERATED BY DEFAULT AS IDENTITY, preserving explicit source IDs on import.", "Foreign keys, delete/update actions, deferral, unique keys and checks are native constraints; explicit indexes preserve their source names.", "SQLite integer predicates in partial indexes and the sales review check use explicit comparisons to zero.", "savia_json_valid uses the PostgreSQL json parser while retaining text storage. JSON execution uses jsonb and therefore escaped U+0000 is a known incompatible value requiring resolution before release.", "seed=false suppresses baseline seed data permanently for that installation; changing seed on an applied baseline never replays seeds."]
+  "mappingNotes": [
+    "All SQLite INTEGER/BIGINT values map to PostgreSQL BIGINT; flags remain integer values, JSON and timestamps remain text.",
+    "A single-column INTEGER primary key maps to GENERATED BY DEFAULT AS IDENTITY, preserving explicit source IDs on import.",
+    "Foreign keys, delete/update actions, deferral, unique keys and checks are native constraints; explicit indexes preserve their source names.",
+    "SQLite integer predicates in partial indexes and the sales review check use explicit comparisons to zero.",
+    "savia_json_valid uses the PostgreSQL json parser while retaining text storage. JSON execution uses jsonb and therefore escaped U+0000 is a known incompatible value requiring resolution before release.",
+    "seed=false suppresses baseline seed data permanently for that installation; changing seed on an applied baseline never replays seeds."
+  ]
 }

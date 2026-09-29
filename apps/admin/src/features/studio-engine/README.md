@@ -1,5 +1,7 @@
 # Savia Studio engine
 
+> Migration note (2026-09-29): numbered historical migration references below are obsolete. Fresh installations use `0001_initial.sql` and optional `0002_bootstrap.sql`; see `docs/guides/database-initial-baseline.md`.
+
 Motor low-code embebido en Savia (antes "CRM dinámico"). La interfaz vive en
 `/#/studio` del admin (`/#/crm` sigue como alias heredado); la API
 autenticada expone el runtime por tenant a través de Savia (`/v1/studio/:tenantId`;

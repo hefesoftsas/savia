@@ -185,12 +185,22 @@ live("native baseline parity", () => {
         ).results
           .map((r) => r.name)
           .sort();
-        expect(triggers).toEqual(
-          manifest.objects
-            .filter((o: { type: string }) => o.type === "trigger")
-            .map((o: { name: string }) => o.name)
-            .sort(),
+        const derivedTables = new Set(
+          manifest.sqliteOnlyDerivedTables as string[],
         );
+        const expectedTriggers = manifest.objects
+          .filter(
+            (o: { type: string; name: string; table: string }) =>
+              o.type === "trigger" &&
+              !derivedTables.has(o.table) &&
+              !o.name.startsWith("studio_record_counts_") &&
+              !o.name.startsWith("studio_record_search_") &&
+              !o.name.startsWith("studio_record_summary_") &&
+              !o.name.startsWith("identity_principal_active_email_"),
+          )
+          .map((o: { name: string }) => o.name);
+        expectedTriggers.push("identity_principal_active_email_guard");
+        expect(triggers).toEqual(expectedTriggers.sort());
         for (const table of manifest.tables.filter(
           (t: { seedRows: number }) => t.seedRows,
         ))
@@ -199,11 +209,103 @@ live("native baseline parity", () => {
               .prepare(`SELECT count(*) AS n FROM "${table.name}"`)
               .first("n"),
           ).toBe(0);
+        const requestManifest = JSON.parse(
+          readFileSync(join(requestDirectory, "manifest.json"), "utf8"),
+        );
+        const requestTables = (
+          await db
+            .prepare(
+              "SELECT tablename AS name FROM pg_tables WHERE schemaname='savia_request' AND tablename<>'_savia_postgres_migrations' ORDER BY tablename",
+            )
+            .all<{ name: string }>()
+        ).results;
+        expect(requestTables.map((t) => t.name)).toEqual(
+          requestManifest.tables.map((t: { name: string }) => t.name).sort(),
+        );
+        const requestColumns = (
+          await db
+            .prepare(
+              "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='savia_request' ORDER BY table_name,ordinal_position",
+            )
+            .all<{ table_name: string; column_name: string }>()
+        ).results;
+        for (const table of requestManifest.tables)
+          expect(
+            requestColumns
+              .filter((c) => c.table_name === table.name)
+              .map((c) => c.column_name)
+              .sort(),
+          ).toEqual(table.columns.map((c: { name: string }) => c.name).sort());
+        const requestIndexes = (
+          await db
+            .prepare(
+              "SELECT indexname AS name FROM pg_indexes WHERE schemaname='savia_request'",
+            )
+            .all<{ name: string }>()
+        ).results.map((r) => r.name);
+        for (const index of requestManifest.objects.filter(
+          (o: { type: string }) => o.type === "index",
+        ))
+          expect(requestIndexes).toContain(index.name);
+        const requestConstraints = (
+          await db
+            .prepare(
+              "SELECT relname AS name,contype,count(*)::integer AS n FROM pg_constraint JOIN pg_class ON conrelid=pg_class.oid JOIN pg_namespace ON relnamespace=pg_namespace.oid WHERE nspname='savia_request' GROUP BY relname,contype",
+            )
+            .all<{ name: string; contype: string; n: number }>()
+        ).results;
+        for (const table of requestManifest.tables) {
+          expect(
+            requestConstraints.find(
+              (c) => c.name === table.name && c.contype === "f",
+            )?.n ?? 0,
+          ).toBe(
+            new Set(table.foreignKeys.map((fk: { id: number }) => fk.id)).size,
+          );
+          expect(
+            requestConstraints.find(
+              (c) => c.name === table.name && c.contype === "c",
+            )?.n ?? 0,
+          ).toBe(table.checkCount);
+        }
+        const requestTriggers = (
+          await db
+            .prepare(
+              "SELECT tgname AS name FROM pg_trigger JOIN pg_class ON tgrelid=pg_class.oid JOIN pg_namespace ON relnamespace=pg_namespace.oid WHERE nspname='savia_request' AND NOT tgisinternal",
+            )
+            .all<{ name: string }>()
+        ).results
+          .map((r) => r.name)
+          .sort();
+        expect(requestTriggers).toEqual(
+          requestManifest.objects
+            .filter((o: { type: string }) => o.type === "trigger")
+            .map((o: { name: string }) => o.name)
+            .sort(),
+        );
+        for (const table of requestManifest.tables.filter(
+          (t: { seedRows: number }) => t.seedRows,
+        ))
+          expect(
+            await db
+              .prepare(
+                `SELECT count(*) AS n FROM savia_request."${table.name}"`,
+              )
+              .first("n"),
+          ).toBe(0);
         expect(
           await migratePostgres({
             connectionString,
             schema: "savia_core",
             directory: coreDirectory,
+            seed: true,
+          }),
+        ).toEqual([]);
+        expect(
+          await migratePostgres({
+            connectionString,
+            schema: "savia_request",
+            directory: requestDirectory,
             seed: true,
           }),
         ).toEqual([]);

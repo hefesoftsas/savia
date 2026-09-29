@@ -1,5 +1,7 @@
 # Savia request integrado
 
+> Migration note (2026-09-29): numbered historical migration references below are obsolete. Fresh installations use `0001_initial.sql` and optional `0002_bootstrap.sql`; see `docs/guides/database-initial-baseline.md`.
+
 El MVP de `insurer-flow-lab` se incorpora completo en Savia. El menú **Savia request** y `/#/savia-request` requieren administrador de plataforma. `/#/savia-request/docs` abre su Scalar independiente, con los ejemplos guardados y una operación por flow.
 
 El editor se monta de forma nativa dentro de `apps/admin`: comparte su sidebar, la paleta Savia y la sesión del administrador. Usa `ApiClient`, que obtiene el token actual y lo envía únicamente a la API de Savia. La API aplica su autenticación habitual (sesión/MFA u OAuth con scopes de lectura/escritura). Sin `?tenant=` verifica `platform_admin` en cada llamada; con `?tenant=agency:ID` autoriza al miembro del tenant (lectura/ejecución para cualquier miembro activo, edición solo para administradores del tenant o de plataforma) y accede al Worker privado mediante `SAVIA_REQUEST` reenviando únicamente el scope como cabecera `x-savia-tenant`. Las cookies y tokens de Savia no se reenvían al motor ni a los proveedores.

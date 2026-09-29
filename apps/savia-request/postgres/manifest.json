@@ -1,46 +1,41 @@
 {
   "format": 1,
-  "baseline": "0001_baseline.sql",
+  "baseline": "0001_initial.sql",
   "sourceMigrations": [
     {
-      "filename": "0001.sql",
-      "sha256": "f2a6fdd65306fe3a0e43d6d97a321301f66aad050dc3baa90af471b05705220c"
+      "filename": "0001_initial.sql",
+      "sha256": "9993a2f30bc3114899b4e42145f9a098f4623d344f7fcd01d3b2b0a5d051690c"
     },
     {
-      "filename": "0002.sql",
-      "sha256": "dc529a2fb171f5f1c8a7d5ce12f070a0cb84a2e23f86160b2a8dbaa37d58cec3"
-    },
-    {
-      "filename": "0003_insurance_bundles.sql",
-      "sha256": "565b204f4d6d6728b47b7187357266db0449f9186b0effb2b2123b744804264f"
-    },
-    {
-      "filename": "0004_tenant_scope.sql",
-      "sha256": "0cebd7c40f259f9d6363bcc5ebed32f6e49e2d50eff102fdc0b999996bf06f46"
-    },
-    {
-      "filename": "0005_bundle_flow_state.sql",
-      "sha256": "0bee96e25b8d370f555f524f6b3a88b22cd8f756ff831bda32316be0cacede5e"
-    },
-    {
-      "filename": "0006_audit.sql",
-      "sha256": "749d68852c465eaee3f7b87682b6bda9ac81df0928af713e1cc1352ba3220dc2"
-    },
-    {
-      "filename": "0007_tenant_only_isolation.sql",
-      "sha256": "71f72fe1f3cd99b58219d03ba1cd352a4ff90e1e0a8fd28f4972ee46109bc83a"
+      "filename": "0002_bootstrap.sql",
+      "sha256": "1f41e0e46e786295c2e9031992fd2cfbcb049276d2fe78b7ea92876cb3de8bd4"
     }
   ],
   "objects": [
     {
-      "type": "table",
-      "name": "flows",
-      "table": "flows"
+      "type": "index",
+      "name": "savia_request_audit_scope_idx",
+      "table": "savia_request_audit"
+    },
+    {
+      "type": "index",
+      "name": "tenant_flow_runs_scope_idx",
+      "table": "tenant_flow_runs"
+    },
+    {
+      "type": "index",
+      "name": "tenant_flow_versions_scope_idx",
+      "table": "tenant_flow_versions"
     },
     {
       "type": "table",
-      "name": "flow_versions",
-      "table": "flow_versions"
+      "name": "bundle_flow_state",
+      "table": "bundle_flow_state"
+    },
+    {
+      "type": "table",
+      "name": "flow_runs",
+      "table": "flow_runs"
     },
     {
       "type": "table",
@@ -49,8 +44,13 @@
     },
     {
       "type": "table",
-      "name": "flow_runs",
-      "table": "flow_runs"
+      "name": "flow_versions",
+      "table": "flow_versions"
+    },
+    {
+      "type": "table",
+      "name": "flows",
+      "table": "flows"
     },
     {
       "type": "table",
@@ -61,91 +61,55 @@
       "type": "table",
       "name": "installed_bundles",
       "table": "installed_bundles"
+    },
+    {
+      "type": "table",
+      "name": "savia_request_audit",
+      "table": "savia_request_audit"
+    },
+    {
+      "type": "table",
+      "name": "tenant_bundles",
+      "table": "tenant_bundles"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flow_runs",
+      "table": "tenant_flow_runs"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flow_variables",
+      "table": "tenant_flow_variables"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flow_versions",
+      "table": "tenant_flow_versions"
+    },
+    {
+      "type": "table",
+      "name": "tenant_flows",
+      "table": "tenant_flows"
+    },
+    {
+      "type": "table",
+      "name": "tenant_folders",
+      "table": "tenant_folders"
+    },
+    {
+      "type": "table",
+      "name": "tenant_namespace_migrations",
+      "table": "tenant_namespace_migrations"
     }
   ],
   "tables": [
     {
-      "name": "flows",
+      "name": "bundle_flow_state",
       "columns": [
         {
           "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "definition",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "flow_versions",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "flow_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "definition",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["id"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "flow_variables",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "flow_id",
+          "name": "scope",
           "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
@@ -153,7 +117,7 @@
         },
         {
           "cid": 1,
-          "name": "key",
+          "name": "flow_id",
           "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
@@ -161,7 +125,7 @@
         },
         {
           "cid": 2,
-          "name": "value",
+          "name": "bundle_version",
           "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
@@ -169,10 +133,18 @@
         },
         {
           "cid": 3,
-          "name": "secret",
-          "type": "INTEGER",
+          "name": "content_hash",
+          "type": "TEXT",
           "notnull": 1,
-          "dflt_value": "0",
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
           "pk": 0
         }
       ],
@@ -180,7 +152,10 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["flow_id", "key"],
+          "columns": [
+            "scope",
+            "flow_id"
+          ],
           "origin": "pk"
         }
       ],
@@ -250,7 +225,138 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "flow_variables",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "value",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "secret",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "flow_id",
+            "key"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "flow_versions",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "definition",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "flows",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "definition",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
           "origin": "pk"
         }
       ],
@@ -272,7 +378,9 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["path"],
+          "columns": [
+            "path"
+          ],
           "origin": "pk"
         }
       ],
@@ -310,7 +418,446 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": ["id"],
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "savia_request_audit",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "actor",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "action",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "detail",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_bundles",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "installed_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_flow_runs",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "version_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "mode",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "summary",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_flow_variables",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "value",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "secret",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "flow_id",
+            "key"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_flow_versions",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "definition",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_flows",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "flow_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "definition",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "flow_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_folders",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "path",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "path"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_namespace_migrations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "old_key",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 1,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "old_key"
+          ],
           "origin": "pk"
         }
       ],

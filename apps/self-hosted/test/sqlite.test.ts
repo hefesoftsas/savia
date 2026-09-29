@@ -191,7 +191,7 @@ test("all production migration scripts apply and reopen without replaying seeds"
     import.meta.url,
   ).pathname;
   const applied = await db.migrate(decodeURIComponent(migrations));
-  assert.ok(applied.includes("0057_record_history.sql"));
+  assert.deepEqual(applied, ["0001_initial.sql", "0002_bootstrap.sql"]);
   assert.ok(
     await db
       .prepare(

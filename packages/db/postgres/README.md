@@ -1,82 +1,36 @@
 # Native PostgreSQL baseline
 
-`0001_baseline.sql` is a native schema snapshot of source migrations recorded in
-`manifest.json`. It is checked-in SQL, not a runtime SQLite translator. The
-manifest maps the PostgreSQL-compatible SQLite schema: derived record counts,
-read-cache entries, and SQLite FTS tables listed in `sqliteOnlyDerivedTables`
-are intentionally omitted from PostgreSQL and from SQLite-to-PostgreSQL imports.
-PostgreSQL reads those counts directly and uses its normal query path for search.
-The request database has its own baseline and source manifest in
-`apps/savia-request/postgres/`.
+`0001_initial.sql` is the native PostgreSQL schema snapshot for the final
+SQLite-compatible core schema recorded in `manifest.json`. It is generated from
+the fully applied native schema chain, so it includes the final tables,
+constraints, indexes, functions, views, and triggers without replaying obsolete
+renames, table removals, or tenant migrations. PostgreSQL-only derived data such
+as SQLite FTS and read-cache tables remains intentionally absent.
+
+`0002_bootstrap.sql` contains the optional initial core rows. The migration
+runner sets `savia.seed` for each transaction; `seed: false` leaves the schema
+empty, and an applied bootstrap is never replayed when a later startup requests
+`seed: true`. SQLite import must copy source bootstrap rows as well as user rows.
 
 Run through `migratePostgres`, which owns the deployment advisory lock, trusted
-search path, checksum history and transaction. Startup can share one reserved
-client across core, request and native authentication using
-`withPostgresDeploymentLock`. Add future changes as new migration files; never
-edit an applied migration. Missing or changed applied files stop startup.
-
-`seed: false` creates an empty import destination. An applied baseline never
-replays its seeds, including when a later startup requests `seed: true`. Import
-must copy the source's baseline rows as well as its user rows. Explicit identity
-values are accepted; the importer must synchronize identity sequences afterwards.
-PostgreSQL sequences can have gaps after rollback; application revisions, history
-rows and synchronization tombstones remain transactional.
+search path, checksum history, and transaction. Future changes must use new
+additive migration files. These initial files establish the clean starting point
+for preproduction; once released, treat them as immutable.
 
 Flags remain integers, JSON remains text, timestamps remain API-compatible UTC
-text and IDs use bigint with checked conversion in the adapter. Native trigger
+text, and IDs use bigint with checked conversion in the adapter. Native trigger
 functions preserve access invalidation, synchronization tombstones, history,
-workflow dispatch, tenant/agency mirroring and relation guards.
+workflow dispatch, tenant/agency mirroring, and relation guards. PostgreSQL
+sequences can have gaps after rollback; application revisions, history rows, and
+synchronization tombstones remain transactional.
 
-The live migration test compares table/column/index/trigger inventory and foreign
-key/check counts, then compares SQLite and PostgreSQL behavior for history,
-synchronization, rollback, access revisions, tenant removal, relation guards and
-workflow dispatch. Legacy customer synchronization triggers still need broader
-end-to-end fixture coverage before the release acceptance gate is complete.
+The live migration test compares final table, column, index, foreign-key, and
+check inventories with the SQLite manifests. It excludes triggers used only by
+SQLite-derived tables and accounts for the PostgreSQL email guard using one
+trigger for both insert and update. The test also exercises core history,
+synchronization, rollback, access revisions, tenant removal, relation guards,
+and workflow dispatch.
 
 Known compatibility boundary: PostgreSQL `jsonb` expressions reject escaped
-U+0000, which SQLite JSON accepts. Text storage and `savia_json_valid` alone do not
-resolve that execution difference. This is a release review issue, not a claim
-of complete compatibility for arbitrary SQLite JSON payloads.
-
-`0002_workflow_collection_triggers.sql` applies the collection workflow behavior
-introduced by SQLite migration `0059`: combined create/update events, soft and
-hard deletion events, typed conditions with all/any matching, and captured event
-metadata. The source manifest describes the final inventory after both native
-migrations. Existing native installations apply only the additive migration;
-`0001_baseline.sql` remains unchanged.
-
-`0006_public_form_short_links.sql` adds the persisted Savia short-link mapping to
-the native core schema. Existing installations apply it after the notification
-migrations; the baseline remains unchanged.
-
-`0007_public_form_external_short_url.sql` stores the optional third-party short
-URL on each public form. Existing installations apply it after the Savia short
-link mapping; the baseline remains unchanged.
-
-`0015_tenant_branding_login_animation.sql` widens `tenant_branding_assets` for
-per-tenant login Lottie animations, matching SQLite migration
-`0074_tenant_branding_login_animation.sql` (`login-animation` kind,
-`application/json` content type).
-
-`0016_savia_request_installed_bundles.sql` adds the Savia Request bundle ledger
-to the native core schema, matching SQLite migration
-`0075_savia_request_installed_bundles.sql` on the shared D1 database.
-
-`0017_public_form_logo.sql` stores the optional per-link logo (inline data URL)
-on each public form, matching SQLite migration `0076_public_form_logo.sql`.
-Existing installations apply it after the installed bundles migration; the
-baseline remains unchanged.
-
-`0020_identity_principal_email_uniqueness.sql` prevents future active principals
-from sharing an email after `lower(trim(email))`, including across issuers. It
-leaves existing rows untouched and allows issuer/subject login upserts for a
-principal already present before the guard was installed. Email checks take a
-transaction-scoped advisory lock so concurrent inserts and updates for the same
-normalized email are serialized. The guard function is `VOLATILE`, so at the
-default `READ COMMITTED` isolation level its collision query gets a fresh
-snapshot after any advisory-lock wait.
-
-Native pools discard failed idle connections without logging their credential-bearing
-client objects. Shutdown waits for socket removal as well as pool shutdown before
-allowing database teardown; the next query after an idle connection loss obtains
-a replacement connection.
+U+0000, which SQLite JSON accepts. Text storage and `savia_json_valid` alone do
+not resolve that execution difference. This remains a release review issue.

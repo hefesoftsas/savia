@@ -1,0 +1,2467 @@
+CREATE TABLE access_assignments (
+ scope TEXT NOT NULL, principal_id TEXT NOT NULL, role_id TEXT NOT NULL,
+ PRIMARY KEY(scope,principal_id,role_id),
+ FOREIGN KEY(scope,role_id) REFERENCES access_roles(scope,id) ON DELETE CASCADE,
+ FOREIGN KEY(principal_id) REFERENCES identity_principal(id) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE access_audit (
+ id TEXT PRIMARY KEY, scope TEXT NOT NULL, actor_id TEXT NOT NULL, action TEXT NOT NULL, target_id TEXT NOT NULL,
+ before_state TEXT, after_state TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+--> statement-breakpoint
+CREATE TABLE access_grants (
+ id TEXT PRIMARY KEY, scope TEXT NOT NULL, role_id TEXT NOT NULL, resource TEXT NOT NULL, action TEXT NOT NULL,
+ predicate TEXT NOT NULL CHECK(json_valid(predicate)), fields TEXT NOT NULL CHECK(json_valid(fields)),
+ FOREIGN KEY(scope,role_id) REFERENCES access_roles(scope,id) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE access_revisions (scope TEXT PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0));
+--> statement-breakpoint
+CREATE TABLE access_roles (
+ id TEXT NOT NULL, scope TEXT NOT NULL, name TEXT NOT NULL, label TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+ enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)), protected INTEGER NOT NULL DEFAULT 0 CHECK(protected IN (0,1)),
+ legacy_role TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ PRIMARY KEY(scope,id), UNIQUE(scope,name), FOREIGN KEY(scope) REFERENCES access_revisions(scope)
+);
+--> statement-breakpoint
+CREATE TABLE `admin_oauth_transactions` (
+  `state` TEXT PRIMARY KEY NOT NULL,
+  `client_id` TEXT NOT NULL,
+  `redirect_uri` TEXT NOT NULL,
+  `code_verifier` TEXT NOT NULL,
+  `expires_at` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `agencies` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`address` text NOT NULL,
+	`id_check_digit` text NOT NULL,
+	`id_number` text NOT NULL,
+	`phone` text,
+	`logo` text,
+	`city_id` integer,
+	`coordinates` text,
+	`lr_id_number` text NOT NULL,
+	`lr_id_type` text NOT NULL,
+	`lr_name` text NOT NULL,
+	`payments_email` text NOT NULL,
+	`is_active` integer NOT NULL,
+	`email` text NOT NULL,
+	`is_in_house` integer NOT NULL,
+	`email_domain` text NOT NULL,
+	`birthday_from_email` text NOT NULL,
+	`payment_from_email` text NOT NULL,
+	`renewal_from_email` text NOT NULL,
+	`home_url` text NOT NULL,
+	`short_name` text NOT NULL,
+	`seller_required` integer NOT NULL,
+	`has_compliance` integer NOT NULL,
+	`default_cc_emails` text,
+	`surnames` text NOT NULL,
+	`type` text NOT NULL,
+	`theme` text NOT NULL,
+	`retirement_date` text
+, tenant_id BIGINT REFERENCES tenants(id));
+--> statement-breakpoint
+CREATE TABLE `agency_branches` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`is_active` integer NOT NULL,
+	`agency_id` BIGINT NOT NULL,
+	`city_id` integer NOT NULL,
+	FOREIGN KEY (`agency_id`) REFERENCES `agencies`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`city_id`) REFERENCES `cities`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `agency_contacts` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`surname` text NOT NULL,
+	`email` text NOT NULL,
+	`phone` text NOT NULL,
+	`position` text NOT NULL,
+	`agency_id` BIGINT NOT NULL,
+	FOREIGN KEY (`agency_id`) REFERENCES `agencies`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `app_economicactivity` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `code` TEXT NOT NULL,
+  `name` TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "assistant_active_tenants" (
+  `principal_id` TEXT PRIMARY KEY NOT NULL,
+  "tenant_id" BIGINT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE cascade,
+  FOREIGN KEY ("tenant_id") REFERENCES `tenants`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE "assistant_openrouter_settings" (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `scope` TEXT NOT NULL,
+  `agency_id` BIGINT,
+  `api_key_ciphertext` TEXT,
+  `api_key_iv` TEXT,
+  `model` TEXT,
+  `updated_at` TEXT NOT NULL,
+  `updated_by` TEXT NOT NULL,
+  FOREIGN KEY (`agency_id`) REFERENCES `tenants`(`id`) ON UPDATE no action ON DELETE cascade,
+  CHECK (`scope` IN ('global', 'agency')),
+  CHECK (
+    (`scope` = 'global' AND `id` = 'global' AND `agency_id` IS NULL) OR
+    (`scope` = 'agency' AND `id` = 'agency:' || `agency_id` AND `agency_id` IS NOT NULL)
+  ),
+  CHECK ((`api_key_ciphertext` IS NULL) = (`api_key_iv` IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE `assistant_pending_actions` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `principal_id` TEXT NOT NULL,
+  `domain` TEXT NOT NULL,
+  `command` TEXT NOT NULL,
+  `input_json` TEXT NOT NULL,
+  `status` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `expires_at` TEXT NOT NULL,
+  `resolved_at` TEXT,
+  `result_json` TEXT,
+  CHECK (`status` IN ('pending', 'executing', 'completed', 'failed', 'cancelled', 'expired'))
+);
+--> statement-breakpoint
+CREATE TABLE `assistant_virtual_employee_chunks` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `employee_id` TEXT NOT NULL,
+  `file_id` TEXT NOT NULL,
+  `chunk_index` INTEGER NOT NULL,
+  `text` TEXT NOT NULL,
+  `vector_id` TEXT,
+  `created_at` TEXT NOT NULL,
+  FOREIGN KEY (`employee_id`) REFERENCES `assistant_virtual_employees`(`id`) ON UPDATE no action ON DELETE cascade,
+  FOREIGN KEY (`file_id`) REFERENCES `assistant_virtual_employee_files`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `assistant_virtual_employee_files` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `employee_id` TEXT NOT NULL,
+  `name` TEXT NOT NULL,
+  `content_type` TEXT NOT NULL,
+  `size_bytes` INTEGER NOT NULL,
+  `r2_key` TEXT NOT NULL,
+  `rag_status` TEXT NOT NULL DEFAULT 'indexed' CHECK (`rag_status` IN ('pending', 'indexed', 'failed')),
+  `created_at` TEXT NOT NULL,
+  FOREIGN KEY (`employee_id`) REFERENCES `assistant_virtual_employees`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `assistant_virtual_employees` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `agency_id` BIGINT,
+  `name` TEXT NOT NULL,
+  `handle` TEXT NOT NULL,
+  `position` TEXT,
+  `avatar` TEXT,
+  `greeting` TEXT,
+  `system_prompt` TEXT NOT NULL,
+  `allowed_collections` TEXT NOT NULL DEFAULT '["*"]',
+  `model` TEXT,
+  `status` TEXT NOT NULL DEFAULT 'active' CHECK (`status` IN ('active', 'inactive')),
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `created_by` TEXT,
+  FOREIGN KEY (`agency_id`) REFERENCES `tenants`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `attachment_uploads` (
+  `id` text PRIMARY KEY NOT NULL,
+  `created_at` text NOT NULL,
+  `updated_at` text NOT NULL,
+  `expires_at` text NOT NULL,
+  `agency_id` BIGINT NOT NULL,
+  `domain` text NOT NULL,
+  `collection` text NOT NULL,
+  `aggregate_id` BIGINT NOT NULL,
+  `object_key` text NOT NULL,
+  `original_name` text NOT NULL,
+  `content_type` text NOT NULL,
+  `byte_size` integer NOT NULL,
+  `sha256` text,
+  `status` text NOT NULL,
+  `source_table` text,
+  `source_document_id` BIGINT,
+  FOREIGN KEY (`agency_id`) REFERENCES `agencies`(`id`) ON UPDATE no action ON DELETE no action,
+  CHECK (`status` IN ('issued', 'ready', 'rejected', 'discarded')),
+  CHECK (`byte_size` > 0)
+);
+--> statement-breakpoint
+CREATE TABLE `auto_light_quote_offers` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `quote_request_id` TEXT NOT NULL,
+  `provider` TEXT NOT NULL,
+  `operation_id` TEXT NOT NULL,
+  `attempt_number` INTEGER NOT NULL,
+  `status` TEXT NOT NULL,
+  `started_at` TEXT,
+  `completed_at` TEXT,
+  `http_status` INTEGER,
+  `provider_reference` TEXT,
+  `normalized_result` TEXT,
+  `sanitized_response` TEXT,
+  `error_code` TEXT,
+  `error_message` TEXT,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL, credential_owner_principal_id TEXT REFERENCES identity_principal(id),
+  CONSTRAINT `auto_light_quote_offers_request_operation_attempt_unique`
+    UNIQUE (`quote_request_id`, `operation_id`, `attempt_number`),
+  FOREIGN KEY (`quote_request_id`) REFERENCES `auto_light_quote_requests`(`id`) ON UPDATE no action ON DELETE restrict,
+  CHECK (`attempt_number` > 0),
+  CHECK (`status` IN ('pending', 'in_progress', 'successful', 'failed'))
+);
+--> statement-breakpoint
+CREATE TABLE `auto_light_quote_requests` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `agency_id` BIGINT NOT NULL,
+  `created_by_principal_id` TEXT NOT NULL,
+  `plate` TEXT NOT NULL,
+  `vehicle_source` TEXT NOT NULL,
+  `vehicle_snapshot` TEXT NOT NULL,
+  `applicant_snapshot` TEXT NOT NULL,
+  `coverage_preferences` TEXT NOT NULL,
+  `status` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  FOREIGN KEY (`agency_id`) REFERENCES `agencies`(`id`) ON UPDATE no action ON DELETE restrict,
+  FOREIGN KEY (`created_by_principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  CHECK (`vehicle_source` IN ('equidad', 'sura')),
+  CHECK (`status` IN ('pending', 'in_progress', 'successful', 'partial', 'failed'))
+);
+--> statement-breakpoint
+CREATE TABLE bundle_flow_state (scope TEXT NOT NULL, flow_id TEXT NOT NULL, bundle_version TEXT NOT NULL, content_hash TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(scope, flow_id));
+--> statement-breakpoint
+CREATE TABLE `business_commercialunit` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `name` TEXT NOT NULL,
+  `created_by` TEXT NOT NULL,
+  `agency_id` BIGINT NOT NULL,
+  `edited_by` TEXT NOT NULL,
+  CONSTRAINT `business_commercialu_agency_id_3f578aee_fk_business_` FOREIGN KEY (`agency_id`) REFERENCES `agencies` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE `categories` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`external_id` integer
+);
+--> statement-breakpoint
+CREATE TABLE `cities` (
+	`id` integer PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`department_id` integer NOT NULL,
+	`external_id` integer NOT NULL,
+	FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `countries` (
+	`id` integer PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`code` text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE crm_collection_bindings (
+ tenant_id TEXT NOT NULL,
+ object_name TEXT NOT NULL,
+ source_id TEXT NOT NULL,
+ resource TEXT NOT NULL,
+ config TEXT NOT NULL CHECK(json_valid(config)),
+ PRIMARY KEY(tenant_id,object_name),
+ FOREIGN KEY(tenant_id,object_name) REFERENCES "studio_objects"(tenant_id,name)
+);
+--> statement-breakpoint
+CREATE TABLE crm_sync_changes (
+ sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+ tenant_id TEXT NOT NULL, object_name TEXT NOT NULL,
+ id TEXT NOT NULL, data TEXT NOT NULL, version INTEGER NOT NULL,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, created_by TEXT,
+ UNIQUE(tenant_id,object_name,id)
+);
+--> statement-breakpoint
+CREATE TABLE crm_sync_jobs (
+ id TEXT PRIMARY KEY,
+ rule_id TEXT NOT NULL REFERENCES crm_sync_rules(id),
+ customer_id INTEGER NOT NULL,
+ revision INTEGER NOT NULL DEFAULT 1,
+ synced_revision INTEGER NOT NULL DEFAULT 0,
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processing','synced','failed','blocked')),
+ attempts INTEGER NOT NULL DEFAULT 0,
+ next_attempt_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ lease_token TEXT,
+ lease_started_at TEXT,
+ last_error TEXT,
+ external_url TEXT,
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ UNIQUE(rule_id,customer_id)
+);
+--> statement-breakpoint
+CREATE TABLE crm_sync_mappings (
+ rule_id TEXT NOT NULL REFERENCES crm_sync_rules(id),
+ customer_id INTEGER NOT NULL,
+ object_kind TEXT NOT NULL CHECK(object_kind IN ('contact','company')),
+ external_object_id TEXT NOT NULL,
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ PRIMARY KEY(rule_id,customer_id,object_kind)
+);
+--> statement-breakpoint
+CREATE TABLE crm_sync_receipts (
+ tenant_id TEXT NOT NULL, principal_id TEXT NOT NULL, mutation_id TEXT NOT NULL,
+ fingerprint TEXT NOT NULL, response TEXT NOT NULL,
+ before_state TEXT, effects_applied INTEGER NOT NULL DEFAULT 0,
+ PRIMARY KEY(tenant_id,principal_id,mutation_id)
+);
+--> statement-breakpoint
+CREATE TABLE crm_sync_rules (
+ id TEXT PRIMARY KEY,
+ principal_id TEXT NOT NULL REFERENCES identity_principal(id),
+ tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+ provider TEXT NOT NULL CHECK(provider IN ('hubspot','salesforce','zoho','pipedrive')),
+ connection_id TEXT NOT NULL REFERENCES "tenant_crm_connections"(id),
+ external_account_id TEXT NOT NULL,
+ account_label TEXT NOT NULL,
+ enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ UNIQUE(principal_id,tenant_id,provider,connection_id,external_account_id)
+);
+--> statement-breakpoint
+CREATE TABLE `customer_address` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `address` TEXT NOT NULL,
+  `city_id` INTEGER NOT NULL,
+  `coordinates` TEXT,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `complement` TEXT NOT NULL,
+  CONSTRAINT `customer_address_city_id_121281ad_fk_app_city_id` FOREIGN KEY (`city_id`) REFERENCES `cities` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE `customer_client` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `id_number` TEXT NOT NULL,
+  `migration_slug` TEXT NOT NULL,
+  `external_id` TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `customer_clientagency` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `agency_id` BIGINT NOT NULL,
+  `client_id` BIGINT NOT NULL,
+  `created_by` TEXT NOT NULL,
+  `created_by_slug` TEXT NOT NULL,
+  `birthday_notification` INTEGER NOT NULL,
+  `payment_notification` INTEGER NOT NULL,
+  `renewal_notification` INTEGER NOT NULL,
+  `commercial_unit_id` BIGINT,
+  `group_id` BIGINT,
+  `document_url` TEXT NOT NULL,
+  `computed_data` TEXT NOT NULL,
+  `completed_at` TEXT,
+  `origin_from_prospects` INTEGER NOT NULL,
+  CONSTRAINT `customer_clientagenc_commercial_unit_id_c62e178e_fk_business_` FOREIGN KEY (`commercial_unit_id`) REFERENCES `business_commercialunit` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_clientagency_agency_id_2219f9d3_fk_business_agency_id` FOREIGN KEY (`agency_id`) REFERENCES `agencies` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_clientagency_client_id_f7514a49_fk_customer_client_id` FOREIGN KEY (`client_id`) REFERENCES `customer_client` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_clientagency_group_id_45d26c9d_fk_customer_group_id` FOREIGN KEY (`group_id`) REFERENCES `customer_group` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE customer_crm_sync_records (
+ principal_id TEXT NOT NULL REFERENCES identity_principal(id),
+ agency_id BIGINT NOT NULL REFERENCES agencies(id),
+ customer_profile_id BIGINT NOT NULL REFERENCES customer_clientagency(id),
+ provider TEXT NOT NULL CHECK(provider IN ('hubspot','salesforce','zoho','pipedrive')),
+ object_kind TEXT NOT NULL CHECK(object_kind IN ('contact','company')),
+ external_object_id TEXT NOT NULL,
+ last_synced_at TEXT, last_failure_code TEXT, last_failure_at TEXT,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ PRIMARY KEY(principal_id, agency_id, customer_profile_id, provider, object_kind)
+);
+--> statement-breakpoint
+CREATE TABLE `customer_group` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `name` TEXT NOT NULL,
+  `agency_id` BIGINT,
+  `description` TEXT NOT NULL,
+  CONSTRAINT `customer_group_agency_id_3b3c328d_fk_business_agency_id` FOREIGN KEY (`agency_id`) REFERENCES `agencies` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE `customer_legalperson` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `name` TEXT NOT NULL,
+  `id_number` TEXT NOT NULL,
+  `id_check_digit` TEXT NOT NULL,
+  `incorporation_date` TEXT,
+  `lr_name` TEXT NOT NULL,
+  `lr_id_type` TEXT NOT NULL,
+  `lr_id_number` TEXT NOT NULL,
+  `address_id` BIGINT,
+  `business_activity_id` INTEGER,
+  `client_id` BIGINT NOT NULL,
+  CONSTRAINT `customer_legalperson_address_id_93d0acf3_fk_customer_address_id` FOREIGN KEY (`address_id`) REFERENCES `customer_address` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_legalperson_business_activity_id_fbcde3c5_fk_app_econo` FOREIGN KEY (`business_activity_id`) REFERENCES `app_economicactivity` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_legalperson_client_id_4bf9637a_fk_customer_` FOREIGN KEY (`client_id`) REFERENCES `customer_clientagency` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE `customer_legalpersoncontact` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `surname` TEXT NOT NULL,
+  `email` TEXT NOT NULL,
+  `phone` TEXT NOT NULL,
+  `position` TEXT NOT NULL,
+  `legal_person_id` BIGINT NOT NULL,
+  `is_main` INTEGER NOT NULL,
+  `name` TEXT NOT NULL,
+  `comments` TEXT NOT NULL,
+  CONSTRAINT `customer_legalperson_legal_person_id_af37b447_fk_customer_` FOREIGN KEY (`legal_person_id`) REFERENCES `customer_legalperson` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE `customer_naturalperson` (
+  `id` INTEGER PRIMARY KEY NOT NULL,
+  `id_slug` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `surname` TEXT NOT NULL,
+  `birth_date` TEXT,
+  `phone` TEXT NOT NULL,
+  `id_type` TEXT NOT NULL,
+  `id_number` TEXT NOT NULL,
+  `id_issue_at` TEXT,
+  `marital_status` TEXT NOT NULL,
+  `occupation` TEXT NOT NULL,
+  `company` TEXT NOT NULL,
+  `home_address_id` BIGINT,
+  `work_address_id` BIGINT,
+  `genre` TEXT NOT NULL,
+  `name` TEXT NOT NULL,
+  `email` TEXT NOT NULL,
+  `client_id` BIGINT NOT NULL,
+  CONSTRAINT `customer_naturalpers_client_id_64a2c072_fk_customer_` FOREIGN KEY (`client_id`) REFERENCES `customer_clientagency` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_naturalpers_home_address_id_94875213_fk_customer_` FOREIGN KEY (`home_address_id`) REFERENCES `customer_address` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT `customer_naturalpers_work_address_id_191ca03d_fk_customer_` FOREIGN KEY (`work_address_id`) REFERENCES `customer_address` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+);
+--> statement-breakpoint
+CREATE TABLE `departments` (
+	`id` integer PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`country_id` integer NOT NULL,
+	`external_id` integer NOT NULL,
+	FOREIGN KEY (`country_id`) REFERENCES `countries`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `document_ownership` (
+  `domain` TEXT NOT NULL,
+  `collection` TEXT NOT NULL,
+  `document_id` TEXT NOT NULL,
+  `agency_id` BIGINT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  PRIMARY KEY (`domain`, `collection`, `document_id`),
+  FOREIGN KEY (`agency_id`) REFERENCES `agencies`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE extension_action_runs (
+  tenant_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  extension_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'succeeded', 'failed', 'expired')),
+  input TEXT NOT NULL CHECK (json_valid(input)),
+  output TEXT,
+  error_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, run_id)
+);
+--> statement-breakpoint
+CREATE TABLE extension_connection_audit_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  extension_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  actor_principal_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+  error_code TEXT,
+  created_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE extension_connections (
+  tenant_id TEXT NOT NULL,
+  extension_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  connector_id TEXT NOT NULL,
+  credential_ciphertext TEXT NOT NULL,
+  credential_iv TEXT NOT NULL,
+  created_by_principal_id TEXT NOT NULL,
+  updated_by_principal_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, extension_id, id)
+);
+--> statement-breakpoint
+CREATE TABLE extension_settings (
+  tenant_id TEXT NOT NULL,
+  extension_id TEXT NOT NULL,
+  value TEXT NOT NULL CHECK (json_valid(value)),
+  version INTEGER NOT NULL,
+  created_by_principal_id TEXT NOT NULL,
+  updated_by_principal_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, extension_id)
+);
+--> statement-breakpoint
+CREATE TABLE flow_runs (id TEXT PRIMARY KEY, flow_id TEXT NOT NULL, version_id TEXT, mode TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, summary TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE flow_variables (flow_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, secret INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(flow_id,key));
+--> statement-breakpoint
+CREATE TABLE flow_versions (id TEXT PRIMARY KEY, flow_id TEXT NOT NULL, definition TEXT NOT NULL, created_at TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE flows (id TEXT PRIMARY KEY, definition TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE folders (path TEXT PRIMARY KEY);
+--> statement-breakpoint
+CREATE TABLE `identity_global_role` (
+  `principal_id` TEXT NOT NULL,
+  `role` TEXT NOT NULL,
+  `created_at` TEXT NOT NULL,
+  PRIMARY KEY (`principal_id`, `role`),
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE cascade,
+  CHECK (`role` IN ('platform_admin'))
+);
+--> statement-breakpoint
+CREATE TABLE `identity_principal` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `issuer` TEXT NOT NULL,
+  `subject` TEXT NOT NULL,
+  `email` TEXT NOT NULL,
+  `display_name` TEXT NOT NULL,
+  `is_active` INTEGER NOT NULL DEFAULT 1,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  CONSTRAINT `identity_principal_issuer_subject_unique` UNIQUE (`issuer`, `subject`)
+);
+--> statement-breakpoint
+CREATE TABLE identity_tenant_membership (
+ id TEXT PRIMARY KEY NOT NULL,
+ principal_id TEXT NOT NULL UNIQUE REFERENCES identity_principal(id) ON DELETE CASCADE,
+ tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ role TEXT NOT NULL CHECK (role IN ('agency_admin','tenant_admin','operator','viewer')),
+ is_active INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE installed_bundles (
+  id TEXT PRIMARY KEY,
+  version TEXT NOT NULL,
+  installed_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `insurer_companies` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`id_number` text NOT NULL,
+	`name_long` text NOT NULL,
+	`id_check_digit` text NOT NULL,
+	`external_id` integer,
+	`reconciliation_type` text NOT NULL,
+	`payment_url` text NOT NULL,
+	`vendu_code` text NOT NULL,
+	`collection_reconciliation_type` text NOT NULL,
+	`payment_information` text NOT NULL,
+	`assistance_line` text NOT NULL,
+	`is_active` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `legacy_import_snapshots` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `created_at` TEXT NOT NULL,
+  `manifest_sha256` TEXT NOT NULL UNIQUE,
+  `stream_count` INTEGER NOT NULL CHECK (`stream_count` >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE `legacy_import_streams` (
+  `snapshot_id` TEXT NOT NULL REFERENCES `legacy_import_snapshots`(`id`) ON DELETE RESTRICT,
+  `source_type` TEXT NOT NULL,
+  `source_name` TEXT NOT NULL,
+  `destination_prefix` TEXT NOT NULL,
+  `record_count` INTEGER NOT NULL CHECK (`record_count` >= 0),
+  `byte_count` INTEGER NOT NULL CHECK (`byte_count` >= 0),
+  `sha256` TEXT NOT NULL,
+  PRIMARY KEY (`snapshot_id`, `source_type`, `source_name`)
+);
+--> statement-breakpoint
+CREATE TABLE managed_customer_extensions (
+  tenant_id TEXT NOT NULL,
+  profile_id INTEGER NOT NULL,
+  data TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(data)),
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(tenant_id,profile_id),
+  FOREIGN KEY(profile_id) REFERENCES customer_clientagency(id) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE managed_customer_requests (
+  tenant_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  response TEXT NOT NULL CHECK(json_valid(response)),
+  PRIMARY KEY(tenant_id,request_key)
+);
+--> statement-breakpoint
+CREATE TABLE notification_admin_audit (
+ id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, actor_id TEXT NOT NULL,
+ event_id TEXT NOT NULL, action TEXT NOT NULL, created_at BIGINT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE notification_deliveries (
+ id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES notification_events(id),
+ scope_kind TEXT NOT NULL, scope_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
+ channel TEXT NOT NULL DEFAULT 'in-app' CHECK(channel='in-app'), created_at BIGINT NOT NULL,
+ read_at BIGINT, archived_at BIGINT, resolved_at BIGINT,
+ UNIQUE(event_id,recipient_id,channel)
+);
+--> statement-breakpoint
+CREATE TABLE notification_events (
+ id TEXT PRIMARY KEY, scope_kind TEXT NOT NULL CHECK(scope_kind IN ('workspace','account')), scope_id TEXT NOT NULL,
+ event_key TEXT NOT NULL, payload TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT,
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processing','completed','failed')),
+ cursor TEXT, attempts INTEGER NOT NULL DEFAULT 0, next_retry BIGINT NOT NULL DEFAULT 0,
+ lease_token TEXT, lease_until BIGINT NOT NULL DEFAULT 0, error TEXT,
+ UNIQUE(scope_kind,scope_id,event_key)
+);
+--> statement-breakpoint
+CREATE TABLE notification_maintenance_checkpoints (name TEXT PRIMARY KEY, cursor TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE notification_recipient_retries (
+ event_id TEXT NOT NULL REFERENCES notification_events(id), recipient_id TEXT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0, next_retry BIGINT NOT NULL, error TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','failed')),
+ PRIMARY KEY(event_id,recipient_id)
+);
+--> statement-breakpoint
+CREATE TABLE notification_scope_settings (
+ workspace_id TEXT PRIMARY KEY, read_days INTEGER NOT NULL DEFAULT 90 CHECK(read_days BETWEEN 7 AND 365),
+ unread_days INTEGER NOT NULL DEFAULT 180 CHECK(unread_days BETWEEN 30 AND 730 AND unread_days>=read_days)
+);
+--> statement-breakpoint
+CREATE TABLE notification_send_limits (
+ workspace_id TEXT NOT NULL, actor_id TEXT NOT NULL, window_start BIGINT NOT NULL,
+ count INTEGER NOT NULL CHECK(count BETWEEN 1 AND 10), PRIMARY KEY(workspace_id,actor_id,window_start)
+);
+--> statement-breakpoint
+CREATE TABLE notification_subscriptions (
+ workspace_id TEXT NOT NULL, principal_id TEXT NOT NULL, collection TEXT NOT NULL,
+ created_at BIGINT NOT NULL, PRIMARY KEY(workspace_id,principal_id,collection)
+);
+--> statement-breakpoint
+CREATE TABLE offline_collection_policies (
+  tenant_id INTEGER NOT NULL,
+  collection TEXT NOT NULL,
+  is_enabled INTEGER NOT NULL DEFAULT 1,
+  refresh_seconds INTEGER NOT NULL DEFAULT 300,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, collection)
+);
+--> statement-breakpoint
+CREATE TABLE `personal_integration_audit_events` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `connection_id` TEXT NOT NULL,
+  `principal_id` TEXT NOT NULL,
+  `provider` TEXT NOT NULL,
+  `event_type` TEXT NOT NULL,
+  `outcome` TEXT NOT NULL,
+  `error_code` TEXT,
+  `created_at` TEXT NOT NULL,
+  FOREIGN KEY (`connection_id`) REFERENCES `personal_integration_connections`(`id`) ON UPDATE no action ON DELETE restrict,
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `personal_integration_connections` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `principal_id` TEXT NOT NULL,
+  `provider` TEXT NOT NULL,
+  `nango_connection_id` TEXT NOT NULL,
+  `nango_integration_id` TEXT NOT NULL,
+  `status` TEXT NOT NULL,
+  `external_account_label` TEXT,
+  `external_account_id` TEXT,
+  `scopes` TEXT NOT NULL DEFAULT '[]',
+  `last_validated_at` TEXT,
+  `disconnected_at` TEXT,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  CHECK (`provider` IN ('google_drive', 'gmail', 'google_calendar', 'outlook', 'onedrive_personal', 'onedrive_business')),
+  CHECK (`status` IN ('pending', 'connected', 'reconnect_required', 'disconnected', 'failed'))
+);
+--> statement-breakpoint
+CREATE TABLE plugin_store_artifacts (
+ tenant_id TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL,
+ manifest TEXT NOT NULL CHECK(json_valid(manifest)),
+ entry_js TEXT NOT NULL,
+ sha256 TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+ created_by TEXT,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), store_json TEXT CHECK(store_json IS NULL OR json_valid(store_json)),
+ PRIMARY KEY(tenant_id,id,version)
+);
+--> statement-breakpoint
+CREATE TABLE public_form_short_links (
+ code TEXT PRIMARY KEY CHECK(length(code)=16 AND code NOT GLOB '*[^a-f0-9]*'),
+ form_id TEXT NOT NULL UNIQUE REFERENCES public_forms(id) ON DELETE CASCADE,
+ created_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE public_form_submissions (
+ form_id TEXT NOT NULL REFERENCES public_forms(id),
+ submission_id TEXT NOT NULL,
+ tenant_id TEXT NOT NULL,
+ ip_hash TEXT NOT NULL,
+ day TEXT NOT NULL,
+ fingerprint TEXT NOT NULL,
+ captcha_hash TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('reserved','complete','failed')),
+ response TEXT CHECK(response IS NULL OR json_valid(response)),
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(form_id,submission_id),
+ UNIQUE(captcha_hash)
+);
+--> statement-breakpoint
+CREATE TABLE public_forms (
+ id TEXT PRIMARY KEY,
+ token TEXT NOT NULL UNIQUE,
+ tenant_id TEXT NOT NULL,
+ object_name TEXT NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('record','quote')),
+ title TEXT NOT NULL,
+ description TEXT,
+ fields TEXT NOT NULL CHECK(json_valid(fields)),
+ snapshot TEXT NOT NULL CHECK(json_valid(snapshot)),
+ daily_limit INTEGER NOT NULL CHECK(daily_limit BETWEEN 1 AND 1000),
+ return_result INTEGER NOT NULL DEFAULT 0 CHECK(return_result IN (0,1)),
+ expires_at TEXT,
+ revoked_at TEXT,
+ created_by TEXT NOT NULL,
+ created_at TEXT NOT NULL
+, short_url TEXT, logo_image TEXT);
+--> statement-breakpoint
+CREATE TABLE `ramos` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`sub_ramo_id` BIGINT NOT NULL,
+	`tax_iva` text NOT NULL,
+	`external_id` integer,
+	`manage_reinvestment` integer NOT NULL,
+	`has_monthly_payment` integer NOT NULL,
+	`allow_custom_renewal_days` integer NOT NULL,
+	`is_non_renewable` integer NOT NULL,
+	`insurance_subject_validation` text NOT NULL,
+	`insurance_subject_validation_message` text NOT NULL,
+	`monthly_payment_form_label` text NOT NULL,
+	`compliance_policy_type` text NOT NULL,
+	FOREIGN KEY (`sub_ramo_id`) REFERENCES `sub_ramos`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE request_page_runs (
+  id TEXT PRIMARY KEY NOT NULL,
+  principal_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  page_name TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  action_label TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('mock', 'live')),
+  status TEXT NOT NULL CHECK (status IN ('running', 'complete', 'failed')),
+  form_values TEXT NOT NULL,
+  result TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE savia_request_audit (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, flow_id TEXT, detail TEXT, created_at TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE `server_id_sequences` (
+  `resource` TEXT PRIMARY KEY NOT NULL,
+  `next_id` BIGINT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "studio_access_deliveries" (principal_id TEXT NOT NULL,scope TEXT NOT NULL,revision INTEGER NOT NULL,object_name TEXT NOT NULL,record_id TEXT NOT NULL,PRIMARY KEY(principal_id,scope,revision,object_name,record_id));
+--> statement-breakpoint
+CREATE TABLE "studio_audit" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, action TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT, detail TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_automation_runs" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, automation_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
+ event_key TEXT NOT NULL, status TEXT NOT NULL, detail TEXT NOT NULL, task_id TEXT,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ UNIQUE(tenant_id,automation_id,event_key)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_automations" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, name TEXT NOT NULL,
+ config TEXT NOT NULL CHECK(json_valid(config)), enabled INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_business_links" (
+ tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
+ connection_id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('syncing','synced','uncertain')),
+ external_object_id TEXT, last_synced_at TEXT,
+ PRIMARY KEY(tenant_id,object_name,record_id,connection_id),
+ FOREIGN KEY(tenant_id,record_id) REFERENCES "studio_records"(tenant_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_collection_relations" (
+ tenant_id TEXT NOT NULL, id TEXT NOT NULL,
+ source_object TEXT NOT NULL, target_object TEXT NOT NULL,
+ source_label TEXT NOT NULL, target_label TEXT NOT NULL,
+ cardinality TEXT NOT NULL CHECK(cardinality IN ('one-to-one','one-to-many','many-to-many')), source_field TEXT NOT NULL DEFAULT 'id', target_field TEXT NOT NULL DEFAULT 'id', source_display_field TEXT, target_display_field TEXT, storage TEXT NOT NULL DEFAULT 'local' CHECK(storage IN ('local','fields')), version INTEGER NOT NULL DEFAULT 1,
+ PRIMARY KEY(tenant_id,id),
+ FOREIGN KEY(tenant_id,source_object) REFERENCES "studio_objects"(tenant_id,name) ON DELETE CASCADE,
+ FOREIGN KEY(tenant_id,target_object) REFERENCES "studio_objects"(tenant_id,name) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE "studio_collection_requests" (
+ tenant_id TEXT NOT NULL,
+ request_key TEXT NOT NULL,
+ fingerprint TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('pending','success')),
+ response TEXT CHECK(response IS NULL OR json_valid(response)),
+ PRIMARY KEY(tenant_id,request_key)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_collection_sources" (
+  tenant_id TEXT NOT NULL,
+  owner_principal_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('jsonapi','postgres','mysql','mssql','mongodb')),
+  config TEXT NOT NULL CHECK(json_valid(config)),
+  encrypted_secret TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY(tenant_id,owner_principal_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_collection_versions" (
+  tenant_id TEXT NOT NULL,
+  collection TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, collection)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_extension_installations" (
+ tenant_id TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL,
+ enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+ manifest TEXT NOT NULL CHECK(json_valid(manifest)),
+ installed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ PRIMARY KEY(tenant_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_file_drafts" (
+ id TEXT PRIMARY KEY,
+ tenant_id TEXT NOT NULL,
+ object_name TEXT NOT NULL,
+ field_name TEXT NOT NULL,
+ name TEXT NOT NULL,
+ mime TEXT NOT NULL,
+ size INTEGER NOT NULL,
+ storage_key TEXT NOT NULL UNIQUE,
+ version INTEGER NOT NULL DEFAULT 1,
+ expires_at TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_file_revisions" (
+ tenant_id TEXT NOT NULL,
+ file_id TEXT NOT NULL REFERENCES "studio_files"(id) ON DELETE CASCADE,
+ version INTEGER NOT NULL CHECK(version > 0),
+ storage_key TEXT NOT NULL UNIQUE,
+ size INTEGER NOT NULL CHECK(size > 0),
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ created_by TEXT,
+ PRIMARY KEY(tenant_id,file_id,version)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_files" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
+ name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, storage_key TEXT NOT NULL UNIQUE, version INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), field_name TEXT NOT NULL DEFAULT '',
+ FOREIGN KEY(tenant_id,record_id) REFERENCES "studio_records"(tenant_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_geocoding_settings" (
+  tenant_id TEXT PRIMARY KEY,
+  encrypted_geoapify_key TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_integration_runs" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, integration_id TEXT NOT NULL, operation_id TEXT NOT NULL,
+ method TEXT NOT NULL, status TEXT NOT NULL, http_status INTEGER, attempts INTEGER NOT NULL DEFAULT 0,
+ duration_ms INTEGER NOT NULL DEFAULT 0, error TEXT, response TEXT, idempotency_key TEXT, request_hash TEXT,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_integrations" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT NOT NULL, document TEXT NOT NULL CHECK(json_valid(document)), created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+, connection TEXT NOT NULL DEFAULT '{}', encrypted_secret TEXT, owner_principal_id TEXT NOT NULL DEFAULT '');
+--> statement-breakpoint
+CREATE TABLE "studio_native_relation_overrides"(tenant_id TEXT NOT NULL,id TEXT NOT NULL,config TEXT NOT NULL CHECK(json_valid(config)),version INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(tenant_id,id));
+--> statement-breakpoint
+CREATE TABLE "studio_notes" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
+ body TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'note', version INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ FOREIGN KEY(tenant_id,record_id) REFERENCES "studio_records"(tenant_id,id) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE "studio_objects" (
+ tenant_id TEXT NOT NULL, name TEXT NOT NULL, label TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+ config TEXT NOT NULL CHECK(json_valid(config)), created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), version INTEGER NOT NULL DEFAULT 1,
+ PRIMARY KEY (tenant_id, name)
+);
+--> statement-breakpoint
+CREATE TABLE studio_record_counts (
+  tenant_id TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  active_count INTEGER NOT NULL DEFAULT 0 CHECK(active_count >= 0),
+  trash_count INTEGER NOT NULL DEFAULT 0 CHECK(trash_count >= 0),
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),
+  PRIMARY KEY (tenant_id, object_name)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_record_history" (
+ tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
+ version INTEGER NOT NULL, action TEXT NOT NULL CHECK(action IN ('created','updated','deleted','restored')),
+ created_at TEXT NOT NULL, actor_kind TEXT NOT NULL CHECK(actor_kind IN ('user','workflow','public-form','system')),
+ actor_id TEXT, cause_id TEXT, changes TEXT NOT NULL CHECK(json_valid(changes)), expires_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,object_name,record_id,version)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_record_history_context" (
+ tenant_id TEXT PRIMARY KEY, actor_kind TEXT NOT NULL, actor_id TEXT, cause_id TEXT
+);
+--> statement-breakpoint
+CREATE TABLE "studio_record_links" (
+ tenant_id TEXT NOT NULL, relation_id TEXT NOT NULL, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,relation_id,source_id,target_id),
+ FOREIGN KEY(tenant_id,relation_id) REFERENCES "studio_collection_relations"(tenant_id,id) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE studio_record_read_cache (
+  tenant_id TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  query_fingerprint TEXT NOT NULL,
+  payload TEXT NOT NULL CHECK(json_valid(payload)),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, object_name, revision, query_fingerprint)
+);
+--> statement-breakpoint
+CREATE TABLE studio_record_search (
+  rowid INTEGER PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  search_text TEXT NOT NULL,
+  UNIQUE (tenant_id, object_name, record_id)
+);
+--> statement-breakpoint
+CREATE VIRTUAL TABLE studio_record_search_fts USING fts5(
+  search_text,
+  tenant_id UNINDEXED,
+  object_name UNINDEXED,
+  record_id UNINDEXED,
+  content='studio_record_search',
+  content_rowid='rowid',
+  tokenize='trigram'
+);
+--> statement-breakpoint
+CREATE TABLE studio_record_summary_definitions (
+  tenant_id TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  group_field TEXT NOT NULL,
+  amount_field TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (tenant_id, object_name, group_field, amount_field),
+  FOREIGN KEY (tenant_id, object_name) REFERENCES studio_objects(tenant_id, name)
+    ON DELETE CASCADE
+) WITHOUT ROWID;
+--> statement-breakpoint
+CREATE TABLE studio_record_summary_groups (
+  tenant_id TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  group_field TEXT NOT NULL,
+  amount_field TEXT NOT NULL,
+  value_type TEXT NOT NULL CHECK(value_type IN ('null','number','text')),
+  value_key,
+  record_count INTEGER NOT NULL CHECK(record_count >= 0),
+  amount REAL NOT NULL,
+  PRIMARY KEY (tenant_id, object_name, group_field, amount_field, value_type, value_key),
+  FOREIGN KEY (tenant_id, object_name, group_field, amount_field)
+    REFERENCES studio_record_summary_definitions(tenant_id, object_name, group_field, amount_field)
+    ON DELETE CASCADE
+) WITHOUT ROWID;
+--> statement-breakpoint
+CREATE TABLE "studio_records" (
+ id TEXT NOT NULL, tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, data TEXT NOT NULL CHECK(json_valid(data)),
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), version INTEGER NOT NULL DEFAULT 1, deleted_at TEXT, created_by TEXT,
+ PRIMARY KEY (tenant_id, id), FOREIGN KEY (tenant_id, object_name) REFERENCES "studio_objects"(tenant_id, name)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_requests"(tenant_id TEXT NOT NULL, request_key TEXT NOT NULL, fingerprint TEXT NOT NULL, response TEXT NOT NULL, PRIMARY KEY(tenant_id,request_key));
+--> statement-breakpoint
+CREATE TABLE "studio_schema_data"(tenant_id TEXT NOT NULL,object_name TEXT NOT NULL,version INTEGER NOT NULL,record_id TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(tenant_id,object_name,version,record_id));
+--> statement-breakpoint
+CREATE TABLE "studio_schema_versions"(tenant_id TEXT NOT NULL,object_name TEXT NOT NULL,version INTEGER NOT NULL,definition TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),PRIMARY KEY(tenant_id,object_name,version));
+--> statement-breakpoint
+CREATE TABLE "studio_settings" (
+  tenant_id TEXT PRIMARY KEY,
+  menu_layout TEXT CHECK(menu_layout IS NULL OR json_valid(menu_layout)),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_solution_installations" (
+ tenant_id TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL,
+ enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+ manifest TEXT NOT NULL CHECK(json_valid(manifest)),
+ installed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ PRIMARY KEY(tenant_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_solution_objects" (
+ tenant_id TEXT NOT NULL, solution_id TEXT NOT NULL, object_name TEXT NOT NULL,
+ definition TEXT NOT NULL CHECK(json_valid(definition)),
+ PRIMARY KEY(tenant_id,object_name),
+ FOREIGN KEY(tenant_id,solution_id) REFERENCES "studio_solution_installations"(tenant_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE "studio_tasks" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
+ title TEXT NOT NULL, owner TEXT NOT NULL DEFAULT '', due_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', version INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ FOREIGN KEY(tenant_id,record_id) REFERENCES "studio_records"(tenant_id,id) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE "studio_unique_values" (tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, field_name TEXT NOT NULL, value TEXT NOT NULL, record_id TEXT NOT NULL, PRIMARY KEY(tenant_id,object_name,field_name,value));
+--> statement-breakpoint
+CREATE TABLE "studio_views" (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, name TEXT NOT NULL, config TEXT NOT NULL CHECK(json_valid(config))
+);
+--> statement-breakpoint
+CREATE TABLE "studio_write_guards"(id TEXT PRIMARY KEY, valid INTEGER NOT NULL CHECK(valid=1));
+--> statement-breakpoint
+CREATE TABLE `sub_ramos` (
+	`id` BIGINT PRIMARY KEY NOT NULL,
+	`id_slug` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	`name` text NOT NULL,
+	`category_id` BIGINT NOT NULL,
+	`external_ids` text,
+	FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE tenant_branding (
+ tenant_id INTEGER PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+ config TEXT NOT NULL CHECK(json_valid(config)),
+ version INTEGER NOT NULL CHECK(version > 0),
+ updated_by TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "tenant_branding_assets" (
+  id TEXT PRIMARY KEY,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK(kind IN ('logo','cover','login-animation')),
+  object_key TEXT NOT NULL UNIQUE,
+  state TEXT NOT NULL DEFAULT 'live' CHECK(state IN ('live','uploading','deleting')),
+  content_type TEXT NOT NULL CHECK(content_type IN ('image/png','image/jpeg','image/webp','application/json')),
+  size INTEGER NOT NULL CHECK(size > 0 AND size <= 2097152),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE tenant_bundles (tenant_id TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL, installed_at TEXT NOT NULL, PRIMARY KEY(tenant_id, id));
+--> statement-breakpoint
+CREATE TABLE tenant_consolidation_agency_bootstraps (
+ target_tenant_id INTEGER PRIMARY KEY,
+ source_tenant_id INTEGER NOT NULL,
+ temporary_short_name TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE tenant_consolidation_discards (
+ source_tenant_id INTEGER NOT NULL,
+ target_tenant_id INTEGER NOT NULL,
+ table_name TEXT NOT NULL,
+ record_key TEXT NOT NULL,
+ discarded_at TEXT NOT NULL,
+ PRIMARY KEY(source_tenant_id,table_name,record_key)
+);
+--> statement-breakpoint
+CREATE TABLE tenant_consolidation_sources (
+ source_tenant_id INTEGER PRIMARY KEY,
+ target_tenant_id INTEGER NOT NULL,
+ consolidated_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "tenant_crm_connection_audit_events" (
+ id TEXT PRIMARY KEY NOT NULL,
+ connection_id TEXT NOT NULL REFERENCES "tenant_crm_connections"(id),
+ "tenant_id" BIGINT NOT NULL REFERENCES tenants(id),
+ principal_id TEXT NOT NULL REFERENCES identity_principal(id),
+ provider TEXT NOT NULL, event_type TEXT NOT NULL, outcome TEXT NOT NULL,
+ error_code TEXT, created_at TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "tenant_crm_connections" (
+ id TEXT PRIMARY KEY NOT NULL,
+ "tenant_id" BIGINT NOT NULL REFERENCES tenants(id),
+ created_by_principal_id TEXT NOT NULL REFERENCES identity_principal(id),
+ provider TEXT NOT NULL CHECK(provider IN ('hubspot','salesforce','zoho','pipedrive')),
+ nango_connection_id TEXT NOT NULL, nango_integration_id TEXT NOT NULL,
+ status TEXT NOT NULL CHECK(status IN ('pending','connected','reconnect_required','disconnected','failed')),
+ external_account_label TEXT, scopes TEXT NOT NULL DEFAULT '[]',
+ last_validated_at TEXT, disconnected_at TEXT, created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL, external_account_id TEXT
+);
+--> statement-breakpoint
+CREATE TABLE tenant_flow_runs (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, flow_id TEXT NOT NULL, version_id TEXT, mode TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, summary TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE tenant_flow_variables (tenant_id TEXT NOT NULL, flow_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, secret INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(tenant_id, flow_id, key));
+--> statement-breakpoint
+CREATE TABLE tenant_flow_versions (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, flow_id TEXT NOT NULL, definition TEXT NOT NULL, created_at TEXT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE tenant_flows (tenant_id TEXT NOT NULL, flow_id TEXT NOT NULL, definition TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(tenant_id, flow_id));
+--> statement-breakpoint
+CREATE TABLE tenant_folders (tenant_id TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY(tenant_id, path));
+--> statement-breakpoint
+CREATE TABLE tenant_namespace_migrations (old_key TEXT PRIMARY KEY, tenant_id BIGINT NOT NULL);
+--> statement-breakpoint
+CREATE TABLE tenants (
+ id BIGINT PRIMARY KEY NOT NULL,
+ id_slug TEXT NOT NULL UNIQUE,
+ name TEXT NOT NULL,
+ is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+, kind TEXT NOT NULL DEFAULT 'commercial' CHECK(kind IN ('commercial','platform')));
+--> statement-breakpoint
+CREATE TABLE `user_appearance_preferences` (
+  `principal_id` TEXT PRIMARY KEY NOT NULL,
+  `settings` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`)
+    ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `user_my_day_widgets` (
+  `principal_id` TEXT PRIMARY KEY NOT NULL,
+  `layout` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`)
+    ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `user_navigation_preferences` (
+  `principal_id` TEXT PRIMARY KEY NOT NULL,
+  `layout` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  FOREIGN KEY (`principal_id`) REFERENCES `identity_principal`(`id`)
+    ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `user_provider_credential_audit_events` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `owner_principal_id` TEXT NOT NULL,
+  `provider` TEXT NOT NULL,
+  `actor_principal_id` TEXT NOT NULL,
+  `event_type` TEXT NOT NULL,
+  `outcome` TEXT NOT NULL,
+  `error_code` TEXT,
+  `created_at` TEXT NOT NULL,
+  FOREIGN KEY (`owner_principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  FOREIGN KEY (`actor_principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  CHECK (`event_type` IN ('created', 'replaced', 'revealed', 'tested', 'deleted'))
+);
+--> statement-breakpoint
+CREATE TABLE `user_provider_credentials` (
+  `id` TEXT PRIMARY KEY NOT NULL,
+  `owner_principal_id` TEXT NOT NULL,
+  `provider` TEXT NOT NULL,
+  `schema_version` INTEGER NOT NULL,
+  `credential_ciphertext` TEXT NOT NULL,
+  `credential_iv` TEXT NOT NULL,
+  `last_validation_status` TEXT,
+  `last_validation_error_code` TEXT,
+  `last_validated_at` TEXT,
+  `created_at` TEXT NOT NULL,
+  `updated_at` TEXT NOT NULL,
+  `created_by_principal_id` TEXT NOT NULL,
+  `updated_by_principal_id` TEXT NOT NULL,
+  FOREIGN KEY (`owner_principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  FOREIGN KEY (`created_by_principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  FOREIGN KEY (`updated_by_principal_id`) REFERENCES `identity_principal`(`id`) ON UPDATE no action ON DELETE restrict,
+  CHECK (`schema_version` > 0),
+  CHECK (`last_validation_status` IN ('valid', 'invalid') OR `last_validation_status` IS NULL)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, collection TEXT NOT NULL,
+ kind TEXT NOT NULL, before_state TEXT NOT NULL, after_state TEXT NOT NULL,
+ depth INTEGER NOT NULL DEFAULT 0, cause TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+--> statement-breakpoint
+CREATE TABLE workflow_executions (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL, workflow_id TEXT NOT NULL, version_id TEXT NOT NULL,
+ owner_id TEXT NOT NULL, initiator_id TEXT NOT NULL, event_key TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','running','waiting','completed','failed','blocked','cancelled')),
+ node_id TEXT, context TEXT NOT NULL CHECK(json_valid(context)), depth INTEGER NOT NULL DEFAULT 0,
+ wake_at INTEGER NOT NULL DEFAULT 0, lease_token TEXT, lease_until INTEGER NOT NULL DEFAULT 0,
+ attempts INTEGER NOT NULL DEFAULT 0, error TEXT,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(workspace_id,id), UNIQUE(workspace_id,workflow_id,event_key),
+ FOREIGN KEY(workspace_id,version_id) REFERENCES workflow_versions(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_jobs (
+ workspace_id TEXT NOT NULL, execution_id TEXT NOT NULL, node_id TEXT NOT NULL,
+ sequence INTEGER NOT NULL, type TEXT NOT NULL, input TEXT NOT NULL, output TEXT NOT NULL,
+ attempts INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(workspace_id,execution_id,node_id),
+ FOREIGN KEY(workspace_id,execution_id) REFERENCES workflow_executions(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_tasks (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL, execution_id TEXT NOT NULL, node_id TEXT NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('task','notification')), title TEXT NOT NULL, assignee TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done')), due_at INTEGER,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(workspace_id,id), UNIQUE(workspace_id,execution_id,node_id),
+ FOREIGN KEY(workspace_id,execution_id) REFERENCES workflow_executions(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_versions (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL, workflow_id TEXT NOT NULL,
+ definition TEXT NOT NULL CHECK(json_valid(definition)), owner_id TEXT NOT NULL,
+ revision INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(workspace_id,id), UNIQUE(workspace_id,workflow_id,revision),
+ FOREIGN KEY(workspace_id,workflow_id) REFERENCES workflows(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_admissions (
+ endpoint_id TEXT NOT NULL, minute INTEGER NOT NULL, count INTEGER NOT NULL CHECK(count BETWEEN 1 AND 60),
+ PRIMARY KEY(endpoint_id,minute), FOREIGN KEY(endpoint_id) REFERENCES workflow_webhook_endpoints(id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_attempts (
+ workspace_id TEXT NOT NULL, execution_id TEXT NOT NULL, node_id TEXT NOT NULL, sequence INTEGER NOT NULL,
+ lease_token TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, status INTEGER, error TEXT, output TEXT,
+ PRIMARY KEY(workspace_id,execution_id,node_id,sequence),
+ FOREIGN KEY(workspace_id,execution_id,node_id) REFERENCES workflow_webhook_deliveries(workspace_id,execution_id,node_id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_deliveries (
+ workspace_id TEXT NOT NULL, execution_id TEXT NOT NULL, node_id TEXT NOT NULL,
+ destination_id TEXT NOT NULL, destination_revision INTEGER NOT NULL, payload TEXT NOT NULL, stable_key TEXT NOT NULL,
+ attempt_count INTEGER NOT NULL DEFAULT 0, retry_generation INTEGER NOT NULL DEFAULT 0, generation_attempts INTEGER NOT NULL DEFAULT 0,
+ state TEXT NOT NULL DEFAULT 'prepared',
+ PRIMARY KEY(workspace_id,execution_id,node_id),
+ FOREIGN KEY(workspace_id,execution_id) REFERENCES workflow_executions(workspace_id,id),
+ FOREIGN KEY(workspace_id,destination_id,destination_revision) REFERENCES workflow_webhook_destination_versions(workspace_id,id,revision)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_destination_versions (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL, revision INTEGER NOT NULL, url TEXT NOT NULL, auth_type TEXT NOT NULL, auth_header TEXT,
+ PRIMARY KEY(workspace_id,id,revision), FOREIGN KEY(workspace_id,id) REFERENCES workflow_webhook_destinations(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_destinations (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, current_revision INTEGER NOT NULL,
+ enabled INTEGER NOT NULL DEFAULT 1, encrypted_secret TEXT, credential_type TEXT NOT NULL, credential_header TEXT,
+ PRIMARY KEY(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_endpoints (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL UNIQUE, workflow_id TEXT NOT NULL, secret_hash TEXT NOT NULL,
+ PRIMARY KEY(workspace_id,id), UNIQUE(workspace_id,workflow_id),
+ FOREIGN KEY(workspace_id,workflow_id) REFERENCES workflows(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_webhook_receipts (
+ workspace_id TEXT NOT NULL, endpoint_id TEXT NOT NULL, event_key TEXT NOT NULL, payload_hash TEXT NOT NULL, execution_id TEXT NOT NULL,
+ PRIMARY KEY(workspace_id,endpoint_id,event_key),
+ FOREIGN KEY(workspace_id,endpoint_id) REFERENCES workflow_webhook_endpoints(workspace_id,id),
+ FOREIGN KEY(workspace_id,execution_id) REFERENCES workflow_executions(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE TABLE workflow_write_context (
+ workspace_id TEXT NOT NULL, record_id TEXT NOT NULL, depth INTEGER NOT NULL, cause TEXT NOT NULL,
+ PRIMARY KEY(workspace_id,record_id)
+);
+--> statement-breakpoint
+CREATE TABLE workflows (
+ workspace_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+ definition TEXT NOT NULL CHECK(json_valid(definition)), revision INTEGER NOT NULL DEFAULT 1,
+ enabled INTEGER NOT NULL DEFAULT 0, published_version TEXT, created_by TEXT NOT NULL,
+ next_run_at INTEGER, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(workspace_id,id)
+);
+--> statement-breakpoint
+CREATE INDEX access_audit_scope ON access_audit(scope,created_at);
+--> statement-breakpoint
+CREATE INDEX access_grants_role ON access_grants(scope,role_id);
+--> statement-breakpoint
+CREATE INDEX `admin_oauth_transactions_expires_at_index`
+ON `admin_oauth_transactions` (`expires_at`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `agencies_id_slug_unique` ON `agencies` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `agencies_short_name_unique` ON `agencies` (`short_name`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX agencies_tenant_unique ON agencies(tenant_id);
+--> statement-breakpoint
+CREATE INDEX `agency_branches_agency_id_index` ON `agency_branches` (`agency_id`);
+--> statement-breakpoint
+CREATE INDEX `agency_branches_city_id_index` ON `agency_branches` (`city_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `agency_branches_id_slug_unique` ON `agency_branches` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `agency_contacts_agency_id_index` ON `agency_contacts` (`agency_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `agency_contacts_id_slug_unique` ON `agency_contacts` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX agency_crm_connection_audit_events_agency_created_at_index ON "tenant_crm_connection_audit_events"("tenant_id",created_at);
+--> statement-breakpoint
+CREATE INDEX agency_crm_connection_audit_events_connection_created_at_index ON "tenant_crm_connection_audit_events"(connection_id,created_at);
+--> statement-breakpoint
+CREATE INDEX `app_economicactivity_code_a9ea7a57_like` ON `app_economicactivity` (`code`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `app_economicactivity_code_key` ON `app_economicactivity` (`code`);
+--> statement-breakpoint
+CREATE INDEX `assistant_active_agencies_agency_index`
+ON "assistant_active_tenants" ("tenant_id");
+--> statement-breakpoint
+CREATE INDEX `assistant_active_tenants_tenant_index`
+  ON `assistant_active_tenants` (`tenant_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `assistant_openrouter_settings_agency_unique`
+ON `assistant_openrouter_settings` (`agency_id`) WHERE `scope` = 'agency';
+--> statement-breakpoint
+CREATE INDEX `assistant_pending_actions_principal_status_index`
+ON `assistant_pending_actions` (`principal_id`, `status`, `expires_at`);
+--> statement-breakpoint
+CREATE INDEX `assistant_virtual_employee_chunks_lookup`
+ON `assistant_virtual_employee_chunks` (`employee_id`, `file_id`);
+--> statement-breakpoint
+CREATE INDEX `assistant_virtual_employee_files_employee_index`
+ON `assistant_virtual_employee_files` (`employee_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `assistant_virtual_employees_agency_handle`
+ON `assistant_virtual_employees` (`agency_id`, `handle`) WHERE `agency_id` IS NOT NULL;
+--> statement-breakpoint
+CREATE INDEX `assistant_virtual_employees_agency_index`
+ON `assistant_virtual_employees` (`agency_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `assistant_virtual_employees_global_handle`
+ON `assistant_virtual_employees` (`handle`) WHERE `agency_id` IS NULL;
+--> statement-breakpoint
+CREATE INDEX `attachment_uploads_agency_status_index` ON `attachment_uploads` (`agency_id`, `status`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `attachment_uploads_object_key_unique` ON `attachment_uploads` (`object_key`);
+--> statement-breakpoint
+CREATE INDEX `attachment_uploads_target_index` ON `attachment_uploads` (`domain`, `collection`, `aggregate_id`);
+--> statement-breakpoint
+CREATE INDEX `auto_light_quote_offers_request_created_at_index`
+  ON `auto_light_quote_offers` (`quote_request_id`, `created_at`);
+--> statement-breakpoint
+CREATE INDEX `auto_light_quote_requests_agency_created_at_index`
+  ON `auto_light_quote_requests` (`agency_id`, `created_at`);
+--> statement-breakpoint
+CREATE INDEX `business_commercialunit_agency_id_3f578aee` ON `business_commercialunit` (`agency_id`);
+--> statement-breakpoint
+CREATE INDEX `business_commercialunit_id_slug_93b24ac2_like` ON `business_commercialunit` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `business_commercialunit_id_slug_key` ON `business_commercialunit` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `categories_id_slug_unique` ON `categories` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `cities_department_id_index` ON `cities` (`department_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `cities_external_id_unique` ON `cities` (`external_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `countries_code_unique` ON `countries` (`code`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `countries_name_unique` ON `countries` (`name`);
+--> statement-breakpoint
+CREATE INDEX crm_sync_changes_scope ON crm_sync_changes(tenant_id,object_name,sequence);
+--> statement-breakpoint
+CREATE INDEX crm_sync_jobs_due ON crm_sync_jobs(status,next_attempt_at);
+--> statement-breakpoint
+CREATE INDEX `customer_address_city_id_121281ad` ON `customer_address` (`city_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_address_coordinates_0b250f3d_id` ON `customer_address` (`coordinates`);
+--> statement-breakpoint
+CREATE INDEX `customer_client_external_id_ff2ecb68` ON `customer_client` (`external_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_client_external_id_ff2ecb68_like` ON `customer_client` (`external_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_client_id_slug_51651e62_like` ON `customer_client` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_client_id_slug_key` ON `customer_client` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_client_migration_slug_87cd0ef0` ON `customer_client` (`migration_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_client_migration_slug_87cd0ef0_like` ON `customer_client` (`migration_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_agency_id_2219f9d3` ON `customer_clientagency` (`agency_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_clientagency_client_id_agency_id_8d00008e_uniq` ON `customer_clientagency` (`client_id`, `agency_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_client_id_f7514a49` ON `customer_clientagency` (`client_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_commercial_unit_id_c62e178e` ON `customer_clientagency` (`commercial_unit_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_created_by_slug_fc0af2df` ON `customer_clientagency` (`created_by_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_created_by_slug_fc0af2df_like` ON `customer_clientagency` (`created_by_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_group_id_45d26c9d` ON `customer_clientagency` (`group_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_clientagency_id_slug_44ceaef1_like` ON `customer_clientagency` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_clientagency_id_slug_key` ON `customer_clientagency` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX customer_crm_sync_records_customer_provider_index ON customer_crm_sync_records(customer_profile_id, provider);
+--> statement-breakpoint
+CREATE INDEX `customer_group_agency_id_3b3c328d` ON `customer_group` (`agency_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_group_id_slug_07cbc3f2_like` ON `customer_group` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_group_id_slug_key` ON `customer_group` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalperson_address_id_93d0acf3` ON `customer_legalperson` (`address_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalperson_business_activity_id_fbcde3c5` ON `customer_legalperson` (`business_activity_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalperson_client_agency_id_3baf8ef1` ON `customer_legalperson` (`client_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalperson_id_slug_7402ef0d_like` ON `customer_legalperson` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_legalperson_id_slug_key` ON `customer_legalperson` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalperson_lr_id_type_df272121` ON `customer_legalperson` (`lr_id_type`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalperson_lr_id_type_df272121_like` ON `customer_legalperson` (`lr_id_type`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalpersoncontact_id_slug_4fbb0989_like` ON `customer_legalpersoncontact` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_legalpersoncontact_id_slug_key` ON `customer_legalpersoncontact` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_legalpersoncontact_legal_person_id_af37b447` ON `customer_legalpersoncontact` (`legal_person_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_client_agency_id_d669e098` ON `customer_naturalperson` (`client_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_genre_5fb8d699` ON `customer_naturalperson` (`genre`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_genre_5fb8d699_like` ON `customer_naturalperson` (`genre`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_home_address_id_94875213` ON `customer_naturalperson` (`home_address_id`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_id_slug_745981bd_like` ON `customer_naturalperson` (`id_slug`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `customer_naturalperson_id_slug_key` ON `customer_naturalperson` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_id_type_bc04fc36` ON `customer_naturalperson` (`id_type`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_id_type_bc04fc36_like` ON `customer_naturalperson` (`id_type`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_marital_status_0279a05c` ON `customer_naturalperson` (`marital_status`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_marital_status_0279a05c_like` ON `customer_naturalperson` (`marital_status`);
+--> statement-breakpoint
+CREATE INDEX `customer_naturalperson_work_address_id_191ca03d` ON `customer_naturalperson` (`work_address_id`);
+--> statement-breakpoint
+CREATE INDEX `departments_country_id_index` ON `departments` (`country_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `departments_external_id_unique` ON `departments` (`external_id`);
+--> statement-breakpoint
+CREATE INDEX `document_ownership_agency_index`
+  ON `document_ownership` (`agency_id`, `domain`, `collection`);
+--> statement-breakpoint
+CREATE INDEX extension_action_runs_tenant_updated_index
+  ON extension_action_runs (tenant_id, updated_at DESC);
+--> statement-breakpoint
+CREATE INDEX extension_connection_audit_events_tenant_created_index
+  ON extension_connection_audit_events (tenant_id, created_at DESC);
+--> statement-breakpoint
+CREATE INDEX extension_connections_tenant_updated_index
+  ON extension_connections (tenant_id, updated_at DESC);
+--> statement-breakpoint
+CREATE INDEX extension_settings_tenant_updated_index
+  ON extension_settings (tenant_id, updated_at DESC);
+--> statement-breakpoint
+CREATE INDEX identity_tenant_membership_tenant_index ON identity_tenant_membership(tenant_id);
+--> statement-breakpoint
+CREATE INDEX idx_plugin_store_artifacts_tenant ON plugin_store_artifacts(tenant_id,id);
+--> statement-breakpoint
+CREATE INDEX `insurer_companies_collection_reconciliation_type_index` ON `insurer_companies` (`collection_reconciliation_type`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `insurer_companies_id_slug_unique` ON `insurer_companies` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `insurer_companies_reconciliation_type_index` ON `insurer_companies` (`reconciliation_type`);
+--> statement-breakpoint
+CREATE INDEX notification_audit_scope ON notification_admin_audit(workspace_id,created_at,id);
+--> statement-breakpoint
+CREATE INDEX notification_events_due ON notification_events(status,next_retry,lease_until,created_at,id);
+--> statement-breakpoint
+CREATE INDEX notification_followers ON notification_subscriptions(workspace_id,collection,principal_id,created_at);
+--> statement-breakpoint
+CREATE INDEX notification_inbox ON notification_deliveries(recipient_id,scope_kind,scope_id,created_at DESC,id DESC);
+--> statement-breakpoint
+CREATE INDEX notification_retries_due ON notification_recipient_retries(status,next_retry,event_id);
+--> statement-breakpoint
+CREATE INDEX notification_unread ON notification_deliveries(recipient_id,scope_kind,scope_id,read_at,archived_at);
+--> statement-breakpoint
+CREATE INDEX `personal_integration_audit_events_connection_created_at_index`
+  ON `personal_integration_audit_events` (`connection_id`, `created_at`);
+--> statement-breakpoint
+CREATE INDEX `personal_integration_audit_events_principal_created_at_index`
+  ON `personal_integration_audit_events` (`principal_id`, `created_at`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `personal_integration_connections_active_unique`
+  ON `personal_integration_connections` (`principal_id`, `provider`)
+  WHERE `disconnected_at` IS NULL;
+--> statement-breakpoint
+CREATE INDEX `personal_integration_connections_principal_provider_index`
+  ON `personal_integration_connections` (`principal_id`, `provider`);
+--> statement-breakpoint
+CREATE INDEX public_form_submissions_ip_day ON public_form_submissions(ip_hash,day);
+--> statement-breakpoint
+CREATE INDEX public_form_submissions_link_day ON public_form_submissions(form_id,day);
+--> statement-breakpoint
+CREATE INDEX public_form_submissions_tenant_day ON public_form_submissions(tenant_id,day);
+--> statement-breakpoint
+CREATE INDEX public_forms_management ON public_forms(tenant_id,object_name,created_at);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `ramos_id_slug_unique` ON `ramos` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX `ramos_sub_ramo_id_index` ON `ramos` (`sub_ramo_id`);
+--> statement-breakpoint
+CREATE INDEX request_page_runs_owner_page ON request_page_runs(principal_id,tenant_id,page_name,created_at);
+--> statement-breakpoint
+CREATE INDEX savia_request_audit_scope_idx ON savia_request_audit(tenant_id, created_at DESC, id DESC);
+--> statement-breakpoint
+CREATE INDEX studio_file_drafts_expiry
+ON studio_file_drafts(tenant_id, expires_at);
+--> statement-breakpoint
+CREATE INDEX studio_files_record ON studio_files(tenant_id,record_id,created_at);
+--> statement-breakpoint
+CREATE INDEX studio_files_record_field
+  ON studio_files(tenant_id, object_name, record_id, field_name, created_at);
+--> statement-breakpoint
+CREATE INDEX studio_integration_runs_history ON studio_integration_runs(tenant_id,integration_id,created_at);
+--> statement-breakpoint
+CREATE UNIQUE INDEX studio_integration_runs_idempotency ON studio_integration_runs(tenant_id,integration_id,operation_id,idempotency_key) WHERE idempotency_key IS NOT NULL;
+--> statement-breakpoint
+CREATE INDEX studio_integrations_owner_index ON studio_integrations(tenant_id, owner_principal_id);
+--> statement-breakpoint
+CREATE INDEX studio_notes_record ON studio_notes(tenant_id,record_id,created_at);
+--> statement-breakpoint
+CREATE INDEX studio_record_history_expiry ON studio_record_history(expires_at);
+--> statement-breakpoint
+CREATE INDEX studio_record_links_incoming ON studio_record_links(tenant_id,relation_id,target_id,source_id);
+--> statement-breakpoint
+CREATE INDEX studio_record_read_cache_expiry ON studio_record_read_cache(expires_at);
+--> statement-breakpoint
+CREATE INDEX studio_records_active ON studio_records(tenant_id,object_name,deleted_at,updated_at);
+--> statement-breakpoint
+CREATE INDEX studio_records_active_created_order
+  ON studio_records(tenant_id, object_name, deleted_at, created_at DESC, id ASC);
+--> statement-breakpoint
+CREATE INDEX studio_records_active_updated_order
+  ON studio_records(tenant_id, object_name, deleted_at, updated_at DESC, id ASC);
+--> statement-breakpoint
+CREATE INDEX studio_records_object ON studio_records(tenant_id, object_name, updated_at);
+--> statement-breakpoint
+CREATE INDEX studio_tasks_due ON studio_tasks(tenant_id,status,due_at);
+--> statement-breakpoint
+CREATE INDEX studio_unique_record ON studio_unique_values(tenant_id,record_id);
+--> statement-breakpoint
+CREATE INDEX `sub_ramos_category_id_index` ON `sub_ramos` (`category_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `sub_ramos_id_slug_unique` ON `sub_ramos` (`id_slug`);
+--> statement-breakpoint
+CREATE INDEX tenant_branding_assets_tenant ON tenant_branding_assets(tenant_id);
+--> statement-breakpoint
+CREATE INDEX `tenant_crm_connection_audit_events_connection_created_at_index`
+  ON `tenant_crm_connection_audit_events` (`connection_id`, `created_at`);
+--> statement-breakpoint
+CREATE INDEX `tenant_crm_connection_audit_events_tenant_created_at_index`
+  ON `tenant_crm_connection_audit_events` (`tenant_id`, `created_at`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `tenant_crm_connections_active_unique`
+  ON `tenant_crm_connections` (`created_by_principal_id`, `tenant_id`, `provider`)
+  WHERE `disconnected_at` IS NULL;
+--> statement-breakpoint
+CREATE INDEX `tenant_crm_connections_owner_index`
+  ON `tenant_crm_connections` (`created_by_principal_id`, `tenant_id`, `provider`);
+--> statement-breakpoint
+CREATE INDEX `tenant_crm_connections_tenant_provider_index`
+  ON `tenant_crm_connections` (`tenant_id`, `provider`);
+--> statement-breakpoint
+CREATE INDEX tenant_flow_runs_scope_idx ON tenant_flow_runs(tenant_id, flow_id, created_at);
+--> statement-breakpoint
+CREATE INDEX tenant_flow_versions_scope_idx ON tenant_flow_versions(tenant_id, flow_id, created_at);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `unique_agency_commercial_unit` ON `business_commercialunit` (`agency_id`, `name`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `unique_id_number` ON `customer_client` (`id_number`) WHERE (NOT (upper((id_number)) = upper('')));
+--> statement-breakpoint
+CREATE INDEX `user_provider_credential_audit_events_owner_created_at_index`
+  ON `user_provider_credential_audit_events` (`owner_principal_id`, `created_at`);
+--> statement-breakpoint
+CREATE INDEX `user_provider_credentials_owner_index`
+  ON `user_provider_credentials` (`owner_principal_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `user_provider_credentials_owner_provider_unique`
+  ON `user_provider_credentials` (`owner_principal_id`, `provider`);
+--> statement-breakpoint
+CREATE INDEX workflow_executions_due ON workflow_executions(status,wake_at,lease_until);
+--> statement-breakpoint
+CREATE INDEX workflow_executions_history ON workflow_executions(workspace_id,workflow_id,created_at);
+--> statement-breakpoint
+CREATE INDEX workflow_tasks_inbox ON workflow_tasks(workspace_id,assignee,status);
+--> statement-breakpoint
+CREATE VIEW `agency_crm_connection_audit_events` AS
+  SELECT `id`, `connection_id`, `tenant_id` AS `agency_id`, `principal_id`, `provider`,
+         `event_type`, `outcome`, `error_code`, `created_at`
+  FROM `tenant_crm_connection_audit_events`;
+--> statement-breakpoint
+CREATE VIEW `agency_crm_connections` AS
+  SELECT `id`, `tenant_id` AS `agency_id`, `created_by_principal_id`, `provider`,
+         `nango_connection_id`, `nango_integration_id`, `status`,
+         `external_account_label`, `scopes`, `last_validated_at`,
+         `disconnected_at`, `created_at`, `updated_at`, `external_account_id`
+  FROM `tenant_crm_connections`;
+--> statement-breakpoint
+CREATE VIEW `assistant_active_agencies` AS
+  SELECT `principal_id`, `tenant_id` AS `agency_id`, `updated_at`
+  FROM `assistant_active_tenants`;
+--> statement-breakpoint
+CREATE VIEW studio_record_history_fields AS
+ SELECT o.tenant_id,o.name AS object_name,f.key AS field_name,
+ MIN(365,MAX(1,COALESCE(CAST(json_extract(o.config,'$.studio.history.retentionDays') AS INTEGER),90))) AS retention_days
+ FROM studio_objects o,json_each(o.config,'$.fields') f
+ WHERE json_extract(o.config,'$.studio.history.enabled')=1
+ AND json_type(o.config,'$.studio.collection') IS NULL
+ AND COALESCE(json_extract(o.config,'$.studio.business'),'') NOT IN ('managed-customer','managed-agency')
+ AND json_type(o.config,'$.studio.history.fields')='array'
+ AND f.key IN (SELECT value FROM json_each(o.config,'$.studio.history.fields') WHERE type='text' AND key<50)
+ AND f.key NOT GLOB '*[^A-Za-z0-9_]*' AND f.key NOT LIKE '\_%' ESCAPE '\'
+ AND f.key NOT IN ('id','created_at','updated_at','deleted_at','created_by','updated_by','createdAt','updatedAt','deletedAt','createdBy','updatedBy','constructor','prototype')
+ AND json_extract(f.value,'$.type') IN ('Textbox','Textarea','Email','Phone','Url','Address','Number','Currency','Dropdown','Autocomplete','Toggle','DateControl')
+ AND COALESCE(json_extract(f.value,'$.hidden'),0)=0
+ AND COALESCE(json_extract(f.value,'$.readOnly'),0)=0
+ AND COALESCE(json_extract(f.value,'$.config.sensitive'),0)=0
+ AND COALESCE(json_extract(f.value,'$.config.readable'),1)<>0
+ AND COALESCE(json_extract(f.value,'$.readable'),1)<>0
+ AND COALESCE(json_extract(f.value,'$.config.multiple'),0)=0
+ AND json_extract(f.value,'$.config.formula') IS NULL
+ AND json_extract(f.value,'$.config.relation') IS NULL
+ AND json_extract(f.value,'$.config.collectionRelation') IS NULL
+ AND json_extract(f.value,'$.config.collectionRelationTarget') IS NULL;
+--> statement-breakpoint
+CREATE TRIGGER access_global_role_added AFTER INSERT ON identity_global_role BEGIN
+ UPDATE access_revisions SET revision=revision+1;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_global_role_removed AFTER DELETE ON identity_global_role BEGIN
+ UPDATE access_revisions SET revision=revision+1;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_membership_changed AFTER UPDATE OF tenant_id,role,is_active ON identity_tenant_membership BEGIN
+ DELETE FROM access_assignments WHERE principal_id=OLD.principal_id AND scope='tenant:'||OLD.tenant_id
+ AND (OLD.tenant_id<>NEW.tenant_id OR role_id LIKE 'builtin:%');
+ INSERT OR IGNORE INTO access_assignments(scope,principal_id,role_id)
+ SELECT 'tenant:'||NEW.tenant_id,NEW.principal_id,'builtin:tenant:'||NEW.tenant_id||':'||NEW.role WHERE NEW.tenant_id>0;
+ UPDATE access_revisions SET revision=revision+1 WHERE scope IN ('tenant:'||OLD.tenant_id,'tenant:'||NEW.tenant_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_membership_created AFTER INSERT ON identity_tenant_membership WHEN NEW.tenant_id>0 BEGIN
+ INSERT OR IGNORE INTO access_assignments(scope,principal_id,role_id)
+ VALUES('tenant:'||NEW.tenant_id,NEW.principal_id,'builtin:tenant:'||NEW.tenant_id||':'||NEW.role);
+ UPDATE access_revisions SET revision=revision+1 WHERE scope='tenant:'||NEW.tenant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_membership_removed AFTER DELETE ON identity_tenant_membership BEGIN
+ DELETE FROM access_assignments WHERE principal_id=OLD.principal_id AND scope='tenant:'||OLD.tenant_id;
+ UPDATE access_revisions SET revision=revision+1 WHERE scope='tenant:'||OLD.tenant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_object_changed AFTER UPDATE OF config ON "studio_objects" BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope=NEW.tenant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_object_removed AFTER DELETE ON "studio_objects" BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope=OLD.tenant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_principal_changed AFTER UPDATE OF is_active ON identity_principal BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope IN (SELECT scope FROM access_assignments WHERE principal_id=NEW.id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_tenant_created AFTER INSERT ON tenants WHEN NEW.id>0 BEGIN
+ INSERT OR IGNORE INTO access_revisions(scope) VALUES ('tenant:'||NEW.id);
+ INSERT INTO access_roles(id,scope,name,label,protected,legacy_role)
+ SELECT 'builtin:tenant:'||NEW.id||':'||r.name,'tenant:'||NEW.id,r.name,r.name,1,r.name
+ FROM (SELECT 'tenant_admin' name UNION ALL SELECT 'agency_admin' UNION ALL SELECT 'operator' UNION ALL SELECT 'viewer') r;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_tenant_removed AFTER DELETE ON tenants WHEN OLD.id>0 BEGIN
+ DELETE FROM access_roles WHERE scope='tenant:'||OLD.id;
+ UPDATE access_revisions SET revision=revision+1 WHERE scope='tenant:'||OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER access_tenant_state_changed AFTER UPDATE OF is_active,kind ON tenants BEGIN
+ UPDATE access_revisions SET revision=revision+1 WHERE scope='tenant:'||NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `agency_crm_connection_audit_events_insert` INSTEAD OF INSERT ON `agency_crm_connection_audit_events`
+BEGIN
+  INSERT INTO `tenant_crm_connection_audit_events` (
+    `id`, `connection_id`, `tenant_id`, `principal_id`, `provider`,
+    `event_type`, `outcome`, `error_code`, `created_at`
+  ) VALUES (
+    NEW.`id`, NEW.`connection_id`, NEW.`agency_id`, NEW.`principal_id`, NEW.`provider`,
+    NEW.`event_type`, NEW.`outcome`, NEW.`error_code`, NEW.`created_at`
+  );
+END;
+--> statement-breakpoint
+CREATE TRIGGER `agency_crm_connections_delete` INSTEAD OF DELETE ON `agency_crm_connections`
+BEGIN
+  DELETE FROM `tenant_crm_connections` WHERE `id` = OLD.`id`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `agency_crm_connections_insert` INSTEAD OF INSERT ON `agency_crm_connections`
+BEGIN
+  INSERT INTO `tenant_crm_connections` (
+    `id`, `tenant_id`, `created_by_principal_id`, `provider`,
+    `nango_connection_id`, `nango_integration_id`, `status`,
+    `external_account_label`, `scopes`, `last_validated_at`,
+    `disconnected_at`, `created_at`, `updated_at`, `external_account_id`
+  ) VALUES (
+    NEW.`id`, NEW.`agency_id`, NEW.`created_by_principal_id`, NEW.`provider`,
+    NEW.`nango_connection_id`, NEW.`nango_integration_id`, NEW.`status`,
+    NEW.`external_account_label`, COALESCE(NEW.`scopes`, '[]'), NEW.`last_validated_at`,
+    NEW.`disconnected_at`, NEW.`created_at`, NEW.`updated_at`, NEW.`external_account_id`
+  );
+END;
+--> statement-breakpoint
+CREATE TRIGGER `agency_crm_connections_update` INSTEAD OF UPDATE ON `agency_crm_connections`
+BEGIN
+  UPDATE `tenant_crm_connections` SET
+    `tenant_id` = NEW.`agency_id`,
+    `nango_connection_id` = NEW.`nango_connection_id`,
+    `nango_integration_id` = NEW.`nango_integration_id`,
+    `status` = NEW.`status`,
+    `external_account_label` = NEW.`external_account_label`,
+    `external_account_id` = NEW.`external_account_id`,
+    `scopes` = COALESCE(NEW.`scopes`, OLD.`scopes`, '[]'),
+    `last_validated_at` = NEW.`last_validated_at`,
+    `disconnected_at` = NEW.`disconnected_at`,
+    `updated_at` = NEW.`updated_at`
+  WHERE `id` = OLD.`id`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER agency_tenant_create AFTER INSERT ON agencies
+ BEGIN
+ INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at)
+ VALUES(NEW.id,NEW.id_slug,NEW.name,NEW.is_active,NEW.created_at,NEW.updated_at)
+ ON CONFLICT(id) DO UPDATE SET id_slug=excluded.id_slug,name=excluded.name,is_active=excluded.is_active,updated_at=excluded.updated_at;
+ UPDATE agencies SET tenant_id=NEW.id WHERE id=NEW.id;
+ END;
+--> statement-breakpoint
+CREATE TRIGGER agency_tenant_identity_insert BEFORE INSERT ON agencies
+ WHEN NEW.tenant_id IS NOT NULL AND NEW.tenant_id != NEW.id
+ BEGIN SELECT RAISE(ABORT,'Agency profile must use its tenant identity'); END;
+--> statement-breakpoint
+CREATE TRIGGER agency_tenant_identity_update BEFORE UPDATE OF id,tenant_id ON agencies
+ WHEN NEW.id != OLD.id OR NEW.tenant_id IS NULL OR NEW.tenant_id != NEW.id
+ BEGIN SELECT RAISE(ABORT,'Agency profile must use its tenant identity'); END;
+--> statement-breakpoint
+CREATE TRIGGER agency_tenant_update AFTER UPDATE OF id_slug,name,is_active,updated_at ON agencies
+ WHEN NEW.id_slug != OLD.id_slug OR NEW.name != OLD.name OR NEW.is_active != OLD.is_active OR NEW.updated_at != OLD.updated_at
+ BEGIN
+ UPDATE tenants SET id_slug=NEW.id_slug,name=NEW.name,is_active=NEW.is_active,updated_at=NEW.updated_at WHERE id=NEW.id;
+ END;
+--> statement-breakpoint
+CREATE TRIGGER `assistant_active_agencies_delete` INSTEAD OF DELETE ON `assistant_active_agencies`
+BEGIN
+  DELETE FROM `assistant_active_tenants` WHERE `principal_id` = OLD.`principal_id`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `assistant_active_agencies_insert` INSTEAD OF INSERT ON `assistant_active_agencies`
+BEGIN
+  INSERT INTO `assistant_active_tenants` (`principal_id`, `tenant_id`, `updated_at`)
+  VALUES (NEW.`principal_id`, NEW.`agency_id`, NEW.`updated_at`)
+  ON CONFLICT(`principal_id`) DO UPDATE SET
+    `tenant_id` = excluded.`tenant_id`,
+    `updated_at` = excluded.`updated_at`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_address_delete AFTER DELETE ON customer_address
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_naturalperson WHERE home_address_id=OLD.id)
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_address_insert AFTER INSERT ON customer_address
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_naturalperson WHERE home_address_id=NEW.id)
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_address_update AFTER UPDATE ON customer_address
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_naturalperson WHERE home_address_id=NEW.id)
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_clientagency_insert AFTER INSERT ON customer_clientagency
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id=NEW.id
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET
+ revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_clientagency_update AFTER UPDATE ON customer_clientagency
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id=NEW.id
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET
+ revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_deleted AFTER DELETE ON customer_clientagency
+BEGIN
+ UPDATE crm_sync_jobs SET revision=revision+1,status='blocked',last_error='SOURCE_DELETED',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE customer_id=OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_legalperson_insert AFTER INSERT ON customer_legalperson
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id=NEW.client_id
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET
+ revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_legalperson_update AFTER UPDATE ON customer_legalperson
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id=NEW.client_id
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET
+ revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_legalpersoncontact_delete AFTER DELETE ON customer_legalpersoncontact
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_legalperson WHERE id=OLD.legal_person_id)
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_legalpersoncontact_insert AFTER INSERT ON customer_legalpersoncontact
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_legalperson WHERE id=NEW.legal_person_id)
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_legalpersoncontact_update AFTER UPDATE ON customer_legalpersoncontact
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_legalperson WHERE id=NEW.legal_person_id)
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_naturalperson_insert AFTER INSERT ON customer_naturalperson
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id=NEW.client_id
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET
+ revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_customer_naturalperson_update AFTER UPDATE ON customer_naturalperson
+BEGIN
+ INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
+ SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
+ WHERE r.enabled=1 AND p.id=NEW.client_id
+ ON CONFLICT(rule_id,customer_id) DO UPDATE SET
+ revision=revision+1,
+ status=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN status ELSE 'pending' END,
+ attempts=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN attempts ELSE 0 END,
+ last_error=CASE WHEN status='processing' OR (status='blocked' AND COALESCE(last_error,'')<>'RULE_PAUSED') THEN last_error ELSE NULL END,
+ next_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_delete AFTER DELETE ON "studio_records" BEGIN
+ INSERT INTO crm_sync_changes(tenant_id,object_name,id,data,version,created_at,updated_at,deleted_at,created_by) VALUES (OLD.tenant_id,OLD.object_name,OLD.id,OLD.data,OLD.version+1,OLD.created_at,OLD.updated_at,COALESCE(OLD.deleted_at,strftime('%Y-%m-%dT%H:%M:%fZ','now')),OLD.created_by) ON CONFLICT(tenant_id,object_name,id) DO UPDATE SET sequence=excluded.sequence,data=excluded.data,version=excluded.version,created_at=excluded.created_at,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at,created_by=excluded.created_by;
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_insert AFTER INSERT ON "studio_records" BEGIN
+ INSERT INTO crm_sync_changes(tenant_id,object_name,id,data,version,created_at,updated_at,deleted_at,created_by) VALUES (NEW.tenant_id,NEW.object_name,NEW.id,NEW.data,NEW.version,NEW.created_at,NEW.updated_at,NEW.deleted_at,NEW.created_by) ON CONFLICT(tenant_id,object_name,id) DO UPDATE SET sequence=excluded.sequence,data=excluded.data,version=excluded.version,created_at=excluded.created_at,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at,created_by=excluded.created_by;
+END;
+--> statement-breakpoint
+CREATE TRIGGER crm_sync_update AFTER UPDATE ON "studio_records" BEGIN
+ INSERT INTO crm_sync_changes(tenant_id,object_name,id,data,version,created_at,updated_at,deleted_at,created_by) VALUES (NEW.tenant_id,NEW.object_name,NEW.id,NEW.data,NEW.version,NEW.created_at,NEW.updated_at,NEW.deleted_at,NEW.created_by) ON CONFLICT(tenant_id,object_name,id) DO UPDATE SET sequence=excluded.sequence,data=excluded.data,version=excluded.version,created_at=excluded.created_at,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at,created_by=excluded.created_by;
+END;
+--> statement-breakpoint
+CREATE TRIGGER identity_principal_active_email_insert
+BEFORE INSERT ON identity_principal
+WHEN NEW.is_active <> 0
+ AND NOT EXISTS (
+   SELECT 1
+   FROM identity_principal AS same_identity
+   WHERE same_identity.issuer = NEW.issuer
+     AND same_identity.subject = NEW.subject
+ )
+ AND EXISTS (
+   SELECT 1
+   FROM identity_principal AS existing
+   WHERE existing.is_active <> 0
+     AND lower(trim(existing.email)) = lower(trim(NEW.email))
+     AND NOT (existing.issuer = NEW.issuer AND existing.subject = NEW.subject)
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'IDENTITY_EMAIL_CONFLICT');
+END;
+--> statement-breakpoint
+CREATE TRIGGER identity_principal_active_email_update
+BEFORE UPDATE ON identity_principal
+WHEN NEW.is_active <> 0
+ AND (OLD.is_active = 0 OR lower(trim(NEW.email)) <> lower(trim(OLD.email)))
+ AND EXISTS (
+   SELECT 1
+   FROM identity_principal AS existing
+   WHERE existing.id <> OLD.id
+     AND existing.is_active <> 0
+     AND lower(trim(existing.email)) = lower(trim(NEW.email))
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'IDENTITY_EMAIL_CONFLICT');
+END;
+--> statement-breakpoint
+CREATE TRIGGER notification_event_fanout AFTER INSERT ON notification_events
+BEGIN
+INSERT OR IGNORE INTO notification_deliveries(id,event_id,scope_kind,scope_id,recipient_id,created_at)
+SELECT 'dlv_'||NEW.id||'_'||s.principal_id,NEW.id,NEW.scope_kind,NEW.scope_id,s.principal_id,NEW.created_at
+FROM notification_subscriptions s
+WHERE s.workspace_id=NEW.scope_id
+ AND s.collection=json_extract(NEW.payload,'$.audience.collection')
+ AND json_extract(NEW.payload,'$.audience.kind')='collection-followers'
+ AND (json_extract(NEW.payload,'$.actor.id') IS NULL OR s.principal_id<>json_extract(NEW.payload,'$.actor.id'));
+END;
+--> statement-breakpoint
+CREATE TRIGGER notification_record_insert AFTER INSERT ON "studio_records"
+BEGIN
+INSERT INTO notification_events(id,scope_kind,scope_id,event_key,payload,created_at)
+SELECT 'ntf_'||lower(hex(randomblob(8))),'workspace',NEW.tenant_id,
+ 'record:'||NEW.tenant_id||':'||NEW.object_name||':'||NEW.id||':'||NEW.version,
+ json_object('scope',json_object('kind','workspace','id',NEW.tenant_id),'key','record:'||NEW.tenant_id||':'||NEW.object_name||':'||NEW.id||':'||NEW.version,
+ 'actor',json_object('kind',COALESCE((SELECT actor_kind FROM "studio_record_history_context" WHERE tenant_id=NEW.tenant_id),'system'),'id',(SELECT actor_id FROM "studio_record_history_context" WHERE tenant_id=NEW.tenant_id)),
+ 'source',json_object('kind','record','collection',NEW.object_name,'id',NEW.id,'operation','created'),
+ 'title',NEW.object_name||' created','body','',
+ 'audience',json_object('kind','collection-followers','collection',NEW.object_name),
+ 'createdAt',CAST(strftime('%s','now') AS INTEGER)*1000,'expiresAt',json('null')),
+ CAST(strftime('%s','now') AS INTEGER)*1000
+WHERE EXISTS(SELECT 1 FROM notification_subscriptions WHERE workspace_id=NEW.tenant_id AND collection=NEW.object_name);
+END;
+--> statement-breakpoint
+CREATE TRIGGER notification_record_purge AFTER DELETE ON "studio_records"
+BEGIN
+INSERT INTO notification_events(id,scope_kind,scope_id,event_key,payload,created_at)
+SELECT 'ntf_'||lower(hex(randomblob(8))),'workspace',OLD.tenant_id,
+ 'record:'||OLD.tenant_id||':'||OLD.object_name||':'||OLD.id||':purged',
+ json_object('scope',json_object('kind','workspace','id',OLD.tenant_id),'key','record:'||OLD.tenant_id||':'||OLD.object_name||':'||OLD.id||':purged',
+ 'actor',json_object('kind','system','id',NULL),
+ 'source',json_object('kind','record','collection',OLD.object_name,'id',OLD.id,'operation','deleted'),
+ 'title',OLD.object_name||' deleted','body','',
+ 'audience',json_object('kind','collection-followers','collection',OLD.object_name),
+ 'createdAt',CAST(strftime('%s','now') AS INTEGER)*1000,'expiresAt',json('null')),
+ CAST(strftime('%s','now') AS INTEGER)*1000
+WHERE EXISTS(SELECT 1 FROM notification_subscriptions WHERE workspace_id=OLD.tenant_id AND collection=OLD.object_name);
+END;
+--> statement-breakpoint
+CREATE TRIGGER notification_record_update AFTER UPDATE ON "studio_records"
+WHEN OLD.data IS NOT NEW.data OR (OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL) OR (OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL)
+BEGIN
+INSERT INTO notification_events(id,scope_kind,scope_id,event_key,payload,created_at)
+SELECT 'ntf_'||lower(hex(randomblob(8))),'workspace',NEW.tenant_id,
+ 'record:'||NEW.tenant_id||':'||NEW.object_name||':'||NEW.id||':'||NEW.version,
+ json_object('scope',json_object('kind','workspace','id',NEW.tenant_id),'key','record:'||NEW.tenant_id||':'||NEW.object_name||':'||NEW.id||':'||NEW.version,
+ 'actor',json_object('kind',COALESCE((SELECT actor_kind FROM "studio_record_history_context" WHERE tenant_id=NEW.tenant_id),'system'),'id',(SELECT actor_id FROM "studio_record_history_context" WHERE tenant_id=NEW.tenant_id)),
+ 'source',json_object('kind','record','collection',NEW.object_name,'id',NEW.id,'operation',
+  CASE WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN 'deleted' WHEN OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL THEN 'created' ELSE 'updated' END),
+ 'title',NEW.object_name||' '||CASE WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN 'deleted' WHEN OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL THEN 'restored' ELSE 'updated' END,'body','',
+ 'audience',json_object('kind','collection-followers','collection',NEW.object_name),
+ 'createdAt',CAST(strftime('%s','now') AS INTEGER)*1000,'expiresAt',json('null')),
+ CAST(strftime('%s','now') AS INTEGER)*1000
+WHERE EXISTS(SELECT 1 FROM notification_subscriptions WHERE workspace_id=NEW.tenant_id AND collection=NEW.object_name);
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_history_delete AFTER DELETE ON studio_records BEGIN
+ DELETE FROM studio_record_history WHERE tenant_id=OLD.tenant_id AND object_name=OLD.object_name AND record_id=OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_history_insert AFTER INSERT ON studio_records
+ BEGIN
+ INSERT INTO studio_record_history(tenant_id,object_name,record_id,version,action,created_at,actor_kind,actor_id,cause_id,changes,expires_at)
+ SELECT NEW.tenant_id,NEW.object_name,NEW.id,NEW.version,'created',strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ COALESCE((SELECT actor_kind FROM studio_record_history_context WHERE tenant_id=NEW.tenant_id),'system'),
+ (SELECT actor_id FROM studio_record_history_context WHERE tenant_id=NEW.tenant_id),
+ (SELECT cause_id FROM studio_record_history_context WHERE tenant_id=NEW.tenant_id),
+ (SELECT json_group_object(field_name,json(substr('{}',1,length('{}')-1)||IIF('{}'<>'{}' AND IIF(json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('after',IIF(json_type(NEW.data,'$.'||field_name)='text' AND NOT (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))<=2050),substr(json_extract(NEW.data,'$.'||field_name),1,2048),json((NEW.data -> ('$.'||field_name))))),IIF(json_type(NEW.data,'$.'||field_name)='text' AND (length(json_extract(NEW.data,'$.'||field_name))>2048 OR (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))>2050)),json_object('afterTruncated',json('true')),'{}')),'{}')<>'{}',',','')||substr(IIF(json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('after',IIF(json_type(NEW.data,'$.'||field_name)='text' AND NOT (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))<=2050),substr(json_extract(NEW.data,'$.'||field_name),1,2048),json((NEW.data -> ('$.'||field_name))))),IIF(json_type(NEW.data,'$.'||field_name)='text' AND (length(json_extract(NEW.data,'$.'||field_name))>2048 OR (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))>2050)),json_object('afterTruncated',json('true')),'{}')),'{}'),2))) FROM studio_record_history_fields WHERE tenant_id=NEW.tenant_id AND object_name=NEW.object_name AND (json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'))),
+ strftime('%Y-%m-%dT%H:%M:%fZ','now','+'||retention_days||' days')
+ FROM studio_record_history_fields
+ WHERE tenant_id=NEW.tenant_id AND object_name=NEW.object_name
+ AND ((1) OR EXISTS(SELECT 1 FROM studio_record_history_fields WHERE tenant_id=NEW.tenant_id AND object_name=NEW.object_name AND (json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'))))
+ LIMIT 1;
+ END;
+--> statement-breakpoint
+CREATE TRIGGER studio_history_update AFTER UPDATE ON studio_records
+ BEGIN
+ INSERT INTO studio_record_history(tenant_id,object_name,record_id,version,action,created_at,actor_kind,actor_id,cause_id,changes,expires_at)
+ SELECT NEW.tenant_id,NEW.object_name,NEW.id,NEW.version,IIF(OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL,'deleted',IIF(OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL,'restored','updated')),strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+ COALESCE((SELECT actor_kind FROM studio_record_history_context WHERE tenant_id=NEW.tenant_id),'system'),
+ (SELECT actor_id FROM studio_record_history_context WHERE tenant_id=NEW.tenant_id),
+ (SELECT cause_id FROM studio_record_history_context WHERE tenant_id=NEW.tenant_id),
+ (SELECT json_group_object(field_name,json(substr(IIF(json_type(OLD.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('before',IIF(json_type(OLD.data,'$.'||field_name)='text' AND NOT (instr(json_extract(OLD.data,'$.'||field_name),char(0))>0 AND length((OLD.data -> ('$.'||field_name)))<=2050),substr(json_extract(OLD.data,'$.'||field_name),1,2048),json((OLD.data -> ('$.'||field_name))))),IIF(json_type(OLD.data,'$.'||field_name)='text' AND (length(json_extract(OLD.data,'$.'||field_name))>2048 OR (instr(json_extract(OLD.data,'$.'||field_name),char(0))>0 AND length((OLD.data -> ('$.'||field_name)))>2050)),json_object('beforeTruncated',json('true')),'{}')),'{}'),1,length(IIF(json_type(OLD.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('before',IIF(json_type(OLD.data,'$.'||field_name)='text' AND NOT (instr(json_extract(OLD.data,'$.'||field_name),char(0))>0 AND length((OLD.data -> ('$.'||field_name)))<=2050),substr(json_extract(OLD.data,'$.'||field_name),1,2048),json((OLD.data -> ('$.'||field_name))))),IIF(json_type(OLD.data,'$.'||field_name)='text' AND (length(json_extract(OLD.data,'$.'||field_name))>2048 OR (instr(json_extract(OLD.data,'$.'||field_name),char(0))>0 AND length((OLD.data -> ('$.'||field_name)))>2050)),json_object('beforeTruncated',json('true')),'{}')),'{}'))-1)||IIF(IIF(json_type(OLD.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('before',IIF(json_type(OLD.data,'$.'||field_name)='text' AND NOT (instr(json_extract(OLD.data,'$.'||field_name),char(0))>0 AND length((OLD.data -> ('$.'||field_name)))<=2050),substr(json_extract(OLD.data,'$.'||field_name),1,2048),json((OLD.data -> ('$.'||field_name))))),IIF(json_type(OLD.data,'$.'||field_name)='text' AND (length(json_extract(OLD.data,'$.'||field_name))>2048 OR (instr(json_extract(OLD.data,'$.'||field_name),char(0))>0 AND length((OLD.data -> ('$.'||field_name)))>2050)),json_object('beforeTruncated',json('true')),'{}')),'{}')<>'{}' AND IIF(json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('after',IIF(json_type(NEW.data,'$.'||field_name)='text' AND NOT (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))<=2050),substr(json_extract(NEW.data,'$.'||field_name),1,2048),json((NEW.data -> ('$.'||field_name))))),IIF(json_type(NEW.data,'$.'||field_name)='text' AND (length(json_extract(NEW.data,'$.'||field_name))>2048 OR (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))>2050)),json_object('afterTruncated',json('true')),'{}')),'{}')<>'{}',',','')||substr(IIF(json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'),json_patch(json_object('after',IIF(json_type(NEW.data,'$.'||field_name)='text' AND NOT (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))<=2050),substr(json_extract(NEW.data,'$.'||field_name),1,2048),json((NEW.data -> ('$.'||field_name))))),IIF(json_type(NEW.data,'$.'||field_name)='text' AND (length(json_extract(NEW.data,'$.'||field_name))>2048 OR (instr(json_extract(NEW.data,'$.'||field_name),char(0))>0 AND length((NEW.data -> ('$.'||field_name)))>2050)),json_object('afterTruncated',json('true')),'{}')),'{}'),2))) FROM studio_record_history_fields WHERE tenant_id=NEW.tenant_id AND object_name=NEW.object_name AND (((IIF(json_type(OLD.data,'$.'||field_name) IN ('integer','real'),'number',json_type(OLD.data,'$.'||field_name)) IS NOT IIF(json_type(NEW.data,'$.'||field_name) IN ('integer','real'),'number',json_type(NEW.data,'$.'||field_name)) OR json_extract(OLD.data,'$.'||field_name) IS NOT json_extract(NEW.data,'$.'||field_name)) AND (json_type(OLD.data,'$.'||field_name) IN ('null','text','integer','real','true','false') OR json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'))))),
+ strftime('%Y-%m-%dT%H:%M:%fZ','now','+'||retention_days||' days')
+ FROM studio_record_history_fields
+ WHERE tenant_id=NEW.tenant_id AND object_name=NEW.object_name
+ AND ((OLD.deleted_at IS NOT NEW.deleted_at) OR EXISTS(SELECT 1 FROM studio_record_history_fields WHERE tenant_id=NEW.tenant_id AND object_name=NEW.object_name AND (((IIF(json_type(OLD.data,'$.'||field_name) IN ('integer','real'),'number',json_type(OLD.data,'$.'||field_name)) IS NOT IIF(json_type(NEW.data,'$.'||field_name) IN ('integer','real'),'number',json_type(NEW.data,'$.'||field_name)) OR json_extract(OLD.data,'$.'||field_name) IS NOT json_extract(NEW.data,'$.'||field_name)) AND (json_type(OLD.data,'$.'||field_name) IN ('null','text','integer','real','true','false') OR json_type(NEW.data,'$.'||field_name) IN ('null','text','integer','real','true','false'))))))
+ LIMIT 1;
+ END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_counts_delete AFTER DELETE ON studio_records
+BEGIN
+  UPDATE studio_record_counts
+  SET active_count = active_count - CASE WHEN OLD.deleted_at IS NULL THEN 1 ELSE 0 END,
+      trash_count = trash_count - CASE WHEN OLD.deleted_at IS NULL THEN 0 ELSE 1 END,
+      revision = revision + 1
+  WHERE tenant_id = OLD.tenant_id AND object_name = OLD.object_name;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_counts_insert AFTER INSERT ON studio_records
+BEGIN
+  INSERT INTO studio_record_counts(tenant_id, object_name, active_count, trash_count, revision)
+  VALUES(NEW.tenant_id, NEW.object_name,
+         CASE WHEN NEW.deleted_at IS NULL THEN 1 ELSE 0 END,
+         CASE WHEN NEW.deleted_at IS NULL THEN 0 ELSE 1 END,
+         1)
+  ON CONFLICT(tenant_id, object_name) DO UPDATE SET
+    active_count = active_count + excluded.active_count,
+    trash_count = trash_count + excluded.trash_count,
+    revision = revision + 1;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_counts_update_new AFTER UPDATE ON studio_records
+BEGIN
+  INSERT INTO studio_record_counts(tenant_id, object_name, active_count, trash_count, revision)
+  VALUES(NEW.tenant_id, NEW.object_name,
+         CASE WHEN NEW.deleted_at IS NULL THEN 1 ELSE 0 END,
+         CASE WHEN NEW.deleted_at IS NULL THEN 0 ELSE 1 END,
+         1)
+  ON CONFLICT(tenant_id, object_name) DO UPDATE SET
+    active_count = active_count + excluded.active_count,
+    trash_count = trash_count + excluded.trash_count,
+    revision = revision + 1;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_counts_update_old BEFORE UPDATE ON studio_records
+BEGIN
+  UPDATE studio_record_counts
+  SET active_count = active_count - CASE WHEN OLD.deleted_at IS NULL THEN 1 ELSE 0 END,
+      trash_count = trash_count - CASE WHEN OLD.deleted_at IS NULL THEN 0 ELSE 1 END,
+      revision = revision + CASE
+        WHEN OLD.tenant_id <> NEW.tenant_id OR OLD.object_name <> NEW.object_name THEN 1
+        ELSE 0
+      END
+  WHERE tenant_id = OLD.tenant_id AND object_name = OLD.object_name;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_links_cardinality BEFORE INSERT ON studio_record_links
+BEGIN
+ SELECT RAISE(ABORT,'relation_cardinality_conflict') WHERE EXISTS (
+ SELECT 1 FROM studio_collection_relations r JOIN studio_record_links e ON e.tenant_id=r.tenant_id AND e.relation_id=r.id
+ WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.relation_id
+ AND ((r.cardinality='one-to-one' AND e.source_id=NEW.source_id AND e.target_id<>NEW.target_id)
+ OR (r.cardinality IN ('one-to-one','one-to-many') AND e.target_id=NEW.target_id AND e.source_id<>NEW.source_id))
+ );
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_links_storage BEFORE INSERT ON studio_record_links
+BEGIN
+ SELECT RAISE(ABORT,'relation_mapping_has_links') WHERE EXISTS(SELECT 1 FROM studio_collection_relations WHERE tenant_id=NEW.tenant_id AND id=NEW.relation_id AND storage<>'local');
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_delete AFTER DELETE ON studio_records BEGIN
+  DELETE FROM studio_record_search
+  WHERE tenant_id=OLD.tenant_id AND object_name=OLD.object_name AND record_id=OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_fts_before_delete BEFORE DELETE ON studio_record_search BEGIN
+  INSERT INTO studio_record_search_fts(studio_record_search_fts, rowid, search_text, tenant_id, object_name, record_id)
+  VALUES ('delete', OLD.rowid, OLD.search_text, OLD.tenant_id, OLD.object_name, OLD.record_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_fts_before_update BEFORE UPDATE ON studio_record_search BEGIN
+  INSERT INTO studio_record_search_fts(studio_record_search_fts, rowid, search_text, tenant_id, object_name, record_id)
+  VALUES ('delete', OLD.rowid, OLD.search_text, OLD.tenant_id, OLD.object_name, OLD.record_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_fts_insert AFTER INSERT ON studio_record_search BEGIN
+  INSERT INTO studio_record_search_fts(rowid, search_text, tenant_id, object_name, record_id)
+  VALUES (NEW.rowid, NEW.search_text, NEW.tenant_id, NEW.object_name, NEW.record_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_fts_update AFTER UPDATE ON studio_record_search BEGIN
+  INSERT INTO studio_record_search_fts(rowid, search_text, tenant_id, object_name, record_id)
+  VALUES (NEW.rowid, NEW.search_text, NEW.tenant_id, NEW.object_name, NEW.record_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_insert AFTER INSERT ON studio_records BEGIN
+  INSERT INTO studio_record_search(rowid, tenant_id, object_name, record_id, search_text)
+  SELECT NEW.rowid, NEW.tenant_id, NEW.object_name, NEW.id,
+         COALESCE((SELECT group_concat(CAST(search.value AS TEXT), '')
+                   FROM json_each(NEW.data, '$') AS search), '')
+  ON CONFLICT(tenant_id, object_name, record_id) DO UPDATE SET
+    rowid=excluded.rowid, search_text=excluded.search_text;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_search_update
+AFTER UPDATE OF tenant_id, object_name, id, data ON studio_records BEGIN
+  UPDATE studio_record_search SET
+    rowid=NEW.rowid,
+    tenant_id=NEW.tenant_id,
+    object_name=NEW.object_name,
+    record_id=NEW.id,
+    search_text=COALESCE((SELECT group_concat(CAST(search.value AS TEXT), '')
+                          FROM json_each(NEW.data, '$') AS search), '')
+  WHERE rowid=OLD.rowid;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_summary_delete AFTER DELETE ON studio_records BEGIN
+  DELETE FROM studio_record_summary_groups
+  WHERE tenant_id=OLD.tenant_id AND object_name=OLD.object_name
+    AND record_count=1 AND OLD.deleted_at IS NULL
+    AND (group_field,amount_field,value_type,value_key) IN (
+      SELECT d.group_field,d.amount_field,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN 'null'
+                  WHEN typeof(json_extract(OLD.data, '$.' || d.group_field)) IN ('integer','real') THEN 'number' ELSE 'text' END,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN ''
+                  ELSE json_extract(OLD.data, '$.' || d.group_field) END
+      FROM studio_record_summary_definitions AS d
+      WHERE d.tenant_id=OLD.tenant_id AND d.object_name=OLD.object_name
+    );
+  UPDATE studio_record_summary_groups
+  SET record_count=record_count-1,
+      amount=amount-CASE WHEN amount_field='' THEN 0.0
+                         ELSE COALESCE(CAST(json_extract(OLD.data, '$.' || amount_field) AS REAL), 0.0) END
+  WHERE tenant_id=OLD.tenant_id AND object_name=OLD.object_name
+    AND record_count>1 AND OLD.deleted_at IS NULL
+    AND (group_field,amount_field,value_type,value_key) IN (
+      SELECT d.group_field,d.amount_field,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN 'null'
+                  WHEN typeof(json_extract(OLD.data, '$.' || d.group_field)) IN ('integer','real') THEN 'number' ELSE 'text' END,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN ''
+                  ELSE json_extract(OLD.data, '$.' || d.group_field) END
+      FROM studio_record_summary_definitions AS d
+      WHERE d.tenant_id=OLD.tenant_id AND d.object_name=OLD.object_name
+    );
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_summary_insert AFTER INSERT ON studio_records BEGIN
+  INSERT INTO studio_record_summary_groups
+    (tenant_id, object_name, group_field, amount_field, value_type, value_key, record_count, amount)
+  SELECT d.tenant_id, d.object_name, d.group_field, d.amount_field,
+         CASE WHEN json_extract(NEW.data, '$.' || d.group_field) IS NULL THEN 'null'
+              WHEN typeof(json_extract(NEW.data, '$.' || d.group_field)) IN ('integer','real') THEN 'number' ELSE 'text' END,
+         CASE WHEN json_extract(NEW.data, '$.' || d.group_field) IS NULL THEN ''
+              ELSE json_extract(NEW.data, '$.' || d.group_field) END,
+         1,
+         CASE WHEN d.amount_field='' THEN 0.0
+              ELSE COALESCE(CAST(json_extract(NEW.data, '$.' || d.amount_field) AS REAL), 0.0) END
+  FROM studio_record_summary_definitions AS d
+  WHERE d.tenant_id=NEW.tenant_id AND d.object_name=NEW.object_name
+    AND NEW.deleted_at IS NULL
+  ON CONFLICT(tenant_id, object_name, group_field, amount_field, value_type, value_key)
+  DO UPDATE SET record_count=record_count+1, amount=amount+excluded.amount;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_record_summary_update AFTER UPDATE ON studio_records BEGIN
+  DELETE FROM studio_record_summary_groups
+  WHERE tenant_id=OLD.tenant_id AND object_name=OLD.object_name
+    AND record_count=1 AND OLD.deleted_at IS NULL
+    AND (group_field,amount_field,value_type,value_key) IN (
+      SELECT d.group_field,d.amount_field,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN 'null'
+                  WHEN typeof(json_extract(OLD.data, '$.' || d.group_field)) IN ('integer','real') THEN 'number' ELSE 'text' END,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN ''
+                  ELSE json_extract(OLD.data, '$.' || d.group_field) END
+      FROM studio_record_summary_definitions AS d
+      WHERE d.tenant_id=OLD.tenant_id AND d.object_name=OLD.object_name
+    );
+  UPDATE studio_record_summary_groups
+  SET record_count=record_count-1,
+      amount=amount-CASE WHEN amount_field='' THEN 0.0
+                         ELSE COALESCE(CAST(json_extract(OLD.data, '$.' || amount_field) AS REAL), 0.0) END
+  WHERE tenant_id=OLD.tenant_id AND object_name=OLD.object_name
+    AND record_count>1 AND OLD.deleted_at IS NULL
+    AND (group_field,amount_field,value_type,value_key) IN (
+      SELECT d.group_field,d.amount_field,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN 'null'
+                  WHEN typeof(json_extract(OLD.data, '$.' || d.group_field)) IN ('integer','real') THEN 'number' ELSE 'text' END,
+             CASE WHEN json_extract(OLD.data, '$.' || d.group_field) IS NULL THEN ''
+                  ELSE json_extract(OLD.data, '$.' || d.group_field) END
+      FROM studio_record_summary_definitions AS d
+      WHERE d.tenant_id=OLD.tenant_id AND d.object_name=OLD.object_name
+    );
+  INSERT INTO studio_record_summary_groups
+    (tenant_id, object_name, group_field, amount_field, value_type, value_key, record_count, amount)
+  SELECT d.tenant_id, d.object_name, d.group_field, d.amount_field,
+         CASE WHEN json_extract(NEW.data, '$.' || d.group_field) IS NULL THEN 'null'
+              WHEN typeof(json_extract(NEW.data, '$.' || d.group_field)) IN ('integer','real') THEN 'number' ELSE 'text' END,
+         CASE WHEN json_extract(NEW.data, '$.' || d.group_field) IS NULL THEN ''
+              ELSE json_extract(NEW.data, '$.' || d.group_field) END,
+         1,
+         CASE WHEN d.amount_field='' THEN 0.0
+              ELSE COALESCE(CAST(json_extract(NEW.data, '$.' || d.amount_field) AS REAL), 0.0) END
+  FROM studio_record_summary_definitions AS d
+  WHERE d.tenant_id=NEW.tenant_id AND d.object_name=NEW.object_name
+    AND NEW.deleted_at IS NULL
+  ON CONFLICT(tenant_id, object_name, group_field, amount_field, value_type, value_key)
+  DO UPDATE SET record_count=record_count+1, amount=amount+excluded.amount;
+END;
+--> statement-breakpoint
+CREATE TRIGGER studio_relation_definition_update BEFORE UPDATE ON studio_collection_relations
+BEGIN
+ SELECT RAISE(ABORT,'relation_mapping_has_links') WHERE (NEW.source_field<>OLD.source_field OR NEW.target_field<>OLD.target_field OR NEW.storage<>OLD.storage) AND EXISTS(SELECT 1 FROM studio_record_links WHERE tenant_id=OLD.tenant_id AND relation_id=OLD.id);
+ SELECT RAISE(ABORT,'relation_cardinality_conflict') WHERE (NEW.cardinality='one-to-one' AND EXISTS(SELECT 1 FROM studio_record_links WHERE tenant_id=OLD.tenant_id AND relation_id=OLD.id GROUP BY source_id HAVING count(*)>1)) OR (NEW.cardinality IN ('one-to-one','one-to-many') AND EXISTS(SELECT 1 FROM studio_record_links WHERE tenant_id=OLD.tenant_id AND relation_id=OLD.id GROUP BY target_id HAVING count(*)>1));
+END;
+--> statement-breakpoint
+CREATE TRIGGER tenant_agency_update AFTER UPDATE OF id_slug,name,is_active,updated_at ON tenants
+ WHEN NEW.id_slug != OLD.id_slug OR NEW.name != OLD.name OR NEW.is_active != OLD.is_active OR NEW.updated_at != OLD.updated_at
+ BEGIN
+ UPDATE agencies SET id_slug=NEW.id_slug,name=NEW.name,is_active=NEW.is_active,updated_at=NEW.updated_at WHERE tenant_id=NEW.id;
+ END;
+--> statement-breakpoint
+CREATE TRIGGER workflow_event_dispatch AFTER INSERT ON workflow_events WHEN NEW.depth<5 BEGIN
+ INSERT INTO workflow_executions(workspace_id,id,workflow_id,version_id,owner_id,initiator_id,event_key,node_id,context,depth)
+ SELECT w.workspace_id,v.id||':'||NEW.id,w.id,v.id,v.owner_id,v.owner_id,'event:'||NEW.id,
+ json_extract(v.definition,'$.nodes[0].id'),
+ json_object('trigger',json(CASE WHEN NEW.kind='deleted' THEN NEW.before_state ELSE NEW.after_state END),
+ 'before',json(NEW.before_state),'steps',json('{}'),
+ 'system',json_object('owner',v.owner_id,'workspace',w.workspace_id,'event',NEW.id,'eventType',NEW.kind,'cause',NEW.cause)),NEW.depth
+ FROM workflows w JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version
+ WHERE w.workspace_id=NEW.workspace_id AND w.enabled=1
+ AND (json_extract(v.definition,'$.trigger.type')=NEW.kind OR
+ (json_extract(v.definition,'$.trigger.type')='created_or_updated' AND NEW.kind IN ('created','updated')))
+ AND json_extract(v.definition,'$.trigger.collection')=NEW.collection
+ AND (NEW.kind<>'updated' OR COALESCE(json_array_length(v.definition,'$.trigger.changedFields'),0)=0 OR EXISTS (
+ SELECT 1 FROM json_each(v.definition,'$.trigger.changedFields') f
+ WHERE json_extract(NEW.before_state,'$.'||f.value) IS NOT json_extract(NEW.after_state,'$.'||f.value)
+ OR json_type(NEW.before_state,'$.'||f.value) IS NOT json_type(NEW.after_state,'$.'||f.value)))
+ AND (COALESCE(json_array_length(v.definition,'$.trigger.conditions'),0)=0 OR (
+ SELECT CASE WHEN json_extract(v.definition,'$.trigger.conditionMode')='any' THEN MAX(matched) ELSE MIN(matched) END
+ FROM (
+ SELECT COALESCE(CASE operator
+ WHEN 'eq' THEN actual_type IS NOT NULL AND (actual_type=expected_type OR (actual_type IN ('integer','real') AND expected_type IN ('integer','real'))) AND actual IS expected
+ WHEN 'neq' THEN actual_type IS NOT NULL AND NOT ((actual_type=expected_type OR (actual_type IN ('integer','real') AND expected_type IN ('integer','real'))) AND actual IS expected)
+ WHEN 'gt' THEN actual_type IN ('integer','real') AND actual>expected
+ WHEN 'gte' THEN actual_type IN ('integer','real') AND actual>=expected
+ WHEN 'lt' THEN actual_type IN ('integer','real') AND actual<expected
+ WHEN 'lte' THEN actual_type IN ('integer','real') AND actual<=expected
+ WHEN 'contains' THEN actual_type='text' AND instr(actual,expected)>0
+ WHEN 'empty' THEN actual_type IS NULL OR actual_type='null' OR (actual_type='text' AND actual='')
+ WHEN 'not_empty' THEN actual_type IS NOT NULL AND actual_type<>'null' AND NOT (actual_type='text' AND actual='')
+ ELSE 0 END,0) AS matched
+ FROM (
+ SELECT json_extract(f.value,'$.operator') AS operator,
+ json_extract(f.value,'$.value') AS expected,json_type(f.value,'$.value') AS expected_type,
+ json_extract(CASE WHEN NEW.kind='deleted' THEN NEW.before_state ELSE NEW.after_state END,'$.'||json_extract(f.value,'$.field')) AS actual,
+ json_type(CASE WHEN NEW.kind='deleted' THEN NEW.before_state ELSE NEW.after_state END,'$.'||json_extract(f.value,'$.field')) AS actual_type
+ FROM json_each(v.definition,'$.trigger.conditions') f
+ ))));
+END;
+--> statement-breakpoint
+CREATE TRIGGER workflow_record_created AFTER INSERT ON "studio_records"
+ WHEN NEW.deleted_at IS NULL AND EXISTS (
+ SELECT 1 FROM workflows w JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version
+ WHERE w.workspace_id=NEW.tenant_id AND w.enabled=1 AND json_extract(v.definition,'$.trigger.type') IN ('created','created_or_updated')
+ AND json_extract(v.definition,'$.trigger.collection')=NEW.object_name)
+ BEGIN
+ INSERT INTO workflow_events(workspace_id,collection,kind,before_state,after_state,depth,cause)
+ SELECT NEW.tenant_id,NEW.object_name,'created','{}',
+ json_set(NEW.data,'$.id',NEW.id,'$._version',NEW.version,'$.created_at',NEW.created_at,'$.updated_at',NEW.updated_at),
+ COALESCE(c.depth,0),c.cause FROM (SELECT 1) LEFT JOIN workflow_write_context c ON c.workspace_id=NEW.tenant_id AND c.record_id=NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER workflow_record_deleted AFTER UPDATE OF deleted_at ON "studio_records"
+ WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL AND EXISTS (
+ SELECT 1 FROM workflows w JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version
+ WHERE w.workspace_id=OLD.tenant_id AND w.enabled=1 AND json_extract(v.definition,'$.trigger.type')='deleted'
+ AND json_extract(v.definition,'$.trigger.collection')=OLD.object_name)
+ BEGIN
+ INSERT INTO workflow_events(workspace_id,collection,kind,before_state,after_state,depth,cause)
+ SELECT OLD.tenant_id,OLD.object_name,'deleted',
+ json_set(OLD.data,'$.id',OLD.id,'$._version',OLD.version,'$.created_at',OLD.created_at,'$.updated_at',OLD.updated_at),'{}',
+ COALESCE(c.depth,0),c.cause FROM (SELECT 1) LEFT JOIN workflow_write_context c ON c.workspace_id=OLD.tenant_id AND c.record_id=OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER workflow_record_hard_deleted AFTER DELETE ON "studio_records"
+ WHEN OLD.deleted_at IS NULL AND EXISTS (
+ SELECT 1 FROM workflows w JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version
+ WHERE w.workspace_id=OLD.tenant_id AND w.enabled=1 AND json_extract(v.definition,'$.trigger.type')='deleted'
+ AND json_extract(v.definition,'$.trigger.collection')=OLD.object_name)
+ BEGIN
+ INSERT INTO workflow_events(workspace_id,collection,kind,before_state,after_state,depth,cause)
+ SELECT OLD.tenant_id,OLD.object_name,'deleted',
+ json_set(OLD.data,'$.id',OLD.id,'$._version',OLD.version,'$.created_at',OLD.created_at,'$.updated_at',OLD.updated_at),'{}',
+ COALESCE(c.depth,0),c.cause FROM (SELECT 1) LEFT JOIN workflow_write_context c ON c.workspace_id=OLD.tenant_id AND c.record_id=OLD.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER workflow_record_updated AFTER UPDATE OF data ON "studio_records"
+ WHEN NEW.deleted_at IS NULL AND OLD.deleted_at IS NULL AND NEW.data<>OLD.data AND EXISTS (
+ SELECT 1 FROM workflows w JOIN workflow_versions v ON v.workspace_id=w.workspace_id AND v.id=w.published_version
+ WHERE w.workspace_id=NEW.tenant_id AND w.enabled=1 AND json_extract(v.definition,'$.trigger.type') IN ('updated','created_or_updated')
+ AND json_extract(v.definition,'$.trigger.collection')=NEW.object_name)
+ BEGIN
+ INSERT INTO workflow_events(workspace_id,collection,kind,before_state,after_state,depth,cause)
+ SELECT NEW.tenant_id,NEW.object_name,'updated',
+ json_set(OLD.data,'$.id',OLD.id,'$._version',OLD.version,'$.created_at',OLD.created_at,'$.updated_at',OLD.updated_at),
+ json_set(NEW.data,'$.id',NEW.id,'$._version',NEW.version,'$.created_at',NEW.created_at,'$.updated_at',NEW.updated_at),
+ COALESCE(c.depth,0),c.cause FROM (SELECT 1) LEFT JOIN workflow_write_context c ON c.workspace_id=NEW.tenant_id AND c.record_id=NEW.id;
+END;

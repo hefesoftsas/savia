@@ -11,7 +11,7 @@
     "./errors": "./src/errors.ts"
   },
   "scripts": {
-    "generate": "drizzle-kit generate --config drizzle.config.ts"
+    "generate": "node ../../scripts/new-db-migration.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2"

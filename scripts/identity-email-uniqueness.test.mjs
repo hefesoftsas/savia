@@ -1,19 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 
 const directory = new URL("../packages/db/migrations/", import.meta.url);
-const migration = new URL("0078_identity_principal_email_uniqueness.sql", directory);
+const baselineFiles = ["0001_initial.sql", "0002_bootstrap.sql"];
 
 function fixture() {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys=ON");
-  for (const file of readdirSync(directory)
-    .filter((file) => file.endsWith(".sql") && file < "0078")
-    .sort()) {
+  for (const file of baselineFiles)
     db.exec(readFileSync(new URL(file, directory), "utf8"));
-  }
   return db;
 }
 
@@ -25,70 +22,92 @@ function insertPrincipal(db, id, issuer, subject, email, isActive = 1) {
   ).run(id, issuer, subject, email, id, isActive, "now", "now");
 }
 
-function applyMigration(db) {
-  db.exec(readFileSync(migration, "utf8"));
-}
-
-test("preserves historical duplicate principals and blocks future active email collisions", () => {
+test("baseline blocks duplicate active emails but permits inactive historical identities", () => {
   const db = fixture();
   try {
-    insertPrincipal(db, "legacy-a", "issuer-a", "subject-a", " Shared@Example.test ");
-    insertPrincipal(db, "legacy-b", "issuer-b", "subject-b", "shared@example.test");
+    insertPrincipal(
+      db,
+      "active",
+      "issuer-a",
+      "subject-a",
+      "person@example.test",
+    );
+    insertPrincipal(
+      db,
+      "inactive",
+      "issuer-b",
+      "subject-b",
+      "PERSON@example.test",
+      0,
+    );
 
-    applyMigration(db);
-
-    assert.equal(
-      db.prepare("SELECT COUNT(*) AS n FROM identity_principal").get().n,
-      2,
+    assert.throws(
+      () =>
+        insertPrincipal(
+          db,
+          "duplicate",
+          "issuer-c",
+          "subject-c",
+          " Person@Example.test ",
+        ),
+      /IDENTITY_EMAIL_CONFLICT/,
     );
     assert.throws(
-      () => insertPrincipal(db, "new", "issuer-c", "subject-c", " SHARED@example.test "),
+      () =>
+        db
+          .prepare(
+            "UPDATE identity_principal SET is_active=1 WHERE id='inactive'",
+          )
+          .run(),
       /IDENTITY_EMAIL_CONFLICT/,
     );
 
-    // Existing login upserts are keyed by issuer and subject and can repair or
-    // refresh their row even when legacy data already contains duplicates.
-    db.prepare(`
-      INSERT INTO identity_principal
-        (id,issuer,subject,email,display_name,is_active,created_at,updated_at)
-      VALUES('legacy-a','issuer-a','subject-a','shared@example.test','Updated',1,'now','now')
-      ON CONFLICT(issuer,subject) DO UPDATE SET
-        email=excluded.email, display_name=excluded.display_name, updated_at=excluded.updated_at
-    `).run();
+    db.prepare(
+      "UPDATE identity_principal SET is_active=0 WHERE id='active'",
+    ).run();
+    db.prepare(
+      "UPDATE identity_principal SET is_active=1 WHERE id='inactive'",
+    ).run();
     assert.equal(
-      db.prepare("SELECT display_name FROM identity_principal WHERE id='legacy-a'").get().display_name,
-      "Updated",
+      db
+        .prepare("SELECT is_active FROM identity_principal WHERE id='inactive'")
+        .get().is_active,
+      1,
     );
-
-    insertPrincipal(db, "different", "issuer-c", "subject-c", "other@example.test");
   } finally {
     db.close();
   }
 });
 
-test("rejects colliding email changes and activation while allowing inactive duplicate records", () => {
+test("login upserts retain issuer-subject identity while refreshing profile fields", () => {
   const db = fixture();
   try {
-    insertPrincipal(db, "active", "issuer-a", "active", "person@example.test");
-    insertPrincipal(db, "active-update", "issuer-b", "update-active", "old@example.test");
-    insertPrincipal(db, "inactive-update", "issuer-b", "update", "old@example.test", 0);
-    insertPrincipal(db, "inactive-reactivate", "issuer-c", "reactivate", "person@example.test", 0);
-    applyMigration(db);
-
-    assert.throws(
-      () => db.prepare("UPDATE identity_principal SET email=' Person@Example.test ' WHERE id='active-update'").run(),
-      /IDENTITY_EMAIL_CONFLICT/,
+    insertPrincipal(
+      db,
+      "same-user",
+      "savia:better-auth",
+      "same-user",
+      "old@example.test",
     );
-    assert.throws(
-      () => db.prepare("UPDATE identity_principal SET is_active=1 WHERE id='inactive-reactivate'").run(),
-      /IDENTITY_EMAIL_CONFLICT/,
-    );
+    db.prepare(
+      `
+      INSERT INTO identity_principal
+        (id,issuer,subject,email,display_name,is_active,created_at,updated_at)
+      VALUES('replacement-id','savia:better-auth','same-user','new@example.test','Updated',1,'now','later')
+      ON CONFLICT(issuer,subject) DO UPDATE SET
+        email=excluded.email, display_name=excluded.display_name, updated_at=excluded.updated_at
+    `,
+    ).run();
 
-    db.prepare("UPDATE identity_principal SET is_active=0 WHERE id='active'").run();
-    db.prepare("UPDATE identity_principal SET is_active=1 WHERE id='inactive-reactivate'").run();
-    assert.equal(
-      db.prepare("SELECT is_active FROM identity_principal WHERE id='inactive-reactivate'").get().is_active,
-      1,
+    assert.deepEqual(
+      {
+        ...db
+          .prepare(
+            "SELECT id,email,display_name FROM identity_principal WHERE subject='same-user'",
+          )
+          .get(),
+      },
+      { id: "same-user", email: "new@example.test", display_name: "Updated" },
     );
   } finally {
     db.close();

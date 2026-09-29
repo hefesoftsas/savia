@@ -79,3 +79,5 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Identity email uniqueness](guides/identity-email-uniqueness.md)
 
 - [Documents and deliveries](guides/document-delivery.md): saved attachments, OneDrive copies and confirmed Outlook sends.
+
+- [Initial database baseline](guides/database-initial-baseline.md) — fresh installation and pre-production reset.

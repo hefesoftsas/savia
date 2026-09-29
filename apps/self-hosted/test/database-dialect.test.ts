@@ -191,13 +191,24 @@ async function contract(db: D1Database, dialect: SqlDialect) {
     await db.exec(
       readFileSync(
         new URL(
-          "../../../packages/db/migrations/0080_studio_record_search.sql",
+          "../../../packages/db/migrations/0001_initial.sql",
           import.meta.url,
         ),
         "utf8",
-      ).replaceAll("studio_records", "sample"),
+      )
+        .split("--> statement-breakpoint")
+        .filter((sql) =>
+          /^\s*CREATE (?:VIRTUAL TABLE|TABLE|TRIGGER) studio_record_search/.test(
+            sql,
+          ),
+        )
+        .join("\n")
+        .replaceAll("studio_records", "sample"),
     );
   }
+  if (dialect.name === "sqlite")
+    await db.exec(`INSERT INTO studio_record_search(rowid,tenant_id,object_name,record_id,search_text)
+    SELECT rowid,tenant_id,object_name,id,COALESCE((SELECT group_concat(CAST(value AS TEXT),'') FROM json_each(sample.data)), '') FROM sample`);
   for (const [document, search] of [
     ['{"value":1e-7}', "1.0e-07"],
     ['{"value":1e20}', "1.0e+20"],

@@ -11,11 +11,14 @@ import {
 import { seedTenantAgency } from "./tenant-fixtures";
 
 const migrations = Object.entries(
-  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
-    eager: true,
-    import: "default",
-    query: "?raw",
-  }),
+  import.meta.glob<string>(
+    "../../../packages/db/migrations/000{1_initial,2_bootstrap}.sql",
+    {
+      eager: true,
+      import: "default",
+      query: "?raw",
+    },
+  ),
 ).sort(([a], [b]) => a.localeCompare(b));
 const genericSolution = {
   format: "savia.solution",
@@ -112,26 +115,11 @@ const post = (body: unknown, method = "POST") => ({
   body: JSON.stringify(body),
 });
 beforeAll(async () => {
+  expect(migrations.map(([path]) => path.split("/").at(-1))).toEqual([
+    "0001_initial.sql",
+    "0002_bootstrap.sql",
+  ]);
   for (const [path, sql] of migrations) {
-    if (path.endsWith("0041_industry_solutions.sql")) {
-      await seedTenantAgency(env.DB, 101);
-      // Seeded under pre-rename names on purpose: 0064 renames the tables
-      // (and rows) to studio_* later in this same chain.
-      await env.DB.prepare(
-        "INSERT INTO crm_objects(tenant_id,name,label,description,config) VALUES ('agency:101','polizas','Mis pólizas','Personalizadas',?)",
-      )
-        .bind(
-          JSON.stringify({
-            version: 2,
-            fields: { name: { type: "Textbox", label: "Nombre" } },
-            fieldOrder: ["name"],
-          }),
-        )
-        .run();
-      await env.DB.prepare(
-        "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES ('legacy-record','agency:101','polizas','{\"name\":\"Póliza existente\"}')",
-      ).run();
-    }
     const statements = sql
       .split("--> statement-breakpoint")
       .map((statement) =>
@@ -141,23 +129,33 @@ beforeAll(async () => {
           .trim(),
       )
       .filter(Boolean);
-    if (path.endsWith("0077_tenant_only_isolation.sql")) {
-      await env.DB.batch(
-        statements.map((statement) => env.DB.prepare(statement)),
-      );
-      continue;
-    }
     for (const statement of statements) await env.DB.exec(statement);
   }
+  await seedTenantAgency(env.DB, 101);
+  await env.DB.prepare(
+    "INSERT INTO studio_solution_installations(tenant_id,id,version,manifest) VALUES('tenant:101','savia.insurance-management','1.0.0','{\"id\":\"savia.insurance-management\"}')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES('tenant:101','polizas','Mis pólizas','Personalizadas',?)",
+  )
+    .bind(
+      JSON.stringify({
+        version: 2,
+        fields: { name: { type: "Textbox", label: "Nombre" } },
+        fieldOrder: ["name"],
+      }),
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES('current-record','tenant:101','polizas','{\"name\":\"Póliza existente\"}')",
+  ).run();
 });
-it("adopts existing insurance without rewriting schemas or records", async () => {
+it("serves an explicitly installed solution from the final schema", async () => {
   const row = await env.DB.prepare(
-    "SELECT version,enabled FROM studio_solution_installations WHERE tenant_id='tenant:101' AND id='savia.insurance'",
+    "SELECT version,enabled FROM studio_solution_installations WHERE tenant_id='tenant:101' AND id='savia.insurance-management'",
   ).first();
-  expect(row).toEqual({ version: "0.0.0", enabled: 1 });
-  const response = await app().request(
-    "/v1/dynamic-crm/101/api/records/polizas",
-  );
+  expect(row).toEqual({ version: "1.0.0", enabled: 1 });
+  const response = await app().request("/v1/studio/101/api/records/polizas");
   expect(response.status).toBe(200);
   expect(JSON.stringify(await response.json())).toContain("Póliza existente");
   expect(

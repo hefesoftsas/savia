@@ -15,7 +15,7 @@ beforeAll(async () => {
   await db.exec(
     "CREATE TABLE studio_objects(tenant_id TEXT,name TEXT,config TEXT); CREATE TABLE studio_records(tenant_id TEXT,object_name TEXT,id TEXT,data TEXT,version INTEGER DEFAULT 1,deleted_at TEXT); CREATE TABLE fail_guard(valid INTEGER CHECK(valid=1));",
   );
-  // Inline history DDL (mirrors migrations/0017_record_history.sql with studio_* names).
+  // Inline history DDL (mirrors history definitions in migrations/0001_initial.sql).
   const historyDdl = `CREATE TABLE studio_record_history (
  tenant_id TEXT NOT NULL, object_name TEXT NOT NULL, record_id TEXT NOT NULL,
  version INTEGER NOT NULL, action TEXT NOT NULL CHECK(action IN ('created','updated','deleted','restored')),
