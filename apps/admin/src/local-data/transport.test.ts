@@ -424,3 +424,31 @@ it.each([
     data: [{ name: "external", version: 2 }],
   });
 });
+
+it("always refreshes deletion previews from the backend and never falls back on failure", async () => {
+  const local = { ...store(), scope: "deletion-preview-fresh" };
+  const network = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ data: { token: "first", totalRecords: 1 } }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ data: { token: "second", totalRecords: 2 } }),
+    )
+    .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  const transport = createLocalTransport(
+    local as never,
+    network,
+    async () => {},
+  );
+  const path = "/api/objects/contacts/deletion-preview";
+  expect(await (await transport(path)).json()).toMatchObject({
+    data: { token: "first" },
+  });
+  expect(await (await transport(path)).json()).toMatchObject({
+    data: { token: "second", totalRecords: 2 },
+  });
+  await expect(transport(path)).rejects.toThrow("Failed to fetch");
+  expect(network).toHaveBeenCalledTimes(3);
+  expect(network).toHaveBeenLastCalledWith(path, { cache: "no-store" });
+});

@@ -46,6 +46,16 @@ export function createLocalTransport(
       url.pathname === "/api/bootstrap" ||
       url.pathname === "/api/business/setup";
     if (segments[1] === "local-sync") return network(path, init);
+    // Destructive confirmation must always reflect the current backend scope.
+    // Do not persist previews or fall back to stale/offline metadata.
+    if (
+      method === "GET" &&
+      segments[1] === "objects" &&
+      segments.length === 4 &&
+      segments[3] === "deletion-preview"
+    )
+      return network(path, { ...init, cache: "no-store" });
+
     if (
       method === "POST" &&
       bootstrapRoute &&

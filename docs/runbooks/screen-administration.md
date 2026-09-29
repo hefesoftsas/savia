@@ -78,6 +78,8 @@ screens. Destructive audit operations require tenant management permissions.
 ## Permanent deletion and dependent screens
 
 Tenant administrators can preview permanent deletion from screen administration.
+Deletion previews always require a fresh backend response; they are not stored or
+served from the browser metadata cache, including on retries or while offline.
 The dialog loads the selected screen and recursively finds screens that reference
 it, through relation fields or collection relations in the same tenant. References
 from the selected screen to an independent parent do not include that parent.
