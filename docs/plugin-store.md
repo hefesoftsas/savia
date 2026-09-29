@@ -169,6 +169,13 @@ servidor quedan fuera de esta versión.
 4. **Ver** renderiza el plugin en su iframe aislado.
 5. **Eliminar** exige desactivar primero; nunca borra registros.
 
+The catalog loads artifact metadata and configuration with a constant number of
+database reads, without loading JavaScript bundles. It shows the manifest from
+the latest semantic version. For an installed plugin, screens and widgets come
+from the installed version even when disabled; if that version is missing or
+its configuration is invalid, they are empty rather than falling back to the
+latest configuration.
+
 Re-subir la misma versión con distinto contenido se rechaza (409):
 publica una versión semver nueva. La instalación conserva datos y
 respeta dependencias `requires` (solo built-ins del host o extensiones

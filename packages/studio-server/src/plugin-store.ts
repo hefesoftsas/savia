@@ -402,6 +402,103 @@ export async function storePluginCatalog(
   return catalog;
 }
 
+export type StorePluginCatalogEntry = {
+  manifest: PluginStoreManifest;
+  config: StoreJson | null;
+};
+
+function isMissingStoreJsonColumn(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:no such column:\s*store_json|column ["']?store_json["']? does not exist|store_json.*(?:no such column|does not exist))/i.test(
+    message,
+  );
+}
+
+function isMissingStoreArtifactTable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:no such table:\s*plugin_store_artifacts|table ["']?plugin_store_artifacts["']? does not exist)/i.test(
+    message,
+  );
+}
+
+function parseStoreJson(value: string | null | undefined): StoreJson | null {
+  if (!value) return null;
+  try {
+    return storeJsonSchema.parse(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tenant catalog manifests and their displayed configuration from one artifact
+ * read. Installed artifacts keep their version even when disabled; dangling
+ * installations deliberately do not fall back to the latest upload.
+ */
+export async function storePluginCatalogWithConfigs(
+  db: D1Database,
+  tenant: string,
+  installedVersions: ReadonlyMap<string, string>,
+): Promise<StorePluginCatalogEntry[]> {
+  let rows: Array<{
+    id: string;
+    version: string;
+    manifest: string;
+    store_json: string | null;
+  }>;
+  try {
+    const result = await db
+      .prepare(
+        "SELECT id,version,manifest,store_json FROM plugin_store_artifacts WHERE tenant_id=?",
+      )
+      .bind(tenant)
+      .all<{
+        id: string;
+        version: string;
+        manifest: string;
+        store_json: string | null;
+      }>();
+    rows = result.results;
+  } catch (error) {
+    if (isMissingStoreArtifactTable(error)) return [];
+    if (isMissingStoreJsonColumn(error)) {
+      return (await storePluginCatalog(db, tenant)).map((manifest) => ({
+        manifest,
+        config: null,
+      }));
+    }
+    throw error;
+  }
+
+  const latestVersions = latestById(rows);
+  const latestRows = new Map<string, (typeof rows)[number]>();
+  const artifactRowsByVersion = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    artifactRowsByVersion.set(`${row.id}\0${row.version}`, row);
+    if (latestVersions.get(row.id) === row.version) latestRows.set(row.id, row);
+  }
+
+  const catalog: StorePluginCatalogEntry[] = [];
+  for (const [id, latestRow] of latestRows) {
+    let manifest: PluginStoreManifest;
+    try {
+      manifest = pluginStoreManifestSchema.parse(
+        JSON.parse(latestRow.manifest),
+      );
+    } catch {
+      // Keep the existing behavior: a corrupt latest manifest hides this id.
+      continue;
+    }
+    const configVersion = installedVersions.get(id) ?? latestRow.version;
+    const configRow = artifactRowsByVersion.get(`${id}\0${configVersion}`);
+    catalog.push({
+      manifest,
+      config: parseStoreJson(configRow?.store_json),
+    });
+  }
+  return catalog;
+}
+
 async function latestArtifactRow<T>(
   db: D1Database,
   tenant: string,
@@ -490,8 +587,7 @@ export async function storeConfigFor(
           id,
           "version,store_json",
         );
-    if (!row?.store_json) return null;
-    return storeJsonSchema.parse(JSON.parse(row.store_json));
+    return parseStoreJson(row?.store_json);
   } catch {
     return null;
   }

@@ -18,9 +18,8 @@ import type { ExtensionConnectionRepository } from "./extension-connections";
 import { prepareExtensionObjectProvisioning } from "./extension-object-requirements";
 import type { ExtensionSettingsRepository } from "./extension-settings";
 import {
-  storeConfigFor,
   storeObjectRequirements,
-  storePluginCatalog,
+  storePluginCatalogWithConfigs,
   storePluginManifest,
 } from "./plugin-store";
 import { audit, guard, transaction } from "./services";
@@ -306,8 +305,12 @@ export function registerExtensions(
       .bind(tenant)
       .all<StoredInstallation>();
     const installed = new Map(rows.results.map((row) => [row.id, row]));
-    const catalog = await storePluginCatalog(c.env.DB, tenant);
-    const shadowed = new Set(catalog.map((manifest) => manifest.id));
+    const catalog = await storePluginCatalogWithConfigs(
+      c.env.DB,
+      tenant,
+      new Map(rows.results.map((row) => [row.id, row.version])),
+    );
+    const shadowed = new Set(catalog.map(({ manifest }) => manifest.id));
     const compiledEntries = registry.ids().map((id) => {
       const extension = registry.get(id)!;
       return {
@@ -318,8 +321,7 @@ export function registerExtensions(
     });
     // Lo subido al store reemplaza a lo compilado con el mismo id.
     const storeEntries = [];
-    for (const manifest of catalog) {
-      const config = await storeConfigFor(c.env.DB, tenant, manifest.id);
+    for (const { manifest, config } of catalog) {
       storeEntries.push({
         manifest,
         builtIn: false,

@@ -163,6 +163,22 @@ function appWithRuntime(tenant: string) {
   });
 }
 
+function countPreparedStatements(database: D1Database) {
+  const statements: string[] = [];
+  const counted = new Proxy(database, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          statements.push(query);
+          return target.prepare(query);
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { database: counted, statements };
+}
+
 async function api(
   tenant: string,
   path: string,
@@ -456,6 +472,358 @@ describe("plugin store por tenant", () => {
       platform.env,
     );
     expect(blocked.status).toBe(404);
+  });
+
+  it("loads all catalog configuration with a bounded number of D1 reads", async () => {
+    const tenant = "store-catalog-query-count";
+    for (const id of [
+      "custom.catalog-one",
+      "custom.catalog-two",
+      "custom.catalog-three",
+      "custom.catalog-four",
+    ]) {
+      const uploaded = await uploadZip(
+        tenant,
+        pluginZip({
+          manifest: { id },
+          store: {
+            format: "savia.store",
+            formatVersion: 1,
+            screens: [{ object: "records" }],
+          },
+        }),
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+    }
+
+    const counted = countPreparedStatements(platform.env.DB);
+    const response = await app(tenant).request(
+      "http://localhost/api/extensions",
+      {},
+      { ...platform.env, DB: counted.database },
+    );
+    const body = (await response.json()) as {
+      data: Array<{ store?: boolean }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data.filter((entry) => entry.store)).toHaveLength(4);
+    expect(counted.statements).toHaveLength(2);
+  });
+
+  it("preserves installed, latest, missing, and corrupt catalog configuration behavior", async () => {
+    const tenant = "store-catalog-compatibility";
+    const installedOld = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "installed_old" }],
+      widgets: [
+        {
+          id: "installed-widget",
+          collection: "installed_old",
+          title: { es: "Antiguo", en: "Old" },
+        },
+      ],
+    };
+    const installedLatest = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "installed_latest" }],
+      widgets: [
+        {
+          id: "latest-widget",
+          collection: "installed_latest",
+          title: { es: "Nuevo", en: "Latest" },
+        },
+      ],
+    };
+    const latestAvailable = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "available_latest" }],
+      widgets: [
+        {
+          id: "available-widget",
+          collection: "available_latest",
+          title: { es: "Disponible", en: "Available" },
+        },
+      ],
+    };
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-installed" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.catalog-installed/install",
+          { method: "POST" },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.catalog-installed",
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: false }),
+          },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: {
+              id: "custom.catalog-installed",
+              version: "1.1.0",
+            },
+            store: installedLatest,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-available" },
+            store: {
+              ...latestAvailable,
+              screens: [{ object: "available_1_9" }],
+            },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: {
+              id: "custom.catalog-available",
+              version: "1.10.0",
+            },
+            store: latestAvailable,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          `${tenant}-other`,
+          pluginZip({
+            manifest: { id: "custom.catalog-available" },
+            store: {
+              ...latestAvailable,
+              screens: [{ object: "other_tenant" }],
+            },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-dangling" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.catalog-dangling/install",
+          { method: "POST" },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    await platform.env.DB.prepare(
+      "UPDATE studio_extension_installations SET version=? WHERE tenant_id=? AND id=?",
+    )
+      .bind("9.9.9", tenant, "custom.catalog-dangling")
+      .run();
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-corrupt-config" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    await platform.env.DB.prepare(
+      "UPDATE plugin_store_artifacts SET store_json=? WHERE tenant_id=? AND id=?",
+    )
+      .bind(
+        JSON.stringify({
+          format: "savia.store",
+          formatVersion: 1,
+          actions: "not-an-array",
+        }),
+        tenant,
+        "custom.catalog-corrupt-config",
+      )
+      .run();
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-corrupt-manifest" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: {
+              id: "custom.catalog-corrupt-manifest",
+              version: "2.0.0",
+            },
+            store: installedLatest,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    await platform.env.DB.prepare(
+      "UPDATE plugin_store_artifacts SET manifest=? WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(
+        JSON.stringify({
+          format: "invalid",
+          id: "custom.catalog-corrupt-manifest",
+        }),
+        tenant,
+        "custom.catalog-corrupt-manifest",
+        "2.0.0",
+      )
+      .run();
+
+    const response = await app(tenant).request(
+      "http://localhost/api/extensions",
+      {},
+      platform.env,
+    );
+    const body = (await response.json()) as {
+      data: Array<{
+        manifest: { id: string; version: string };
+        screens: Array<{ object: string }>;
+        installed: { version: string; enabled: boolean } | null;
+      }>;
+    };
+    const entry = (id: string) =>
+      body.data.find((candidate) => candidate.manifest.id === id);
+
+    expect(response.status).toBe(200);
+    expect(entry("custom.catalog-installed")).toMatchObject({
+      manifest: { version: "1.1.0" },
+      screens: [{ object: "installed_old" }],
+      widgets: [{ id: "installed-widget", collection: "installed_old" }],
+      installed: { version: "1.0.0", enabled: false },
+    });
+    expect(entry("custom.catalog-available")).toMatchObject({
+      manifest: { version: "1.10.0" },
+      screens: [{ object: "available_latest" }],
+      widgets: [{ id: "available-widget", collection: "available_latest" }],
+    });
+    expect(entry("custom.catalog-dangling")).toMatchObject({
+      installed: { version: "9.9.9", enabled: true },
+      screens: [],
+      widgets: [],
+    });
+    expect(entry("custom.catalog-corrupt-config")).toMatchObject({
+      screens: [],
+      widgets: [],
+    });
+    expect(entry("custom.catalog-corrupt-manifest")).toBeUndefined();
+  });
+
+  it("keeps the manifest catalog available when an older schema lacks store_json", async () => {
+    const tenant = "store-catalog-legacy-schema";
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-legacy" },
+            store: {
+              format: "savia.store",
+              formatVersion: 1,
+              screens: [{ object: "legacy_config" }],
+            },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const legacyDatabase = new Proxy(platform.env.DB, {
+      get(target, property) {
+        if (property === "prepare")
+          return (query: string) => {
+            if (
+              /SELECT .*store_json.* FROM plugin_store_artifacts/i.test(query)
+            )
+              return {
+                bind: () => ({
+                  all: async () => {
+                    throw new Error("no such column: store_json");
+                  },
+                }),
+              } as unknown as D1PreparedStatement;
+            return target.prepare(query);
+          };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const response = await app(tenant).request(
+      "http://localhost/api/extensions",
+      {},
+      { ...platform.env, DB: legacyDatabase },
+    );
+    const body = (await response.json()) as {
+      data: Array<{
+        manifest: { id: string };
+        screens: Array<{ object: string }>;
+      }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(
+      body.data.find((entry) => entry.manifest.id === "custom.catalog-legacy"),
+    ).toMatchObject({ screens: [] });
   });
 
   it("keeps installed screen bindings until a newer ZIP is installed", async () => {
