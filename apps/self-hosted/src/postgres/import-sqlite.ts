@@ -21,6 +21,22 @@ const stores = [
   },
 ] as const;
 const internal = new Set(["_savia_sqlite_migrations", "sqlite_sequence"]);
+const sqliteOnlyCoreTables = new Set([
+  "studio_record_counts",
+  "studio_record_read_cache",
+  "studio_record_search",
+  "studio_record_search_fts",
+  // FTS5 virtual-table shadow tables are rebuildable index internals.
+  "studio_record_search_fts_config",
+  "studio_record_search_fts_data",
+  "studio_record_search_fts_docsize",
+  "studio_record_search_fts_idx",
+]);
+export function isSqliteDerivedTable(store: string, table: string): boolean {
+  return (
+    internal.has(table) || (store === "core" && sqliteOnlyCoreTables.has(table))
+  );
+}
 const hash = (data: Uint8Array | string) =>
   createHash("sha256").update(data).digest("hex");
 
@@ -104,7 +120,10 @@ export async function importSqlite(options: {
         .prepare(
           "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
         )
-        .all()) {
+        .all()
+        .filter(
+          (entry) => !isSqliteDerivedTable(store.name, String(entry.name)),
+        )) {
         const inspect = db.prepare(
           `SELECT * FROM ${quote(String(table.name))}`,
         );
@@ -194,7 +213,7 @@ export async function importSqlite(options: {
               )
               .all()
               .map((r) => String(r.name))
-              .filter((n) => !internal.has(n));
+              .filter((n) => !isSqliteDerivedTable(store.name, n));
             const target = await client.query<{ table_name: string }>(
               "SELECT table_name FROM information_schema.tables WHERE table_schema=$1 AND table_type='BASE TABLE' AND table_name <> '_savia_postgres_migrations'",
               [store.schema],

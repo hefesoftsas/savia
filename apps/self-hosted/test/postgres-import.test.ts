@@ -14,6 +14,7 @@ import { createApplication } from "../src/application";
 import { loadConfiguration } from "../src/config";
 import {
   importSqlite,
+  isSqliteDerivedTable,
   ImportTextCompatibilityError,
 } from "../src/postgres/import-sqlite";
 import {
@@ -78,6 +79,26 @@ it("provides safe CLI-compatible Unicode diagnostics", () => {
 });
 it("requires PostgreSQL when explicitly selected", () => {
   if (postgresTestsRequired) expect(postgresTestUrl).toBeTruthy();
+});
+it("excludes only declared core-derived SQLite tables from PostgreSQL import", () => {
+  const derived = [
+    "studio_record_counts",
+    "studio_record_read_cache",
+    "studio_record_search",
+    "studio_record_search_fts",
+    "studio_record_search_fts_config",
+    "studio_record_search_fts_data",
+    "studio_record_search_fts_docsize",
+    "studio_record_search_fts_idx",
+  ];
+  expect(derived.every((table) => isSqliteDerivedTable("core", table))).toBe(
+    true,
+  );
+  expect(isSqliteDerivedTable("request", "studio_record_counts")).toBe(false);
+  expect(isSqliteDerivedTable("core", "studio_record_search_fts_extra")).toBe(
+    false,
+  );
+  expect(isSqliteDerivedTable("core", "unsupported_source")).toBe(false);
 });
 it.skipIf(!postgresTestUrl)(
   "imports actual application stores without source writes and rejects existing targets",
@@ -243,6 +264,13 @@ it.skipIf(!postgresTestUrl)(
           destinationUrl: url,
         });
         expect(report.verified).toBe(true);
+        expect(
+          report.tables.some(
+            (table) =>
+              table.schema === "savia_core" &&
+              isSqliteDerivedTable("core", table.table),
+          ),
+        ).toBe(false);
         expect((await readdir(directory)).sort()).toEqual(
           [...sourceFiles].sort(),
         );

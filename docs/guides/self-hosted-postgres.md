@@ -73,7 +73,9 @@ node --import ./apps/self-hosted/node_modules/tsx/dist/loader.mjs apps/self-host
 
 The importer checks schema compatibility, copies all three stores in one
 transaction, verifies mapped values and row counts, and advances generated ID
-sequences. It refuses a destination containing any existing tables. A failed import can leave
+sequences. It skips only the core SQLite-derived record counts, read cache and
+FTS index tables; PostgreSQL rebuilds none of these and uses its direct count
+and query paths. It refuses a destination containing any existing tables. A failed import can leave
 empty initialized schemas, but cannot commit a partial copy of application data. Retry against another empty database, or explicitly recreate only the disposable failed destination after verifying it contains no user data.
 
 After success, point a stopped application at PostgreSQL and restore its matching

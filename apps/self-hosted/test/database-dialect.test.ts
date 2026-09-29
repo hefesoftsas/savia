@@ -1,4 +1,5 @@
 import { test, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   dialectFor,
   registerDialect,
@@ -48,7 +49,9 @@ async function contract(db: D1Database, dialect: SqlDialect) {
   const rows = async (sql: string, args: unknown[] = []) =>
     (
       await db
-        .prepare(`SELECT id FROM sample WHERE ${sql} ORDER BY id`)
+        .prepare(
+          `SELECT id FROM sample AS studio_records WHERE ${sql} ORDER BY id`,
+        )
         .bind(...args)
         .all()
     ).results.map((r) => r.id);
@@ -181,6 +184,18 @@ async function contract(db: D1Database, dialect: SqlDialect) {
           `SELECT ${dialect.jsonType("data", "$.value")} AS type, ${dialect.jsonText("data", "$.value")} AS value FROM sample WHERE id=0`,
         )
         .first(),
+    );
+  }
+  if (dialect.name === "sqlite") {
+    // Use the real search projection/triggers on this contract's sample table.
+    await db.exec(
+      readFileSync(
+        new URL(
+          "../../../packages/db/migrations/0080_studio_record_search.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ).replaceAll("studio_records", "sample"),
     );
   }
   for (const [document, search] of [

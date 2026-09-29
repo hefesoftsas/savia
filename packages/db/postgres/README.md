@@ -1,10 +1,13 @@
 # Native PostgreSQL baseline
 
-`0001_baseline.sql` is a native schema snapshot of all source migrations recorded
-in `manifest.json`. It is checked-in SQL, not a runtime SQLite translator. The
-manifest maps every final SQLite table, column, foreign key, explicit index,
-trigger and seed count to the native baseline. The request database has its own
-baseline and source manifest in `apps/savia-request/postgres/`.
+`0001_baseline.sql` is a native schema snapshot of source migrations recorded in
+`manifest.json`. It is checked-in SQL, not a runtime SQLite translator. The
+manifest maps the PostgreSQL-compatible SQLite schema: derived record counts,
+read-cache entries, and SQLite FTS tables listed in `sqliteOnlyDerivedTables`
+are intentionally omitted from PostgreSQL and from SQLite-to-PostgreSQL imports.
+PostgreSQL reads those counts directly and uses its normal query path for search.
+The request database has its own baseline and source manifest in
+`apps/savia-request/postgres/`.
 
 Run through `migratePostgres`, which owns the deployment advisory lock, trusted
 search path, checksum history and transaction. Startup can share one reserved

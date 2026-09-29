@@ -353,7 +353,25 @@
     {
       "filename": "0078_identity_principal_email_uniqueness.sql",
       "sha256": "9d7d5db677dc8a4f3dccfd0d570c8214203f56f5a34accd562ec0a29d6f2513c"
+    },
+    {
+      "filename": "0079_record_read_state.sql",
+      "sha256": "8d3f152ad169f5292d595a6d6cfebee6ddf5d18408f8a43c1b832028a142a0f5"
+    },
+    {
+      "filename": "0080_studio_record_search.sql",
+      "sha256": "25788d3119fa014c0d92cc70bd86462d88d604426a31b50abd510c1e84f6bcdd"
     }
+  ],
+  "sqliteOnlyDerivedTables": [
+    "studio_record_counts",
+    "studio_record_read_cache",
+    "studio_record_search",
+    "studio_record_search_fts",
+    "studio_record_search_fts_config",
+    "studio_record_search_fts_data",
+    "studio_record_search_fts_docsize",
+    "studio_record_search_fts_idx"
   ],
   "objects": [
     {
