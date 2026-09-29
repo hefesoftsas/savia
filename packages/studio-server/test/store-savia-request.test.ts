@@ -223,8 +223,11 @@ beforeAll(async () => {
       "utf8",
     )
       .split(";")
+      .map((statement) =>
+        statement.replace(/^.*--> statement-breakpoint.*$/gm, ""),
+      )
       .filter((statement) => statement.trim()))
-      await sr.env.DB.exec(sql + ";");
+      await sr.env.DB.prepare(sql).run();
   await ensureInsuranceAutoLightBundle({
     DB: sr.env.DB,
     ENCRYPTION_KEY: "test-encryption-key",
@@ -238,7 +241,7 @@ afterAll(async () => {
 
 describe("cotización live vía savia-request desde el store", () => {
   it("ejecuta un flujo mock real de punta a punta.", async () => {
-    const tenant = "quotes-sr-e2e";
+    const tenant = "tenant:101";
     const form = new FormData();
     form.set(
       "file",
@@ -329,7 +332,7 @@ describe("port real insurance.quotes con ejecución nativa", () => {
   maybeQuotes(
     "ejecuta flujos sin delegar al release.",
     async () => {
-      const tenant = "quotes-native";
+      const tenant = "tenant:102";
       const zip = readFileSync(QUOTES_ARTIFACT);
       const form = new FormData();
       form.set(
