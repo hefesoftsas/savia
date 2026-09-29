@@ -5,6 +5,7 @@ import { registerDialect } from "@savia/db/dialect";
 import { postgresDialect } from "@savia/db/postgres-dialect";
 import { SqliteDatabase } from "./sqlite";
 import { openPostgresDatabase } from "./postgres/database";
+import { ensurePostgresRecordIndexes } from "./postgres/record-indexes";
 import {
   migratePostgres,
   withPostgresDeploymentLock,
@@ -51,6 +52,16 @@ export function openDatabases(
             seed: true,
             client,
           });
+          await client.query(
+            "BEGIN; SET LOCAL search_path TO savia_core, pg_catalog",
+          );
+          try {
+            await ensurePostgresRecordIndexes(client);
+            await client.query("COMMIT");
+          } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+          }
           await client.query("CREATE SCHEMA IF NOT EXISTS savia_request");
           await migratePostgres({
             connectionString: options.connectionString,

@@ -1,4 +1,10 @@
-import { dialectFor, sqlLiteral } from "@savia/db/dialect";
+import {
+  dialectFor,
+  quoteIdentifier,
+  sqlLiteral,
+  type SqlDialect,
+} from "@savia/db/dialect";
+import { postgresJsonSortParts } from "@savia/db/postgres-dialect";
 import type {
   RecordPerformance,
   StudioObject,
@@ -21,13 +27,33 @@ export async function recordIndexStatements(
   previous: Index[] = [],
   next: Index[] = [],
 ): Promise<D1PreparedStatement[]> {
-  if (dialectFor(db).name !== "sqlite") return [];
+  const dialect = dialectFor(db);
+  const statements = await recordIndexSql(
+    dialect,
+    tenant,
+    objectName,
+    previous,
+    next,
+  );
+  return statements.map((sql) => db.prepare(sql));
+}
+
+/** Generate configured record index DDL for startup, import, and adapters. */
+export async function recordIndexSql(
+  dialect: SqlDialect,
+  tenant: string,
+  objectName: string,
+  previous: Index[] = [],
+  next: Index[] = [],
+): Promise<string[]> {
   const name = (index: Index) => recordIndexName(tenant, objectName, index);
-  const statements: D1PreparedStatement[] = [];
+  const statements: string[] = [];
   const keys = new Set(next.map((index) => JSON.stringify(index)));
   for (const index of previous)
     if (!keys.has(JSON.stringify(index)))
-      statements.push(db.prepare(`DROP INDEX IF EXISTS ${await name(index)}`));
+      statements.push(
+        `DROP INDEX IF EXISTS ${quoteIdentifier(await name(index))}`,
+      );
   for (const index of next) {
     if (previous.some((old) => JSON.stringify(old) === JSON.stringify(index)))
       continue;
@@ -37,14 +63,19 @@ export async function recordIndexStatements(
       !["ASC", "DESC"].includes(index.order)
     )
       throw Error("Invalid performance index");
-    const fields = index.fields.map(
-      (field, i) =>
-        `${["created_at", "updated_at"].includes(field) ? field : dialectFor(db).jsonSort("data", "$." + field)} ${i === index.fields.length - 1 ? index.order : "ASC"}`,
-    );
+    const fields = index.fields.flatMap((field, i) => {
+      const order = i === index.fields.length - 1 ? index.order : "ASC";
+      if (["created_at", "updated_at"].includes(field))
+        return [`${quoteIdentifier(field)} ${order}`];
+      if (dialect.name === "postgres")
+        return postgresJsonSortParts("data", "$." + field).map(
+          (part) => `(${part}) ${order}`,
+        );
+      return [`${dialect.jsonSort("data", "$." + field)} ${order}`];
+    });
+    const indexName = await name(index);
     statements.push(
-      db.prepare(
-        `CREATE INDEX IF NOT EXISTS ${await name(index)} ON studio_records(${fields.join(",")},id ASC) WHERE tenant_id=${sqlLiteral(tenant)} AND object_name=${sqlLiteral(objectName)} AND deleted_at IS NULL`,
-      ),
+      `CREATE INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON studio_records(${fields.join(",")},id ASC) WHERE tenant_id=${sqlLiteral(tenant)} AND object_name=${sqlLiteral(objectName)} AND deleted_at IS NULL`,
     );
   }
   return statements;

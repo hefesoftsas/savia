@@ -2,6 +2,7 @@
 .worktrees
 .superpowers
 node_modules
+.pnpm-store
 **/node_modules
 **/.wrangler
 dist

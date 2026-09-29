@@ -35,6 +35,13 @@ const rank = (d: string, p: string) =>
   `(CASE WHEN ${node(d, p)} IS NULL OR jsonb_typeof(${node(d, p)})='null' THEN NULL WHEN jsonb_typeof(${node(d, p)})='number' THEN 1 WHEN jsonb_typeof(${node(d, p)})='boolean' THEN 1 ELSE 2 END)`;
 const numeric = (d: string, p: string) =>
   `(CASE WHEN ${rank(d, p)}=1 THEN (${text(d, p)})::numeric END)`;
+/** The three non-NULL scalar keys used for JSON ordering and btree indexes. */
+export const postgresJsonSortParts = (document: string, path: string) =>
+  [
+    `COALESCE(${rank(document, path)},0)`,
+    `COALESCE(${numeric(document, path)},0)`,
+    `(CASE WHEN ${rank(document, path)}=2 THEN ${text(document, path)} ELSE '' END) COLLATE "C"`,
+  ] as const;
 export const postgresDialect: SqlDialect = {
   name: "postgres",
   quoteIdentifier,
@@ -48,10 +55,11 @@ export const postgresDialect: SqlDialect = {
   },
   jsonCompare(d, p, op, value) {
     const equal = op === "eq" || op === "ne";
+    const [sortRank, sortNumber, sortText] = postgresJsonSortParts(d, p);
     if (value === null)
       return {
         sql: equal
-          ? `${text(d, p)} IS ${op === "ne" ? "NOT " : ""}NULL`
+          ? `(${sortRank}=0 AND ${sortNumber}=0 AND ${sortText}='')${op === "ne" ? " IS NOT TRUE" : ""}`
           : "FALSE",
         parameters: [],
       };
@@ -60,19 +68,23 @@ export const postgresDialect: SqlDialect = {
     const isNumber = typeof value !== "string",
       r = isNumber ? 1 : 2;
     const expr = isNumber ? numeric(d, p) : text(d, p);
-    if (equal)
+    if (equal) {
+      const numericValue = typeof value === "boolean" ? Number(value) : value;
+      const expectedRank = isNumber ? 1 : 2;
+      const expectedNumber = isNumber ? "?" : "0";
+      const expectedText = isNumber ? "''" : "?";
       return {
-        sql: `${op === "ne" ? "NOT " : ""}(COALESCE(${rank(d, p)}=${r} AND ${expr} = ?,FALSE))`,
-        parameters: [typeof value === "boolean" ? Number(value) : value],
+        sql: `(${sortRank}=${expectedRank} AND ${sortNumber}=${expectedNumber} AND ${sortText}=${expectedText})${op === "ne" ? " IS NOT TRUE" : ""}`,
+        parameters: isNumber ? [numericValue] : [numericValue],
       };
+    }
     const sqlOp = { gt: ">", gte: ">=", lt: "<", lte: "<=" }[op];
     return {
       sql: `(${rank(d, p)} ${op === "gt" || op === "gte" ? ">" : "<"} ${r} OR (${rank(d, p)}=${r} AND ${expr} ${sqlOp} ?))`,
       parameters: [typeof value === "boolean" ? Number(value) : value],
     };
   },
-  jsonSort: (d, p) =>
-    `ROW(COALESCE(${rank(d, p)},0),COALESCE(${numeric(d, p)},0),(CASE WHEN ${rank(d, p)}=2 THEN ${text(d, p)} ELSE '' END) COLLATE "C")`,
+  jsonSort: (d, p) => `ROW(${postgresJsonSortParts(d, p).join(",")})`,
   scalarType: (e) =>
     `(CASE pg_typeof(${e})::text WHEN 'text' THEN 'text' WHEN 'character varying' THEN 'text' WHEN 'integer' THEN 'integer' WHEN 'bigint' THEN 'integer' WHEN 'double precision' THEN 'real' ELSE pg_typeof(${e})::text END)`,
   nullSafeEqual: "IS NOT DISTINCT FROM",

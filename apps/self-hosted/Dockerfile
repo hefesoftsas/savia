@@ -11,8 +11,8 @@ COPY apps/legacy-exporter/package.json apps/legacy-exporter/
 COPY apps/mcp/package.json apps/mcp/
 COPY apps/savia-request/package.json apps/savia-request/
 COPY apps/self-hosted/package.json apps/self-hosted/
-COPY packages/crm-server/package.json packages/crm-server/
-COPY packages/crm-shared/package.json packages/crm-shared/
+COPY packages/studio-server/package.json packages/studio-server/
+COPY packages/studio-shared/package.json packages/studio-shared/
 COPY packages/db/package.json packages/db/
 COPY packages/insurance-accounting/package.json packages/insurance-accounting/
 COPY packages/insurance-activities/package.json packages/insurance-activities/

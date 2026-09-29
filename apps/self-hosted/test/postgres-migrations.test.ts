@@ -130,7 +130,10 @@ live("native baseline parity", () => {
             .all<{ name: string }>()
         ).results;
         expect(tables.map((t) => t.name)).toEqual(
-          manifest.tables.map((t: { name: string }) => t.name).sort(),
+          [
+            ...manifest.tables.map((t: { name: string }) => t.name),
+            ...manifest.postgresDerivedTables,
+          ].sort(),
         );
         const columns = (
           await db
@@ -200,6 +203,11 @@ live("native baseline parity", () => {
           )
           .map((o: { name: string }) => o.name);
         expectedTriggers.push("identity_principal_active_email_guard");
+        expectedTriggers.push(
+          "studio_record_read_state_insert",
+          "studio_record_read_state_update",
+          "studio_record_read_state_delete",
+        );
         expect(triggers).toEqual(expectedTriggers.sort());
         for (const table of manifest.tables.filter(
           (t: { seedRows: number }) => t.seedRows,
@@ -1211,20 +1219,22 @@ live("concurrent collection events", () => {
           b = await db.pool.connect();
         try {
           await Promise.all([a.query("BEGIN"), b.query("BEGIN")]);
-          await Promise.all([
-            a.query(
-              "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('events','items','rolled-back','{\"amount\":2}')",
-            ),
-            b.query(
-              "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('events','items','committed','{\"amount\":3}')",
-            ),
-          ]);
+          await a.query(
+            "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('events','items','rolled-back','{\"amount\":2}')",
+          );
+          // Exact counters serialize writers to the same collection. Start the
+          // competing write without waiting for it before releasing the first.
+          const competingWrite = b.query(
+            "INSERT INTO studio_records(tenant_id,object_name,id,data) VALUES('events','items','committed','{\"amount\":3}')",
+          );
           expect(
             await db
               .prepare("SELECT count(*) AS n FROM workflow_executions")
               .first("n"),
           ).toBe(0);
-          await Promise.all([a.query("ROLLBACK"), b.query("COMMIT")]);
+          await a.query("ROLLBACK");
+          await competingWrite;
+          await b.query("COMMIT");
           expect(
             await db
               .prepare("SELECT count(*) AS n FROM workflow_events")

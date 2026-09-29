@@ -172,9 +172,15 @@ it.skipIf(!postgresTestUrl)(
       await api("/objects", "POST", {
         name: "import_contacts",
         label: "Import contacts",
-        config: makeConfig({
-          name: { type: "Textbox", label: "Name", required: true },
-        }),
+        config: {
+          ...makeConfig({
+            name: { type: "Textbox", label: "Name", required: true },
+          }),
+          performance: {
+            indexes: [{ fields: ["name"], order: "ASC" }],
+            summaries: [{ group: "name" }],
+          },
+        },
       });
       await api("/record-history-settings/import_contacts", "PUT", {
         enabled: true,
@@ -266,6 +272,27 @@ it.skipIf(!postgresTestUrl)(
           destinationUrl: url,
         });
         expect(report.verified).toBe(true);
+        expect(
+          await db
+            .prepare(
+              "SELECT active_count,trash_count FROM studio_record_counts WHERE object_name='import_contacts'",
+            )
+            .first(),
+        ).toEqual({ active_count: 1, trash_count: 1 });
+        expect(
+          await db
+            .prepare(
+              "SELECT record_count FROM studio_record_summary_groups WHERE object_name='import_contacts' AND value_key='Preserved history'",
+            )
+            .first("record_count"),
+        ).toBe(1);
+        expect(
+          await db
+            .prepare(
+              "SELECT count(*) AS n FROM pg_indexes WHERE schemaname='savia_core' AND indexname LIKE 'studio_perf_%'",
+            )
+            .first("n"),
+        ).toBeGreaterThan(0);
         expect(
           report.tables.some(
             (table) =>

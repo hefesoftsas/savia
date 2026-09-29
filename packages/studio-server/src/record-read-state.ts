@@ -16,8 +16,9 @@ export function getRecordCountStatement(
   if (dialectFor(db).name === "postgres") {
     return db
       .prepare(
-        `SELECT COUNT(*) AS count FROM studio_records
-         WHERE tenant_id=? AND object_name=? AND deleted_at IS ${trash ? "NOT " : ""}NULL`,
+        `SELECT COALESCE((SELECT ${trash ? "trash_count" : "active_count"}
+                          FROM studio_record_counts
+                          WHERE tenant_id=? AND object_name=?), 0) AS count`,
       )
       .bind(tenant, objectName);
   }
@@ -42,18 +43,22 @@ export async function getRecordCounts(
   if (dialectFor(db).name === "postgres") {
     const row = await db
       .prepare(
-        `SELECT
-           COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END), 0) AS active_count,
-           COALESCE(SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS trash_count
-         FROM studio_records WHERE tenant_id=? AND object_name=?`,
+        `SELECT COALESCE(state.active_count, 0) AS active_count,
+                COALESCE(state.trash_count, 0) AS trash_count,
+                COALESCE(state.revision, 0) AS revision
+         FROM (SELECT 1) AS singleton
+         LEFT JOIN studio_record_counts state ON state.tenant_id=? AND state.object_name=?`,
       )
       .bind(tenant, objectName)
-      .first<{ active_count: number; trash_count: number }>();
+      .first<{
+        active_count: number;
+        trash_count: number;
+        revision: number;
+      }>();
     return {
       activeCount: Number(row?.active_count ?? 0),
       trashCount: Number(row?.trash_count ?? 0),
-      // PostgreSQL has no matching trigger-maintained revision table yet.
-      revision: 0,
+      revision: Number(row?.revision ?? 0),
     };
   }
 

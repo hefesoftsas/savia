@@ -1,9 +1,9 @@
 # Record read performance
 
 Studio preserves exact record totals and existing search results while reducing
-repeated scans on D1. PostgreSQL continues using its existing SQL path for
-counts, searches and aggregates; D1-specific indexes and caches are not enabled
-there.
+repeated scans on D1 and PostgreSQL. Both backends maintain whole-collection
+counts and configured summaries transactionally and support configured JSON
+indexes. The revision cache and FTS5 candidate index remain SQLite/D1-specific.
 
 ## Pages and totals
 
@@ -117,11 +117,20 @@ ledger. Repeated reads do not depend on the revision cache for the accelerated
 page/count/summary paths. Arbitrary filters, unsupported orders, and restricted
 row summaries can still use the existing cache and query fallback.
 
-These accelerators are SQLite/D1-specific. PostgreSQL continues direct queries;
-imported performance metadata remains portable but inactive on that backend.
-Its SQLite importer intentionally omits the derived summary tables along with
-the read-cache/search tables. The generated source manifest records the new
-migration without adding SQLite-only tables to the PostgreSQL baseline.
+PostgreSQL uses native btree expression indexes with separate type-rank, numeric
+and text keys, preserving mixed JSON ordering and stable cursor ties. PostgreSQL
+triggers maintain counts and summaries in the same transaction as writes.
+Configuration/backfill locks record writes while publishing the new definitions;
+normal reads never build indexes or summaries. Configuration on a large table
+therefore needs a maintenance window. Whole-collection counters serialize writes
+to the same collection; measure concurrent writes as well as read improvements.
+
+PostgreSQL initialization installs configured indexes that were previously
+inactive. Its SQLite importer skips source derived tables, rebuilds native counts
+and summaries from imported records/metadata, and creates configured indexes
+before committing. Authentication and record payloads are not rewritten for this
+acceleration. PostgreSQL still executes unconfigured or permission-restricted
+queries directly, without the D1 revision cache or FTS5 index.
 
 Validate with `STRESS_PERFORMANCE=1 STRESS_COLD=1` in the local stress runner.
 Add `STRESS_MIXED=1 STRESS_MIXED_SAME_COLLECTION=1` to interleave matching reads

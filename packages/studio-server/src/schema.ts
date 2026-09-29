@@ -39,6 +39,14 @@ async function validateMetadataRelations(
     if (field.config?.relation && field.config.relation !== object.name)
       await getObject(db, tenant, String(field.config.relation));
 }
+function recordSummaryConfigurationLock(
+  db: D1Database,
+  changed: boolean,
+): D1PreparedStatement[] {
+  return changed && dialectFor(db).name === "postgres"
+    ? [db.prepare("LOCK TABLE studio_records IN SHARE ROW EXCLUSIVE MODE")]
+    : [];
+}
 export async function createObject(
   db: D1Database,
   tenant: string,
@@ -59,6 +67,10 @@ export async function createObject(
   )
     return fail("Ya existe un objeto con ese identificador.", 409);
   await transaction(db, [
+    ...recordSummaryConfigurationLock(
+      db,
+      Boolean(object.config.performance?.summaries.length),
+    ),
     db
       .prepare(
         "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
@@ -293,6 +305,11 @@ export async function publishSchema(
       ...(await checkRelations(db, tenant, next, record.after)),
     );
   const statements = [
+    ...recordSummaryConfigurationLock(
+      db,
+      JSON.stringify(previous.config.performance?.summaries ?? []) !==
+        JSON.stringify(next.config.performance?.summaries ?? []),
+    ),
     g.start,
     count.start,
     ...relationGuards,
@@ -414,8 +431,6 @@ export async function configureObjectPerformance(
   input: unknown,
 ) {
   await assertLocalCollection(db, tenant, name);
-  if (dialectFor(db).name !== "sqlite")
-    return fail("Esta optimización está disponible para SQLite/D1.", 422);
   const body = recordPerformanceUpdateSchema.parse(input);
   const previous = await getObject(db, tenant, name);
   if (body.version !== previous.version)
@@ -434,6 +449,11 @@ export async function configureObjectPerformance(
     [body.version, tenant, name],
   );
   const statements = [
+    ...recordSummaryConfigurationLock(
+      db,
+      JSON.stringify(previous.config.performance?.summaries ?? []) !==
+        JSON.stringify(next.config.performance?.summaries ?? []),
+    ),
     lock.start,
     ...(await recordIndexStatements(
       db,

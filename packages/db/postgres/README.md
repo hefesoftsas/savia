@@ -34,3 +34,11 @@ and workflow dispatch.
 Known compatibility boundary: PostgreSQL `jsonb` expressions reject escaped
 U+0000, which SQLite JSON accepts. Text storage and `savia_json_valid` alone do
 not resolve that execution difference. This remains a release review issue.
+
+`0003_record_read_acceleration.sql` adds native derived record counts and
+configured summaries and backfills them from existing records/metadata. The
+source manifest retains SQLite source tables separately from
+`postgresDerivedTables`; import rebuilds these native projections instead of
+copying SQLite cache/search internals. Configured expression indexes are installed
+from portable metadata during initialization and import, and updated atomically
+when performance settings are published.

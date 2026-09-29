@@ -9,6 +9,7 @@ import { initializeAuthSchema } from "../../../auth/src/index";
 import { openPostgresDatabase } from "./database";
 import { migratePostgres, withPostgresDeploymentLock } from "./migrations";
 import { mapSqliteValue, quote, columnDigest } from "./import-mappings";
+import { ensurePostgresRecordIndexes } from "./record-indexes";
 
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const stores = [
@@ -21,6 +22,11 @@ const stores = [
   },
 ] as const;
 const internal = new Set(["_savia_sqlite_migrations", "sqlite_sequence"]);
+const postgresDerivedCoreTables = new Set([
+  "studio_record_counts",
+  "studio_record_summary_definitions",
+  "studio_record_summary_groups",
+]);
 const sqliteOnlyCoreTables = new Set([
   "studio_record_summary_definitions",
   "studio_record_summary_groups",
@@ -220,6 +226,11 @@ export async function importSqlite(options: {
               "SELECT table_name FROM information_schema.tables WHERE table_schema=$1 AND table_type='BASE TABLE' AND table_name <> '_savia_postgres_migrations'",
               [store.schema],
             );
+            target.rows = target.rows.filter(
+              (row) =>
+                store.name !== "core" ||
+                !postgresDerivedCoreTables.has(row.table_name),
+            );
             if (
               sourceTables.length !== target.rows.length ||
               sourceTables.some(
@@ -359,6 +370,11 @@ export async function importSqlite(options: {
             await client.query(
               `ALTER TABLE ${quote(schema)}.${quote(table)} ENABLE TRIGGER USER`,
             );
+          await client.query("SET LOCAL search_path TO savia_core, pg_catalog");
+          await client.query(
+            "SELECT savia_core.studio_rebuild_record_read_state()",
+          );
+          await ensurePostgresRecordIndexes(client);
           for (const source of sources)
             if ((await fileHash(source.path)) !== source.checksum)
               throw new Error("Source changed during import.");

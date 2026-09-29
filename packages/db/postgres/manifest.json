@@ -14529,5 +14529,10 @@
     "SQLite integer predicates in partial indexes and the sales review check use explicit comparisons to zero.",
     "savia_json_valid uses the PostgreSQL json parser while retaining text storage. JSON execution uses jsonb and therefore escaped U+0000 is a known incompatible value requiring resolution before release.",
     "seed=false suppresses baseline seed data permanently for that installation; changing seed on an applied baseline never replays seeds."
+  ],
+  "postgresDerivedTables": [
+    "studio_record_counts",
+    "studio_record_summary_definitions",
+    "studio_record_summary_groups"
   ]
 }

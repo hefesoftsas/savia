@@ -73,9 +73,10 @@ node --import ./apps/self-hosted/node_modules/tsx/dist/loader.mjs apps/self-host
 
 The importer checks schema compatibility, copies all three stores in one
 transaction, verifies mapped values and row counts, and advances generated ID
-sequences. It skips only the core SQLite-derived record counts, read cache and
-FTS index tables; PostgreSQL rebuilds none of these and uses its direct count
-and query paths. It refuses a destination containing any existing tables. A failed import can leave
+sequences. It skips core SQLite-derived counts, summaries, read cache and FTS
+index tables. Native counts and configured summaries are rebuilt, and configured
+JSON indexes are installed in the import transaction; the D1 read cache and FTS5
+index are not copied. It refuses a destination containing any existing tables. A failed import can leave
 empty initialized schemas, but cannot commit a partial copy of application data. Retry against another empty database, or explicitly recreate only the disposable failed destination after verifying it contains no user data.
 
 After success, point a stopped application at PostgreSQL and restore its matching
@@ -98,3 +99,29 @@ silently skipping native tests. Tests create uniquely named databases and remove
 only their own fixtures.
 
 The [SQL compatibility inventory](postgres-sql-compatibility.md) describes the native query and migration boundaries.
+
+## Record read acceleration and stress testing
+
+The additive `0003_record_read_acceleration.sql` migration backfills exact counts
+and configured summaries without resetting records, users or keys. Initialization
+installs configured JSON indexes; publishing performance settings is supported on
+PostgreSQL. See [record read performance](record-read-performance.md) for ordering,
+permissions, locking and fallback behavior. An installation with the retired
+preproduction migration history first requires verified reconciliation to the
+initial baseline; do not rename ledger rows without validating the actual schema.
+
+To compare uncached application reads before and after enabling configuration:
+
+```sh
+STRESS_ROWS=100000 STRESS_SAMPLES=10 node --import ./apps/self-hosted/node_modules/tsx/dist/loader.mjs scripts/postgres-stress/run.mts
+```
+
+Set `SAVIA_TEST_POSTGRES_URL` to a dedicated test server beforehand. The runner
+creates and removes its own database; it never populates the supplied database.
+It checks exact summaries after concurrent reads/writes and writes timing reports
+to `.wrangler/postgres-stress/`. `STRESS_BATCH_SIZE` defaults to 1,000 and can
+be raised to 100,000 to exercise one bulk statement; INSERT counters and summaries
+are aggregated once per statement. Updates/deletes maintain state per row.
+There is no application result-cache hit in these
+measurements, but PostgreSQL uses normal shared buffers; these are not physical
+cold-disk measurements or production capacity estimates.

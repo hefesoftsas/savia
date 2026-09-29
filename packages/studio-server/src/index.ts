@@ -17,9 +17,11 @@ import {
   paginationScope,
   encodeRecordCursor,
   decodeRecordCursor,
+  type RecordCursorValue,
 } from "./record-pagination";
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { dialectFor } from "@savia/db/dialect";
+import { postgresJsonSortParts } from "@savia/db/postgres-dialect";
 import { registerRecordHistory } from "./record-history";
 import { historyDatabase } from "./record-history-storage";
 import { STUDIO_AUDIT_RETENTION_LIMIT } from "./audit-retention";
@@ -468,6 +470,12 @@ export function createStudioApp(
     const sortSql = ["created_at", "updated_at", "id"].includes(sort)
       ? sort
       : dialectFor(c.env.DB).jsonSort("data", `$.${sort}`);
+    const dialect = dialectFor(c.env.DB);
+    const sortParts =
+      dialect.name === "postgres" &&
+      !["created_at", "updated_at", "id"].includes(sort)
+        ? postgresJsonSortParts("data", `$.${sort}`)
+        : undefined;
     const { where, args } = buildWhere(
       object,
       c.get("tenant"),
@@ -477,17 +485,15 @@ export function createStudioApp(
     );
     // With selective FTS rowids, SQLite must seek those rowids rather than
     // walking the active-order index just to avoid sorting a few candidates.
-    const performanceIndex =
-      dialectFor(c.env.DB).name === "sqlite"
-        ? indexedRecordSort(object, sort, order, params)
-        : undefined;
-    const recordSource = performanceIndex
-      ? `studio_records INDEXED BY ${await recordIndexName(c.get("tenant"), object.name, performanceIndex)}`
-      : dialectFor(c.env.DB).name === "sqlite" &&
-          params.q &&
-          recordSearchCandidate(params.q.slice(0, 200))
-        ? "studio_records NOT INDEXED"
-        : "studio_records";
+    const performanceIndex = indexedRecordSort(object, sort, order, params);
+    const recordSource =
+      performanceIndex && dialect.name === "sqlite"
+        ? `studio_records INDEXED BY ${await recordIndexName(c.get("tenant"), object.name, performanceIndex)}`
+        : dialect.name === "sqlite" &&
+            params.q &&
+            recordSearchCandidate(params.q.slice(0, 200))
+          ? "studio_records NOT INDEXED"
+          : "studio_records";
     const cursorSupported =
       ["created_at", "updated_at", "id"].includes(sort) ||
       Boolean(performanceIndex);
@@ -502,6 +508,21 @@ export function createStudioApp(
     ]);
     if (params.cursor && !cursorSupported)
       return fail("Este orden no admite cursores.", 422);
+    const cursor = params.cursor
+      ? decodeRecordCursor(params.cursor, scope)
+      : undefined;
+    if (
+      cursor &&
+      ((sortParts &&
+        (cursor.value === null || typeof cursor.value !== "object")) ||
+        (!sortParts &&
+          cursor.value !== null &&
+          typeof cursor.value === "object"))
+    )
+      return fail(
+        "El cursor no corresponde a esta consulta. Recarga la lista.",
+        422,
+      );
     const selection = buildRecordPageSelection({
       source: recordSource,
       where,
@@ -511,16 +532,23 @@ export function createStudioApp(
       order,
       perPage,
       offset: (page - 1) * perPage,
-      cursor: params.cursor
-        ? decodeRecordCursor(params.cursor, scope)
-        : undefined,
-      nullSafeEqual: dialectFor(c.env.DB).nullSafeEqual,
+      cursor,
+      nullSafeEqual: dialect.nullSafeEqual,
+      sortParts,
     });
     const selectIds = selection.sql;
     const pageBindings = selection.bindings;
     // Materialize only the bounded candidate list before fetching JSON. CROSS
     // JOIN prevents SQLite from scanning the tenant to join a selective result.
-    const pageSql = `SELECT r.*,${sort === "id" ? "r.id" : sortSql} AS _cursor_value FROM (${selectIds}) selected CROSS JOIN studio_records r WHERE r.tenant_id=? AND r.id=selected.id ORDER BY ${sort === "id" ? "r.id" : sortSql} ${order},r.id ASC`;
+    const cursorProjection = sortParts
+      ? sortParts
+          .map((part, index) => `${part} AS _cursor_part_${index}`)
+          .join(",")
+      : `${sort === "id" ? "r.id" : sortSql} AS _cursor_value`;
+    const pageOrder = sortParts
+      ? sortParts.map((part) => `${part} ${order}`).join(",")
+      : `${sort === "id" ? "r.id" : sortSql} ${order}`;
+    const pageSql = `SELECT r.*,${cursorProjection} FROM (${selectIds}) selected CROSS JOIN studio_records r WHERE r.tenant_id=? AND r.id=selected.id ORDER BY ${pageOrder},r.id ASC`;
     pageBindings.push(c.get("tenant"));
     const policy = policyFor(c.env.DB);
     const fullCollection =
@@ -541,7 +569,6 @@ export function createStudioApp(
     const equality = singleRecordEquality(object, params);
     const maintainedCount =
       fullCollection &&
-      dialectFor(c.env.DB).name === "sqlite" &&
       equality &&
       object.config.performance?.summaries.some(
         (summary) => summary.group === equality.field,
@@ -624,11 +651,29 @@ export function createStudioApp(
       unknown
     >[];
     const last = rows.at(-1);
-    const cursorValue = last?._cursor_value;
+    const cursorValue: RecordCursorValue | undefined = sortParts
+      ? last && {
+          rank: last._cursor_part_0 as 0 | 1 | 2,
+          number: last._cursor_part_1 as string | number,
+          text: last._cursor_part_2 as string,
+        }
+      : (last?._cursor_value as RecordCursorValue | undefined);
     const cursorValueSupported =
       cursorValue === null ||
       (typeof cursorValue === "string" && cursorValue.length <= 500) ||
-      (typeof cursorValue === "number" && Number.isFinite(cursorValue));
+      (typeof cursorValue === "number" && Number.isFinite(cursorValue)) ||
+      (typeof cursorValue === "object" &&
+        cursorValue !== null &&
+        [0, 1, 2].includes(cursorValue.rank) &&
+        ((typeof cursorValue.number === "string" &&
+          cursorValue.number.length <= 3000 &&
+          /^-?\d+(?:\.\d+)?$/.test(cursorValue.number)) ||
+          (typeof cursorValue.number === "number" &&
+            Number.isFinite(cursorValue.number) &&
+            (!Number.isInteger(cursorValue.number) ||
+              Number.isSafeInteger(cursorValue.number)))) &&
+        typeof cursorValue.text === "string" &&
+        cursorValue.text.length <= 500);
     return c.json({
       data: rows.map(parseRecord),
       total: pageResult.total,
@@ -639,11 +684,7 @@ export function createStudioApp(
         cursorValueSupported &&
         pageResult.results.length > perPage &&
         last
-          ? encodeRecordCursor(
-              scope,
-              last._cursor_value as string | number | null,
-              String(last.id),
-            )
+          ? encodeRecordCursor(scope, cursorValue, String(last.id))
           : null,
     });
   });
