@@ -366,6 +366,13 @@ describe("plugin store por tenant", () => {
     expect(signedEntry.pathname).toBe(
       "/api/public/plugin-store/custom.demo/entry",
     );
+    // Discover the module before the bootstrap script finishes downloading.
+    const preload = signedHtml.match(
+      /<link rel="modulepreload" href="([^"]+)" crossorigin="anonymous">/,
+    )?.[1];
+    expect(preload?.replaceAll("&amp;", "&")).toBe(
+      signedUrl.searchParams.get("entry"),
+    );
     expect(
       await verifyPluginEntryGrant(
         "test-secret",

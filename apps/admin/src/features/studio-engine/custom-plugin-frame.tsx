@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { pluginApiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
+import { Button } from "@/components/ui/button";
+import { useMessages } from "@/i18n/core";
+import { automationMessages } from "@/i18n/locales/automation";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
-  type: "request" | "ready";
+  type: "request" | "ready" | "error";
   id: string;
   path: string;
   method?: string;
@@ -63,8 +66,12 @@ export function CustomPluginFrame({
   screen?: { object: string; view: string };
   heightClassName?: string;
 }) {
+  const t = useMessages(automationMessages);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const [readyFrame, setReadyFrame] = useState<string | null>(null);
+  const [failedFrame, setFailedFrame] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const shellPath =
     src ??
     `${getStudioRuntime().apiBasePath ?? ""}/api/plugin-store/${encodeURIComponent(pluginId)}/shell`;
@@ -77,6 +84,13 @@ export function CustomPluginFrame({
     [screenUrl],
   );
   const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}`;
+  const frameKey = `${shellUrl}#${attempt}`;
+
+  useEffect(() => {
+    if (readyFrame === frameKey) return;
+    const timeout = window.setTimeout(() => setFailedFrame(frameKey), 30_000);
+    return () => window.clearTimeout(timeout);
+  }, [frameKey, readyFrame]);
 
   useEffect(() => {
     function sendTheme() {
@@ -101,7 +115,14 @@ export function CustomPluginFrame({
       const message = event.data as Partial<PluginFrameRequest>;
       if (!message || message.ns !== "savia-plugin") return;
       if (message.type === "ready") {
+        setLoadedUrl(frameKey);
+        setReadyFrame(frameKey);
+        setFailedFrame(null);
         sendTheme();
+        return;
+      }
+      if (message.type === "error") {
+        setFailedFrame(frameKey);
         return;
       }
       if (message.type !== "request" || typeof message.id !== "string") return;
@@ -118,6 +139,7 @@ export function CustomPluginFrame({
         );
         return;
       }
+      const source = frameRef.current?.contentWindow;
       try {
         const data = await pluginApiFetch<unknown>(
           "/api" + message.path,
@@ -128,6 +150,8 @@ export function CustomPluginFrame({
                 body: JSON.stringify(message.body),
               },
         );
+        // A previous frame must never deliver a pending response to its replacement.
+        if (source !== frameRef.current?.contentWindow) return;
         frameRef.current?.contentWindow?.postMessage(
           {
             ns: "savia-plugin",
@@ -139,6 +163,7 @@ export function CustomPluginFrame({
           "*",
         );
       } catch (error) {
+        if (source !== frameRef.current?.contentWindow) return;
         frameRef.current?.contentWindow?.postMessage(
           {
             ns: "savia-plugin",
@@ -161,20 +186,42 @@ export function CustomPluginFrame({
       window.removeEventListener("message", onMessage);
       observer.disconnect();
     };
-  }, []);
+  }, [frameKey]);
 
   return (
     <div
-      className={`w-full overflow-hidden rounded-md border bg-background ${heightClassName}`}
+      className={`relative w-full overflow-hidden rounded-md border bg-background ${heightClassName}`}
     >
+      {failedFrame === frameKey ? (
+        <div
+          role="alert"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center"
+        >
+          <p>{t("Plugin could not be loaded.")}</p>
+          <Button
+            variant="outline"
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            {t("Reintentar")}
+          </Button>
+        </div>
+      ) : readyFrame !== frameKey ? (
+        <div
+          role="status"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm text-muted-foreground"
+        >
+          {t("Cargando plugins…")}
+        </div>
+      ) : null}
       <iframe
-        key={shellUrl}
+        key={frameKey}
         ref={frameRef}
         src={shellUrl}
         sandbox="allow-scripts allow-downloads"
         title={title}
-        onLoad={() => setLoadedUrl(shellUrl)}
-        className={`h-full w-full border-0 ${loadedUrl === shellUrl ? "" : "invisible"}`}
+        onLoad={() => setLoadedUrl(frameKey)}
+        onError={() => setFailedFrame(frameKey)}
+        className={`h-full w-full border-0 ${loadedUrl === frameKey ? "" : "invisible"}`}
       />
     </div>
   );

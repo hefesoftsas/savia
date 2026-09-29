@@ -1,10 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
+  pluginEntryGrantExpiresAt,
   signPluginEntryGrant,
   verifyPluginEntryGrant,
 } from "../src/plugin-entry-grant";
 
 describe("ZIP plugin entry grants", () => {
+  it("reuses a grant within a minute while keeping expiry within two minutes", async () => {
+    const grant = {
+      tenantId: "tenant:0",
+      pluginId: "custom.demo",
+      version: "1",
+      expiresAt: pluginEntryGrantExpiresAt(120_001),
+    };
+    const repeated = {
+      ...grant,
+      expiresAt: pluginEntryGrantExpiresAt(179_999),
+    };
+    expect(grant.expiresAt).toBe(240_000);
+    expect(await signPluginEntryGrant("secret", repeated)).toBe(
+      await signPluginEntryGrant("secret", grant),
+    );
+    expect(pluginEntryGrantExpiresAt(180_000)).toBe(300_000);
+    const signature = await signPluginEntryGrant("secret", grant);
+    expect(
+      await verifyPluginEntryGrant("secret", grant, signature, 239_999),
+    ).toBe(true);
+    expect(
+      await verifyPluginEntryGrant("secret", grant, signature, 240_000),
+    ).toBe(false);
+  });
   it("accepts only the signed tenant, plugin and version before expiry", async () => {
     const now = Date.now();
     const grant = {

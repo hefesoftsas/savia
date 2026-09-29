@@ -18,7 +18,10 @@ import {
   type StoreJson,
   type StoreSaviaRequestAction,
 } from "@savia/studio-shared/plugin-store";
-import { signPluginEntryGrant } from "@savia/studio-shared/plugin-entry-grant";
+import {
+  pluginEntryGrantExpiresAt,
+  signPluginEntryGrant,
+} from "@savia/studio-shared/plugin-entry-grant";
 import {
   insuranceSaviaRequestBundle,
   isInsuranceSaviaRequestFlow,
@@ -976,6 +979,7 @@ function shellHtml(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${SHELL_CSP}">
+<link rel="modulepreload" href="${entryUrl.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}" crossorigin="anonymous">
 <title>${safeLabel}</title>
 <style>:root{${initialTheme}}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:16px}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
 </head>
@@ -994,7 +998,7 @@ async function shellAssetPaths(
 ) {
   if (options.entryGrantSecret) {
     const storeBasePath = "/api/public/plugin-store";
-    const expiresAt = Date.now() + 2 * 60_000;
+    const expiresAt = pluginEntryGrantExpiresAt();
     const signature = await signPluginEntryGrant(options.entryGrantSecret, {
       tenantId,
       pluginId,

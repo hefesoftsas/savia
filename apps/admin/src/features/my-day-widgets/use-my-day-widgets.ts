@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { UserPreferencesClient } from "@/api/user-preferences-client";
 import {
   defaultMyDayWidgets,
@@ -7,66 +7,168 @@ import {
   type MyDayWidgetsLayout,
 } from "@savia/studio-shared/my-day-widgets";
 
+let layoutCache = new WeakMap<UserPreferencesClient, MyDayWidgetsLayout>();
+let layoutRevisions = new WeakMap<UserPreferencesClient, number>();
+let sessionGeneration = 0;
+
+function clearLayoutCache() {
+  sessionGeneration += 1;
+  layoutCache = new WeakMap();
+  layoutRevisions = new WeakMap();
+}
+
+function nextLayoutRevision(client: UserPreferencesClient): number {
+  const next = (layoutRevisions.get(client) ?? 0) + 1;
+  layoutRevisions.set(client, next);
+  return next;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("savia:session-cleared", clearLayoutCache);
+  window.addEventListener("savia:identity-changed", clearLayoutCache);
+}
+
 export function useMyDayWidgets(
   userPreferences: UserPreferencesClient | undefined,
 ) {
-  const [layout, setLayout] = useState<MyDayWidgetsLayout | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [layoutState, setLayoutState] = useState<MyDayWidgetsLayout | null>(
+    () => (userPreferences ? (layoutCache.get(userPreferences) ?? null) : null),
+  );
+  const [layoutOwner, setLayoutOwner] = useState(userPreferences);
+  const [loadingState, setLoading] = useState(
+    () => !userPreferences || !layoutCache.has(userPreferences),
+  );
+  const [currentSessionGeneration, setCurrentSessionGeneration] =
+    useState(sessionGeneration);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const revision = useRef(0);
+  const layout =
+    layoutOwner === userPreferences
+      ? layoutState
+      : userPreferences
+        ? (layoutCache.get(userPreferences) ?? null)
+        : null;
+  const loading =
+    layoutOwner === userPreferences
+      ? loadingState
+      : !userPreferences || !layoutCache.has(userPreferences);
+
+  useEffect(() => {
+    const clear = () => {
+      revision.current += 1;
+      setLayoutState(null);
+      setLayoutOwner(userPreferences);
+      setLoading(true);
+      setFeedback(null);
+      setCurrentSessionGeneration(sessionGeneration);
+    };
+    window.addEventListener("savia:session-cleared", clear);
+    window.addEventListener("savia:identity-changed", clear);
+    return () => {
+      window.removeEventListener("savia:session-cleared", clear);
+      window.removeEventListener("savia:identity-changed", clear);
+    };
+  }, [userPreferences]);
 
   useEffect(() => {
     if (!userPreferences) {
-      setLayout(defaultMyDayWidgets());
+      setLayoutState(defaultMyDayWidgets());
+      setLayoutOwner(undefined);
       setLoading(false);
       return;
     }
     let active = true;
-    setLoading(true);
+    const generation = sessionGeneration;
+    const requestRevision = nextLayoutRevision(userPreferences);
+    revision.current = requestRevision;
+    const existing = layoutCache.get(userPreferences);
+    if (!existing) setLoading(true);
     userPreferences
       .getMyDayWidgets()
       .then(
         (remote) => {
-          if (!active) return;
+          if (
+            !active ||
+            generation !== sessionGeneration ||
+            revision.current !== requestRevision ||
+            layoutRevisions.get(userPreferences) !== requestRevision
+          )
+            return;
           try {
-            setLayout(parseMyDayWidgets(remote));
+            const next = parseMyDayWidgets(remote);
+            layoutCache.set(userPreferences, next);
+            setLayoutState(next);
+            setLayoutOwner(userPreferences);
           } catch {
-            setLayout(defaultMyDayWidgets());
+            setLayoutState(defaultMyDayWidgets());
+            setLayoutOwner(userPreferences);
             setFeedback(
               "Tus widgets guardados no se pudieron leer. Empezamos de cero.",
             );
           }
         },
         () => {
-          if (!active) return;
-          setLayout(defaultMyDayWidgets());
+          if (
+            !active ||
+            generation !== sessionGeneration ||
+            revision.current !== requestRevision ||
+            layoutRevisions.get(userPreferences) !== requestRevision
+          )
+            return;
+          if (!existing) setLayoutState(defaultMyDayWidgets());
+          setLayoutOwner(userPreferences);
           setFeedback("No pudimos cargar tus widgets. Reintenta.");
         },
       )
       .finally(() => {
-        if (active) setLoading(false);
+        if (
+          active &&
+          generation === sessionGeneration &&
+          revision.current === requestRevision
+        ) {
+          setLoading(false);
+        }
       });
     return () => {
       active = false;
     };
-  }, [userPreferences]);
+  }, [userPreferences, currentSessionGeneration]);
 
   const persist = useCallback(
     async (next: MyDayWidgetsLayout, successMessage: string | null) => {
       if (!userPreferences) {
-        setLayout(next);
+        setLayoutState(next);
+        setLayoutOwner(undefined);
         if (successMessage) setFeedback(successMessage);
         return true;
       }
       setSaving(true);
       setFeedback(null);
+      const generation = sessionGeneration;
+      const saveRevision = nextLayoutRevision(userPreferences);
+      revision.current = saveRevision;
       try {
         const saved = await userPreferences.saveMyDayWidgets(next);
-        setLayout(parseMyDayWidgets(saved));
+        if (
+          generation !== sessionGeneration ||
+          revision.current !== saveRevision ||
+          layoutRevisions.get(userPreferences) !== saveRevision
+        )
+          return false;
+        const parsed = parseMyDayWidgets(saved);
+        layoutCache.set(userPreferences, parsed);
+        setLayoutState(parsed);
+        setLayoutOwner(userPreferences);
         if (successMessage) setFeedback(successMessage);
         return true;
       } catch {
-        setFeedback("No pudimos guardar tus widgets. Reintenta.");
+        if (
+          generation === sessionGeneration &&
+          revision.current === saveRevision
+        ) {
+          setFeedback("No pudimos guardar tus widgets. Reintenta.");
+        }
         return false;
       } finally {
         setSaving(false);
@@ -149,13 +251,38 @@ export function useMyDayWidgets(
     hasSystemWidget,
     reload: useCallback(async () => {
       if (!userPreferences) return;
-      setLoading(true);
+      const generation = sessionGeneration;
+      const requestRevision = nextLayoutRevision(userPreferences);
+      revision.current = requestRevision;
+      const existing = layoutCache.get(userPreferences);
+      setLoading(!existing);
       try {
-        setLayout(parseMyDayWidgets(await userPreferences.getMyDayWidgets()));
+        const parsed = parseMyDayWidgets(
+          await userPreferences.getMyDayWidgets(),
+        );
+        if (
+          generation !== sessionGeneration ||
+          revision.current !== requestRevision ||
+          layoutRevisions.get(userPreferences) !== requestRevision
+        )
+          return;
+        layoutCache.set(userPreferences, parsed);
+        setLayoutState(parsed);
+        setLayoutOwner(userPreferences);
       } catch {
-        setFeedback("No pudimos cargar tus widgets. Reintenta.");
+        if (
+          generation === sessionGeneration &&
+          revision.current === requestRevision
+        ) {
+          setFeedback("No pudimos cargar tus widgets. Reintenta.");
+        }
       } finally {
-        setLoading(false);
+        if (
+          generation === sessionGeneration &&
+          revision.current === requestRevision
+        ) {
+          setLoading(false);
+        }
       }
     }, [userPreferences]),
   };

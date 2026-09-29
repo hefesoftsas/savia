@@ -73,7 +73,12 @@ function providerPath(provider: PersonalIntegrationProviderId): string {
 }
 
 export class PersonalIntegrationsClient {
-  constructor(private readonly api: ApiClient) {}
+  constructor(private readonly api: ApiClient) {
+    if (typeof window !== "undefined") {
+      window.addEventListener("savia:session-cleared", this.clearCache);
+      window.addEventListener("savia:identity-changed", this.clearCache);
+    }
+  }
   private connectionsPromise: Promise<PersonalIntegrationConnection[]> | null =
     null;
   private connectionsCache: {
@@ -81,6 +86,14 @@ export class PersonalIntegrationsClient {
     timestamp: number;
   } | null = null;
   private eventsInflight = new Map<string, Promise<PersonalCalendarEvent[]>>();
+  private cacheGeneration = 0;
+
+  clearCache = () => {
+    this.cacheGeneration += 1;
+    this.connectionsPromise = null;
+    this.connectionsCache = null;
+    this.eventsInflight.clear();
+  };
 
   async listProviders(): Promise<PersonalIntegrationProvider[]> {
     const response = await this.api.get<{ data: ProviderDocument[] }>(
@@ -104,20 +117,24 @@ export class PersonalIntegrationsClient {
     if (this.connectionsPromise) {
       return this.connectionsPromise;
     }
-    this.connectionsPromise = this.api
+    const generation = this.cacheGeneration;
+    const request = this.api
       .get<{ data: ConnectionDocument[] }>(
         "/v1/personal-integrations/connections",
       )
       .then((response) => {
         const data = response.data.map(connectionFromDocument);
-        this.connectionsCache = { data, timestamp: Date.now() };
-        this.connectionsPromise = null;
+        if (generation === this.cacheGeneration) {
+          this.connectionsCache = { data, timestamp: Date.now() };
+          this.connectionsPromise = null;
+        }
         return data;
       })
       .catch((err) => {
-        this.connectionsPromise = null;
+        if (generation === this.cacheGeneration) this.connectionsPromise = null;
         throw err;
       });
+    this.connectionsPromise = request;
     return this.connectionsPromise;
   }
 
@@ -166,11 +183,15 @@ export class PersonalIntegrationsClient {
     const promise = this.api
       .get<{ data: PersonalCalendarEvent[] }>(path)
       .then((response) => {
-        this.eventsInflight.delete(path);
+        if (this.eventsInflight.get(path) === promise) {
+          this.eventsInflight.delete(path);
+        }
         return response.data;
       })
       .catch((err) => {
-        this.eventsInflight.delete(path);
+        if (this.eventsInflight.get(path) === promise) {
+          this.eventsInflight.delete(path);
+        }
         throw err;
       });
     this.eventsInflight.set(path, promise);

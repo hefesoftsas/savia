@@ -178,6 +178,11 @@ export const automationMessages = {
     "Não foi possível conectar ao Studio",
   ],
   Reintentar: ["Reintentar", "Retry", "Tentar novamente"],
+  "Plugin could not be loaded.": [
+    "No se pudo cargar el plugin.",
+    "Plugin could not be loaded.",
+    "Não foi possível carregar o plugin.",
+  ],
   "Fuentes y colecciones": [
     "Fuentes y colecciones",
     "Sources and collections",

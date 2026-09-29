@@ -5,6 +5,11 @@ export type PluginEntryGrant = {
   expiresAt: number;
 };
 
+/** Stable asset URLs for nearby navigations, with at most two minutes of validity. */
+export function pluginEntryGrantExpiresAt(now = Date.now()): number {
+  return Math.floor(now / 60_000) * 60_000 + 120_000;
+}
+
 const grantBytes = (grant: PluginEntryGrant) =>
   new TextEncoder().encode(
     JSON.stringify([

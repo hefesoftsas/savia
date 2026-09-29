@@ -1,5 +1,28 @@
 # Store de plugins por tenant
 
+## Loading performance
+
+Plugin shells preload their entry module while the sandbox bootstrap downloads.
+Signed entry URLs remain stable within a one-minute window; grants still expire
+within two minutes and are validated on every request. JavaScript responses use
+an artifact checksum ETag and `private, no-cache`: the browser may retain static
+code, but must revalidate before reusing it. A matching conditional request checks
+the active installation and version, returns `304`, and avoids transferring the
+module body from D1. Disabled installations and invalid or expired grants return
+`404` with `no-store`. The shell itself remains `no-store`.
+
+This caches executable artifacts only, not application records, credentials, or
+permission decisions. The iframe remains sandboxed with an opaque origin, and
+all business requests still pass through the authenticated host transport.
+The host shows a loading state until the sandbox announces readiness; startup
+errors or a missing readiness message after 30 seconds offer a retry. Retrying
+creates a fresh iframe, and pending replies from the previous frame are discarded.
+
+After deploying, compare full reloads and return navigation separately. Record
+time until the plugin form and required settings are visible, and confirm entry
+revalidation in the browser network panel. Local tests verify request counts,
+conditional delivery, and isolation; they do not predict Cloudflare latency.
+
 ## Selecting a workspace in Screens
 
 Screens has a visible **Tenant** selector and direct **Screens** and **Plugins**

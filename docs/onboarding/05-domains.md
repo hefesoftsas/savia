@@ -21,7 +21,10 @@ are the executable spec: read them before the runbooks.
   `crm-auto-sync`, `connected-crm-workspace`.
 - **Auth and tenants**: `apps/auth/` (Better Auth, admin bootstrap, TOTP MFA,
   OAuth/OIDC) + `apps/api/src/routes/identity.ts`, `tenants.ts`;
-  invariants in the `tenants` / `tenant-membership` tests.
+  invariants in the `tenants` / `tenant-membership` tests. Successful auth
+  bootstrap is shared per auth database and configuration; a changed
+  environment configuration initializes its bootstrap separately, and failed
+  initialization can be retried.
 - **Insurance results**: `apps/api/src/insurance-results/` (`README.md`,
   `InsuranceResult` contract) + `packages/insurance-portfolio-dashboard/`.
 - **Legacy**: `apps/legacy-api/` (opt-in Postgres source, `/legacy` routes),

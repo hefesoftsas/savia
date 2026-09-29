@@ -2,7 +2,7 @@
 
 Savia prevents a new active principal from using another active principal's email. The comparison trims surrounding spaces and ignores case. The rule spans authentication issuers: a matching email alone never links accounts or transfers roles.
 
-The identity repository checks before an authentication principal is created or changes email. User provisioning checks before creating the Better Auth account or sending a password setup message. A conflict returns HTTP 409 with code `IDENTITY_EMAIL_CONFLICT`; administrators must resolve the conflicting identity explicitly. Successful repeat logins with the same issuer and subject retain the principal ID and assignments. An inactive principal is not automatically reactivated by login.
+The identity repository checks before an authentication principal is created or changes email. User provisioning checks before creating the Better Auth account or sending a password setup message. A conflict returns HTTP 409 with code `IDENTITY_EMAIL_CONFLICT`; administrators must resolve the conflicting identity explicitly. Successful repeat logins with the same issuer and subject retain the principal ID and assignments. If the normalized email and display name are unchanged, the login does not rewrite the principal's `updated_at`; changed profile data is persisted. An inactive principal is not automatically reactivated by login.
 
 SQLite migration `0078_identity_principal_email_uniqueness.sql` and PostgreSQL migration `0020_identity_principal_email_uniqueness.sql` add database guards for inserts, changes to an active email and reactivation. Database enforcement covers concurrent requests as well as application checks. Deploy the migration with the API change.
 

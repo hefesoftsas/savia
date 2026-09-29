@@ -65,6 +65,14 @@ export type AuthDependencies = {
 
 const schemaInitializations = new WeakMap<object, Promise<void>>();
 const noticeSchemaInitialized = new WeakSet<object>();
+type AuthBootstrap = {
+  scalarClient: ScalarOAuthClient;
+  adminClient: AdminOAuthClient;
+};
+const bootstrapInitializations = new WeakMap<
+  object,
+  Map<string, Promise<AuthBootstrap>>
+>();
 
 function requiredValue(value: string | undefined, name: string): string {
   if (value) return value;
@@ -296,6 +304,57 @@ async function ensureBootstrapAdministrator(
   });
 }
 
+function bootstrapEnvironmentKey(environment: AuthWorkerEnvironment): string {
+  return JSON.stringify([
+    environment.BETTER_AUTH_URL,
+    environment.BETTER_AUTH_SECRET,
+    environment.BETTER_AUTH_BOOTSTRAP_EMAIL,
+    environment.BETTER_AUTH_BOOTSTRAP_PASSWORD,
+    environment.BETTER_AUTH_BOOTSTRAP_NAME,
+    environment.SAVIA_API_RESOURCE,
+    environment.SAVIA_ADMIN_REDIRECT_URI,
+    environment.SAVIA_SCALAR_REDIRECT_URI,
+  ]);
+}
+
+function ensureAuthBootstrap(
+  auth: ReturnType<typeof createBetterAuth>,
+  environment: AuthWorkerEnvironment,
+): Promise<AuthBootstrap> {
+  const database = environment.AUTH_DB;
+  const key = bootstrapEnvironmentKey(environment);
+  let configurations = bootstrapInitializations.get(database);
+  if (!configurations) {
+    configurations = new Map();
+    bootstrapInitializations.set(database, configurations);
+  }
+  const existing = configurations.get(key);
+  if (existing) return existing;
+
+  const initialization = (async () => {
+    await ensureBootstrapAdministrator(auth, environment);
+    const scalarClient = await ensureScalarOAuthClient(
+      auth,
+      database,
+      environment,
+    );
+    const adminClient = await ensureAdminOAuthClient(
+      auth,
+      database,
+      environment,
+    );
+    return { scalarClient, adminClient };
+  })();
+  configurations.set(key, initialization);
+  void initialization.catch(() => {
+    if (configurations?.get(key) === initialization) {
+      configurations.delete(key);
+      if (configurations.size === 0) bootstrapInitializations.delete(database);
+    }
+  });
+  return initialization;
+}
+
 async function internalSession(
   auth: ReturnType<typeof createBetterAuth>,
   request: Request,
@@ -304,27 +363,11 @@ async function internalSession(
   return Response.json({ user: session ? userDocument(session.user) : null });
 }
 
-async function scalarOAuthClient(
-  auth: ReturnType<typeof createBetterAuth>,
-  environment: AuthWorkerEnvironment,
-): Promise<Response> {
-  const client: ScalarOAuthClient = await ensureScalarOAuthClient(
-    auth,
-    environment.AUTH_DB,
-    environment,
-  );
+async function scalarOAuthClient(client: ScalarOAuthClient): Promise<Response> {
   return Response.json(client);
 }
 
-async function adminOAuthClient(
-  auth: ReturnType<typeof createBetterAuth>,
-  environment: AuthWorkerEnvironment,
-): Promise<Response> {
-  const client: AdminOAuthClient = await ensureAdminOAuthClient(
-    auth,
-    environment.AUTH_DB,
-    environment,
-  );
+async function adminOAuthClient(client: AdminOAuthClient): Promise<Response> {
   return Response.json(client);
 }
 
@@ -551,9 +594,7 @@ export function createAuthHandler(
       // Native startup verifies the database under its deployment lock first.
       const auth = (instance ??= createBetterAuth(environment, dependencies));
       await ensureSchema(auth, environment.AUTH_DB);
-      await ensureBootstrapAdministrator(auth, environment);
-      await ensureScalarOAuthClient(auth, environment.AUTH_DB, environment);
-      await ensureAdminOAuthClient(auth, environment.AUTH_DB, environment);
+      const bootstrap = await ensureAuthBootstrap(auth, environment);
       const pathname = new URL(request.url).pathname;
       if (
         request.method === "POST" &&
@@ -577,13 +618,13 @@ export function createAuthHandler(
         request.method === "GET" &&
         pathname === "/_internal/oauth/scalar-client"
       ) {
-        return scalarOAuthClient(auth, environment);
+        return scalarOAuthClient(bootstrap.scalarClient);
       }
       if (
         request.method === "GET" &&
         pathname === "/_internal/oauth/admin-client"
       ) {
-        return adminOAuthClient(auth, environment);
+        return adminOAuthClient(bootstrap.adminClient);
       }
       const oauthManagement = await oauthManagementResponse(
         auth as unknown as OAuthManagementAuth,

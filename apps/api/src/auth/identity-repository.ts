@@ -99,6 +99,13 @@ export async function upsertPrincipal(
   ) {
     await assertIdentityEmailAvailable(d1, external.email, existing?.id);
   }
+  if (
+    existing &&
+    existing.email.trim().toLowerCase() === external.email &&
+    existing.displayName === external.displayName
+  ) {
+    return existing;
+  }
   try {
     return await persistPrincipal(d1, external);
   } catch (error) {

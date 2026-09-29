@@ -234,10 +234,20 @@ async function actorForIdentity(
     email: identity.email,
     displayName: identity.displayName,
   });
-  if (hasAdministratorRole(identity.roles)) {
+  let actor = await loadActor(d1, principal);
+  if (
+    hasAdministratorRole(identity.roles) &&
+    (!actor.globalRoles.includes("platform_admin") ||
+      !actor.memberships.some(
+        (entry) =>
+          entry.tenantId === 0 &&
+          entry.role === "tenant_admin" &&
+          entry.isActive,
+      ))
+  ) {
     await ensureBootstrapAdministrator(d1, principal.id);
+    actor = await loadActor(d1, principal);
   }
-  const actor = await loadActor(d1, principal);
   if (!actor.principal.isActive) {
     throw new AuthenticationError(
       "AUTHORIZATION_FORBIDDEN",

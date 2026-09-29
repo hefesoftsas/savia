@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -12,6 +13,7 @@ import { setStudioRuntime } from "../runtime";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   setStudioRuntime({ embedded: false });
 });
 
@@ -119,6 +121,87 @@ it("sends the current host theme when the plugin becomes ready", () => {
     "*",
   );
   document.documentElement.style.removeProperty("--foreground");
+});
+
+it("shows a ready plugin without waiting for the iframe load event", () => {
+  render(
+    <CustomPluginFrame pluginId="insurance.quotes" title="Ready plugin" />,
+  );
+  const frame = screen.getByTitle("Ready plugin") as HTMLIFrameElement;
+  expect(screen.getByRole("status")).toBeVisible();
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin", type: "ready" },
+    }),
+  );
+  expect(frame).not.toHaveClass("invisible");
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+it("offers a fresh iframe after a plugin startup failure", () => {
+  render(
+    <CustomPluginFrame pluginId="insurance.quotes" title="Failed plugin" />,
+  );
+  const frame = screen.getByTitle("Failed plugin") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin", type: "error", error: "Module unavailable" },
+    }),
+  );
+  expect(screen.getByRole("alert")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(screen.getByTitle("Failed plugin")).not.toBe(frame);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toBeVisible();
+});
+
+it("offers retry when a frame never announces readiness", () => {
+  vi.useFakeTimers();
+  render(
+    <CustomPluginFrame pluginId="custom.stalled" title="Stalled plugin" />,
+  );
+  act(() => vi.advanceTimersByTime(30_000));
+  expect(screen.getByRole("alert")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+});
+
+it("does not send a previous screen's pending response to a replacement frame", async () => {
+  let resolve!: (value: Response) => void;
+  const transport = vi.fn(
+    () =>
+      new Promise<Response>((done) => {
+        resolve = done;
+      }),
+  );
+  setStudioRuntime({ embedded: false, transport });
+  const { rerender } = render(
+    <CustomPluginFrame pluginId="custom.first" title="Plugin" />,
+  );
+  const first = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: first.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "pending",
+        path: "/objects",
+      },
+    }),
+  );
+  rerender(<CustomPluginFrame pluginId="custom.second" title="Plugin" />);
+  const second = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const send = vi.spyOn(second.contentWindow!, "postMessage");
+  await act(async () => resolve(Response.json({ data: ["private"] })));
+  expect(send).not.toHaveBeenCalledWith(
+    expect.objectContaining({ id: "pending" }),
+    "*",
+  );
 });
 
 it("forwards any workspace API route with the current user's transport", async () => {

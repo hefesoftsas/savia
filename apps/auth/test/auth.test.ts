@@ -1,25 +1,108 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
-import authWorker, { createBetterAuth } from "../src/index";
+import { describe, expect, it, vi } from "vitest";
+import authWorker, { createAuthHandler, createBetterAuth } from "../src/index";
 import { oauthProviderOptions, oauthRuntime } from "../src/oauth";
 
 const origin = "http://127.0.0.1:8787";
 
+it("reuses successful auth bootstrap checks across handler instances", async () => {
+  const environment = {
+    ...env,
+    BETTER_AUTH_BOOTSTRAP_NAME: "Bootstrap cache regression test",
+  };
+  const prepare = vi.spyOn(environment.AUTH_DB, "prepare");
+  const bootstrapQueries = () =>
+    prepare.mock.calls.filter(([query]) =>
+      /SELECT id FROM "user" WHERE email = \? LIMIT 1|FROM "oauthClient" WHERE name = \? LIMIT 1/.test(
+        String(query),
+      ),
+    ).length;
+
+  try {
+    const responses = await Promise.all([
+      createAuthHandler(environment).fetch(
+        new Request(`${origin}/_internal/session`),
+      ),
+      createAuthHandler(environment).fetch(
+        new Request(`${origin}/_internal/session`),
+      ),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(bootstrapQueries()).toBe(3);
+
+    const later = await createAuthHandler(environment).fetch(
+      new Request(`${origin}/_internal/session`),
+    );
+    expect(later.status).toBe(200);
+    expect(bootstrapQueries()).toBe(3);
+
+    const changedEnvironment = {
+      ...environment,
+      BETTER_AUTH_BOOTSTRAP_NAME: "Changed bootstrap configuration",
+    };
+    const changed = await createAuthHandler(changedEnvironment).fetch(
+      new Request(`${origin}/_internal/session`),
+    );
+    expect(changed.status).toBe(200);
+    expect(bootstrapQueries()).toBe(6);
+  } finally {
+    prepare.mockRestore();
+  }
+});
+
+it("retries auth bootstrap after a transient initialization failure", async () => {
+  const environment = {
+    ...env,
+    BETTER_AUTH_BOOTSTRAP_NAME: "Bootstrap retry regression test",
+  };
+  const prepareDatabase = environment.AUTH_DB.prepare.bind(environment.AUTH_DB);
+  let failOnce = true;
+  const prepare = vi
+    .spyOn(environment.AUTH_DB, "prepare")
+    .mockImplementation((query) => {
+      if (
+        failOnce &&
+        String(query).includes('FROM "oauthClient" WHERE name = ?')
+      ) {
+        failOnce = false;
+        throw new Error("transient bootstrap database failure");
+      }
+      return prepareDatabase(query);
+    });
+
+  try {
+    await expect(
+      createAuthHandler(environment).fetch(
+        new Request(`${origin}/_internal/session`),
+      ),
+    ).rejects.toThrow("transient bootstrap database failure");
+
+    const retry = await createAuthHandler(environment).fetch(
+      new Request(`${origin}/_internal/session`),
+    );
+    expect(retry.status).toBe(200);
+  } finally {
+    prepare.mockRestore();
+  }
+});
+
 async function authRequest(
   path: string,
   init?: RequestInit,
+  environment: typeof env = env,
 ): Promise<Response> {
   const url = path.startsWith("http") ? path : `${origin}${path}`;
-  return authWorker.fetch(new Request(url, init), env);
+  return authWorker.fetch(new Request(url, init), environment);
 }
 
 async function internalAuthRequest(
   path: string,
   init?: RequestInit,
+  environment: typeof env = env,
 ): Promise<Response> {
   return authWorker.fetch(
     new Request(`https://savia-auth.internal${path}`, init),
-    env,
+    environment,
   );
 }
 
@@ -286,7 +369,10 @@ describe("Savia Better Auth worker", () => {
       )
       .run();
 
-    await internalAuthRequest("/_internal/oauth/admin-client");
+    await internalAuthRequest("/_internal/oauth/admin-client", undefined, {
+      ...env,
+      BETTER_AUTH_BOOTSTRAP_NAME: "Refresh token scope repair",
+    });
 
     const upgraded = await env.AUTH_DB.prepare(
       'SELECT scopes FROM "oauthClient" WHERE "clientId" = ?',
@@ -791,6 +877,8 @@ describe("Savia Better Auth worker", () => {
 
     const discovery = await authRequest(
       "/api/auth/.well-known/openid-configuration",
+      undefined,
+      { ...env, BETTER_AUTH_BOOTSTRAP_NAME: "OAuth resource link repair" },
     );
 
     expect(discovery.status).toBe(200);
@@ -830,6 +918,8 @@ describe("Savia Better Auth worker", () => {
 
     const discovery = await authRequest(
       "/api/auth/.well-known/openid-configuration",
+      undefined,
+      { ...env, BETTER_AUTH_BOOTSTRAP_NAME: "OAuth redirect repair" },
     );
     expect(discovery.status).toBe(200);
 

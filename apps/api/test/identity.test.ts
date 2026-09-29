@@ -432,6 +432,58 @@ describe("Identity and access", () => {
     expect(response.status).toBe(200);
   });
 
+  it("does not rewrite complete platform grants on each authenticated request", async () => {
+    const identity = await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "steady-platform-administrator",
+      email: "steady.admin@savia.test",
+      displayName: "Steady Administrator",
+    });
+    await ensureBootstrapAdministrator(env.DB, identity.id);
+    const authService = {
+      async fetch(request: Request) {
+        if (new URL(request.url).pathname === "/_internal/session") {
+          return Response.json({
+            user: {
+              id: "steady-platform-administrator",
+              email: "steady.admin@savia.test",
+              name: "Steady Administrator",
+              role: "admin",
+              twoFactorEnabled: true,
+            },
+          });
+        }
+        return Response.json({ user: null });
+      },
+    };
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      authService,
+    );
+    const prepare = vi.spyOn(env.DB, "prepare");
+
+    try {
+      const response = await app.request("/v1/identity/me", {
+        headers: { cookie: "savia.session_token=session-token" },
+      });
+
+      expect(response.status).toBe(200);
+      const grantWrites = prepare.mock.calls.filter(([query]) =>
+        /INSERT INTO identity_(tenant_membership|global_role)/i.test(
+          String(query),
+        ),
+      );
+      expect(grantWrites).toHaveLength(0);
+    } finally {
+      prepare.mockRestore();
+    }
+  });
+
   it("prevents a platform administrator without MFA enrollment from using Savia", async () => {
     const authService = {
       async fetch(request: Request) {
@@ -1483,6 +1535,34 @@ describe("Identity and access", () => {
       .bind(identity.issuer, identity.subject)
       .first<{ total: number }>();
     expect(users?.total).toBe(1);
+  });
+
+  it("does not rewrite an unchanged principal during a repeated login", async () => {
+    const identity = {
+      issuer: "savia:better-auth",
+      subject: "unchanged-better-auth-subject",
+      email: "unchanged@savia.test",
+      displayName: "Unchanged User",
+    };
+    const created = await upsertPrincipal(env.DB, identity);
+    await env.DB.prepare(
+      "UPDATE identity_principal SET updated_at = ? WHERE id = ?",
+    )
+      .bind("2020-01-01T00:00:00.000Z", created.id)
+      .run();
+
+    const repeated = await upsertPrincipal(env.DB, {
+      ...identity,
+      email: " UNCHANGED@SAVIA.TEST ",
+    });
+    const persisted = await env.DB.prepare(
+      "SELECT updated_at FROM identity_principal WHERE id = ?",
+    )
+      .bind(created.id)
+      .first<{ updated_at: string }>();
+
+    expect(repeated.id).toBe(created.id);
+    expect(persisted?.updated_at).toBe("2020-01-01T00:00:00.000Z");
   });
 
   it("finds an existing principal by subject", async () => {
