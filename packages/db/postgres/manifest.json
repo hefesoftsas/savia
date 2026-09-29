@@ -361,9 +361,15 @@
     {
       "filename": "0080_studio_record_search.sql",
       "sha256": "25788d3119fa014c0d92cc70bd86462d88d604426a31b50abd510c1e84f6bcdd"
+    },
+    {
+      "filename": "0081_record_summaries.sql",
+      "sha256": "8002fd79fa4df8731b1e5c16b2cac107fbf04cfbdbcefb74f41b99cd5f809729"
     }
   ],
   "sqliteOnlyDerivedTables": [
+    "studio_record_summary_definitions",
+    "studio_record_summary_groups",
     "studio_record_counts",
     "studio_record_read_cache",
     "studio_record_search",

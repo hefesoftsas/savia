@@ -82,6 +82,8 @@ it("requires PostgreSQL when explicitly selected", () => {
 });
 it("excludes only declared core-derived SQLite tables from PostgreSQL import", () => {
   const derived = [
+    "studio_record_summary_definitions",
+    "studio_record_summary_groups",
     "studio_record_counts",
     "studio_record_read_cache",
     "studio_record_search",

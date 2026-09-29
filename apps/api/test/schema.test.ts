@@ -44,11 +44,13 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(153);
+    expect(names).toHaveLength(155);
     expect(names).toEqual(
       expect.arrayContaining([
         "studio_record_counts",
         "studio_record_read_cache",
+        "studio_record_summary_definitions",
+        "studio_record_summary_groups",
         "studio_record_search",
         "studio_record_search_fts",
         "access_revisions",
@@ -140,6 +142,8 @@ describe("full D1 schema projection", () => {
 
         "studio_record_counts",
         "studio_record_read_cache",
+        "studio_record_summary_definitions",
+        "studio_record_summary_groups",
         "studio_record_search",
         "studio_record_search_fts",
         "access_revisions",

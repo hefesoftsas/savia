@@ -10,6 +10,7 @@ export default {
     });
     const input: any = await request.json();
     const queries: any[] = [];
+    let coldCacheBypasses = 0;
     const statements = new WeakMap<object, any>();
     function wrap(statement: any, sql: string, args: any[] = []): any {
       const proxy = new Proxy(statement, {
@@ -19,6 +20,21 @@ export default {
               wrap(target.bind(...values), sql, values);
           if (key === "first")
             return async (column?: string) => {
+              if (
+                input.cold === true &&
+                /^\s*SELECT\s+cache\.payload\s+FROM\s+studio_record_read_cache\b/i.test(
+                  sql,
+                )
+              ) {
+                coldCacheBypasses++;
+                queries.push({
+                  sql,
+                  args,
+                  metaUnavailable: true,
+                  coldCacheBypass: true,
+                });
+                return null;
+              }
               const row = await target.first(column);
               queries.push({ sql, args, metaUnavailable: true });
               return row;
@@ -69,6 +85,7 @@ export default {
       status: response.status,
       body,
       workerMs: performance.now() - started,
+      coldCacheBypasses,
       queries,
     });
   },

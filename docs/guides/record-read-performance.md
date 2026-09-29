@@ -63,3 +63,68 @@ Use [the isolated local stress runner](d1-local-stress.md) for volume and concur
 reads/writes. Compare first uncached requests as well as repeated requests; an
 aggregate cache hit is not evidence that an arbitrary cold aggregation became
 constant-time. Keep local timings separate from Cloudflare capacity estimates.
+
+## Opt-in cold-read acceleration
+
+A local collection can declare `config.performance` with up to four indexes
+and four maintained summaries. These settings are explicit: the engine does
+not create indexes for every field or infer them on the request path.
+
+```json
+{
+  "indexes": [
+    { "fields": ["name"], "order": "ASC" },
+    { "fields": ["stage", "updated_at"], "order": "DESC" }
+  ],
+  "summaries": [{ "group": "stage", "amountField": "amount" }]
+}
+```
+
+The first index supports name ordering. The second supports an exact stage
+filter followed by newest-first ordering. Indexes are scoped to the tenant,
+collection and active rows; they do not duplicate index entries for unrelated
+collections. Index names are deterministic hashes, and field expressions match
+the query dialect. Publishing creates or retires indexes within the metadata
+transaction. Collection deletion removes its indexes and summaries.
+
+Administrators can change performance settings independently of the schema
+through the generated OpenAPI operation `configure_record_performance`.
+It requires the current collection version and updates metadata, selected
+indexes and summary backfills atomically without rewriting record payloads.
+Building an index or initial summary still reads existing records: configure a
+large remote collection separately and validate D1 execution limits before
+rollout. Regular reads never perform schema changes or backfills.
+
+Configured indexed sorts support typed cursors, including numeric values,
+nulls, and repeated values. The ID breaks ties. Unconfigured sorts and random
+page jumps retain the existing behavior. Indexes can accelerate matching
+filters, but an exact count over an arbitrary combination can still require
+scanning the matching index range.
+
+A maintained summary stores active count and optional numeric sum for each
+group. Inserts, updates, trash, restore, moves and deletes change only the
+impacted groups in the same database transaction. A single exact equality
+filter on a configured grouping field can reuse its count in the page batch.
+The summary endpoint uses the maintained result only for its configured group
+and amount field without extra filters/search/trash, and only when the row
+policy grants the whole collection. Restricted row policies always execute
+their own predicates. Field permissions still apply to all queries.
+
+Choose low-cardinality grouping fields such as status. High-cardinality fields
+create more summary rows. Sums retain SQLite REAL arithmetic, including its
+floating-point precision limits; this is not an exact-decimal accounting
+ledger. Repeated reads do not depend on the revision cache for the accelerated
+page/count/summary paths. Arbitrary filters, unsupported orders, and restricted
+row summaries can still use the existing cache and query fallback.
+
+These accelerators are SQLite/D1-specific. PostgreSQL continues direct queries;
+imported performance metadata remains portable but inactive on that backend.
+Its SQLite importer intentionally omits the derived summary tables along with
+the read-cache/search tables. The generated source manifest records the new
+migration without adding SQLite-only tables to the PostgreSQL baseline.
+
+Validate with `STRESS_PERFORMANCE=1 STRESS_COLD=1` in the local stress runner.
+Add `STRESS_MIXED=1 STRESS_MIXED_SAME_COLLECTION=1` to interleave matching reads
+and real writes on the same collection, then compare maintained summaries
+against direct SQL. Report uncached latency, rows read, writes, and database
+size rather than treating a warm cache hit as evidence of a faster query.

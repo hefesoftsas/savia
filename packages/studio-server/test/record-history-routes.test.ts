@@ -1,3 +1,4 @@
+import { migrationStatements } from "./migration-statements";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
@@ -100,9 +101,9 @@ beforeAll(async () => {
   for (const file of readdirSync("migrations")
     .filter((n) => n.endsWith(".sql"))
     .sort())
-    for (const sql of readFileSync("migrations/" + file, "utf8")
-      .split(/;(?!(?:\s*END\b))/i)
-      .filter((s) => s.trim()))
+    for (const sql of migrationStatements(
+      readFileSync("migrations/" + file, "utf8"),
+    ))
       await platform.env.DB.prepare(sql).run();
   // Standalone policy guard fixture mirrors the API's current revision table.
   await platform.env.DB.exec(

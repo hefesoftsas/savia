@@ -1,3 +1,4 @@
+import { migrationStatements } from "./migration-statements";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync } from "node:fs";
@@ -51,10 +52,7 @@ beforeAll(async () => {
     "../db/migrations/0079_record_read_state.sql",
     "utf8",
   );
-  for (const sql of migration
-    .split(/;(?!(?:\s*END\b))/i)
-    .filter((statement) => statement.trim()))
-    await db.prepare(sql).run();
+  for (const sql of migrationStatements(migration)) await db.prepare(sql).run();
 });
 
 afterAll(async () => {

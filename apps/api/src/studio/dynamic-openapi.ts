@@ -1,3 +1,4 @@
+import { recordPerformanceUpdateSchema } from "@savia/studio-server/schema";
 import {
   documentDeliveryRequestSchema,
   documentDeliveryConfirmationSchema,
@@ -1049,6 +1050,20 @@ export async function dynamicOpenApi(
         };
     }
   }
+  paths["/objects/{name}/performance"] = {
+    patch: operation(
+      "configure_record_performance",
+      "Collections",
+      "Configure local collection read indexes and maintained summaries",
+      envelope({ type: "object" }),
+      {
+        parameters: [parameter("name", "path", { type: "string" }, true)],
+        body: z.toJSONSchema(recordPerformanceUpdateSchema, { io: "input" }),
+        description:
+          "Administrator-only SQLite/D1 configuration. Builds selected indexes and summaries atomically without rewriting record payloads. Requires the current collection version.",
+      },
+    ),
+  };
   const workflowRoutes = [
     ["/workflows/{id}/webhook", "get", "Read webhook endpoint", null],
     ["/workflows/{id}/webhook", "post", "Create webhook endpoint", null],

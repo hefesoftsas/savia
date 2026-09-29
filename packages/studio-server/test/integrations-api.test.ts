@@ -1,3 +1,4 @@
+import { migrationStatements } from "./migration-statements";
 import {
   beforeAll,
   afterAll,
@@ -37,9 +38,9 @@ beforeAll(async () => {
   for (const name of readdirSync("migrations")
     .filter((n) => n.endsWith(".sql"))
     .sort())
-    for (const statement of readFileSync(`migrations/${name}`, "utf8")
-      .split(/;(?!(?:\s*END\b))/i)
-      .filter((s) => s.trim()))
+    for (const statement of migrationStatements(
+      readFileSync(`migrations/${name}`, "utf8"),
+    ))
       await platform.env.DB.prepare(statement).run();
   await json("/bootstrap", "POST");
 });

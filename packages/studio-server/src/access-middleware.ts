@@ -42,6 +42,7 @@ export function visibleAccessObject(
     ...object,
     config: {
       ...object.config,
+      performance: undefined,
       fields: Object.fromEntries(
         Object.entries(object.config.fields).filter(([key]) => fields.has(key)),
       ),

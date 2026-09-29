@@ -1,3 +1,4 @@
+import { migrationStatements } from "./migration-statements";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
@@ -80,9 +81,9 @@ beforeAll(async () => {
   for (const file of readdirSync("migrations")
     .filter((n) => n.endsWith(".sql"))
     .sort())
-    for (const sql of readFileSync(`migrations/${file}`, "utf8")
-      .split(/;(?!(?:\s*END\b))/i)
-      .filter((s) => s.trim()))
+    for (const sql of migrationStatements(
+      readFileSync(`migrations/${file}`, "utf8"),
+    ))
       await platform.env.DB.prepare(sql).run();
 });
 afterAll(async () => {
@@ -289,8 +290,13 @@ describe("industry packages on real D1", () => {
       "POST",
       quoterManifest,
     );
-    expect(activated.data).toMatchObject({ id: quoterManifest.id, enabled: true });
-    expect((await json(tenant, "/objects")).data.map((object: any) => object.name)).toEqual(
+    expect(activated.data).toMatchObject({
+      id: quoterManifest.id,
+      enabled: true,
+    });
+    expect(
+      (await json(tenant, "/objects")).data.map((object: any) => object.name),
+    ).toEqual(
       expect.arrayContaining([
         "cotizaciones",
         "cotizaciones_detalle",
@@ -316,8 +322,14 @@ describe("industry packages on real D1", () => {
       "Dependencia no disponible: insurance.missing-extension.",
     );
     expect(
-      (await request(tenant, "/solutions/activate", "POST", packageWithDependency))
-        .status,
+      (
+        await request(
+          tenant,
+          "/solutions/activate",
+          "POST",
+          packageWithDependency,
+        )
+      ).status,
     ).toBe(409);
     expect(
       await platform.env.DB.prepare(

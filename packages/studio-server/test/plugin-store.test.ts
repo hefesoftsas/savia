@@ -1,3 +1,4 @@
+import { migrationStatements } from "./migration-statements";
 import deploymentWorker, {
   deploymentTenants,
 } from "../../../scripts/plugin-deployment/worker";
@@ -226,9 +227,9 @@ beforeAll(async () => {
   for (const file of readdirSync("migrations")
     .filter((name) => name.endsWith(".sql"))
     .sort())
-    for (const sql of readFileSync(`migrations/${file}`, "utf8")
-      .split(/;(?!(?:\s*END\b))/i)
-      .filter((statement) => statement.trim()))
+    for (const sql of migrationStatements(
+      readFileSync(`migrations/${file}`, "utf8"),
+    ))
       await platform.env.DB.prepare(sql).run();
 });
 

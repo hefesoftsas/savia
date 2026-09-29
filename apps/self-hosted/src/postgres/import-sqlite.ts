@@ -22,6 +22,8 @@ const stores = [
 ] as const;
 const internal = new Set(["_savia_sqlite_migrations", "sqlite_sequence"]);
 const sqliteOnlyCoreTables = new Set([
+  "studio_record_summary_definitions",
+  "studio_record_summary_groups",
   "studio_record_counts",
   "studio_record_read_cache",
   "studio_record_search",

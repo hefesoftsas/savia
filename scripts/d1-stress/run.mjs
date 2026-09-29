@@ -28,6 +28,10 @@ const concurrencyLevels = (process.env.STRESS_CONCURRENCY ?? "1,8,32")
   .map(Number);
 const samples = Number(process.env.STRESS_SAMPLES ?? 32);
 const mixedSamples = Number(process.env.STRESS_MIXED_SAMPLES ?? samples);
+const coldReads = process.env.STRESS_COLD === "1";
+const mixedSameCollection = process.env.STRESS_MIXED_SAME_COLLECTION === "1";
+const performanceEnabled =
+  process.env.STRESS_PERFORMANCE === "1" || mixedSameCollection;
 if (!Number.isInteger(mixedSamples) || mixedSamples < 2 || mixedSamples > 500)
   throw Error("Invalid mixed sample count");
 const stopP95Ms = Number(process.env.STRESS_STOP_P95_MS ?? 30000);
@@ -74,6 +78,9 @@ const report = {
   concurrencyLevels,
   samples,
   mixedSamples,
+  performanceEnabled,
+  coldReads,
+  mixedSameCollection,
   stages: [],
 };
 report.harness = {};
@@ -140,13 +147,15 @@ try {
     `Applied ${migrations.length} real migrations to disposable local D1.`,
   );
   const config = {
+    version: 2,
     fields: {
-      name: { type: "Text", label: "Name" },
-      email: { type: "Text", label: "Email" },
-      stage: { type: "Text", label: "Stage" },
+      name: { type: "Textbox", label: "Name" },
+      email: { type: "Textbox", label: "Email" },
+      stage: { type: "Textbox", label: "Stage" },
       amount: { type: "Number", label: "Amount" },
-      notes: { type: "Text", label: "Notes" },
+      notes: { type: "Textbox", label: "Notes" },
     },
+    fieldOrder: ["name", "email", "stage", "amount", "notes"],
   };
   for (const tenant of ["900001", "900002"])
     for (const name of ["contacts", "deals"])
@@ -156,15 +165,35 @@ try {
         )
         .bind(tenant, name, name, JSON.stringify(config))
         .run();
-  const request = async (input) => {
+  const request = async (input, { cold = false } = {}) => {
     const started = performance.now();
     const response = await mf.dispatchFetch("http://127.0.0.1/probe", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, cold }),
     });
     const result = await response.json();
     return { ...result, ms: performance.now() - started };
   };
+  if (performanceEnabled || mixedSameCollection) {
+    const performance = {
+      indexes: [
+        { fields: ["name"], order: "ASC" },
+        { fields: ["stage", "updated_at"], order: "DESC" },
+      ],
+      summaries: [{ group: "stage", amountField: "amount" }],
+    };
+    for (const name of ["contacts", "deals"]) {
+      const configured = await request({
+        path: `/api/objects/${name}/performance`,
+        method: "PATCH",
+        body: { version: 1, performance },
+      });
+      if (configured.status !== 200)
+        throw Error(
+          `Could not configure ${name} performance: ${JSON.stringify(configured.body)}`,
+        );
+    }
+  }
   let seeded = 0;
   volumeLoop: for (const size of sizes) {
     const seedStart = performance.now();
@@ -255,11 +284,29 @@ try {
       },
       { name: "menu-counts", path: "/api/objects", kind: "menu" },
     ];
+    if (performanceEnabled) {
+      scenarios.push(
+        {
+          name: "performance-indexed-sort-name",
+          path: "/api/records/contacts?perPage=25&sort=name&order=ASC",
+          kind: "list",
+        },
+        {
+          name: "performance-indexed-filter-sort",
+          path: "/api/records/contacts?perPage=25&stage=open&sort=updated_at&order=DESC",
+          kind: "filter",
+        },
+        {
+          name: "performance-summary-stage-amount",
+          path: "/api/records/contacts/summary?group=stage&amountField=amount",
+          kind: "summary",
+        },
+      );
+    }
     if (process.env.STRESS_CURSOR === "1") {
+      const deepPage = Math.max(1, Math.floor((active * 0.9) / 25));
       const anchor = await request({
-        path:
-          "/api/records/contacts?perPage=25&page=" +
-          Math.max(1, Math.floor((active * 0.9) / 25)),
+        path: "/api/records/contacts?perPage=25&page=" + deepPage,
       });
       if (!anchor.body.nextCursor)
         throw Error("Cursor probe requires a nextCursor response");
@@ -270,13 +317,32 @@ try {
           encodeURIComponent(anchor.body.nextCursor),
         kind: "list",
       });
+      if (performanceEnabled) {
+        const nameAnchor = await request({
+          path:
+            "/api/records/contacts?perPage=25&page=" +
+            deepPage +
+            "&sort=name&order=ASC",
+        });
+        if (nameAnchor.status !== 200 || !nameAnchor.body.nextCursor)
+          throw Error(
+            `Custom-name cursor probe requires a nextCursor response: ${JSON.stringify(nameAnchor.body)}`,
+          );
+        scenarios.push({
+          name: "performance-cursor-name",
+          path:
+            "/api/records/contacts?perPage=25&sort=name&order=ASC&cursor=" +
+            encodeURIComponent(nameAnchor.body.nextCursor),
+          kind: "list",
+        });
+      }
     }
     for (const scenario of scenarios.filter(
       (s) =>
         !process.env.STRESS_SCENARIOS ||
         process.env.STRESS_SCENARIOS.split(",").includes(s.name),
     )) {
-      const warmup = await request(scenario);
+      const warmup = await request(scenario, { cold: coldReads });
       if (warmup.status !== 200)
         throw Error(`${scenario.name}: ${JSON.stringify(warmup.body)}`);
       if (
@@ -312,7 +378,9 @@ try {
       const entry = {
         name: scenario.name,
         path: scenario.path,
+        cacheMode: coldReads ? "cold-bypass" : "normal",
         coldMs: warmup.ms,
+        coldCacheBypasses: warmup.coldCacheBypasses ?? 0,
         coldRowsRead: warmup.queries.reduce(
           (n, q) => n + (q.meta?.rows_read ?? 0),
           0,
@@ -329,11 +397,12 @@ try {
           Array.from({ length: Math.min(concurrency, samples) }, async () => {
             while (next++ < samples) {
               try {
-                const r = await request(scenario);
+                const r = await request(scenario, { cold: coldReads });
                 observations.push({
                   ms: r.ms,
                   status: r.status,
                   workerMs: r.workerMs,
+                  coldCacheBypasses: r.coldCacheBypasses ?? 0,
                   rowsRead: r.queries.reduce(
                     (n, q) => n + (q.meta?.rows_read ?? 0),
                     0,
@@ -388,9 +457,13 @@ try {
       await save();
     }
   }
-  if (process.env.STRESS_MIXED === "1") {
+  if (process.env.STRESS_MIXED === "1" || mixedSameCollection) {
     report.mixed = [];
-    // Fixed 80/20 read/write workload, writes go to deals so contact probes stay stable.
+    const mixedObject = mixedSameCollection ? "contacts" : "deals";
+    const mixedReadPath = mixedSameCollection
+      ? "/api/records/contacts?perPage=25&stage=open&sort=updated_at&order=DESC"
+      : "/api/records/contacts?perPage=25";
+    // Fixed 80/20 read/write workload; same-collection mode exercises invalidation.
     for (const concurrency of concurrencyLevels) {
       const observations = [];
       let next = 0;
@@ -398,7 +471,7 @@ try {
       const before = Number(
         await db
           .prepare(
-            "SELECT count(*) AS n FROM studio_records WHERE tenant_id='900001' AND object_name='deals'",
+            `SELECT count(*) AS n FROM studio_records WHERE tenant_id='900001' AND object_name='${mixedObject}'`,
           )
           .first("n"),
       );
@@ -414,7 +487,7 @@ try {
                 const r = await request(
                   write
                     ? {
-                        path: "/api/records/deals",
+                        path: `/api/records/${mixedObject}`,
                         method: "POST",
                         body: {
                           name: "Stress " + index,
@@ -424,7 +497,8 @@ try {
                           notes: "Synthetic",
                         },
                       }
-                    : { path: "/api/records/contacts?perPage=25" },
+                    : { path: mixedReadPath },
+                  { cold: coldReads },
                 );
                 observations.push({
                   write,
@@ -451,7 +525,7 @@ try {
       const after = Number(
         await db
           .prepare(
-            "SELECT count(*) AS n FROM studio_records WHERE tenant_id='900001' AND object_name='deals'",
+            `SELECT count(*) AS n FROM studio_records WHERE tenant_id='900001' AND object_name='${mixedObject}'`,
           )
           .first("n"),
       );
@@ -460,6 +534,39 @@ try {
       ).length;
       if (after - before !== successes)
         throw Error("Write acknowledgement/count mismatch");
+      if (mixedSameCollection) {
+        const summary = await request(
+          {
+            path: "/api/records/contacts/summary?group=stage&amountField=amount",
+          },
+          { cold: coldReads },
+        );
+        if (summary.status !== 200)
+          throw Error(
+            `Post-write summary failed: ${JSON.stringify(summary.body)}`,
+          );
+        const direct = await db
+          .prepare(
+            `SELECT json_extract(data,'$.stage') AS value,count(*) AS count,
+                    COALESCE(sum(CAST(json_extract(data,'$.amount') AS REAL)),0) AS amount
+             FROM studio_records WHERE tenant_id='900001' AND object_name='contacts'
+               AND deleted_at IS NULL GROUP BY value`,
+          )
+          .all();
+        const normalize = (rows) =>
+          rows
+            .map((row) => ({
+              value: row.value,
+              count: Number(row.count),
+              amount: Number(row.amount),
+            }))
+            .sort((a, b) => a.value.localeCompare(b.value));
+        if (
+          JSON.stringify(normalize(summary.body.data)) !==
+          JSON.stringify(normalize(direct.results))
+        )
+          throw Error("Post-write grouped summary disagrees with direct SQL");
+      }
       const errors = observations.filter(
         (x) => x.status !== (x.write ? 201 : 200),
       ).length;

@@ -31,6 +31,18 @@ STRESS_SIZES=1000000 STRESS_SCENARIOS=mixed-only STRESS_MIXED=1 STRESS_SAMPLES=1
 `mixed-only` selector skips read-only scenarios. `STRESS_OUTPUT` selects the
 report directory. `STRESS_CURSOR=1` adds a deep cursor probe;
 `STRESS_MIXED_SAMPLES` overrides the mixed workload sample count separately.
+`STRESS_PERFORMANCE=1` configures the contacts and deals performance indexes
+and grouped summary through the local object API before seeding, then adds
+indexed name sorting, stage-filtered timestamp sorting, and grouped-summary
+scenarios. `STRESS_COLD=1` makes the local Worker adapter return a cache miss
+for each read-cache lookup while leaving cache writes enabled; the report marks
+these requests as `cold-bypass` and records the number of bypassed lookups.
+`STRESS_MIXED_SAME_COLLECTION=1` enables the performance configuration and runs
+the 80/20 workload against contacts: reads filter `stage=open` and sort by
+`updated_at`, while writes also target contacts. After each concurrency level,
+the harness compares the API summary with direct SQL to check summary
+maintenance after writes. It also retains the record/sync and foreign-key
+integrity checks. This option can be combined with `STRESS_COLD=1`.
 Each scenario also records `coldMs` for its first request before warm samples.
 The read profile stops on its first request error or a p95 above
 30 seconds (`STRESS_STOP_P95_MS`), saves partial results and exits nonzero.
@@ -46,9 +58,13 @@ more stable percentiles; with 32 observations p99 is just the maximum.
 - JSON field sorting and equality filtering.
 - General substring search across JSON values.
 - Grouped count/sum summaries.
+- Optional indexed JSON sorting, stage-filtered sorting and configured grouped
+  summaries through `STRESS_PERFORMANCE=1`.
 - Object menu counts.
 - Optional 80/20 list/create traffic through the real routes, checking committed
   write counts, foreign keys, and record/sync row counts afterwards.
+- Optional same-collection reads and writes through
+  `STRESS_MIXED_SAME_COLLECTION=1`, including a direct SQL summary comparison.
 
 The dataset has two tenants and two collections. Tenant `900001` contains 80%
 of all seeded rows in `contacts` and 10% in `deals`; tenant `900002` owns the

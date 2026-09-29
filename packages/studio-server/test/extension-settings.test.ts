@@ -1,3 +1,4 @@
+import { migrationStatements } from "./migration-statements";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { getPlatformProxy } from "wrangler";
@@ -22,9 +23,9 @@ async function applyMigrations() {
   for (const name of readdirSync("migrations")
     .filter((file) => file.endsWith(".sql"))
     .sort())
-    for (const statement of readFileSync(`migrations/${name}`, "utf8")
-      .split(/;(?!(?:\s*END\b))/i)
-      .filter((value) => value.trim()))
+    for (const statement of migrationStatements(
+      readFileSync(`migrations/${name}`, "utf8"),
+    ))
       await platform.env.DB.prepare(statement).run();
 }
 

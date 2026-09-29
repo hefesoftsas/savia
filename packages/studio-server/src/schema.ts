@@ -1,8 +1,11 @@
+import { summaryConfigurationStatements } from "./record-summaries";
+import { recordIndexStatements } from "./record-performance";
 import { dialectFor } from "@savia/db/dialect";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import {
   objectSchema,
+  recordPerformanceSchema,
   screenNavigationIconSchema,
   screenNavigationSectionSchema,
   validateRecord,
@@ -73,6 +76,21 @@ export async function createObject(
       )
       .bind(tenant, object.name, JSON.stringify(object)),
     audit(db, tenant, "object.created", object.name, null, object),
+    ...(await recordIndexStatements(
+      db,
+      tenant,
+      object.name,
+      [],
+      object.config.performance?.indexes,
+    )),
+    ...(object.config.performance?.summaries.length
+      ? summaryConfigurationStatements(
+          db,
+          tenant,
+          object.name,
+          object.config.performance.summaries,
+        )
+      : []),
   ]);
   return object;
 }
@@ -356,8 +374,96 @@ export async function publishSchema(
     count.end,
     g.end,
   );
+  statements.push(
+    ...(await recordIndexStatements(
+      db,
+      tenant,
+      name,
+      previous.config.performance?.indexes,
+      next.config.performance?.indexes,
+    )),
+  );
+  if (
+    JSON.stringify(previous.config.performance?.summaries ?? []) !==
+    JSON.stringify(next.config.performance?.summaries ?? [])
+  )
+    statements.push(
+      ...summaryConfigurationStatements(
+        db,
+        tenant,
+        name,
+        next.config.performance?.summaries ?? [],
+      ),
+    );
   await transaction(db, statements);
   return definition;
+}
+
+export const recordPerformanceUpdateSchema = z
+  .object({
+    version: z.number().int().positive(),
+    performance: recordPerformanceSchema,
+  })
+  .strict();
+
+/** Change physical read configuration without rewriting collection records. */
+export async function configureObjectPerformance(
+  db: D1Database,
+  tenant: string,
+  name: string,
+  input: unknown,
+) {
+  await assertLocalCollection(db, tenant, name);
+  if (dialectFor(db).name !== "sqlite")
+    return fail("Esta optimización está disponible para SQLite/D1.", 422);
+  const body = recordPerformanceUpdateSchema.parse(input);
+  const previous = await getObject(db, tenant, name);
+  if (body.version !== previous.version)
+    return fail(
+      "Otra persona cambió la estructura. Recarga el diseñador.",
+      409,
+    );
+  const next = objectSchema.parse({
+    ...previous,
+    version: body.version + 1,
+    config: { ...previous.config, performance: body.performance },
+  }) as StudioObject;
+  const lock = guard(
+    db,
+    "SELECT version=? FROM studio_objects WHERE tenant_id=? AND name=?",
+    [body.version, tenant, name],
+  );
+  const statements = [
+    lock.start,
+    ...(await recordIndexStatements(
+      db,
+      tenant,
+      name,
+      previous.config.performance?.indexes,
+      next.config.performance?.indexes,
+    )),
+    ...(JSON.stringify(previous.config.performance?.summaries ?? []) !==
+    JSON.stringify(next.config.performance?.summaries ?? [])
+      ? summaryConfigurationStatements(
+          db,
+          tenant,
+          name,
+          next.config.performance?.summaries ?? [],
+        )
+      : []),
+    db
+      .prepare(
+        "UPDATE studio_objects SET config=?,version=? WHERE tenant_id=? AND name=?",
+      )
+      .bind(JSON.stringify(next.config), next.version, tenant, name),
+    audit(db, tenant, "object.performance_updated", name, null, {
+      before: previous.config.performance,
+      after: next.config.performance,
+    }),
+    lock.end,
+  ];
+  await transaction(db, statements);
+  return next;
 }
 
 export const screenMetaSchema = z.object({
@@ -670,7 +776,15 @@ export async function deleteObject(
     allowRecords: options.deleteRecords,
   });
   const cascadeData = Boolean(options.deleteRecords && recordCount > 0);
+  const dropIndexes = await recordIndexStatements(
+    db,
+    tenant,
+    name,
+    object.config.performance?.indexes,
+    [],
+  );
   const statements = [
+    ...dropIndexes,
     ...(cascadeData
       ? await deleteObjectDataStatements(db, tenant, name)
       : deleteObjectMetadataStatements(db, tenant, name)),

@@ -133,7 +133,10 @@ export type StudioObject = {
   name: string;
   label: string;
   description: string;
-  config: IFormConfig & { studio?: StudioConfig };
+  config: IFormConfig & {
+    studio?: StudioConfig;
+    performance?: RecordPerformance;
+  };
   count?: number;
   version?: number;
 };
@@ -363,18 +366,94 @@ const studio = z.object({
     })
     .optional(),
 });
+export const recordPerformanceSchema = z
+  .object({
+    indexes: z
+      .array(
+        z
+          .object({
+            fields: z.array(identifier).min(1).max(3),
+            order: z.enum(["ASC", "DESC"]).default("ASC"),
+          })
+          .strict(),
+      )
+      .max(4)
+      .default([]),
+    summaries: z
+      .array(
+        z
+          .object({
+            group: identifier,
+            amountField: identifier.optional(),
+          })
+          .strict(),
+      )
+      .max(4)
+      .default([]),
+  })
+  .strict();
+export type RecordPerformance = z.infer<typeof recordPerformanceSchema>;
+
 export const configSchema = z
   .object({
     version: z.literal(2),
     fields: z.record(z.union([identifier, z.literal("_id")]), fieldSchema),
     fieldOrder: z.array(z.union([identifier, z.literal("_id")])),
     studio: studio.optional(),
+    performance: recordPerformanceSchema.optional(),
   })
   .passthrough()
   .superRefine((config, ctx) => {
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
     const names = Object.keys(config.fields);
+    if (config.performance) {
+      const scalar = (name: string) =>
+        config.fields[name] &&
+        ![
+          "MultiSelect",
+          "MapLocation",
+          "Address",
+          "R2Attachment",
+          "FormHtml",
+          "DisplayText",
+          "RichText",
+        ].includes(config.fields[name].type);
+      if (
+        config.studio?.collection ||
+        ["managed-customer", "managed-agency"].includes(
+          config.studio?.business ?? "",
+        )
+      )
+        issue("Read performance settings require a local collection.");
+      const indexKeys = new Set<string>();
+      for (const index of config.performance.indexes) {
+        if (new Set(index.fields).size !== index.fields.length)
+          issue("An index cannot repeat a field.");
+        for (const name of index.fields)
+          if (!["created_at", "updated_at"].includes(name) && !scalar(name))
+            issue(`Unsupported indexed field: ${name}`);
+        const key = JSON.stringify(index);
+        if (indexKeys.has(key)) issue("Duplicate performance index.");
+        indexKeys.add(key);
+      }
+      const summaryKeys = new Set<string>();
+      for (const summary of config.performance.summaries) {
+        if (!scalar(summary.group))
+          issue(`Unsupported summary field: ${summary.group}`);
+        if (
+          summary.amountField &&
+          !["Number", "Currency"].includes(
+            config.fields[summary.amountField]?.type,
+          )
+        )
+          issue("Summary amountField must be Number or Currency.");
+        const key = JSON.stringify(summary);
+        if (summaryKeys.has(key)) issue("Duplicate performance summary.");
+        summaryKeys.add(key);
+      }
+    }
+
     if (names.includes("_id") && config.studio?.collection?.kind !== "mongodb")
       issue("The _id field is reserved for MongoDB collections.");
     if (config.studio?.history) {

@@ -1,5 +1,6 @@
 import {
   sqliteDialect,
+  sqlLiteral,
   type SqlDialect,
   type JsonOperator,
 } from "@savia/db/dialect";
@@ -65,6 +66,10 @@ export function buildWhere(
     );
   const args: any[] = [tenant, object.name];
   let where = `tenant_id=? AND object_name=? AND deleted_at IS ${params.trash === "true" ? "NOT " : ""}NULL`;
+  // Partial indexes are scoped to this validated tenant/collection. Literal
+  // predicates let SQLite prove applicability while bindings remain authoritative.
+  if (dialect.name === "sqlite" && object.config.performance?.indexes?.length)
+    where += ` AND tenant_id=${sqlLiteral(tenant)} AND object_name=${sqlLiteral(object.name)}`;
   if (policy) {
     const access = compileAccessWhere(
       policy,

@@ -80,6 +80,11 @@ it("publishes individual typed paths from current agency metadata and refreshes 
   expect(response.headers.get("cache-control")).toBe("no-store");
   const spec: any = await response.json();
   expect(spec.openapi).toBe("3.1.0");
+  expect(
+    spec.paths["/objects/{name}/performance"].patch.requestBody.content[
+      "application/json"
+    ].schema.properties.performance.properties.indexes.maxItems,
+  ).toBe(4);
   expect(spec.paths["/file/{id}/office"].get.operationId).toBe(
     "office_file_metadata",
   );

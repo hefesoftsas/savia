@@ -1,3 +1,13 @@
+import {
+  getMaintainedSummary,
+  maintainedGroupCountStatement,
+} from "./record-summaries";
+import { buildRecordPageSelection } from "./record-page-query";
+import {
+  indexedRecordSort,
+  recordIndexName,
+  singleRecordEquality,
+} from "./record-performance";
 import { recordSearchCandidate } from "./record-search";
 import {
   getRecordCountStatement,
@@ -44,6 +54,7 @@ import {
 } from "./services";
 import {
   createObject,
+  configureObjectPerformance,
   deleteObject,
   patchScreenMeta,
   previewSchema,
@@ -374,6 +385,16 @@ export function createStudioApp(
       ),
     });
   });
+  app.patch("/api/objects/:name/performance", async (c) =>
+    c.json({
+      data: await configureObjectPerformance(
+        c.env.DB,
+        c.get("tenant"),
+        c.req.param("name"),
+        await c.req.json(),
+      ),
+    }),
+  );
   app.patch("/api/objects/:name/screen", async (c) => {
     const body = screenMetaPatchSchema.parse(await c.req.json());
     const { version, ...screen } = body;
@@ -456,13 +477,20 @@ export function createStudioApp(
     );
     // With selective FTS rowids, SQLite must seek those rowids rather than
     // walking the active-order index just to avoid sorting a few candidates.
-    const recordSource =
-      dialectFor(c.env.DB).name === "sqlite" &&
-      params.q &&
-      recordSearchCandidate(params.q.slice(0, 200))
+    const performanceIndex =
+      dialectFor(c.env.DB).name === "sqlite"
+        ? indexedRecordSort(object, sort, order, params)
+        : undefined;
+    const recordSource = performanceIndex
+      ? `studio_records INDEXED BY ${await recordIndexName(c.get("tenant"), object.name, performanceIndex)}`
+      : dialectFor(c.env.DB).name === "sqlite" &&
+          params.q &&
+          recordSearchCandidate(params.q.slice(0, 200))
         ? "studio_records NOT INDEXED"
         : "studio_records";
-    const cursorSupported = ["created_at", "updated_at", "id"].includes(sort);
+    const cursorSupported =
+      ["created_at", "updated_at", "id"].includes(sort) ||
+      Boolean(performanceIndex);
     const scope = await paginationScope([
       c.get("tenant"),
       object.name,
@@ -472,36 +500,27 @@ export function createStudioApp(
       order,
       perPage,
     ]);
-    let selectIds = `SELECT id FROM ${recordSource} WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`;
-    let pageBindings = [...args, perPage + 1, (page - 1) * perPage];
-    if (params.cursor) {
-      if (!cursorSupported) return fail("Este orden no admite cursores.", 422);
-      const cursor = decodeRecordCursor(params.cursor, scope);
-      const comparison = order === "ASC" ? ">" : "<";
-      if (sort === "id") {
-        selectIds = `SELECT id FROM ${recordSource} WHERE ${where} AND id${comparison}? ORDER BY id ${order} LIMIT ?`;
-        pageBindings = [...args, cursor.id, perPage + 1];
-      } else {
-        // Two bounded seeks handle mixed date DESC / id ASC ordering, including
-        // a bulk import where thousands of records share the cursor timestamp.
-        const tied = `SELECT id,${sort} AS cursor_sort FROM ${recordSource} WHERE ${where} AND ${sort}=? AND id>? ORDER BY id ASC LIMIT ?`;
-        const later = `SELECT id,${sort} AS cursor_sort FROM ${recordSource} WHERE ${where} AND ${sort}${comparison}? ORDER BY ${sort} ${order},id ASC LIMIT ?`;
-        selectIds = `SELECT id FROM (SELECT * FROM (${tied}) tied_page UNION ALL SELECT * FROM (${later}) later_page) positions ORDER BY cursor_sort ${order},id ASC LIMIT ?`;
-        pageBindings = [
-          ...args,
-          cursor.value,
-          cursor.id,
-          perPage + 1,
-          ...args,
-          cursor.value,
-          perPage + 1,
-          perPage + 1,
-        ];
-      }
-    }
+    if (params.cursor && !cursorSupported)
+      return fail("Este orden no admite cursores.", 422);
+    const selection = buildRecordPageSelection({
+      source: recordSource,
+      where,
+      args,
+      sortSql,
+      sortName: sort,
+      order,
+      perPage,
+      offset: (page - 1) * perPage,
+      cursor: params.cursor
+        ? decodeRecordCursor(params.cursor, scope)
+        : undefined,
+      nullSafeEqual: dialectFor(c.env.DB).nullSafeEqual,
+    });
+    const selectIds = selection.sql;
+    const pageBindings = selection.bindings;
     // Materialize only the bounded candidate list before fetching JSON. CROSS
     // JOIN prevents SQLite from scanning the tenant to join a selective result.
-    const pageSql = `SELECT r.* FROM (${selectIds}) selected CROSS JOIN studio_records r WHERE r.tenant_id=? AND r.id=selected.id ORDER BY ${sort === "id" ? "r.id" : sortSql} ${order},r.id ASC`;
+    const pageSql = `SELECT r.*,${sort === "id" ? "r.id" : sortSql} AS _cursor_value FROM (${selectIds}) selected CROSS JOIN studio_records r WHERE r.tenant_id=? AND r.id=selected.id ORDER BY ${sort === "id" ? "r.id" : sortSql} ${order},r.id ASC`;
     pageBindings.push(c.get("tenant"));
     const policy = policyFor(c.env.DB);
     const fullCollection =
@@ -519,22 +538,62 @@ export function createStudioApp(
       params.stage ||
       params.emptyStage === "true",
     );
+    const equality = singleRecordEquality(object, params);
+    const maintainedCount =
+      fullCollection &&
+      dialectFor(c.env.DB).name === "sqlite" &&
+      equality &&
+      object.config.performance?.summaries.some(
+        (summary) => summary.group === equality.field,
+      );
     const countStatement =
-      fullCollection && !filtered
-        ? getRecordCountStatement(
+      maintainedCount && equality
+        ? maintainedGroupCountStatement(
             c.env.DB,
             c.get("tenant"),
             object.name,
-            params.trash === "true",
+            equality.field,
+            equality.value,
           )
-        : c.env.DB.prepare(
-            `SELECT count(*) AS count FROM ${recordSource} WHERE ${where}`,
-          ).bind(...args);
+        : fullCollection && !filtered
+          ? getRecordCountStatement(
+              c.env.DB,
+              c.get("tenant"),
+              object.name,
+              params.trash === "true",
+            )
+          : c.env.DB.prepare(
+              `SELECT count(*) AS count FROM ${recordSource} WHERE ${where}`,
+            ).bind(...args);
     const compute = async () => {
-      const [countResult, pageResult] = await c.env.DB.batch([
-        countStatement,
-        c.env.DB.prepare(pageSql).bind(...pageBindings),
-      ]);
+      let results: D1Result[];
+      try {
+        results = await c.env.DB.batch([
+          countStatement,
+          c.env.DB.prepare(pageSql).bind(...pageBindings),
+        ]);
+      } catch (error) {
+        // Metadata can be replaced after getObject but before this read. A
+        // retired physical index must not make an otherwise valid page fail.
+        if (
+          !performanceIndex ||
+          !String(error).toLowerCase().includes("no such index")
+        )
+          throw error;
+        const unhinted = pageSql.replaceAll(
+          / INDEXED BY studio_perf_[a-f0-9]{40}/g,
+          "",
+        );
+        results = await c.env.DB.batch([
+          maintainedCount || (fullCollection && !filtered)
+            ? countStatement
+            : c.env.DB.prepare(
+                `SELECT count(*) AS count FROM studio_records WHERE ${where}`,
+              ).bind(...args),
+          c.env.DB.prepare(unhinted).bind(...pageBindings),
+        ]);
+      }
+      const [countResult, pageResult] = results;
       return {
         results: pageResult.results,
         total: Number(
@@ -543,7 +602,7 @@ export function createStudioApp(
       };
     };
     const pageResult =
-      filtered || !cursorSupported || !fullCollection
+      (filtered && !maintainedCount) || !cursorSupported || !fullCollection
         ? await getRevisionedRead(
             c.env.DB,
             c.get("tenant"),
@@ -565,14 +624,26 @@ export function createStudioApp(
       unknown
     >[];
     const last = rows.at(-1);
+    const cursorValue = last?._cursor_value;
+    const cursorValueSupported =
+      cursorValue === null ||
+      (typeof cursorValue === "string" && cursorValue.length <= 500) ||
+      (typeof cursorValue === "number" && Number.isFinite(cursorValue));
     return c.json({
       data: rows.map(parseRecord),
       total: pageResult.total,
       page,
       perPage,
       nextCursor:
-        cursorSupported && pageResult.results.length > perPage && last
-          ? encodeRecordCursor(scope, String(last[sort]), String(last.id))
+        cursorSupported &&
+        cursorValueSupported &&
+        pageResult.results.length > perPage &&
+        last
+          ? encodeRecordCursor(
+              scope,
+              last._cursor_value as string | number | null,
+              String(last.id),
+            )
           : null,
     });
   });
@@ -626,6 +697,41 @@ export function createStudioApp(
       recordSearchCandidate(params.q.slice(0, 200))
         ? "studio_records NOT INDEXED"
         : "studio_records";
+    const summaryPolicy = policyFor(c.env.DB);
+    const fullSummaryCollection =
+      !summaryPolicy ||
+      summaryPolicy.grants.some(
+        (grant) =>
+          grant.resource === `collection:${object.name}` &&
+          grant.action === "read" &&
+          "all" in grant.predicate &&
+          grant.predicate.all === true,
+      );
+    const effectiveAmount =
+      targetAmountField && isNumericAmount(targetAmountField)
+        ? targetAmountField
+        : undefined;
+    if (
+      fullSummaryCollection &&
+      !params.q &&
+      !params.filters &&
+      !params.stage &&
+      params.emptyStage !== "true" &&
+      params.trash !== "true" &&
+      object.config.performance?.summaries.some(
+        (summary) =>
+          summary.group === group && summary.amountField === effectiveAmount,
+      )
+    ) {
+      const maintained = await getMaintainedSummary(
+        c.env.DB,
+        c.get("tenant"),
+        object.name,
+        group,
+        effectiveAmount,
+      );
+      if (maintained !== undefined) return c.json({ data: maintained });
+    }
     const summarySql = `SELECT ${groupSql} AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM ${recordSource} WHERE ${where} GROUP BY value ORDER BY count DESC`;
     const results = await getRevisionedRead(
       c.env.DB,

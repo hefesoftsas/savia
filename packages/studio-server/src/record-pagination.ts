@@ -1,4 +1,7 @@
 import { fail } from "./context";
+
+export type RecordCursor = { value: string | number | null; id: string };
+
 export async function paginationScope(values: unknown[]): Promise<string> {
   const hash = await crypto.subtle.digest(
     "SHA-256",
@@ -10,7 +13,7 @@ export async function paginationScope(values: unknown[]): Promise<string> {
 }
 export function encodeRecordCursor(
   scope: string,
-  value: string,
+  value: string | number | null,
   id: string,
 ): string {
   return btoa(
@@ -19,10 +22,7 @@ export function encodeRecordCursor(
     ),
   );
 }
-export function decodeRecordCursor(
-  token: string,
-  scope: string,
-): { value: string; id: string } {
+export function decodeRecordCursor(token: string, scope: string): RecordCursor {
   try {
     if (token.length > 4096) throw new Error();
     const data = JSON.parse(
@@ -32,13 +32,18 @@ export function decodeRecordCursor(
     );
     if (
       data.scope !== scope ||
-      typeof data.value !== "string" ||
+      !(
+        typeof data.value === "string" ||
+        (typeof data.value === "number" && Number.isFinite(data.value)) ||
+        data.value === null
+      ) ||
       typeof data.id !== "string" ||
-      data.value.length > 500 ||
       data.id.length > 500
     )
       throw new Error();
-    return data;
+    if (typeof data.value === "string" && data.value.length > 500)
+      throw new Error();
+    return { value: data.value, id: data.id };
   } catch {
     return fail(
       "El cursor no corresponde a esta consulta. Recarga la lista.",
