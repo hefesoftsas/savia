@@ -331,6 +331,21 @@ export class SaviaAssistantService implements AssistantService {
 
     // The configuration resolver checks current tenant membership, including revocations.
     const tenantId = effective.tenantId;
+    let canResolveGlobalEmployees = false;
+    if (
+      tenantId === undefined &&
+      typeof this.configuration.database?.prepare === "function"
+    ) {
+      canResolveGlobalEmployees = Boolean(
+        await this.configuration.database
+          .prepare(
+            `SELECT 1 AS present FROM identity_global_role
+             WHERE principal_id = ? AND role = 'platform_admin' LIMIT 1`,
+          )
+          .bind(request.principalId)
+          .first<{ present: number }>(),
+      );
+    }
 
     // 2. Extract last user text
     let lastUserText = "";
@@ -354,7 +369,10 @@ export class SaviaAssistantService implements AssistantService {
 
     // 3. Resolve Virtual Employee (by request handle/ID or @handle in prompt)
     let employee: VirtualEmployee | null = null;
-    if (typeof this.configuration.database?.prepare === "function") {
+    if (
+      typeof this.configuration.database?.prepare === "function" &&
+      (tenantId !== undefined || canResolveGlobalEmployees)
+    ) {
       try {
         if (request.employeeId) {
           employee = await this.virtualEmployees.getById(
@@ -412,7 +430,9 @@ export class SaviaAssistantService implements AssistantService {
     if (
       employee &&
       (employee.status !== "active" ||
-        (employee.agencyId !== null && employee.agencyId !== tenantId))
+        (tenantId === undefined
+          ? employee.agencyId !== null
+          : employee.agencyId !== tenantId))
     )
       employee = null;
     if ((request.employeeId || request.employeeHandle) && !employee) {

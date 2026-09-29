@@ -4,6 +4,7 @@ import { actorFromContext } from "../auth/middleware";
 import type { AssistantService } from "./contracts";
 import type { AssistantRouteDependencies } from "./routes";
 import { VirtualEmployeesRepository } from "./virtual-employees";
+import { employeeTenantScope } from "./employee-scope";
 
 const invocation = z.object({
   message: z.string().trim().min(1).max(12000),
@@ -118,8 +119,9 @@ export function registerEmployeeMcpRoutes(
     if (!dependencies?.db)
       return context.json({ error: "Employees unavailable" }, 503);
     const actor = actorFromContext(context);
-    const agencyId = await dependencies.configuration?.activeAgencyFor(
-      actor.principal.id,
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
     );
     const employees = await new VirtualEmployeesRepository(
       dependencies.db,
@@ -145,8 +147,9 @@ export function registerEmployeeMcpRoutes(
     if (!parsed.success)
       return context.json({ error: "Invalid employee request" }, 400);
     const actor = actorFromContext(context);
-    const agencyId = await dependencies.configuration?.activeAgencyFor(
-      actor.principal.id,
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
     );
     const employees = await new VirtualEmployeesRepository(
       dependencies.db,

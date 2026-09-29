@@ -145,17 +145,21 @@ operations remain available.
 
 | Tool                            | Purpose                                                                                |
 | ------------------------------- | -------------------------------------------------------------------------------------- |
-| `savia_list_employees`          | List active employees visible in the selected organization and global employees.       |
+| `savia_list_employees`          | List active employees owned by the selected organization.                              |
 | `savia_invoke_employee`         | Execute a task with an employee's instructions, knowledge and collection restrictions. |
 | `savia_get_employee_action`     | Read the caller's proposal status/result.                                              |
 | `savia_confirm_employee_action` | Execute an unexpired proposal after explicit user approval; requires write scope.      |
 | `savia_cancel_employee_action`  | Cancel the caller's pending proposal; requires write scope.                            |
 
 Select the active organization in Savia's assistant settings. Membership is
-rechecked when resolving this selection. Without a valid selection, employee
-discovery exposes global employees only. Unknown, inactive or inaccessible IDs
-fail rather than substituting a different employee. Discovery does not return
-system prompts, model credentials or raw knowledge files.
+rechecked when resolving this selection. If no organization is selected, Savia
+uses the caller's only active commercial membership; it does not guess when the
+caller has multiple memberships. Employees, their files, and the collections
+they can use are scoped to that organization. Global employees are managed and
+available only to platform administrators in the platform workspace; they are
+not automatically shared with commercial tenants. Unknown, inactive or
+inaccessible IDs fail rather than substituting a different employee. Discovery
+does not return system prompts, model credentials or raw knowledge files.
 
 Invocation accepts `employeeId`, `message` (up to 12,000 characters), and optional
 `history` (up to 20 user/assistant messages). It returns text and pending proposals;

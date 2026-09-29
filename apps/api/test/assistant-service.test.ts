@@ -77,6 +77,28 @@ describe("SaviaAssistantService action approvals", () => {
     expect(factory).not.toHaveBeenCalled();
   });
 
+  it("does not expose global employees when the caller has no tenant scope", async () => {
+    const factory = vi.fn();
+    const service = new SaviaAssistantService(
+      {
+        database: env.DB,
+        mcpUrl: "http://mcp:8789/mcp",
+        mcpSharedSecret: "secret",
+        openRouterApiKey: "key",
+      },
+      { mcpClientFactory: factory },
+    );
+    const response = await service.chat({
+      principalId: "tenantless-employee-test",
+      authorization: "Bearer user",
+      employeeId: "emp-default-ventas",
+      messages: [{ role: "user", content: "Summarize" }],
+    });
+
+    expect(response.status).toBe(404);
+    expect(factory).not.toHaveBeenCalled();
+  });
+
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM assistant_pending_actions");
   });
@@ -618,6 +640,27 @@ describe("SaviaAssistantService MCP transport", () => {
   });
 
   it("resolves virtual employee from @handle and attaches employee identity headers", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO identity_principal (
+        id, issuer, subject, email, display_name, is_active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+    )
+      .bind(
+        "test-platform-admin",
+        "savia:test",
+        "test-platform-admin",
+        "admin@savia.test",
+        "Platform administrator test",
+        now,
+        now,
+      )
+      .run();
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO identity_global_role (principal_id, role, created_at) VALUES (?, 'platform_admin', ?)",
+    )
+      .bind("test-platform-admin", now)
+      .run();
     const toolsMock = vi.fn(async () => ({
       savia_list_crm_records: {
         description: "List records",

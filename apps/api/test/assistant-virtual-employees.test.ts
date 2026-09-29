@@ -55,6 +55,46 @@ describe("VirtualEmployeesRepository", () => {
     expect(emp1?.name).toContain("Laura");
   });
 
+  it("keeps global and other-tenant employees out of a tenant scope", async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(910101,'employee-scope-910101','Employee Scope 910101',1,'2026-09-29','2026-09-29','commercial'),(910102,'employee-scope-910102','Employee Scope 910102',1,'2026-09-29','2026-09-29','commercial')",
+    ).run();
+    const global = await repo.create({
+      name: "Global Employee Scope Test",
+      handle: `global-scope-${crypto.randomUUID()}`,
+      systemPrompt: "Global prompt",
+    });
+    const tenantEmployee = await repo.create({
+      agencyId: 910101,
+      name: "Tenant Employee Scope Test",
+      handle: `tenant-scope-${crypto.randomUUID()}`,
+      systemPrompt: "Tenant prompt",
+    });
+    const otherTenantEmployee = await repo.create({
+      agencyId: 910102,
+      name: "Other Tenant Employee Scope Test",
+      handle: `other-scope-${crypto.randomUUID()}`,
+      systemPrompt: "Other tenant prompt",
+    });
+
+    const scoped = await repo.list(910101);
+    expect(scoped.map((employee) => employee.id)).toContain(tenantEmployee.id);
+    expect(scoped.map((employee) => employee.id)).not.toContain(global.id);
+    expect(scoped.map((employee) => employee.id)).not.toContain(
+      otherTenantEmployee.id,
+    );
+    await expect(
+      repo.getById(otherTenantEmployee.id, 910101),
+    ).resolves.toBeNull();
+    await expect(
+      repo.getByHandle(otherTenantEmployee.handle, 910101),
+    ).resolves.toBeNull();
+
+    await repo.delete(global.id);
+    await repo.delete(tenantEmployee.id, 910101);
+    await repo.delete(otherTenantEmployee.id, 910102);
+  });
+
   it("creates, updates, and fetches a new agency virtual employee", async () => {
     const created = await repo.create({
       name: "Andrés - Analista de Riesgos",
@@ -62,7 +102,8 @@ describe("VirtualEmployeesRepository", () => {
       position: "Especialista en Evaluación de Riesgos",
       avatar: "shield-alert",
       greeting: "Hola, analizo los riesgos de tus clientes.",
-      systemPrompt: "Eres Andrés, analista de riesgos. Tu labor es verificar siniestralidad.",
+      systemPrompt:
+        "Eres Andrés, analista de riesgos. Tu labor es verificar siniestralidad.",
       allowedCollections: ["customers", "policies"],
       createdBy: "test-admin",
     });

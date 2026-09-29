@@ -427,7 +427,34 @@ export class AssistantConfigurationRepository {
       )
       .bind(principalId)
       .first<{ tenant_id: number }>();
-    return row?.tenant_id;
+    if (row) return row.tenant_id;
+
+    const platformAdministrator = await this.database
+      .prepare(
+        `SELECT 1 AS present FROM identity_global_role
+         WHERE principal_id = ? AND role = 'platform_admin' LIMIT 1`,
+      )
+      .bind(principalId)
+      .first<{ present: number }>();
+    if (platformAdministrator) return undefined;
+
+    const memberships = await this.database
+      .prepare(
+        `SELECT membership.tenant_id
+         FROM identity_tenant_membership AS membership
+         INNER JOIN tenants ON tenants.id = membership.tenant_id
+           AND tenants.kind = 'commercial'
+           AND tenants.is_active = 1
+         WHERE membership.principal_id = ?
+           AND membership.is_active = 1
+         ORDER BY membership.tenant_id
+         LIMIT 2`,
+      )
+      .bind(principalId)
+      .all<{ tenant_id: number }>();
+    return memberships.results?.length === 1
+      ? memberships.results[0].tenant_id
+      : undefined;
   }
 
   async activeAgencyFor(principalId: string): Promise<number | undefined> {

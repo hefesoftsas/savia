@@ -138,6 +138,99 @@ it("enforces current source policy and owner identity before native writes", asy
   ).toBe(404);
 });
 
+it("isolates sources and bindings for the same principal across tenants", async () => {
+  const tenantA = makeApp("shared-principal", "source-isolation-a");
+  const tenantB = makeApp("shared-principal", "source-isolation-b");
+  const sourceInput = {
+    id: "tenant_private",
+    label: "Tenant private",
+    kind: "mysql",
+    host: "db.internal",
+    database: "erp",
+    username: "writer",
+    password: "tenant-secret",
+  };
+
+  const created = await call("sources", "POST", sourceInput, tenantA);
+  expect(created.status, await created.clone().text()).toBe(201);
+  expect(await created.text()).not.toContain("tenant-secret");
+  const bound = await call(
+    "collection-bindings",
+    "POST",
+    {
+      name: "tenant_private_rows",
+      label: "Tenant private rows",
+      sourceId: sourceInput.id,
+      resource: "orders",
+      fields: {
+        id: { type: "Textbox", label: "ID" },
+        name: { type: "Textbox", label: "Name" },
+      },
+    },
+    tenantA,
+  );
+  expect(bound.status, await bound.clone().text()).toBe(201);
+
+  const sourcesInB = (await call("sources", "GET", undefined, tenantB).then(
+    (response) => response.json(),
+  )) as { data: Array<{ id: string }> };
+  expect(sourcesInB.data).toEqual([]);
+  expect(
+    (
+      await call(
+        `sources/${sourceInput.id}`,
+        "PUT",
+        { label: "Stolen" },
+        tenantB,
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await call(
+        `sources/${sourceInput.id}/inspect`,
+        "POST",
+        { resource: "orders" },
+        tenantB,
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (await call(`sources/${sourceInput.id}/test`, "POST", {}, tenantB)).status,
+  ).toBe(404);
+  expect(
+    (await call(`sources/${sourceInput.id}`, "DELETE", undefined, tenantB))
+      .status,
+  ).toBe(404);
+
+  const bindingsInB = (await call(
+    "collection-bindings",
+    "GET",
+    undefined,
+    tenantB,
+  ).then((response) => response.json())) as { data: Array<{ name: string }> };
+  expect(bindingsInB.data).toEqual([]);
+  expect(
+    (
+      await call(
+        "collection-bindings/tenant_private_rows",
+        "DELETE",
+        undefined,
+        tenantB,
+      )
+    ).status,
+  ).toBe(404);
+
+  // The same identifier can be used independently in another tenant.
+  expect((await call("sources", "POST", sourceInput, tenantB)).status).toBe(
+    201,
+  );
+  const sourcesInA = (await call("sources", "GET", undefined, tenantA).then(
+    (response) => response.json(),
+  )) as { data: Array<{ id: string }> };
+  expect(sourcesInA.data.map(({ id }) => id)).toEqual([sourceInput.id]);
+});
+
 it("rejects undeclared writes and synchronizes metadata with version guards", async () => {
   await call("sources", "POST", {
     id: "sync",

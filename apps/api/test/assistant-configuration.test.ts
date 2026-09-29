@@ -197,6 +197,32 @@ describe("assistant OpenRouter configuration", () => {
     });
   });
 
+  it("derives an unambiguous tenant when the member has no saved selection", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(105);
+
+    await expect(settings.activeAgencyFor("test-agency-member")).resolves.toBe(
+      105,
+    );
+    await expect(
+      settings.effectiveConfigurationFor("test-agency-member"),
+    ).resolves.toMatchObject({ tenantId: 105 });
+  });
+
+  it("does not guess when the actor has no active tenant membership", async () => {
+    const settings = repository();
+    await seedAgencyAndMember(107);
+    await env.DB.prepare(
+      "DELETE FROM identity_tenant_membership WHERE principal_id = ?",
+    )
+      .bind("test-agency-member")
+      .run();
+
+    await expect(
+      settings.activeAgencyFor("test-agency-member"),
+    ).resolves.toBeUndefined();
+  });
+
   it("rejects ciphertext used with another agency AAD", async () => {
     const encryption = new AssistantEncryption(masterKey);
     const encrypted = await encryption.encrypt("agency", 101, "not-a-real-key");

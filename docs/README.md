@@ -29,6 +29,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Self-hosted Docker](guides/self-hosted-docker.md) — optional native deployment alongside Cloudflare, setup, persistence and operational limits.
 
 - [Remote MCP](remote-mcp.md): connect Claude and ChatGPT to authorized collections and AI employees using OAuth.
+- [Virtual AI employees](guides/virtual-employees.md) — tenant ownership, employee access, files and collection scope.
 - [low-code-fields.md](low-code-fields.md) — field types, temporal values and consistent record display.
 
 - [navigation.md](navigation.md) — sidebar grouping, hidden destinations, direct links, and personal preferences.

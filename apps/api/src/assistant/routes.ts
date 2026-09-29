@@ -8,6 +8,7 @@ import { AuthenticationError } from "../auth/types";
 import type { AssistantService } from "./contracts";
 import type { AssistantConfigurationRepository } from "./configuration";
 import { VirtualEmployeesRepository } from "./virtual-employees";
+import { employeeTenantScope } from "./employee-scope";
 import {
   extractTextFromFile,
   indexDocument,
@@ -137,71 +138,27 @@ export function registerAssistantRoutes(
   app.get("/api/assistant/collections", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
-    const isPlatform = actor.globalRoles.includes("platform_admin");
-
-    let rows: Array<{
-      name: string;
-      label: string | null;
-      description: string | null;
-      tenant_id: string;
-    }> = [];
-
-    if (agencyId) {
-      const { results } = await dependencies.db
-        .prepare(
-          `SELECT name, label, description, tenant_id FROM studio_objects
-           WHERE tenant_id IN (?, 'tenant:0')
-           ORDER BY CASE WHEN tenant_id = ? THEN 0 ELSE 1 END, label ASC, name ASC`,
-        )
-        .bind(`tenant:${agencyId}`, `tenant:${agencyId}`)
-        .all<{
-          name: string;
-          label: string | null;
-          description: string | null;
-          tenant_id: string;
-        }>();
-      rows = results;
-    } else if (isPlatform) {
-      const { results } = await dependencies.db
-        .prepare(
-          `SELECT name, label, description, tenant_id FROM studio_objects
-           ORDER BY label ASC, name ASC`,
-        )
-        .all<{
-          name: string;
-          label: string | null;
-          description: string | null;
-          tenant_id: string;
-        }>();
-      rows = results;
-    } else {
-      const tenantIds = actor.memberships
-        .filter((m) => m.isActive && (m.tenantId ?? m.agencyId))
-        .map((m) => `tenant:${m.tenantId ?? m.agencyId}`);
-      if (isPlatform) tenantIds.push("tenant:0");
-      const placeholders = tenantIds.map(() => "?").join(",");
-      const { results } = await dependencies.db
-        .prepare(
-          `SELECT name, label, description, tenant_id FROM studio_objects
-           WHERE tenant_id IN (${placeholders})
-           ORDER BY label ASC, name ASC`,
-        )
-        .bind(...tenantIds)
-        .all<{
-          name: string;
-          label: string | null;
-          description: string | null;
-          tenant_id: string;
-        }>();
-      rows = results;
-    }
+    const { results: rows } = await dependencies.db
+      .prepare(
+        `SELECT name, label, description, tenant_id FROM studio_objects
+         WHERE tenant_id = ?
+         ORDER BY label ASC, name ASC`,
+      )
+      .bind(`tenant:${agencyId ?? 0}`)
+      .all<{
+        name: string;
+        label: string | null;
+        description: string | null;
+        tenant_id: string;
+      }>();
 
     let disabled = new Set<string>();
-    if (agencyId) {
+    if (agencyId !== null) {
       try {
         disabled = await disabledSolutionObjects(
           dependencies.db,
@@ -231,9 +188,10 @@ export function registerAssistantRoutes(
   app.get("/api/assistant/employees", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const employees = await repo.list(agencyId);
@@ -257,9 +215,10 @@ export function registerAssistantRoutes(
       );
     }
 
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const repo = new VirtualEmployeesRepository(dependencies.db);
     try {
@@ -289,9 +248,10 @@ export function registerAssistantRoutes(
   app.get("/api/assistant/employees/:id", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const employee = await repo.getById(context.req.param("id"), agencyId);
@@ -312,9 +272,10 @@ export function registerAssistantRoutes(
   app.patch("/api/assistant/employees/:id", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const body = await context.req.json().catch(() => undefined);
     const parsed = updateEmployeeSchema.safeParse(body);
@@ -353,9 +314,10 @@ export function registerAssistantRoutes(
   app.delete("/api/assistant/employees/:id", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const id = context.req.param("id");
@@ -397,9 +359,10 @@ export function registerAssistantRoutes(
   app.post("/api/assistant/employees/:id/files", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const employeeId = context.req.param("id");
@@ -510,9 +473,10 @@ export function registerAssistantRoutes(
   app.delete("/api/assistant/employees/:id/files/:fileId", async (context) => {
     if (!dependencies?.db) return unavailableResponse();
     const actor = actorFromContext(context);
-    const agencyId = dependencies.configuration
-      ? await dependencies.configuration.activeAgencyFor(actor.principal.id)
-      : undefined;
+    const agencyId = await employeeTenantScope(
+      actor,
+      dependencies.configuration,
+    );
 
     const repo = new VirtualEmployeesRepository(dependencies.db);
     const employeeId = context.req.param("id");

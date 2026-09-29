@@ -28,6 +28,9 @@ beforeAll(async () => {
       )
       .filter(Boolean))
       await env.DB.exec(statement);
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO tenants (id, id_slug, name, is_active, created_at, updated_at, kind) VALUES (101, 'mcp-tenant-101', 'MCP tenant 101', 1, '2026-01-01', '2026-01-01', 'commercial')",
+  ).run();
 });
 function stream(events: unknown[]) {
   return new Response(
@@ -52,7 +55,15 @@ function fixture() {
 }
 describe("employee MCP API", () => {
   it("lists public employee capabilities without system prompts or inactive employees", async () => {
-    await new VirtualEmployeesRepository(env.DB).create({
+    const repo = new VirtualEmployeesRepository(env.DB);
+    await repo.create({
+      agencyId: 101,
+      name: "Visible",
+      handle: "mcp-visible",
+      systemPrompt: "tenant employee prompt",
+    });
+    await repo.create({
+      agencyId: 101,
       name: "Hidden",
       handle: "mcp-hidden",
       status: "inactive",
@@ -65,6 +76,12 @@ describe("employee MCP API", () => {
       data: Array<Record<string, unknown>>;
     };
     expect(data.data.length).toBeGreaterThan(0);
+    expect(data.data.map((employee) => employee.handle)).toContain(
+      "mcp-visible",
+    );
+    expect(data.data.map((employee) => employee.handle)).not.toContain(
+      "ventas",
+    );
     expect(JSON.stringify(data)).not.toContain("systemPrompt");
     expect(JSON.stringify(data)).not.toContain("mcp-hidden");
     expect(data.data[0]).not.toHaveProperty("files");
@@ -72,6 +89,7 @@ describe("employee MCP API", () => {
   it("rejects inactive, unknown and out-of-tenant employees before model execution", async () => {
     const repo = new VirtualEmployeesRepository(env.DB);
     const inactive = await repo.create({
+      agencyId: 101,
       name: "Off",
       handle: "mcp-off",
       status: "inactive",
@@ -108,7 +126,12 @@ describe("employee MCP API", () => {
     expect(chat).not.toHaveBeenCalled();
   });
   it("invokes the selected employee with the caller token and returns its completed answer", async () => {
-    const employee = (await new VirtualEmployeesRepository(env.DB).list())[0];
+    const employee = await new VirtualEmployeesRepository(env.DB).create({
+      agencyId: 101,
+      name: "MCP invoke test",
+      handle: `mcp-invoke-${crypto.randomUUID()}`,
+      systemPrompt: "Tenant employee prompt",
+    });
     const { app, chat } = fixture();
     const response = await app.request(
       `/api/assistant/mcp/employees/${employee.id}/invoke`,

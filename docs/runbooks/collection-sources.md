@@ -18,7 +18,7 @@ Al revisar el origen el 2026-09-08, packages/core/data-source-manager/package.js
 
 ## Operación
 
-Aplicar la migración 0026 y desplegar API y administrador juntos. En la vista previa se aplica solo sobre la copia local, conservando sus datos anteriores. Las fuentes y bindings pertenecen al dominio y sus rutas requieren administración de plataforma. Las credenciales permanecen cifradas en backend con la clave de integraciones; nunca se devuelven en los listados.
+Sources are scoped to the active tenant and the principal that created them. A different tenant cannot list, inspect, update, or delete a source, even when the principal ID matches; within a tenant, source listing and management also enforce creator ownership. Tenant administrators and platform administrators can use source-management routes only within the requested tenant, subject to those ownership checks. Bindings and collection catalogs are tenant-scoped. Credentials remain encrypted in the backend with the integrations key and are never returned in list responses.
 
 Las conexiones JSON:API admiten únicamente destinos públicos HTTPS y recursos configurados, sin redirecciones. Las operaciones no habilitadas se rechazan también desde API. Los errores externos se normalizan sin revelar credenciales. La prueba de conector utiliza transporte controlado; configurar una fuente no envía escrituras.
 

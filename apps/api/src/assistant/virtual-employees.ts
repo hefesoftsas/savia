@@ -127,14 +127,15 @@ export class VirtualEmployeesRepository {
         COUNT(f.id) AS files_count
       FROM assistant_virtual_employees e
       LEFT JOIN assistant_virtual_employee_files f ON f.employee_id = e.id
-      WHERE (e.agency_id IS NULL ${agencyId ? "OR e.agency_id = ?" : ""})
+      WHERE ${agencyId == null ? "e.agency_id IS NULL" : "e.agency_id = ?"}
       GROUP BY e.id
       ORDER BY e.agency_id DESC, e.name ASC
     `;
 
-    const stmt = agencyId
-      ? this.db.prepare(query).bind(agencyId)
-      : this.db.prepare(query);
+    const stmt =
+      agencyId != null
+        ? this.db.prepare(query).bind(agencyId)
+        : this.db.prepare(query);
 
     const result = await stmt.all<EmployeeRow>();
     return (result.results ?? []).map(mapRow);
@@ -148,13 +149,14 @@ export class VirtualEmployeesRepository {
       SELECT e.*, COUNT(f.id) AS files_count
       FROM assistant_virtual_employees e
       LEFT JOIN assistant_virtual_employee_files f ON f.employee_id = e.id
-      WHERE e.id = ? ${agencyId ? "AND (e.agency_id IS NULL OR e.agency_id = ?)" : ""}
+      WHERE e.id = ? AND ${agencyId == null ? "e.agency_id IS NULL" : "e.agency_id = ?"}
       GROUP BY e.id
     `;
 
-    const stmt = agencyId
-      ? this.db.prepare(query).bind(id, agencyId)
-      : this.db.prepare(query).bind(id);
+    const stmt =
+      agencyId != null
+        ? this.db.prepare(query).bind(id, agencyId)
+        : this.db.prepare(query).bind(id);
 
     const row = await stmt.first<EmployeeRow>();
     if (!row) return null;
@@ -170,21 +172,22 @@ export class VirtualEmployeesRepository {
   ): Promise<VirtualEmployee | null> {
     const cleanHandle = handle.replace(/^@/, "").toLowerCase().trim();
 
-    // Prioritize agency-specific employee, fallback to global
+    // Tenant lookups never inherit employees from the platform/global scope.
     const query = `
       SELECT e.*, COUNT(f.id) AS files_count
       FROM assistant_virtual_employees e
       LEFT JOIN assistant_virtual_employee_files f ON f.employee_id = e.id
       WHERE LOWER(e.handle) = ? AND e.status = 'active'
-        ${agencyId ? "AND (e.agency_id = ? OR e.agency_id IS NULL)" : "AND e.agency_id IS NULL"}
+        ${agencyId != null ? "AND e.agency_id = ?" : "AND e.agency_id IS NULL"}
       GROUP BY e.id
       ORDER BY e.agency_id DESC
       LIMIT 1
     `;
 
-    const stmt = agencyId
-      ? this.db.prepare(query).bind(cleanHandle, agencyId)
-      : this.db.prepare(query).bind(cleanHandle);
+    const stmt =
+      agencyId != null
+        ? this.db.prepare(query).bind(cleanHandle, agencyId)
+        : this.db.prepare(query).bind(cleanHandle);
 
     const row = await stmt.first<EmployeeRow>();
     if (!row) return null;
@@ -226,7 +229,7 @@ export class VirtualEmployeesRepository {
       )
       .run();
 
-    const created = await this.getById(id);
+    const created = await this.getById(id, input.agencyId ?? null);
     if (!created) throw new Error("Failed to create virtual employee");
     return created;
   }
@@ -285,9 +288,15 @@ export class VirtualEmployeesRepository {
     updates.push("updated_at = ?");
     values.push(now);
 
+    const ownershipPredicate =
+      agencyId == null ? "agency_id IS NULL" : "agency_id = ?";
     values.push(id);
-    const query = `UPDATE assistant_virtual_employees SET ${updates.join(", ")} WHERE id = ?`;
-    await this.db.prepare(query).bind(...values).run();
+    if (agencyId != null) values.push(agencyId);
+    const query = `UPDATE assistant_virtual_employees SET ${updates.join(", ")} WHERE id = ? AND ${ownershipPredicate}`;
+    await this.db
+      .prepare(query)
+      .bind(...values)
+      .run();
 
     return this.getById(id, agencyId);
   }
@@ -297,10 +306,13 @@ export class VirtualEmployeesRepository {
     if (!existing) return false;
 
     // Do not allow deleting system global seeds unless explicitly targeted
-    await this.db
-      .prepare(`DELETE FROM assistant_virtual_employees WHERE id = ?`)
-      .bind(id)
-      .run();
+    const ownershipPredicate =
+      agencyId == null ? "agency_id IS NULL" : "agency_id = ?";
+    const statement = this.db.prepare(
+      `DELETE FROM assistant_virtual_employees WHERE id = ? AND ${ownershipPredicate}`,
+    );
+    if (agencyId == null) await statement.bind(id).run();
+    else await statement.bind(id, agencyId).run();
 
     return true;
   }
@@ -318,16 +330,16 @@ export class VirtualEmployeesRepository {
 
   async getFile(fileId: string): Promise<VirtualEmployeeFile | null> {
     const row = await this.db
-      .prepare(
-        `SELECT * FROM assistant_virtual_employee_files WHERE id = ?`,
-      )
+      .prepare(`SELECT * FROM assistant_virtual_employee_files WHERE id = ?`)
       .bind(fileId)
       .first<FileRow>();
 
     return row ? mapFileRow(row) : null;
   }
 
-  async addFile(file: Omit<VirtualEmployeeFile, "createdAt">): Promise<VirtualEmployeeFile> {
+  async addFile(
+    file: Omit<VirtualEmployeeFile, "createdAt">,
+  ): Promise<VirtualEmployeeFile> {
     const now = new Date().toISOString();
     await this.db
       .prepare(
