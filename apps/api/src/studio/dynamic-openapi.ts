@@ -1,3 +1,4 @@
+import { hubspotObjects } from "../external-crm/hubspot-workspace-catalog";
 import { recordPerformanceUpdateSchema } from "@savia/studio-server/schema";
 import {
   documentDeliveryRequestSchema,
@@ -888,6 +889,65 @@ export async function dynamicOpenApi(
       if (!capabilities.delete) delete paths[`/published/${name}/{id}`].delete;
     }
   }
+  const workspaceScreen = {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      label: { type: "string" },
+      resource: {
+        type: "string",
+        enum: hubspotObjects.map((item) => item.resource),
+      },
+      available: { type: "boolean" },
+      installed: { type: "boolean" },
+      reason: { type: "string" },
+    },
+  };
+  paths["/crm-workspace"] = {
+    get: operation(
+      "discover_hubspot_screens",
+      "Collections",
+      "Discover available and installed HubSpot screens",
+      envelope({
+        type: "object",
+        properties: {
+          connected: { type: "boolean" },
+          accountLabel: { type: "string" },
+          objects: { type: "array", items: workspaceScreen },
+        },
+      }),
+    ),
+  };
+  paths["/crm-workspace/install"] = {
+    post: operation(
+      "install_hubspot_screens",
+      "Collections",
+      "Install selected HubSpot screens",
+      envelope({
+        type: "object",
+        properties: { objects: { type: "array", items: workspaceScreen } },
+      }),
+      {
+        body: {
+          type: "object",
+          properties: {
+            resources: {
+              type: "array",
+              minItems: 1,
+              maxItems: hubspotObjects.length,
+              uniqueItems: true,
+              items: {
+                type: "string",
+                enum: hubspotObjects.map((item) => item.resource),
+              },
+            },
+          },
+        },
+        description:
+          "Tenant administrators select resources from the connected HubSpot catalog. Only selected available resources are installed; invalid or unavailable selections are rejected before writing screen metadata. Existing unselected screens and remote HubSpot records are unchanged. Omitting resources retains the legacy install-all behavior; interactive clients should always send an explicit selection.",
+      },
+    ),
+  };
   paths["/objects/{name}/deletion-preview"] = {
     get: operation(
       "preview_screen_deletion",

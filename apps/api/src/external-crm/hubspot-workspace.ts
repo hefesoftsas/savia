@@ -20,6 +20,7 @@ type Binding = {
   propertyTypes?: Record<string, string>;
   capabilities: ReturnType<typeof capabilities>;
 };
+type HubspotCatalogObject = (typeof hubspotObjects)[number];
 function fail(
   message: string,
   status: 403 | 404 | 405 | 409 | 422 | 502 | 503 = 422,
@@ -173,23 +174,58 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
       );
     return response.status === 204 ? {} : ((await response.json()) as any);
   }
-  async function discover(conn: ActiveCrmConnection) {
+  async function installedResources(
+    conn: ActiveCrmConnection,
+    selected: ReadonlyArray<HubspotCatalogObject>,
+  ) {
+    const names = new Set(selected.map((item) => `hubspot_${item.resource}`));
+    if (!names.size) return new Set<string>();
+    const { results } = await db
+      .prepare(
+        "SELECT o.name,b.config FROM studio_objects o JOIN crm_collection_bindings b ON b.tenant_id=o.tenant_id AND b.object_name=o.name WHERE o.tenant_id=? AND b.source_id='hubspot'",
+      )
+      .bind(tenant)
+      .all<{ name: string; config: string }>();
+    return new Set(
+      results
+        .filter((row) => names.has(row.name))
+        .filter((row) => {
+          const binding = JSON.parse(row.config) as Binding;
+          return (
+            binding.kind === "crm" &&
+            binding.provider === "hubspot" &&
+            binding.resource === row.name.slice("hubspot_".length) &&
+            binding.principalId === actor.principal.id &&
+            binding.connectionId === conn.id &&
+            binding.accountId === conn.externalAccountId
+          );
+        })
+        .map((row) => row.name),
+    );
+  }
+  async function discover(
+    conn: ActiveCrmConnection,
+    selected: ReadonlyArray<HubspotCatalogObject> = hubspotObjects,
+  ) {
+    const installed = await installedResources(conn, selected);
     return Promise.all(
-      hubspotObjects.map(async (item) => {
+      selected.map(async (item) => {
         const base = {
           resource: item.resource,
           name: `hubspot_${item.resource}`,
           label: item.label,
           capabilities: capabilities(conn.scopes, item.resource),
         };
+        const isInstalled = installed.has(`hubspot_${item.resource}`);
         try {
           await remote(conn, `/crm/v3/objects/${item.resource}?limit=1`);
-          return { ...base, available: true };
+          return { ...base, available: true, installed: isInstalled };
         } catch (e) {
           if (e instanceof HTTPException && [403, 404].includes(e.status))
             return {
               ...base,
               available: false,
+              installed: isInstalled,
               reason: "La conexión no tiene acceso a este objeto.",
             };
           throw e;
@@ -217,9 +253,49 @@ export function createHubspotWorkspaceApp(context: CollectionGatewayContext) {
     });
   });
   app.post("/api/crm-workspace/install", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      fail("La lista de recursos de HubSpot no es válida.");
+    const keys = Object.keys(body);
+    let selected: ReadonlyArray<HubspotCatalogObject>;
+    const explicit = Object.hasOwn(body, "resources");
+    if (!explicit && keys.length === 0) {
+      selected = hubspotObjects;
+    } else {
+      if (
+        keys.length !== 1 ||
+        !explicit ||
+        !Array.isArray((body as any).resources) ||
+        (body as any).resources.length === 0 ||
+        !(body as any).resources.every(
+          (resource: unknown) => typeof resource === "string",
+        )
+      )
+        fail("Indica una lista no vacía de recursos de HubSpot.");
+      const resources = (body as any).resources as string[];
+      if (new Set(resources).size !== resources.length)
+        fail("La lista de recursos contiene duplicados.");
+      const catalog = new Map<string, HubspotCatalogObject>(
+        hubspotObjects.map((item) => [item.resource, item]),
+      );
+      selected = resources.map((resource) => {
+        const item = catalog.get(resource);
+        if (!item)
+          fail(`El recurso de HubSpot no está disponible: ${resource}.`);
+        return item;
+      });
+    }
     const conn = await connection(),
-      discovered = await discover(conn),
+      discovered = await discover(conn, selected),
       installed = [];
+    if (explicit) {
+      const unavailable = discovered.find((item) => !item.available);
+      if (unavailable)
+        fail(
+          `El recurso ${unavailable.resource} no está disponible para esta conexión de HubSpot.`,
+          422,
+        );
+    }
     const statements: D1PreparedStatement[] = [];
     for (const item of discovered.filter((x) => x.available)) {
       const existing = await db

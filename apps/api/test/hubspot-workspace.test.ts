@@ -131,6 +131,129 @@ it("installs permitted objects idempotently, with actual scope capabilities", as
     200,
   );
 });
+it("reports installed state only for matching tenant objects and bindings", async () => {
+  const response = await request("/api/crm-workspace");
+  expect(response.status).toBe(200);
+  const objects = ((await response.json()) as any).data.objects;
+  expect(
+    objects.find((item: any) => item.resource === "contacts"),
+  ).toMatchObject({
+    available: true,
+    installed: true,
+  });
+  expect(
+    objects.find((item: any) => item.resource === "companies"),
+  ).toMatchObject({
+    available: true,
+    installed: true,
+  });
+  expect(objects.find((item: any) => item.resource === "deals")).toMatchObject({
+    available: false,
+    installed: false,
+  });
+
+  const binding = await env.DB.prepare(
+    "SELECT config FROM crm_collection_bindings WHERE tenant_id=? AND object_name=?",
+  )
+    .bind(context.tenant, "hubspot_contacts")
+    .first<{ config: string }>();
+  const config = JSON.parse(binding!.config);
+  config.connectionId = "stale-connection";
+  await env.DB.prepare(
+    "UPDATE crm_collection_bindings SET config=? WHERE tenant_id=? AND object_name=?",
+  )
+    .bind(JSON.stringify(config), context.tenant, "hubspot_contacts")
+    .run();
+  const mismatched = await request("/api/crm-workspace");
+  expect(
+    ((await mismatched.json()) as any).data.objects.find(
+      (item: any) => item.resource === "contacts",
+    ).installed,
+  ).toBe(false);
+  await env.DB.prepare(
+    "UPDATE crm_collection_bindings SET config=? WHERE tenant_id=? AND object_name=?",
+  )
+    .bind(binding!.config, context.tenant, "hubspot_contacts")
+    .run();
+});
+it("installs only selected resources and avoids provider calls for other resources", async () => {
+  const tenant = "tenant:selective-install";
+  const start = calls.length;
+  const response = await createHubspotWorkspaceApp({
+    ...context,
+    tenant,
+  }).request("/api/crm-workspace/install", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resources: ["companies"] }),
+  });
+  expect(response.status).toBe(200);
+  expect(
+    ((await response.json()) as any).data.objects.map((x: any) => x.name),
+  ).toEqual(["hubspot_companies"]);
+  const selectedCalls = calls.slice(start);
+  expect(selectedCalls.every((call) => !call.path.includes("contacts"))).toBe(
+    true,
+  );
+  const rows = await env.DB.prepare(
+    "SELECT name FROM studio_objects WHERE tenant_id=? ORDER BY name",
+  )
+    .bind(tenant)
+    .all<{ name: string }>();
+  expect(rows.results.map((row) => row.name)).toEqual(["hubspot_companies"]);
+  const bindings = await env.DB.prepare(
+    "SELECT object_name FROM crm_collection_bindings WHERE tenant_id=?",
+  )
+    .bind(tenant)
+    .all<{ object_name: string }>();
+  expect(bindings.results.map((row) => row.object_name)).toEqual([
+    "hubspot_companies",
+  ]);
+});
+it("rejects invalid and unavailable resource lists before installation writes", async () => {
+  const tenant = "tenant:invalid-install";
+  const app = createHubspotWorkspaceApp({ ...context, tenant });
+  const count = calls.length;
+  for (const resources of [
+    [],
+    ["unknown"],
+    ["companies", "companies"],
+    "companies",
+  ])
+    expect(
+      (
+        await app.request("/api/crm-workspace/install", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resources }),
+        })
+      ).status,
+    ).toBe(422);
+  expect(calls).toHaveLength(count);
+  const unavailable = await app.request("/api/crm-workspace/install", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resources: ["deals"] }),
+  });
+  expect(unavailable.status).toBe(422);
+  expect(calls.slice(count).map((call) => call.path)).toEqual([
+    "/crm/v3/objects/deals?limit=1",
+  ]);
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) AS total FROM studio_objects WHERE tenant_id=?",
+    )
+      .bind(tenant)
+      .first<{ total: number }>(),
+  ).toMatchObject({ total: 0 });
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) AS total FROM crm_collection_bindings WHERE tenant_id=?",
+    )
+      .bind(tenant)
+      .first<{ total: number }>(),
+  ).toMatchObject({ total: 0 });
+});
 it("reads remote pages and rejects invalid fields before writes", async () => {
   const response = await request(
     "/api/records/hubspot_contacts?page=2&perPage=1",

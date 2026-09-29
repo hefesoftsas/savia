@@ -635,6 +635,29 @@ export const automationMessages = {
     "Install all available screens",
     "Instalar todas as telas disponíveis",
   ],
+  "Seleccionar todas las disponibles": [
+    "Seleccionar todas las disponibles",
+    "Select all available",
+    "Selecionar todas as disponíveis",
+  ],
+  "Limpiar selección": [
+    "Limpiar selección",
+    "Clear selection",
+    "Limpar seleção",
+  ],
+  "Instalar seleccionadas (%{value0})": [
+    "Instalar seleccionadas (%{value0})",
+    "Install selected (%{value0})",
+    "Instalar selecionadas (%{value0})",
+  ],
+  "Seleccionar %{value0}": [
+    "Seleccionar %{value0}",
+    "Select %{value0}",
+    "Selecionar %{value0}",
+  ],
+  Instalada: ["Instalada", "Installed", "Instalada"],
+  "por instalar": ["por instalar", "to install", "para instalar"],
+  "en catálogo": ["en catálogo", "in catalog", "no catálogo"],
   "Actualizar disponibilidad": [
     "Actualizar disponibilidad",
     "Refresh availability",

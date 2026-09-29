@@ -44,3 +44,23 @@ El diseñador de colecciones conectadas permite ordenar y mostrar campos y confi
 El procedimiento local de vista previa del 2026-09-08 es histórico y depende de tablas y perfiles operativos que ya fueron retirados. No lo uses como una guía de migración. La vinculación de colecciones soportadas, análisis de recursos y configuración de columnas descritos arriba siguen vigentes.
 
 Plataforma ya no instala automáticamente los objetos administrados al abrirse. Los adaptadores anteriores siguen disponibles cuando su metadata está instalada explícitamente. La pantalla inicial permite conectar una colección en un CRM vacío.
+
+## Selective HubSpot screen installation
+
+In **Sources and collections → Connected CRM · HubSpot**, select the screens you
+need and choose **Install selected (N)**. Nothing is selected by default. **Select
+all** includes only available screens that are not already installed; **Clear
+selection** resets the choice. Unavailable screens show their access reason, and
+existing screens show an installed badge. Return to this panel to add more screens
+later without reinstalling the existing selection.
+
+Installation creates the selected Savia screen definitions and connection bindings.
+It does not copy all remote records or create, update, or delete records in HubSpot.
+Associations to resources with no installed screen do not appear in Savia's related
+screen views. Unselecting an installed screen is not an uninstall operation; use
+its existing unlink action to remove the screen binding.
+
+The backend validates the explicit resource list and availability before writing
+metadata. Unknown, empty, or unavailable selections fail without partially
+installing screens. The generated tenant OpenAPI document describes the selection
+payload. Legacy callers that omit the selection retain the install-all behavior.

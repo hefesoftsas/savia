@@ -80,6 +80,17 @@ it("publishes individual typed paths from current agency metadata and refreshes 
   expect(response.headers.get("cache-control")).toBe("no-store");
   const spec: any = await response.json();
   expect(spec.openapi).toBe("3.1.0");
+  const selection =
+    spec.paths["/crm-workspace/install"].post.requestBody.content[
+      "application/json"
+    ].schema.properties.resources;
+  expect(selection.minItems).toBe(1);
+  expect(selection.items.enum).toContain("contacts");
+  expect(
+    spec.paths["/crm-workspace"].get.responses[200].content["application/json"]
+      .schema.properties.data.properties.objects.items.properties.installed,
+  ).toEqual({ type: "boolean" });
+
   expect(spec.paths["/objects/{name}/deletion-preview"].get.operationId).toBe(
     "preview_screen_deletion",
   );

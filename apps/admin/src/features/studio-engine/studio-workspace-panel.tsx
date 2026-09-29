@@ -1,6 +1,6 @@
 import { useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
@@ -27,6 +28,7 @@ type WorkspaceObject = {
   label: string;
   resource: string;
   available: boolean;
+  installed?: boolean;
   reason?: string;
 };
 type Workspace = {
@@ -62,9 +64,44 @@ export default function StudioWorkspacePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [selectedResources, setSelectedResources] = useState<Set<string>>(
+    () => new Set(),
+  );
   const inFlight = useRef(false);
-  const available =
-    workspace.data?.objects?.filter((object) => object.available) ?? [];
+  const selectionScope = JSON.stringify([
+    scope,
+    workspace.data?.connected,
+    workspace.data?.accountLabel,
+  ]);
+  const previousSelectionScope = useRef(selectionScope);
+  const selectable =
+    workspace.data?.objects?.filter(
+      (object) => object.available && !object.installed,
+    ) ?? [];
+  const selected = selectable.filter((object) =>
+    selectedResources.has(object.resource),
+  );
+
+  useEffect(() => {
+    if (previousSelectionScope.current !== selectionScope) {
+      previousSelectionScope.current = selectionScope;
+      setSelectedResources(new Set());
+    }
+  }, [selectionScope]);
+
+  useEffect(() => {
+    const currentSelectable = new Set(
+      (workspace.data?.objects ?? [])
+        .filter((object) => object.available && !object.installed)
+        .map((object) => object.resource),
+    );
+    setSelectedResources((previous) => {
+      const next = new Set(
+        [...previous].filter((resource) => currentSelectable.has(resource)),
+      );
+      return next.size === previous.size ? previous : next;
+    });
+  }, [workspace.data?.objects]);
 
   // The panel is only relevant while the CRM integration is active.
   // A confirmed inactive connection renders nothing; query failures still
@@ -72,7 +109,10 @@ export default function StudioWorkspacePanel({
   if (!workspace.data?.connected && !workspace.isError) return null;
 
   async function install() {
-    if (inFlight.current) return;
+    const resources = selected
+      .filter((object) => object.available && !object.installed)
+      .map((object) => object.resource);
+    if (inFlight.current || resources.length === 0) return;
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -81,7 +121,7 @@ export default function StudioWorkspacePanel({
       const installed = await request<InstalledWorkspace>(
         "/crm-workspace/install",
         "POST",
-        {},
+        { resources },
       );
       if (!installed.objects?.length)
         throw new Error(
@@ -89,6 +129,7 @@ export default function StudioWorkspacePanel({
             "No se instaló ninguna pantalla. Revisa los permisos de la conexión HubSpot y vuelve a consultar la disponibilidad.",
           ),
         );
+      setSelectedResources(new Set());
       await client.invalidateQueries();
       const first = installed.objects[0];
       await onInstalled(first);
@@ -185,9 +226,9 @@ export default function StudioWorkspacePanel({
           <div className="space-y-3">
             <div className="flex items-center gap-1.5">
               <p className="text-xs font-medium text-foreground">
-                {workspace.data.accountLabel || "HubSpot"} · {available.length}{" "}
-                {t("de")} {workspace.data.objects.length}{" "}
-                {t("pantallas disponibles")}
+                {workspace.data.accountLabel || "HubSpot"} · {selectable.length}{" "}
+                {t("por instalar")} · {workspace.data.objects.length}{" "}
+                {t("en catálogo")}
               </p>
               <FieldHelp
                 label={`${t("pantallas disponibles")} (${t("Ayuda")})`}
@@ -204,14 +245,39 @@ export default function StudioWorkspacePanel({
                   className="flex flex-col justify-between rounded-xl border border-border/60 bg-card p-2.5 text-xs transition-colors hover:bg-muted/40"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">
-                      {object.label}
-                    </span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Checkbox
+                        checked={selectedResources.has(object.resource)}
+                        disabled={busy || !object.available || object.installed}
+                        aria-label={t("Seleccionar %{value0}", {
+                          value0: object.label,
+                        })}
+                        onCheckedChange={(checked) => {
+                          setSelectedResources((previous) => {
+                            const next = new Set(previous);
+                            if (checked === true) next.add(object.resource);
+                            else next.delete(object.resource);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span className="truncate font-medium text-foreground">
+                        {object.label}
+                      </span>
+                    </div>
                     <Badge
-                      variant={object.available ? "outline" : "secondary"}
-                      className="text-xs font-normal"
+                      variant={
+                        object.installed || !object.available
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="shrink-0 text-xs font-normal"
                     >
-                      {object.available ? t("Disponible") : t("No disponible")}
+                      {object.installed
+                        ? t("Instalada")
+                        : object.available
+                          ? t("Disponible")
+                          : t("No disponible")}
                     </Badge>
                   </div>
                   {!object.available && object.reason && (
@@ -248,17 +314,47 @@ export default function StudioWorkspacePanel({
       <CardFooter className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/30 py-3">
         <Button
           type="button"
+          variant="outline"
           size="sm"
-          disabled={busy || workspace.isFetching || !available.length}
+          disabled={
+            busy ||
+            selectable.length === 0 ||
+            selected.length === selectable.length
+          }
+          onClick={() =>
+            setSelectedResources(
+              new Set(selectable.map((object) => object.resource)),
+            )
+          }
+        >
+          {t("Seleccionar todas las disponibles")}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy || selected.length === 0}
+          onClick={() => setSelectedResources(new Set())}
+        >
+          {t("Limpiar selección")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={busy || workspace.isFetching || selected.length === 0}
           onClick={() => void install()}
         >
           <Sparkles className="size-3.5" aria-hidden="true" />
           {busy
             ? t("Instalando pantallas…")
-            : t("Instalar todas las pantallas disponibles")}
+            : t("Instalar seleccionadas (%{value0})", {
+                value0: selected.length,
+              })}
         </Button>
         <FieldHelp
-          label={`${t("Instalar todas las pantallas disponibles")} (${t("Ayuda")})`}
+          label={`${t("Instalar seleccionadas (%{value0})", {
+            value0: selected.length,
+          })} (${t("Ayuda")})`}
         >
           {t(
             "Al instalar, todos los miembros activos de este tenant podrán consultar estas colecciones usando tu conexión. Solo los administradores podrán modificar registros, según los permisos de HubSpot.",
