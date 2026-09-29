@@ -52,12 +52,15 @@ describe("legacy authorization compatibility", () => {
     "agency_admin",
     "operator",
     "viewer",
-  ] as FixtureRole[])("rejects independent domain for %s", async (role) => {
-    expect(
-      (await f.request(role, 101, "/v1/data-domains/acl_private/api/objects"))
-        .status,
-    ).toBe(403);
-  });
+  ] as FixtureRole[])(
+    "rejects removed data-domain route for %s",
+    async (role) => {
+      expect(
+        (await f.request(role, 101, "/v1/data-domains/acl_private/api/objects"))
+          .status,
+      ).toBe(404);
+    },
+  );
   it.each([
     ["tenant_admin", true, true],
     ["agency_admin", true, true],

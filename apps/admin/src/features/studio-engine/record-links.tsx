@@ -346,7 +346,7 @@ function LinkGroup({
     queryKey: [
       "link-candidates",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       group.targetObject,
       page,
     ],
@@ -574,7 +574,7 @@ function RecordLinksContent({
     queryKey: [
       "record-links",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       object.name,
       record.id,
       page,

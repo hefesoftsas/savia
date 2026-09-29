@@ -1,15 +1,11 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
-import type {
-  AssistantActiveTenant,
-  AssistantConfigurationClient,
-} from "@/api/assistant-configuration-client";
+import type { AssistantActiveTenant } from "@/api/assistant-configuration-client";
 
 export type ActiveTenantClient = {
-  activeTenant?: () => Promise<AssistantActiveTenant>;
+  activeTenant: () => Promise<AssistantActiveTenant>;
   setActiveTenant?: (tenantId: number) => Promise<AssistantActiveTenant>;
-  activeAgency?: () => Promise<AssistantActiveTenant>;
-  setActiveAgency?: (agencyId: number) => Promise<AssistantActiveTenant>;
 };
 
 export function ActiveTenantSelector({
@@ -21,26 +17,19 @@ export function ActiveTenantSelector({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchActive = () => {
-    if (client.activeTenant) return client.activeTenant();
-    if (client.activeAgency) return client.activeAgency();
-    return Promise.reject(new Error("No active tenant method"));
-  };
-
   const updateActive = (tenantId: number) => {
     if (client.setActiveTenant) return client.setActiveTenant(tenantId);
-    if (client.setActiveAgency) return client.setActiveAgency(tenantId);
     return Promise.reject(new Error("No setActiveTenant method"));
   };
 
   useEffect(() => {
     let active = true;
-    void fetchActive().then(
+    void client.activeTenant().then(
       (next) => {
         if (active) setState(next);
       },
       () => {
-        if (active) setState({ agencies: [], tenants: [] });
+        if (active) setState({ tenants: [] });
       },
     );
     return () => {
@@ -48,8 +37,14 @@ export function ActiveTenantSelector({
     };
   }, [client]);
 
-  const tenants = state?.tenants ?? state?.agencies ?? [];
-  const activeTenantId = state?.activeTenantId ?? state?.activeAgencyId;
+  useRealtimeRefresh({
+    topics: ["account"],
+    blocked: saving,
+    refresh: async () => setState(await client.activeTenant()),
+  });
+
+  const tenants = state?.tenants ?? [];
+  const activeTenantId = state?.activeTenantId;
 
   if (!state || tenants.length < 2) return null;
 
@@ -64,7 +59,7 @@ export function ActiveTenantSelector({
       setError(
         exception instanceof Error
           ? exception.message
-          : "No fue posible actualizar la organización activa.",
+          : "No fue posible actualizar el tenant activo.",
       );
     } finally {
       setSaving(false);
@@ -76,19 +71,19 @@ export function ActiveTenantSelector({
       <div className="flex flex-wrap items-center gap-2">
         <label
           className="text-xs font-medium text-muted-foreground"
-          htmlFor="assistant-active-agency"
+          htmlFor="assistant-active-tenant"
         >
-          Organización activa
+          Tenant activo
         </label>
         <select
-          id="assistant-active-agency"
+          id="assistant-active-tenant"
           className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 min-w-44 rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
           value={activeTenantId ?? ""}
           onChange={(event) => void selectTenant(Number(event.target.value))}
           disabled={saving}
         >
           <option value="" disabled>
-            Elige una organización
+            Elige un tenant
           </option>
           {tenants.map((tenant) => (
             <option key={tenant.id} value={tenant.id}>
@@ -99,7 +94,7 @@ export function ActiveTenantSelector({
         {saving ? (
           <LoaderCircle
             className="size-4 animate-spin text-muted-foreground"
-            aria-label="Guardando organización activa"
+            aria-label="Guardando tenant activo"
           />
         ) : null}
       </div>
@@ -111,6 +106,3 @@ export function ActiveTenantSelector({
     </div>
   );
 }
-
-export const ActiveAgencySelector = ActiveTenantSelector;
-export type ActiveAgencyClient = ActiveTenantClient;

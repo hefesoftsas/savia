@@ -108,8 +108,16 @@ export async function processWorkflows(
     now?: number;
     maxSteps?: number;
     webhooks?: WebhookDependencies;
+    onExecutionTransition?: (workspace: string, executionId: string) => void;
   } = {},
 ) {
+  const notifyTransition = (workspace: string, executionId: string) => {
+    try {
+      options.onExecutionTransition?.(workspace, executionId);
+    } catch {
+      // Realtime is advisory and must not affect workflow execution.
+    }
+  };
   const now = options.now ?? Date.now();
   await schedule(db, now);
   for (let step = 0; step < Math.min(options.maxSteps ?? 100, 200); step++) {
@@ -121,6 +129,7 @@ export async function processWorkflows(
       .bind(token, Date.now() + 30000, now, now)
       .first<ExecutionRow>();
     if (!run) break;
+    notifyTransition(run.workspace_id, run.id);
     try {
       if (
         !(await authorize({
@@ -134,6 +143,7 @@ export async function processWorkflows(
           )
           .bind(run.workspace_id, run.id, token)
           .run();
+        notifyTransition(run.workspace_id, run.id);
         continue;
       }
       const version = await db
@@ -156,6 +166,7 @@ export async function processWorkflows(
           )
           .bind(run.workspace_id, run.id, token)
           .run();
+        notifyTransition(run.workspace_id, run.id);
         continue;
       }
       if (node.type === "webhook")
@@ -169,6 +180,7 @@ export async function processWorkflows(
           options.webhooks ?? {},
         );
       else await executeNode(db, run, node, context, token, now);
+      notifyTransition(run.workspace_id, run.id);
     } catch (error) {
       const status =
         error && typeof error === "object" && "status" in error
@@ -188,6 +200,7 @@ export async function processWorkflows(
           token,
         )
         .run();
+      notifyTransition(run.workspace_id, run.id);
     }
   }
 }

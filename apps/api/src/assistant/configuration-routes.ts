@@ -37,15 +37,11 @@ const configurationWriteSchema = z
 
 const activeTenantWriteSchema = z
   .object({
-    agencyId: z.number().int().positive().optional(),
     tenantId: z.number().int().positive().optional(),
   })
-  .refine(
-    (data) => data.tenantId !== undefined || data.agencyId !== undefined,
-    { message: "tenantId or agencyId is required" },
-  );
-
-const activeAgencyWriteSchema = activeTenantWriteSchema;
+  .refine((data) => data.tenantId !== undefined, {
+    message: "tenantId is required",
+  });
 
 type AgencyRow = { id: number; name: string };
 
@@ -99,7 +95,7 @@ function requireConfigurationAdministrator(context: Context): AppActor {
   return actor;
 }
 
-async function activeAgencySummary(
+async function activeTenantSummary(
   database: D1Database,
   repository: AssistantConfigurationRepository,
   actor: AppActor,
@@ -126,9 +122,7 @@ async function activeAgencySummary(
   const activeId = await repository.activeAgencyFor(actor.principal.id);
   return {
     activeTenantId: activeId,
-    activeAgencyId: activeId,
     tenants: tenants.results,
-    agencies: tenants.results,
   };
 }
 
@@ -165,8 +159,7 @@ export function registerAssistantConfigurationRoutes(
   const handlePutTenantOverride = async (context: Context) => {
     const actor = requireConfigurationAdministrator(context);
     if (!repository) return unavailableResponse();
-    const idParam =
-      context.req.param("tenantId") ?? context.req.param("agencyId");
+    const idParam = context.req.param("tenantId");
     const tenantId = Number(idParam);
     if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
     const parsed = await parseWrite(context);
@@ -184,10 +177,6 @@ export function registerAssistantConfigurationRoutes(
     }
   };
   app.put(
-    "/v1/assistant/configuration/agencies/:agencyId",
-    handlePutTenantOverride,
-  );
-  app.put(
     "/v1/assistant/configuration/tenants/:tenantId",
     handlePutTenantOverride,
   );
@@ -195,17 +184,12 @@ export function registerAssistantConfigurationRoutes(
   const handleDeleteTenantOverride = async (context: Context) => {
     requireConfigurationAdministrator(context);
     if (!repository) return unavailableResponse();
-    const idParam =
-      context.req.param("tenantId") ?? context.req.param("agencyId");
+    const idParam = context.req.param("tenantId");
     const tenantId = Number(idParam);
     if (!Number.isInteger(tenantId) || tenantId <= 0) return invalidResponse();
     await repository.clearAgencyOverride(tenantId);
     return new Response(null, { status: 204 });
   };
-  app.delete(
-    "/v1/assistant/configuration/agencies/:agencyId",
-    handleDeleteTenantOverride,
-  );
   app.delete(
     "/v1/assistant/configuration/tenants/:tenantId",
     handleDeleteTenantOverride,
@@ -230,9 +214,8 @@ export function registerAssistantConfigurationRoutes(
   const handleGetActiveTenant = async (context: Context) => {
     const actor = actorFromContext(context);
     if (!repository) return unavailableResponse();
-    return context.json(await activeAgencySummary(database, repository, actor));
+    return context.json(await activeTenantSummary(database, repository, actor));
   };
-  app.get("/v1/assistant/active-agency", handleGetActiveTenant);
   app.get("/v1/assistant/active-tenant", handleGetActiveTenant);
 
   const handlePutActiveTenant = async (context: Context) => {
@@ -241,11 +224,11 @@ export function registerAssistantConfigurationRoutes(
     const body = await context.req.json().catch(() => undefined);
     const parsed = activeTenantWriteSchema.safeParse(body);
     if (!parsed.success) return invalidResponse();
-    const targetId = parsed.data.tenantId ?? parsed.data.agencyId!;
+    const targetId = parsed.data.tenantId!;
     try {
       await repository.setActiveAgency(actor.principal.id, targetId, actor);
       return context.json(
-        await activeAgencySummary(database, repository, actor),
+        await activeTenantSummary(database, repository, actor),
       );
     } catch (error) {
       const response = configurationFailureResponse(error);
@@ -253,6 +236,5 @@ export function registerAssistantConfigurationRoutes(
       throw error;
     }
   };
-  app.put("/v1/assistant/active-agency", handlePutActiveTenant);
   app.put("/v1/assistant/active-tenant", handlePutActiveTenant);
 }

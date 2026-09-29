@@ -50,3 +50,7 @@ Si un proveedor devuelve un error de autorización o una conexión revocada, mar
 - [ ] Cada callback OAuth coincide con el que muestra Nango.
 - [ ] Se probaron Connect, reconexión, desconexión, una búsqueda y una acción confirmada con cuentas de prueba separadas para Personal y Business.
 - [ ] La verificación de Google/Gmail y la política de datos están completas antes de permitir usuarios externos.
+
+## Saved record document delivery
+
+The [Documents and deliveries](../guides/document-delivery.md) flow extends Microsoft connections with folder browsing, binary create-only OneDrive copies, and Outlook file attachments. It uses a separate encrypted, five-minute, single-use review token scoped to the authenticated user, tenant, file, version and connection. The assistant text-file upload flow remains unchanged.

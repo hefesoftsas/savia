@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import {
@@ -7,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { AppServices } from "@/app-services";
@@ -23,10 +24,10 @@ import {
 } from "@/components/ui/tooltip";
 import { studioHref } from "@/features/studio/studio-navigation";
 import {
-  listStudioDomains,
-  selectStudioDomain,
-  type StudioDomain,
-} from "@/features/studio/studio-domains";
+  listStudioTenants,
+  selectStudioTenant,
+  type StudioTenant,
+} from "@/features/studio/studio-tenants";
 import { GeocodingSettingsPanel } from "@/features/studio-engine/geocoding-settings-panel";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
 import { api } from "@/features/studio-engine/api";
@@ -153,7 +154,7 @@ function integrationStatus(item: IntegrationSummary): {
   return { configured: false, label: "Sin conexión" };
 }
 
-export function StudioDomainCredentialsSection({
+export function StudioTenantCredentialsSection({
   services,
   globalCredentials,
 }: {
@@ -163,33 +164,39 @@ export function StudioDomainCredentialsSection({
   const t = useMessages(settingsMessages);
   const locale = intlLocale(useAppLocale());
   const navigate = useNavigate();
-  const [domains, setDomains] = useState<StudioDomain[]>([]);
-  const [loadingDomains, setLoadingDomains] = useState(true);
-  const domain = useMemo(
-    () => selectStudioDomain(domains, "platform") ?? domains[0],
-    [domains],
+  const cache = useQueryClient();
+  const [tenants, setTenants] = useState<StudioTenant[]>([]);
+  const [loadingTenants, setLoadingTenants] = useState(true);
+  const [selectedTenantId, setSelectedTenantId] = useState<number>();
+  const tenant = useMemo(
+    () =>
+      selectStudioTenant(tenants, selectedTenantId) ??
+      (selectedTenantId === undefined
+        ? (selectStudioTenant(tenants, 0) ?? tenants[0])
+        : undefined),
+    [tenants, selectedTenantId],
   );
   const transport = useMemo(
     () =>
-      domain
-        ? createEmbeddedTransport(services.apiClient, domain.apiBasePath)
+      tenant
+        ? createEmbeddedTransport(services.apiClient, tenant.apiBasePath)
         : null,
-    [domain, services.apiClient],
+    [tenant, services.apiClient],
   );
   const fallbackObject = "cotizador";
 
   useEffect(() => {
     if (!services.apiClient?.get) {
-      setLoadingDomains(false);
+      setLoadingTenants(false);
       return;
     }
     let active = true;
-    void listStudioDomains(services as AppServices)
+    void listStudioTenants(services as AppServices)
       .then((result) => {
-        if (active) setDomains(result);
+        if (active) setTenants(result);
       })
       .finally(() => {
-        if (active) setLoadingDomains(false);
+        if (active) setLoadingTenants(false);
       });
     return () => {
       active = false;
@@ -197,29 +204,41 @@ export function StudioDomainCredentialsSection({
   }, [services]);
 
   useLayoutEffect(() => {
-    if (!domain || !transport) return;
+    if (!tenant || !transport) return;
     setStudioRuntime({
       embedded: true,
-      domainId: domain.id,
-      apiBasePath: domain.apiBasePath,
+      tenantId: tenant.tenantId,
+      apiBasePath: tenant.apiBasePath,
       transport,
     });
     return () => setStudioRuntime({ embedded: false });
-  }, [domain, transport]);
+  }, [tenant, transport]);
 
   const integrations = useQuery({
-    queryKey: ["integrations", domain?.id],
+    queryKey: ["integrations", tenant?.id],
     queryFn: () => api<{ data: IntegrationSummary[] }>("/integrations"),
     enabled: !!transport,
   });
 
   const geocoding = useQuery({
-    queryKey: ["geocoding-settings", domain?.id],
+    queryKey: ["geocoding-settings", tenant?.id],
     queryFn: () => api<GeocodingSettings>("/settings/geocoding"),
     enabled: !!transport,
   });
 
-  if (loadingDomains) {
+  useRealtimeRefresh({
+    topics: ["settings", "integrations"],
+    tenantId: tenant?.tenantId,
+    enabled: !!tenant,
+    refresh: async () => {
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["integrations"] }),
+        cache.invalidateQueries({ queryKey: ["geocoding-settings"] }),
+      ]);
+    },
+  });
+
+  if (loadingTenants) {
     return (
       <Tabs defaultValue="global" className="credentials-tabs">
         <TabsList className="credentials-tabs-list">
@@ -258,7 +277,7 @@ export function StudioDomainCredentialsSection({
     );
   }
 
-  if (!domain || !transport) {
+  if (!tenant || !transport) {
     return (
       <Tabs defaultValue="global" className="credentials-tabs">
         <TabsList className="credentials-tabs-list">
@@ -281,7 +300,7 @@ export function StudioDomainCredentialsSection({
             loadingMessage={
               <p className="credentials-muted">
                 {t(
-                  "No hay dominios de datos disponibles para Geoapify o integraciones de Studio.",
+                  "No hay tenants disponibles para Geoapify o integraciones de Studio.",
                 )}
               </p>
             }
@@ -304,7 +323,7 @@ export function StudioDomainCredentialsSection({
         item.connection?.authType !== "none" &&
         !item.hasSecret,
     ) ?? [];
-  const domainTools = domain.apiBasePath.startsWith("/v1/data-domains/");
+  const tenantTools = true;
   const geoapifyConfigured =
     geocoding.data?.geoapifyStored || geocoding.data?.geoapifyConfigured;
 
@@ -418,7 +437,7 @@ export function StudioDomainCredentialsSection({
           </>
         ) : (
           <p className="credentials-muted">
-            {t("Aún no importaste integraciones en este dominio.")}
+            {t("Aún no importaste integraciones en este tenant.")}
           </p>
         )}
         <div className="credentials-entry-actions">
@@ -427,7 +446,7 @@ export function StudioDomainCredentialsSection({
             onClick={() =>
               navigate(
                 studioHref({
-                  domain: domain.id,
+                  tenantId: tenant.tenantId,
                   object: fallbackObject,
                   view: "collection-sources",
                   tab: "integrations",
@@ -443,7 +462,7 @@ export function StudioDomainCredentialsSection({
     </CredentialGroup>
   );
 
-  const sourcesPanel = domainTools ? (
+  const sourcesPanel = tenantTools ? (
     <CredentialGroup
       title={t("Por fuente")}
       description={t(
@@ -463,7 +482,7 @@ export function StudioDomainCredentialsSection({
             onClick={() =>
               navigate(
                 studioHref({
-                  domain: domain.id,
+                  tenantId: tenant.tenantId,
                   object: fallbackObject,
                   view: "collection-sources",
                 }),
@@ -479,58 +498,76 @@ export function StudioDomainCredentialsSection({
   ) : null;
 
   return (
-    <Tabs defaultValue="global" className="credentials-tabs">
-      <TabsList className="credentials-tabs-list">
-        <CredentialTab
-          value="global"
-          tooltip={t(
-            "Una clave por espacio para IA y servicios opcionales como Geoapify.",
-          )}
+    <div className="grid gap-3">
+      <label className="grid max-w-sm gap-1.5 text-sm">
+        {t("Workspace")}
+        <select
+          className="h-9 rounded-md border bg-background px-3"
+          value={String(tenant.tenantId)}
+          onChange={(event) => {
+            setSelectedTenantId(Number(event.target.value));
+          }}
         >
-          {t("Globales")}
-        </CredentialTab>
-        <CredentialTab
-          value="integrations"
-          tooltip={t(
-            "Cada OpenAPI externa guarda su URL y credencial por separado.",
-          )}
-        >
-          {t("Integraciones")}
-          {pendingIntegrations.length > 0 ? (
-            <Badge className="ml-1.5" variant="secondary">
-              {pendingIntegrations.length}
-            </Badge>
-          ) : null}
-        </CredentialTab>
-        {domainTools ? (
+          {tenants.map((item) => (
+            <option key={item.id} value={item.tenantId}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Tabs defaultValue="global" className="credentials-tabs">
+        <TabsList className="credentials-tabs-list">
           <CredentialTab
-            value="sources"
+            value="global"
             tooltip={t(
-              "Los tokens JSON:API se configuran en cada fuente de datos.",
+              "Una clave por espacio para IA y servicios opcionales como Geoapify.",
             )}
           >
-            {t("Fuentes")}
+            {t("Globales")}
           </CredentialTab>
-        ) : null}
-      </TabsList>
+          <CredentialTab
+            value="integrations"
+            tooltip={t(
+              "Cada OpenAPI externa guarda su URL y credencial por separado.",
+            )}
+          >
+            {t("Integraciones")}
+            {pendingIntegrations.length > 0 ? (
+              <Badge className="ml-1.5" variant="secondary">
+                {pendingIntegrations.length}
+              </Badge>
+            ) : null}
+          </CredentialTab>
+          {tenantTools ? (
+            <CredentialTab
+              value="sources"
+              tooltip={t(
+                "Los tokens JSON:API se configuran en cada fuente de datos.",
+              )}
+            >
+              {t("Fuentes")}
+            </CredentialTab>
+          ) : null}
+        </TabsList>
 
-      <TabsContent value="global" className="credentials-tabs-panel">
-        <GlobalCredentialsPanel
-          globalCredentials={globalCredentials}
-          geoapifyEntry={geoapifyEntry}
-          freeServicesEntry={<FreeServicesEntry />}
-        />
-      </TabsContent>
-
-      <TabsContent value="integrations" className="credentials-tabs-panel">
-        {integrationsPanel}
-      </TabsContent>
-
-      {domainTools ? (
-        <TabsContent value="sources" className="credentials-tabs-panel">
-          {sourcesPanel}
+        <TabsContent value="global" className="credentials-tabs-panel">
+          <GlobalCredentialsPanel
+            globalCredentials={globalCredentials}
+            geoapifyEntry={geoapifyEntry}
+            freeServicesEntry={<FreeServicesEntry />}
+          />
         </TabsContent>
-      ) : null}
-    </Tabs>
+
+        <TabsContent value="integrations" className="credentials-tabs-panel">
+          {integrationsPanel}
+        </TabsContent>
+
+        {tenantTools ? (
+          <TabsContent value="sources" className="credentials-tabs-panel">
+            {sourcesPanel}
+          </TabsContent>
+        ) : null}
+      </Tabs>
+    </div>
   );
 }

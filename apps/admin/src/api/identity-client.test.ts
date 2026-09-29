@@ -70,3 +70,19 @@ describe("IdentityClient", () => {
     expect(get).toHaveBeenCalledTimes(2);
   });
 });
+
+it("bypasses the list TTL for realtime refetches while coalescing requests", async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: [{ id: "old" }] })
+    .mockResolvedValue({ data: [{ id: "new" }] });
+  const client = new IdentityClient({ get } as unknown as ApiClient);
+  await client.list();
+  const [first, second] = await Promise.all([
+    client.list(true),
+    client.list(true),
+  ]);
+  expect(first).toEqual([{ id: "new" }]);
+  expect(second).toEqual(first);
+  expect(get).toHaveBeenCalledTimes(2);
+});

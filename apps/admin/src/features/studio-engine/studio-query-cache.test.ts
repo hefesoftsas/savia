@@ -15,13 +15,13 @@ beforeEach(() => {
 });
 
 describe("studio-query-cache", () => {
-  it("reuses the client for the same session and domain", () => {
+  it("reuses the client for the same session and tenant", () => {
     const first = getStudioQueryClient("crm", "env|user-1");
     const second = getStudioQueryClient("crm", "env|user-1");
     expect(second).toBe(first);
   });
 
-  it("isolates domains", () => {
+  it("isolates tenants", () => {
     const crm = getStudioQueryClient("crm", "env|user-1");
     const ops = getStudioQueryClient("ops", "env|user-1");
     expect(ops).not.toBe(crm);
@@ -33,7 +33,7 @@ describe("studio-query-cache", () => {
     expect(second).not.toBe(first);
   });
 
-  it("tracks bootstrap once per domain and retries after failure", () => {
+  it("tracks bootstrap once per tenant and retries after failure", () => {
     expect(isStudioBootstrapped("crm", "env|user-1")).toBe(false);
     getStudioQueryClient("crm", "env|user-1");
     markStudioBootstrapped("crm", "env|user-1");
@@ -42,7 +42,7 @@ describe("studio-query-cache", () => {
     expect(isStudioBootstrapped("crm", "env|user-1")).toBe(false);
   });
 
-  it("clears on owner rotation and prunes deleted domains", () => {
+  it("clears on owner rotation and prunes deleted tenants", () => {
     setStudioQueryOwner("env|user-1");
     const client = getStudioQueryClient("crm", "env|user-1");
     client.setQueryData(["x"], { ok: true });

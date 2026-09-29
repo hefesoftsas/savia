@@ -1,3 +1,4 @@
+import { readCredentialEnvelope } from "./credential-envelope";
 import type { ExtensionActionContext } from "@savia/studio-shared/extension-runtime";
 
 const encoder = new TextEncoder();
@@ -329,14 +330,18 @@ export class ExtensionConnectionRepository {
     if (!row)
       throw new ExtensionRuntimeError("EXTENSION_CONNECTION_NOT_CONFIGURED");
     try {
+      const envelope = readCredentialEnvelope(
+        row.credential_ciphertext,
+        decoder.decode(connectionAad(key, row.connector_id)),
+      );
       const decrypted = await crypto.subtle.decrypt(
         {
           name: "AES-GCM",
           iv: bufferSource(decodeBase64(row.credential_iv)),
-          additionalData: bufferSource(connectionAad(key, row.connector_id)),
+          additionalData: bufferSource(encoder.encode(envelope.aad)),
         },
         await this.requireKey(),
-        bufferSource(decodeBase64(row.credential_ciphertext)),
+        bufferSource(decodeBase64(envelope.value)),
       );
       return normalizedValues(JSON.parse(decoder.decode(decrypted)));
     } catch (error) {

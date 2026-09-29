@@ -72,14 +72,14 @@ it("keeps a saved page section and appends newly created pages", () => {
     version: 1,
     sections: {
       operation: ["studio", "dashboard"],
-      productivity: ["page:platform:clients"],
+      productivity: ["page:0:clients"],
       administration: [],
       management: [],
     },
   });
   const result = reconcileSidebarNavigation(layout, [
-    "page:platform:clients",
-    "page:platform:projects",
+    "page:0:clients",
+    "page:0:projects",
     "dashboard",
   ]);
   const productivity = result.blocks.find(
@@ -88,8 +88,8 @@ it("keeps a saved page section and appends newly created pages", () => {
   const operation = result.blocks.find(
     (block) => block.kind === "builtin" && block.id === "operation",
   );
-  expect(productivity?.items).toEqual(["page:platform:clients"]);
-  expect(operation?.items).toEqual(["page:platform:projects", "dashboard"]);
+  expect(productivity?.items).toEqual(["page:0:clients"]);
+  expect(operation?.items).toEqual(["page:0:projects", "dashboard"]);
 });
 
 it("places work, building and administration in coherent default groups", () => {
@@ -110,7 +110,7 @@ it("upgrades legacy defaults once while preserving custom placement and hidden s
   const legacy = normalizeSidebarNavigationLayout({
     version: 1,
     sections: {
-      operation: ["page:platform:clients"],
+      operation: ["page:0:clients"],
       productivity: ["my-day", "integrations"],
       administration: ["provider-credentials", "access-control"],
       management: ["tenants", "users", "page-administrator"],
@@ -123,7 +123,7 @@ it("upgrades legacy defaults once while preserving custom placement and hidden s
     collapsed: true,
     items: ["service-credentials"],
   });
-  legacy.hiddenItems = ["page:platform:clients"];
+  legacy.hiddenItems = ["page:0:clients"];
   const result = upgradeSidebarNavigationPreset(legacy);
   expect(result.blocks.find((b) => b.id === "operation")?.items).toContain(
     "my-day",

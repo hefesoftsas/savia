@@ -80,7 +80,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
     activePage * PAGE_SIZE,
   );
   const schema = useQuery({
-    queryKey: ["related-object", runtime.apiBasePath, runtime.domainId, target],
+    queryKey: ["related-object", runtime.apiBasePath, runtime.tenantId, target],
     enabled: expanded && !!target,
     queryFn: () =>
       api<{ data: StudioObject }>(`/objects/${encodeURIComponent(target)}`),
@@ -89,7 +89,7 @@ export function RelatedRecordEditor(props: IFieldProps) {
     queryKey: [
       "related-page",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       target,
       visibleRows.map((row) => row.id),
     ],

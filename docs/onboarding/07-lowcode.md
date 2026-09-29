@@ -2,18 +2,18 @@
 
 ## Core idea: metadata, not code or migrations
 
-Everything configurable lives as **data in fixed D1 tables** (`crm_objects`,
-`crm_records`, `crm_views`, `crm_schema_versions`, …). Creating a new
+Everything configurable lives as **data in fixed D1 tables** (`studio_objects`,
+`studio_records`, `studio_views`, `studio_schema_versions`, …). Creating a new
 "entity" creates no SQL tables: records are JSON documents validated against a
 versioned schema. Files go to R2.
 
 ## Hierarchy
 
-**Domain → Object → Records → Screens/Views**, each level versioned:
+**Tenant → Object → Records → Screens/Views**, each level versioned:
 
-- **Domain**: independent space (e.g. Platform, or a custom one like
-  inventory). Internal scopes `domain:platform` / `domain:<id>`; clients never
-  pick an arbitrary tenant.
+- **Tenant**: authorized workspace backed by `tenants.id`. Studio storage uses
+  `tenant:<id>`; `tenant:0` is the reserved platform workspace. Custom data
+  domains are migrated to tenants. See [tenant isolation](../guides/tenant-isolation.md).
 - **Object**: entity with fields (types, labels), relations
   (`config.relation`, including mutual ones), sections, and layout. Some
   operational fields are protected: they cannot be deleted or retyped.
@@ -51,10 +51,10 @@ versioned schema. Files go to R2.
 
 ## Everything configurable generates its own API
 
-- `/v1/data-domains/:id/api/*` and `/v1/studio/:agencyId/api/*` (`/v1/dynamic-crm/*` alias kept): per-object
+- `/v1/studio/:tenantId/api/*` (`/v1/dynamic-crm/*` alias kept): per-object
   CRUD, designer, **generated OpenAPI/Scalar with per-object endpoints**, and
   integrations (import an external OpenAPI schema, run operations, map results
-  into the domain with per-domain isolated credentials).
+  into the tenant with per-tenant isolated credentials).
 - **Solutions**: that metadata exports/imports as versioned packages
   installable per space (`solutions/insurance/`, [solution-packages.md](../solution-packages.md)).
   Atomic install, collision detection, no data or customization destruction.

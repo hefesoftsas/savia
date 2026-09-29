@@ -193,7 +193,6 @@ describe("assistant OpenRouter configuration", () => {
 
     await expect(settings.summary()).resolves.toEqual({
       global: null,
-      agencies: [],
       tenants: [],
       deployment: {
         keyState: "deployment_fallback",
@@ -221,7 +220,6 @@ describe("assistant OpenRouter configuration", () => {
     ).resolves.toEqual({
       apiKey: "not-a-real-global-key",
       model: "openai/gpt-5",
-      agencyId: 101,
       tenantId: 101,
     });
   });

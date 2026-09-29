@@ -73,7 +73,7 @@ describe("extension administration authorization", () => {
             },
           ],
         }),
-        "agency:101",
+        "tenant:101",
       ),
     ).toBe(false);
     expect(
@@ -93,13 +93,13 @@ describe("extension administration authorization", () => {
             },
           ],
         }),
-        "agency:101",
+        "tenant:101",
       ),
     ).toBe(true);
     expect(
       canManageTenantExtensions(
         actor({ globalRoles: ["platform_admin"], memberships: [] }),
-        "agency:101",
+        "tenant:101",
       ),
     ).toBe(true);
   });
@@ -109,7 +109,7 @@ describe("extension administration authorization", () => {
     const gateway = createCollectionGateway({
       db,
       files: {} as R2Bucket,
-      tenant: "agency:101",
+      tenant: "tenant:101",
       actor: actor({ globalRoles: ["platform_admin"], memberships: [] }),
       seedObjects: [],
     });
@@ -121,7 +121,7 @@ describe("extension administration authorization", () => {
       expect.objectContaining({ isExtensionActive: expect.any(Function) }),
     );
     expect(gatewayMocks.createStudioApp).toHaveBeenCalledWith(
-      "agency:101",
+      "tenant:101",
       expect.objectContaining({
         settingsRepository: expect.anything(),
       }),
@@ -133,7 +133,7 @@ describe("extension administration authorization", () => {
     const context = {
       db: {} as D1Database,
       files: {} as R2Bucket,
-      tenant: "agency:101",
+      tenant: "tenant:101",
       actor: actor({ globalRoles: ["platform_admin"], memberships: [] }),
       seedObjects: [],
       saviaRequestService,
@@ -144,7 +144,7 @@ describe("extension administration authorization", () => {
     );
 
     expect(gatewayMocks.createStudioApp).toHaveBeenCalledWith(
-      "agency:101",
+      "tenant:101",
       expect.objectContaining({ saviaRequestService }),
     );
   });

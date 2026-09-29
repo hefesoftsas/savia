@@ -1,3 +1,5 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { matchTenantApiBasePath } from "@/features/studio/studio-navigation";
 import { useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
@@ -78,6 +80,14 @@ function useWidgetSchema(
 ) {
   const [schema, setSchema] = useState<WidgetCollectionSchema | null>(null);
   const [missing, setMissing] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  useRealtimeRefresh({
+    topics: ["studio"],
+    tenantId: Number(tenantId),
+    enabled: tenantId !== undefined,
+    refresh: () => setRevision((value) => value + 1),
+  });
   useEffect(() => {
     if (!apiClient) return;
     let active = true;
@@ -88,8 +98,8 @@ function useWidgetSchema(
     ).then(
       (result) => {
         if (!active) return;
-        if (result) setSchema(result);
-        else setMissing(true);
+        setSchema(result ?? null);
+        setMissing(!result);
       },
       () => {
         if (active) setMissing(true);
@@ -98,7 +108,7 @@ function useWidgetSchema(
     return () => {
       active = false;
     };
-  }, [apiClient, widget.apiBasePath, widget.collection]);
+  }, [apiClient, widget.apiBasePath, widget.collection, revision]);
   return { schema, missing };
 }
 
@@ -115,6 +125,14 @@ export function SummaryWidgetBody({
   >(null);
   const [failed, setFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  useRealtimeRefresh({
+    topics: ["records"],
+    tenantId: Number(tenantId),
+    enabled: tenantId !== undefined,
+    accepts: (event) => event.collection === widget.collection,
+    refresh: () => setNonce((value) => value + 1),
+  });
   const { schema, missing } = useWidgetSchema(apiClient, widget);
   const detected = schema ? autoDetectWidgetConfig(schema) : {};
   const statusField = widget.config?.statusField ?? detected.statusField;
@@ -215,6 +233,14 @@ export function ItemsWidgetBody({
   >(null);
   const [failed, setFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  useRealtimeRefresh({
+    topics: ["records"],
+    tenantId: Number(tenantId),
+    enabled: tenantId !== undefined,
+    accepts: (event) => event.collection === widget.collection,
+    refresh: () => setNonce((value) => value + 1),
+  });
   const { schema, missing } = useWidgetSchema(apiClient, widget);
 
   useEffect(() => {
@@ -294,6 +320,14 @@ export function ChartWidgetBody({
   >(null);
   const [failed, setFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  useRealtimeRefresh({
+    topics: ["records"],
+    tenantId: Number(tenantId),
+    enabled: tenantId !== undefined,
+    accepts: (event) => event.collection === widget.collection,
+    refresh: () => setNonce((value) => value + 1),
+  });
   const { schema, missing } = useWidgetSchema(apiClient, widget);
   const detected = schema ? autoDetectWidgetConfig(schema) : {};
   const groupField = widget.config?.groupField ?? detected.statusField;
@@ -396,6 +430,14 @@ export function ActionsWidgetBody({
   >(null);
   const [failed, setFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  useRealtimeRefresh({
+    topics: ["records"],
+    tenantId: Number(tenantId),
+    enabled: tenantId !== undefined,
+    accepts: (event) => event.collection === widget.collection,
+    refresh: () => setNonce((value) => value + 1),
+  });
   const { schema, missing } = useWidgetSchema(apiClient, widget);
   const detected = schema ? autoDetectWidgetConfig(schema) : {};
   const dateField = widget.config?.dateField ?? detected.dateField;

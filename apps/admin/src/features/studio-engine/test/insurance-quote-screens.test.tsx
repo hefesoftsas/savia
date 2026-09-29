@@ -1359,7 +1359,7 @@ it("opens the quote linked by Alice without locking later history selection", as
     numero_cotizacion: "ALICE-123",
   });
   window.location.hash =
-    "#/crm?domain=platform&object=cotizador_por_pasos&quote=alice-quote";
+    "#/crm?tenantId=0&object=cotizador_por_pasos&quote=alice-quote";
   const WizardScreen = quoteScreen("cotizador_por_pasos");
   render(<WizardScreen savia={savia} />);
   expect(await screen.findByText("ALICE-123")).toBeVisible();

@@ -255,7 +255,7 @@ export default function CollectionRelations({
   const runtime = getStudioRuntime();
   const client = useQueryClient();
   const query = useQuery({
-    queryKey: ["collection-relations", runtime.apiBasePath, runtime.domainId],
+    queryKey: ["collection-relations", runtime.apiBasePath, runtime.tenantId],
     queryFn: () => api<{ data: RelationDefinition[] }>("/collection-relations"),
   });
   const [hiddenObjects, setHiddenObjects] = useState<string[]>([]);

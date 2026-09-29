@@ -9,6 +9,18 @@ in D1. No editor service, third-party document upload, or browser database is us
 
 ## User workflow
 
+In a saved record's **Documents** tab, choose **Create file**, select Document
+(DOCX), Spreadsheet (XLSX), or Presentation (PPTX), and enter a name. **Create and
+attach** uploads a blank file through the existing attachment endpoint. After
+the upload succeeds, **Open in ZetaOffice** opens that attachment for editing.
+Edits saved in the editor create revisions of the same attachment.
+
+Attachment fields also offer **Create file** for formats allowed by their
+configured MIME policy. These files join the form's pending attachments and
+follow its normal upload/save flow; a new record must be saved before editing
+its attachments. Existing file-count, size and server permission checks apply.
+Blank templates are bundled static assets and contain no user data.
+
 Open an existing supported attachment with **Editar**. Edit the document and press
 **Guardar** (or Ctrl/Cmd+S). The native editor Save action also requests a Savia save.
 Every successful save creates a revision; **Historial de versiones** downloads old
@@ -19,6 +31,8 @@ A stale save returns a conflict and keeps the draft in the current tab. Download
 copy before reopening the newest version; there is no automatic merge. Temporary
 attachments must first be attached to a saved record. Read-only fields cannot be
 edited. Existing collection/domain permissions apply to all revision operations.
+
+Saved attachments can also be copied to OneDrive or sent through Outlook after a separate review and confirmation. See [Documents and deliveries](guides/document-delivery.md). These actions use the saved revision; save Office edits first.
 
 ## Local setup
 

@@ -207,6 +207,9 @@ export async function syncPlatformAdministratorMembership(
         role=excluded.role,
         is_active=1,
         updated_at=excluded.updated_at
+      WHERE identity_tenant_membership.tenant_id<>excluded.tenant_id
+         OR identity_tenant_membership.role<>excluded.role
+         OR identity_tenant_membership.is_active<>1
       RETURNING id,principal_id,tenant_id,role,is_active,created_at,updated_at`,
     )
     .bind(
@@ -218,6 +221,14 @@ export async function syncPlatformAdministratorMembership(
       now,
     )
     .first<MembershipRow>();
-  if (!saved) throw new Error("Unable to assign platform membership");
-  return document(saved);
+  const existing =
+    saved ??
+    (await d1
+      .prepare(
+        "SELECT id,principal_id,tenant_id,role,is_active,created_at,updated_at FROM identity_tenant_membership WHERE principal_id=?",
+      )
+      .bind(principalId)
+      .first<MembershipRow>());
+  if (!existing) throw new Error("Unable to assign platform membership");
+  return document(existing);
 }

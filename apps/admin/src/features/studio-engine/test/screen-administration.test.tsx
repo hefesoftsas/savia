@@ -38,7 +38,7 @@ it("lists active screens dynamically and opens the selected screen configuration
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={navigate}
       onVisibilityChange={onVisibilityChange}
       onMenuLayoutChange={onMenuLayoutChange}
@@ -63,7 +63,7 @@ it("filters active and inactive screens without persisting a menu change", () =>
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={vi.fn()}
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={onMenuLayoutChange}
@@ -90,7 +90,7 @@ it("persists an alphabetical active menu order while retaining sections", async 
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       menuLayout={{
         version: 1,
         blocks: [
@@ -127,7 +127,7 @@ it("confirms before removing an active screen from the menu", async () => {
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={navigate}
       onVisibilityChange={onVisibilityChange}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -157,7 +157,7 @@ it("recovers an inactive screen from the list", async () => {
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={vi.fn()}
       onVisibilityChange={onVisibilityChange}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -182,7 +182,7 @@ it("keeps tools scoped to the screen and hides endpoint configuration for local 
       objects={objects}
       selected="screen_1"
       detail
-      domainTools
+      tenantTools
       onNavigate={navigate}
       onVisibilityChange={onVisibilityChange}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -212,7 +212,7 @@ it("opens screen configuration when clicking the row body", () => {
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={navigate}
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -229,7 +229,7 @@ it("reorders active screens after drag and drop", async () => {
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={vi.fn()}
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={onMenuLayoutChange}
@@ -264,7 +264,7 @@ it("confirms permanent deletion for inactive screens", async () => {
       objects={objects}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={vi.fn()}
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -299,7 +299,7 @@ it("requires acknowledging record deletion when a screen has data", async () => 
       objects={withRecords}
       selected="screen_0"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={vi.fn()}
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -333,7 +333,7 @@ it("navigates to public link management when selected in screen configuration", 
   const navigate = vi.fn();
   setStudioRuntime({
     embedded: true,
-    domainId: "sales",
+    tenantId: "sales",
     publicFormTransport: vi.fn(),
   });
   render(
@@ -341,7 +341,7 @@ it("navigates to public link management when selected in screen configuration", 
       objects={objects}
       selected="screen_0"
       detail
-      domainTools
+      tenantTools
       onNavigate={navigate}
       onVisibilityChange={vi.fn()}
       onMenuLayoutChange={vi.fn()}

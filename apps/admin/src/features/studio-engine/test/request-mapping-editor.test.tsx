@@ -260,7 +260,7 @@ it("moves the saved-response explanation into a contextual tooltip", async () =>
     data: [
       {
         id: "run-1",
-        domainId: "platform",
+        tenantId: 0,
         pageName: "cotizador",
         actionId: "quote",
         label: "Cotizar",

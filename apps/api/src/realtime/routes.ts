@@ -4,10 +4,13 @@ import {
   requirePlatformAdministrator,
 } from "../auth/middleware";
 import { AuthenticationError } from "../auth/types";
+import { accessAuthority } from "../auth/access-context";
+import type { AccessScope } from "@savia/studio-shared/access-control";
 import type { RealtimeHubClient } from "./hub-client";
 import {
   PLATFORM_ROOM,
   isRealtimeRoom,
+  principalRoom,
   tenantRoom,
   ticketRequestSchema,
   ticketResponseSchema,
@@ -41,8 +44,16 @@ const ticketRoute = createRoute({
   },
 });
 
+const platformOnlyTopics = new Set(["users", "tenants"]);
+const principalOnlyTopics = new Set([
+  "notifications",
+  "personal-integrations",
+  "account",
+]);
+
 export function registerRealtimeRoutes(
   app: OpenAPIHono,
+  db: D1Database,
   hub?: RealtimeHubClient,
 ): void {
   app.use("/v1/realtime/*", async (c, next) => {
@@ -83,10 +94,42 @@ export function registerRealtimeRoutes(
         503,
       );
     }
-    const wantsPlatformTopics = input.topics.some(
-      (topic) => topic === "users" || topic === "tenants",
+    const wantsPlatformTopics = input.topics.some((topic) =>
+      platformOnlyTopics.has(topic),
     );
+    const wantsPrincipalTopics = input.topics.some((topic) =>
+      principalOnlyTopics.has(topic),
+    );
+    if (
+      Number(wantsPlatformTopics) +
+        Number(wantsPrincipalTopics) +
+        Number(input.tenantId !== undefined) >
+      1
+    ) {
+      return context.json(
+        {
+          error: {
+            code: "INVALID_TOPIC_SCOPE",
+            message:
+              "Platform, tenant and principal topics require separate tickets.",
+          },
+        },
+        400,
+      );
+    }
     if (wantsPlatformTopics) {
+      if (input.topics.some((topic) => !platformOnlyTopics.has(topic))) {
+        return context.json(
+          {
+            error: {
+              code: "INVALID_TOPIC_SCOPE",
+              message:
+                "Platform topics cannot be mixed with tenant or principal topics.",
+            },
+          },
+          400,
+        );
+      }
       requirePlatformAdministrator(actor);
       const issued = await hub.issue(PLATFORM_ROOM, {
         principalId: actor.principal.id,
@@ -104,16 +147,58 @@ export function registerRealtimeRoutes(
         201,
       );
     }
+    if (wantsPrincipalTopics) {
+      if (
+        input.topics.some((topic) => !principalOnlyTopics.has(topic)) ||
+        (input.principalId !== undefined &&
+          input.principalId !== actor.principal.id)
+      ) {
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "Principal topics are available only to the authenticated account.",
+        );
+      }
+      const room = principalRoom(actor.principal.id);
+      const issued = await hub.issue(room, {
+        principalId: actor.principal.id,
+        topics: input.topics,
+      });
+      return context.json(
+        {
+          data: {
+            room,
+            topics: input.topics,
+            ticket: issued.ticket,
+            expiresAt: issued.expiresAt,
+          },
+        },
+        201,
+      );
+    }
+    if (input.topics.some((topic) => principalOnlyTopics.has(topic))) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "Principal topics cannot be subscribed from a tenant room.",
+      );
+    }
     const tenantId = input.tenantId;
     if (tenantId === undefined) {
       return context.json(
         {
           error: {
             code: "COMMERCIAL_TENANT_REQUIRED",
-            message: "A tenantId is required for record topics.",
+            message: "A tenantId is required for tenant-scoped topics.",
           },
         },
         400,
+      );
+    }
+    if (input.topics.includes("access-control")) {
+      await accessAuthority(
+        db,
+        actor,
+        `tenant:${tenantId}` as AccessScope,
+        true,
       );
     }
     const isPlatformAdmin = actor.globalRoles.includes("platform_admin");
@@ -174,7 +259,13 @@ export function registerRealtimeRoutes(
     }
     const actor = actorFromContext(c);
     if (room === PLATFORM_ROOM) requirePlatformAdministrator(actor);
-    else if (
+    else if (room.startsWith("principal:")) {
+      if (room !== principalRoom(actor.principal.id))
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "Principal room is not authorized.",
+        );
+    } else if (
       !actor.globalRoles.includes("platform_admin") &&
       !actor.memberships.some(
         (m) => m.isActive && tenantRoom(m.tenantId ?? m.agencyId) === room,

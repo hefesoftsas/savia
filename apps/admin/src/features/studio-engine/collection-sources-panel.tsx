@@ -51,6 +51,11 @@ import {
 } from "lucide-react";
 import { FieldHelp } from "./field-help";
 
+const BusinessPanel = lazy(async () => {
+  const module = await import("./business-panel");
+  return { default: module.BusinessPanel };
+});
+
 const IntegrationsPanel = lazy(() => import("./integrations"));
 
 const sectionKeys = [
@@ -150,7 +155,10 @@ function useScopedRequest() {
   const t = useMessages(studioMessages);
   const [runtime] = useState(getStudioRuntime);
   return {
-    scope: runtime.domainId ?? runtime.apiBasePath,
+    scope:
+      runtime.tenantId === undefined
+        ? runtime.apiBasePath
+        : `tenant:${runtime.tenantId}`,
     request: async <T,>(
       path: string,
       method = "GET",
@@ -1851,6 +1859,7 @@ export default function CollectionSourcesPanel({
               </div>
             }
           >
+            <BusinessPanel onInstalled={() => client.invalidateQueries()} />
             <IntegrationsPanel
               onImported={
                 onImported ??

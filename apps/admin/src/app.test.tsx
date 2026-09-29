@@ -75,13 +75,13 @@ function createServices(
       disconnect: vi.fn(),
     },
     assistantConfiguration: {
-      summary: vi.fn().mockResolvedValue({ global: null, agencies: [] }),
+      summary: vi.fn().mockResolvedValue({ global: null, tenants: [] }),
       models: vi.fn().mockResolvedValue([]),
-      activeAgency: vi.fn().mockResolvedValue({ agencies: [] }),
+      activeTenant: vi.fn().mockResolvedValue({ tenants: [] }),
       saveGlobal: vi.fn(),
-      saveAgencyOverride: vi.fn(),
-      clearAgencyOverride: vi.fn(),
-      setActiveAgency: vi.fn(),
+      saveTenantOverride: vi.fn(),
+      clearTenantOverride: vi.fn(),
+      setActiveTenant: vi.fn(),
     },
     apiClient: {
       get: vi.fn().mockResolvedValue({ data: [] }),
@@ -187,13 +187,13 @@ describe("App", () => {
     expect(services.authSession.getAccessToken).not.toHaveBeenCalled();
   });
 
-  it("shows the persisted active-agency selector when the user can operate across agencies", async () => {
+  it("shows the persisted active-tenant selector when the user can operate across tenants", async () => {
     const services = createServices();
-    services.assistantConfiguration.activeAgency = vi.fn().mockResolvedValue({
-      activeAgencyId: 101,
-      agencies: [
-        { id: 101, name: "Agencia Norte" },
-        { id: 202, name: "Agencia Sur" },
+    services.assistantConfiguration.activeTenant = vi.fn().mockResolvedValue({
+      activeTenantId: 101,
+      tenants: [
+        { id: 101, name: "Tenant Norte" },
+        { id: 202, name: "Tenant Sur" },
       ],
     });
     const user = userEvent.setup();
@@ -202,9 +202,7 @@ describe("App", () => {
     await screen.findByRole("heading", { name: "Integraciones" });
     await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
 
-    expect(await screen.findByLabelText("Organización activa")).toHaveValue(
-      "101",
-    );
+    expect(await screen.findByLabelText("Tenant activo")).toHaveValue("101");
   });
 
   it("keeps the signed-in account menu in the sidebar", async () => {
@@ -292,9 +290,7 @@ describe("App", () => {
     const services = createServices();
     services.authProvider.canAccess = vi.fn(async () => false);
     render(<App services={services} />);
-    expect(
-      await screen.findByText("Acceso de administración"),
-    ).toBeVisible();
+    expect(await screen.findByText("Acceso de administración")).toBeVisible();
     expect(
       await screen.findByText(/Tu cuenta no tiene acceso al editor/),
     ).toHaveTextContent("administrador de tu tenant");
@@ -375,8 +371,8 @@ describe("App", () => {
   it("opens the unified service credentials screen from its protected route", async () => {
     window.location.hash = "#/service-credentials";
     const services = createServices();
-    services.assistantConfiguration.activeAgency = vi.fn().mockResolvedValue({
-      agencies: [{ id: 101, name: "Agencia Norte" }],
+    services.assistantConfiguration.activeTenant = vi.fn().mockResolvedValue({
+      tenants: [{ id: 101, name: "Tenant Norte" }],
     });
 
     render(<App services={services} />);

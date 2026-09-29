@@ -11,11 +11,11 @@ import type {
 import DynamicForm, { type DynamicFormProps } from "./dynamic-form";
 import { api } from "./api";
 import { getStudioRuntime } from "./runtime";
-import { isAgencyApiBasePath } from "@/features/studio/studio-navigation";
 import type { RelatedRecordChanges } from "@savia/studio-shared/related-records";
 import { relatedRows } from "./related-record-editor";
 import { createRelatedRecordDraft } from "./related-record-drafts";
 import { Button } from "@/components/ui/button";
+import { isTenantApiBasePath } from "@/features/studio/studio-navigation";
 
 type Selections = Record<string, string[]>;
 type DraftSnapshot = {
@@ -30,10 +30,7 @@ export default function CollectionRecordForm(props: DynamicFormProps) {
   const runtime = getStudioRuntime();
   if (isDatabaseKind(props.object.config.studio?.collection?.kind))
     return <DatabaseRecordForm {...props} />;
-  if (
-    !runtime.apiBasePath?.startsWith("/v1/data-domains/") &&
-    !isAgencyApiBasePath(runtime.apiBasePath)
-  )
+  if (!isTenantApiBasePath(runtime.apiBasePath))
     return <DynamicForm {...props} />;
   return (
     <ManualRelationsForm
@@ -173,7 +170,7 @@ function ManualRelationsForm(props: DynamicFormProps) {
   const persisted = useRef<Selections>({});
   const savedRecord = useRef<StudioRecord | undefined>(undefined);
   const definitions = useQuery({
-    queryKey: ["collection-relations", runtime.apiBasePath, runtime.domainId],
+    queryKey: ["collection-relations", runtime.apiBasePath, runtime.tenantId],
     queryFn: () => api<{ data: RelationDefinition[] }>("/collection-relations"),
   });
   const bindings = useMemo(

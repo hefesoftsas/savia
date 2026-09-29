@@ -35,6 +35,8 @@ import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { isLocalPublicOrigin } from "./public-forms/captcha";
 import { createShlinkShortener } from "./public-forms/shortener";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
+import { publishRealtime } from "./realtime/hub-client";
+import { tenantRoom } from "./realtime/protocol";
 export { oauthResourceAuthenticator } from "./auth/runtime";
 export {
   crmClientFromEnvironment,
@@ -212,10 +214,21 @@ export function assistantRuntimeFromEnvironment(
 
 export async function runScheduledCrmSync(
   environment: RuntimeEnvironment,
+  realtime?: import("./realtime/hub-client").RealtimeHubClient,
 ): Promise<{ processed: number }> {
   return processCrmSyncJobs(
     environment.DB,
     crmRoutesFromEnvironment(environment),
+    {
+      onJobTransition(tenantId, jobId) {
+        publishRealtime(realtime, tenantRoom(tenantId), {
+          topic: "integrations",
+          type: "updated",
+          collection: "runs",
+          id: jobId,
+        });
+      },
+    },
   );
 }
 
@@ -323,14 +336,16 @@ const runtime = {
     environment: RuntimeEnvironment,
     overrides: RuntimeOverrides = {},
   ): Promise<void> {
+    const realtime = createRealtimeHubClient(environment.REALTIME_HUB);
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       const results = await Promise.allSettled([
         runScheduledWorkflows(
           environment.DB,
           studioIntegrationKeyFromEnvironment(environment),
           overrides.workflowFetch,
+          realtime,
         ),
-        runScheduledNotifications(environment.DB),
+        runScheduledNotifications(environment.DB, realtime),
         runScheduledAuditRetention(environment.DB),
       ]);
       const failures = results.filter((result) => result.status === "rejected");
@@ -342,13 +357,14 @@ const runtime = {
       return;
     }
     const results = await Promise.allSettled([
-      runScheduledCrmSync(environment),
+      runScheduledCrmSync(environment, realtime),
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),
         overrides.workflowFetch,
+        realtime,
       ),
-      runScheduledNotifications(environment.DB),
+      runScheduledNotifications(environment.DB, realtime),
       runScheduledAuditRetention(environment.DB),
       maintainRecordHistory(environment.DB).then((report) => {
         console.info(

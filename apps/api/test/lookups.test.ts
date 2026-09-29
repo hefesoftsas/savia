@@ -32,7 +32,7 @@ function appFor(auth: Authenticator, service?: SaviaRequestService) {
 }
 
 describe("DANE city lookups endpoint", () => {
-  it("serves DANE lookups through the selected data domain", async () => {
+  it("serves DANE lookups through the selected tenant", async () => {
     const fetcher = vi.fn(async () =>
       Response.json({
         status: "matched",
@@ -45,9 +45,7 @@ describe("DANE city lookups endpoint", () => {
       saviaRequestService: { fetch: fetcher },
     });
 
-    const response = await app.request(
-      "/v1/data-domains/platform/api/lookups/dane?city=Bo",
-    );
+    const response = await app.request("/v1/studio/0/api/lookups/dane?city=Bo");
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({

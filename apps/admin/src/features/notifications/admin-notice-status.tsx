@@ -1,9 +1,7 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useTranslate } from "ra-core";
-import { useQuery } from "@tanstack/react-query";
-import {
-  notificationClient,
-  type NotificationClient,
-} from "./client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { notificationClient, type NotificationClient } from "./client";
 
 export function AdminNoticeStatus({
   eventId,
@@ -14,6 +12,14 @@ export function AdminNoticeStatus({
 }) {
   const translate = useTranslate();
   const t = (key: string) => translate(`savia.notificationInbox.${key}`);
+  const cache = useQueryClient();
+  useRealtimeRefresh({
+    topics: ["notifications"],
+    refresh: () =>
+      cache.invalidateQueries({
+        queryKey: ["notifications", "admin-status", eventId],
+      }),
+  });
   const status = useQuery({
     queryKey: ["notifications", "admin-status", eventId],
     queryFn: () => client.adminStatus(eventId),
@@ -21,7 +27,8 @@ export function AdminNoticeStatus({
   });
 
   if (status.isPending) return <p>{t("loading")}</p>;
-  if (status.isError || !status.data) return <p role="alert">{t("loadError")}</p>;
+  if (status.isError || !status.data)
+    return <p role="alert">{t("loadError")}</p>;
   return (
     <dl className="grid grid-cols-2 gap-1 text-sm">
       <dt>{t("statusState")}</dt>

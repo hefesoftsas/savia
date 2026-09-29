@@ -103,7 +103,7 @@ const linkSchema = z.object({
 type PublicLink = z.infer<typeof linkSchema>;
 
 type Props = {
-  domainId: string;
+  tenantId: number;
   objectName: string;
   kind: "record" | "quote";
   request: (path: string, init?: RequestInit) => Promise<Response>;
@@ -135,7 +135,7 @@ function setChecked(
 
 /** Protected controls; the caller supplies the existing authenticated transport. */
 export function PublicLinkManager({
-  domainId,
+  tenantId,
   objectName,
   kind,
   request,
@@ -180,7 +180,7 @@ export function PublicLinkManager({
     setConfirmed(false);
     setConfirming(null);
     void request(
-      `/v1/public-forms?${new URLSearchParams({ domainId, objectName })}`,
+      `/v1/public-forms?${new URLSearchParams({ tenantId: String(tenantId), objectName })}`,
     )
       .then(async (response) => {
         if (!response.ok) throw new Error(managementError(response.status));
@@ -214,7 +214,7 @@ export function PublicLinkManager({
     return () => {
       generation.current++;
     };
-  }, [domainId, objectName, request]);
+  }, [tenantId, objectName, request]);
 
   function setPresetExpiration(hours: number) {
     if (hours === 0) {
@@ -241,7 +241,7 @@ export function PublicLinkManager({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          domainId,
+          tenantId,
           objectName,
           kind,
           dailyLimit,

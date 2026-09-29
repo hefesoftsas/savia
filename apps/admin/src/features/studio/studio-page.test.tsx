@@ -21,13 +21,6 @@ vi.mock("@/features/studio-engine/app", () => ({
     return <p>Espacio CRM {search}</p>;
   },
 }));
-vi.mock("@/features/studio-engine/business-panel", () => ({
-  BusinessPanel: () => (
-    <details>
-      <summary>API del dominio</summary>
-    </details>
-  ),
-}));
 vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children }: { children: React.ReactNode }) => (
@@ -45,27 +38,23 @@ afterEach(() => {
 });
 
 const platform = {
-  id: "platform",
+  id: "tenant:0",
+  tenantId: 0,
   label: "Plataforma",
   kind: "platform",
-  apiBasePath: "/v1/data-domains/platform",
+  apiBasePath: "/v1/studio/0",
 };
-const agency = {
-  id: "agency:101",
-  agencyId: 101,
+const tenant = {
+  id: "tenant:101",
+  tenantId: 101,
   label: "Norte",
-  kind: "agency",
-  apiBasePath: "/v1/dynamic-crm/101",
+  kind: "tenant",
+  apiBasePath: "/v1/studio/101",
 };
-function servicesFor(domains: unknown[], admin = false): AppServices {
+function servicesFor(tenants: unknown[]): AppServices {
   return {
-    authSession: {
-      getPermissions: async () => ({
-        canManageIdentity: admin,
-        memberships: [],
-      }),
-    },
-    apiClient: { get: vi.fn(async () => ({ data: domains })), post: vi.fn() },
+    authSession: { getIdentity: async () => ({ id: "user-1" }) },
+    apiClient: { get: vi.fn(async () => ({ data: tenants })) },
   } as unknown as AppServices;
 }
 function mount(services: AppServices, route = "/studio") {
@@ -76,151 +65,50 @@ function mount(services: AppServices, route = "/studio") {
     </MemoryRouter>,
   );
 }
-describe("Studio domain integration", () => {
-  it("opens the platform designer without an agency", async () => {
+describe("Studio tenant integration", () => {
+  it("selects reserved platform tenant zero and uses its Studio route", async () => {
     mount(
-      servicesFor([platform], true),
-      "/studio?domain=platform&view=designer&object=agencias",
+      servicesFor([platform, tenant]),
+      "/studio?tenantId=0&view=designer&object=agencias",
     );
     expect(await screen.findByText(/Espacio CRM/)).toHaveTextContent(
-      "domain=platform",
+      "tenantId=0",
     );
     expect(getStudioRuntime().apiBasePath).toBe(platform.apiBasePath);
-    expect(getStudioRuntime().businessSetupEnabled).toBe(false);
-    expect(
-      screen.getByRole("button", { name: "Dominio: Plataforma" }),
-    ).toBeVisible();
+    expect(getStudioRuntime().tenantId).toBe(0);
+    expect(screen.getByLabelText("Tenant")).toHaveValue("0");
   });
-  it("separates tenant selection from advanced domains", async () => {
+
+  it("selects the requested tenant and clears an old domain query parameter", async () => {
     mount(
-      servicesFor([platform, agency], true),
-      "/studio?domain=platform&view=admin",
-    );
-    await screen.findByText(/Espacio CRM/);
-    expect(screen.getByLabelText("Tenant")).toHaveValue("");
-    expect(screen.getByLabelText("Dominio de datos")).toHaveValue("platform");
-    expect(
-      screen.getByLabelText("Tenant").querySelector('option[value="platform"]'),
-    ).toBeNull();
-    expect(
-      screen
-        .getByLabelText("Dominio de datos")
-        .querySelector('option[value="agency:101"]'),
-    ).toBeNull();
-    expect(screen.getByRole("button", { name: "Crear dominio" })).toBeVisible();
-  });
-  it("converts legacy agency links to a domain while preserving the requested tool", async () => {
-    mount(
-      servicesFor([agency]),
-      "/studio?agencyId=101&object=clientes&view=designer",
+      servicesFor([platform, tenant]),
+      "/studio?tenantId=101&domain=old-domain&object=clientes",
     );
     expect(await screen.findByText(/Espacio CRM/)).toHaveTextContent(
-      "domain=agency%3A101",
+      "tenantId=101",
     );
-    expect(screen.getByText(/Espacio CRM/)).toHaveTextContent("view=designer");
-    expect(getStudioRuntime().apiBasePath).toBe(agency.apiBasePath);
+    expect(getStudioRuntime().apiBasePath).toBe(tenant.apiBasePath);
+    expect(getStudioRuntime().tenantId).toBe(101);
     expect(
-      screen.queryByRole("button", { name: "Crear dominio" }),
-    ).not.toBeInTheDocument();
+      screen.queryByRole("button", { name: /Crear dominio|Create domain/ }),
+    ).toBeNull();
+    expect(screen.queryByLabelText(/Dominio de datos|Data domain/)).toBeNull();
   });
-  it("does not fall back to a different domain for an unauthorized URL", async () => {
-    mount(servicesFor([agency]), "/studio?domain=platform");
+
+  it("does not fall back to another tenant for an unauthorized tenant id", async () => {
+    mount(servicesFor([tenant]), "/studio?tenantId=0");
     expect(
       (await screen.findAllByText(/Selecciona un tenant para administrar/))[0],
     ).toBeVisible();
     expect(screen.queryByText(/Espacio CRM/)).not.toBeInTheDocument();
   });
-  it("clears the previous domain object when switching domains", async () => {
-    mount(
-      servicesFor([platform, agency], true),
-      "/studio?domain=platform&view=admin",
-    );
-    await screen.findByText(/Espacio CRM/);
-    const user = userEvent.setup();
-    await user.selectOptions(screen.getByLabelText("Tenant"), agency.id);
-    expect(screen.getByText(/Espacio CRM/)).not.toHaveTextContent(
-      "object=agencias",
-    );
-    expect(getStudioRuntime().apiBasePath).toBe(agency.apiBasePath);
+
+  it("opens a single authorized tenant without requiring a query parameter", async () => {
+    mount(servicesFor([tenant]));
+    expect(await screen.findByText(/Espacio CRM/)).toBeVisible();
+    expect(getStudioRuntime().tenantId).toBe(101);
   });
-  it("creates a domain, reloads the catalog and opens its object designer", async () => {
-    const custom = {
-      id: "operaciones",
-      label: "Operaciones",
-      kind: "custom",
-      apiBasePath: "/v1/data-domains/operaciones",
-    };
-    const services = servicesFor([platform], true);
-    vi.mocked(services.apiClient.get)
-      .mockResolvedValueOnce({ data: [platform] })
-      .mockResolvedValue({ data: [platform, custom] });
-    vi.mocked(services.apiClient.post).mockResolvedValue({ data: custom });
-    mount(services);
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", {
-        name: "Administración avanzada",
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Crear dominio" }));
-    await user.type(screen.getByLabelText("Nombre del dominio"), "Operaciones");
-    await user.type(screen.getByLabelText("Identificador"), "operaciones");
-    await user.click(screen.getByRole("button", { name: "Guardar dominio" }));
-    await waitFor(() =>
-      expect(screen.getByText(/Espacio CRM/)).toHaveTextContent(
-        "domain=operaciones",
-      ),
-    );
-    expect(services.apiClient.post).toHaveBeenCalledWith("/v1/data-domains", {
-      name: "operaciones",
-      label: "Operaciones",
-    });
-    expect(getStudioRuntime().apiBasePath).toBe(custom.apiBasePath);
-  });
-  it("refreshes the domain selector when an agency is created in the platform designer", async () => {
-    const services = servicesFor([platform], true);
-    vi.mocked(services.apiClient.get)
-      .mockResolvedValueOnce({ data: [platform] })
-      .mockResolvedValue({ data: [platform, agency] });
-    mount(services, "/studio?domain=platform&view=admin");
-    await screen.findByText(/Espacio CRM/);
-    expect(
-      screen.queryByRole("option", { name: "Norte" }),
-    ).not.toBeInTheDocument();
-    window.dispatchEvent(new Event("savia-studio-domains-changed"));
-    expect(await screen.findByRole("option", { name: "Norte" })).toBeVisible();
-    expect(screen.getByLabelText("Dominio de datos")).toHaveValue("platform");
-  });
-  it("ignores repeated domain submits while creation is in flight", async () => {
-    const services = servicesFor([platform], true);
-    vi.mocked(services.apiClient.post).mockImplementation(
-      () => new Promise(() => {}),
-    );
-    mount(services);
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", {
-        name: "Administración avanzada",
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Crear dominio" }));
-    await user.type(screen.getByLabelText("Nombre del dominio"), "Operaciones");
-    await user.type(screen.getByLabelText("Identificador"), "operaciones");
-    const form = screen
-      .getByRole("button", { name: "Guardar dominio" })
-      .closest("form")!;
-    fireEvent.submit(form);
-    fireEvent.submit(form);
-    expect(services.apiClient.post).toHaveBeenCalledTimes(1);
-  });
-  it("surfaces catalog errors", async () => {
-    const services = servicesFor([]);
-    vi.mocked(services.apiClient.get).mockRejectedValue(
-      new Error("Sin conexión"),
-    );
-    mount(services);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Sin conexión");
-  });
+
   it("closes the local workspace when leaving Studio", async () => {
     const close = vi.fn();
     const fakeStore = {
@@ -234,14 +122,7 @@ describe("Studio domain integration", () => {
       },
     };
     const services = {
-      ...servicesFor([platform], true),
-      authSession: {
-        getPermissions: async () => ({
-          canManageIdentity: true,
-          memberships: [],
-        }),
-        getIdentity: async () => ({ id: "user-1" }),
-      },
+      ...servicesFor([platform]),
       localData: {
         open: vi.fn(async () => ({ close, store: fakeStore })),
         cachedMetadata: vi.fn(async (_name: string, load: () => unknown) =>
@@ -249,7 +130,7 @@ describe("Studio domain integration", () => {
         ),
       },
     } as unknown as AppServices;
-    const mounted = mount(services, "/studio?domain=platform&view=records");
+    const mounted = mount(services, "/studio?tenantId=0&view=records");
     await screen.findByText(/Espacio CRM/);
     expect(services.localData.open).toHaveBeenCalledWith(platform.apiBasePath);
     mounted.unmount();

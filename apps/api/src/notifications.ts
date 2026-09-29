@@ -7,6 +7,9 @@ import {
 } from "@savia/studio-shared/notifications";
 import { processNotifications } from "@savia/studio-server/notifications/dispatcher";
 import { maintainNotifications } from "@savia/studio-server/notifications/maintenance";
+import type { RealtimeHubClient } from "./realtime/hub-client";
+import { publishRealtime } from "./realtime/hub-client";
+import { principalRoom } from "./realtime/protocol";
 import { findPrincipal } from "./auth/identity-repository";
 import type { AppActor } from "./auth/types";
 import { loadActor } from "./auth/identity-repository";
@@ -39,7 +42,7 @@ async function actorFor(
 }
 
 function agencyId(tenant: string): number | null {
-  const match = /^agency:(\d+)$/.exec(tenant);
+  const match = /^tenant:(\d+)$/.exec(tenant);
   return match ? Number(match[1]) : null;
 }
 
@@ -149,6 +152,7 @@ export function createNotificationPolicy(db: D1Database): NotificationPolicy {
 
 export async function runScheduledNotifications(
   db: D1Database,
+  realtime?: RealtimeHubClient,
 ): Promise<DispatchReport> {
   const startedAt = Date.now();
   const report = await processNotifications(db, createNotificationPolicy(db), {
@@ -160,6 +164,22 @@ export async function runScheduledNotifications(
     maxRecipientAttempts: notificationDefaults.maxRecipientAttempts,
     softBudgetMs: notificationDefaults.softBudgetMs,
     leaseMs: notificationDefaults.leaseMs,
+  }, {
+    onDelivery(principalId) {
+      publishRealtime(realtime, principalRoom(principalId), {
+        topic: "notifications",
+        type: "created",
+        collection: "inbox",
+      });
+    },
+    onEventStatus(principalId, eventId) {
+      publishRealtime(realtime, principalRoom(principalId), {
+        topic: "notifications",
+        type: "updated",
+        collection: "admin-status",
+        id: eventId,
+      });
+    },
   });
   const backlog = await db
     .prepare(

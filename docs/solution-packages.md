@@ -129,9 +129,9 @@ El catálogo compilado contiene las extensiones disponibles para esa versión de
 Savia. La API permite consultar su estado, instalar una extensión incluida en
 el catálogo y activarla o desactivarla por tenant:
 
-- `GET /v1/data-domains/:domainId/api/extensions`
-- `POST /v1/data-domains/:domainId/api/extensions/:id/install`
-- `PATCH /v1/data-domains/:domainId/api/extensions/:id` con `{ "enabled": true | false }`
+- `GET /v1/studio/:tenantId/api/extensions`
+- `POST /v1/studio/:tenantId/api/extensions/:id/install`
+- `PATCH /v1/studio/:tenantId/api/extensions/:id` con `{ "enabled": true | false }`
 
 El host resuelve el tenant desde la ruta autorizada; el manifiesto no puede
 seleccionar otro tenant. Una dependencia de `requires` solo se satisface si la
@@ -326,5 +326,5 @@ La prueba de integración verifica que el catálogo y el JSON descargable coinci
 D1 antes de servir la nueva versión del API.
 
 Las rutas se ofrecen bajo `/v1/studio/:tenantId/api/solutions` (alias heredado `/v1/dynamic-crm/...`) o
-`/v1/data-domains/:domainId/api/solutions`: GET catálogo, POST `/preview`,
+`/v1/studio/:tenantId/api/solutions`: GET catálogo, POST `/preview`,
 POST `/install`, GET `/:id/export` y PATCH `/:id` con `{ "enabled": false }`.

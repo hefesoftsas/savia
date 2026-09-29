@@ -10,7 +10,7 @@ const saviaEnglish = {
       items: {
         "domain-sources": "Data sources",
         "domain-operations": "Operations",
-        "domain-history": "Domain history",
+        "domain-history": "Tenant history",
         "domain-packages": "Packages and extensions",
         "virtual-employees": "AI employees",
         "tenant-branding": "Workspace identity",
@@ -286,7 +286,7 @@ const saviaEnglish = {
         commercialTenant: "Commercial tenant",
         commercialTenantRemove:
           "Commercial tenant after removing global access",
-        tenantRole: "Role in tenant",
+        tenantRole: "Base role in tenant",
         tenantRoleRemove: "Role after removing global access",
         mfa: "Multi-factor authentication",
         sessions: "Sessions",
@@ -535,7 +535,7 @@ const saviaSpanish = {
       items: {
         "domain-sources": "Fuentes de datos",
         "domain-operations": "Operaciones",
-        "domain-history": "Historial del dominio",
+        "domain-history": "Historial del tenant",
         "domain-packages": "Paquetes y extensiones",
         "virtual-employees": "Empleados IA",
         "tenant-branding": "Identidad del espacio",
@@ -813,7 +813,7 @@ const saviaSpanish = {
           "Al retirarlo, selecciona abajo el tenant comercial y el rol que conservará el usuario.",
         commercialTenant: "Tenant comercial",
         commercialTenantRemove: "Tenant comercial al retirar acceso global",
-        tenantRole: "Rol en el tenant",
+        tenantRole: "Rol base en el tenant",
         tenantRoleRemove: "Rol al retirar acceso global",
         mfa: "Autenticación multifactor",
         sessions: "Sesiones",
@@ -1063,7 +1063,7 @@ const saviaPortuguese = {
       items: {
         "domain-sources": "Fontes de dados",
         "domain-operations": "Operações",
-        "domain-history": "Histórico do domínio",
+        "domain-history": "Histórico do tenant",
         "domain-packages": "Pacotes e extensões",
         "virtual-employees": "Funcionários IA",
         "tenant-branding": "Identidade do espaço",
@@ -1340,7 +1340,7 @@ const saviaPortuguese = {
           "Ao remover, selecione abaixo o tenant comercial e a função que o usuário manterá.",
         commercialTenant: "Tenant comercial",
         commercialTenantRemove: "Tenant comercial ao remover acesso global",
-        tenantRole: "Função no tenant",
+        tenantRole: "Papel base no tenant",
         tenantRoleRemove: "Função ao remover acesso global",
         mfa: "Autenticação multifator",
         sessions: "Sessões",

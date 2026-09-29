@@ -5,10 +5,11 @@ import type {
 
 export type { MyDayWidget, MyDayWidgetsLayout };
 
-export type WidgetDomain = {
+export type WidgetTenant = {
   id: string;
+  tenantId: number;
   label: string;
-  kind: "platform" | "custom" | "agency" | "tenant";
+  kind: "platform" | "tenant";
   apiBasePath: string;
 };
 

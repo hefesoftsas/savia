@@ -1,3 +1,8 @@
+import {
+  useRealtimeRefresh,
+  RemoteChangesNotice,
+} from "@/realtime/use-realtime-refresh";
+import { roleDisplayLabel, type VisibleAccessRole } from "./system-role";
 import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { EffectivePermissions } from "./effective-permissions";
@@ -30,6 +35,17 @@ export function AssignmentEditor({
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const online = useOnlineStatus();
+  const [dirty, setDirty] = useState(false);
+  const [remoteVersion, setRemoteVersion] = useState(0);
+  const remote = useRealtimeRefresh({
+    topics: ["access-control"],
+    tenantId: Number(scope.slice(7)),
+    blocked: dirty || busy,
+    refresh: () => {
+      setDirty(false);
+      setRemoteVersion((value) => value + 1);
+    },
+  });
   useEffect(() => {
     let active = true;
     client
@@ -43,7 +59,7 @@ export function AssignmentEditor({
     return () => {
       active = false;
     };
-  }, [scope, client]);
+  }, [scope, client, remoteVersion]);
   useEffect(() => {
     let active = true;
     setRevision(undefined);
@@ -64,9 +80,10 @@ export function AssignmentEditor({
     return () => {
       active = false;
     };
-  }, [scope, principal, client]);
+  }, [scope, principal, client, remoteVersion]);
   return (
     <section className="space-y-5">
+      <RemoteChangesNotice {...remote} />
       <div>
         <h2 className="text-lg font-semibold">{t("Members")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -94,7 +111,10 @@ export function AssignmentEditor({
         <select
           className="h-10 rounded-md border bg-background px-3"
           value={principal}
-          onChange={(e) => setPrincipal(e.target.value)}
+          onChange={(e) => {
+            setDirty(false);
+            setPrincipal(e.target.value);
+          }}
         >
           <option value="">{t("Select a user")}</option>
           {members.map((m) => (
@@ -104,6 +124,30 @@ export function AssignmentEditor({
           ))}
         </select>
       </label>
+      {principal && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium">{t("System roles")}</h3>
+          {(roles as VisibleAccessRole[])
+            .filter(
+              (role) =>
+                role.protected &&
+                role.assignedUsers?.some((user) => user.id === principal),
+            )
+            .map((role) => (
+              <p key={role.id} className="text-sm">
+                {roleDisplayLabel(role, t)}{" "}
+                <span className="text-muted-foreground">
+                  · {t("Read only")}
+                </span>
+              </p>
+            ))}
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "System roles are inherited from identity or tenant membership. Custom assignments below do not remove that access.",
+            )}
+          </p>
+        </section>
+      )}
       {principal && (
         <fieldset
           disabled={!online || busy || revision === undefined}
@@ -120,13 +164,14 @@ export function AssignmentEditor({
                   type="checkbox"
                   disabled={!r.enabled && !selection.includes(r.id)}
                   checked={selection.includes(r.id)}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setDirty(true);
                     setSelection(
                       e.target.checked
                         ? [...selection, r.id]
                         : selection.filter((id) => id !== r.id),
-                    )
-                  }
+                    );
+                  }}
                 />
                 {r.label}
                 {!r.enabled && t(" (disabled)")}
@@ -144,6 +189,7 @@ export function AssignmentEditor({
                   roleIds: selection,
                   expectedRevision: revision,
                 });
+                setDirty(false);
                 setRevision(result.revision);
                 setMessage("Roles saved.");
                 onSaved();

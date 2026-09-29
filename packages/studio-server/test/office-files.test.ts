@@ -2,6 +2,7 @@ import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { readFileSync, readdirSync } from "node:fs";
 import { createStudioApp } from "../src/index";
+import { OFFICE_FORMATS } from "@savia/studio-shared/office";
 import type { Env } from "../src/context";
 let platform: Awaited<ReturnType<typeof getPlatformProxy<Env["Bindings"]>>>;
 const app = createStudioApp("agency:1", { principalId: "editor-1" });
@@ -267,3 +268,47 @@ describe("Office revisions on real D1 and R2", () => {
     }
   });
 });
+
+it.each(["docx", "xlsx", "pptx"] as const)(
+  "persists a new blank %s attachment and its next Office revision",
+  async (format) => {
+    const content = readFileSync(
+      new URL(
+        `../../../apps/admin/public/office/templates/blank.${format}`,
+        import.meta.url,
+      ),
+    );
+    const filename = `New file.${format}`;
+    const mime = OFFICE_FORMATS[format].mime;
+    const form = new FormData();
+    form.set("file", new File([content], filename, { type: mime }));
+    const uploaded = await req("/files/contracts/record-1", {
+      method: "POST",
+      body: form,
+    });
+    expect(uploaded.status).toBe(201);
+    const attachment = ((await uploaded.json()) as any).data;
+    const metadata = await req("/file/" + attachment.id + "/office");
+    expect(metadata.status).toBe(200);
+    expect(((await metadata.json()) as any).data).toMatchObject({
+      name: filename,
+      version: 1,
+      readOnly: false,
+    });
+    const revision = new FormData();
+    revision.set("version", "1");
+    revision.set("file", new File([content], filename, { type: mime }));
+    const saved = await req("/file/" + attachment.id + "/revisions", {
+      method: "POST",
+      body: revision,
+    });
+    expect(saved.status, await saved.clone().text()).toBe(201);
+    expect(((await saved.json()) as any).data.version).toBe(2);
+    const listed = (
+      (await (await req("/files/contracts/record-1")).json()) as any
+    ).data;
+    expect(listed.find((file: any) => file.id === attachment.id)).toMatchObject(
+      { name: filename, version: 2 },
+    );
+  },
+);

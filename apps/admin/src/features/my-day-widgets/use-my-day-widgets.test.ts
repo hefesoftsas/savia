@@ -19,7 +19,7 @@ describe("useMyDayWidgets", () => {
     await act(async () => {
       ok = await result.current.add({
         id: "w_1",
-        apiBasePath: "/v1/data-domains/platform",
+        apiBasePath: "/v1/studio/0",
         collection: "polizas",
         kind: "summary",
       } as never);
@@ -35,7 +35,7 @@ describe("useMyDayWidgets", () => {
     const preferences = createPreferences([
       {
         id: "w_a",
-        apiBasePath: "/v1/data-domains/platform",
+        apiBasePath: "/v1/studio/0",
         collection: "polizas",
         kind: "items",
       },
@@ -45,7 +45,7 @@ describe("useMyDayWidgets", () => {
       },
       {
         id: "w_b",
-        apiBasePath: "/v1/data-domains/platform",
+        apiBasePath: "/v1/studio/0",
         collection: "polizas",
         kind: "summary",
       },

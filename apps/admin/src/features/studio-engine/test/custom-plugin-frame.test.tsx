@@ -81,10 +81,10 @@ it("allows a plugin to download a generated PDF while keeping its origin isolate
   expect(permissions).not.toContain("allow-same-origin");
 });
 
-it("loads the plugin shell through the selected data domain", () => {
+it("loads the plugin shell through the selected tenant", () => {
   setStudioRuntime({
     embedded: false,
-    apiBasePath: "/v1/data-domains/platform",
+    apiBasePath: "/v1/studio/0",
   });
   render(
     <CustomPluginFrame
@@ -95,7 +95,7 @@ it("loads the plugin shell through the selected data domain", () => {
   );
   const frame = screen.getByTitle("Cotizador por pasos") as HTMLIFrameElement;
   expect(new URL(frame.src).pathname).toBe(
-    "/v1/data-domains/platform/api/plugin-store/insurance.quotes/shell",
+    "/v1/studio/0/api/plugin-store/insurance.quotes/shell",
   );
 });
 

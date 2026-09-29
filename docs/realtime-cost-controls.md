@@ -1,8 +1,8 @@
 # Realtime cost controls
 
-Owner: Savia platform team. Reviewed: 2026-09-18.
+Owner: Savia platform team. Reviewed: 2026-09-28.
 
-`RealtimeHub` uses one SQLite Durable Object per room (platform or tenant).
+`RealtimeHub` uses one SQLite Durable Object per room (platform, tenant or authenticated principal).
 Sockets use the hibernation API; plain `ping`/`pong` is handled by the runtime
 without invoking JavaScript. All other client messages close the socket with
 1008 without JSON parsing. This is a push-only protocol.
@@ -29,6 +29,14 @@ alarm; abandoned expired tickets remain until later traffic, bounded by the new
 pending-ticket cap. Legacy tickets retain their original TTL during rollout.
 Existing sockets keep working; sockets predating principal tags count toward the
 room cap but cannot be included in per-principal counts until they reconnect.
+
+Within each browser tab, components share one socket per API client and room,
+with the union of their topics. Mount/unmount bursts are batched before obtaining
+a ticket. Changing the topic union replaces that room's socket; clearing the
+authenticated session closes all of its sockets and cancels pending connections.
+Different tenant rooms and personal rooms never share tickets. Reconnect
+acknowledgements trigger scoped data refresh; ordinary hint bursts are coalesced
+for 200 ms. See [coverage and boundaries](guides/realtime-coverage.md).
 
 The browser retries with exponential backoff and jitter (1–2 seconds initially,
 60–120 seconds at the cap). Opening a socket does not reset backoff; a connection

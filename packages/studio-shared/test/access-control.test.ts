@@ -4,9 +4,9 @@ import {
   accessPredicateSchema,
   accessScopeSchema,
 } from "../src/access-control";
-it("accepts only canonical positive tenant scopes", () => {
+it("accepts only canonical tenant scopes including the reserved platform tenant", () => {
   for (const value of [
-    "tenant:0",
+    "domain:claims",
     "tenant:-1",
     "tenant:01",
     "tenant:1.5",
@@ -15,7 +15,7 @@ it("accepts only canonical positive tenant scopes", () => {
     "other",
   ])
     expect(accessScopeSchema.safeParse(value).success).toBe(false);
-  for (const value of ["platform", "tenant:101", "domain:claims"])
+  for (const value of ["platform", "tenant:0", "tenant:101"])
     expect(accessScopeSchema.safeParse(value).success).toBe(true);
 });
 it("rejects malformed, oversized and executable predicates", () => {

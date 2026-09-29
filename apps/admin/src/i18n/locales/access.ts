@@ -1,4 +1,117 @@
 export const accessMessages = {
+  "Changes arrived from another session. Your edits are preserved.": [
+    "Hay cambios de otra sesión. Tus ediciones se conservan.",
+    "Changes arrived from another session. Your edits are preserved.",
+    "Há alterações de outra sessão. Suas edições foram preservadas.",
+  ],
+  "Reload and discard draft": [
+    "Recargar y descartar borrador",
+    "Reload and discard draft",
+    "Recarregar e descartar rascunho",
+  ],
+  "This role was removed. Your draft is preserved but cannot be saved.": [
+    "Este rol fue eliminado. Tu borrador se conserva, pero ya no puede guardarse.",
+    "This role was removed. Your draft is preserved but cannot be saved.",
+    "Este papel foi excluído. Seu rascunho foi preservado, mas não pode ser salvo.",
+  ],
+  "Permissions changed elsewhere. Your draft is preserved; reopen the role before saving.":
+    [
+      "Los permisos cambiaron en otra sesión. Tu borrador se conserva; vuelve a abrir el rol antes de guardar.",
+      "Permissions changed elsewhere. Your draft is preserved; reopen the role before saving.",
+      "As permissões mudaram em outra sessão. Seu rascunho foi preservado; reabra o papel antes de salvar.",
+    ],
+  "Tenant roles": ["Roles del tenant", "Tenant roles", "Papéis do tenant"],
+  "Select roles created in Roles and permissions for this tenant. They add access to the base role.":
+    [
+      "Selecciona los roles creados en Roles y permisos para este tenant. Suman permisos al rol base.",
+      "Select roles created in Roles and permissions for this tenant. They add access to the base role.",
+      "Selecione os papéis criados em Papéis e permissões para este tenant. Eles adicionam acesso ao papel base.",
+    ],
+  "Select a tenant to see its roles.": [
+    "Selecciona un tenant para ver sus roles.",
+    "Select a tenant to see its roles.",
+    "Selecione um tenant para ver seus papéis.",
+  ],
+  "Unable to load tenant roles.": [
+    "No se pudieron cargar los roles del tenant.",
+    "Unable to load tenant roles.",
+    "Não foi possível carregar os papéis do tenant.",
+  ],
+  "No enabled custom roles in this tenant. Roles from other tenants are not available here.":
+    [
+      "Este tenant no tiene roles personalizados activos. Los roles de otros tenants no están disponibles aquí.",
+      "No enabled custom roles in this tenant. Roles from other tenants are not available here.",
+      "Este tenant não tem papéis personalizados ativos. Papéis de outros tenants não estão disponíveis aqui.",
+    ],
+  "The policy or membership changed. Reload before saving.": [
+    "Los permisos o la membresía cambiaron. Recarga la página antes de guardar.",
+    "The policy or membership changed. Reload before saving.",
+    "As permissões ou a associação mudaram. Recarregue a página antes de salvar.",
+  ],
+  "Expand all": ["Expandir todo", "Expand all", "Expandir tudo"],
+  "Collapse all": ["Contraer todo", "Collapse all", "Recolher tudo"],
+  actions: ["acciones", "actions", "ações"],
+  Data: ["Datos", "Data", "Dados"],
+  Page: ["Pantalla", "Page", "Página"],
+  "System roles are inherited from identity or tenant membership. Custom assignments below do not remove that access.":
+    [
+      "Los roles del sistema provienen de la identidad o membresía del usuario. Las asignaciones personalizadas no eliminan ese acceso.",
+      "System roles are inherited from identity or tenant membership. Custom assignments below do not remove that access.",
+      "Os papéis do sistema vêm da identidade ou associação do usuário. As atribuições personalizadas não removem esse acesso.",
+    ],
+  "No resource-specific permissions to list yet. The system role remains assigned.":
+    [
+      "Todavía no hay permisos por recurso que listar. El rol del sistema sigue asignado.",
+      "No resource-specific permissions to list yet. The system role remains assigned.",
+      "Ainda não há permissões por recurso para listar. O papel do sistema continua atribuído.",
+    ],
+  "Permissions below reflect the resources currently available in this tenant.":
+    [
+      "Estos permisos corresponden a los recursos actualmente disponibles en este tenant.",
+      "Permissions below reflect the resources currently available in this tenant.",
+      "Estas permissões correspondem aos recursos disponíveis neste tenant.",
+    ],
+  "This access comes from the user's membership in this tenant. It is managed through membership, not through custom role assignments.":
+    [
+      "Este acceso proviene de la membresía del usuario en este tenant. Se administra mediante su membresía, no mediante roles personalizados.",
+      "This access comes from the user's membership in this tenant. It is managed through membership, not through custom role assignments.",
+      "Este acesso vem da associação do usuário a este tenant. É gerenciado pela associação, não pelos papéis personalizados.",
+    ],
+  "This access comes from the user's platform administrator assignment, not from a role created in this tenant. It grants administration across the platform.":
+    [
+      "Este acceso proviene de la asignación del usuario como administrador de plataforma. Permite administrar toda la plataforma y no depende de los roles creados en este tenant.",
+      "This access comes from the user's platform administrator assignment, not from a role created in this tenant. It grants administration across the platform.",
+      "Este acesso vem da atribuição do usuário como administrador da plataforma. Permite administrar toda a plataforma e não depende dos papéis criados neste tenant.",
+    ],
+  "No assigned users.": [
+    "Sin usuarios asignados.",
+    "No assigned users.",
+    "Sem usuários atribuídos.",
+  ],
+  "Assigned users": [
+    "Usuarios asignados",
+    "Assigned users",
+    "Usuários atribuídos",
+  ],
+  "System role \u00b7 Read only": [
+    "Rol del sistema · Solo lectura",
+    "System role · Read only",
+    "Papel do sistema · Somente leitura",
+  ],
+  "Read only": ["Solo lectura", "Read only", "Somente leitura"],
+  "System roles": ["Roles del sistema", "System roles", "Papéis do sistema"],
+  "System role": ["Rol del sistema", "System role", "Papel do sistema"],
+  "Tenant member": ["Miembro del tenant", "Tenant member", "Membro do tenant"],
+  "Tenant administrator": [
+    "Administrador del tenant",
+    "Tenant administrator",
+    "Administrador do tenant",
+  ],
+  "Platform administrator": [
+    "Administrador de plataforma",
+    "Platform administrator",
+    "Administrador da plataforma",
+  ],
   configure: ["Configurar", "Configure", "Configurar"],
   Members: ["Miembros", "Members", "Membros"],
   "Assign several roles to the same user. Their existing tenant membership and protected role remain in place.":
@@ -48,6 +161,7 @@ export const accessMessages = {
   Actor: ["Autor", "Actor", "Autor"],
   "Recorded at": ["Fecha de registro", "Recorded at", "Registrado em"],
   Target: ["Destino", "Target", "Destino"],
+  ID: ["ID", "ID", "ID"],
   "Event ID": ["ID del evento", "Event ID", "ID do evento"],
   "Only captured values are shown. Unchanged values are omitted.": [
     "Solo se muestran los valores registrados. Se omiten los valores sin cambios.",

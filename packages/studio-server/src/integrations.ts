@@ -1,3 +1,4 @@
+import { readCredentialEnvelope } from "./credential-envelope";
 import type { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -180,13 +181,14 @@ export async function decryptSecret(
   context: string,
 ): Promise<string> {
   try {
-    const [iv, data] = value.split(".");
+    const envelope = readCredentialEnvelope(value, context);
+    const [iv, data] = envelope.value.split(".");
     return new TextDecoder().decode(
       await crypto.subtle.decrypt(
         {
           name: "AES-GCM",
           iv: decode64(iv),
-          additionalData: new TextEncoder().encode(context),
+          additionalData: new TextEncoder().encode(envelope.aad),
         },
         await encryptionKey(key),
         decode64(data),

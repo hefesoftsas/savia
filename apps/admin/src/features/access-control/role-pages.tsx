@@ -1,3 +1,5 @@
+import { useAccessRealtime } from "@/realtime/use-access-realtime";
+import { roleDisplayLabel } from "./system-role";
 import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
@@ -19,19 +21,25 @@ export function RolePages({ services }: { services: AppServices }) {
   const [scope, setScope] = useState(""),
     [selected, setSelected] = useState<string>(),
     [message, setMessage] = useState("");
+  useAccessRealtime(scope);
   const scopes = useQuery({
     queryKey: ["access-control", "scopes"],
     queryFn: async () =>
       (
         await services.apiClient.get<{
-          data: Array<{ id: string; label: string; kind: string }>;
-        }>("/v1/data-domains")
+          data: Array<{
+            id: string;
+            tenantId: number;
+            label: string;
+            kind: string;
+          }>;
+        }>("/v1/tenant-workspaces")
       ).data,
   });
   useEffect(() => {
     if (!scope && scopes.data?.length) {
-      const d = scopes.data[0];
-      setScope(d.kind === "custom" ? "domain:" + d.id : d.id);
+      const tenant = scopes.data[0];
+      setScope(`tenant:${tenant.tenantId}`);
     }
   }, [scopes.data, scope]);
   const roles = useQuery({
@@ -76,10 +84,7 @@ export function RolePages({ services }: { services: AppServices }) {
             }}
           >
             {scopes.data?.map((d) => (
-              <option
-                key={d.id}
-                value={d.kind === "custom" ? "domain:" + d.id : d.id}
-              >
+              <option key={d.id} value={`tenant:${d.tenantId}`}>
                 {d.label}
               </option>
             ))}
@@ -132,15 +137,17 @@ export function RolePages({ services }: { services: AppServices }) {
                     </span>
                   </div>
                   <Button
-                    type="button"
+                    type={selected === "new" ? "submit" : "button"}
+                    form={selected === "new" ? "access-role-editor" : undefined}
                     size="sm"
                     onClick={() => {
+                      if (selected === "new") return;
                       setSelected("new");
                       setMessage("");
                     }}
                   >
-                    <Plus aria-hidden="true" />
-                    {t("Create role")}
+                    {selected !== "new" && <Plus aria-hidden="true" />}
+                    {selected === "new" ? t("Save role") : t("Create role")}
                   </Button>
                 </div>
                 {roles.data.roles.length > 0 ? (
@@ -157,13 +164,11 @@ export function RolePages({ services }: { services: AppServices }) {
                           }}
                         >
                           <span className="block truncate font-medium">
-                            {r.label}
+                            {roleDisplayLabel(r, t)}
                           </span>
                           {(r.protected || !r.enabled) && (
                             <span className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-                              {r.protected && (
-                                <span>{t("Protected role")}</span>
-                              )}
+                              {r.protected && <span>{t("System role")}</span>}
                               {!r.enabled && <span>{t("Disabled")}</span>}
                             </span>
                           )}
@@ -183,6 +188,10 @@ export function RolePages({ services }: { services: AppServices }) {
                     key={scope + ":" + selected}
                     scope={scope}
                     revision={roles.data.revision}
+                    unavailable={
+                      selected !== "new" &&
+                      !roles.data.roles.some((role) => role.id === selected)
+                    }
                     role={roles.data.roles.find((r) => r.id === selected)}
                     catalog={catalog.data}
                     onDelete={async (id, revision) => {

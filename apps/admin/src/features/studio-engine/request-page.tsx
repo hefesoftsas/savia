@@ -174,7 +174,7 @@ export default function RequestPage({ object }: { object: StudioObject }) {
   const config = requestPageSchema.parse(object.config.studio?.requestPage);
   const isWizard = !!object.config.studio?.wizard?.enabled;
   const [surface, setSurface] = useState<"form" | "results">("form");
-  const domainId = getStudioRuntime().domainId ?? "platform";
+  const tenantId = String(getStudioRuntime().tenantId ?? 0);
   const [selected, setSelected] = useState(() =>
     defaultSelectedActions(config.actions),
   );
@@ -191,7 +191,7 @@ export default function RequestPage({ object }: { object: StudioObject }) {
   const refresh = useCallback(async () => {
     try {
       const result = await requestPageApi<{ data: PageRun[] }>(
-        "/runs?" + new URLSearchParams({ domainId, pageName: object.name }),
+        "/runs?" + new URLSearchParams({ tenantId, pageName: object.name }),
       );
       if (alive.current) {
         setRuns(result.data);
@@ -201,7 +201,7 @@ export default function RequestPage({ object }: { object: StudioObject }) {
     } finally {
       if (alive.current) setLoading(false);
     }
-  }, [domainId, object.name]);
+  }, [tenantId, object.name]);
   useEffect(() => {
     alive.current = true;
     void refresh();

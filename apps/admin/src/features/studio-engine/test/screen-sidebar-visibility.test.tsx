@@ -135,7 +135,7 @@ it("shows sidebar subtitles without labeling ordinary screens as compiled plugin
       objects={objects}
       selected="polizas"
       detail={false}
-      domainTools
+      tenantTools
       onNavigate={vi.fn()}
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={vi.fn(async () => undefined)}
@@ -151,7 +151,7 @@ it("shows sidebar subtitles without labeling ordinary screens as compiled plugin
   ).toBeInTheDocument();
   expect(
     screen.getByText(
-      /Fuera del menú del dominio · Accesibles mediante enlaces con permiso/,
+      /Fuera del menú del tenant · Accesibles mediante enlaces con permiso/,
     ),
   ).toBeInTheDocument();
 
@@ -174,7 +174,7 @@ it("labels an active tenant ZIP screen as a plugin", () => {
       objects={objects}
       selected="polizas"
       detail={false}
-      domainTools
+      tenantTools
       extensions={[
         {
           manifest: { id: "insurance.portfolio-dashboard" },

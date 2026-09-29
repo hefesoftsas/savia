@@ -2,8 +2,8 @@
 
 Motor low-code embebido en Savia (antes "CRM dinámico"). La interfaz vive en
 `/#/studio` del admin (`/#/crm` sigue como alias heredado); la API
-autenticada expone el runtime a través de Savia (`/v1/data-domains/*`,
-`/v1/dynamic-crm/*`).
+autenticada expone el runtime por tenant a través de Savia (`/v1/studio/:tenantId`;
+`/v1/dynamic-crm/:tenantId` se conserva como alias heredado).
 
 El motor está repartido en tres piezas:
 

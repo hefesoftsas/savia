@@ -331,6 +331,13 @@ export function createLocalTransport(
       (await store.db.collections.count()) > 0
     )
       return Response.json({ ok: true });
+    const solutionCatalogMutation =
+      segments[1] === "solutions" &&
+      (segments[2] === "activate" ||
+        segments[2] === "install" ||
+        method === "PATCH");
+    const extensionCatalogMutation =
+      segments[1] === "extensions" || segments[1] === "plugin-store";
     if (method !== "GET" && result.ok) {
       if (
         bootstrapRoute ||
@@ -341,6 +348,8 @@ export function createLocalTransport(
       }
       if (
         segments[1] === "objects" ||
+        solutionCatalogMutation ||
+        extensionCatalogMutation ||
         (segments[1] === "record-history-settings" && method === "PUT") ||
         segments[1] === "collection-bindings" ||
         segments[1] === "sources"
@@ -370,7 +379,7 @@ export function createLocalTransport(
             revalidatedMetadata.delete(cachedKey);
         }
       }
-      if (segments[1] === "extensions" || segments[1] === "plugin-store") {
+      if (extensionCatalogMutation || solutionCatalogMutation) {
         // Package installs and removals change the same tenant extension catalog.
         // Finish invalidation before the caller refreshes the screen menu.
         await removeWorkspaceMetadata(

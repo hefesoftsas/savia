@@ -38,7 +38,7 @@ const oauthScopes = {
   openid: "OpenID Connect identity",
   profile: "Basic Savia profile",
   email: "Verified Savia email",
-  "savia.api.read": "Read Savia domain data",
+  "savia.api.read": "Read Savia tenant data",
   "savia.api.write": "Execute Savia commands and administrative writes",
 };
 

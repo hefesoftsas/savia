@@ -46,7 +46,7 @@ it("runs general-domain workflows with current persisted owner permissions", asy
     undefined,
     platformAdministratorAuthenticator(),
   );
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   const headers = { "content-type": "application/json" };
   const draftResponse = await app.request(base + "/workflows", {
     method: "POST",
@@ -353,7 +353,7 @@ it("allows members to discover only shared CRM collections and rejects writes an
     "INSERT INTO crm_collection_bindings(tenant_id,object_name,source_id,resource,config) VALUES(?,?,?,?,?)",
   )
     .bind(
-      "agency:101",
+      "tenant:101",
       "shared_contacts",
       "hubspot",
       "contacts",
@@ -399,6 +399,28 @@ it("allows members to discover only shared CRM collections and rejects writes an
       })
     ).status,
   ).toBe(403);
+  await env.DB.prepare(
+    "INSERT INTO access_revisions(scope) VALUES('tenant:101') ON CONFLICT(scope) DO NOTHING",
+  ).run();
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES('test-agency-member','savia:test','test-agency-member','member@savia.test','Savia Test Member',1,'2026-01-01','2026-01-01')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO access_roles(scope,id,name,label,description,enabled,protected) VALUES('tenant:101','audit-visible','audit-visible','Audit visible','',1,0)",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO access_grants(id,scope,role_id,resource,action,predicate,fields) VALUES('audit-visible-read','tenant:101','audit-visible','collection:shared_contacts','read','{\"all\":true}','[]')",
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO access_assignments(scope,principal_id,role_id) VALUES('tenant:101','test-agency-member','audit-visible')",
+  ).run();
+  expect(
+    (
+      await member.request(prefix + "/audit/member-event", {
+        method: "DELETE",
+      })
+    ).status,
+  ).toBe(403);
   expect((await member.request("/v1/dynamic-crm/202/api/objects")).status).toBe(
     403,
   );
@@ -435,14 +457,14 @@ describe("local synchronization transport", () => {
   });
 });
 
-it("preserves conflict master through the platform data-domain transport", async () => {
+it("preserves conflict master through the platform tenant transport", async () => {
   const app = createApp(
     env.DB,
     env.DOCUMENTS,
     undefined,
     platformAdministratorAuthenticator(),
   );
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   const object = await app.request(base + "/objects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -475,10 +497,7 @@ it("forwards principal binding through both authenticated synchronization gatewa
     undefined,
     platformAdministratorAuthenticator(),
   );
-  for (const base of [
-    "/v1/data-domains/platform/api",
-    "/v1/dynamic-crm/101/api",
-  ]) {
+  for (const base of ["/v1/studio/0/api", "/v1/dynamic-crm/101/api"]) {
     const response = await app.request(base + "/local-sync/manifest", {
       headers: { "X-Savia-Sync-Principal": "wrong-principal" },
     });

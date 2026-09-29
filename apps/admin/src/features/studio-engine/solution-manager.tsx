@@ -47,6 +47,8 @@ type Preview = {
   }[];
   conflicts: string[];
   canInstall: boolean;
+  canActivate?: boolean;
+  dependencies?: { id: string; label: string; action: string }[];
 };
 
 function download(manifest: Manifest) {
@@ -135,7 +137,7 @@ export default function SolutionManager({
     setPreview(null);
     setCandidate(null);
     const response = await api<{ data: Preview }>(
-      "/solutions/preview",
+      "/solutions/activation-preview",
       "POST",
       manifest,
     );
@@ -158,14 +160,14 @@ export default function SolutionManager({
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">
-            {t("Paquetes")}
+            {t("Aplicaciones")}
           </h2>
           <StudioHelpTooltip
             label={t("Cómo funcionan los paquetes de soluciones")}
             side="bottom"
           >
             {t(
-              "Un paquete añade modelos y pantallas a este espacio. Revísalo antes de instalarlo.",
+              "Instala un conjunto de pantallas y campos en el tenant. Puedes reutilizarlo en otro tenant sin copiar registros ni credenciales.",
             )}
           </StudioHelpTooltip>
         </div>
@@ -180,57 +182,62 @@ export default function SolutionManager({
           {notice}
         </p>
       )}
-      <section
-        aria-label={t("Importar paquete")}
-        className="flex flex-wrap items-center gap-x-2 gap-y-3 border-y py-4"
-      >
-        <div className="flex items-center gap-2">
-          <label htmlFor="solution-file" className="text-sm font-medium">
-            {t("Importar JSON")}
-          </label>
-          <StudioHelpTooltip
-            label={t("Información sobre la importación de paquetes")}
-            side="bottom"
-          >
-            {t(
-              "Máximo 2 MB. El archivo contiene definiciones, no registros ni credenciales.",
-            )}
-          </StudioHelpTooltip>
-        </div>
-        <Input
-          className="max-w-xl"
-          id="solution-file"
-          type="file"
-          accept=".json,application/json"
-          disabled={busy || loading}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (!file) return;
-            void run(async () => {
-              setCandidate(null);
-              setPreview(null);
-              if (file.size > 2 * 1024 * 1024)
-                throw new Error(
-                  t(
-                    "El archivo supera 2 MB. Selecciona un paquete más pequeño.",
-                  ),
-                );
-              let manifest: unknown;
-              try {
-                manifest = JSON.parse(await file.text());
-              } catch {
-                throw new Error(
-                  t(
-                    "El archivo no contiene JSON válido. Revisa el archivo e intenta de nuevo.",
-                  ),
-                );
-              }
-              await inspect(manifest);
-            });
-          }}
-        />
-      </section>
+      <details>
+        <summary className="cursor-pointer text-sm font-medium">
+          {t("Opciones avanzadas")}
+        </summary>
+        <section
+          aria-label={t("Importar paquete")}
+          className="flex flex-wrap items-center gap-x-2 gap-y-3 border-y py-4"
+        >
+          <div className="flex items-center gap-2">
+            <label htmlFor="solution-file" className="text-sm font-medium">
+              {t("Importar JSON")}
+            </label>
+            <StudioHelpTooltip
+              label={t("Información sobre la importación de paquetes")}
+              side="bottom"
+            >
+              {t(
+                "Máximo 2 MB. El archivo contiene definiciones, no registros ni credenciales.",
+              )}
+            </StudioHelpTooltip>
+          </div>
+          <Input
+            className="max-w-xl"
+            id="solution-file"
+            type="file"
+            accept=".json,application/json"
+            disabled={busy || loading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              void run(async () => {
+                setCandidate(null);
+                setPreview(null);
+                if (file.size > 2 * 1024 * 1024)
+                  throw new Error(
+                    t(
+                      "El archivo supera 2 MB. Selecciona un paquete más pequeño.",
+                    ),
+                  );
+                let manifest: unknown;
+                try {
+                  manifest = JSON.parse(await file.text());
+                } catch {
+                  throw new Error(
+                    t(
+                      "El archivo no contiene JSON válido. Revisa el archivo e intenta de nuevo.",
+                    ),
+                  );
+                }
+                await inspect(manifest);
+              });
+            }}
+          />
+        </section>
+      </details>
       <section aria-label={t("Catálogo de paquetes")} className="space-y-2">
         <header className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">{t("Disponibles")}</h2>
@@ -280,150 +287,170 @@ export default function SolutionManager({
                   );
                   return (
                     <>
-                <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
-                  <h3 className="break-words font-medium">{label}</h3>
-                  <Badge variant={installed?.enabled ? "secondary" : "outline"}>
-                    {installed
-                      ? installed.enabled
-                        ? t("Activo")
-                        : t("Inactivo")
-                      : t("Disponible")}
-                  </Badge>
-                  <StudioHelpTooltip
-                    label={t("Más información sobre %{value0}", {
-                      value0: label,
-                    })}
-                    side="bottom"
-                  >
-                    <span className="block max-w-xs space-y-1">
-                      <span className="block">{description}</span>
-                      <span className="block text-primary-foreground/75">
-                        {t("Versión")} {manifest.version}
-                        {installed
-                          ? ` · ${installed.version === "0.0.0" ? t("Configuración existente") : t("Instalada %{value0}", { value0: installed.version })}`
-                          : ""}
-                      </span>
-                    </span>
-                  </StudioHelpTooltip>
-                  {installed ? (
-                    <StudioHelpTooltip
-                      label={t("Qué ocurre al activar o desactivar %{value0}", {
-                        value0: label,
-                      })}
-                      side="bottom"
-                    >
-                      {t(
-                        "Desactivar oculta sus pantallas y conserva los datos. Al activarlo, las pantallas vuelven a estar disponibles.",
-                      )}
-                    </StudioHelpTooltip>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-8"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            download(manifest);
-                          })
-                        }
-                        aria-label={t("Descargar %{value0}", {
-                          value0: label,
-                        })}
-                      >
-                        <Download aria-hidden="true" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      {t("Descargar")} {label}
-                    </TooltipContent>
-                  </Tooltip>
-                  {installed && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-8"
-                          disabled={busy}
-                          aria-label={t("Exportar instalado %{value0}", {
+                      <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
+                        <h3 className="break-words font-medium">{label}</h3>
+                        <Badge
+                          variant={installed?.enabled ? "secondary" : "outline"}
+                        >
+                          {installed
+                            ? installed.enabled
+                              ? t("Activo")
+                              : t("Inactivo")
+                            : t("Disponible")}
+                        </Badge>
+                        <StudioHelpTooltip
+                          label={t("Más información sobre %{value0}", {
                             value0: label,
                           })}
-                          onClick={() =>
-                            void run(async () => {
-                              download(
-                                await api<Manifest>(
-                                  `/solutions/${encodeURIComponent(manifest.id)}/export`,
-                                ),
-                              );
-                            })
-                          }
+                          side="bottom"
                         >
-                          <FileDown aria-hidden="true" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        {t("Exportar instalado")}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {!installed ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => void run(() => inspect(manifest))}
-                    >
-                      {t("Revisar")} {label}
-                    </Button>
-                  ) : null}
-                  {installed && installed.version !== manifest.version ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => void run(() => inspect(manifest))}
-                    >
-                      {t("Actualizar")} {label}
-                    </Button>
-                  ) : null}
-                  {installed && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          await api(
-                            `/solutions/${encodeURIComponent(manifest.id)}`,
-                            "PATCH",
-                            { enabled: !installed.enabled },
-                          );
-                          setPreview(null);
-                          setCandidate(null);
-                          await onChanged();
-                          await reload();
-                          setNotice(
-                            installed.enabled
-                              ? t(
-                                  "Paquete desactivado. Sus datos se conservan.",
-                                )
-                              : t(
-                                  "Paquete activado. Sus pantallas están disponibles.",
-                                ),
-                          );
-                        })
-                      }
-                    >
-                      {installed.enabled ? t("Desactivar") : t("Activar")}{" "}
-                      {label}
-                    </Button>
-                  )}
-                </div>
+                          <span className="block max-w-xs space-y-1">
+                            <span className="block">{description}</span>
+                            <span className="block text-primary-foreground/75">
+                              {t("Versión")} {manifest.version}
+                              {installed
+                                ? ` · ${installed.version === "0.0.0" ? t("Configuración existente") : t("Instalada %{value0}", { value0: installed.version })}`
+                                : ""}
+                            </span>
+                          </span>
+                        </StudioHelpTooltip>
+                        {installed ? (
+                          <StudioHelpTooltip
+                            label={t(
+                              "Qué ocurre al activar o desactivar %{value0}",
+                              {
+                                value0: label,
+                              },
+                            )}
+                            side="bottom"
+                          >
+                            {t(
+                              "Desactivar oculta sus pantallas y conserva los datos. Al activarlo, las pantallas vuelven a estar disponibles.",
+                            )}
+                          </StudioHelpTooltip>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-8"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  download(manifest);
+                                })
+                              }
+                              aria-label={t("Descargar %{value0}", {
+                                value0: label,
+                              })}
+                            >
+                              <Download aria-hidden="true" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {t("Descargar")} {label}
+                          </TooltipContent>
+                        </Tooltip>
+                        {installed && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8"
+                                disabled={busy}
+                                aria-label={t("Exportar instalado %{value0}", {
+                                  value0: label,
+                                })}
+                                onClick={() =>
+                                  void run(async () => {
+                                    download(
+                                      await api<Manifest>(
+                                        `/solutions/${encodeURIComponent(manifest.id)}/export`,
+                                      ),
+                                    );
+                                  })
+                                }
+                              >
+                                <FileDown aria-hidden="true" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {t("Exportar instalado")}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {!installed ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() =>
+                                  void run(() => inspect(manifest))
+                                }
+                              >
+                                {t("Habilitar")} {label}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              {t(
+                                "Revisa las pantallas y los cambios antes de instalar. Revisar no modifica el tenant.",
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        {installed && installed.version !== manifest.version ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => void run(() => inspect(manifest))}
+                          >
+                            {t("Actualizar")} {label}
+                          </Button>
+                        ) : null}
+                        {installed && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                if (!installed.enabled) {
+                                  await inspect(manifest);
+                                  return;
+                                }
+                                await api(
+                                  `/solutions/${encodeURIComponent(manifest.id)}`,
+                                  "PATCH",
+                                  { enabled: !installed.enabled },
+                                );
+                                setPreview(null);
+                                setCandidate(null);
+                                await onChanged();
+                                await reload();
+                                setNotice(
+                                  installed.enabled
+                                    ? t(
+                                        "Paquete desactivado. Sus datos se conservan.",
+                                      )
+                                    : t(
+                                        "Paquete activado. Sus pantallas están disponibles.",
+                                      ),
+                                );
+                              })
+                            }
+                          >
+                            {installed.enabled ? t("Desactivar") : t("Activar")}{" "}
+                            {label}
+                          </Button>
+                        )}
+                      </div>
                     </>
                   );
                 })()}
@@ -438,9 +465,32 @@ export default function SolutionManager({
           className="space-y-3 border-t pt-4"
         >
           <h2 className="break-words font-semibold">
-            {t("Revisar")} {preview.id} · {preview.version}
+            {t("Habilitar")}{" "}
+            {resolveLocalizedContent(
+              (candidate as Manifest).label,
+              (candidate as Manifest).labels,
+              locale,
+            )}
           </h2>
+          <p className="text-sm">
+            {t("Al confirmar se prepararán estos componentes y pantallas:")}
+          </p>
           <ul className="space-y-2 text-sm">
+            {preview.dependencies?.map((dependency) => (
+              <li
+                key={dependency.id}
+                className="flex flex-wrap justify-between gap-2"
+              >
+                <span>{dependency.label}</span>
+                <span className="text-muted-foreground">
+                  {dependency.action === "install"
+                    ? t("Instalar")
+                    : dependency.action === "enable"
+                      ? t("Activar")
+                      : t("Sin cambios")}
+                </span>
+              </li>
+            ))}
             {preview.objects.map((object) => (
               <li
                 key={object.name}
@@ -455,6 +505,13 @@ export default function SolutionManager({
               </li>
             ))}
           </ul>
+          {(candidate as Manifest).requires.includes("insurance.quotes") && (
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "Para cotizar con proveedores reales, configura sus conexiones después de habilitar el Cotizador.",
+              )}
+            </p>
+          )}
           {preview.conflicts.length > 0 && (
             <div role="alert">
               <p className="font-medium">
@@ -469,10 +526,10 @@ export default function SolutionManager({
           )}
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={busy || !preview.canInstall}
+              disabled={busy || !(preview.canActivate ?? preview.canInstall)}
               onClick={() =>
                 void run(async () => {
-                  await api("/solutions/install", "POST", candidate);
+                  await api("/solutions/activate", "POST", candidate);
                   setPreview(null);
                   setCandidate(null);
                   await onChanged();
@@ -493,7 +550,7 @@ export default function SolutionManager({
                 ? t("Procesando…")
                 : isUpdating
                   ? t("Actualizar paquete")
-                  : t("Instalar paquete")}
+                  : t("Confirmar habilitación")}
             </Button>
             <Button
               variant="outline"

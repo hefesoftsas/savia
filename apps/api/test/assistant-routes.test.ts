@@ -340,15 +340,15 @@ describe("assistant routes", () => {
     await seedAssistantAgencyMember(101);
     const response = await createConfigurationApp(
       agencyMemberAuthenticator(),
-    ).request("http://api.savia.test/v1/assistant/active-agency", {
+    ).request("http://api.savia.test/v1/assistant/active-tenant", {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agencyId: 101 }),
+      body: JSON.stringify({ tenantId: 101 }),
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      activeAgencyId: 101,
+      activeTenantId: 101,
     });
   });
 
@@ -356,7 +356,7 @@ describe("assistant routes", () => {
     await seedAssistantAgencyMember(101);
     const app = createConfigurationApp();
     const saved = await app.request(
-      "http://api.savia.test/v1/assistant/configuration/agencies/101",
+      "http://api.savia.test/v1/assistant/configuration/tenants/101",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -366,13 +366,13 @@ describe("assistant routes", () => {
 
     expect(saved.status).toBe(200);
     await expect(saved.json()).resolves.toMatchObject({
-      agencies: [
-        expect.objectContaining({ agencyId: 101, model: "openai/gpt-5" }),
+      tenants: [
+        expect.objectContaining({ tenantId: 101, model: "openai/gpt-5" }),
       ],
     });
 
     const deleted = await app.request(
-      "http://api.savia.test/v1/assistant/configuration/agencies/101",
+      "http://api.savia.test/v1/assistant/configuration/tenants/101",
       { method: "DELETE" },
     );
     expect(deleted.status).toBe(204);
@@ -393,7 +393,7 @@ describe("assistant routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       activeTenantId: 101,
-      activeAgencyId: 101,
+      activeTenantId: 101,
     });
 
     const getResponse = await app.request(
@@ -473,19 +473,19 @@ describe("assistant routes", () => {
   it("returns the server-persisted active agency after reload", async () => {
     await seedAssistantAgencyMember(101);
     const app = createConfigurationApp(agencyMemberAuthenticator());
-    await app.request("http://api.savia.test/v1/assistant/active-agency", {
+    await app.request("http://api.savia.test/v1/assistant/active-tenant", {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agencyId: 101 }),
+      body: JSON.stringify({ tenantId: 101 }),
     });
 
     const response = await app.request(
-      "http://api.savia.test/v1/assistant/active-agency",
+      "http://api.savia.test/v1/assistant/active-tenant",
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      activeAgencyId: 101,
-      agencies: [expect.objectContaining({ id: 101 })],
+      activeTenantId: 101,
+      tenants: [expect.objectContaining({ id: 101 })],
     });
   });
 

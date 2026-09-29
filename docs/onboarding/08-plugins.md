@@ -20,7 +20,7 @@ opaco + bridge `savia`), and server-side capabilities are declarative
    the matching view. Heavy work (summaries) computes client-side from
    collections. The authenticated iframe shell uses the current workspace
    API prefix (for example,
-   `/v1/data-domains/platform/api/plugin-store/`). Screen shells invoke
+   `/v1/studio/0/api/plugin-store/`). Screen shells invoke
    `render`; widget shells invoke the declared `widgets[id]` handler, with
    `renderWidget` or `render` as fallbacks. The authenticated shell issues a
    two-minute signed URL for its ZIP entry module; the opaque iframe loads

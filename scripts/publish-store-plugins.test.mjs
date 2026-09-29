@@ -8,14 +8,14 @@ import {
 } from "./publish-store-plugins.mjs";
 
 describe("publish-store-plugins", () => {
-  it("construye el prefijo por tenant o dominio", () => {
+  it("builds canonical tenant paths, including tenant zero", () => {
     assert.equal(
-      apiPrefix("https://api.test/", { tenant: "agency:101" }),
-      "https://api.test/v1/dynamic-crm/agency%3A101/api",
+      apiPrefix("https://api.test/", { tenant: "tenant:101" }),
+      "https://api.test/v1/studio/101/api",
     );
     assert.equal(
-      apiPrefix("https://api.test", { domain: "platform" }),
-      "https://api.test/v1/data-domains/platform/api",
+      apiPrefix("https://api.test", { tenant: 0 }),
+      "https://api.test/v1/studio/0/api",
     );
     assert.throws(() => apiPrefix("https://api.test", {}), /tenant/);
   });
@@ -27,7 +27,7 @@ describe("publish-store-plugins", () => {
           "--api-url",
           "https://api.test",
           "--tenant",
-          "agency:101",
+          "tenant:101",
         ]),
       /cookie/i,
     );
@@ -35,7 +35,7 @@ describe("publish-store-plugins", () => {
       "--api-url",
       "https://api.test",
       "--tenant",
-      "agency:101",
+      "tenant:101",
       "--dry-run",
       "--ports",
       "http-echo",
@@ -47,7 +47,7 @@ describe("publish-store-plugins", () => {
           "--api-url",
           "https://api.test",
           "--tenant",
-          "agency:101",
+          "tenant:101",
           "--dry-run",
           "--ports",
           "inexistente",
@@ -62,7 +62,7 @@ describe("publish-store-plugins", () => {
     const results = await publishPorts(
       {
         apiUrl: "https://api.test",
-        tenant: "agency:101",
+        tenant: "tenant:101",
         cookie: null,
         ports: ["http-echo"],
         install: false,
@@ -81,7 +81,7 @@ describe("publish-store-plugins", () => {
       "--preview-branch",
       "chibchombiano26/plugin-store-epic",
       "--tenant",
-      "agency:101",
+      "tenant:101",
       "--dry-run",
     ]);
     assert.equal(
@@ -106,7 +106,7 @@ describe("publish-store-plugins", () => {
       const results = await publishPorts(
         {
           apiUrl: `http://127.0.0.1:${address.port}`,
-          tenant: "agency:101",
+          tenant: "tenant:101",
           cookie: "session=abc",
           ports: ["http-echo"],
           install: true,
@@ -119,15 +119,13 @@ describe("publish-store-plugins", () => {
       assert.equal(results[0].error, null);
       assert.ok(
         seen.some((line) =>
-          line.startsWith(
-            "POST /v1/dynamic-crm/agency%3A101/api/plugin-store/upload",
-          ),
+          line.startsWith("POST /v1/studio/101/api/plugin-store/upload"),
         ),
       );
       assert.ok(
         seen.some((line) =>
           line.startsWith(
-            "POST /v1/dynamic-crm/agency%3A101/api/extensions/custom.http-echo/install",
+            "POST /v1/studio/101/api/extensions/custom.http-echo/install",
           ),
         ),
       );
@@ -169,7 +167,7 @@ it("deployment updates ZIPs only for enabled installations and retains source ar
   try {
     const options = {
       apiUrl: `http://127.0.0.1:${server.address().port}`,
-      tenant: "agency:1",
+      tenant: "tenant:1",
       cookie: "session=test",
       artifacts: [artifactPath],
       updateInstalled: true,

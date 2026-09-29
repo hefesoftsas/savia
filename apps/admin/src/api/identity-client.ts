@@ -7,17 +7,25 @@ type IdentityUsersResponse =
   paths["/v1/identity/users"]["get"]["responses"][200]["content"]["application/json"];
 type IdentityUser = IdentityUsersResponse["data"][number];
 
-export type AgencyAccessRole = "tenant_admin" | "agency_admin" | "operator" | "viewer";
+export type AgencyAccessRole =
+  "tenant_admin" | "agency_admin" | "operator" | "viewer";
 export type SaviaIdentity = CurrentIdentityResponse["data"];
 export type ManagedIdentityUser = Omit<IdentityUser, "relationships"> & {
-  relationships: { memberships: Array<Omit<IdentityUser["relationships"]["memberships"][number], "role"> & {
-    role: AgencyAccessRole;
-    relationships: { agency: { id: string }; tenant?: { id: string } };
-  }> };
+  relationships: {
+    memberships: Array<
+      Omit<IdentityUser["relationships"]["memberships"][number], "role"> & {
+        role: AgencyAccessRole;
+        relationships: { agency: { id: string }; tenant?: { id: string } };
+      }
+    >;
+  };
 };
 export type UserProvisionInput = Omit<
-  paths["/v1/identity/users"]["post"]["requestBody"]["content"]["application/json"], "membership"
-> & { membership?: { tenantId?: number; agencyId?: number; role: AgencyAccessRole } };
+  paths["/v1/identity/users"]["post"]["requestBody"]["content"]["application/json"],
+  "membership"
+> & {
+  membership?: { tenantId?: number; agencyId?: number; role: AgencyAccessRole };
+};
 export type UserUpdateInput =
   paths["/v1/identity/users/{principalId}"]["patch"]["requestBody"]["content"]["application/json"];
 
@@ -66,8 +74,12 @@ export class IdentityClient {
     return this.mePromise;
   }
 
-  async list(): Promise<ManagedIdentityUser[]> {
-    if (this.listCache && Date.now() - this.listCache.timestamp < 30_000) {
+  async list(refresh = false): Promise<ManagedIdentityUser[]> {
+    if (
+      !refresh &&
+      this.listCache &&
+      Date.now() - this.listCache.timestamp < 30_000
+    ) {
       return this.listCache.data;
     }
     if (this.listPromise) {

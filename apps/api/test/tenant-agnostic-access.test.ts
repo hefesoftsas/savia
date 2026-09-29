@@ -36,12 +36,12 @@ function createActor(overrides?: Partial<AppActor>): AppActor {
 }
 
 describe("Tenant-agnostic CRM access control", () => {
-  it("allows tenant_admin to access and manage tenant:101 and agency:101", () => {
+  it("allows tenant_admin to access and manage tenant:101 and tenant:101", () => {
     const actor = createActor();
     expect(canAccessSharedCrm(actor, "tenant:101")).toBe(true);
     expect(canManageSharedCrm(actor, "tenant:101")).toBe(true);
-    expect(canAccessSharedCrm(actor, "agency:101")).toBe(true);
-    expect(canManageSharedCrm(actor, "agency:101")).toBe(true);
+    expect(canAccessSharedCrm(actor, "tenant:101")).toBe(true);
+    expect(canManageSharedCrm(actor, "tenant:101")).toBe(true);
   });
 
   it("allows legacy agency_admin to access and manage tenant:101", () => {
@@ -94,8 +94,8 @@ describe("Tenant-agnostic CRM access control", () => {
     });
     expect(canAccessSharedCrm(actor, "tenant:999")).toBe(true);
     expect(canManageSharedCrm(actor, "tenant:999")).toBe(true);
-    expect(canAccessSharedCrm(actor, "agency:999")).toBe(true);
-    expect(canManageSharedCrm(actor, "agency:999")).toBe(true);
+    expect(canAccessSharedCrm(actor, "tenant:999")).toBe(true);
+    expect(canManageSharedCrm(actor, "tenant:999")).toBe(true);
   });
 
   it("denies access if principal is inactive", () => {
@@ -124,52 +124,21 @@ describe("Tenant-agnostic CRM access control", () => {
     expect(canManageSharedCrm(actor, "tenant:101")).toBe(false);
   });
 
-  it("resolves dynamic tenant key preferring legacy agency: prefix if records exist", async () => {
-    const mockDb = {
-      prepare: (sql: string) => ({
-        bind: (...args: unknown[]) => ({
-          first: async () => {
-            if (args[0] === "agency:101") return { 1: 1 };
-            return null;
-          },
-        }),
-      }),
-    } as unknown as D1Database;
-
-    const key = await resolveStudioTenantKey(mockDb, 101);
-    expect(key).toBe("agency:101");
+  it("always resolves Studio storage to the canonical tenant key", async () => {
+    const key = await resolveStudioTenantKey(101);
+    expect(key).toBe("tenant:101");
   });
 
-  it("resolves dynamic tenant key using preferredPrefix when no records exist", async () => {
-    const mockDb = {
-      prepare: () => ({
-        bind: () => ({
-          first: async () => null,
-        }),
-      }),
-    } as unknown as D1Database;
-
-    const tenantRouteKey = await resolveStudioTenantKey(mockDb, 202, "tenant");
+  it("ignores legacy prefixes when resolving the canonical tenant key", async () => {
+    const tenantRouteKey = await resolveStudioTenantKey(202);
     expect(tenantRouteKey).toBe("tenant:202");
 
-    const agencyRouteKey = await resolveStudioTenantKey(mockDb, 202, "agency");
-    expect(agencyRouteKey).toBe("agency:202");
+    const agencyRouteKey = await resolveStudioTenantKey(202);
+    expect(agencyRouteKey).toBe("tenant:202");
   });
 
-  it("prefers tenant: prefix whenever tenant: records already exist", async () => {
-    const mockDb = {
-      prepare: (sql: string) => ({
-        bind: (...args: unknown[]) => ({
-          first: async () => {
-            if (args[0] === "tenant:303") return { 1: 1 };
-            return null;
-          },
-        }),
-      }),
-    } as unknown as D1Database;
-
-    const key = await resolveStudioTenantKey(mockDb, 303, "agency");
-    expect(key).toBe("tenant:303");
+  it("uses tenant zero for the reserved platform workspace", async () => {
+    const key = await resolveStudioTenantKey(0);
+    expect(key).toBe("tenant:0");
   });
 });
-

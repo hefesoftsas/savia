@@ -9,16 +9,33 @@ import { z } from "@hono/zod-openapi";
  * over the wire.
  */
 
-export const REALTIME_TOPICS = ["users", "tenants", "records"] as const;
+export const REALTIME_TOPICS = [
+  "users",
+  "tenants",
+  "records",
+  "access-control",
+  "studio",
+  "settings",
+  "integrations",
+  "workflows",
+  "notifications",
+  "personal-integrations",
+  "account",
+] as const;
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];
 
 export const PLATFORM_ROOM = "platform";
 
-export function tenantRoom(agencyId: number): string {
-  return `tenant:${agencyId}`;
+export function tenantRoom(tenantId: number): string {
+  return `tenant:${tenantId}`;
 }
 
-const ROOM_PATTERN = /^(platform|tenant:[1-9]\d*)$/;
+export function principalRoom(principalId: string): string {
+  return `principal:${principalId}`;
+}
+
+const ROOM_PATTERN =
+  /^(platform|tenant:(?:0|[1-9]\d*)|principal:[A-Za-z0-9_-]{1,128})$/;
 
 export function isRealtimeRoom(room: unknown): room is string {
   return typeof room === "string" && ROOM_PATTERN.test(room);
@@ -59,8 +76,9 @@ export function toRealtimeEvent(input: RealtimeEventInput): RealtimeEvent {
 export const TICKET_TTL_MS = 15_000;
 
 export const ticketRequestSchema = z.object({
-  topics: z.array(z.enum(REALTIME_TOPICS)).min(1).max(3),
-  tenantId: z.number().int().positive().optional(),
+  topics: z.array(z.enum(REALTIME_TOPICS)).min(1).max(REALTIME_TOPICS.length),
+  tenantId: z.number().int().nonnegative().optional(),
+  principalId: z.string().min(1).max(128).optional(),
 });
 
 export type TicketRequest = z.infer<typeof ticketRequestSchema>;

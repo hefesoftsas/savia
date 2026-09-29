@@ -34,19 +34,11 @@ import {
   seedOnce,
   syncInsuranceAutoLightBundle,
 } from "./store";
-import { isPlatformTenant, scopeTenant } from "./tenant";
+import { isPlatformTenant, scopeTenant, tenantFromRequest } from "./tenant";
 import { execute } from "./runner";
 import { demoInput } from "./mock";
 const app = new Hono<{ Bindings: Env }>();
-function scopeOf(request: Request): string {
-  const header = request.headers.get("x-savia-tenant");
-  if (header !== null) return scopeTenant(header);
-  try {
-    return scopeTenant(new URL(request.url).searchParams.get("tenant"));
-  } catch {
-    return scopeTenant("");
-  }
-}
+const scopeOf = tenantFromRequest;
 /** Principal id forwarded by the API gateway for attribution, if any. */
 function actorOf(request: Request): string {
   return (request.headers.get("x-savia-actor") ?? "").slice(0, 200);

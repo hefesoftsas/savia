@@ -1,7 +1,13 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Workflows from "../workflows";
@@ -187,7 +193,7 @@ it("saves selected variables as typed references rather than interpolated string
     ),
   );
 });
-it("clears an unsaved draft when the data domain changes", async () => {
+it("clears an unsaved draft when the tenant changes", async () => {
   vi.mocked(api).mockResolvedValue({ data: [] });
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -197,17 +203,70 @@ it("clears an unsaved draft when the data domain changes", async () => {
       <Workflows objects={[]} />
     </QueryClientProvider>
   );
-  setStudioRuntime({ embedded: true, domainId: "first" });
+  setStudioRuntime({ embedded: true, tenantId: 1 });
   const view = render(element());
   fireEvent.click(await screen.findByRole("button", { name: "Nuevo flujo" }));
   fireEvent.change(screen.getByLabelText("Nombre del flujo"), {
-    target: { value: "Private first-domain draft" },
+    target: { value: "Private tenant draft" },
   });
-  setStudioRuntime({ embedded: true, domainId: "second" });
+  setStudioRuntime({ embedded: true, tenantId: 2 });
   view.rerender(element());
   expect(
     screen.queryByDisplayValue("Private first-domain draft"),
   ).not.toBeInTheDocument();
+});
+it("preserves a workflow draft and offers an explicit reload after a remote revision", async () => {
+  const original = {
+    id: "flow-1",
+    name: "Shared flow",
+    revision: 1,
+    enabled: 0,
+    definition: {
+      trigger: { type: "manual" as const },
+      nodes: [{ id: "step_1", type: "transform" as const, values: {} }],
+    },
+  };
+  let serverFlow = original;
+  vi.mocked(api).mockImplementation(async (url) => ({
+    data:
+      url === "/workflows"
+        ? [serverFlow]
+        : url === "/workflow-bundles"
+          ? []
+          : [],
+  }));
+  setStudioRuntime({ embedded: true, tenantId: 7, apiBasePath: "/tenant/7" });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchInterval: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <Workflows objects={[]} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: /Shared flow/ }));
+  const name = screen.getByLabelText("Nombre del flujo");
+  fireEvent.change(name, { target: { value: "My local draft" } });
+
+  serverFlow = { ...original, name: "Remote flow", revision: 2 };
+  const workflowsQuery = client.getQueryCache().findAll({
+    queryKey: ["workflows"],
+  })[0];
+  await act(() => {
+    client.setQueryData(workflowsQuery.queryKey, { data: [serverFlow] });
+  });
+
+  expect(name).toHaveValue("My local draft");
+  expect(await screen.findByText("Remote flow")).toBeInTheDocument();
+  expect(
+    await screen.findByText(/Tus ediciones se conservan/),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Recargar y descartar borrador" }),
+  );
+  expect(await screen.findByLabelText("Nombre del flujo")).toHaveValue(
+    "Remote flow",
+  );
 });
 it("reuses the manual delivery key after an uncertain network failure", async () => {
   const flow = {

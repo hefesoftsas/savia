@@ -10,7 +10,6 @@ export type AssistantSettingScope = "global" | "agency";
 export type EffectiveAssistantConfiguration = {
   apiKey?: string;
   model: string;
-  agencyId?: number;
   tenantId?: number;
 };
 
@@ -60,7 +59,6 @@ type ActiveAgencyRow = ActiveTenantRow;
 
 export type AssistantConfigurationSummary = {
   global: AssistantConfigurationSettingSummary | null;
-  agencies: AssistantConfigurationSettingSummary[];
   tenants: AssistantConfigurationSettingSummary[];
   deployment: AssistantConfigurationDeploymentSummary;
 };
@@ -69,8 +67,7 @@ export type AssistantConfigurationKeyState =
   "configured" | "inherited" | "deployment_fallback" | "not_configured";
 
 export type AssistantConfigurationSettingSummary = {
-  scope: AssistantSettingScope;
-  agencyId?: number;
+  scope: "global" | "tenant";
   tenantId?: number;
   keyState: AssistantConfigurationKeyState;
   model: string | null;
@@ -141,10 +138,8 @@ function summary(
   keyState: AssistantConfigurationKeyState,
 ): AssistantConfigurationSettingSummary {
   return {
-    scope: row.scope,
-    ...(row.agency_id === null
-      ? {}
-      : { agencyId: row.agency_id, tenantId: row.agency_id }),
+    scope: row.scope === "global" ? "global" : "tenant",
+    ...(row.agency_id === null ? {} : { tenantId: row.agency_id }),
     keyState,
     model: row.model,
     updatedAt: row.updated_at,
@@ -328,7 +323,7 @@ export class AssistantConfigurationRepository {
     const globalKeyState = global?.api_key_ciphertext
       ? "configured"
       : deployment.keyState;
-    const agencySettings = rows.results
+    const tenantSettings = rows.results
       .filter((row) => row.scope === "agency")
       .map((row) =>
         summary(
@@ -342,8 +337,7 @@ export class AssistantConfigurationRepository {
       );
     return {
       global: global ? summary(global, globalKeyState) : null,
-      agencies: agencySettings,
-      tenants: agencySettings,
+      tenants: tenantSettings,
       deployment,
     };
   }
@@ -360,7 +354,9 @@ export class AssistantConfigurationRepository {
       );
     }
     const agency = await this.database
-      .prepare("SELECT id FROM tenants WHERE id = ? AND kind='commercial' AND is_active = 1")
+      .prepare(
+        "SELECT id FROM tenants WHERE id = ? AND kind='commercial' AND is_active = 1",
+      )
       .bind(agencyId)
       .first<{ id: number }>();
     if (!agency) {
@@ -468,7 +464,7 @@ export class AssistantConfigurationRepository {
     return {
       ...(apiKey ? { apiKey } : {}),
       model,
-      ...(agencyId === undefined ? {} : { agencyId, tenantId: agencyId }),
+      ...(agencyId === undefined ? {} : { tenantId: agencyId }),
     };
   }
 
@@ -621,7 +617,9 @@ export function openRouterModelCatalog(
                 ? (candidate.architecture as Record<string, unknown>)
                 : undefined;
 
-            const inputModalities = Array.isArray(architecture?.input_modalities)
+            const inputModalities = Array.isArray(
+              architecture?.input_modalities,
+            )
               ? (architecture.input_modalities as string[])
               : typeof architecture?.modality === "string"
                 ? (architecture.modality as string).split("->")[0].split("+")
@@ -630,7 +628,8 @@ export function openRouterModelCatalog(
             const supportedParams = Array.isArray(
               (candidate as Record<string, unknown>).supported_parameters,
             )
-              ? ((candidate as Record<string, unknown>).supported_parameters as string[])
+              ? ((candidate as Record<string, unknown>)
+                  .supported_parameters as string[])
               : [];
 
             const modalities: AssistantModelModalities = {

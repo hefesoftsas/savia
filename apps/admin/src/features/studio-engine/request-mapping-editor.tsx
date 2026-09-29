@@ -47,7 +47,7 @@ export function RequestMappingEditor({
   const mappingPropertiesRef = useRef<HTMLDivElement>(null);
   const action =
     config.actions.find((item) => item.id === actionId) ?? config.actions[0];
-  const domainId = getStudioRuntime().domainId ?? "platform";
+  const tenantId = String(getStudioRuntime().tenantId ?? 0);
   const {
     empty: propertyFilterEmpty,
     matchCount,
@@ -64,7 +64,7 @@ export function RequestMappingEditor({
     setError("");
     setRuns([]);
     requestPageApi<{ data: PageRun[] }>(
-      "/runs?" + new URLSearchParams({ domainId, pageName }),
+      "/runs?" + new URLSearchParams({ tenantId, pageName }),
     )
       .then((result) => {
         if (active) setRuns(result.data);
@@ -83,7 +83,7 @@ export function RequestMappingEditor({
     return () => {
       active = false;
     };
-  }, [pageName, domainId, revision]);
+  }, [pageName, tenantId, revision]);
   useEffect(() => {
     setPropertySearch("");
   }, [action?.id]);

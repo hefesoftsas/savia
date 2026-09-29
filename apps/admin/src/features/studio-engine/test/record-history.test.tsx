@@ -233,9 +233,9 @@ it("discards a late response after the workspace changes", async () => {
       enabled: true,
       retentionDays: 90,
     });
-  setStudioRuntime({ embedded: false, domainId: "first" });
+  setStudioRuntime({ embedded: false, tenantId: 1 });
   const view = render(<RecordHistory object={object} recordId="one" />);
-  setStudioRuntime({ embedded: false, domainId: "second" });
+  setStudioRuntime({ embedded: false, tenantId: 2 });
   view.rerender(<RecordHistory object={object} recordId="one" />);
   await screen.findByText(/No hay cambios conservados/);
   resolveFirst({

@@ -228,7 +228,7 @@ export class SaviaApiClient {
 
   async extensionStatus(id: string): Promise<SaviaExtensionStatus> {
     const response = await this.request<{ data: SaviaExtensionStatus[] }>(
-      "/v1/data-domains/platform/api/extensions",
+      "/v1/studio/0/api/extensions",
     );
     const extension = response.data.find(
       (candidate) => candidate.manifest.id === id,
@@ -241,7 +241,7 @@ export class SaviaApiClient {
 
   async getExtensionSummary<T = unknown>(id: string): Promise<T> {
     const response = await this.request<{ data: T }>(
-      `/v1/data-domains/platform/api/extensions/${encode(id)}/summary`,
+      `/v1/studio/0/api/extensions/${encode(id)}/summary`,
     );
     return response.data;
   }
@@ -259,9 +259,7 @@ export class SaviaApiClient {
       }>;
     }>;
   }> {
-    return this.request(
-      "/v1/data-domains/platform/api/plugin-store/mcp-catalog",
-    );
+    return this.request("/v1/studio/0/api/plugin-store/mcp-catalog");
   }
 
   async executeStoreAction(
@@ -270,7 +268,7 @@ export class SaviaApiClient {
     input: Record<string, unknown>,
   ): Promise<unknown> {
     const response = await this.request<{ data: { output: unknown } }>(
-      `/v1/data-domains/platform/api/extensions/${encode(pluginId)}/actions/${encode(actionId)}`,
+      `/v1/studio/0/api/extensions/${encode(pluginId)}/actions/${encode(actionId)}`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -301,7 +299,7 @@ export class SaviaApiClient {
           };
         }
       >;
-    }>("/v1/data-domains/platform/api/objects");
+    }>("/v1/studio/0/api/objects");
     if (!all) {
       return {
         data: result.data.filter(
@@ -382,7 +380,7 @@ export class SaviaApiClient {
     }
     if (id !== undefined && (!id.trim() || id === "." || id === ".."))
       throw new Error("Invalid Studio record identifier");
-    return `/v1/data-domains/platform/api/${resource}/${encode(object)}${id === undefined ? "" : `/${encode(id)}`}`;
+    return `/v1/studio/0/api/${resource}/${encode(object)}${id === undefined ? "" : `/${encode(id)}`}`;
   }
 
   async listStudioRecords(
@@ -457,7 +455,7 @@ export class SaviaApiClient {
       throw new Error("Indica una placa válida.");
     const settings = await this.request<{
       data: { value: { vehicleLookup: { enabled: boolean; flowId: string } } };
-    }>("/v1/data-domains/platform/api/extensions/insurance.quotes/settings");
+    }>("/v1/studio/0/api/extensions/insurance.quotes/settings");
     const lookup = settings.data.value.vehicleLookup;
     if (!lookup?.enabled)
       throw new Error("La consulta de placa no está habilitada.");
@@ -467,20 +465,17 @@ export class SaviaApiClient {
       );
     const response = await this.request<{
       data: { output: { data?: { vehicle?: Record<string, unknown> } } };
-    }>(
-      "/v1/data-domains/platform/api/extensions/insurance.quotes/actions/quote",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          input: {
-            mode: "live",
-            flowId: lookup.flowId,
-            quoteInput: { vehicle: { plate: normalized } },
-          },
-        }),
-      },
-    );
+    }>("/v1/studio/0/api/extensions/insurance.quotes/actions/quote", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: {
+          mode: "live",
+          flowId: lookup.flowId,
+          quoteInput: { vehicle: { plate: normalized } },
+        },
+      }),
+    });
     const vehicle = response.data.output?.data?.vehicle;
     if (!vehicle || vehicle.plate !== normalized)
       throw new Error("No se encontraron datos verificados para esa placa.");
@@ -507,7 +502,7 @@ export class SaviaApiClient {
           products: Array<{ id: string; label: string; enabled: boolean }>;
         };
       };
-    }>("/v1/data-domains/platform/api/extensions/insurance.quotes/settings");
+    }>("/v1/studio/0/api/extensions/insurance.quotes/settings");
     return {
       ...assistantQuoteForm,
       products: settings.data.value.products
@@ -529,7 +524,7 @@ export class SaviaApiClient {
     if (!form.products.length)
       throw new Error("No hay productos habilitados en el cotizador.");
     const reference = `COT-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 8)}`;
-    const base = "/v1/data-domains/platform/api/records/";
+    const base = "/v1/studio/0/api/records/";
     const write = <T>(path: string, method: string, body: unknown) =>
       this.request<T>(path, {
         method,
@@ -587,7 +582,7 @@ export class SaviaApiClient {
                 output: { data?: Record<string, any> };
               };
             }>(
-              "/v1/data-domains/platform/api/extensions/insurance.quotes/actions/quote",
+              "/v1/studio/0/api/extensions/insurance.quotes/actions/quote",
               "POST",
               {
                 input: { mode: "live", flowId: product.id, quoteInput: input },
@@ -704,7 +699,7 @@ export class SaviaApiClient {
     const masters = await this.request<{
       data: Array<Record<string, unknown>>;
       total: number;
-    }>(`/v1/data-domains/platform/api/records/cotizaciones?${params}`);
+    }>(`/v1/studio/0/api/records/cotizaciones?${params}`);
     const totalQuotes =
       collections.data.find((c) => c.name === "cotizaciones")?.recordCount ??
       masters.total;
@@ -724,9 +719,7 @@ export class SaviaApiClient {
     const details = await this.request<{
       data: Array<Record<string, unknown>>;
       total: number;
-    }>(
-      `/v1/data-domains/platform/api/records/cotizaciones_detalle?${detailParams}`,
-    );
+    }>(`/v1/studio/0/api/records/cotizaciones_detalle?${detailParams}`);
     const received = details.data.filter((d) => d.estado === "Recibida");
     const priced = received
       .flatMap((d) => {

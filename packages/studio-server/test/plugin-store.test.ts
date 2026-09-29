@@ -1627,24 +1627,17 @@ describe("release deployment worker", () => {
       .prepare("CREATE TABLE IF NOT EXISTS tenants(id INTEGER PRIMARY KEY)")
       .run();
     await db
-      .prepare(
-        "CREATE TABLE IF NOT EXISTS studio_data_domains(id TEXT PRIMARY KEY)",
-      )
-      .run();
-    await db.prepare("INSERT INTO tenants(id) VALUES (901),(902),(903)").run();
-    await db
-      .prepare("INSERT INTO studio_data_domains(id) VALUES ('deployment-test')")
+      .prepare("INSERT INTO tenants(id) VALUES (0),(901),(902),(903)")
       .run();
     await db
       .prepare(
-        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES ('agency:902','example','Example','{}'),('tenant:903','example','Example','{}')",
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES ('tenant:902','example','Example','{}'),('tenant:903','example','Example','{}')",
       )
       .run();
     expect(await deploymentTenants(db)).toEqual([
-      "agency:902",
-      "domain:deployment-test",
-      "domain:platform",
+      "tenant:0",
       "tenant:901",
+      "tenant:902",
       "tenant:903",
     ]);
     const env = {

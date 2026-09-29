@@ -54,7 +54,6 @@ import {
 import { api, downloadCrm } from "./api";
 import { getListObjectsQueryKey } from "./generated/studio";
 import { getStudioRuntime } from "./runtime";
-import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {
   fieldEntries,
   getPipeline,
@@ -370,39 +369,6 @@ function hasSameTablePreferences(
     )
   );
 }
-function tenantIdFromDomainId(
-  domainId: string | undefined,
-): number | undefined {
-  const match = /^tenant:([1-9]\d*)$/.exec(domainId ?? "");
-  return match ? Number(match[1]) : undefined;
-}
-
-/**
- * Live sync for the records table. Subscribes to record hints for the
- * current tenant, debounces bursts (imports fire one event per row) into a
- * single refetch, and toasts what arrived. Renders nothing.
- */
-function RecordsLiveSync({ objectName }: { objectName: string }) {
-  const client = useQueryClient();
-  const runtime = getStudioRuntime();
-  const tenantId = tenantIdFromDomainId(runtime.domainId);
-  useRealtimeTopics({
-    topics: ["records"],
-    tenantId,
-    enabled: tenantId !== undefined,
-    onEvent: (event) => {
-      if (runtime.localWorkspace) {
-        runtime.localWorkspace.requestSync();
-        return;
-      }
-      if (event.collection && event.collection !== objectName) return;
-      void client.invalidateQueries({ queryKey: [objectName] });
-      void client.invalidateQueries({ queryKey: ["summary", objectName] });
-    },
-  });
-  return null;
-}
-
 export default function Records({
   object,
   onOpen,
@@ -729,7 +695,6 @@ export default function Records({
   return (
     <>
       <div className="records-panel">
-        <RecordsLiveSync objectName={object.name} />
         <div className="records-panel-toolbar">
           <div className="view-tabs">
             <button

@@ -22,7 +22,7 @@ export function RelatedPresentationSettings({
   const t = useMessages(studioMessages);
   const runtime = getStudioRuntime();
   const relations = useQuery({
-    queryKey: ["collection-relations", runtime.apiBasePath, runtime.domainId],
+    queryKey: ["collection-relations", runtime.apiBasePath, runtime.tenantId],
     queryFn: () => api<{ data: RelationDefinition[] }>("/collection-relations"),
     enabled: !!config.collectionRelation,
   });

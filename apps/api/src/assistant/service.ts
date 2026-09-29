@@ -331,7 +331,7 @@ export class SaviaAssistantService implements AssistantService {
     if (!effective.apiKey) return unavailableResponse();
 
     // The configuration resolver checks current tenant membership, including revocations.
-    const agencyId = effective.agencyId;
+    const tenantId = effective.tenantId;
 
     // 2. Extract last user text
     let lastUserText = "";
@@ -360,19 +360,19 @@ export class SaviaAssistantService implements AssistantService {
         if (request.employeeId) {
           employee = await this.virtualEmployees.getById(
             request.employeeId,
-            agencyId,
+            tenantId,
           );
         } else if (request.employeeHandle) {
           employee = await this.virtualEmployees.getByHandle(
             request.employeeHandle,
-            agencyId,
+            tenantId,
           );
         } else if (lastUserText) {
           const mentionMatch = lastUserText.match(/@([a-zA-Z0-9_\-]+)/);
           if (mentionMatch) {
             employee = await this.virtualEmployees.getByHandle(
               mentionMatch[1],
-              agencyId,
+              tenantId,
             );
           }
         }
@@ -400,7 +400,7 @@ export class SaviaAssistantService implements AssistantService {
               if (mentionMatch) {
                 employee = await this.virtualEmployees.getByHandle(
                   mentionMatch[1],
-                  agencyId,
+                  tenantId,
                 );
                 if (employee) break;
               }
@@ -413,7 +413,7 @@ export class SaviaAssistantService implements AssistantService {
     if (
       employee &&
       (employee.status !== "active" ||
-        (employee.agencyId !== null && employee.agencyId !== agencyId))
+        (employee.agencyId !== null && employee.agencyId !== tenantId))
     )
       employee = null;
     if ((request.employeeId || request.employeeHandle) && !employee) {

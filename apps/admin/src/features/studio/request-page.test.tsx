@@ -78,7 +78,7 @@ describe("generated request page runtime", () => {
     });
     setStudioRuntime({
       embedded: true,
-      domainId: "platform",
+      tenantId: 0,
       requestTransport: transport,
     });
     const mounted = render(<RequestPage object={object} />);
@@ -132,7 +132,7 @@ describe("generated request page runtime", () => {
     });
     setStudioRuntime({
       embedded: true,
-      domainId: "platform",
+      tenantId: 0,
       requestTransport: transport,
     });
     render(<RequestPage object={page} />);
@@ -250,7 +250,7 @@ describe("generated request page runtime", () => {
       });
       setStudioRuntime({
         embedded: true,
-        domainId: "platform",
+        tenantId: 0,
         requestTransport: transport,
       });
       render(<RequestPage object={page} />);

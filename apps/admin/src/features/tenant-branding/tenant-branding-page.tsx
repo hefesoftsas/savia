@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import {
@@ -327,6 +328,19 @@ function BrandingEditor({
     setNotice("");
   }
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(saved);
+  const remoteBranding = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: Number(tenantId),
+    enabled: Number.isSafeInteger(Number(tenantId)),
+    blocked: dirty || Boolean(pending),
+    refresh: () => {
+      setReload((value) => value + 1);
+      void refetch({ reload: true });
+    },
+  });
+  useEffect(() => {
+    if (remoteBranding.changed) setConflict(true);
+  }, [remoteBranding.changed]);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft || !canManage || !dirty || busy.current || conflict) return;

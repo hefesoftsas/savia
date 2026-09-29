@@ -60,3 +60,25 @@ Select a workspace in **Roles and permissions**, then open **Audit**. Administra
 Filter by action, actor ID, target ID and an inclusive date range. Dates entered in the browser use the local timezone. History loads 25 summaries per page, newest first, using a cursor rather than counting the entire history. **Refresh history** returns to the newest page. Open **View changes** to load the captured before/after values for one event; missing historical values are labeled **Not recorded**.
 
 History requires connectivity. The API rechecks administrator access for both lists and details, binds cursors to their scope and filters, and disables HTTP caching. Changing scope or receiving an authorization rejection hides the prior history. Audit data is not persisted in the offline replica.
+
+## Visible system roles
+
+The tenant role catalog includes read-only system roles derived from active
+identity assignments and tenant memberships, alongside editable custom roles.
+The platform administrator can therefore appear even when no custom role exists.
+Selecting a system role shows its source, assigned users, and resource permissions
+computed by the same compatibility policy used for authorization. A tenant's
+catalog does not include memberships from other tenants.
+
+The Members tab displays inherited system roles separately from editable custom
+assignments. Removing a custom assignment does not revoke authority inherited
+from identity or tenant membership. This display does not create persisted roles
+or grant any new access.
+
+System-role details group grants by resource in collapsible sections, using catalog labels when available. Assigned users can be collapsed independently. Expand all and Collapse all affect resource details only. These controls change presentation, not authorization. System grants remain read-only because compatibility grants and administrative checks still derive from identity and membership; editing custom grants cannot revoke inherited administrative authority.
+
+When creating a role, the header action changes from Create role to Save role and submits the visible form. Role identifiers normalize uppercase input to lowercase; the display name preserves its casing. Identifier rules are shown below the field. Saving retains native form validation and reports API errors without clearing the draft.
+
+Bootstrap administrator membership synchronization is idempotent: authentication does not rewrite an unchanged membership or advance the access revision. Real membership changes still invalidate stale policy edits.
+
+User creation includes a Tenant roles selection for enabled custom roles in the chosen tenant. The base membership role remains separate and additive: selecting custom roles does not remove its permissions. Changing the target tenant clears custom-role selections. Platform administrators use tenant:0; roles created there cannot be assigned to commercial-tenant users. Provisioning validates selected roles on the server and saves their assignments as part of the provisioning workflow.

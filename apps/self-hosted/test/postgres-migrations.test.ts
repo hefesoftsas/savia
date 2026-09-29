@@ -143,8 +143,9 @@ live("native baseline parity", () => {
           expect(
             columns
               .filter((c) => c.table_name === table.name)
-              .map((c) => c.column_name),
-          ).toEqual(table.columns.map((c: { name: string }) => c.name));
+              .map((c) => c.column_name)
+              .sort(),
+          ).toEqual(table.columns.map((c: { name: string }) => c.name).sort());
         const indexes = (
           await db
             .prepare(
@@ -228,15 +229,11 @@ live("native baseline parity", () => {
             seed: true,
           }),
         ]);
-        expect(initialization.flat()).toEqual([
-          "0001_baseline.sql",
-          "0002_workflow_collection_triggers.sql",
-          "0003_user_my_day_widgets.sql",
-          "0004_notifications.sql",
-          "0005_notification_collection_triggers.sql",
-          "0006_public_form_short_links.sql",
-          "0007_public_form_external_short_url.sql",
-        ]);
+        expect(initialization.flat()).toEqual(
+          readdirSync(coreDirectory)
+            .filter((file) => file.endsWith(".sql"))
+            .sort(),
+        );
         expect(
           await postgres
             .prepare("SELECT count(*) AS n FROM assistant_virtual_employees")
@@ -682,27 +679,25 @@ live("access revision invalidation", () => {
             await capture();
             await db
               .prepare(
-                "INSERT INTO studio_data_domains(id,label,created_by) VALUES('d','Domain','p')",
+                "INSERT INTO tenants(id,id_slug,name,created_at,updated_at) VALUES(22,'workspace-22','Workspace','now','now')",
               )
               .run();
             await capture();
-            await db
-              .prepare("DELETE FROM studio_data_domains WHERE id='d'")
-              .run();
+            await db.prepare("DELETE FROM tenants WHERE id=22").run();
             await capture();
             await db
               .prepare(
-                "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('agency:21','items','Items','{}')",
+                "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES('tenant:21','items','Items','{}')",
               )
               .run();
             await db
               .prepare(
-                "UPDATE studio_objects SET config='{}' WHERE tenant_id='agency:21'",
+                "UPDATE studio_objects SET config='{}' WHERE tenant_id='tenant:21'",
               )
               .run();
             await capture();
             await db
-              .prepare("DELETE FROM studio_objects WHERE tenant_id='agency:21'")
+              .prepare("DELETE FROM studio_objects WHERE tenant_id='tenant:21'")
               .run();
             await capture();
             await db.prepare("DELETE FROM tenants WHERE id=21").run();

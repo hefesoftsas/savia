@@ -16,7 +16,7 @@ it("has an empty catalog without consulting legacy tables or services", async ()
   const app = createCollectionSourceApp(
     unavailableDb,
     {} as R2Bucket,
-    "domain:platform",
+    "tenant:0",
     "owner",
   );
   const response = await app.request("/api/collection-catalog");

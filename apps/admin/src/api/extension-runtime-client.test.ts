@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ExtensionRuntimeClient } from "./extension-runtime-client";
 
 describe("ExtensionRuntimeClient", () => {
-  it("uses only the active CRM domain routes for a connection and action", async () => {
+  it("uses only the active tenant routes for a connection and action", async () => {
     const request = vi.fn(async (path: string, init?: RequestInit) => {
       if (path === "/extensions/inventory.sync/connections" && !init)
         return {

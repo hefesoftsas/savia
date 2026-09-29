@@ -39,7 +39,7 @@ export interface PublicQuoteAdapter {
   publish(input: {
     db: D1Database;
     tenant: string;
-    domainId: string;
+    tenantId: number;
     object: StudioObject;
   }): Promise<{ fields: PublicFormField[]; snapshot: unknown }>;
   validate(input: {
@@ -49,7 +49,7 @@ export interface PublicQuoteAdapter {
   execute(input: {
     db: D1Database;
     tenant: string;
-    domainId: string;
+    tenantId: number;
     objectName: string;
     submissionId: string;
     reference?: string;
@@ -60,7 +60,7 @@ export interface PublicQuoteAdapter {
   assertAvailable?(input: {
     db: D1Database;
     tenant: string;
-    domainId: string;
+    tenantId: number;
     objectName: string;
     snapshot: unknown;
   }): Promise<void>;
@@ -71,7 +71,7 @@ export interface PublicQuoteAdapter {
   lookupVehicle?(input: {
     db: D1Database;
     tenant: string;
-    domainId: string;
+    tenantId: number;
     objectName: string;
     snapshot: unknown;
     plate: string;
@@ -79,7 +79,7 @@ export interface PublicQuoteAdapter {
   quoteStatus?(input: {
     db: D1Database;
     tenant: string;
-    domainId: string;
+    tenantId: number;
     objectName: string;
     snapshot: unknown;
     submission: string;
@@ -103,9 +103,7 @@ export type PublicFormOptions = CaptchaOptions & {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
 };
-export const domainIdSchema = z
-  .string()
-  .regex(/^(?:[a-z][a-z0-9_-]{0,47}|tenant:[1-9][0-9]*)$/);
+export const tenantIdSchema = z.coerce.number().int().nonnegative().safe();
 export const objectNameSchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
 
 /**
@@ -184,7 +182,7 @@ export function normalizePublicFormLogo(
 }
 export const publishSchema = z
   .object({
-    domainId: domainIdSchema,
+    tenantId: tenantIdSchema,
     objectName: objectNameSchema,
     kind: z.enum(["record", "quote"]),
     expiresAt: z.string().datetime().optional(),
@@ -212,7 +210,6 @@ export type PublicFormRow = {
   id: string;
   token: string;
   tenant_id: string;
-  domain_id: string;
   object_name: string;
   kind: "record" | "quote";
   title: string;
@@ -240,10 +237,11 @@ function reject(
 ): never {
   throw new HTTPException(status, { message });
 }
-export function tenantForDomain(domainId: string) {
-  return domainId.startsWith("tenant:")
-    ? domainId.replace("tenant:", "agency:")
-    : "domain:" + domainId;
+export function tenantKey(tenantId: number) {
+  return `tenant:${tenantId}`;
+}
+function tenantIdFromKey(key: string) {
+  return Number(key.slice("tenant:".length));
 }
 export function managedForm(
   row: PublicFormRow,
@@ -265,7 +263,7 @@ export function managedForm(
     id: row.id,
     token: row.token,
     path: "/public/forms/" + row.token,
-    domainId: row.domain_id,
+    tenantId: tenantIdFromKey(row.tenant_id),
     objectName: row.object_name,
     kind: row.kind,
     title: row.title,
@@ -301,18 +299,13 @@ export async function availableObject(
   name: string,
   quoteAdapter = false,
 ) {
-  const active = tenant.startsWith("agency:")
+  const tenantId = Number(tenant.slice("tenant:".length));
+  const active = tenant.startsWith("tenant:")
     ? await db
-        .prepare(
-          "SELECT 1 FROM tenants WHERE id=? AND kind='commercial' AND is_active=1",
-        )
-        .bind(Number(tenant.slice(7)))
+        .prepare("SELECT 1 FROM tenants WHERE id=? AND is_active=1")
+        .bind(tenantId)
         .first()
-    : tenant === "domain:platform" ||
-      (await db
-        .prepare("SELECT 1 FROM studio_data_domains WHERE id=?")
-        .bind(tenant.slice(7))
-        .first());
+    : null;
   if (!active) reject("Public form unavailable.", 404);
   const object = await getObject(db, tenant, name);
   if (
@@ -498,7 +491,7 @@ export async function publishPublicForm(
   captchaConfiguration(options);
   if (input.expiresAt && Date.parse(input.expiresAt) <= Date.now())
     reject("Expiry must be in the future.");
-  const tenant = tenantForDomain(input.domainId);
+  const tenant = tenantKey(input.tenantId);
   const object = await availableObject(
     db,
     tenant,
@@ -513,7 +506,7 @@ export async function publishPublicForm(
       : await options.quote!.publish({
           db,
           tenant,
-          domainId: input.domainId,
+          tenantId: input.tenantId,
           object,
         });
   const id = crypto.randomUUID(),
@@ -523,13 +516,12 @@ export async function publishPublicForm(
   const logoImage = normalizePublicFormLogo(input.logoImage ?? null);
   await db
     .prepare(
-      "INSERT INTO public_forms(id,token,tenant_id,domain_id,object_name,kind,title,description,fields,snapshot,daily_limit,return_result,logo_image,expires_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO public_forms(id,token,tenant_id,object_name,kind,title,description,fields,snapshot,daily_limit,return_result,logo_image,expires_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(
       id,
       token,
       tenant,
-      input.domainId,
       input.objectName,
       input.kind,
       object.label,
@@ -625,7 +617,7 @@ export async function submitPublicForm(
     await options.quote.assertAvailable?.({
       db,
       tenant: link.tenant_id,
-      domainId: link.domain_id,
+      tenantId: tenantIdFromKey(link.tenant_id),
       objectName: link.object_name,
       snapshot,
     });
@@ -748,7 +740,7 @@ export async function submitPublicForm(
       result = await options.quote!.execute({
         db,
         tenant: link.tenant_id,
-        domainId: link.domain_id,
+        tenantId: tenantIdFromKey(link.tenant_id),
         objectName: link.object_name,
         submissionId: input.submissionId,
         reference: options.quote!.reference?.(input.submissionId, now),

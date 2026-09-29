@@ -28,9 +28,12 @@ async function applyMigrations() {
     .sort()) {
     const statements = readFileSync("migrations/" + migration, "utf8")
       .split(";")
+      .map((statement) =>
+        statement.replace(/^.*--> statement-breakpoint.*$/gm, ""),
+      )
       .filter((statement) => statement.trim());
     for (const statement of statements)
-      await platform.env.DB.exec(statement + ";");
+      await platform.env.DB.prepare(statement).run();
   }
 }
 
@@ -116,7 +119,7 @@ describe("listScopedFlows batched", () => {
       "INSERT INTO tenant_flows(tenant_id,flow_id,definition,updated_at) VALUES(?,?,?,?)",
     )
       .bind(
-        "agency:101",
+        "tenant:101",
         "flow-b",
         flowDefinition("flow-b", { name: "flow-b custom" }),
         new Date().toISOString(),
@@ -126,7 +129,7 @@ describe("listScopedFlows batched", () => {
       "INSERT INTO tenant_flows(tenant_id,flow_id,definition,updated_at) VALUES(?,?,?,?)",
     )
       .bind(
-        "agency:101",
+        "tenant:101",
         "flow-c",
         flowDefinition("flow-c", { deleted: true }),
         new Date().toISOString(),
@@ -137,7 +140,7 @@ describe("listScopedFlows batched", () => {
       "INSERT INTO tenant_flows(tenant_id,flow_id,definition,updated_at) VALUES(?,?,?,?)",
     )
       .bind(
-        "agency:101",
+        "tenant:101",
         "flow-tenant-only",
         flowDefinition("flow-tenant-only"),
         new Date().toISOString(),
@@ -145,7 +148,7 @@ describe("listScopedFlows batched", () => {
       .run();
 
     const { env, count } = countingEnv();
-    const flows = await listScopedFlows(env, "agency:101");
+    const flows = await listScopedFlows(env, "tenant:101");
     const queries = count();
 
     // flow-c eliminado, orden estable, precedencia del overlay.
@@ -164,7 +167,7 @@ describe("listScopedFlows batched", () => {
     expect(flows.find((flow) => flow.id === "flow-a")?.customized).toBe(false);
     // No expone variables ni secretos adicionales: misma forma que getFlow.
     for (const flow of flows) {
-      const single = await getFlow(platform.env, flow.id, "agency:101");
+      const single = await getFlow(platform.env, flow.id, "tenant:101");
       expect(flow).toEqual(single);
     }
     // El listado no crece linealmente con cada flow: 2 consultas conjuntas
@@ -180,10 +183,8 @@ describe("listScopedFlows batched", () => {
 });
 
 describe("seedOnce", () => {
-  it(
-    "seeds the catalog once and incorporates new definitions",
-    async () => {
-      const first = countingEnv();
+  it("seeds the catalog once and incorporates new definitions", async () => {
+    const first = countingEnv();
     await seedOnce(first.env);
     const firstQueries = first.count();
     expect(firstQueries).toBeGreaterThan(1);

@@ -17,11 +17,11 @@ type IntegrationSummary = {
 
 export default function ServiceCredentials({
   selected,
-  domainTools,
+  tenantTools,
   onNavigate,
 }: {
   selected: string;
-  domainTools: boolean;
+  tenantTools: boolean;
   onNavigate: (
     name: string,
     view: string,
@@ -143,7 +143,7 @@ export default function ServiceCredentials({
         </Button>
       </section>
 
-      {domainTools ? (
+      {tenantTools ? (
         <section className="credentials-section">
           <div className="credentials-section-heading">
             <Database size={18} aria-hidden="true" />

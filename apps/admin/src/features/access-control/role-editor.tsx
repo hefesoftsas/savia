@@ -1,3 +1,4 @@
+import { SystemRoleDetails } from "./system-role";
 import { useMessages } from "@/i18n/core";
 import { accessMessages } from "@/i18n/locales/access";
 import { accessPredicateSchema } from "@savia/studio-shared/access-control";
@@ -19,7 +20,9 @@ export function RoleEditor({
   catalog,
   onSave,
   onDelete,
+  unavailable = false,
 }: {
+  unavailable?: boolean;
   scope: string;
   revision: number;
   role?: AccessRole;
@@ -47,11 +50,15 @@ export function RoleEditor({
     [error, setError] = useState("");
   const online = useOnlineStatus();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  if (role?.protected)
+    return <SystemRoleDetails role={role} catalog={catalog} />;
   return (
     <form
+      id="access-role-editor"
       className="space-y-6"
       onSubmit={async (e) => {
         e.preventDefault();
+        if (busy || !online || unavailable) return;
         setError("");
         if (
           draft.grants.some(
@@ -71,6 +78,20 @@ export function RoleEditor({
         }
       }}
     >
+      {unavailable && (
+        <p role="alert">
+          {t(
+            "This role was removed. Your draft is preserved but cannot be saved.",
+          )}
+        </p>
+      )}
+      {revision !== draft.expectedRevision && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t(
+            "Permissions changed elsewhere. Your draft is preserved; reopen the role before saving.",
+          )}
+        </p>
+      )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {Object.hasOwn(accessMessages, error)
@@ -86,7 +107,7 @@ export function RoleEditor({
         </p>
       )}
       <fieldset
-        disabled={busy || role?.protected || !online}
+        disabled={busy || role?.protected || !online || unavailable}
         className="space-y-6"
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -96,12 +117,21 @@ export function RoleEditor({
               id="role-name"
               required
               pattern="[a-z][a-z0-9_-]{0,63}"
+              maxLength={64}
+              aria-describedby="role-name-help"
               title={t(
                 "Start with a lowercase letter; use lowercase letters, numbers, underscores or hyphens.",
               )}
               value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              onChange={(e) =>
+                setDraft({ ...draft, name: e.target.value.toLowerCase() })
+              }
             />
+            <p id="role-name-help" className="text-xs text-muted-foreground">
+              {t(
+                "Start with a lowercase letter; use lowercase letters, numbers, underscores or hyphens.",
+              )}
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="role-label">{t("Display name")}</Label>

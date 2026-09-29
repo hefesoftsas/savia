@@ -192,6 +192,11 @@ export function createPersonalIntegrationNangoClient(
             ...Object.fromEntries(headers(nango.apiKey)),
             "connection-id": request.connection.nangoConnectionId,
             "provider-config-key": request.connection.nangoIntegrationId,
+            // Nango's OneDrive Personal provider defaults to api.onedrive.com,
+            // while Savia uses Graph paths and Graph-scoped Microsoft tokens.
+            ...(request.connection.provider === "onedrive_personal"
+              ? { "base-url-override": "https://graph.microsoft.com" }
+              : {}),
             ...(hasBody
               ? { "content-type": request.contentType ?? "application/json" }
               : {}),

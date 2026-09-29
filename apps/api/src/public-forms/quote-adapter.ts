@@ -22,7 +22,7 @@ const policySchema = z
     version: z.literal(1),
     publicationId: z.string().uuid(),
     tenant: z.string(),
-    domainId: z.string(),
+    tenantId: z.number().int().nonnegative().safe(),
     objectName: z
       .string()
       .refine((name) => contribution.objectNames.includes(name)),
@@ -267,11 +267,11 @@ export function createPublicQuoteAdapter(options: {
   };
   const assertAvailable: NonNullable<
     PublicQuoteAdapter["assertAvailable"]
-  > = async ({ db, tenant, domainId, objectName, snapshot }) => {
+  > = async ({ db, tenant, tenantId, objectName, snapshot }) => {
     const frozen = policy(snapshot);
     if (
       frozen.tenant !== tenant ||
-      frozen.domainId !== domainId ||
+      frozen.tenantId !== tenantId ||
       frozen.objectName !== objectName
     )
       throw new HTTPException(404, {
@@ -313,14 +313,14 @@ export function createPublicQuoteAdapter(options: {
   async function lookupVehicle({
     db,
     tenant,
-    domainId,
+    tenantId,
     objectName,
     snapshot,
     plate,
   }: {
     db: D1Database;
     tenant: string;
-    domainId: string;
+    tenantId: number;
     objectName: string;
     snapshot: unknown;
     plate: string;
@@ -328,7 +328,7 @@ export function createPublicQuoteAdapter(options: {
     const frozen = policy(snapshot);
     if (
       frozen.tenant !== tenant ||
-      frozen.domainId !== domainId ||
+      frozen.tenantId !== tenantId ||
       frozen.objectName !== objectName
     )
       throw new HTTPException(404, {
@@ -437,7 +437,7 @@ export function createPublicQuoteAdapter(options: {
     async quoteStatus({
       db,
       tenant,
-      domainId,
+      tenantId,
       objectName,
       snapshot,
       submission,
@@ -445,7 +445,7 @@ export function createPublicQuoteAdapter(options: {
       const frozen = policy(snapshot);
       if (
         frozen.tenant !== tenant ||
-        frozen.domainId !== domainId ||
+        frozen.tenantId !== tenantId ||
         frozen.objectName !== objectName
       )
         throw new HTTPException(404, {
@@ -501,7 +501,7 @@ export function createPublicQuoteAdapter(options: {
         }),
       };
     },
-    async publish({ db, tenant, domainId, object }) {
+    async publish({ db, tenant, tenantId, object }) {
       if (!options.executor)
         throw new HTTPException(503, {
           message: "El servicio de cotización no está disponible.",
@@ -515,7 +515,7 @@ export function createPublicQuoteAdapter(options: {
         version: 1,
         publicationId: crypto.randomUUID(),
         tenant,
-        domainId,
+        tenantId,
         objectName: object.name,
         extensionId,
         extensionVersion: await extensionVersion(db, tenant),

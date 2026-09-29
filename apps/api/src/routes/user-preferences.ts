@@ -76,11 +76,7 @@ const invalidAppearanceResponseSchema = z.object({
 
 const myDayCollectionWidgetSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,48}$/),
-  apiBasePath: z
-    .string()
-    .regex(
-      /^\/v1\/(data-domains\/[a-z][a-z0-9_-]{0,47}|(?:studio|dynamic-crm)\/[1-9][0-9]*)$/,
-    ),
+  apiBasePath: z.string().regex(/^\/v1\/studio\/(?:0|[1-9][0-9]*)$/),
   collection: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
   kind: z.union([
     z.enum(["summary", "items", "chart", "actions"]),

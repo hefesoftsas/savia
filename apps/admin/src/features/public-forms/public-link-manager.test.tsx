@@ -34,7 +34,7 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
   });
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -54,10 +54,10 @@ it("publishes an acknowledged snapshot, copies its public URL and revokes its li
     screen.getByRole("button", { name: "Copiar enlace corto" }),
   ).toBeEnabled();
   expect(request.mock.calls[0][0]).toBe(
-    "/v1/public-forms?domainId=domain&objectName=people",
+    "/v1/public-forms?tenantId=0&objectName=people",
   );
   expect(JSON.parse(request.mock.calls[1][1].body)).toEqual({
-    domainId: "domain",
+    tenantId: 0,
     objectName: "people",
     kind: "record",
     dailyLimit: 25,
@@ -92,7 +92,7 @@ it("deletes a revoked link only after inline confirmation", async () => {
     .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })));
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -129,7 +129,7 @@ it("explains missing captcha configuration when publishing is unavailable", asyn
     .mockResolvedValueOnce(new Response("{}", { status: 503 }));
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -177,7 +177,7 @@ it("toggles the QR code and downloads it as SVG", async () => {
   try {
     render(
       <PublicLinkManager
-        domainId="domain"
+        tenantId={0}
         objectName="people"
         kind="record"
         request={request}
@@ -234,7 +234,7 @@ it("shares the public URL when Web Share API is available", async () => {
 
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -279,7 +279,7 @@ it("creates a Savia short URL through the authenticated API", async () => {
 
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -322,7 +322,7 @@ it("restores a published short URL when the link list reloads", async () => {
 
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -361,7 +361,7 @@ it("shows the canonical and external short links together after loading", async 
 
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -402,7 +402,7 @@ it("renders the direct open link button and back button when provided", async ()
 
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}
@@ -431,7 +431,7 @@ it("applies expiration and limit presets in creation form", async () => {
 
   render(
     <PublicLinkManager
-      domainId="domain"
+      tenantId={0}
       objectName="people"
       kind="record"
       request={request}

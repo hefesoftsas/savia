@@ -62,7 +62,7 @@ beforeEach(async () => {
   );
 });
 
-const workspace = { kind: "workspace", id: "agency:9201" } as const;
+const workspace = { kind: "workspace", id: "tenant:9201" } as const;
 
 describe("notification policy", () => {
   it("resolves explicit recipients through the dispatcher helper", async () => {
@@ -113,7 +113,12 @@ describe("notification policy", () => {
         scope: workspace,
         key: "followers",
         actor: { kind: "system", id: null },
-        source: { kind: "record", collection: "requests", id: "r1", operation: "updated" },
+        source: {
+          kind: "record",
+          collection: "requests",
+          id: "r1",
+          operation: "updated",
+        },
         title: "Changed",
         body: "",
         audience: { kind: "collection-followers", collection: "requests" },
@@ -132,7 +137,9 @@ describe("notification policy", () => {
     expect(await policy.canReadScope(outsider, workspace)).toBe(false);
     expect(await policy.canSend(admin, workspace)).toBe(true);
     expect(await policy.canSend(member, workspace)).toBe(false);
-    expect(await policy.canSend(admin, { kind: "account", id: admin })).toBe(false);
+    expect(await policy.canSend(admin, { kind: "account", id: admin })).toBe(
+      false,
+    );
     expect(
       await policy.canReadSource(member, workspace, {
         kind: "record",

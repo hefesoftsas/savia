@@ -13,7 +13,6 @@ describe("ActiveTenantSelector", () => {
         { id: 101, name: "Organización Norte" },
         { id: 202, name: "Organización Sur" },
       ],
-      agencies: [],
     });
     const client = {
       activeTenant: vi.fn().mockResolvedValue({
@@ -22,7 +21,6 @@ describe("ActiveTenantSelector", () => {
           { id: 101, name: "Organización Norte" },
           { id: 202, name: "Organización Sur" },
         ],
-        agencies: [],
       }),
       setActiveTenant,
     };
@@ -31,7 +29,7 @@ describe("ActiveTenantSelector", () => {
     render(<ActiveTenantSelector client={client} />);
 
     await user.selectOptions(
-      await screen.findByLabelText("Organización activa"),
+      await screen.findByLabelText("Tenant activo"),
       "202",
     );
 
@@ -46,14 +44,13 @@ describe("ActiveTenantSelector", () => {
           { id: 101, name: "Organización Norte" },
           { id: 202, name: "Organización Sur" },
         ],
-        agencies: [],
       }),
       setActiveTenant: vi.fn().mockRejectedValue(new Error("No disponible")),
     };
     const user = userEvent.setup();
 
     render(<ActiveTenantSelector client={client} />);
-    const selector = await screen.findByLabelText("Organización activa");
+    const selector = await screen.findByLabelText("Tenant activo");
     await user.selectOptions(selector, "202");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No disponible");

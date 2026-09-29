@@ -1,6 +1,10 @@
+import {
+  useRealtimeRefresh,
+  RemoteChangesNotice,
+} from "@/realtime/use-realtime-refresh";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   Check,
@@ -58,20 +62,20 @@ import { ModelCapabilityBadges } from "./model-capability-badges";
 import { SettingsPanelSkeleton } from "@/components/admin/page-skeletons";
 
 type ConfigurationServices = Pick<AppServices, "assistantConfiguration">;
-type ConfigurationTab = "global" | "agency";
+type ConfigurationTab = "global" | "tenant";
 
 function failureMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function agencyName(
-  agencyId: number,
-  agencies: Array<{ id: number; name: string }>,
+function tenantName(
+  tenantId: number,
+  tenants: Array<{ id: number; name: string }>,
   t: ReturnType<typeof useMessages<typeof settingsMessages>>,
 ): string {
   return (
-    agencies.find((agency) => agency.id === agencyId)?.name ??
-    t("Organización #%{id}", { id: agencyId })
+    tenants.find((tenant) => tenant.id === tenantId)?.name ??
+    t("Tenant #%{id}", { id: tenantId })
   );
 }
 
@@ -91,7 +95,7 @@ function keyState(
 /**
  * THESIS: configuración segura y operativa, no un panel técnico opaco.
  * OWN-WORLD: hereda el panel Savia con una superficie clara, bordes precisos y acento primario.
- * STORY: un administrador identifica el estado, reemplaza una clave y administra excepciones por agencia.
+ * STORY: un administrador identifica el estado, reemplaza una clave y administra excepciones por tenant.
  * FIRST VIEWPORT: título de propósito, estado global y acción de guardar antes de la tabla de excepciones.
  * FORM: campos nativos, tablas de lectura rápida y confirmación solo para volver a heredar.
  */
@@ -110,7 +114,7 @@ export function AssistantConfigurationPanel({
   const [summary, setSummary] = useState<AssistantConfigurationSummary | null>(
     null,
   );
-  const [agencies, setAgencies] = useState<Array<{ id: number; name: string }>>(
+  const [tenants, setTenants] = useState<Array<{ id: number; name: string }>>(
     [],
   );
   const [models, setModels] = useState<AssistantModel[]>([]);
@@ -124,40 +128,61 @@ export function AssistantConfigurationPanel({
   const [globalModel, setGlobalModel] = useState("");
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [confirmGlobalKeyClear, setConfirmGlobalKeyClear] = useState(false);
-  const [selectedAgencyId, setSelectedAgencyId] = useState<
+  const [selectedTenantId, setSelectedTenantId] = useState<
     number | undefined
   >();
-  const [agencyKey, setAgencyKey] = useState("");
-  const [clearAgencyKey, setClearAgencyKey] = useState(false);
-  const [agencyModel, setAgencyModel] = useState("");
-  const [savingAgency, setSavingAgency] = useState(false);
+  const [tenantKey, setTenantKey] = useState("");
+  const [clearTenantKey, setClearTenantKey] = useState(false);
+  const [tenantModel, setTenantModel] = useState("");
+  const [savingTenant, setSavingTenant] = useState(false);
   const [pendingDeletion, setPendingDeletion] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<ConfigurationTab>("global");
 
   const selectedOverride = useMemo(
     () =>
-      summary?.agencies.find(
-        (setting) => setting.agencyId === selectedAgencyId,
+      summary?.tenants.find(
+        (setting) => setting.tenantId === selectedTenantId,
       ) ?? null,
-    [selectedAgencyId, summary?.agencies],
+    [selectedTenantId, summary?.tenants],
   );
 
+  const draftSnapshot = useRef("");
+  draftSnapshot.current = JSON.stringify([
+    globalKey,
+    globalModel,
+    tenantKey,
+    tenantModel,
+    clearTenantKey,
+    selectedTenantId,
+  ]);
   const load = async () => {
+    const snapshot = draftSnapshot.current;
     setLoading(true);
     setError(null);
     setAccessDenied(false);
     try {
-      const [nextSummary, activeAgency] = await Promise.all([
+      const [nextSummary, activeTenant] = await Promise.all([
         client.summary(),
-        client.activeAgency(),
+        client.activeTenant(),
       ]);
+      if (draftSnapshot.current !== snapshot) return;
       setSummary(nextSummary);
-      setAgencies(activeAgency.agencies);
+      setTenants(activeTenant.tenants);
       setGlobalModel(nextSummary.global?.model ?? "");
-      if (selectedAgencyId === undefined && nextSummary.agencies[0]?.agencyId) {
-        setSelectedAgencyId(nextSummary.agencies[0].agencyId);
-        setAgencyModel(nextSummary.agencies[0].model ?? "");
+      if (selectedTenantId !== undefined) {
+        setTenantModel(
+          nextSummary.tenants.find(
+            (setting) => setting.tenantId === selectedTenantId,
+          )?.model ?? "",
+        );
+      }
+      if (
+        selectedTenantId === undefined &&
+        nextSummary.tenants[0]?.tenantId !== undefined
+      ) {
+        setSelectedTenantId(nextSummary.tenants[0].tenantId);
+        setTenantModel(nextSummary.tenants[0].model ?? "");
       }
     } catch (exception) {
       if (exception instanceof ApiClientError && exception.status === 403) {
@@ -185,16 +210,37 @@ export function AssistantConfigurationPanel({
     void load();
   }, [client]);
 
-  const selectAgency = (agencyId: number) => {
-    const override = summary?.agencies.find(
-      (setting) => setting.agencyId === agencyId,
+  const draftDirty = Boolean(
+    globalKey ||
+    tenantKey ||
+    clearTenantKey ||
+    globalModel !== (summary?.global?.model ?? "") ||
+    tenantModel !== (selectedOverride?.model ?? ""),
+  );
+  const remoteGlobal = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: 0,
+    blocked: draftDirty || savingGlobal || savingTenant,
+    refresh: load,
+  });
+  const remoteTenant = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: selectedTenantId,
+    enabled: selectedTenantId !== undefined && selectedTenantId !== 0,
+    blocked: draftDirty || savingGlobal || savingTenant,
+    refresh: load,
+  });
+
+  const selectTenant = (tenantId: number) => {
+    const override = summary?.tenants.find(
+      (setting) => setting.tenantId === tenantId,
     );
-    setSelectedAgencyId(agencyId);
-    setAgencyModel(override?.model ?? "");
-    setAgencyKey("");
-    setClearAgencyKey(false);
+    setSelectedTenantId(tenantId);
+    setTenantModel(override?.model ?? "");
+    setTenantKey("");
+    setClearTenantKey(false);
     setNotice(null);
-    setActiveTab("agency");
+    setActiveTab("tenant");
   };
 
   const saveGlobal = async (event: FormEvent<HTMLFormElement>) => {
@@ -255,27 +301,27 @@ export function AssistantConfigurationPanel({
     }
   };
 
-  const saveAgency = async (event: FormEvent<HTMLFormElement>) => {
+  const saveTenant = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedAgencyId) return;
-    setSavingAgency(true);
+    if (selectedTenantId === undefined) return;
+    setSavingTenant(true);
     setError(null);
     setNotice(null);
     try {
-      const next = await client.saveAgencyOverride(selectedAgencyId, {
-        ...(clearAgencyKey
+      const next = await client.saveTenantOverride(selectedTenantId, {
+        ...(clearTenantKey
           ? { clearApiKey: true }
-          : agencyKey.trim()
-            ? { apiKey: agencyKey.trim() }
+          : tenantKey.trim()
+            ? { apiKey: tenantKey.trim() }
             : {}),
-        model: agencyModel.trim() || null,
+        model: tenantModel.trim() || null,
       });
       setSummary(next);
-      setAgencyKey("");
-      setClearAgencyKey(false);
+      setTenantKey("");
+      setClearTenantKey(false);
       setNotice(
-        t("Configuración de %{agency} guardada.", {
-          agency: agencyName(selectedAgencyId, agencies, t),
+        t("Configuración de %{tenant} guardada.", {
+          tenant: tenantName(selectedTenantId, tenants, t),
         }),
       );
     } catch (exception) {
@@ -283,7 +329,7 @@ export function AssistantConfigurationPanel({
         failureMessage(exception, t("No fue posible guardar el override.")),
       );
     } finally {
-      setSavingAgency(false);
+      setSavingTenant(false);
     }
   };
 
@@ -292,15 +338,15 @@ export function AssistantConfigurationPanel({
     setDeleting(true);
     setError(null);
     try {
-      await client.clearAgencyOverride(pendingDeletion);
+      await client.clearTenantOverride(pendingDeletion);
       const next = await client.summary();
       setSummary(next);
-      setAgencyKey("");
-      setClearAgencyKey(false);
-      setAgencyModel("");
+      setTenantKey("");
+      setClearTenantKey(false);
+      setTenantModel("");
       setNotice(
-        t("%{agency} vuelve a heredar la configuración global.", {
-          agency: agencyName(pendingDeletion, agencies, t),
+        t("%{tenant} vuelve a heredar la configuración global.", {
+          tenant: tenantName(pendingDeletion, tenants, t),
         }),
       );
       setPendingDeletion(null);
@@ -339,7 +385,7 @@ export function AssistantConfigurationPanel({
     return <main className="mx-auto w-full max-w-3xl py-10">{denied}</main>;
   }
 
-  const showAgencyConfiguration = !embedded && !globalOnly;
+  const showTenantConfiguration = !embedded && !globalOnly;
   const globalKeyState = summary?.global?.keyState ?? "not_configured";
   const isCustomGlobalKeyConfigured =
     summary?.global?.keyState === "configured";
@@ -468,6 +514,16 @@ export function AssistantConfigurationPanel({
 
   const panel = (
     <>
+      <RemoteChangesNotice
+        changed={remoteGlobal.changed || remoteTenant.changed}
+        reload={async () => {
+          setGlobalKey("");
+          setTenantKey("");
+          setClearTenantKey(false);
+          await remoteGlobal.reload();
+          await remoteTenant.reload();
+        }}
+      />
       {embedded && globalOnly ? (
         <CredentialEntry
           title="OpenRouter"
@@ -493,12 +549,12 @@ export function AssistantConfigurationPanel({
         >
           <TabsList>
             <TabsTrigger value="global">{t("Global")}</TabsTrigger>
-            {showAgencyConfiguration ? (
-              <TabsTrigger value="agency">
+            {showTenantConfiguration ? (
+              <TabsTrigger value="tenant">
                 {t("Por organización")}
-                {(summary?.agencies.length ?? 0) > 0 ? (
+                {(summary?.tenants.length ?? 0) > 0 ? (
                   <Badge className="ml-1.5" variant="outline">
-                    {summary?.agencies.length}
+                    {summary?.tenants.length}
                   </Badge>
                 ) : null}
               </TabsTrigger>
@@ -533,9 +589,9 @@ export function AssistantConfigurationPanel({
             </Card>
           </TabsContent>
 
-          {showAgencyConfiguration ? (
-            <TabsContent value="agency">
-              {summary?.agencies.length ? (
+          {showTenantConfiguration ? (
+            <TabsContent value="tenant">
+              {summary?.tenants.length ? (
                 <div className="overflow-hidden rounded-xl border bg-card">
                   <Table>
                     <TableHeader className="bg-muted/40">
@@ -549,12 +605,12 @@ export function AssistantConfigurationPanel({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {summary.agencies.map((setting) => {
-                        const agencyId = setting.agencyId!;
+                      {summary.tenants.map((setting) => {
+                        const tenantId = setting.tenantId!;
                         return (
-                          <TableRow key={agencyId}>
+                          <TableRow key={tenantId}>
                             <TableCell className="font-medium">
-                              {agencyName(agencyId, agencies, t)}
+                              {tenantName(tenantId, tenants, t)}
                             </TableCell>
                             <TableCell>
                               <div>
@@ -580,7 +636,7 @@ export function AssistantConfigurationPanel({
                                   type="button"
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => selectAgency(agencyId)}
+                                  onClick={() => selectTenant(tenantId)}
                                 >
                                   {t("Editar")}
                                 </Button>
@@ -589,8 +645,8 @@ export function AssistantConfigurationPanel({
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => {
-                                    setActiveTab("agency");
-                                    setPendingDeletion(agencyId);
+                                    setActiveTab("tenant");
+                                    setPendingDeletion(tenantId);
                                   }}
                                 >
                                   {t("Volver a heredar")}
@@ -611,31 +667,31 @@ export function AssistantConfigurationPanel({
 
               <form
                 className="mt-5 grid max-w-3xl gap-4 rounded-xl border bg-card p-5 sm:p-6"
-                onSubmit={saveAgency}
+                onSubmit={saveTenant}
               >
                 <div className="grid gap-2">
-                  <Label htmlFor="assistant-agency">{t("Organización")}</Label>
+                  <Label htmlFor="assistant-tenant">{t("Tenant")}</Label>
                   <select
-                    id="assistant-agency"
+                    id="assistant-tenant"
                     className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
-                    value={selectedAgencyId ?? ""}
+                    value={selectedTenantId ?? ""}
                     onChange={(event) =>
-                      selectAgency(Number(event.target.value))
+                      selectTenant(Number(event.target.value))
                     }
                   >
                     <option value="" disabled>
                       {t("Selecciona una organización")}
                     </option>
-                    {agencies.map((agency) => (
-                      <option key={agency.id} value={agency.id}>
-                        {agency.name}
+                    {tenants.map((tenant) => (
+                      <option key={tenant.id} value={tenant.id}>
+                        {tenant.name}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="assistant-agency-key">
+                    <Label htmlFor="assistant-tenant-key">
                       {t("Clave de organización")}
                     </Label>
                     {selectedOverride?.keyState === "configured" &&
@@ -650,17 +706,17 @@ export function AssistantConfigurationPanel({
                     ) : null}
                   </div>
                   <Input
-                    id="assistant-agency-key"
+                    id="assistant-tenant-key"
                     type="password"
                     autoComplete="new-password"
-                    value={agencyKey}
-                    onChange={(event) => setAgencyKey(event.target.value)}
+                    value={tenantKey}
+                    onChange={(event) => setTenantKey(event.target.value)}
                     placeholder={
                       selectedOverride?.keyState === "configured"
                         ? t("•••••••••••••••• (dejar en blanco para conservar)")
                         : t("Hereda global")
                     }
-                    disabled={!selectedAgencyId || clearAgencyKey}
+                    disabled={selectedTenantId === undefined || clearTenantKey}
                   />
                   {selectedOverride?.keyState === "configured" ? (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200">
@@ -682,15 +738,15 @@ export function AssistantConfigurationPanel({
                   {selectedOverride?.keyState === "configured" ? (
                     <label
                       className="flex items-center gap-2 text-sm text-muted-foreground"
-                      htmlFor="assistant-agency-inherit-key"
+                      htmlFor="assistant-tenant-inherit-key"
                     >
                       <input
-                        id="assistant-agency-inherit-key"
+                        id="assistant-tenant-inherit-key"
                         type="checkbox"
-                        checked={clearAgencyKey}
+                        checked={clearTenantKey}
                         onChange={(event) => {
-                          setClearAgencyKey(event.target.checked);
-                          if (event.target.checked) setAgencyKey("");
+                          setClearTenantKey(event.target.checked);
+                          if (event.target.checked) setTenantKey("");
                         }}
                       />
                       {t("Heredar clave global")}
@@ -698,10 +754,10 @@ export function AssistantConfigurationPanel({
                   ) : null}
                 </div>
                 <ModelInput
-                  id="assistant-agency-model"
-                  label={t("Modelo de organización")}
-                  value={agencyModel}
-                  onChange={setAgencyModel}
+                  id="assistant-tenant-model"
+                  label={t("Modelo del tenant")}
+                  value={tenantModel}
+                  onChange={setTenantModel}
                   models={models}
                   fallbackModel={
                     summary?.global?.model || summary?.deployment?.model
@@ -711,14 +767,14 @@ export function AssistantConfigurationPanel({
                       ? t("Hereda de global")
                       : t("Modelo predeterminado")
                   }
-                  disabled={!selectedAgencyId}
+                  disabled={selectedTenantId === undefined}
                 />
                 <div>
                   <Button
                     type="submit"
-                    disabled={!selectedAgencyId || savingAgency}
+                    disabled={selectedTenantId === undefined || savingTenant}
                   >
-                    {savingAgency ? (
+                    {savingTenant ? (
                       <LoaderCircle className="animate-spin" />
                     ) : null}
                     {t("Guardar")}
@@ -739,8 +795,8 @@ export function AssistantConfigurationPanel({
             <DialogTitle>{t("Volver a heredar")}</DialogTitle>
             <DialogDescription>
               {pendingDeletion
-                ? t("%{agency} vuelve a heredar la configuración global.", {
-                    agency: agencyName(pendingDeletion, agencies, t),
+                ? t("%{tenant} vuelve a heredar la configuración global.", {
+                    tenant: tenantName(pendingDeletion, tenants, t),
                   })
                 : ""}
             </DialogDescription>

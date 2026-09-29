@@ -1,3 +1,7 @@
+import {
+  useRealtimeRefresh,
+  RemoteChangesNotice,
+} from "@/realtime/use-realtime-refresh";
 import { useMemo, useState } from "react";
 import {
   closestCenter,
@@ -62,11 +66,11 @@ function useCollectionLabels(
     );
     if (collectionWidgets.length === 0) return;
     let active = true;
-    const domains = [
+    const apiBasePaths = [
       ...new Set(collectionWidgets.map((widget) => widget.apiBasePath)),
     ];
     void Promise.allSettled(
-      domains.map((apiBasePath) =>
+      apiBasePaths.map((apiBasePath) =>
         listWidgetCollections(apiClient, apiBasePath).then((collections) => ({
           apiBasePath,
           collections,
@@ -159,9 +163,22 @@ export function MyDayWidgetsSection({
   const labels = useCollectionLabels(apiClient, widgets);
   // La página ya posee una instancia (header): reutilizarla evita duplicar
   // /connections y /events x2 en el mismo ms.
-  const fallbackAgenda = useMyDayAgenda(agendaProp ? undefined : personalIntegrations);
+  const fallbackAgenda = useMyDayAgenda(
+    agendaProp ? undefined : personalIntegrations,
+  );
   const agenda = agendaProp ?? fallbackAgenda;
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  const remoteLayout = useRealtimeRefresh({
+    topics: ["account"],
+    blocked: saving || dialogOpen || Boolean(activeId),
+    refresh: async () => {
+      setDialogOpen(false);
+      setActiveId(null);
+      await reload();
+    },
+    accepts: (event) => !event.collection || event.collection === "preferences",
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -216,6 +233,7 @@ export function MyDayWidgetsSection({
 
   return (
     <section aria-label="Mis widgets" className="mt-8">
+      <RemoteChangesNotice {...remoteLayout} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">

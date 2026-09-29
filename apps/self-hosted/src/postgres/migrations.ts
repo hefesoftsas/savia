@@ -112,7 +112,14 @@ export async function migratePostgres(options: {
       const applied: string[] = [];
       for (const migration of migrations) {
         if (completed.has(migration.filename)) continue;
-        await client.query(migration.sql);
+        // Source files use statement breakpoints as explicit SQL delimiters.
+        // Keep checksums on the original bytes while terminating each chunk.
+        await client.query(
+          migration.sql
+            .split("--> statement-breakpoint")
+            .map((sql) => sql.trim() + "\n;")
+            .join("\n"),
+        );
         await client.query(
           "INSERT INTO _savia_postgres_migrations(position,filename,checksum) VALUES($1,$2,$3)",
           [

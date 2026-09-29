@@ -13,13 +13,13 @@ function fail(message) {
   throw new Error(`No se pudieron publicar los plugins: ${message}`);
 }
 
-/** `v1/dynamic-crm/:tenant` o `v1/data-domains/:domain` según destino. */
-export function apiPrefix(apiUrl, { tenant, domain }) {
+/** Canonical tenant workspace endpoint, including the reserved tenant zero. */
+export function apiPrefix(apiUrl, { tenant }) {
   const base = apiUrl.replace(/\/$/, "");
-  if (tenant) return `${base}/v1/dynamic-crm/${encodeURIComponent(tenant)}/api`;
-  if (domain)
-    return `${base}/v1/data-domains/${encodeURIComponent(domain)}/api`;
-  fail("indica --tenant (p. ej. agency:101) o --domain.");
+  const id = String(tenant ?? "").replace(/^tenant:/, "");
+  if (!/^(0|[1-9][0-9]*)$/.test(id) || !Number.isSafeInteger(Number(id)))
+    fail("provide --tenant with a non-negative integer tenant ID.");
+  return `${base}/v1/studio/${id}/api`;
 }
 
 export function parseArguments(argv) {
@@ -29,7 +29,6 @@ export function parseArguments(argv) {
     updateInstalled: false,
     dryRun: false,
     tenant: null,
-    domain: null,
     previewBranch: null,
     apiUrl: process.env.SAVIA_API_URL,
     cookie: process.env.SAVIA_SESSION_COOKIE,
@@ -43,7 +42,6 @@ export function parseArguments(argv) {
     };
     if (arg === "--api-url") options.apiUrl = next();
     else if (arg === "--tenant") options.tenant = next();
-    else if (arg === "--domain") options.domain = next();
     else if (arg === "--preview-branch") options.previewBranch = next();
     else if (arg === "--cookie") options.cookie = next();
     else if (arg === "--ports")
@@ -61,8 +59,7 @@ export function parseArguments(argv) {
     options.apiUrl = `https://${names.workers.api}.workers.dev`;
   }
   if (!options.apiUrl) fail("indica --api-url o SAVIA_API_URL.");
-  if (!options.tenant && !options.domain)
-    fail("indica --tenant (p. ej. agency:101) o --domain.");
+  apiPrefix(options.apiUrl, options);
   if (!options.dryRun && !options.cookie)
     fail(
       "indica --cookie o SAVIA_SESSION_COOKIE con el header Cookie completo " +

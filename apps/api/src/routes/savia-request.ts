@@ -10,7 +10,7 @@ export type SaviaRequestService = {
   fetch(request: Request): Promise<Response> | Response;
 };
 
-const TENANT_PATTERN = /^[A-Za-z0-9:_.-]{1,120}$/;
+const TENANT_PATTERN = /^tenant:(?:0|[1-9][0-9]*)$/;
 const EDITOR_ROLES = new Set([
   "agency_admin",
   "tenant_admin",

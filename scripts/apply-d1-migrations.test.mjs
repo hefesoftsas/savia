@@ -76,8 +76,20 @@ for (const partial of [0, 34, 203]) {
         db.exec('PRAGMA foreign_keys=ON');
         globalThis.fetch = async (_url, options) => {
           try {
-            const results = db.prepare(JSON.parse(options.body).sql).all();
-            return Response.json({success:true,result:[{results}]});
+            const body = JSON.parse(options.body);
+            const execute = (sql) => {
+              const statement = db.prepare(sql);
+              if (statement.columns().length) return {results:statement.all()};
+              db.exec(sql);
+              return {results:[]};
+            };
+            let result;
+            if (body.batch) {
+              db.exec('BEGIN');
+              try { result = body.batch.map(({sql}) => execute(sql)); db.exec('COMMIT'); }
+              catch (error) { db.exec('ROLLBACK'); throw error; }
+            } else result = [execute(body.sql)];
+            return Response.json({success:true,result});
           } catch (error) {
             return Response.json({success:false,errors:[{message:error.message}]},{status:400});
           }
@@ -112,7 +124,7 @@ for (const partial of [0, 34, 203]) {
             "SELECT tenant_id FROM studio_solution_installations WHERE id='source.solution'",
           )
           .get().tenant_id,
-        "agency:101",
+        "tenant:101",
       );
       assert.equal(
         db
@@ -120,7 +132,7 @@ for (const partial of [0, 34, 203]) {
             "SELECT tenant_id FROM studio_solution_objects WHERE solution_id='source.solution'",
           )
           .get().tenant_id,
-        "agency:101",
+        "tenant:101",
       );
       assert.equal(
         db
@@ -197,7 +209,10 @@ for (const [partial, mismatch] of [
         preload,
         `import {DatabaseSync} from 'node:sqlite';
         const db = new DatabaseSync(${JSON.stringify(dbPath)}); db.exec('PRAGMA foreign_keys=ON');
-        globalThis.fetch = async (_url, options) => { try { const results = db.prepare(JSON.parse(options.body).sql).all(); return Response.json({success:true,result:[{results}]}); } catch(error) { return Response.json({success:false,errors:[{message:error.message}]},{status:400}); } };`,
+        globalThis.fetch = async (_url, options) => { try { const body = JSON.parse(options.body);
+          const execute = (sql) => { const statement = db.prepare(sql); if(statement.columns().length) return {results:statement.all()}; db.exec(sql); return {results:[]}; };
+          let result;
+          if(body.batch) { db.exec('BEGIN'); try { result=body.batch.map(({sql})=>execute(sql)); db.exec('COMMIT'); } catch(error) { db.exec('ROLLBACK'); throw error; } } else result=[execute(body.sql)]; return Response.json({success:true,result}); } catch(error) { return Response.json({success:false,errors:[{message:error.message}]},{status:400}); } };`,
       );
       const run = () =>
         spawnSync(
@@ -343,8 +358,11 @@ test("0063 migration recovery handles interrupted deployment and preserves relat
       const db = new DatabaseSync(${JSON.stringify(dbPath)}); db.exec('PRAGMA foreign_keys=ON');
       globalThis.fetch = async (_url, options) => {
         try {
-          const results = db.prepare(JSON.parse(options.body).sql).all();
-          return Response.json({success:true,result:[{results}]});
+          const body = JSON.parse(options.body);
+          const execute = (sql) => { const statement = db.prepare(sql); if(statement.columns().length) return {results:statement.all()}; db.exec(sql); return {results:[]}; };
+          let result;
+          if(body.batch) { db.exec('BEGIN'); try { result=body.batch.map(({sql})=>execute(sql)); db.exec('COMMIT'); } catch(error) { db.exec('ROLLBACK'); throw error; } } else result=[execute(body.sql)];
+          return Response.json({success:true,result});
         } catch(error) {
           return Response.json({success:false,errors:[{message:error.message}]},{status:400});
         }
@@ -374,35 +392,60 @@ test("0063 migration recovery handles interrupted deployment and preserves relat
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 
     assert.equal(
-      db.prepare("SELECT type FROM sqlite_master WHERE name='tenant_crm_connections'").get().type,
+      db
+        .prepare(
+          "SELECT type FROM sqlite_master WHERE name='tenant_crm_connections'",
+        )
+        .get().type,
       "table",
     );
     assert.equal(
-      db.prepare("SELECT type FROM sqlite_master WHERE name='agency_crm_connections'").get().type,
+      db
+        .prepare(
+          "SELECT type FROM sqlite_master WHERE name='agency_crm_connections'",
+        )
+        .get().type,
       "view",
     );
     assert.equal(
-      db.prepare("SELECT count(*) c FROM tenant_crm_connections WHERE id='conn1'").get().c,
+      db
+        .prepare(
+          "SELECT count(*) c FROM tenant_crm_connections WHERE id='conn1'",
+        )
+        .get().c,
       1,
     );
     assert.equal(
-      db.prepare("SELECT count(*) c FROM agency_crm_connections WHERE id='conn1'").get().c,
+      db
+        .prepare(
+          "SELECT count(*) c FROM agency_crm_connections WHERE id='conn1'",
+        )
+        .get().c,
       1,
     );
     assert.equal(
-      db.prepare("SELECT count(*) c FROM assistant_active_tenants WHERE principal_id='p1'").get().c,
+      db
+        .prepare(
+          "SELECT count(*) c FROM assistant_active_tenants WHERE principal_id='p1'",
+        )
+        .get().c,
       1,
     );
     assert.equal(
-      db.prepare("SELECT count(*) c FROM assistant_active_agencies WHERE principal_id='p1'").get().c,
+      db
+        .prepare(
+          "SELECT count(*) c FROM assistant_active_agencies WHERE principal_id='p1'",
+        )
+        .get().c,
       1,
     );
     assert.ok(
-      db.prepare("SELECT filename FROM _savia_migrations WHERE filename=?").get(targetMigration),
+      db
+        .prepare("SELECT filename FROM _savia_migrations WHERE filename=?")
+        .get(targetMigration),
     );
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
-

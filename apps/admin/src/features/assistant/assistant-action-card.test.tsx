@@ -87,7 +87,7 @@ it("shows the saved quotation link and evidence-based comparison after confirmat
   const quoteResult = {
     quoteId: "q1",
     reference: "COT-1",
-    url: "/#/crm?domain=platform&object=cotizador_por_pasos&quote=q1",
+    url: "/#/crm?tenantId=0&object=cotizador_por_pasos&quote=q1",
     failedOffers: 1,
     unpricedOffers: 0,
     pricedOffers: 1,

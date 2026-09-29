@@ -30,9 +30,9 @@ describe("identity user data provider", () => {
         },
       },
     ]);
-    const provider = createIdentityUserDataProvider(
-      { list } as unknown as IdentityClient,
-    );
+    const provider = createIdentityUserDataProvider({
+      list,
+    } as unknown as IdentityClient);
 
     const result = await provider.getList("users", {
       pagination: { page: 1, perPage: 20 },
@@ -95,9 +95,9 @@ describe("identity user data provider", () => {
         },
       },
     ]);
-    const provider = createIdentityUserDataProvider(
-      { list } as unknown as IdentityClient,
-    );
+    const provider = createIdentityUserDataProvider({
+      list,
+    } as unknown as IdentityClient);
 
     const result = await provider.getList("users", {
       pagination: { page: 1, perPage: 20 },
@@ -109,7 +109,7 @@ describe("identity user data provider", () => {
     expect(result.total).toBe(1);
   });
 
-  it("forwards a temporary password only while provisioning a user", async () => {
+  it("forwards a temporary password and selected roles while provisioning a user", async () => {
     const provision = vi.fn().mockResolvedValue({
       id: "principal-1",
       kind: "identity-principal",
@@ -126,9 +126,9 @@ describe("identity user data provider", () => {
       },
       relationships: { memberships: [] },
     });
-    const provider = createIdentityUserDataProvider(
-      { provision } as unknown as IdentityClient,
-    );
+    const provider = createIdentityUserDataProvider({
+      provision,
+    } as unknown as IdentityClient);
 
     await provider.create("users", {
       data: {
@@ -136,6 +136,7 @@ describe("identity user data provider", () => {
         firstName: "Agency",
         lastName: "Admin",
         temporaryPassword: "Temporary-password-123",
+        accessRoleIds: ["custom-test"],
         platformAdmin: false,
         tenantId: 101,
         agencyRole: "agency_admin",
@@ -147,6 +148,7 @@ describe("identity user data provider", () => {
       firstName: "Agency",
       lastName: "Admin",
       temporaryPassword: "Temporary-password-123",
+      accessRoleIds: ["custom-test"],
       platformAdmin: false,
       membership: { tenantId: 101, role: "agency_admin" },
     });
@@ -154,9 +156,9 @@ describe("identity user data provider", () => {
 
   it("returns an id fallback when deleting without previousData", async () => {
     const remove = vi.fn().mockResolvedValue(undefined);
-    const provider = createIdentityUserDataProvider(
-      { remove } as unknown as IdentityClient,
-    );
+    const provider = createIdentityUserDataProvider({
+      remove,
+    } as unknown as IdentityClient);
 
     const result = await provider.delete("users", {
       id: "principal-9",
@@ -169,9 +171,9 @@ describe("identity user data provider", () => {
 
   it("returns previousData when deleting with a record in context", async () => {
     const remove = vi.fn().mockResolvedValue(undefined);
-    const provider = createIdentityUserDataProvider(
-      { remove } as unknown as IdentityClient,
-    );
+    const provider = createIdentityUserDataProvider({
+      remove,
+    } as unknown as IdentityClient);
     const previousData = { id: "principal-7", displayName: "Persona Siete" };
 
     const result = await provider.delete("users", {

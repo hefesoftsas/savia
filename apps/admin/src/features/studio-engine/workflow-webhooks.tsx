@@ -12,7 +12,7 @@ import { api } from "./api";
 import { getStudioRuntime } from "./runtime";
 const scope = () =>
   JSON.stringify([
-    getStudioRuntime().domainId,
+    getStudioRuntime().tenantId,
     getStudioRuntime().apiBasePath,
     getStudioRuntime().localWorkspace?.scope,
   ]);

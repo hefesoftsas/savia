@@ -195,6 +195,8 @@ export class BetterAuthOAuthSession implements AuthSession {
   }
 
   async clearSession(): Promise<void> {
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event("savia:session-cleared"));
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
     this.scopes.clear();

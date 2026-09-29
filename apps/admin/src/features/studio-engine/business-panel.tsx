@@ -93,7 +93,7 @@ function ScopedBusinessPanel({
       <summary className="cursor-pointer text-sm font-medium">
         {businessEnabled
           ? t("Clientes, cotizaciones y API")
-          : t("API del dominio")}
+          : t("API del tenant")}
       </summary>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {!businessEnabled ? null : setup.isPending ? (

@@ -40,6 +40,7 @@ export type UserFormData = {
   lastName?: string;
   email?: string;
   temporaryPassword?: string;
+  accessRoleIds?: string[];
   platformAdmin?: boolean;
   tenantId?: number | string;
   agencyId?: number | string;
@@ -77,7 +78,10 @@ export function toUserRecord(user: ManagedIdentityUser): UserRecord {
     twoFactorEnabled: user.attributes.account.twoFactorEnabled,
     memberships: user.relationships.memberships.map((membership) => ({
       id: membership.id,
-      tenantId: Number(membership.relationships.tenant?.id ?? membership.relationships.agency.id),
+      tenantId: Number(
+        membership.relationships.tenant?.id ??
+          membership.relationships.agency.id,
+      ),
       agencyId: Number(membership.relationships.agency.id),
       role: membership.role,
       isActive: membership.attributes.isActive,
@@ -115,7 +119,10 @@ function matchesFilter(record: UserRecord, params: GetListParams): boolean {
     return false;
   }
   if (filter.scope === "platform" && !record.platformAdmin) return false;
-  if ((filter.scope === "tenant" || filter.scope === "agency") && record.memberships.length === 0)
+  if (
+    (filter.scope === "tenant" || filter.scope === "agency") &&
+    record.memberships.length === 0
+  )
     return false;
   return true;
 }
@@ -145,7 +152,7 @@ export function createIdentityUserDataProvider(
 ): IdentityUserDataProvider {
   const provider = {
     async getList(_resource: string, params: GetListParams) {
-      const allRecords = (await client.list()).map(toUserRecord);
+      const allRecords = (await client.list(true)).map(toUserRecord);
       const filtered = allRecords
         .filter((record) => matchesFilter(record, params))
         .sort((left, right) =>
@@ -190,6 +197,9 @@ export function createIdentityUserDataProvider(
           ? { temporaryPassword: data.temporaryPassword }
           : {}),
         membership: membershipFrom(data),
+        ...(data.accessRoleIds?.length
+          ? { accessRoleIds: data.accessRoleIds }
+          : {}),
       });
       return { data: toUserRecord(user) };
     },

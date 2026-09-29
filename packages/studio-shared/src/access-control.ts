@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type AccessScope = "platform" | `tenant:${number}` | `domain:${string}`;
+export type AccessScope = "platform" | `tenant:${number}`;
 export type AccessAction =
   | "read"
   | "create"
@@ -65,8 +65,7 @@ export const accessScopeSchema = z
   .max(100)
   .refine((value) => {
     if (value === "platform") return true;
-    if (/^domain:[a-z][a-z0-9_-]{0,47}$/.test(value)) return true;
-    const match = /^tenant:([1-9][0-9]*)$/.exec(value);
+    const match = /^tenant:(0|[1-9][0-9]*)$/.exec(value);
     return Boolean(match && Number.isSafeInteger(Number(match[1])));
   }, "Invalid access scope")
   .transform((value) => value as AccessScope);

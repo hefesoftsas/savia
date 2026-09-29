@@ -9,7 +9,7 @@ afterEach(() => {
 
 const widget = {
   id: "w_plugin1",
-  apiBasePath: "/v1/data-domains/platform",
+  apiBasePath: "/v1/studio/0",
   collection: "polizas",
   kind: "plugin:insurance.portfolio-dashboard:summary",
 };
@@ -29,12 +29,12 @@ function createApiClient(
 ) {
   return {
     get: vi.fn(async (path: string) => {
-      if (path === "/v1/data-domains/platform/api/extensions") {
+      if (path === "/v1/studio/0/api/extensions") {
         return { data: extensions };
       }
       if (
         path ===
-        "/v1/data-domains/platform/api/extensions/insurance.portfolio-dashboard/summary"
+        "/v1/studio/0/api/extensions/insurance.portfolio-dashboard/summary"
       ) {
         return {
           data: {
@@ -178,7 +178,7 @@ describe("PluginWidgetBody", () => {
       return element!;
     });
     expect(frame?.getAttribute("src")).toContain(
-      "/v1/data-domains/platform/api/plugin-store/custom.demo/widget?widget=resumen",
+      "/v1/studio/0/api/plugin-store/custom.demo/widget?widget=resumen",
     );
   });
 });

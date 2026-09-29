@@ -16,6 +16,7 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
 único usuario activo del Tenant #1 y la invariante lo protege.
 
 ### Fix aplicado (`fix(admin): confirm user deletes pessimistically…`)
+
 - `apps/admin/src/features/users/user-pages.tsx`: nuevo `UserDeleteButton`
   pesimista con diálogo `Confirm`; espera al servidor y traduce cada guard a
   español (`deleteUserErrorMessage`). Reemplaza al botón con deshacer en lista,
@@ -31,6 +32,7 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
 ## 2. Offline-first por fases (plan: `docs/superpowers/plans/2026-09-17-offline-first.md`)
 
 ### Fase 1 — lecturas en caché (`feat(admin): Dexie-backed offline reads…`)
+
 - `apps/admin/src/offline/`: Dexie `savia-offline` (v1 `queryCache`),
   persister TanStack (`@tanstack/react-query-persist-client` +
   `@tanstack/query-async-storage-persister`, pineados a 5.102.8),
@@ -42,6 +44,7 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
 - Caché inicial: usuarios, tenants y metadatos del studio.
 
 ### Fase 2 — outbox (`feat(offline): outbox queue for personal preferences`)
+
 - Tabla `outbox` (Dexie v2), elegibilidad estricta: **solo preferencias
   personales** (apariencia, menú). Identidad excluida por diseño (los guards no
   tienen resolución automática segura).
@@ -50,17 +53,20 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
 - Cableado en `appearance-preferences-sync.tsx` y `app-sidebar.tsx`.
 
 ### Delta (`feat(sync): monotonic collection versions for delta refetch`)
+
 - Migración `0051_collection_versions.sql` + bump en el proxy studio (rutas /v1/studio, alias /v1/dynamic-crm);
   la versión viaja en el evento realtime y el cliente (`collectionVersions`,
   Dexie v3) salta eventos ya cubiertos.
 - Espejo por fila rechazado: backends heterogéneos (D1 local, HubSpot, Postgres).
 
 ### Fase 3 — service worker (`feat(offline): precache app shell…`)
+
 - `vite-plugin-pwa` (generateSW, autoUpdate). Precache solo del shell
   (27 entradas, 2,8 MB — el dist trae ~9k chunks/43 MB, no se precachea todo).
   `/v1/*` y `/api/*` excluidos de Cache Storage: los datos viven solo en Dexie.
 
 ### Opt-in PII por colección (`feat(offline): per-collection PII opt-in…`)
+
 - `OFFLINE_PII_COLLECTIONS` (piloto: `cotizaciones`, `cotizaciones_detalle`);
   solo listas `pipeline`/`summary`, nunca detalles/archivos.
 - TTL 12 h al restaurar + **wipe total al logout** (`onLogout` en el auth
@@ -72,6 +78,7 @@ revertía. En el caso del video el backend tenía razón: "Agencia Consulta" era
   `staleTime`/`refetchInterval` por colección). Sin snapshot: rige el piloto.
 
 ### Dónde vive cada cosa en IndexedDB (`savia-offline`)
+
 - `queryCache`: caché TanStack. `outbox`: mutaciones pendientes/fallidas.
 - `collectionVersions`: `tenant:<id>:<colección>` → versión.
 - Las políticas viven en el servidor (D1), no en IDB.
@@ -126,3 +133,7 @@ está. Vigilar dashboard el primer mes.
 2. Outbox cubre apariencia + menú; para más dominios, extender `ELIGIBLE_ACTIONS`.
 3. `WebSocketRequestResponsePair`: no reintroducir sin verificar `wrangler dev`.
 4. Agregar colección offline = 1 línea en `OFFLINE_PII_COLLECTIONS` + caso de test.
+
+## Realtime coverage update (2026-09-28)
+
+The permanent live badge has been removed. The current coverage, reconnect behavior and remaining gaps are documented in [Automatic refresh coverage](guides/realtime-coverage.md); that inventory supersedes the UI status and coverage claims above.

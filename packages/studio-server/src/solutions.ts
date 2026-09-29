@@ -8,14 +8,19 @@ import {
   compareSolutionVersions,
   type SolutionPackage,
 } from "@savia/studio-shared/solution-package";
-import type { ExtensionRegistry } from "@savia/studio-shared/extension-package";
+import type {
+  ExtensionObjectRequirement,
+  ExtensionRegistry,
+} from "@savia/studio-shared/extension-package";
 import { type Env, fail } from "./context";
 import { audit, guard, transaction } from "./services";
 import { isExtensionAvailable } from "./extensions";
+import { storeObjectRequirements, storePluginManifest } from "./plugin-store";
 
 export type SolutionOptions = {
   solutionCatalog?: readonly unknown[];
   extensionRegistry?: ExtensionRegistry;
+  extensionObjectRequirements?: readonly ExtensionObjectRequirement[];
   beforeInstall?: (manifest: SolutionPackage) => Promise<void>;
 };
 type Installation = {
@@ -34,6 +39,14 @@ type StoredObject = {
   definition: string | null;
 };
 type SolutionObject = SolutionPackage["objects"][number];
+type ActivationDependency = {
+  id: string;
+  label: string;
+  version: string;
+  action: "install" | "enable" | "already_available" | "built_in";
+  kind: "extension" | "solution";
+  requires: string[];
+};
 const definition = (o: SolutionObject) => ({
   name: o.name,
   label: o.label,
@@ -77,6 +90,7 @@ async function inspect(
   );
   const conflicts: string[] = [];
   const dependencies: string[] = [];
+  const claims = new Set<string>();
   for (const id of manifest.requires) {
     if (await isExtensionAvailable(db, tenant, id, options.extensionRegistry))
       continue;
@@ -102,7 +116,12 @@ async function inspect(
         conflicts.push(`La actualización elimina el objeto ${object.name}.`);
   }
   const disabled = await disabledSolutionObjects(db, tenant);
-  const objects = manifest.objects.map((object) => {
+  const objects: {
+    name: string;
+    label: string;
+    action: "create" | "update" | "keep";
+  }[] = [];
+  for (const object of manifest.objects) {
     const row = current.get(object.name);
     let action: "create" | "update" | "keep" = row ? "keep" : "create";
     const owner = ownership.get(object.name);
@@ -114,10 +133,23 @@ async function inspect(
       conflicts.push(
         `El objeto ${object.name} pertenece al paquete ${owner}, aunque su definición fue eliminada.`,
       );
-    if (row && row.solution_id !== manifest.id)
-      conflicts.push(
-        `El objeto ${object.name} ya existe y no pertenece a este paquete.`,
-      );
+    if (row && row.solution_id !== manifest.id) {
+      const provisioned =
+        row.solution_id === null &&
+        (await isExactRequiredExtensionObject(
+          db,
+          tenant,
+          manifest,
+          object,
+          row,
+          options,
+        ));
+      if (provisioned) claims.add(object.name);
+      else
+        conflicts.push(
+          `El objeto ${object.name} ya existe y no pertenece a este paquete.`,
+        );
+    }
     if (
       row &&
       row.solution_id === manifest.id &&
@@ -178,12 +210,13 @@ async function inspect(
       )
         conflicts.push(`Relación no disponible: ${object.name} → ${relation}.`);
     }
-    return { name: object.name, label: object.label, action };
-  });
+    objects.push({ name: object.name, label: object.label, action });
+  }
   return {
     manifest,
     installed,
     current,
+    claims,
     dependencies,
     preview: {
       id: manifest.id,
@@ -195,18 +228,216 @@ async function inspect(
   };
 }
 
+async function isExactRequiredExtensionObject(
+  db: D1Database,
+  tenant: string,
+  manifest: SolutionPackage,
+  object: SolutionObject,
+  row: StoredObject,
+  options: SolutionOptions,
+) {
+  for (const extensionId of manifest.requires) {
+    const installed = await db
+      .prepare(
+        "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+      )
+      .bind(tenant, extensionId)
+      .first();
+    if (!installed) continue;
+    const provisions = await db
+      .prepare(
+        "SELECT detail FROM studio_audit WHERE tenant_id=? AND action='extension.collection.provisioned' AND object_name=?",
+      )
+      .bind(tenant, object.name)
+      .all<{ detail: string }>();
+    const provisionedByDependency = provisions.results.some((entry) => {
+      try {
+        return JSON.parse(entry.detail).extensionId === extensionId;
+      } catch {
+        return false;
+      }
+    });
+    if (!provisionedByDependency) continue;
+    const requirements = [
+      ...(options.extensionObjectRequirements ?? []).filter(
+        (requirement) => requirement.id === extensionId,
+      ),
+      ...(await storeObjectRequirements(db, tenant, extensionId)),
+    ];
+    const requirement = requirements.find(
+      (candidate) => candidate.object.name === object.name,
+    );
+    if (
+      requirement &&
+      requirement.object.label === object.label &&
+      requirement.object.description === object.description &&
+      canonicalJson(requirement.object.config) ===
+        canonicalJson(object.config) &&
+      row.label === object.label &&
+      row.description === object.description &&
+      canonicalJson(JSON.parse(row.config)) === canonicalJson(object.config)
+    )
+      return true;
+  }
+  return false;
+}
+
+async function activationPlan(
+  db: D1Database,
+  tenant: string,
+  manifest: SolutionPackage,
+  options: SolutionOptions,
+) {
+  const dependencies: ActivationDependency[] = [];
+  const conflicts: string[] = [];
+  const visiting = new Set<string>();
+  const planned = new Map<string, ActivationDependency>();
+  const registry = options.extensionRegistry;
+  const add = (dependency: ActivationDependency) => {
+    if (planned.has(dependency.id)) return;
+    planned.set(dependency.id, dependency);
+    dependencies.push(dependency);
+  };
+
+  async function visit(id: string, chain: string[]) {
+    const storedManifest = await storePluginManifest(db, tenant, id);
+    const registered = storedManifest ? undefined : registry?.get(id);
+    const extensionManifest = storedManifest ?? registered?.manifest;
+    const builtIn = !storedManifest && registered?.builtIn === true;
+    if (builtIn) {
+      add({
+        id,
+        label: extensionManifest!.label,
+        version: extensionManifest!.version,
+        action: "built_in",
+        kind: "extension",
+        requires: extensionManifest!.requires,
+      });
+      return;
+    }
+
+    const installed = await db
+      .prepare(
+        "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+      .bind(tenant, id)
+      .first<{ version: string; enabled: number }>();
+    if (installed?.enabled === 1) {
+      add({
+        id,
+        label: extensionManifest?.label ?? id,
+        version: installed.version,
+        action: "already_available",
+        kind: "extension",
+        requires: extensionManifest?.requires ?? [],
+      });
+      return;
+    }
+
+    if (!extensionManifest) {
+      if (await isSolutionEnabled(db, tenant, id)) {
+        const solution = await db
+          .prepare(
+            "SELECT version,manifest FROM studio_solution_installations WHERE tenant_id=? AND id=? AND enabled=1",
+          )
+          .bind(tenant, id)
+          .first<{ version: string; manifest: string }>();
+        let label = id;
+        try {
+          label = solutionPackageSchema.parse(JSON.parse(solution!.manifest)).label;
+        } catch {
+          // The enabled solution remains usable even if its display metadata is invalid.
+        }
+        add({
+          id,
+          label,
+          version: solution?.version ?? "",
+          action: "already_available",
+          kind: "solution",
+          requires: [],
+        });
+        return;
+      }
+      conflicts.push(`Dependencia no disponible: ${id}.`);
+      return;
+    }
+
+    if (visiting.has(id)) {
+      conflicts.push(`Dependencia circular: ${[...chain, id].join(" → ")}.`);
+      return;
+    }
+    if (planned.has(id)) return;
+
+    visiting.add(id);
+    for (const dependency of extensionManifest.requires) {
+      await visit(dependency, [...chain, id]);
+    }
+    visiting.delete(id);
+    add({
+      id,
+      label: extensionManifest.label,
+      version: extensionManifest.version,
+      action: installed ? "enable" : "install",
+      kind: "extension",
+      requires: extensionManifest.requires,
+    });
+  }
+
+  for (const id of manifest.requires) await visit(id, [manifest.id]);
+  return { dependencies, conflicts };
+}
+
+async function activationPreview(
+  db: D1Database,
+  tenant: string,
+  input: unknown,
+  options: SolutionOptions,
+) {
+  const inspected = await inspect(db, tenant, input, options);
+  const plan = await activationPlan(db, tenant, inspected.manifest, options);
+  const resolvable = new Set(
+    plan.dependencies.map((dependency) => dependency.id),
+  );
+  const conflicts = inspected.preview.conflicts.filter((conflict) => {
+    const match = /^Dependencia no disponible: (.+)\.$/.exec(conflict);
+    return !match || !resolvable.has(match[1]);
+  });
+  conflicts.push(...plan.conflicts);
+  return {
+    label: inspected.manifest.label,
+    ...inspected.preview,
+    conflicts: [...new Set(conflicts)],
+    canInstall: conflicts.length === 0,
+    canActivate: conflicts.length === 0,
+    dependencies: plan.dependencies,
+  };
+}
+
+function internalRouteRequest(
+  app: Hono<Env>,
+  url: string,
+  headers: Headers,
+  env: Env["Bindings"],
+  path: string,
+) {
+  return app.request(
+    new Request(new URL(path, url), {
+      method: "POST",
+      headers,
+    }),
+    undefined,
+    env,
+  );
+}
+
 export async function installSolution(
   db: D1Database,
   tenant: string,
   input: unknown,
   options: SolutionOptions = {},
 ) {
-  const { manifest, installed, current, dependencies, preview } = await inspect(
-    db,
-    tenant,
-    input,
-    options,
-  );
+  const { manifest, installed, current, claims, dependencies, preview } =
+    await inspect(db, tenant, input, options);
   if (!preview.canInstall) return fail(preview.conflicts.join(" "), 409);
   await options.beforeInstall?.(manifest);
   if (installed?.version === manifest.version)
@@ -235,15 +466,15 @@ export async function installSolution(
       "SELECT enabled=1 FROM studio_solution_installations WHERE tenant_id=? AND id=?",
       [tenant, id],
     );
-  for (const id of manifest.requires)
-    if (
-      options.extensionRegistry?.get(id) &&
-      !options.extensionRegistry.isBuiltIn(id)
-    )
+  for (const id of manifest.requires) {
+    const storedExtension = await storePluginManifest(db, tenant, id);
+    const registeredExtension = options.extensionRegistry?.get(id);
+    if (storedExtension || (registeredExtension && !registeredExtension.builtIn))
       addGuard(
         "SELECT enabled=1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
         [tenant, id],
       );
+  }
   statements.push(
     db
       .prepare(
@@ -254,7 +485,38 @@ export async function installSolution(
   for (const entry of preview.objects) {
     const object = manifest.objects.find((o) => o.name === entry.name)!;
     const row = current.get(entry.name);
-    if (entry.action === "keep") continue;
+    if (entry.action === "keep") {
+      if (claims.has(entry.name)) {
+        addGuard(
+          "SELECT count(*)=0 FROM studio_solution_objects WHERE tenant_id=? AND object_name=?",
+          [tenant, entry.name],
+        );
+        addGuard(
+          "SELECT version=? AND config=? AND label=? AND description=? FROM studio_objects WHERE tenant_id=? AND name=?",
+          [
+            row!.version,
+            row!.config,
+            row!.label,
+            row!.description,
+            tenant,
+            entry.name,
+          ],
+        );
+        statements.push(
+          db
+            .prepare(
+              "INSERT INTO studio_solution_objects(tenant_id,solution_id,object_name,definition) VALUES (?,?,?,?)",
+            )
+            .bind(
+              tenant,
+              manifest.id,
+              entry.name,
+              canonicalJson(definition(object)),
+            ),
+        );
+      }
+      continue;
+    }
     if (row)
       addGuard(
         "SELECT solution_id=? FROM studio_solution_objects WHERE tenant_id=? AND object_name=?",
@@ -385,6 +647,143 @@ export function registerSolutions(
       ).preview,
     }),
   );
+  app.post("/api/solutions/activation-preview", async (c) =>
+    c.json({
+      data: await activationPreview(
+        c.env.DB,
+        c.get("tenant"),
+        await c.req.json(),
+        options,
+      ),
+    }),
+  );
+  app.post("/api/solutions/activate", async (c) => {
+    const db = c.env.DB;
+    const tenant = c.get("tenant");
+    const input = await c.req.json();
+    const preview = await activationPreview(db, tenant, input, options);
+    if (!preview.canActivate)
+      return c.json({ error: preview.conflicts.join(" "), data: preview }, 409);
+
+    const completed: { id: string; status: string }[] = [];
+    for (const dependency of preview.dependencies) {
+      if (dependency.kind !== "extension") continue;
+      if (dependency.action === "already_available") {
+        completed.push({ id: dependency.id, status: "already_available" });
+        continue;
+      }
+      if (dependency.action === "built_in") {
+        completed.push({ id: dependency.id, status: "built_in" });
+        continue;
+      }
+      try {
+        const response = await internalRouteRequest(
+          app,
+          c.req.url,
+          new Headers(c.req.raw.headers),
+          c.env,
+          `/api/extensions/${encodeURIComponent(dependency.id)}/install`,
+        );
+        if (!response.ok) {
+          const body = await response.text();
+          return c.json(
+            {
+              error: `Could not ${dependency.action} dependency ${dependency.label}.`,
+              detail: body,
+              partial: {
+                solutionId: preview.id,
+                completedDependencies: completed,
+                failedDependency: dependency.id,
+                retryable: true,
+              },
+            },
+            response.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
+          );
+        }
+        completed.push({
+          id: dependency.id,
+          status: dependency.action === "enable" ? "enabled" : "installed",
+        });
+      } catch (error) {
+        return c.json(
+          {
+            error: `Could not ${dependency.action} dependency ${dependency.label}.`,
+            detail: error instanceof Error ? error.message : String(error),
+            partial: {
+              solutionId: preview.id,
+              completedDependencies: completed,
+              failedDependency: dependency.id,
+              retryable: true,
+            },
+          },
+          500,
+        );
+      }
+    }
+
+    let result: Awaited<ReturnType<typeof installSolution>>;
+    try {
+      result = await installSolution(db, tenant, input, options);
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          partial: {
+            solutionId: preview.id,
+            completedDependencies: completed,
+            retryable: true,
+          },
+        },
+        409,
+      );
+    }
+    if (!result.enabled) {
+      try {
+        const response = await app.request(
+          new Request(new URL(`/api/solutions/${encodeURIComponent(preview.id)}`, c.req.url), {
+            method: "PATCH",
+            headers: new Headers(c.req.raw.headers),
+            body: JSON.stringify({ enabled: true }),
+          }),
+          undefined,
+          c.env,
+        );
+        if (!response.ok) {
+          return c.json(
+            {
+              error: `Dependencies are ready, but ${preview.label} could not be enabled.`,
+              detail: await response.text(),
+              partial: {
+                solutionId: preview.id,
+                completedDependencies: completed,
+                solutionInstalled: true,
+                retryable: true,
+              },
+            },
+            response.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
+          );
+        }
+        result = { ...result, enabled: true };
+      } catch (error) {
+        return c.json(
+          {
+            error: `Dependencies are ready, but ${preview.label} could not be enabled.`,
+            detail: error instanceof Error ? error.message : String(error),
+            partial: {
+              solutionId: preview.id,
+              completedDependencies: completed,
+              solutionInstalled: true,
+              retryable: true,
+            },
+          },
+          500,
+        );
+      }
+    }
+    return c.json({
+      data: { ...result, dependencies: completed },
+    });
+  });
   app.post("/api/solutions/install", async (c) =>
     c.json({
       data: await installSolution(

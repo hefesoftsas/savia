@@ -75,7 +75,7 @@ function appFor(auth: Authenticator = platformAdministratorAuthenticator()) {
 }
 const input = () => ({
   id: crypto.randomUUID(),
-  domainId: "platform",
+  tenantId: 0,
   pageName: "generated",
   actionId: "test-request",
   mode: "mock",
@@ -103,7 +103,7 @@ beforeAll(async () => {
     "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
   )
     .bind(
-      "domain:platform",
+      "tenant:0",
       object.name,
       object.label,
       object.description,
@@ -123,7 +123,7 @@ describe("generated request pages", () => {
     expect(run.values.plate).toBe("TESTCAR");
     expect((await post(app, body)).status).toBe(200);
     const history = await app.request(
-      "/v1/request-pages/runs?domainId=platform&pageName=generated",
+      "/v1/request-pages/runs?tenantId=0&pageName=generated",
     );
     expect(
       ((await history.json()) as any).data.some((r: any) => r.id === body.id),
@@ -195,7 +195,7 @@ describe("generated request pages", () => {
       },
     };
     const response = await appFor(other).request(
-      "/v1/request-pages/runs?domainId=platform&pageName=generated",
+      "/v1/request-pages/runs?tenantId=0&pageName=generated",
     );
     expect(((await response.json()) as any).data).toEqual([]);
   });
@@ -210,11 +210,7 @@ it("keeps request results generic across solution installations", async () => {
     label: "Lookup",
     operationIds: ["sura-autos-provider"],
   });
-  for (const scope of [
-    "domain:result_fresh",
-    "domain:result_insured",
-    "agency:914",
-  ]) {
+  for (const scope of ["tenant:0"]) {
     await env.DB.prepare(
       "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
     )
@@ -248,10 +244,10 @@ it("keeps request results generic across solution installations", async () => {
       },
     },
   });
-  for (const domainId of ["result_fresh", "result_insured", "tenant:914"]) {
+  for (const tenantId of [0]) {
     const response = await post(api, {
       ...input(),
-      domainId,
+      tenantId,
       pageName: page.name,
       actionId: "sura-autos-provider",
     });

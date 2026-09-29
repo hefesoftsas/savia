@@ -27,7 +27,7 @@ beforeAll(async () => {
       await env.DB.exec(statement);
 });
 it("accepts a secret-authenticated event without a session and documents the route", async () => {
-  const repo = new WorkflowRepository(env.DB, "domain:hooks");
+  const repo = new WorkflowRepository(env.DB, "tenant:99007");
   const flow = await repo.create(
     {
       name: "Hook",
@@ -41,7 +41,7 @@ it("accepts a secret-authenticated event without a session and documents the rou
   await repo.publish(flow.id, flow.revision, "owner");
   const endpoint = await new WebhookEndpointRepository(
     env.DB,
-    "domain:hooks",
+    "tenant:99007",
   ).ensure(flow.id);
   const app = new OpenAPIHono();
   registerWorkflowWebhookRoutes(app, env.DB, { authorize: async () => true });

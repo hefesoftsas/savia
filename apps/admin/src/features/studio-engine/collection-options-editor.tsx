@@ -24,7 +24,7 @@ export function CollectionOptionsEditor({
   const catalog = useQuery({
     queryKey: [
       "option-collection-catalog",
-      runtime.domainId ?? runtime.apiBasePath,
+      runtime.tenantId ?? runtime.apiBasePath,
     ],
     queryFn: () =>
       api<{ data: { domain: string; collection: string; title: string }[] }>(

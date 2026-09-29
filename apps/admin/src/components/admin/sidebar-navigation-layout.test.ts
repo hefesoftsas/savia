@@ -101,20 +101,20 @@ describe("sidebar navigation layout", () => {
   it("places a newly visible CRM page in its configured section", () => {
     const reconciled = reconcileSidebarNavigation(
       defaultSidebarNavigationLayout(),
-      ["dashboard", "studio", "page:platform:administrar_seguros"],
-      { "page:platform:administrar_seguros": "administration" },
+      ["dashboard", "studio", "page:0:administrar_seguros"],
+      { "page:0:administrar_seguros": "administration" },
     );
 
     expect(
       reconciled.blocks.find(
         (block) => block.kind === "builtin" && block.id === "administration",
       )?.items,
-    ).toContain("page:platform:administrar_seguros");
+    ).toContain("page:0:administrar_seguros");
     expect(
       reconciled.blocks.find(
         (block) => block.kind === "builtin" && block.id === "operation",
       )?.items,
-    ).not.toContain("page:platform:administrar_seguros");
+    ).not.toContain("page:0:administrar_seguros");
   });
 
   it("creates and removes custom sections", () => {

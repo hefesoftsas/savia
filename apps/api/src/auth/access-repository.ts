@@ -163,17 +163,129 @@ export async function listAccessRoles(
     )
     .bind(scope)
     .all<RoleRow>();
+  const mutableRows = rows.results.filter((r) => !r.protected);
   const grants = await grantsForRoles(
     db,
     scope,
-    rows.results.map((r) => r.id),
+    mutableRows.map((r) => r.id),
+  );
+  const assignments = mutableRows.length
+    ? await db
+        .prepare(
+          `SELECT a.role_id,p.id,p.display_name,p.email FROM access_assignments a JOIN identity_principal p ON p.id=a.principal_id WHERE a.scope=? AND a.role_id IN (${mutableRows.map(() => "?").join(",")}) AND p.is_active=1 ORDER BY p.display_name,p.id`,
+        )
+        .bind(scope, ...mutableRows.map((r) => r.id))
+        .all<{
+          role_id: string;
+          id: string;
+          display_name: string;
+          email: string | null;
+        }>()
+    : { results: [] };
+  const customRoles = mutableRows.map((r) => ({
+    ...parseRole(r),
+    source: "custom" as const,
+    assignedUsers: assignments.results
+      .filter((assignment) => assignment.role_id === r.id)
+      .map((assignment) => ({
+        id: assignment.id,
+        displayName: assignment.display_name,
+        email: assignment.email,
+      })),
+    grants: grants.filter((g) => g.roleId === r.id),
+  }));
+  const legacyRoles = new Map<
+    string,
+    Array<{ id: string; displayName: string; email: string | null }>
+  >();
+  {
+    const platformAdmins = await db
+      .prepare(
+        "SELECT p.id,p.display_name,p.email FROM identity_global_role g JOIN identity_principal p ON p.id=g.principal_id WHERE g.role='platform_admin' AND p.is_active=1 ORDER BY p.display_name,p.id",
+      )
+      .all<{
+        id: string;
+        display_name: string;
+        email: string | null;
+      }>();
+    legacyRoles.set(
+      "platform_admin",
+      platformAdmins.results.map((user) => ({
+        id: user.id,
+        displayName: user.display_name,
+        email: user.email,
+      })),
+    );
+  }
+  if (scope.startsWith("tenant:") && scope !== "tenant:0") {
+    const tenantId = Number(scope.slice("tenant:".length));
+    const members = await db
+      .prepare(
+        "SELECT p.id,p.display_name,p.email,m.role FROM identity_tenant_membership m JOIN identity_principal p ON p.id=m.principal_id JOIN tenants t ON t.id=m.tenant_id WHERE m.tenant_id=? AND m.is_active=1 AND p.is_active=1 AND t.is_active=1 AND m.role<>'platform_admin' ORDER BY m.role,p.display_name,p.id",
+      )
+      .bind(tenantId)
+      .all<{
+        id: string;
+        display_name: string;
+        email: string | null;
+        role: string;
+      }>();
+    for (const member of members.results) {
+      const users = legacyRoles.get(member.role) ?? [];
+      users.push({
+        id: member.id,
+        displayName: member.display_name,
+        email: member.email,
+      });
+      legacyRoles.set(member.role, users);
+    }
+  }
+  const builtinRoles = await Promise.all(
+    [...legacyRoles.entries()].map(async ([legacyRole, assignedUsers]) => {
+      const authority = {
+        platform: legacyRole === "platform_admin",
+        manager:
+          legacyRole === "platform_admin" ||
+          legacyRole === "agency_admin" ||
+          legacyRole === "tenant_admin",
+        legacyRole: legacyRole === "platform_admin" ? null : legacyRole,
+      };
+      const roleGrants = await compatibilityGrants(db, scope, authority);
+      const labels: Record<string, string> = {
+        platform_admin: "Platform administrator",
+        tenant_admin: "Tenant administrator",
+        agency_admin: "Agency administrator",
+        tenant_member: "Tenant member",
+        agency_user: "Agency user",
+      };
+      const label =
+        labels[legacyRole] ??
+        legacyRole
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (letter) => letter.toUpperCase());
+      return {
+        id: `builtin:${scope}:${legacyRole}`,
+        scope,
+        name: legacyRole,
+        label,
+        description: "System role derived from active identity membership.",
+        enabled: true,
+        protected: true,
+        legacy_role: legacyRole,
+        source: "system" as const,
+        assignedUsers,
+        grants: roleGrants,
+      };
+    }),
   );
   return {
     revision: await revision(db, scope),
-    roles: rows.results.map((r) => ({
-      ...parseRole(r),
-      grants: grants.filter((g) => g.roleId === r.id),
-    })),
+    roles: [...builtinRoles, ...customRoles].sort(
+      (left, right) =>
+        Number(right.protected) - Number(left.protected) ||
+        left.label.localeCompare(right.label) ||
+        left.id.localeCompare(right.id),
+    ),
   };
 }
 async function mutableRole(db: D1Database, scope: AccessScope, id: string) {

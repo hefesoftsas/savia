@@ -345,6 +345,14 @@
     {
       "filename": "0076_public_form_logo.sql",
       "sha256": "2ef677b61a53a3d5200b11f40d7146361309b40a3a938961ffaca84b8ac23ed0"
+    },
+    {
+      "filename": "0077_tenant_only_isolation.sql",
+      "sha256": "2e362839d13fc1dff5653bd63ba3da779843f71d77ed23f4a3c4aa1d31afa212"
+    },
+    {
+      "filename": "0078_identity_principal_email_uniqueness.sql",
+      "sha256": "9d7d5db677dc8a4f3dccfd0d570c8214203f56f5a34accd562ec0a29d6f2513c"
     }
   ],
   "objects": [
@@ -406,32 +414,17 @@
     {
       "type": "index",
       "name": "agency_crm_connection_audit_events_agency_created_at_index",
-      "table": "agency_crm_connection_audit_events"
+      "table": "tenant_crm_connection_audit_events"
     },
     {
       "type": "index",
       "name": "agency_crm_connection_audit_events_connection_created_at_index",
-      "table": "agency_crm_connection_audit_events"
-    },
-    {
-      "type": "index",
-      "name": "agency_crm_connections_active_unique",
-      "table": "agency_crm_connections"
-    },
-    {
-      "type": "index",
-      "name": "agency_crm_connections_agency_provider_index",
-      "table": "agency_crm_connections"
-    },
-    {
-      "type": "index",
-      "name": "agency_crm_connections_owner_index",
-      "table": "agency_crm_connections"
+      "table": "tenant_crm_connection_audit_events"
     },
     {
       "type": "index",
       "name": "assistant_active_agencies_agency_index",
-      "table": "assistant_active_agencies"
+      "table": "assistant_active_tenants"
     },
     {
       "type": "index",
@@ -960,21 +953,6 @@
     },
     {
       "type": "table",
-      "name": "agency_crm_connection_audit_events",
-      "table": "agency_crm_connection_audit_events"
-    },
-    {
-      "type": "table",
-      "name": "agency_crm_connections",
-      "table": "agency_crm_connections"
-    },
-    {
-      "type": "table",
-      "name": "assistant_active_agencies",
-      "table": "assistant_active_agencies"
-    },
-    {
-      "type": "table",
       "name": "assistant_openrouter_settings",
       "table": "assistant_openrouter_settings"
     },
@@ -1077,11 +1055,6 @@
       "type": "table",
       "name": "studio_collection_versions",
       "table": "studio_collection_versions"
-    },
-    {
-      "type": "table",
-      "name": "studio_data_domains",
-      "table": "studio_data_domains"
     },
     {
       "type": "table",
@@ -1575,16 +1548,6 @@
     },
     {
       "type": "trigger",
-      "name": "access_domain_created",
-      "table": "studio_data_domains"
-    },
-    {
-      "type": "trigger",
-      "name": "access_domain_removed",
-      "table": "studio_data_domains"
-    },
-    {
-      "type": "trigger",
       "name": "access_global_role_added",
       "table": "identity_global_role"
     },
@@ -1972,6 +1935,151 @@
       "type": "table",
       "name": "installed_bundles",
       "table": "installed_bundles"
+    },
+    {
+      "type": "index",
+      "name": "assistant_active_tenants_tenant_index",
+      "table": "assistant_active_tenants"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connection_audit_events_connection_created_at_index",
+      "table": "tenant_crm_connection_audit_events"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connection_audit_events_tenant_created_at_index",
+      "table": "tenant_crm_connection_audit_events"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_active_unique",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_owner_index",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "index",
+      "name": "tenant_crm_connections_tenant_provider_index",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "table",
+      "name": "assistant_active_tenants",
+      "table": "assistant_active_tenants"
+    },
+    {
+      "type": "table",
+      "name": "notification_admin_audit",
+      "table": "notification_admin_audit"
+    },
+    {
+      "type": "table",
+      "name": "notification_deliveries",
+      "table": "notification_deliveries"
+    },
+    {
+      "type": "table",
+      "name": "notification_events",
+      "table": "notification_events"
+    },
+    {
+      "type": "table",
+      "name": "notification_maintenance_checkpoints",
+      "table": "notification_maintenance_checkpoints"
+    },
+    {
+      "type": "table",
+      "name": "notification_recipient_retries",
+      "table": "notification_recipient_retries"
+    },
+    {
+      "type": "table",
+      "name": "notification_scope_settings",
+      "table": "notification_scope_settings"
+    },
+    {
+      "type": "table",
+      "name": "notification_send_limits",
+      "table": "notification_send_limits"
+    },
+    {
+      "type": "table",
+      "name": "notification_subscriptions",
+      "table": "notification_subscriptions"
+    },
+    {
+      "type": "table",
+      "name": "public_form_short_links",
+      "table": "public_form_short_links"
+    },
+    {
+      "type": "table",
+      "name": "tenant_crm_connection_audit_events",
+      "table": "tenant_crm_connection_audit_events"
+    },
+    {
+      "type": "table",
+      "name": "tenant_crm_connections",
+      "table": "tenant_crm_connections"
+    },
+    {
+      "type": "table",
+      "name": "tenant_namespace_migrations",
+      "table": "tenant_namespace_migrations"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connection_audit_events_insert",
+      "table": "agency_crm_connection_audit_events"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connections_delete",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connections_insert",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "trigger",
+      "name": "agency_crm_connections_update",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "trigger",
+      "name": "assistant_active_agencies_delete",
+      "table": "assistant_active_agencies"
+    },
+    {
+      "type": "trigger",
+      "name": "assistant_active_agencies_insert",
+      "table": "assistant_active_agencies"
+    },
+    {
+      "type": "trigger",
+      "name": "identity_principal_active_email_guard",
+      "table": "identity_principal"
+    },
+    {
+      "type": "view",
+      "name": "agency_crm_connection_audit_events",
+      "table": "agency_crm_connection_audit_events"
+    },
+    {
+      "type": "view",
+      "name": "agency_crm_connections",
+      "table": "agency_crm_connections"
+    },
+    {
+      "type": "view",
+      "name": "assistant_active_agencies",
+      "table": "assistant_active_agencies"
     }
   ],
   "tables": [
@@ -2242,12 +2350,10 @@
         }
       ],
       "foreignKeys": [],
-      "seedRows": 1,
+      "seedRows": 2,
       "uniqueKeys": [
         {
-          "columns": [
-            "scope"
-          ],
+          "columns": ["scope"],
           "origin": "pk"
         }
       ],
@@ -2948,282 +3054,6 @@
       "checkCount": 0
     },
     {
-      "name": "agency_crm_connection_audit_events",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "connection_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "agency_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "provider",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "event_type",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "outcome",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "error_code",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "tenants",
-          "from": "agency_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        },
-        {
-          "id": 2,
-          "seq": 0,
-          "table": "agency_crm_connections",
-          "from": "connection_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": [
-            "id"
-          ],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "agency_crm_connections",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "agency_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "created_by_principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "provider",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "nango_connection_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "nango_integration_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "external_account_label",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "scopes",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "'[]'",
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "last_validated_at",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "disconnected_at",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 11,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 12,
-          "name": "updated_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 13,
-          "name": "external_account_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "created_by_principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "tenants",
-          "from": "agency_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": [
-            "created_by_principal_id",
-            "agency_id",
-            "provider"
-          ],
-          "origin": "c"
-        },
-        {
-          "columns": [
-            "id"
-          ],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 2
-    },
-    {
       "name": "app_economicactivity",
       "columns": [
         {
@@ -3259,67 +3089,6 @@
             "code"
           ],
           "origin": "c"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "assistant_active_agencies",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "principal_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "agency_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "updated_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "seq": 0,
-          "table": "tenants",
-          "from": "agency_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        },
-        {
-          "id": 1,
-          "seq": 0,
-          "table": "identity_principal",
-          "from": "principal_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE",
-          "match": "NONE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": [
-            "principal_id"
-          ],
-          "origin": "pk"
         }
       ],
       "checkCount": 0
@@ -5187,7 +4956,7 @@
         {
           "id": 0,
           "seq": 0,
-          "table": "agency_crm_connections",
+          "table": "tenant_crm_connections",
           "from": "connection_id",
           "to": "id",
           "on_update": "NO ACTION",
@@ -5218,19 +4987,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "principal_id",
-            "tenant_id",
-            "provider",
-            "connection_id",
-            "external_account_id"
-          ],
+          "columns": ["principal_id", "tenant_id", "provider", "connection_id", "external_account_id"],
           "origin": "u"
         },
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -8182,14 +7943,6 @@
         },
         {
           "cid": 3,
-          "name": "domain_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
           "name": "object_name",
           "type": "TEXT",
           "notnull": 1,
@@ -8197,7 +7950,7 @@
           "pk": 0
         },
         {
-          "cid": 5,
+          "cid": 4,
           "name": "kind",
           "type": "TEXT",
           "notnull": 1,
@@ -8205,7 +7958,7 @@
           "pk": 0
         },
         {
-          "cid": 6,
+          "cid": 5,
           "name": "title",
           "type": "TEXT",
           "notnull": 1,
@@ -8213,7 +7966,7 @@
           "pk": 0
         },
         {
-          "cid": 7,
+          "cid": 6,
           "name": "description",
           "type": "TEXT",
           "notnull": 0,
@@ -8221,7 +7974,7 @@
           "pk": 0
         },
         {
-          "cid": 8,
+          "cid": 7,
           "name": "fields",
           "type": "TEXT",
           "notnull": 1,
@@ -8229,7 +7982,7 @@
           "pk": 0
         },
         {
-          "cid": 9,
+          "cid": 8,
           "name": "snapshot",
           "type": "TEXT",
           "notnull": 1,
@@ -8237,7 +7990,7 @@
           "pk": 0
         },
         {
-          "cid": 10,
+          "cid": 9,
           "name": "daily_limit",
           "type": "INTEGER",
           "notnull": 1,
@@ -8245,7 +7998,7 @@
           "pk": 0
         },
         {
-          "cid": 11,
+          "cid": 10,
           "name": "return_result",
           "type": "INTEGER",
           "notnull": 1,
@@ -8253,7 +8006,7 @@
           "pk": 0
         },
         {
-          "cid": 12,
+          "cid": 11,
           "name": "expires_at",
           "type": "TEXT",
           "notnull": 0,
@@ -8261,7 +8014,7 @@
           "pk": 0
         },
         {
-          "cid": 13,
+          "cid": 12,
           "name": "revoked_at",
           "type": "TEXT",
           "notnull": 0,
@@ -8269,7 +8022,7 @@
           "pk": 0
         },
         {
-          "cid": 14,
+          "cid": 13,
           "name": "created_by",
           "type": "TEXT",
           "notnull": 1,
@@ -8277,7 +8030,7 @@
           "pk": 0
         },
         {
-          "cid": 15,
+          "cid": 14,
           "name": "created_at",
           "type": "TEXT",
           "notnull": 1,
@@ -8285,7 +8038,7 @@
           "pk": 0
         },
         {
-          "cid": 16,
+          "cid": 15,
           "name": "short_url",
           "type": "TEXT",
           "notnull": 0,
@@ -8293,7 +8046,7 @@
           "pk": 0
         },
         {
-          "cid": 17,
+          "cid": 16,
           "name": "logo_image",
           "type": "TEXT",
           "notnull": 0,
@@ -8305,15 +8058,11 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "token"
-          ],
+          "columns": ["token"],
           "origin": "u"
         },
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -8501,7 +8250,7 @@
         },
         {
           "cid": 2,
-          "name": "domain_id",
+          "name": "tenant_id",
           "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
@@ -8592,9 +8341,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -9460,54 +9207,6 @@
           "columns": [
             "tenant_id",
             "collection"
-          ],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "studio_data_domains",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "label",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "created_by",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "created_at",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": [
-            "id"
           ],
           "origin": "pk"
         }
@@ -14040,14 +13739,6 @@
         },
         {
           "cid": 5,
-          "name": "store_json",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
           "name": "sha256",
           "type": "TEXT",
           "notnull": 1,
@@ -14055,7 +13746,7 @@
           "pk": 0
         },
         {
-          "cid": 7,
+          "cid": 6,
           "name": "size_bytes",
           "type": "INTEGER",
           "notnull": 1,
@@ -14063,7 +13754,7 @@
           "pk": 0
         },
         {
-          "cid": 8,
+          "cid": 7,
           "name": "created_by",
           "type": "TEXT",
           "notnull": 0,
@@ -14071,7 +13762,7 @@
           "pk": 0
         },
         {
-          "cid": 9,
+          "cid": 8,
           "name": "created_at",
           "type": "TEXT",
           "notnull": 1,
@@ -14079,11 +13770,19 @@
           "pk": 0
         },
         {
-          "cid": 10,
+          "cid": 9,
           "name": "updated_at",
           "type": "TEXT",
           "notnull": 1,
           "dflt_value": "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "store_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
           "pk": 0
         }
       ],
@@ -14091,11 +13790,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "tenant_id",
-            "id",
-            "version"
-          ],
+          "columns": ["tenant_id", "id", "version"],
           "origin": "pk"
         }
       ],
@@ -14140,14 +13835,898 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "assistant_active_tenants",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["principal_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "notification_admin_audit",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "actor_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "action",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "notification_deliveries",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "event_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "scope_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "scope_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "recipient_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "channel",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'in-app'",
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "read_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "archived_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "resolved_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "notification_events",
+          "from": "event_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["event_id", "recipient_id", "channel"],
+          "origin": "u"
+        },
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "notification_events",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "scope_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "scope_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "payload",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "expires_at",
+          "type": "BIGINT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'pending'",
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "cursor",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "next_retry",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "lease_token",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "lease_until",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["scope_kind", "scope_id", "event_key"],
+          "origin": "u"
+        },
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "notification_maintenance_checkpoints",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cursor",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["name"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "notification_recipient_retries",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "event_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "recipient_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "next_retry",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'pending'",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "notification_events",
+          "from": "event_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["event_id", "recipient_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "notification_scope_settings",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "read_days",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "90",
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "unread_days",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "180",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["workspace_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "notification_send_limits",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "actor_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "window_start",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["workspace_id", "actor_id", "window_start"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "notification_subscriptions",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "collection",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["workspace_id", "principal_id", "collection"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_crm_connection_audit_events",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "event_type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "outcome",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "error_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "tenant_crm_connections",
+          "from": "connection_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "tenant_crm_connections",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_by_principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "nango_connection_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "nango_integration_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "external_account_label",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "scopes",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "'[]'",
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "last_validated_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "disconnected_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "external_account_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "created_by_principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["created_by_principal_id", "tenant_id", "provider"],
+          "origin": "c"
+        },
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "tenant_namespace_migrations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "old_key",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 2,
+      "uniqueKeys": [
+        {
+          "columns": ["old_key"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
     }
   ],
-  "mappingNotes": [
-    "All SQLite INTEGER/BIGINT values map to PostgreSQL BIGINT; flags remain integer values, JSON and timestamps remain text.",
-    "A single-column INTEGER primary key maps to GENERATED BY DEFAULT AS IDENTITY, preserving explicit source IDs on import.",
-    "Foreign keys, delete/update actions, deferral, unique keys and checks are native constraints; explicit indexes preserve their source names.",
-    "SQLite integer predicates in partial indexes and the sales review check use explicit comparisons to zero.",
-    "savia_json_valid uses the PostgreSQL json parser while retaining text storage. JSON execution uses jsonb and therefore escaped U+0000 is a known incompatible value requiring resolution before release.",
-    "seed=false suppresses baseline seed data permanently for that installation; changing seed on an applied baseline never replays seeds."
-  ]
+  "mappingNotes": ["All SQLite INTEGER/BIGINT values map to PostgreSQL BIGINT; flags remain integer values, JSON and timestamps remain text.", "A single-column INTEGER primary key maps to GENERATED BY DEFAULT AS IDENTITY, preserving explicit source IDs on import.", "Foreign keys, delete/update actions, deferral, unique keys and checks are native constraints; explicit indexes preserve their source names.", "SQLite integer predicates in partial indexes and the sales review check use explicit comparisons to zero.", "savia_json_valid uses the PostgreSQL json parser while retaining text storage. JSON execution uses jsonb and therefore escaped U+0000 is a known incompatible value requiring resolution before release.", "seed=false suppresses baseline seed data permanently for that installation; changing seed on an applied baseline never replays seeds."]
 }

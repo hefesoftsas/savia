@@ -1,3 +1,4 @@
+import { seedRequestTenantMigration } from "./request-tenant-migration";
 import { resolve } from "node:path";
 import type { AuthDependencies } from "../../auth/src/index";
 import { registerDialect } from "@savia/db/dialect";
@@ -50,6 +51,8 @@ export function openDatabases(
             seed: true,
             client,
           });
+          await client.query("CREATE SCHEMA IF NOT EXISTS savia_request");
+          await seedRequestTenantMigration(core, request);
           await migratePostgres({
             connectionString: options.connectionString,
             schema: "savia_request",
@@ -85,6 +88,7 @@ export function openDatabases(
       authDatabase: auth,
       initialize: async (authenticate) => {
         await core.migrate(resolve(root, "packages/db/migrations"));
+        await seedRequestTenantMigration(core, request);
         await request.migrate(resolve(root, "apps/savia-request/migrations"));
         await authenticate();
       },

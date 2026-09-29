@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "./api";
+import { getStudioRuntime } from "./runtime";
+import {
+  RemoteChangesNotice,
+  useRealtimeRefresh,
+} from "@/realtime/use-realtime-refresh";
 import { CustomPluginFrame } from "./custom-plugin-frame";
 import {
   StoreConnections,
@@ -110,12 +115,15 @@ function groupById(items: StoreItem[]): GroupedPlugin[] {
 
 export default function PluginStoreManager({
   onChanged,
+  hideBundledPlugins = false,
 }: {
   onChanged: () => void | Promise<unknown>;
+  hideBundledPlugins?: boolean;
 }) {
   const t = useMessages(automationMessages);
   const locale = useAppLocale();
   const fileRef = useRef<HTMLInputElement>(null);
+  const listGeneration = useRef(0);
 
   const [items, setItems] = useState<StoreItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,10 +140,41 @@ export default function PluginStoreManager({
       ? reason.message
       : t("No se pudo actualizar el plugin. Intenta de nuevo.");
 
-  async function reload() {
-    const response = await api<{ data: StoreItem[] }>("/plugin-store");
-    setItems(response.data);
+  async function loadItems() {
+    const [response, solutions] = await Promise.all([
+      api<{ data: StoreItem[] }>("/plugin-store"),
+      hideBundledPlugins
+        ? api<{ data: { manifest: { requires: string[] } }[] }>("/solutions")
+        : Promise.resolve({ data: [] }),
+    ]);
+    const bundled = new Set(
+      solutions.data.flatMap(({ manifest }) => manifest.requires),
+    );
+    return response.data.filter((item) => !bundled.has(item.manifest.id));
   }
+  async function reload() {
+    const generation = ++listGeneration.current;
+    const items = await loadItems();
+    if (generation === listGeneration.current) setItems(items);
+  }
+
+  async function reloadRemoteChanges() {
+    await reload();
+    setOpenPluginId(null);
+    setDeleteTarget(null);
+  }
+
+  const remoteChanges = useRealtimeRefresh({
+    topics: ["studio"],
+    tenantId: getStudioRuntime().tenantId,
+    blocked:
+      busy !== null ||
+      uploading ||
+      openPluginId !== null ||
+      deleteTarget !== null,
+    refresh: reloadRemoteChanges,
+    accepts: (event) => event.collection === "objects",
+  });
 
   async function fetchInitial() {
     setLoading(true);
@@ -151,9 +190,10 @@ export default function PluginStoreManager({
 
   useEffect(() => {
     let active = true;
-    api<{ data: StoreItem[] }>("/plugin-store")
-      .then((response) => {
-        if (active) setItems(response.data);
+    const generation = ++listGeneration.current;
+    loadItems()
+      .then((items) => {
+        if (active && generation === listGeneration.current) setItems(items);
       })
       .catch((reason) => {
         if (active) setError(message(reason));
@@ -163,6 +203,7 @@ export default function PluginStoreManager({
       });
     return () => {
       active = false;
+      if (generation === listGeneration.current) listGeneration.current++;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -270,6 +311,7 @@ export default function PluginStoreManager({
 
   return (
     <section aria-label={t("Mis plugins")} className="space-y-5">
+      <RemoteChangesNotice {...remoteChanges} />
       <div className="savia-surface-card overflow-hidden">
         <header className="flex flex-wrap items-center gap-2 border-b px-6 py-5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">

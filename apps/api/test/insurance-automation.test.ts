@@ -21,7 +21,7 @@ const api = () =>
     undefined,
     platformAdministratorAuthenticator(),
   );
-const base = "/v1/data-domains/platform/api";
+const base = "/v1/studio/0/api";
 async function request(
   path: string,
   method = "GET",
@@ -323,7 +323,7 @@ it("requires design and publish rights before preparing schemas", async () => {
   const { runtimeReleaseCatalog } =
     await import("@savia/release-catalog/runtime");
   const bundles = runtimeReleaseCatalog.workflowBundles;
-  const app = createStudioApp("domain:unauthorized", {
+  const app = createStudioApp("tenant:99008", {
     principalId: "viewer",
     workflowBundles: bundles,
     authorizeWorkflow: async ({ action }) =>

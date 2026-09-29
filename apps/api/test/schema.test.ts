@@ -95,7 +95,7 @@ describe("full D1 schema projection", () => {
         "plugin_store_artifacts",
         "studio_solution_objects",
         "studio_business_links",
-        "studio_data_domains",
+        "tenant_namespace_migrations",
         "managed_customer_extensions",
         "managed_customer_requests",
         "studio_collection_sources",

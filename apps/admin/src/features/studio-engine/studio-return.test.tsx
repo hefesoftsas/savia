@@ -38,11 +38,11 @@ describe("Studio regreso al mismo dominio", () => {
     const calls: string[] = [];
     setStudioRuntime({
       embedded: true,
-      domainId: "platform",
+      tenantId: 0,
       businessSetupEnabled: false,
       transport: bootstrapTransport(calls),
     });
-    const shared = getStudioQueryClient("platform", OWNER);
+    const shared = getStudioQueryClient("tenant:0", OWNER);
     shared.setQueryData(["probe"], { v: 1 });
 
     const first = render(<Root embedded queryClient={shared} />);
@@ -51,7 +51,7 @@ describe("Studio regreso al mismo dominio", () => {
         1,
       ),
     );
-    expect(isStudioBootstrapped("platform", OWNER)).toBe(true);
+    expect(isStudioBootstrapped("tenant:0", OWNER)).toBe(true);
     first.unmount();
     // Al salir no se vacía el cliente compartido.
     expect(shared.getQueryData(["probe"])).toEqual({ v: 1 });
@@ -68,14 +68,14 @@ describe("Studio regreso al mismo dominio", () => {
     const unsubscribe = vi.fn();
     setStudioRuntime({
       embedded: true,
-      domainId: "platform",
+      tenantId: 0,
       businessSetupEnabled: false,
       transport: bootstrapTransport(calls),
       localWorkspace: {
         store: { subscribeQueryChanges: () => unsubscribe },
       } as never,
     });
-    const shared = getStudioQueryClient("platform", OWNER);
+    const shared = getStudioQueryClient("tenant:0", OWNER);
     const mounted = render(<Root embedded queryClient={shared} />);
     await waitFor(() =>
       expect(calls.filter((path) => path.endsWith("/bootstrap"))).toHaveLength(

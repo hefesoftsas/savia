@@ -61,13 +61,10 @@ async function startApi(): Promise<{
       const body = await readBody(request);
       requests.push(`${request.method} ${request.url}`);
       let payload: unknown = { data: [] };
-      if (
-        request.url === "/v1/data-domains/platform/api/plugin-store/mcp-catalog"
-      ) {
+      if (request.url === "/v1/studio/0/api/plugin-store/mcp-catalog") {
         payload = catalog;
       } else if (
-        request.url ===
-        "/v1/data-domains/platform/api/extensions/custom.demo/actions/eco"
+        request.url === "/v1/studio/0/api/extensions/custom.demo/actions/eco"
       ) {
         expect(JSON.parse(body)).toEqual({ input: { mensaje: "hola" } });
         payload = {
@@ -109,7 +106,7 @@ describe("store assistant tools", () => {
       });
       expect(result.structuredContent).toEqual({ eco: 1 });
       expect(requests).toContain(
-        "POST /v1/data-domains/platform/api/extensions/custom.demo/actions/eco",
+        "POST /v1/studio/0/api/extensions/custom.demo/actions/eco",
       );
     } finally {
       await client.close();

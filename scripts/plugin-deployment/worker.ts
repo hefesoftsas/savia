@@ -3,18 +3,7 @@ import { createStudioApp } from "../../packages/studio-server/src/index";
 /** Private, short-lived Wrangler session. Never publish as a public Worker. */
 export async function deploymentTenants(db: D1Database): Promise<string[]> {
   const tenants = await db
-    .prepare(
-      `
-    SELECT CASE
-      WHEN EXISTS(SELECT 1 FROM studio_objects o WHERE o.tenant_id='tenant:'||t.id) THEN 'tenant:'||t.id
-      WHEN EXISTS(SELECT 1 FROM studio_objects o WHERE o.tenant_id='agency:'||t.id)
-        OR EXISTS(SELECT 1 FROM studio_solution_installations s WHERE s.tenant_id='agency:'||t.id) THEN 'agency:'||t.id
-      ELSE 'tenant:'||t.id END AS scope FROM tenants t
-    UNION SELECT 'domain:'||id AS scope FROM studio_data_domains
-    UNION SELECT 'domain:platform' AS scope
-    ORDER BY scope
-  `,
-    )
+    .prepare("SELECT 'tenant:'||id AS scope FROM tenants ORDER BY scope")
     .all<{ scope: string }>();
   return tenants.results.map((row) => row.scope);
 }

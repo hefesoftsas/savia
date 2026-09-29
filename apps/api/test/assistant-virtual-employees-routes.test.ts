@@ -80,7 +80,7 @@ describe("Virtual Employees API Routes", () => {
       "INSERT OR REPLACE INTO studio_objects (tenant_id, name, label, description, config, version) VALUES (?, ?, ?, ?, ?, ?)",
     )
       .bind(
-        "domain:platform",
+        "tenant:0",
         "clientes_test",
         "Clientes de Prueba",
         "Colección de clientes",
@@ -155,32 +155,41 @@ describe("Virtual Employees API Routes", () => {
     expect(fetched.name).toBe("Mariana - Siniestros");
 
     // 4. Update
-    const patchRes = await app.request(`/api/assistant/employees/${created.id}`, {
-      method: "PATCH",
-      headers: {
-        authorization: "Bearer admin-token",
-        "content-type": "application/json",
+    const patchRes = await app.request(
+      `/api/assistant/employees/${created.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          position: "Coordinadora de Siniestros",
+          allowedCollections: ["*"],
+        }),
       },
-      body: JSON.stringify({
-        position: "Coordinadora de Siniestros",
-        allowedCollections: ["*"],
-      }),
-    });
+    );
     expect(patchRes.status).toBe(200);
     const updated = ((await patchRes.json()) as any).data;
     expect(updated.position).toBe("Coordinadora de Siniestros");
     expect(updated.allowedCollections).toEqual(["*"]);
 
     // 5. Delete
-    const deleteRes = await app.request(`/api/assistant/employees/${created.id}`, {
-      method: "DELETE",
-      headers: { authorization: "Bearer admin-token" },
-    });
+    const deleteRes = await app.request(
+      `/api/assistant/employees/${created.id}`,
+      {
+        method: "DELETE",
+        headers: { authorization: "Bearer admin-token" },
+      },
+    );
     expect(deleteRes.status).toBe(200);
 
-    const getAfterDelete = await app.request(`/api/assistant/employees/${created.id}`, {
-      headers: { authorization: "Bearer admin-token" },
-    });
+    const getAfterDelete = await app.request(
+      `/api/assistant/employees/${created.id}`,
+      {
+        headers: { authorization: "Bearer admin-token" },
+      },
+    );
     expect(getAfterDelete.status).toBe(404);
   });
 
@@ -203,22 +212,25 @@ describe("Virtual Employees API Routes", () => {
     const employee = ((await createRes.json()) as any).data;
 
     // Upload file using JSON payload
-    const uploadRes = await app.request(`/api/assistant/employees/${employee.id}/files`, {
-      method: "POST",
-      headers: {
-        authorization: "Bearer admin-token",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        name: "manual_operaciones.md",
-        contentType: "text/markdown",
-        content: `
+    const uploadRes = await app.request(
+      `/api/assistant/employees/${employee.id}/files`,
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "manual_operaciones.md",
+          contentType: "text/markdown",
+          content: `
           # Manual Operativo 2026
           Para emitir una póliza colectiva se requiere la aprobación de gerencia técnica.
           Los tiempos de respuesta máximos son de 48 horas hábiles.
         `,
-      }),
-    });
+        }),
+      },
+    );
 
     expect(uploadRes.status).toBe(201);
     const file = ((await uploadRes.json()) as any).data;
@@ -227,9 +239,12 @@ describe("Virtual Employees API Routes", () => {
     expect(file.ragStatus).toBe("indexed");
 
     // Check employee detail now includes the file
-    const detailRes = await app.request(`/api/assistant/employees/${employee.id}`, {
-      headers: { authorization: "Bearer admin-token" },
-    });
+    const detailRes = await app.request(
+      `/api/assistant/employees/${employee.id}`,
+      {
+        headers: { authorization: "Bearer admin-token" },
+      },
+    );
     const detail = ((await detailRes.json()) as any).data;
     expect(detail.files).toHaveLength(1);
     expect(detail.files[0].id).toBe(file.id);

@@ -5,7 +5,7 @@ import {
 } from "../src/studio/connector-executor";
 
 const context = {
-  tenantId: "agency:7",
+  tenantId: "tenant:7",
   principalId: "user-a",
   extensionId: "inventory.sync",
   actionId: "pull",

@@ -38,19 +38,22 @@ export function applyRealtimeListEvent(
     }
     const targetId = String(event.id);
     let removed = false;
-    queryClient.setQueriesData<ListPage>({ queryKey: [queryKeyPrefix] }, (previous) => {
-      if (!previous || !Array.isArray(previous.data)) return previous;
-      const data = previous.data.filter((row) => rowId(row) !== targetId);
-      if (data.length === previous.data.length) return previous;
-      removed = true;
-      return {
-        ...previous,
-        data,
-        ...(typeof previous.total === "number"
-          ? { total: previous.total - (previous.data.length - data.length) }
-          : {}),
-      };
-    });
+    queryClient.setQueriesData<ListPage>(
+      { queryKey: [queryKeyPrefix] },
+      (previous) => {
+        if (!previous || !Array.isArray(previous.data)) return previous;
+        const data = previous.data.filter((row) => rowId(row) !== targetId);
+        if (data.length === previous.data.length) return previous;
+        removed = true;
+        return {
+          ...previous,
+          data,
+          ...(typeof previous.total === "number"
+            ? { total: previous.total - (previous.data.length - data.length) }
+            : {}),
+        };
+      },
+    );
     if (!removed) invalidate();
   } catch {
     invalidate();

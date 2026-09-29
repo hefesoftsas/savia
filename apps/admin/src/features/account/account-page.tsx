@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import {
@@ -184,6 +185,8 @@ export function AccountPage({ apiUrl }: AccountPageProps) {
   useEffect(() => {
     void loadAccount();
   }, [apiUrl]);
+
+  useRealtimeRefresh({ topics: ["account"], refresh: loadAccount });
 
   useEffect(
     () => () => {

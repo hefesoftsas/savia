@@ -132,11 +132,11 @@
   font-size: 13px;
 }
 
-.crm-domain-context-trigger {
+.studio-tenant-context-trigger {
   color: var(--muted-foreground);
 }
-.crm-domain-context-trigger:hover,
-.crm-domain-context-trigger[data-state="open"] {
+.studio-tenant-context-trigger:hover,
+.studio-tenant-context-trigger[data-state="open"] {
   color: var(--foreground);
   background: color-mix(in oklab, var(--muted) 45%, transparent);
 }

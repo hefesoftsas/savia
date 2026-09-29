@@ -74,7 +74,7 @@ test("deploys and activates every release ZIP in all discovered workspaces", asy
           assert.equal(init.headers.authorization, "Bearer session");
           return Response.json(
             url.endsWith("/tenants")
-              ? { tenants: ["tenant:1", "agency:2", "domain:operations"] }
+              ? { tenants: ["tenant:1", "tenant:2", "tenant:3"] }
               : { data: {} },
           );
         },

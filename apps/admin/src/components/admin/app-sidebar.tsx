@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
@@ -334,18 +335,18 @@ export function AppSidebar() {
     itemsById: staticItems,
   } = useVisibleSidebarNavigation();
   const location = useLocation();
-  const { children: studioChildren, domainId } = useStudioSidebarNavigation(
+  const { children: studioChildren, tenantId } = useStudioSidebarNavigation(
     Boolean(staticItems["studio"]),
   );
   const pageAdmin = studioChildren.find((child) => child.id === "studio:admin");
   const itemsById = useMemo(() => {
     const items = { ...staticItems };
     delete items["studio"];
-    if (domainId)
+    if (tenantId !== undefined)
       for (const page of studioChildren.filter(
         (child) => child.group === "objects",
       )) {
-        const id: SidebarNavigationItemId = `page:${encodeURIComponent(domainId)}:${page.id.slice("object:".length)}`;
+        const id: SidebarNavigationItemId = `page:${encodeURIComponent(tenantId)}:${page.id.slice("object:".length)}`;
         items[id] = {
           id,
           label: page.label,
@@ -371,7 +372,7 @@ export function AppSidebar() {
           isStudioChildActive(pageAdmin, location.search),
       };
     }
-    if (pageAdmin && domainId) {
+    if (pageAdmin && tenantId !== undefined) {
       const base = new URLSearchParams(pageAdmin.route.split("?")[1]);
       const current = new URLSearchParams(location.search);
       for (const id of [
@@ -417,25 +418,25 @@ export function AppSidebar() {
   }, [
     staticItems,
     studioChildren,
-    domainId,
+    tenantId,
     location.pathname,
     location.search,
     pageAdmin,
     translate,
   ]);
   const pageDefaultSections = useMemo(() => {
-    if (!domainId) return {};
+    if (tenantId === undefined) return {};
     return Object.fromEntries(
       studioChildren
         .filter((child) => child.group === "objects")
         .map((child) => [
-          `page:${encodeURIComponent(domainId)}:${child.id.slice("object:".length)}`,
+          `page:${encodeURIComponent(tenantId)}:${child.id.slice("object:".length)}`,
           child.section ?? "operation",
         ]),
     ) as Partial<
       Record<SidebarNavigationItemId, SidebarNavigationItem["section"]>
     >;
-  }, [studioChildren, domainId]);
+  }, [studioChildren, tenantId]);
   const [search, setSearch] = useState("");
   const [organizationMode, setOrganizationMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -540,6 +541,18 @@ export function AppSidebar() {
       active = false;
     };
   }, [isLoading, services]);
+
+  useRealtimeRefresh({
+    topics: ["account"],
+    blocked: saving || Boolean(activeDragSectionId),
+    refresh: async () => {
+      const saved = await services.userPreferences?.getSidebarNavigation();
+      if (!saved) return;
+      const upgraded = upgradeSidebarNavigationPreset(saved);
+      setLayout(upgraded);
+      setConfirmedLayout(upgraded);
+    },
+  });
 
   const closeMobileSidebar = () => {
     if (openMobile) setOpenMobile(false);
@@ -939,138 +952,140 @@ export function AppSidebar() {
             ))}
           </div>
         ) : (
-        <DndContext
-          collisionDetection={closestCenter}
-          onDragCancel={handleDragCancel}
-          onDragEnd={handleDragEnd}
-          onDragOver={handleDragOver}
-          onDragStart={handleDragStart}
-          sensors={sensors}
-        >
-          <SortableContext
-            items={blockSortableIds}
-            strategy={verticalListSortingStrategy}
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragCancel={handleDragCancel}
+            onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver}
+            onDragStart={handleDragStart}
+            sensors={sensors}
           >
-            {displayedLayout.blocks.map((block, blockIndex) => {
-              const blockId = blockKey(block);
-              const itemIds = blockItems(block).filter((id) => {
-                const item = itemsById[id];
-                if (!item) return false;
+            <SortableContext
+              items={blockSortableIds}
+              strategy={verticalListSortingStrategy}
+            >
+              {displayedLayout.blocks.map((block, blockIndex) => {
+                const blockId = blockKey(block);
+                const itemIds = blockItems(block).filter((id) => {
+                  const item = itemsById[id];
+                  if (!item) return false;
+                  if (
+                    !organizationMode &&
+                    !searching &&
+                    isNavigationItemHidden(displayedLayout, id)
+                  ) {
+                    return false;
+                  }
+                  return (
+                    organizationMode ||
+                    matchesNavigationSearch(
+                      search,
+                      `${item.label} ${item.searchTerms ?? ""}`,
+                    )
+                  );
+                });
+                const items = itemIds
+                  .map((id) => itemsById[id])
+                  .filter((item): item is SidebarNavigationItem =>
+                    Boolean(item),
+                  );
                 if (
                   !organizationMode &&
-                  !searching &&
-                  isNavigationItemHidden(displayedLayout, id)
+                  items.length === 0 &&
+                  block.kind !== "custom"
                 ) {
-                  return false;
+                  return null;
                 }
+
+                const title =
+                  block.kind === "builtin"
+                    ? translate(
+                        sidebarNavigationSections.find(
+                          (section) => section.id === block.id,
+                        )!.labelKey,
+                      )
+                    : block.label;
+                const previousBlock = displayedLayout.blocks[blockIndex - 1];
+                const nextBlock = displayedLayout.blocks[blockIndex + 1];
+                const showSectionDropBefore =
+                  organizationMode &&
+                  activeDragSectionId &&
+                  activeDragSectionId !== blockId &&
+                  sectionDropTarget?.beforeBlockId === blockId;
+
                 return (
-                  organizationMode ||
-                  matchesNavigationSearch(
-                    search,
-                    `${item.label} ${item.searchTerms ?? ""}`,
-                  )
+                  <Fragment key={blockId}>
+                    {showSectionDropBefore ? (
+                      <div className="px-2 py-1">
+                        <SidebarDropIndicator />
+                      </div>
+                    ) : null}
+                    <NavigationSection
+                      activeDragId={activeDragId}
+                      activeDragSectionId={activeDragSectionId}
+                      block={block}
+                      blockId={blockId}
+                      blockSortableId={sidebarBlockSortableId(blockId)}
+                      collapsed={block.collapsed === true}
+                      displayedLayout={displayedLayout}
+                      dropTarget={dropTarget}
+                      items={items}
+                      nextBlockId={nextBlock ? blockKey(nextBlock) : undefined}
+                      onMove={moveWithControls}
+                      onNavigate={closeMobileSidebar}
+                      onRemove={
+                        block.kind === "custom"
+                          ? () =>
+                              void persistLayout(
+                                removeCustomSidebarSection(
+                                  layoutForSave(),
+                                  block.id,
+                                ),
+                              )
+                          : undefined
+                      }
+                      onToggleCollapsed={(collapsed) =>
+                        toggleSection(blockId, collapsed)
+                      }
+                      onToggleVisibility={toggleVisibility}
+                      onRename={
+                        block.kind === "custom"
+                          ? (label) =>
+                              void persistLayout(
+                                renameCustomSidebarSection(
+                                  layoutForSave(),
+                                  block.id,
+                                  label,
+                                ),
+                              )
+                          : undefined
+                      }
+                      organizationMode={organizationMode}
+                      previousBlockId={
+                        previousBlock ? blockKey(previousBlock) : undefined
+                      }
+                      saving={saving}
+                      search={search}
+                      saviaRequestActive={saviaRequestActive}
+                      title={title}
+                    />
+                  </Fragment>
                 );
-              });
-              const items = itemIds
-                .map((id) => itemsById[id])
-                .filter((item): item is SidebarNavigationItem => Boolean(item));
-              if (
-                !organizationMode &&
-                items.length === 0 &&
-                block.kind !== "custom"
-              ) {
-                return null;
-              }
-
-              const title =
-                block.kind === "builtin"
-                  ? translate(
-                      sidebarNavigationSections.find(
-                        (section) => section.id === block.id,
-                      )!.labelKey,
-                    )
-                  : block.label;
-              const previousBlock = displayedLayout.blocks[blockIndex - 1];
-              const nextBlock = displayedLayout.blocks[blockIndex + 1];
-              const showSectionDropBefore =
-                organizationMode &&
-                activeDragSectionId &&
-                activeDragSectionId !== blockId &&
-                sectionDropTarget?.beforeBlockId === blockId;
-
-              return (
-                <Fragment key={blockId}>
-                  {showSectionDropBefore ? (
-                    <div className="px-2 py-1">
-                      <SidebarDropIndicator />
-                    </div>
-                  ) : null}
-                  <NavigationSection
-                    activeDragId={activeDragId}
-                    activeDragSectionId={activeDragSectionId}
-                    block={block}
-                    blockId={blockId}
-                    blockSortableId={sidebarBlockSortableId(blockId)}
-                    collapsed={block.collapsed === true}
-                    displayedLayout={displayedLayout}
-                    dropTarget={dropTarget}
-                    items={items}
-                    nextBlockId={nextBlock ? blockKey(nextBlock) : undefined}
-                    onMove={moveWithControls}
-                    onNavigate={closeMobileSidebar}
-                    onRemove={
-                      block.kind === "custom"
-                        ? () =>
-                            void persistLayout(
-                              removeCustomSidebarSection(
-                                layoutForSave(),
-                                block.id,
-                              ),
-                            )
-                        : undefined
-                    }
-                    onToggleCollapsed={(collapsed) =>
-                      toggleSection(blockId, collapsed)
-                    }
-                    onToggleVisibility={toggleVisibility}
-                    onRename={
-                      block.kind === "custom"
-                        ? (label) =>
-                            void persistLayout(
-                              renameCustomSidebarSection(
-                                layoutForSave(),
-                                block.id,
-                                label,
-                              ),
-                            )
-                        : undefined
-                    }
-                    organizationMode={organizationMode}
-                    previousBlockId={
-                      previousBlock ? blockKey(previousBlock) : undefined
-                    }
-                    saving={saving}
-                    search={search}
-                    saviaRequestActive={saviaRequestActive}
-                    title={title}
-                  />
-                </Fragment>
-              );
-            })}
-            {organizationMode && activeDragSectionId ? (
-              <SidebarSectionEndDropZone
-                active={sectionDropTarget?.beforeBlockId === null}
-              />
-            ) : null}
-          </SortableContext>
-          <DragOverlay dropAnimation={null}>
-            {activeDragSectionId && activeDragSectionTitle ? (
-              <SidebarSectionDragPreview title={activeDragSectionTitle} />
-            ) : activeDragId && itemsById[activeDragId] ? (
-              <SidebarDragPreview item={itemsById[activeDragId]} />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+              })}
+              {organizationMode && activeDragSectionId ? (
+                <SidebarSectionEndDropZone
+                  active={sectionDropTarget?.beforeBlockId === null}
+                />
+              ) : null}
+            </SortableContext>
+            <DragOverlay dropAnimation={null}>
+              {activeDragSectionId && activeDragSectionTitle ? (
+                <SidebarSectionDragPreview title={activeDragSectionTitle} />
+              ) : activeDragId && itemsById[activeDragId] ? (
+                <SidebarDragPreview item={itemsById[activeDragId]} />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
         {!organizationMode &&
         !isLoading &&

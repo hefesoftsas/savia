@@ -1,3 +1,4 @@
+import { BrandingRealtimeSync } from "@/realtime/branding-realtime";
 import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import { PwaInstallBanner } from "@/pwa";
 import { CookieConsentBanner } from "@/consent/cookie-consent-banner";
@@ -149,6 +150,7 @@ export const Layout = (props: CoreLayoutProps) => {
   };
   return (
     <SidebarProvider>
+      <BrandingRealtimeSync />
       <SaviaRequestProvider>
         <AppSidebar />
         <main

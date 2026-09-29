@@ -1,3 +1,4 @@
+import { AuthenticationError } from "./types";
 import { dialectFor } from "@savia/db/dialect";
 import {
   tenants,
@@ -59,7 +60,64 @@ function globalRole(row: typeof identityGlobalRoles.$inferSelect): GlobalRole {
   return row.role;
 }
 
+function emailConflict(): AuthenticationError {
+  return new AuthenticationError(
+    "IDENTITY_EMAIL_CONFLICT",
+    "An active account already uses this email. Ask an administrator to resolve the identity conflict.",
+  );
+}
+
+/** A matching email is not proof that two login subjects are the same person. */
+export async function assertIdentityEmailAvailable(
+  d1: D1Database,
+  email: string,
+  excludingId?: string,
+): Promise<void> {
+  const duplicate = await d1
+    .prepare(
+      "SELECT id FROM identity_principal WHERE is_active=1 AND lower(trim(email))=? AND id<>? LIMIT 1",
+    )
+    .bind(email.trim().toLowerCase(), excludingId ?? "")
+    .first<{ id: string }>();
+  if (duplicate) throw emailConflict();
+}
+
 export async function upsertPrincipal(
+  d1: D1Database,
+  external: ExternalIdentity,
+): Promise<IdentityPrincipal> {
+  external = { ...external, email: external.email.trim().toLowerCase() };
+  const existing = await findPrincipalBySubject(
+    d1,
+    external.issuer,
+    external.subject,
+  );
+  if (
+    !existing ||
+    (existing.isActive &&
+      existing.email.trim().toLowerCase() !== external.email)
+  ) {
+    await assertIdentityEmailAvailable(d1, external.email, existing?.id);
+  }
+  try {
+    return await persistPrincipal(d1, external);
+  } catch (error) {
+    rethrowIdentityWriteError(error);
+  }
+}
+
+function rethrowIdentityWriteError(error: unknown): never {
+  // Drizzle retains the database error in its cause chain.
+  let cause: unknown = error;
+  for (let depth = 0; cause instanceof Error && depth < 8; depth++) {
+    if (cause.message.includes("IDENTITY_EMAIL_CONFLICT"))
+      throw emailConflict();
+    cause = cause.cause;
+  }
+  throw error;
+}
+
+async function persistPrincipal(
   d1: D1Database,
   external: ExternalIdentity,
 ): Promise<IdentityPrincipal> {
@@ -169,13 +227,22 @@ export async function setPrincipalActive(
   isActive: boolean,
 ): Promise<IdentityPrincipal> {
   if (!isActive) await assertPrincipalCanLoseActiveMembership(d1, principalId);
-  const [updated] = await database(d1)
-    .update(identityPrincipals)
-    .set({ isActive, updatedAt: timestamp() })
-    .where(eq(identityPrincipals.id, principalId))
-    .returning();
-  if (!updated) throw new Error("Unable to update identity principal state");
-  return principal(updated);
+  if (isActive) {
+    const existing = await findPrincipal(d1, principalId);
+    if (existing && !existing.isActive)
+      await assertIdentityEmailAvailable(d1, existing.email, principalId);
+  }
+  try {
+    const [updated] = await database(d1)
+      .update(identityPrincipals)
+      .set({ isActive, updatedAt: timestamp() })
+      .where(eq(identityPrincipals.id, principalId))
+      .returning();
+    if (!updated) throw new Error("Unable to update identity principal state");
+    return principal(updated);
+  } catch (error) {
+    rethrowIdentityWriteError(error);
+  }
 }
 
 export async function listMemberships(

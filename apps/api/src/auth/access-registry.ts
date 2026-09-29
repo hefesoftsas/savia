@@ -27,11 +27,7 @@ export const denyAccess = () => {
   );
 };
 export const studioTenantForScope = (scope: AccessScope) =>
-  scope === "platform"
-    ? "domain:platform"
-    : scope.startsWith("tenant:")
-      ? "agency:" + scope.slice(7)
-      : scope;
+  scope === "platform" ? "tenant:0" : scope;
 export type AccessCatalogEntry = {
   resource: AccessGrant["resource"];
   label: string;

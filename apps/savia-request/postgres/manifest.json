@@ -25,6 +25,10 @@
     {
       "filename": "0006_audit.sql",
       "sha256": "749d68852c465eaee3f7b87682b6bda9ac81df0928af713e1cc1352ba3220dc2"
+    },
+    {
+      "filename": "0007_tenant_only_isolation.sql",
+      "sha256": "71f72fe1f3cd99b58219d03ba1cd352a4ff90e1e0a8fd28f4972ee46109bc83a"
     }
   ],
   "objects": [

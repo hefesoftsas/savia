@@ -36,9 +36,7 @@ beforeAll(async () => {
 });
 
 it("lists optional extension contributions supplied by the release catalog", async () => {
-  const response = await app().request(
-    "/v1/data-domains/platform/api/extensions",
-  );
+  const response = await app().request("/v1/studio/0/api/extensions");
   const body = await response.json();
 
   expect(response.status).toBe(200);
@@ -77,7 +75,7 @@ it("lists optional extension contributions supplied by the release catalog", asy
 
 it("returns default settings for the installed insurance quotes extension", async () => {
   const api = app();
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   const install = await api.request(
     `${base}/extensions/insurance.quotes/install`,
     { method: "POST" },
@@ -114,7 +112,7 @@ it("returns default settings for the installed insurance quotes extension", asyn
 
 it("rejects an extension that is not supplied by the release catalog", async () => {
   const api = app();
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   expect(
     (await api.request(`${base}/extensions/inventory.sync/summary`)).status,
   ).toBe(404);
@@ -259,7 +257,7 @@ it.each([
   "installs, repairs and persists records for %s without duplicating the collection",
   async (extension, object, input) => {
     const api = app();
-    const base = "/v1/data-domains/platform/api";
+    const base = "/v1/studio/0/api";
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await api.request(
         `${base}/extensions/${extension}/install`,
@@ -389,7 +387,7 @@ it.each([
   "enforces a documented outcome on the backend for %s",
   async (extension, object, input) => {
     const api = app(),
-      base = "/v1/data-domains/platform/api";
+      base = "/v1/studio/0/api";
     expect(
       (
         await api.request(`${base}/extensions/${extension}/install`, {
@@ -410,16 +408,17 @@ it.each([
   },
 );
 
-it("isolates optional plugin installations and collections between data domains", async () => {
+it("isolates optional plugin installations and collections between tenants", async () => {
   const api = app();
-  for (const name of ["plugins_a", "plugins_b"]) {
-    const created = await api.request("/v1/data-domains", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, label: name }),
-    });
-    expect(created.status, await created.clone().text()).toBe(201);
-  }
+  for (const [id, name] of [
+    [98221, "plugins_a"],
+    [98222, "plugins_b"],
+  ] as const)
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(?,?,?,'commercial',1,'2026-01-01','2026-01-01')",
+    )
+      .bind(id, name, name)
+      .run();
   for (const name of [
     "collections",
     "renewals",
@@ -433,20 +432,18 @@ it("isolates optional plugin installations and collections between data domains"
     "service",
   ]) {
     const installed = await api.request(
-      `/v1/data-domains/plugins_a/api/extensions/insurance.${name}/install`,
+      `/v1/studio/98221/api/extensions/insurance.${name}/install`,
       { method: "POST" },
     );
     expect(installed.status, await installed.clone().text()).toBe(200);
   }
-  const other = await api.request("/v1/data-domains/plugins_b/api/extensions");
+  const other = await api.request("/v1/studio/98222/api/extensions");
   expect(
     (await other.json()).data
       .filter((entry: { builtIn: boolean }) => !entry.builtIn)
       .every((entry: { installed: unknown }) => entry.installed === null),
   ).toBe(true);
-  const collections = await api.request(
-    "/v1/data-domains/plugins_b/api/objects",
-  );
+  const collections = await api.request("/v1/studio/98222/api/objects");
   expect(
     (await collections.json()).data.filter((entry: { name: string }) =>
       entry.name.startsWith("insurance_"),
@@ -511,7 +508,7 @@ it.each([
   "enforces completion evidence for %s on create and partial updates",
   async (name, input, required) => {
     const api = app(),
-      base = "/v1/data-domains/platform/api";
+      base = "/v1/studio/0/api";
     expect(
       (
         await api.request(`${base}/extensions/insurance.${name}/install`, {
@@ -564,7 +561,7 @@ it.each([
   "installs expanded %s contributions and exposes their required backend state",
   async (name, object, settings) => {
     const api = app(),
-      base = "/v1/data-domains/platform/api";
+      base = "/v1/studio/0/api";
     const response = await api.request(
       `${base}/extensions/insurance.${name}/install`,
       { method: "POST" },

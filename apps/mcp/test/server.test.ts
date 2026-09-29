@@ -81,7 +81,7 @@ describe("Savia FastMCP server", () => {
     const requests: string[] = [];
     const apiUrl = await startApi(async (request) => {
       requests.push(request.url ?? "");
-      if (request.url === "/v1/data-domains/platform/api/extensions") {
+      if (request.url === "/v1/studio/0/api/extensions") {
         return {
           data: [
             {
@@ -101,16 +101,15 @@ describe("Savia FastMCP server", () => {
       }
       if (
         request.url ===
-        "/v1/data-domains/platform/api/extensions/insurance.portfolio-dashboard/summary"
+        "/v1/studio/0/api/extensions/insurance.portfolio-dashboard/summary"
       ) {
         throw new Error("summary provider must not be called from the store");
       }
-      if (request.url === "/v1/data-domains/platform/api/objects") {
+      if (request.url === "/v1/studio/0/api/objects") {
         return { data: [{ name: "polizas", label: "Pólizas" }] };
       }
       if (
-        request.url ===
-        "/v1/data-domains/platform/api/records/polizas?page=1&perPage=200"
+        request.url === "/v1/studio/0/api/records/polizas?page=1&perPage=200"
       ) {
         return {
           data: [
@@ -142,9 +141,9 @@ describe("Savia FastMCP server", () => {
       });
       expect(typeof summary.asOf).toBe("string");
       expect(requests).toEqual([
-        "/v1/data-domains/platform/api/extensions",
-        "/v1/data-domains/platform/api/objects",
-        "/v1/data-domains/platform/api/records/polizas?page=1&perPage=200",
+        "/v1/studio/0/api/extensions",
+        "/v1/studio/0/api/objects",
+        "/v1/studio/0/api/records/polizas?page=1&perPage=200",
       ]);
     } finally {
       await client.close();
@@ -155,7 +154,7 @@ describe("Savia FastMCP server", () => {
     const requests: string[] = [];
     const apiUrl = await startApi(async (request) => {
       requests.push(request.url ?? "");
-      if (request.url === "/v1/data-domains/platform/api/extensions") {
+      if (request.url === "/v1/studio/0/api/extensions") {
         return {
           data: [
             {
@@ -181,7 +180,7 @@ describe("Savia FastMCP server", () => {
       await expect(
         client.callTool("savia_extension_insurance_portfolio", {}),
       ).rejects.toThrow("extension is not active");
-      expect(requests).toEqual(["/v1/data-domains/platform/api/extensions"]);
+      expect(requests).toEqual(["/v1/studio/0/api/extensions"]);
     } finally {
       await client.close();
     }
@@ -363,7 +362,7 @@ describe("Savia FastMCP server", () => {
     let authorization: string | undefined;
     const apiUrl = await startApi(async (request) => {
       authorization = request.headers.authorization;
-      expect(request.url).toBe("/v1/data-domains/platform/api/objects");
+      expect(request.url).toBe("/v1/studio/0/api/objects");
       return { data: [] };
     });
     const server = createSaviaMcpServer({

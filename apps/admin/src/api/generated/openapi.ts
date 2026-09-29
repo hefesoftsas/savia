@@ -658,6 +658,13 @@ export interface paths {
                 enabled: boolean;
                 protected: boolean;
                 legacy_role: string | null;
+                /** @enum {string} */
+                source?: "system" | "custom";
+                assignedUsers?: {
+                  id: string;
+                  displayName: string;
+                  email: string | null;
+                }[];
                 grants: {
                   resource: string;
                   /** @enum {string} */
@@ -1767,6 +1774,7 @@ export interface paths {
               /** @enum {string} */
               role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
             };
+            accessRoleIds?: string[];
           };
         };
       };
@@ -1832,8 +1840,15 @@ export interface paths {
           };
           content?: never;
         };
-        /** @description Tenant membership invariant prevented provisioning */
+        /** @description Email conflict or tenant membership invariant prevented provisioning */
         409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description One or more custom access roles are unavailable in the destination tenant */
+        422: {
           headers: {
             [name: string]: unknown;
           };
@@ -2607,8 +2622,21 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
-            topics: ("users" | "tenants" | "records")[];
+            topics: (
+              | "users"
+              | "tenants"
+              | "records"
+              | "access-control"
+              | "studio"
+              | "settings"
+              | "integrations"
+              | "workflows"
+              | "notifications"
+              | "personal-integrations"
+              | "account"
+            )[];
             tenantId?: number;
+            principalId?: string;
           };
         };
       };
@@ -2623,7 +2651,19 @@ export interface paths {
               data: {
                 room: string;
                 ticket: string;
-                topics: ("users" | "tenants" | "records")[];
+                topics: (
+                  | "users"
+                  | "tenants"
+                  | "records"
+                  | "access-control"
+                  | "studio"
+                  | "settings"
+                  | "integrations"
+                  | "workflows"
+                  | "notifications"
+                  | "personal-integrations"
+                  | "account"
+                )[];
                 /** Format: date-time */
                 expiresAt: string;
               };
@@ -2862,7 +2902,7 @@ export interface paths {
     get: {
       parameters: {
         query: {
-          domainId: string;
+          tenantId?: number | null;
           objectName: string;
         };
         header?: never;
@@ -2895,7 +2935,7 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
-            domainId: string;
+            tenantId: number | null;
             objectName: string;
             /** @enum {string} */
             kind: "record" | "quote";
@@ -2905,6 +2945,7 @@ export interface paths {
             dailyLimit?: number;
             /** @default false */
             returnResult?: boolean;
+            logoImage?: string;
           };
         };
       };
@@ -3218,7 +3259,7 @@ export interface paths {
     get: {
       parameters: {
         query: {
-          domainId: string;
+          tenantId?: number | null;
           pageName: string;
         };
         header?: never;
@@ -3236,7 +3277,7 @@ export interface paths {
             "application/json": {
               data: {
                 id: string;
-                domainId: string;
+                tenantId: number;
                 pageName: string;
                 actionId: string;
                 label: string;
@@ -3270,7 +3311,7 @@ export interface paths {
           "application/json": {
             /** Format: uuid */
             id: string;
-            domainId: string;
+            tenantId: number | null;
             pageName: string;
             actionId: string;
             /** @enum {string} */
@@ -3290,7 +3331,7 @@ export interface paths {
           content: {
             "application/json": {
               id: string;
-              domainId: string;
+              tenantId: number;
               pageName: string;
               actionId: string;
               label: string;
@@ -4762,14 +4803,14 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v1/data-domains": {
+  "/v1/tenant-workspaces": {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    /** List authorized data domains */
+    /** List authorized tenant workspaces */
     get: {
       parameters: {
         query?: never;
@@ -4779,7 +4820,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Domains */
+        /** @description Authorized tenant workspaces */
         200: {
           headers: {
             [name: string]: unknown;
@@ -4788,169 +4829,19 @@ export interface paths {
             "application/json": {
               data: {
                 id: string;
+                tenantId: number;
                 label: string;
                 /** @enum {string} */
-                kind: "platform" | "custom" | "agency" | "tenant";
-                agencyId?: number;
-                tenantId?: number;
+                kind: "platform" | "tenant";
                 apiBasePath: string;
               }[];
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        400: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        409: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        422: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
             };
           };
         };
       };
     };
     put?: never;
-    /** Create an independent data domain */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            name: string;
-            label: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Created */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              data: {
-                id: string;
-                label: string;
-                /** @enum {string} */
-                kind: "platform" | "custom" | "agency" | "tenant";
-                agencyId?: number;
-                tenantId?: number;
-                apiBasePath: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        400: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        403: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        409: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-        /** @description Solicitud rechazada */
-        422: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              error: {
-                code: string;
-                message: string;
-              };
-            };
-          };
-        };
-      };
-    };
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;

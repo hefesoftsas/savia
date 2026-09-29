@@ -538,7 +538,7 @@ export function RelationField(p: IFieldProps) {
     queryKey: [
       "relation-options",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       relation,
       search,
       page,
@@ -552,7 +552,7 @@ export function RelationField(p: IFieldProps) {
     queryKey: [
       "relation-selected",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       relation,
       displayField,
       selected,

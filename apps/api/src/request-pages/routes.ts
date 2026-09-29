@@ -22,9 +22,7 @@ import {
 import { requestResultSchema } from "../request-results/contracts";
 import type { ResultNormalizer } from "../request-results/normalize";
 import { validateJsonSchema } from "@savia/studio-shared/json-schema";
-const domainId = z
-  .string()
-  .regex(/^(?:[a-z][a-z0-9_-]{0,47}|tenant:[1-9][0-9]*)$/);
+const tenantId = z.coerce.number().int().nonnegative().safe();
 const pageName = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
 const formValues = z.record(
   z.string().max(48),
@@ -32,7 +30,7 @@ const formValues = z.record(
 );
 const runSchema = z.object({
   id: z.string(),
-  domainId: z.string(),
+  tenantId: z.number().int().nonnegative().safe(),
   pageName: z.string(),
   actionId: z.string(),
   label: z.string(),
@@ -70,7 +68,7 @@ const executeRoute = createRoute({
           schema: z
             .object({
               id: z.string().uuid(),
-              domainId,
+              tenantId,
               pageName,
               actionId: z.string().regex(/^[a-z0-9-]{1,80}$/),
               mode: z.enum(["mock", "live"]),
@@ -95,7 +93,7 @@ const listRoute = createRoute({
   tags: ["Generated request pages"],
   summary:
     "Recuperar las ejecuciones propias de una página sin llamar al proveedor",
-  request: { query: z.object({ domainId, pageName }) },
+  request: { query: z.object({ tenantId, pageName }) },
   responses: {
     200: {
       description: "Historial",
@@ -107,7 +105,7 @@ const listRoute = createRoute({
 });
 type Row = {
   id: string;
-  domain_id: string;
+  tenant_id: string;
   page_name: string;
   action_id: string;
   action_label: string;
@@ -121,7 +119,7 @@ type Row = {
 function publicRun(row: Row) {
   return {
     id: row.id,
-    domainId: row.domain_id,
+    tenantId: Number(row.tenant_id.slice("tenant:".length)),
     pageName: row.page_name,
     actionId: row.action_id,
     label: row.action_label,
@@ -156,8 +154,8 @@ export function registerRequestPageRoutes(
   app: OpenAPIHono,
   db: D1Database,
   service?: SaviaRequestService,
-  normalizersForDomain: (
-    domainId: string,
+  normalizersForTenant: (
+    tenantId: string,
   ) => Promise<readonly ResultNormalizer[]> = async () => [],
 ) {
   app.use("/v1/request-pages/*", async (c, next) => {
@@ -182,9 +180,13 @@ export function registerRequestPageRoutes(
     const query = c.req.valid("query");
     const rows = await db
       .prepare(
-        "SELECT * FROM request_page_runs WHERE principal_id=? AND domain_id=? AND page_name=? ORDER BY created_at DESC LIMIT 100",
+        "SELECT * FROM request_page_runs WHERE principal_id=? AND tenant_id=? AND page_name=? ORDER BY created_at DESC LIMIT 100",
       )
-      .bind(actorFromContext(c).principal.id, query.domainId, query.pageName)
+      .bind(
+        actorFromContext(c).principal.id,
+        `tenant:${query.tenantId}`,
+        query.pageName,
+      )
       .all<Row>();
     return c.json({ data: rows.results.map(publicRun) }, 200);
   });
@@ -199,7 +201,7 @@ export function registerRequestPageRoutes(
       .first<Row>();
     if (existing) {
       if (
-        existing.domain_id !== body.domainId ||
+        existing.tenant_id !== `tenant:${body.tenantId}` ||
         existing.page_name !== body.pageName ||
         existing.action_id !== body.actionId ||
         existing.mode !== body.mode ||
@@ -209,9 +211,7 @@ export function registerRequestPageRoutes(
       return c.json(publicRun(existing), 200);
     }
     if (!service) return error("Savia request no está disponible.", 503);
-    const tenant = body.domainId.startsWith("tenant:")
-      ? body.domainId.replace("tenant:", "agency:")
-      : "domain:" + body.domainId;
+    const tenant = `tenant:${body.tenantId}`;
     const stored = await db
       .prepare(
         "SELECT name,label,description,config FROM studio_objects WHERE tenant_id=? AND name=?",
@@ -303,13 +303,13 @@ export function registerRequestPageRoutes(
     const inserted = await db
       .prepare(
         dialectFor(db).name === "postgres"
-          ? "INSERT INTO request_page_runs(id,principal_id,domain_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?) ON CONFLICT (id) DO NOTHING"
-          : "INSERT OR IGNORE INTO request_page_runs(id,principal_id,domain_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?)",
+          ? "INSERT INTO request_page_runs(id,principal_id,tenant_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?) ON CONFLICT (id) DO NOTHING"
+          : "INSERT OR IGNORE INTO request_page_runs(id,principal_id,tenant_id,page_name,action_id,action_label,mode,status,form_values,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'running',?,?,?)",
       )
       .bind(
         body.id,
         owner,
-        body.domainId,
+        tenant,
         body.pageName,
         action.id,
         action.label,
@@ -329,7 +329,7 @@ export function registerRequestPageRoutes(
       if (!concurrent)
         return error("Identificador de ejecución no disponible.", 409);
       if (
-        concurrent.domain_id !== body.domainId ||
+        concurrent.tenant_id !== tenant ||
         concurrent.page_name !== body.pageName ||
         concurrent.action_id !== body.actionId ||
         concurrent.mode !== body.mode ||
@@ -353,7 +353,7 @@ export function registerRequestPageRoutes(
       const result = normalizeResult(
         flow,
         run,
-        await normalizersForDomain(body.domainId),
+        await normalizersForTenant(tenant),
       );
       const configurationError = (run as RunResult & { error?: string }).error;
       if (

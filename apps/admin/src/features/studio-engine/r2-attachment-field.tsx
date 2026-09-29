@@ -1,7 +1,10 @@
 import { intlLocale, useAppLocale } from "@/i18n/core";
 import { useMessages } from "@/i18n/core";
 import { recordsMessages } from "@/i18n/locales/records";
+import { CreateOfficeAttachment } from "./create-office-attachment";
+import { OFFICE_FORMATS, type OfficeFormat } from "@savia/studio-shared/office";
 import { OfficeEditButton } from "./office-edit-button";
+import { DocumentDeliveryActions } from "./document-delivery-actions";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Paperclip, Trash2 } from "lucide-react";
@@ -142,6 +145,9 @@ export function R2AttachmentField({
                 {formatBytes(file.size, uiLocale)}
               </span>
               <OfficeEditButton file={file} disabled={disabled} />
+              {recordId && (
+                <DocumentDeliveryActions file={file} disabled={disabled} />
+              )}
               <Button
                 aria-label={t("Descargar %{p0}", { p0: file.name })}
                 onClick={() =>
@@ -177,6 +183,27 @@ export function R2AttachmentField({
           )}
         </p>
       )}
+      <div>
+        <CreateOfficeAttachment
+          disabled={
+            disabled || Boolean(uploadingFile) || pending.length >= remaining
+          }
+          formats={(Object.keys(OFFICE_FORMATS) as OfficeFormat[]).filter(
+            (format) =>
+              !policy.accept.length ||
+              policy.accept.some(
+                (mime) =>
+                  mime === OFFICE_FORMATS[format].mime ||
+                  (mime.endsWith("/*") &&
+                    OFFICE_FORMATS[format].mime.startsWith(mime.slice(0, -1))),
+              ),
+          )}
+          maxSize={policy.maxSize}
+          onCreate={async (file) => {
+            onPendingChange([...pending, file]);
+          }}
+        />
+      </div>
       <FilePicker
         accept={policy.accept}
         disabled={disabled || Boolean(uploadingFile) || remaining === 0}

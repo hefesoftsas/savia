@@ -18,7 +18,7 @@ export function historyScope() {
   if (!transports.has(identity)) transports.set(identity, ++sequence);
   return JSON.stringify([
     runtime.apiBasePath,
-    runtime.domainId,
+    runtime.tenantId,
     runtime.localWorkspace?.scope,
     transports.get(identity),
   ]);

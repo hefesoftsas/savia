@@ -15,6 +15,7 @@ import {
   setPrincipalActive,
   updatePrincipal,
   upsertPrincipal,
+  assertIdentityEmailAvailable,
 } from "../auth/identity-repository";
 import {
   TenantMembershipInvariantError,
@@ -31,13 +32,19 @@ import { AuthenticationError, type AgencyRole } from "../auth/types";
 import type { AppActor } from "../auth/types";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
-import { PLATFORM_ROOM } from "../realtime/protocol";
+import { PLATFORM_ROOM, tenantRoom } from "../realtime/protocol";
+import { replaceAccessAssignments } from "../auth/access-repository";
+import type { AccessScope } from "@savia/studio-shared/access-control";
+import { AccessControlError } from "../auth/access-registry";
 
 const membershipSchema = z.object({
   id: z.string(),
   role: z.enum(["tenant_admin", "agency_admin", "operator", "viewer"]),
   attributes: z.object({ isActive: z.boolean() }),
-  relationships: z.object({ tenant: z.object({ id: z.string() }), agency: z.object({ id: z.string() }) }),
+  relationships: z.object({
+    tenant: z.object({ id: z.string() }),
+    agency: z.object({ id: z.string() }),
+  }),
 });
 
 const actorSchema = z.object({
@@ -102,24 +109,37 @@ const identityUsersRoute = createRoute({
   },
 });
 
-const membershipInputSchema = z.object({
-  tenantId: z.number().int().positive().optional(),
-  agencyId: z.number().int().positive().optional(),
-  role: z.enum(["tenant_admin", "agency_admin", "operator", "viewer"]),
-}).refine((input) => input.tenantId !== undefined || input.agencyId !== undefined, {
-  message: "A tenantId is required",
-}).refine((input) => input.tenantId === undefined || input.agencyId === undefined || input.tenantId === input.agencyId, {
-  message: "tenantId and agencyId must identify the same tenant",
-});
+const membershipInputSchema = z
+  .object({
+    tenantId: z.number().int().positive().optional(),
+    agencyId: z.number().int().positive().optional(),
+    role: z.enum(["tenant_admin", "agency_admin", "operator", "viewer"]),
+  })
+  .refine(
+    (input) => input.tenantId !== undefined || input.agencyId !== undefined,
+    {
+      message: "A tenantId is required",
+    },
+  )
+  .refine(
+    (input) =>
+      input.tenantId === undefined ||
+      input.agencyId === undefined ||
+      input.tenantId === input.agencyId,
+    {
+      message: "tenantId and agencyId must identify the same tenant",
+    },
+  );
 
 const userProvisionSchema = z
   .object({
-    email: z.string().email(),
+    email: z.string().trim().email(),
     firstName: z.string().min(1),
     lastName: z.string().min(1),
     platformAdmin: z.boolean().default(false),
     temporaryPassword: z.string().min(12).max(128).optional(),
     membership: membershipInputSchema.optional(),
+    accessRoleIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   })
   .superRefine((input, context) => {
     if (!input.platformAdmin && !input.membership) {
@@ -154,7 +174,14 @@ const provisionIdentityRoute = createRoute({
     },
     403: { description: "Platform administrator role is required" },
     404: { description: "Tenant was not found" },
-    409: { description: "Tenant membership invariant prevented provisioning" },
+    409: {
+      description:
+        "Email conflict or tenant membership invariant prevented provisioning",
+    },
+    422: {
+      description:
+        "One or more custom access roles are unavailable in the destination tenant",
+    },
     503: { description: "Better Auth provisioning is unavailable" },
   },
 });
@@ -165,7 +192,8 @@ const grantMembershipRoute = createRoute({
   path: "/v1/identity/users/{principalId}/memberships",
   tags: ["Identity & access"],
   summary: "Assign tenant access",
-  description: "Assigns the user to one tenant or updates the existing tenant role.",
+  description:
+    "Assigns the user to one tenant or updates the existing tenant role.",
   security: [{ oauth2: ["savia.api.write"] }],
   request: {
     params: membershipParamsSchema,
@@ -471,7 +499,10 @@ function actorDocument(actor: AppActor) {
         id: entry.id,
         role: entry.role,
         attributes: { isActive: entry.isActive },
-        relationships: { tenant: { id: String(entry.tenantId ?? entry.agencyId) }, agency: { id: String(entry.agencyId) } },
+        relationships: {
+          tenant: { id: String(entry.tenantId ?? entry.agencyId) },
+          agency: { id: String(entry.agencyId) },
+        },
       })),
     },
   };
@@ -624,8 +655,38 @@ export function registerIdentityRoutes(
     requirePlatformAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();
     const input = context.req.valid("json");
+    const accessRoleIds = [...new Set(input.accessRoleIds ?? [])];
+    const accessScope =
+      `tenant:${input.platformAdmin ? 0 : (input.membership?.tenantId ?? input.membership?.agencyId)}` as AccessScope;
+    if (accessRoleIds.length) {
+      const matchingRoles = await d1
+        .prepare(
+          `SELECT id FROM access_roles WHERE scope=? AND enabled=1 AND protected=0 AND id IN (${accessRoleIds.map(() => "?").join(",")})`,
+        )
+        .bind(accessScope, ...accessRoleIds)
+        .all<{ id: string }>();
+      if (matchingRoles.results.length !== accessRoleIds.length) {
+        return context.json(
+          {
+            error: {
+              code: "INVALID_ACCESS_ROLE",
+              message:
+                "Only enabled custom roles in the destination tenant can be assigned.",
+            },
+          },
+          422,
+        );
+      }
+    }
+    await assertIdentityEmailAvailable(d1, input.email);
     const authenticatedUser = await userAdministrator.createUser(
-      input,
+      {
+        email: input.email.trim().toLowerCase(),
+        firstName: input.firstName,
+        lastName: input.lastName,
+        platformAdmin: input.platformAdmin,
+        temporaryPassword: input.temporaryPassword,
+      },
       context.req.raw,
     );
     let createdPrincipalId: string | undefined;
@@ -647,6 +708,18 @@ export function registerIdentityRoutes(
           input.membership.role as AgencyRole,
         );
       }
+      if (accessRoleIds.length) {
+        const currentRevision = await d1
+          .prepare("SELECT revision FROM access_revisions WHERE scope=?")
+          .bind(accessScope)
+          .first<{ revision: number }>();
+        await replaceAccessAssignments(d1, actorFromContext(context), {
+          scope: accessScope,
+          principalId: principal.id,
+          roleIds: accessRoleIds,
+          expectedRevision: currentRevision?.revision ?? 0,
+        });
+      }
       if (!input.temporaryPassword) {
         await userAdministrator.sendPasswordReset(
           authenticatedUser.subject,
@@ -654,6 +727,17 @@ export function registerIdentityRoutes(
         );
       }
       notifyUsers(realtime, context, "created", principal.id);
+      const membershipTenantId = input.platformAdmin
+        ? 0
+        : (input.membership?.tenantId ?? input.membership?.agencyId);
+      if (membershipTenantId !== undefined)
+        publishRealtime(realtime, tenantRoom(membershipTenantId), {
+          topic: "access-control",
+          type: "updated",
+          collection: "memberships",
+          id: principal.id,
+          actor: actorFromContext(context).principal.id,
+        });
       return context.json(
         {
           data: managedActorDocument(
@@ -693,7 +777,12 @@ export function registerIdentityRoutes(
     }
     const input = context.req.valid("json");
     try {
-      await grantMembership(d1, principal.id, (input.tenantId ?? input.agencyId)!, input.role);
+      await grantMembership(
+        d1,
+        principal.id,
+        (input.tenantId ?? input.agencyId)!,
+        input.role,
+      );
     } catch (error) {
       if (error instanceof TenantMembershipInvariantError) {
         return membershipInvariantResponse(context, error);
@@ -701,6 +790,13 @@ export function registerIdentityRoutes(
       throw error;
     }
     notifyUsers(realtime, context, "updated", principal.id);
+    publishRealtime(realtime, tenantRoom(input.tenantId ?? input.agencyId!), {
+      topic: "access-control",
+      type: "updated",
+      collection: "memberships",
+      id: principal.id,
+      actor: actorFromContext(context).principal.id,
+    });
     return context.json(
       {
         data: managedActorDocument(
@@ -771,7 +867,10 @@ export function registerIdentityRoutes(
       preventSelfAdministration(actor, target.id);
       const blocked = await preventRemovingFinalAdministrator(d1, targetActor);
       if (blocked) return blocked;
-      if (targetActor.globalRoles.includes("platform_admin") && !input.membership) {
+      if (
+        targetActor.globalRoles.includes("platform_admin") &&
+        !input.membership
+      ) {
         return context.json(
           {
             error: {
@@ -828,6 +927,29 @@ export function registerIdentityRoutes(
         throw error;
       }
     }
+    if (input.platformAdmin !== undefined || input.membership) {
+      const updatedActor = await loadActor(d1, savedPrincipal);
+      const affectedTenantIds = new Set([
+        ...targetActor.memberships.map(
+          (membership) => membership.tenantId ?? membership.agencyId,
+        ),
+        ...updatedActor.memberships.map(
+          (membership) => membership.tenantId ?? membership.agencyId,
+        ),
+        ...(targetActor.globalRoles.includes("platform_admin") ||
+        updatedActor.globalRoles.includes("platform_admin")
+          ? [0]
+          : []),
+      ]);
+      for (const tenantId of affectedTenantIds)
+        publishRealtime(realtime, tenantRoom(tenantId), {
+          topic: "access-control",
+          type: "updated",
+          collection: "memberships",
+          id: target.id,
+          actor: actor.principal.id,
+        });
+    }
     notifyUsers(realtime, context, "updated", target.id);
     return context.json(
       {
@@ -860,6 +982,13 @@ export function registerIdentityRoutes(
       throw error;
     }
     notifyUsers(realtime, context, "updated", principalId);
+    publishRealtime(realtime, tenantRoom(Number(agencyId)), {
+      topic: "access-control",
+      type: "updated",
+      collection: "memberships",
+      id: principalId,
+      actor: actorFromContext(context).principal.id,
+    });
     return context.body(null, 204);
   });
   app.openapi(suspendIdentityUserRoute, async (context) => {
@@ -910,12 +1039,29 @@ export function registerIdentityRoutes(
         404,
       );
     }
+    if (!target.isActive)
+      await assertIdentityEmailAvailable(d1, target.email, target.id);
     await userAdministrator.setAccountActive(
       target.subject,
       true,
       context.req.raw,
     );
-    await setPrincipalActive(d1, target.id, true);
+    try {
+      await setPrincipalActive(d1, target.id, true);
+    } catch (error) {
+      if (
+        !target.isActive &&
+        error instanceof AuthenticationError &&
+        error.code === "IDENTITY_EMAIL_CONFLICT"
+      ) {
+        await userAdministrator.setAccountActive(
+          target.subject,
+          false,
+          context.req.raw,
+        );
+      }
+      throw error;
+    }
     notifyUsers(realtime, context, "updated", target.id);
     return context.body(null, 204);
   });

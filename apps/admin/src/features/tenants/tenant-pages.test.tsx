@@ -73,9 +73,9 @@ function services() {
     domains: { list: vi.fn().mockResolvedValue([]) },
     commands: { execute: vi.fn() },
     assistantConfiguration: {
-      summary: vi.fn().mockResolvedValue({ global: null, agencies: [] }),
+      summary: vi.fn().mockResolvedValue({ global: null, tenants: [] }),
       models: vi.fn().mockResolvedValue([]),
-      activeAgency: vi.fn().mockResolvedValue({ agencies: [] }),
+      activeTenant: vi.fn().mockResolvedValue({ tenants: [] }),
     },
   } as unknown as AppServices;
 }

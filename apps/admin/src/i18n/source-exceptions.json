@@ -195,7 +195,7 @@
     "reason": "Product name, technology name, or internationally used acronym."
   },
   {
-    "file": "../features/service-credentials/studio-domain-credentials-section.tsx",
+    "file": "../features/service-credentials/studio-tenant-credentials-section.tsx",
     "text": "Geoapify",
     "reason": "Product name, technology name, or internationally used acronym."
   },

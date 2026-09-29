@@ -24,6 +24,11 @@ import {
   historyScope,
   supportsRecordHistory,
 } from "./record-history-client";
+import { getStudioRuntime } from "./runtime";
+import {
+  RemoteChangesNotice,
+  useRealtimeRefresh,
+} from "@/realtime/use-realtime-refresh";
 
 type SettingsResponse = { data: RecordHistorySettings; version: number };
 export default function RecordHistorySettingsButton({
@@ -77,6 +82,13 @@ function SettingsForm({ object }: { object: StudioObject }) {
   const [reload, setReload] = useState(0);
   const [saved, setSaved] = useState(false);
   const path = `/record-history-settings/${encodeURIComponent(object.name)}`;
+  const remoteChanges = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: getStudioRuntime().tenantId,
+    blocked: saving || settings !== undefined,
+    refresh: () => setReload((value) => value + 1),
+    accepts: (event) => event.collection === "configuration",
+  });
   useEffect(() => {
     const controller = new AbortController();
     setSettings(undefined);
@@ -142,6 +154,7 @@ function SettingsForm({ object }: { object: StudioObject }) {
         }
       }}
     >
+      <RemoteChangesNotice {...remoteChanges} />
       <fieldset disabled={saving} className="grid gap-4">
         <label className="flex items-center gap-2">
           <input

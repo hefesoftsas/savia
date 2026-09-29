@@ -36,7 +36,7 @@ or `SAVIA_ADMIN_PORT`), api `8787`, auth `8788`, mcp `8789` (only with
   validates sessions against it. Multi-tenancy via memberships (`tenants`,
   `identity_*`).
 - **Data domains**: configurable objects/screens over D1/R2 with no new SQL
-  tables per screen (`apps/api/src/routes/data-domains.ts`,
+  tables per screen (`apps/api/src/routes/tenant-workspaces.ts`,
   `apps/api/src/routes/studio.ts`).
 - **MCP**: read/action surface for the assistant over the same API.
 

@@ -11,8 +11,8 @@ import { makeConfig } from "@savia/studio-shared/metadata";
 vi.mock("../api", () => ({ api: vi.fn() }));
 vi.mock("../runtime", () => ({
   getStudioRuntime: () => ({
-    apiBasePath: "/v1/data-domains/platform",
-    domainId: "platform",
+    apiBasePath: "/v1/studio/0",
+    tenantId: 0,
   }),
 }));
 const object = {

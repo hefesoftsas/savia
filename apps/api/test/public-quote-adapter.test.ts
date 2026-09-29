@@ -18,7 +18,7 @@ const migrations = Object.entries(
     query: "?raw",
   }),
 );
-const tenant = "public-quote-test";
+const tenant = "tenant:99010";
 const object = {
   name: "cotizador",
   label: "Quotes",
@@ -118,7 +118,7 @@ it("keeps public links bound to the installed ZIP after a newer upload", async (
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant: storeTenant,
-    domainId: "platform",
+    tenantId: 0,
     object: { ...object, name: "cotizador_por_pasos" },
   });
   expect(snapshot).toMatchObject({
@@ -148,7 +148,7 @@ it("keeps public links bound to the installed ZIP after a newer upload", async (
     adapter.assertAvailable?.({
       db: env.DB,
       tenant: storeTenant,
-      domainId: "platform",
+      tenantId: 0,
       objectName: "cotizador_por_pasos",
       snapshot,
     }),
@@ -157,7 +157,7 @@ it("keeps public links bound to the installed ZIP after a newer upload", async (
     adapter.publish({
       db: env.DB,
       tenant: storeTenant,
-      domainId: "platform",
+      tenantId: 0,
       object: { ...object, name: "cotizador_por_pasos" },
     }),
   ).resolves.toMatchObject({
@@ -181,7 +181,7 @@ it("freezes only quote products and validates public inputs before executing a f
   const published = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   expect(published.fields.some((f) => f.name === "vehicle_plate")).toBe(true);
@@ -203,7 +203,7 @@ it("freezes only quote products and validates public inputs before executing a f
   const result = await adapter.execute({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     objectName: object.name,
     submissionId: "server-submission",
     snapshot: published.snapshot,
@@ -243,7 +243,7 @@ it("fails closed for a different tenant, disabled extension, changed policy, and
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   await expect(
@@ -256,7 +256,7 @@ it("fails closed for a different tenant, disabled extension, changed policy, and
     adapter.execute({
       db: env.DB,
       tenant: "other",
-      domainId: "test",
+      tenantId: tenant,
       objectName: object.name,
       submissionId: "id",
       snapshot,
@@ -270,7 +270,7 @@ it("fails closed for a different tenant, disabled extension, changed policy, and
     .bind(tenant)
     .run();
   await expect(
-    adapter.publish({ db: env.DB, tenant, domainId: "test", object }),
+    adapter.publish({ db: env.DB, tenant, tenantId: 101, object }),
   ).rejects.toThrow();
   await env.DB.prepare(
     "UPDATE studio_extension_installations SET enabled=1 WHERE tenant_id=?",
@@ -286,7 +286,7 @@ it("fails closed for a different tenant, disabled extension, changed policy, and
     adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: tenant,
       objectName: object.name,
       submissionId: "id",
       snapshot,
@@ -312,14 +312,14 @@ it("suppresses results when disabled and never returns provider failure details"
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   expect(
     await adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "ack-only",
       snapshot,
@@ -338,7 +338,7 @@ it("suppresses results when disabled and never returns provider failure details"
     failed.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "provider-failed",
       snapshot,
@@ -362,7 +362,7 @@ it("refuses lookup flows or forged private policy and executes no provider for b
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   const forged = {
@@ -383,7 +383,7 @@ it("refuses lookup flows or forged private policy and executes no provider for b
       adapter.execute({
         db: env.DB,
         tenant,
-        domainId: "test",
+        tenantId: 101,
         objectName: object.name,
         submissionId: "bad-values",
         snapshot,
@@ -404,7 +404,7 @@ it("describes the public insurance quote renderer", async () => {
   const wizardPublished = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object: wizardObject,
   });
   const wizardPresentation = await adapter.presentation!({
@@ -421,7 +421,7 @@ it("describes the public insurance quote renderer", async () => {
   const directPublished = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   const directPresentation = await adapter.presentation!({
@@ -489,20 +489,20 @@ it("scopes provider run receipts to the published policy, not a visitor-chosen U
   const first = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   const second = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   for (const { snapshot } of [first, second])
     await adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "same-visitor-uuid",
       snapshot,
@@ -550,13 +550,13 @@ it("looks up vehicle data with the fixed trusted flow and projects only safe fie
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   const found = await adapter.lookupVehicle!({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     objectName: object.name,
     snapshot,
     plate: "testcar",
@@ -601,13 +601,13 @@ it("fails the public lookup closed for bad plates, missing vehicles, provider er
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   const input = {
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     objectName: object.name,
     snapshot,
     plate: "TESTCAR",
@@ -686,13 +686,13 @@ it("quotes enabled providers concurrently while preserving frozen product order"
     const { snapshot } = await adapter.publish({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       object,
     });
     const pending = adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "concurrent-submission",
       snapshot,
@@ -789,13 +789,13 @@ it("falls back to frozen plan highlights when providers report no coverage break
     const { snapshot } = await adapter.publish({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       object,
     });
     const result = (await adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "highlights-submission",
       snapshot,
@@ -930,13 +930,13 @@ it("mirrors anonymous quotes into agency CRM records", async () => {
     const { snapshot } = await adapter.publish({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       object,
     });
     const result = (await adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "mirror-submission",
       snapshot,
@@ -1035,13 +1035,13 @@ it("reports per-product progress scoped to the submission policy", async () => {
     const { snapshot } = await adapter.publish({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       object,
     });
     const statusInput = {
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       snapshot,
       submission: "progress-submission",
@@ -1049,7 +1049,7 @@ it("reports per-product progress scoped to the submission policy", async () => {
     const pending = adapter.execute({
       db: env.DB,
       tenant,
-      domainId: "test",
+      tenantId: 101,
       objectName: object.name,
       submissionId: "progress-submission",
       snapshot,
@@ -1123,13 +1123,13 @@ it("simulates providers locally without touching the executor", async () => {
   const { snapshot } = await adapter.publish({
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     object,
   });
   const base = {
     db: env.DB,
     tenant,
-    domainId: "test",
+    tenantId: 101,
     objectName: object.name,
     snapshot,
   };

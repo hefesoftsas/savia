@@ -3,7 +3,7 @@ import type { RequestAction } from "@savia/studio-shared/request-page";
 import { getStudioRuntime } from "./runtime";
 export type PageRun = {
   id: string;
-  domainId: string;
+  tenantId: string;
   pageName: string;
   actionId: string;
   label: string;
@@ -41,7 +41,7 @@ export async function executeRequestPageAction(
 ): Promise<PageRun> {
   return requestPageApi<PageRun>("/runs", {
     id: crypto.randomUUID(),
-    domainId: getStudioRuntime().domainId ?? "platform",
+    tenantId: getStudioRuntime().tenantId ?? 0,
     pageName,
     actionId: action.id,
     mode,

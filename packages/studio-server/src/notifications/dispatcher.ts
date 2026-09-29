@@ -46,6 +46,10 @@ export async function processNotifications(
   db: D1Database,
   policy: NotificationPolicy,
   rawOptions: DispatchOptions,
+  callbacks: {
+    onDelivery?: (principalId: string) => void;
+    onEventStatus?: (principalId: string, eventId: string) => void;
+  } = {},
 ): Promise<DispatchReport> {
   const now = rawOptions.now ?? Date.now;
   const random = rawOptions.random ?? Math.random;
@@ -118,6 +122,7 @@ export async function processNotifications(
       due,
       token,
       report,
+      callbacks,
     );
     recipientAttempts += used;
     seen.add(due.id);
@@ -133,6 +138,10 @@ async function processEvent(
   due: EventRow,
   token: string,
   report: DispatchReport,
+  callbacks: {
+    onDelivery?: (principalId: string) => void;
+    onEventStatus?: (principalId: string, eventId: string) => void;
+  },
 ): Promise<number> {
   const local: DispatchReport = {
     claimed: 0,
@@ -190,6 +199,7 @@ async function processEvent(
     id: due.scope_id,
   } as NoticeEventInput["scope"];
   const statements: D1PreparedStatement[] = [];
+  const newDeliveries: string[] = [];
   const newWaits: number[] = [];
   let usedAttempts = 0;
   let after: string | null = due.cursor;
@@ -258,6 +268,7 @@ async function processEvent(
           ),
       );
       delivered.add(recipient);
+      newDeliveries.push(recipient);
       local.delivered += 1;
     }
     after = page.nextCursor;
@@ -295,6 +306,20 @@ async function processEvent(
   } catch (error) {
     if (String(error).includes("studio_write_guards")) return usedAttempts;
     throw error;
+  }
+  for (const principalId of newDeliveries) {
+    try {
+      callbacks.onDelivery?.(principalId);
+    } catch {
+      // A delivery hint cannot roll back a committed notification.
+    }
+  }
+  if (event.actor.kind === "user" && event.actor.id) {
+    try {
+      callbacks.onEventStatus?.(event.actor.id, due.id);
+    } catch {
+      // Status hints cannot affect a committed dispatch update.
+    }
   }
   report.delivered += local.delivered;
   report.skipped += local.skipped;

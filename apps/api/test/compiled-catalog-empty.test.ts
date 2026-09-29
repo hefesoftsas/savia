@@ -29,7 +29,7 @@ it("does not expose compiled plugins through the extension API", async () => {
     undefined,
     platformAdministratorAuthenticator(),
   );
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   const list = await app.request(`${base}/extensions`);
   expect(list.status).toBe(200);
   expect((await list.json()).data).toEqual([]);

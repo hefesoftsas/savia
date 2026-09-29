@@ -45,7 +45,7 @@ en sus metadatos y en Savia, sin copiar credenciales a las pantallas.
 
 ## API y MCP
 
-El gateway autenticado expone, bajo `/v1/data-domains/platform/api`:
+El gateway autenticado expone, bajo `/v1/studio/0/api`:
 
 - `GET /crm-workspace`, `POST /crm-workspace/install`.
 - `GET /objects`, operaciones de registros en `/records/:object/:id`.
