@@ -41,7 +41,7 @@ export async function publishRecordBundleChanges(options: {
           .prepare(
             `INSERT INTO studio_collection_versions(tenant_id, collection, version, updated_at)
           VALUES(?, ?, 1, ?) ON CONFLICT(tenant_id, collection) DO UPDATE
-          SET version=version+1, updated_at=excluded.updated_at RETURNING version`,
+          SET version=studio_collection_versions.version+1, updated_at=excluded.updated_at RETURNING version`,
           )
           .bind(tenant, collection, new Date().toISOString())
           .first<{ version: number }>();
