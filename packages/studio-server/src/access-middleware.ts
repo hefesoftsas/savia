@@ -1,3 +1,8 @@
+import {
+  getRecordCountStatement,
+  getRevisionedRead,
+} from "./record-read-state";
+import { paginationScope } from "./record-pagination";
 import { dialectFor } from "@savia/db/dialect";
 import type { Hono } from "hono";
 import type { Env } from "./context";
@@ -106,15 +111,47 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
           accessColumns(object, dialectFor(db)),
           dialectFor(db),
         );
-        const count = await db
-          .prepare(
-            `SELECT count(*) AS n FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${where.sql}`,
-          )
-          .bind(tenant, object.name, ...where.bindings)
-          .first<{ n: number }>();
+        const unrestricted = policy.grants.some(
+          (g) =>
+            g.resource === `collection:${object.name}` &&
+            g.action === "read" &&
+            "all" in g.predicate &&
+            g.predicate.all === true,
+        );
+        const countSql = `SELECT count(*) AS count FROM studio_records WHERE tenant_id=? AND object_name=? AND deleted_at IS NULL AND ${where.sql}`;
+        const bindings = [tenant, object.name, ...where.bindings];
+        const count = unrestricted
+          ? Number(
+              (
+                await getRecordCountStatement(db, tenant, object.name).first<{
+                  count: number;
+                }>()
+              )?.count ?? 0,
+            )
+          : await getRevisionedRead(
+              db,
+              tenant,
+              object.name,
+              await paginationScope([
+                "menu-count",
+                countSql,
+                bindings,
+                policy.principalId,
+                policy.revision,
+              ]),
+              async () =>
+                Number(
+                  (
+                    await db
+                      .prepare(countSql)
+                      .bind(...bindings)
+                      .first<{ count: number }>()
+                  )?.count ?? 0,
+                ),
+            );
         data.push({
           ...visibleAccessObject(policy, object),
-          count: count?.n ?? 0,
+          count,
         });
       }
       return c.json({ data, menuLayout: null });
@@ -132,7 +169,12 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
     )
       return next();
     // Document delivery performs read/export row and field checks on every request.
-    if (/^\/api\/file\/[^/]+\/delivery(?:\/(folders|prepare|confirm))?$/.test(path)) return next();
+    if (
+      /^\/api\/file\/[^/]+\/delivery(?:\/(folders|prepare|confirm))?$/.test(
+        path,
+      )
+    )
+      return next();
     const recordMatch =
       /^\/api\/records\/([^/]+)(?:\/([^/]+))?(?:\/(restore|bulk))?$/.exec(path);
     const viewMatch = /^\/api\/views\/([^/]+)$/.exec(path);

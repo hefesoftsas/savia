@@ -44,6 +44,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [related-record-editing.md](related-record-editing.md) — related subforms, editable tables, atomic saves and recoverable drafts.
 
 - [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
+- [Record read performance](guides/record-read-performance.md) — exact counts, cursor pages, revisioned reads and indexed substring search.
+- [Local D1 stress tests](guides/d1-local-stress.md) — isolated volume and concurrency probes.
 - [Authentication loading](guides/authentication-loading.md) — shared app and OAuth pending states.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.

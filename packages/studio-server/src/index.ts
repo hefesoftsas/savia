@@ -1,9 +1,22 @@
+import { recordSearchCandidate } from "./record-search";
+import {
+  getRecordCountStatement,
+  getRevisionedRead,
+} from "./record-read-state";
+import {
+  paginationScope,
+  encodeRecordCursor,
+  decodeRecordCursor,
+} from "./record-pagination";
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { dialectFor } from "@savia/db/dialect";
 import { registerRecordHistory } from "./record-history";
 import { historyDatabase } from "./record-history-storage";
 import { STUDIO_AUDIT_RETENTION_LIMIT } from "./audit-retention";
-import { registerDocumentDelivery, type DocumentDeliveryBridge } from "./document-delivery";
+import {
+  registerDocumentDelivery,
+  type DocumentDeliveryBridge,
+} from "./document-delivery";
 import { registerOfficeFiles } from "./office-files";
 import { Hono } from "hono";
 import { registerLocalSync } from "./local-sync";
@@ -283,7 +296,9 @@ export function createStudioApp(
   app.get("/api/objects", async (c) => {
     const disabled = await disabledSolutionObjects(c.env.DB, c.get("tenant"));
     const { results } = await c.env.DB.prepare(
-      "SELECT o.*,(SELECT count(*) FROM studio_records r WHERE r.tenant_id=o.tenant_id AND r.object_name=o.name AND deleted_at IS NULL) AS count FROM studio_objects o WHERE tenant_id=? ORDER BY created_at,name",
+      dialectFor(c.env.DB).name === "sqlite"
+        ? "SELECT o.*,COALESCE((SELECT active_count FROM studio_record_counts r WHERE r.tenant_id=o.tenant_id AND r.object_name=o.name),0) AS count FROM studio_objects o WHERE tenant_id=? ORDER BY created_at,name"
+        : "SELECT o.*,(SELECT count(*) FROM studio_records r WHERE r.tenant_id=o.tenant_id AND r.object_name=o.name AND deleted_at IS NULL) AS count FROM studio_objects o WHERE tenant_id=? ORDER BY created_at,name",
     )
       .bind(c.get("tenant"))
       .all();
@@ -439,22 +454,126 @@ export function createStudioApp(
       policyFor(c.env.DB),
       dialectFor(c.env.DB),
     );
-    // One D1 batch keeps the count and page in the same transaction and avoids
-    // a separate network roundtrip before fetching the visible records.
-    const [countResult, pageResult] = await c.env.DB.batch([
-      c.env.DB.prepare(
-        `SELECT count(*) AS total FROM studio_records WHERE ${where}`,
-      ).bind(...args),
-      c.env.DB.prepare(
-        `SELECT * FROM studio_records WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`,
-      ).bind(...args, perPage, (page - 1) * perPage),
+    // With selective FTS rowids, SQLite must seek those rowids rather than
+    // walking the active-order index just to avoid sorting a few candidates.
+    const recordSource =
+      dialectFor(c.env.DB).name === "sqlite" &&
+      params.q &&
+      recordSearchCandidate(params.q.slice(0, 200))
+        ? "studio_records NOT INDEXED"
+        : "studio_records";
+    const cursorSupported = ["created_at", "updated_at", "id"].includes(sort);
+    const scope = await paginationScope([
+      c.get("tenant"),
+      object.name,
+      where,
+      args,
+      sort,
+      order,
+      perPage,
     ]);
+    let selectIds = `SELECT id FROM ${recordSource} WHERE ${where} ORDER BY ${sortSql} ${order},id ASC LIMIT ? OFFSET ?`;
+    let pageBindings = [...args, perPage + 1, (page - 1) * perPage];
+    if (params.cursor) {
+      if (!cursorSupported) return fail("Este orden no admite cursores.", 422);
+      const cursor = decodeRecordCursor(params.cursor, scope);
+      const comparison = order === "ASC" ? ">" : "<";
+      if (sort === "id") {
+        selectIds = `SELECT id FROM ${recordSource} WHERE ${where} AND id${comparison}? ORDER BY id ${order} LIMIT ?`;
+        pageBindings = [...args, cursor.id, perPage + 1];
+      } else {
+        // Two bounded seeks handle mixed date DESC / id ASC ordering, including
+        // a bulk import where thousands of records share the cursor timestamp.
+        const tied = `SELECT id,${sort} AS cursor_sort FROM ${recordSource} WHERE ${where} AND ${sort}=? AND id>? ORDER BY id ASC LIMIT ?`;
+        const later = `SELECT id,${sort} AS cursor_sort FROM ${recordSource} WHERE ${where} AND ${sort}${comparison}? ORDER BY ${sort} ${order},id ASC LIMIT ?`;
+        selectIds = `SELECT id FROM (SELECT * FROM (${tied}) tied_page UNION ALL SELECT * FROM (${later}) later_page) positions ORDER BY cursor_sort ${order},id ASC LIMIT ?`;
+        pageBindings = [
+          ...args,
+          cursor.value,
+          cursor.id,
+          perPage + 1,
+          ...args,
+          cursor.value,
+          perPage + 1,
+          perPage + 1,
+        ];
+      }
+    }
+    // Materialize only the bounded candidate list before fetching JSON. CROSS
+    // JOIN prevents SQLite from scanning the tenant to join a selective result.
+    const pageSql = `SELECT r.* FROM (${selectIds}) selected CROSS JOIN studio_records r WHERE r.tenant_id=? AND r.id=selected.id ORDER BY ${sort === "id" ? "r.id" : sortSql} ${order},r.id ASC`;
+    pageBindings.push(c.get("tenant"));
+    const policy = policyFor(c.env.DB);
+    const fullCollection =
+      !policy ||
+      policy.grants.some(
+        (g) =>
+          g.resource === `collection:${object.name}` &&
+          g.action === "read" &&
+          "all" in g.predicate &&
+          g.predicate.all === true,
+      );
+    const filtered = Boolean(
+      params.q ||
+      params.filters ||
+      params.stage ||
+      params.emptyStage === "true",
+    );
+    const countStatement =
+      fullCollection && !filtered
+        ? getRecordCountStatement(
+            c.env.DB,
+            c.get("tenant"),
+            object.name,
+            params.trash === "true",
+          )
+        : c.env.DB.prepare(
+            `SELECT count(*) AS count FROM ${recordSource} WHERE ${where}`,
+          ).bind(...args);
+    const compute = async () => {
+      const [countResult, pageResult] = await c.env.DB.batch([
+        countStatement,
+        c.env.DB.prepare(pageSql).bind(...pageBindings),
+      ]);
+      return {
+        results: pageResult.results,
+        total: Number(
+          (countResult.results[0] as { count: number } | undefined)?.count ?? 0,
+        ),
+      };
+    };
+    const pageResult =
+      filtered || !cursorSupported || !fullCollection
+        ? await getRevisionedRead(
+            c.env.DB,
+            c.get("tenant"),
+            object.name,
+            await paginationScope([
+              "page",
+              pageSql,
+              pageBindings,
+              where,
+              args,
+              policy?.principalId,
+              policy?.revision,
+            ]),
+            compute,
+          )
+        : await compute();
+    const rows = pageResult.results.slice(0, perPage) as Record<
+      string,
+      unknown
+    >[];
+    const last = rows.at(-1);
     return c.json({
-      data: pageResult.results.map(parseRecord),
-      total:
-        (countResult.results[0] as { total: number } | undefined)?.total ?? 0,
+      data: rows.map(parseRecord),
+      total: pageResult.total,
       page,
       perPage,
+      nextCursor:
+        cursorSupported && pageResult.results.length > perPage && last
+          ? encodeRecordCursor(scope, String(last[sort]), String(last.id))
+          : null,
     });
   });
   app.get("/api/records/:object/summary", async (c) => {
@@ -501,11 +620,31 @@ export function createStudioApp(
       dialect.name === "postgres"
         ? `CASE WHEN ${dialect.jsonType("data", `$.${group}`)} IN ('integer','real','true','false') THEN to_jsonb((${groupValue})::numeric) ELSE to_jsonb(${groupValue}) END`
         : groupValue;
-    const { results } = await c.env.DB.prepare(
-      `SELECT ${groupSql} AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM studio_records WHERE ${where} GROUP BY value ORDER BY count DESC`,
-    )
-      .bind(...args)
-      .all();
+    const recordSource =
+      dialectFor(c.env.DB).name === "sqlite" &&
+      params.q &&
+      recordSearchCandidate(params.q.slice(0, 200))
+        ? "studio_records NOT INDEXED"
+        : "studio_records";
+    const summarySql = `SELECT ${groupSql} AS value,count(*) AS count,COALESCE(sum(${amount}),0) AS amount FROM ${recordSource} WHERE ${where} GROUP BY value ORDER BY count DESC`;
+    const results = await getRevisionedRead(
+      c.env.DB,
+      c.get("tenant"),
+      object.name,
+      await paginationScope([
+        "summary",
+        summarySql,
+        args,
+        policyFor(c.env.DB)?.principalId,
+        policyFor(c.env.DB)?.revision,
+      ]),
+      async () =>
+        (
+          await c.env.DB.prepare(summarySql)
+            .bind(...args)
+            .all()
+        ).results,
+    );
     return c.json({ data: results });
   });
   app.get("/api/records/:object/:id", async (c) =>

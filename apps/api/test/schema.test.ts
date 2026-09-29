@@ -44,9 +44,13 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(145);
+    expect(names).toHaveLength(153);
     expect(names).toEqual(
       expect.arrayContaining([
+        "studio_record_counts",
+        "studio_record_read_cache",
+        "studio_record_search",
+        "studio_record_search_fts",
         "access_revisions",
         "access_roles",
         "access_grants",
@@ -134,6 +138,10 @@ describe("full D1 schema projection", () => {
         "workflow_webhook_deliveries",
         "workflow_webhook_attempts",
 
+        "studio_record_counts",
+        "studio_record_read_cache",
+        "studio_record_search",
+        "studio_record_search_fts",
         "access_revisions",
         "access_roles",
         "access_grants",

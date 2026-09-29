@@ -489,9 +489,14 @@ it("reads native counts and pages in one D1 batch with matching filters and pagi
     total: 1,
     data: [{ id: records[1].id }],
   });
-  expect(batch).toHaveBeenCalledTimes(4);
-  for (const [statements] of batch.mock.calls)
-    expect(statements).toHaveLength(2);
+  // Every cold page still batches its exact count and rows atomically;
+  // revisioned cache admission has its own bounded write batch.
+  expect(
+    batch.mock.calls.filter(([statements]) => statements.length === 2),
+  ).toHaveLength(4);
+  const callsBeforeWarmRead = batch.mock.calls.length;
+  expect(await list("sort=amount&order=ASC&page=2&perPage=2")).toEqual(second);
+  expect(batch).toHaveBeenCalledTimes(callsBeforeWarmRead);
 });
 
 it("returns up to 200 tenant audit events in stable date order", async () => {

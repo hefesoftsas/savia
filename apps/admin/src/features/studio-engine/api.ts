@@ -24,8 +24,14 @@ export async function apiFetch<T>(
           ? failure.error
           : (failure?.error?.message ?? `Error ${response.status}`),
       ),
-      { status: response.status,
-        code: typeof failure?.error?.code === "string" ? failure.error.code : typeof failure?.code === "string" ? failure.code : undefined,
+      {
+        status: response.status,
+        code:
+          typeof failure?.error?.code === "string"
+            ? failure.error.code
+            : typeof failure?.code === "string"
+              ? failure.code
+              : undefined,
         detail: failure,
       },
     );
@@ -42,7 +48,9 @@ export function pluginApiFetch<T>(
 ): Promise<T> {
   const runtime = getStudioRuntime();
   if (runtime.localWorkspace && !runtime.pluginTransport) {
-    return Promise.reject(new Error("The plugin backend transport is unavailable."));
+    return Promise.reject(
+      new Error("The plugin backend transport is unavailable."),
+    );
   }
   return apiFetch<T>(url, options, runtime.pluginTransport ?? studioFetch);
 }
@@ -52,13 +60,16 @@ export const pluginApi = <T = unknown>(
   method = "GET",
   data?: unknown,
   options?: RequestInit & { responseType?: "blob" },
-) => pluginApiFetch<T>("/api" + url, {
-  ...options,
-  method,
-  ...(data === undefined ? {} : {
-    body: data instanceof FormData ? data : JSON.stringify(data),
-  }),
-});
+) =>
+  pluginApiFetch<T>("/api" + url, {
+    ...options,
+    method,
+    ...(data === undefined
+      ? {}
+      : {
+          body: data instanceof FormData ? data : JSON.stringify(data),
+        }),
+  });
 export const api = <T = any>(
   url: string,
   method = "GET",
@@ -72,38 +83,86 @@ export const api = <T = any>(
       ? { body: data instanceof FormData ? data : JSON.stringify(data) }
       : {}),
   });
-const list = (resource: string, params: any) =>
-  api(
-    "/records/" +
-      resource +
-      "?" +
-      new URLSearchParams({
-        page: String(params.pagination?.page ?? 1),
-        perPage: String(params.pagination?.perPage ?? 25),
-        ...(params.filter?.__collectionSort === false
-          ? {}
-          : {
-              sort: params.sort?.field ?? "updated_at",
-              order: params.sort?.order ?? "DESC",
-            }),
-        ...(params.filter?.__collectionSearch === false
-          ? {}
-          : {
-              q: params.filter?.q ?? "",
-              ...(params.filter?.searchField
-                ? { searchField: params.filter.searchField }
-                : {}),
-            }),
-        ...(params.filter?.__collectionFilter !== false && params.filter?.stage
-          ? { stage: params.filter.stage }
-          : {}),
-        ...(params.filter?.__collectionFilter !== false &&
-        params.filter?.filters
-          ? { filters: params.filter.filters }
-          : {}),
-        ...(params.filter?.trash ? { trash: params.filter.trash } : {}),
-      }),
-  );
+// Ephemeral navigation hints only. Records and exact totals remain backend-owned.
+let pageCursors = new WeakMap<
+  Function,
+  Map<string, { cursor: string; expires: number }>
+>();
+if (typeof window !== "undefined") {
+  for (const event of ["savia:identity-changed", "savia:session-cleared"])
+    window.addEventListener(event, () => {
+      pageCursors = new WeakMap();
+    });
+}
+const list = async (resource: string, params: any) => {
+  const query = new URLSearchParams({
+    page: String(params.pagination?.page ?? 1),
+    perPage: String(params.pagination?.perPage ?? 25),
+    ...(params.filter?.__collectionSort === false
+      ? {}
+      : {
+          sort: params.sort?.field ?? "updated_at",
+          order: params.sort?.order ?? "DESC",
+        }),
+    ...(params.filter?.__collectionSearch === false
+      ? {}
+      : {
+          q: params.filter?.q ?? "",
+          ...(params.filter?.searchField
+            ? { searchField: params.filter.searchField }
+            : {}),
+        }),
+    ...(params.filter?.__collectionFilter !== false && params.filter?.stage
+      ? { stage: params.filter.stage }
+      : {}),
+    ...(params.filter?.__collectionFilter !== false && params.filter?.filters
+      ? { filters: params.filter.filters }
+      : {}),
+    ...(params.filter?.trash ? { trash: params.filter.trash } : {}),
+  });
+  const runtime = getStudioRuntime();
+  const transport = runtime.transport ?? studioFetch;
+  let cursors = pageCursors.get(transport);
+  if (!cursors) {
+    cursors = new Map();
+    pageCursors.set(transport, cursors);
+  }
+  const page = Number(query.get("page"));
+  const scopeQuery = new URLSearchParams(query);
+  scopeQuery.delete("page");
+  const scope = JSON.stringify([
+    runtime.tenantId,
+    runtime.apiBasePath,
+    resource,
+    scopeQuery.toString(),
+  ]);
+  const key = (number: number) => scope + ":" + number;
+  const hint = page > 1 ? cursors.get(key(page)) : undefined;
+  if (hint && hint.expires > Date.now()) query.set("cursor", hint.cursor);
+  const fetchPage = () => api("/records/" + resource + "?" + query.toString());
+  let result;
+  try {
+    result = await fetchPage();
+  } catch (error) {
+    if (!query.has("cursor") || (error as { status?: number }).status !== 422)
+      throw error;
+    cursors.delete(key(page));
+    query.delete("cursor");
+    result = await fetchPage();
+  }
+  // Clear later positions when the first page refreshes after edits or filtering.
+  if (page === 1)
+    for (const cachedKey of cursors.keys())
+      if (cachedKey.startsWith(scope + ":")) cursors.delete(cachedKey);
+  if (typeof result.nextCursor === "string") {
+    cursors.set(key(page + 1), {
+      cursor: result.nextCursor,
+      expires: Date.now() + 60000,
+    });
+    while (cursors.size > 128) cursors.delete(cursors.keys().next().value!);
+  } else cursors.delete(key(page + 1));
+  return result;
+};
 export const dataProvider: DataProvider = {
   getList: list,
   getOne: (resource, params) => api(`/records/${resource}/${params.id}`),
@@ -172,7 +231,10 @@ export const dataProvider: DataProvider = {
   },
 };
 
-export function studioFetch(url: string, init?: RequestInit): Promise<Response> {
+export function studioFetch(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
   const runtime = getStudioRuntime();
   if (runtime.transport) return runtime.transport(url, init);
   if (runtime.embedded)

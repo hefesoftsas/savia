@@ -9,6 +9,7 @@ import { fail } from "./context";
 import type { AccessPolicy } from "@savia/studio-shared/access-control";
 import { compileAccessWhere } from "./access-query";
 import { accessColumns, requireQueryAccess } from "./access-authorization";
+import { recordSearchCandidate } from "./record-search";
 export const filterSchema = z.object({
   logic: z.enum(["and", "or"]).default("and"),
   conditions: z
@@ -76,8 +77,14 @@ export function buildWhere(
     args.push(...access.bindings);
   }
   if (params.q) {
-    const pattern =
-      "%" + params.q.slice(0, 200).replace(/[\\%_]/g, "\\$&") + "%";
+    const query = params.q.slice(0, 200);
+    const pattern = "%" + query.replace(/[\\%_]/g, "\\$&") + "%";
+    const candidate =
+      dialect.name === "sqlite" ? recordSearchCandidate(query) : undefined;
+    if (candidate) {
+      where += ` AND studio_records.rowid IN (SELECT rowid FROM studio_record_search_fts WHERE studio_record_search_fts MATCH ? AND tenant_id=? AND object_name=?)`;
+      args.push(candidate, tenant, object.name);
+    }
     const searchFields = resolveSearchFields(object, params);
     if (searchFields.length) {
       where += ` AND (${searchFields
