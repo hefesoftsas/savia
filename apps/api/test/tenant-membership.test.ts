@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   grantMembership,
+  ensureBootstrapAdministrator,
   listMemberships,
   removeMembership,
   setPlatformAdministrator,
@@ -43,10 +44,11 @@ beforeEach(async () => {
 });
 
 async function user() {
+  const subject = crypto.randomUUID();
   return upsertPrincipal(env.DB, {
     issuer: "test",
-    subject: crypto.randomUUID(),
-    email: "tenant@example.test",
+    subject,
+    email: `tenant-${subject}@example.test`,
     displayName: "Tenant User",
   });
 }
@@ -76,8 +78,9 @@ describe("required single tenant membership", () => {
     const remainingMember = await user();
     await grantMembership(env.DB, principal.id, 9101, "viewer");
     await grantMembership(env.DB, remainingMember.id, 9101, "tenant_admin");
-    await expect(grantMembership(env.DB, principal.id, 9102, "operator"))
-      .resolves.toMatchObject({ tenantId: 9102, role: "operator" });
+    await expect(
+      grantMembership(env.DB, principal.id, 9102, "operator"),
+    ).resolves.toMatchObject({ tenantId: 9102, role: "operator" });
     expect(await listMemberships(env.DB, principal.id)).toEqual([
       expect.objectContaining({ tenantId: 9102, isActive: true }),
     ]);
@@ -86,10 +89,14 @@ describe("required single tenant membership", () => {
   it("rejects removal and deactivation of a commercial tenant's last active member", async () => {
     const principal = await user();
     await grantMembership(env.DB, principal.id, 9101, "tenant_admin");
-    await expect(removeMembership(env.DB, principal.id, 9101)).rejects.toMatchObject({
+    await expect(
+      removeMembership(env.DB, principal.id, 9101),
+    ).rejects.toMatchObject({
       code: "LAST_ACTIVE_MEMBER",
     });
-    await expect(setPrincipalActive(env.DB, principal.id, false)).rejects.toMatchObject({
+    await expect(
+      setPrincipalActive(env.DB, principal.id, false),
+    ).rejects.toMatchObject({
       code: "LAST_ACTIVE_MEMBER",
     });
   });
@@ -103,9 +110,29 @@ describe("required single tenant membership", () => {
     expect(await listMemberships(env.DB, principal.id)).toEqual([
       expect.objectContaining({ tenantId: 0, role: "tenant_admin" }),
     ]);
-    await expect(grantMembership(env.DB, principal.id, 9102, "viewer")).rejects.toMatchObject({
+    await expect(
+      grantMembership(env.DB, principal.id, 9102, "viewer"),
+    ).rejects.toMatchObject({
       code: "PLATFORM_ADMIN_REQUIRES_REVOCATION",
     });
+  });
+
+  it("does not advance access policy revisions when admin bootstrap is repeated", async () => {
+    const principal = await user();
+    const remainingMember = await user();
+    await grantMembership(env.DB, principal.id, 9101, "tenant_admin");
+    await grantMembership(env.DB, remainingMember.id, 9101, "viewer");
+    await setPlatformAdministrator(env.DB, principal.id, true);
+
+    const before = await env.DB.prepare(
+      "SELECT revision FROM access_revisions WHERE scope='tenant:0'",
+    ).first<{ revision: number }>();
+    await ensureBootstrapAdministrator(env.DB, principal.id);
+    const after = await env.DB.prepare(
+      "SELECT revision FROM access_revisions WHERE scope='tenant:0'",
+    ).first<{ revision: number }>();
+
+    expect(after?.revision).toBe(before?.revision);
   });
 
   it("rejects the internal tenant as an ordinary membership target", async () => {

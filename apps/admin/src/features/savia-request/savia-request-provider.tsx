@@ -271,6 +271,8 @@ export function SaviaRequestProvider({ children }: PropsWithChildren) {
     setError(null);
     try {
       const fresh = await api.readFlow(current.id);
+      // Do not replace a newer draft or a selection made while this read was pending.
+      if (draftRef.current !== current) return false;
       dirtyRef.current = false;
       setDirty(false);
       replaceFlow(fresh);

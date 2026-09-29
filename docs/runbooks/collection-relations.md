@@ -22,7 +22,7 @@ En una ficha, Registros relacionados muestra los enlaces y su procedencia; se pu
 
 ## API
 
-Bajo `/v1/data-domains/{domain}/api`, requiere administración de plataforma:
+Bajo `/v1/studio/{tenantId}/api`, requiere administración de plataforma:
 
 - GET/POST `/collection-relations`
 - DELETE `/collection-relations/{relationId}`

@@ -1,3 +1,5 @@
+import { dialectFor } from "@savia/db/dialect";
+
 export interface AuthNoticeEvent {
   id: string;
   subject: string;
@@ -20,6 +22,41 @@ export async function ensureAuthNoticeSchema(db: D1Database): Promise<void> {
     db,
     "CREATE INDEX IF NOT EXISTS auth_notice_events_pending ON auth_notice_events(acked_at, id)",
   );
+  if (dialectFor(db).name === "postgres") {
+    for (const [name, field, kind, suffix] of [
+      [
+        "auth_notice_email_verified",
+        "emailVerified",
+        "email-verified",
+        "email",
+      ],
+      [
+        "auth_notice_two_factor",
+        "twoFactorEnabled",
+        "two-factor-enabled",
+        "totp",
+      ],
+    ]) {
+      await run(
+        db,
+        `CREATE OR REPLACE FUNCTION ${name}_fn() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          INSERT INTO auth_notice_events(id,subject,kind,created_at,request_id)
+          VALUES ('auth_'||NEW.id||'_${suffix}_'||NEW."updatedAt",NEW.id,'${kind}',
+            (EXTRACT(EPOCH FROM clock_timestamp())*1000)::bigint,NULL);
+          RETURN NEW;
+        END $$`,
+      );
+      await run(db, `DROP TRIGGER IF EXISTS ${name} ON "user"`);
+      await run(
+        db,
+        `CREATE TRIGGER ${name} AFTER UPDATE ON "user"
+        FOR EACH ROW WHEN (OLD."${field}" IS NOT TRUE AND NEW."${field}" IS TRUE)
+        EXECUTE FUNCTION ${name}_fn()`,
+      );
+    }
+    return;
+  }
   await run(db, "DROP TRIGGER IF EXISTS auth_notice_email_verified");
   await run(
     db,
@@ -67,7 +104,10 @@ export async function readAuthNoticeEvents(
   }));
 }
 
-export async function ackAuthNoticeEvents(db: D1Database, ids: string[]): Promise<number> {
+export async function ackAuthNoticeEvents(
+  db: D1Database,
+  ids: string[],
+): Promise<number> {
   if (ids.length === 0) return 0;
   const placeholders = ids.map(() => "?").join(",");
   const result = await db

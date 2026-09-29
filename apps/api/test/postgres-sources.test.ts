@@ -27,7 +27,7 @@ beforeAll(async () => {
     }
 });
 
-const tenant = "domain:pg_test";
+const tenant = "tenant:99005";
 const KEY = "collection-source-test-key-at-least-32-characters";
 
 type Row = Record<string, string | number | boolean | null>;

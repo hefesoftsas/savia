@@ -14,7 +14,7 @@ export type ExtensionRuntimeRequest = (
 
 type ExtensionActionResponse = { output: unknown };
 
-function activeDomainRequest(path: string, init?: RequestInit) {
+function activeTenantRequest(path: string, init?: RequestInit) {
   return apiFetch(`/api${path}`, init);
 }
 
@@ -26,7 +26,7 @@ function objectData<T>(value: unknown): T {
 
 export class ExtensionRuntimeClient {
   constructor(
-    private readonly request: ExtensionRuntimeRequest = activeDomainRequest,
+    private readonly request: ExtensionRuntimeRequest = activeTenantRequest,
   ) {}
 
   async listConnections(

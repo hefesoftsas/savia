@@ -1,3 +1,8 @@
+import {
+  ResourceEditSync,
+  ResourceReadSync,
+} from "@/realtime/resource-realtime";
+import { UserAccessRoles } from "./user-access-roles";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import { useEffect, useState, type ReactNode } from "react";
@@ -49,7 +54,6 @@ import {
 } from "@/components/admin";
 import { Confirm } from "@/components/admin/confirm";
 import { isOfflineError } from "@/offline/offline-error";
-import { LiveIndicator } from "@/realtime/live-indicator";
 import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { TenantRecord } from "@/api/tenant-data-provider";
@@ -317,15 +321,17 @@ function TenantUserScope() {
 function UserListActions() {
   const translate = useTranslate();
   const queryClient = useQueryClient();
-  const { status } = useRealtimeTopics({
+  useRealtimeTopics({
     topics: ["users"],
+    onConnected: () => {
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
     onEvent: (event) => {
       applyRealtimeListEvent(queryClient, "users", event);
     },
   });
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <LiveIndicator status={status} />
       <ExportButton
         iconOnly
         label={translate("savia.users.exportExcel", {
@@ -479,7 +485,11 @@ export function UserEdit() {
       actions={<UserEditActions />}
       mutationMode="optimistic"
     >
-      <SimpleForm className="max-w-5xl gap-6">
+      <SimpleForm
+        className="max-w-5xl gap-6"
+        resetOptions={{ keepDirtyValues: true }}
+      >
+        <ResourceEditSync resource="users" />
         <Tabs defaultValue="identity" className="w-full gap-6">
           <div className="max-w-full overflow-x-auto">
             <TabsList
@@ -561,6 +571,7 @@ function UserEditActions() {
 export function UserShow() {
   return (
     <Show title={<UserShowTitle />} actions={<UserShowActions />}>
+      <ResourceReadSync resource="users" />
       <UserShowContent />
     </Show>
   );
@@ -777,6 +788,7 @@ function UserInitialAccessFields() {
         })}
         choices={getTenantRoleChoices(translate)}
       />
+      <UserAccessRoles />
     </UserSection>
   );
 }

@@ -4,9 +4,21 @@ import { AssistantConfigurationClient } from "./assistant-configuration-client";
 
 describe("AssistantConfigurationClient", () => {
   it("sends a replacement key only in the write request and receives redacted state", async () => {
-    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith("/v1/assistant/configuration/global")) {
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/v1/assistant/configuration/global")) {
+          return Response.json({
+            global: {
+              scope: "global",
+              keyState: "configured",
+              model: "openai/gpt-5",
+              updatedAt: "2026-09-03T12:00:00.000Z",
+              updatedBy: "admin-1",
+            },
+            tenants: [],
+          });
+        }
         return Response.json({
           global: {
             scope: "global",
@@ -15,20 +27,10 @@ describe("AssistantConfigurationClient", () => {
             updatedAt: "2026-09-03T12:00:00.000Z",
             updatedBy: "admin-1",
           },
-          agencies: [],
+          tenants: [],
         });
-      }
-      return Response.json({
-        global: {
-          scope: "global",
-          keyState: "configured",
-          model: "openai/gpt-5",
-          updatedAt: "2026-09-03T12:00:00.000Z",
-          updatedBy: "admin-1",
-        },
-        agencies: [],
-      });
-    });
+      },
+    );
     const apiClient = new ApiClient({
       baseUrl: "http://api.savia.test",
       tokenSource: { getAccessToken: async () => "access-token" },

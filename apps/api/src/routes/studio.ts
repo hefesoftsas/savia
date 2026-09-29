@@ -1,3 +1,5 @@
+import { documentDeliveryBridge } from "../personal-integrations/document-delivery";
+import type { PersonalIntegrationRouteDependencies } from "./personal-integrations";
 import { dialectFor } from "@savia/db/dialect";
 import { streamingRequest } from "../lib/streaming-request";
 import { publishRecordBundleChanges } from "../studio/record-bundle-realtime";
@@ -17,34 +19,17 @@ import type { SqlBridgeClient } from "../studio/sql-bridge";
 import { dynamicOpenApi } from "../studio/dynamic-openapi";
 import { dynamicScalar } from "../studio/dynamic-scalar";
 import type { CrmRouteDependencies } from "./crm";
-import { genericSeed } from "./data-domains";
 import type { SolutionOptions } from "@savia/studio-server/solutions";
 import type { RealtimeHubClient } from "../realtime/hub-client";
 import { publishRealtime } from "../realtime/hub-client";
 import { tenantRoom } from "../realtime/protocol";
 
 export async function resolveStudioTenantKey(
-  db: D1Database,
   tenantId: number,
-  preferredPrefix?: "tenant" | "agency",
 ): Promise<string> {
-  const hasTenant = await db
-    .prepare("SELECT 1 FROM studio_objects WHERE tenant_id=? LIMIT 1")
-    .bind(`tenant:${tenantId}`)
-    .first();
-  if (hasTenant) return `tenant:${tenantId}`;
-
-  const hasAgency = await db
-    .prepare(
-      "SELECT 1 FROM studio_objects WHERE tenant_id=? UNION ALL SELECT 1 FROM studio_solution_installations WHERE tenant_id=? LIMIT 1",
-    )
-    .bind(`agency:${tenantId}`, `agency:${tenantId}`)
-    .first();
-  if (hasAgency) return `agency:${tenantId}`;
-
-  return preferredPrefix === "tenant"
-    ? `tenant:${tenantId}`
-    : `agency:${tenantId}`;
+  if (!Number.isSafeInteger(tenantId) || tenantId < 0)
+    throw new RangeError("Tenant id must be a non-negative safe integer");
+  return `tenant:${tenantId}`;
 }
 
 export function registerStudioRoutes(
@@ -61,6 +46,7 @@ export function registerStudioRoutes(
   beforeInstall?: SolutionOptions["beforeInstall"],
   saviaRequestService?: SaviaRequestService,
   realtime?: RealtimeHubClient,
+  personalIntegrations?: PersonalIntegrationRouteDependencies,
 ) {
   const handleStudioRequest = async (c: any) => {
     const actor = actorFromContext(c);
@@ -77,7 +63,7 @@ export function registerStudioRoutes(
       );
     const paramValue = c.req.param("tenantId") ?? c.req.param("agencyId");
     const tenantId = Number(paramValue);
-    if (!Number.isSafeInteger(tenantId) || tenantId <= 0)
+    if (!Number.isSafeInteger(tenantId) || tenantId < 0)
       return c.json(
         {
           error: {
@@ -89,11 +75,38 @@ export function registerStudioRoutes(
       );
     const url = new URL(c.req.url);
     const isTenantRoute = url.pathname.startsWith("/v1/tenants/");
-    const tenantKey = await resolveStudioTenantKey(
-      db,
-      tenantId,
-      isTenantRoute ? "tenant" : "agency",
-    );
+    const tenantKey = await resolveStudioTenantKey(tenantId);
+    const tenant = await db
+      .prepare(
+        "SELECT t.id,t.kind FROM tenants t WHERE t.id=? AND t.is_active=1",
+      )
+      .bind(tenantId)
+      .first<{ id: number; kind: string }>();
+    if (
+      !tenant ||
+      (tenant.kind === "platform" &&
+        !actor.globalRoles.includes("platform_admin")) ||
+      (tenant.kind !== "platform" && tenant.kind !== "commercial")
+    )
+      return c.json(
+        {
+          error: {
+            code: "TENANT_NOT_FOUND",
+            message: "El tenant no existe o está inactivo.",
+          },
+        },
+        404,
+      );
+    if (tenant.kind === "platform" && tenantId !== 0)
+      return c.json(
+        {
+          error: {
+            code: "TENANT_NOT_FOUND",
+            message: "El tenant no existe o está inactivo.",
+          },
+        },
+        404,
+      );
     const manager = canManageSharedCrm(actor, tenantKey);
     const accessPolicy =
       !manager &&
@@ -112,6 +125,15 @@ export function registerStudioRoutes(
     const readOnlyBootstrap =
       c.req.method === "POST" &&
       ["/api/bootstrap", "/api/business/setup"].includes(requestedPath);
+    if (
+      !manager &&
+      c.req.method === "DELETE" &&
+      /^\/api\/audit(?:\/[^/]+)?$/.test(requestedPath)
+    )
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "Solo los administradores pueden eliminar eventos de auditoría.",
+      );
     if (!manager && !accessPolicy) {
       if (
         !canAccessSharedCrm(actor, tenantKey) ||
@@ -150,22 +172,6 @@ export function registerStudioRoutes(
           "Esta colección no está compartida con el tenant.",
         );
     }
-    const tenant = await db
-      .prepare(
-        "SELECT t.id FROM tenants t WHERE t.id=? AND t.kind='commercial' AND t.is_active=1",
-      )
-      .bind(tenantId)
-      .first<{ id: number; agency_id: number | null }>();
-    if (!tenant)
-      return c.json(
-        {
-          error: {
-            code: "TENANT_NOT_FOUND",
-            message: "El tenant no existe o está inactivo.",
-          },
-        },
-        404,
-      );
     if (!files)
       return c.json(
         {
@@ -244,12 +250,13 @@ export function registerStudioRoutes(
       files,
       tenant: tenantKey,
       publicApiBasePath: routePrefix,
+      documentDelivery: documentDeliveryBridge(db, actor.principal.id, personalIntegrations, actor.principal.displayName),
       actor,
       accessPolicy,
       crm: dependencies,
       integrationKey,
       extensionConnectionsEncryptionKey,
-      seedObjects: genericSeed,
+      seedObjects: [],
       sqlBridge,
       externalCollections: externalService
         ? {
@@ -288,6 +295,15 @@ export function registerStudioRoutes(
             { action?: string; id?: string } | undefined)
         : undefined;
     const response = await gateway.fetch(request);
+    const deliveryMatch = /^\/api\/file\/([^/]+)\/delivery\/confirm$/.exec(path);
+    if (deliveryMatch && c.req.method === "POST" && (response.ok || response.status === 502)) {
+      publishRealtime(realtime, tenantRoom(tenantId), {
+        topic:"studio", type:"updated", collection:"document-delivery", id:decodeURIComponent(deliveryMatch[1]), actor:actor.principal.id,
+      });
+      publishRealtime(realtime, tenantRoom(tenantId), {
+        topic:"studio", type:"updated", collection:"audit", actor:actor.principal.id,
+      });
+    }
     const bundleMatch = /^\/api\/record-bundles\/([^/]+)$/.exec(path);
     if (bundleMatch && c.req.method === "POST" && response.ok) {
       await publishRecordBundleChanges({
@@ -352,6 +368,12 @@ export function registerStudioRoutes(
             : {}),
           actor: actor.principal.id,
         });
+        publishRealtime(realtime, tenantRoom(tenantId), {
+          topic: "studio",
+          type: mutationType,
+          collection: "audit",
+          actor: actor.principal.id,
+        });
       }
     }
     if (sharedNames && path === "/api/objects" && response.ok) {
@@ -402,10 +424,8 @@ export function registerStudioRoutes(
     });
   };
 
-  app.all("/v1/studio/:agencyId/api/*", handleStudioRequest);
   app.all("/v1/studio/:tenantId/api/*", handleStudioRequest);
-  // Legacy alias (Fase 1): old agency workspaces keep working.
-  app.all("/v1/dynamic-crm/:agencyId/api/*", handleStudioRequest);
+  // Compatibility aliases continue to use the canonical tenant storage key.
   app.all("/v1/dynamic-crm/:tenantId/api/*", handleStudioRequest);
   app.all("/v1/tenants/:tenantId/crm/api/*", handleStudioRequest);
 }

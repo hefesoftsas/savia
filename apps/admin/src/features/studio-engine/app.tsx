@@ -1,8 +1,9 @@
+import Audit from "./audit-panel";
 import { ExtensionLocaleBridge } from "@/i18n/app-locale-provider";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { defaultAppLocale, isAppLocale } from "@/i18n/app-locale";
 import { automationMessages } from "@/i18n/locales/automation";
-import { isAgencyApiBasePath } from "@/features/studio/studio-navigation";
+import { isTenantApiBasePath } from "@/features/studio/studio-navigation";
 import {
   canDuplicateRecord,
   duplicateRecordValues,
@@ -111,6 +112,7 @@ import {
   uploadTemporaryR2Attachment,
 } from "./r2-attachment-upload";
 import { getStudioRuntime } from "./runtime";
+import { StudioRealtimeBridge } from "./studio-realtime";
 import { useListObjects, getListObjectsQueryKey } from "./generated/studio";
 import {
   fieldEntries,
@@ -323,23 +325,29 @@ function App({
   const activeQueryClient = useQueryClient();
   const runtime = getStudioRuntime();
   const [ready, setReady] = useState(() => {
-      const domainId = getStudioRuntime().domainId;
+      const tenantId = getStudioRuntime().tenantId;
       const owner = getStudioQueryOwner();
       return Boolean(
-        domainId && owner && isStudioBootstrapped(domainId, owner),
+        tenantId !== undefined &&
+        owner &&
+        isStudioBootstrapped(`tenant:${tenantId}`, owner),
       );
     }),
     [bootError, setBootError] = useState("");
   useEffect(() => {
     let active = true;
     const runtime = getStudioRuntime();
-    const domainId = runtime.domainId;
+    const tenantId = runtime.tenantId;
     const owner = getStudioQueryOwner();
     // Evita que /bootstrap bloquee cada regreso al mismo dominio: solo en
-    // la primera entrada de cada dominio (o tras recargar, fallo previo o
+    // la primera entrada de cada tenant (o tras recargar, fallo previo o
     // cambio de dominio). Al regresar, el contenido conservado se muestra
     // de inmediato y las consultas vencidas se actualizan en segundo plano.
-    if (domainId && owner && isStudioBootstrapped(domainId, owner)) {
+    if (
+      tenantId !== undefined &&
+      owner &&
+      isStudioBootstrapped(`tenant:${tenantId}`, owner)
+    ) {
       setReady(true);
       return () => {
         active = false;
@@ -353,17 +361,19 @@ function App({
         });
         if (!response.ok) {
           const body = (await response.json()) as { error?: string };
-          throw new Error(body.error ?? t("No se pudo preparar el dominio."));
+          throw new Error(body.error ?? t("No se pudo preparar el tenant."));
         }
       };
       try {
         await bootstrap("/bootstrap");
         if (active && embedded && runtime.businessSetupEnabled !== false)
           await bootstrap("/business/setup");
-        if (domainId && owner) markStudioBootstrapped(domainId, owner);
+        if (tenantId !== undefined && owner)
+          markStudioBootstrapped(`tenant:${tenantId}`, owner);
         if (active) setReady(true);
       } catch (e) {
-        if (domainId && owner) markStudioBootstrapFailed(domainId, owner);
+        if (tenantId !== undefined && owner)
+          markStudioBootstrapFailed(`tenant:${tenantId}`, owner);
         if (active) setBootError((e as Error).message);
       }
     })();
@@ -400,7 +410,7 @@ function App({
       setEditing(null);
   }, [search]);
   const extensionsQuery = useQuery({
-    queryKey: ["extension-client-screens", getStudioRuntime().domainId],
+    queryKey: ["extension-client-screens", getStudioRuntime().tenantId],
     queryFn: () =>
       api<{
         data: Array<
@@ -495,7 +505,11 @@ function App({
   const extensionApi = useMemo(
     () =>
       contribution
-        ? extensionApiFor(contribution, pluginApi, () => extensionLocaleRef.current)
+        ? extensionApiFor(
+            contribution,
+            pluginApi,
+            () => extensionLocaleRef.current,
+          )
         : null,
     [contribution?.extensionId],
   );
@@ -619,7 +633,7 @@ function App({
     window.postMessage(
       {
         type: "savia-studio-navigation",
-        domainId: getStudioRuntime().domainId,
+        tenantId: getStudioRuntime().tenantId,
         objects: objects.map((item) => {
           const hidden = isObjectHidden(item);
           return {
@@ -831,11 +845,7 @@ function App({
                 objects={[]}
                 selected={selected}
                 detail={false}
-                domainTools={Boolean(
-                  getStudioRuntime().apiBasePath?.startsWith(
-                    "/v1/data-domains/",
-                  ),
-                )}
+                tenantTools={true}
                 onNavigate={navigate}
                 onVisibilityChange={updateScreenVisibility}
                 menuLayout={resolvedMenuLayout}
@@ -844,7 +854,11 @@ function App({
                 onSolutionsChanged={refresh}
                 extensions={extensionInstallations}
                 tab={
-                  location.get("tab") === "packages" ? "packages" : "screens"
+                  location.get("tab") === "extensions"
+                    ? "extensions"
+                    : location.get("tab") === "packages"
+                      ? "packages"
+                      : "screens"
                 }
                 onTabChange={selectTab}
               />
@@ -990,13 +1004,13 @@ function App({
             closeEditor();
             refresh();
             if (
-              getStudioRuntime().domainId === "platform" &&
+              getStudioRuntime().tenantId === 0 &&
               (object.name === "agencias" ||
                 object.name === "tenants" ||
                 object.name === "organizations" ||
                 object.name === "organizaciones")
             )
-              window.dispatchEvent(new Event("savia-studio-domains-changed"));
+              window.dispatchEvent(new Event("savia-studio-tenants-changed"));
           }}
         />
         {editing !== "new" && (
@@ -1014,6 +1028,7 @@ function App({
     ) : null;
   return (
     <div className="app-shell">
+      <StudioRealtimeBridge />
       {!embedded ? (
         <aside className={"sidebar " + (mobile ? "is-open" : "")}>
           <a className="brand" href="?object=opportunity">
@@ -1167,11 +1182,7 @@ function App({
                 objects={objects}
                 selected={selected}
                 detail={view === "admin-screen"}
-                domainTools={Boolean(
-                  getStudioRuntime().apiBasePath?.startsWith(
-                    "/v1/data-domains/",
-                  ),
-                )}
+                tenantTools={true}
                 onNavigate={navigate}
                 onVisibilityChange={updateScreenVisibility}
                 menuLayout={resolvedMenuLayout}
@@ -1180,7 +1191,11 @@ function App({
                 onSolutionsChanged={refresh}
                 extensions={extensionInstallations}
                 tab={
-                  location.get("tab") === "packages" ? "packages" : "screens"
+                  location.get("tab") === "extensions"
+                    ? "extensions"
+                    : location.get("tab") === "packages"
+                      ? "packages"
+                      : "screens"
                 }
                 onTabChange={selectTab}
               />
@@ -1441,11 +1456,11 @@ function App({
                   </select>
                 )}
               </div>
-              {runtime.domainId && runtime.publicFormTransport ? (
+              {runtime.tenantId !== undefined && runtime.publicFormTransport ? (
                 <Suspense fallback={<Loading />}>
                   <PublicLinkManager
-                    key={`${runtime.domainId}:${selected}`}
-                    domainId={runtime.domainId}
+                    key={`${runtime.tenantId}:${selected}`}
+                    tenantId={runtime.tenantId}
                     objectName={selected}
                     kind={
                       ["cotizador", "cotizador_por_pasos"].includes(selected)
@@ -1562,8 +1577,7 @@ function App({
                 )}
               </Suspense>
             </>
-          ) : (view === "relations" || view === "screen-relations") &&
-            getStudioRuntime().apiBasePath?.startsWith("/v1/data-domains/") ? (
+          ) : view === "relations" || view === "screen-relations" ? (
             <Suspense fallback={<Loading />}>
               <CollectionRelations
                 focusObject={view === "screen-relations" ? selected : undefined}
@@ -1572,9 +1586,10 @@ function App({
               />
             </Suspense>
           ) : view === "collection-sources" &&
-            !isAgencyApiBasePath(getStudioRuntime().apiBasePath) ? (
+            isTenantApiBasePath(getStudioRuntime().apiBasePath) ? (
             <Suspense fallback={<Loading />}>
               <CollectionSourcesPanel
+                initialSection={location.get("tab") ?? undefined}
                 onBound={async (bound) => {
                   await refresh();
                   navigate(bound.name);
@@ -1585,11 +1600,7 @@ function App({
             <Suspense fallback={<Loading />}>
               <ServiceCredentials
                 selected={selected}
-                domainTools={Boolean(
-                  getStudioRuntime().apiBasePath?.startsWith(
-                    "/v1/data-domains/",
-                  ),
-                )}
+                tenantTools={true}
                 onNavigate={navigate}
               />
             </Suspense>
@@ -1939,96 +1950,6 @@ function NewObject({
     </Modal>
   );
 }
-function Audit({ objectName }: { objectName?: string }) {
-  const t = useMessages(automationMessages);
-  const locale = useAppLocale();
-  const description =
-    t("Las últimas 100 operaciones guardadas") +
-    (objectName ? t(" para esta pantalla") : t(" en el dominio")) +
-    ".";
-
-  const query = useQuery({
-    queryKey: ["audit", objectName],
-    queryFn: () =>
-      api(
-        "/audit" +
-          (objectName ? `?object=${encodeURIComponent(objectName)}` : ""),
-      ),
-  });
-  const actions: Record<string, string> = {
-    "record.created": t("Registro creado"),
-    "record.updated": t("Registro actualizado"),
-    "record.deleted": t("Registro eliminado"),
-    "object.created": t("Objeto creado"),
-    "object.updated": t("Formulario publicado"),
-    "object.imported": t("Objeto importado"),
-    "integration.executed": t("Operación ejecutada"),
-  };
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">{t("Todo cambio deja una historia")}</p>
-          <div className="audit-heading-title">
-            <h1>{t("Historial de cambios")}</h1>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label={description}
-                >
-                  <Info className="size-3.5" aria-hidden="true" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs">
-                {description}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-        <Button variant="outline" onClick={() => query.refetch()}>
-          {t("Actualizar")}
-        </Button>
-      </div>
-      {query.isPending ? (
-        <Loading />
-      ) : query.error ? (
-        <p role="alert">{query.error.message}</p>
-      ) : query.data?.data.length ? (
-        <div className="audit-list">
-          {query.data.data.map((row: any) => (
-            <div className="audit-row" key={row.id}>
-              <span className="audit-icon">
-                <History size={18} />
-              </span>
-              <div>
-                <strong>{actions[row.action] ?? row.action}</strong>
-                <p>
-                  {row.object_name}
-                  {row.record_id && " · " + row.record_id.slice(0, 8)}
-                </p>
-              </div>
-              <time>
-                {new Date(row.created_at).toLocaleString(intlLocale(locale))}
-              </time>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state">
-          <History size={30} />
-          <h2>{t("Tu historia está por empezar")}</h2>
-          <p>
-            {t(
-              "Crea un registro o publica un formulario para ver el primer cambio.",
-            )}
-          </p>
-        </div>
-      )}
-    </>
-  );
-}
 export default function Root({
   embedded = false,
   search,
@@ -2047,7 +1968,7 @@ export default function Root({
     ? outerLocaleRaw
     : defaultAppLocale;
 
-  // El cliente conservado vive fuera de StudioRoot (por sesión+dominio).
+  // El cliente conservado vive fuera de StudioRoot (por sesión+tenant).
   // Solo se crea uno efímero cuando no se inyecta el compartido
   // (tests, uso standalone). El compartido se reutiliza al volver al
   // mismo dominio y nunca se vacía al desmontar.
@@ -2073,10 +1994,11 @@ export default function Root({
         void queryClient.cancelQueries();
         queryClient.clear();
         // Perder autorización vacía las consultas conservadas y obliga a
-        // preparar el dominio de nuevo en la próxima entrada.
-        const domainId = getStudioRuntime().domainId;
+        // preparar el tenant de nuevo en la próxima entrada.
+        const tenantId = getStudioRuntime().tenantId;
         const owner = getStudioQueryOwner();
-        if (domainId && owner) markStudioBootstrapFailed(domainId, owner);
+        if (tenantId !== undefined && owner)
+          markStudioBootstrapFailed(`tenant:${tenantId}`, owner);
         return;
       }
       void reconcileLocalQueries(

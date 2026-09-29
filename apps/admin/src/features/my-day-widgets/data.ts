@@ -1,11 +1,11 @@
 import type { ApiClient } from "@/api/api-client";
-import { fetchDataDomains } from "@/api/domain-client";
-import { matchAgencyApiBasePath } from "@/features/studio/studio-navigation";
+import { fetchTenantWorkspaces } from "@/api/tenant-workspaces-client";
+import { matchTenantApiBasePath } from "@/features/studio/studio-navigation";
 import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
 import type {
   WidgetCollection,
   WidgetCollectionSchema,
-  WidgetDomain,
+  WidgetTenant,
   WidgetRecord,
   WidgetRecordsPage,
   WidgetSummaryGroup,
@@ -22,10 +22,6 @@ export type ObjectsResponse = {
       studio?: { screen?: { hidden?: unknown }; requestPage?: unknown };
     };
   }>;
-};
-
-type DomainsResponse = {
-  data: WidgetDomain[];
 };
 
 type RecordsResponse = {
@@ -94,10 +90,10 @@ function recordsPath(widget: MyDayWidget): string {
   return `${widget.apiBasePath}/api/records/${encodeURIComponent(widget.collection)}`;
 }
 
-export async function listWidgetDomains(
+export async function listWidgetTenants(
   apiClient: ApiClient,
-): Promise<WidgetDomain[]> {
-  return (await fetchDataDomains(apiClient)) as WidgetDomain[];
+): Promise<WidgetTenant[]> {
+  return await fetchTenantWorkspaces(apiClient);
 }
 
 export async function listWidgetCollections(
@@ -166,10 +162,8 @@ export async function summarizeWidgetRecords(
 export function widgetDeepLink(widget: MyDayWidget): string {
   if (!("apiBasePath" in widget) || !("collection" in widget)) return "/my-day";
   const search = new URLSearchParams();
-  const domainMatch = widget.apiBasePath.match(/^\/v1\/data-domains\/(.+)$/);
-  const agencyId = matchAgencyApiBasePath(widget.apiBasePath);
-  if (domainMatch) search.set("domain", domainMatch[1]);
-  else if (agencyId) search.set("agencyId", agencyId);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  if (tenantId !== undefined) search.set("tenantId", tenantId);
   search.set("object", widget.collection);
   // Fase 1: canónica #/studio; #/crm sigue como alias legacy.
   return `/studio?${search.toString()}`;

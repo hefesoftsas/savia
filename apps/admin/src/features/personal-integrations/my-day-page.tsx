@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import type { AppServices } from "@/app-services";
 import { MyDayWidgetsSection } from "@/features/my-day-widgets/section";
 import {
@@ -18,6 +19,10 @@ export function MyDayPage({
 }) {
   const [day] = useState(() => startOfLocalDay(new Date()));
   const agenda = useMyDayAgenda(services.personalIntegrations);
+  useRealtimeRefresh({
+    topics: ["personal-integrations"],
+    refresh: () => agenda.refresh(),
+  });
   const providersLabel =
     agenda.calendarProviders.length > 0
       ? agenda.calendarProviders.map(calendarProviderLabel).join(" y ")

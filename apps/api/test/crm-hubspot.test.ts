@@ -4,7 +4,10 @@ import type {
   NangoClient,
   NangoConnectionSummary,
 } from "../src/external-crm/contracts";
-import { CrmUpstreamError, crmListQuerySchema } from "../src/external-crm/contracts";
+import {
+  CrmUpstreamError,
+  crmListQuerySchema,
+} from "../src/external-crm/contracts";
 import { createHubSpotAdapter } from "../src/external-crm/hubspot";
 
 const connection: ActiveCrmConnection = {
@@ -27,7 +30,7 @@ function nangoClient(
   getConnection = vi.fn().mockResolvedValue({
     connectionId: "nango-hubspot-connection",
     providerConfigKey: "hubspot-savia",
-    organizationId: "agency:101",
+    organizationId: "tenant:101",
     metadata: {},
     scopes: [],
     scopeSource: "none",
@@ -60,7 +63,7 @@ describe("HubSpot CRM adapter", () => {
     const getConnection = vi.fn().mockResolvedValue({
       connectionId: "nango-hubspot-connection",
       providerConfigKey: "hubspot-savia",
-      organizationId: "agency:101",
+      organizationId: "tenant:101",
       metadata: {
         scopes: ["crm.objects.contacts.read", "crm.objects.contacts.write"],
         access_token: "not-exposed",
@@ -95,7 +98,7 @@ describe("HubSpot CRM adapter", () => {
     const getConnection = vi.fn().mockResolvedValue({
       connectionId: "nango-hubspot-connection",
       providerConfigKey: "hubspot-savia",
-      organizationId: "agency:101",
+      organizationId: "tenant:101",
       metadata: {
         scopes: "crm.objects.contacts.read crm.objects.contacts.write",
       },
@@ -118,7 +121,7 @@ describe("HubSpot CRM adapter", () => {
     const getConnection = vi.fn().mockResolvedValue({
       connectionId: "nango-hubspot-connection",
       providerConfigKey: "hubspot-savia",
-      organizationId: "agency:101",
+      organizationId: "tenant:101",
       metadata: {},
       scopes: ["crm.objects.contacts.read", "crm.objects.contacts.write"],
       scopeSource: "credentials.raw",

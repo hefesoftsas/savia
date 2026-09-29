@@ -43,7 +43,11 @@ async function query(sql) {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ sql }),
+    body: JSON.stringify(
+      Array.isArray(sql)
+        ? { batch: sql.map((statement) => ({ sql: statement })) }
+        : { sql },
+    ),
   });
   const payload = await response.json();
   if (response.ok === false || payload.success === false) {
@@ -92,6 +96,17 @@ for (const file of files) {
   const statements = splitStatements(
     await readFile(migrationsDir + file, "utf8"),
   );
+  if (file === "0077_tenant_only_isolation.sql") {
+    // D1 REST accepts a batch of query objects. Keep trigger bodies separate,
+    // but commit the namespace conversion and migration ledger atomically.
+    // https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/
+    await query([
+      ...statements,
+      `INSERT INTO _savia_migrations(filename,applied_at) VALUES ('${file}',datetime('now'))`,
+    ]);
+    console.log(`Applied ${file} atomically`);
+    continue;
+  }
   // Only recover the verified prefix from the failed preview deployment.
   // Replaying bootstrap assignments could restore roles deliberately removed
   // after that prefix committed, so none of its data statements run again.

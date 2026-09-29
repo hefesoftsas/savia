@@ -12,7 +12,7 @@ import {
 import type { WidgetCollectionSchema } from "./types";
 
 const schema: WidgetCollectionSchema = {
-  apiBasePath: "/v1/data-domains/platform",
+  apiBasePath: "/v1/studio/0",
   name: "polizas",
   label: "Pólizas",
   fields: [

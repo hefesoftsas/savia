@@ -175,7 +175,7 @@ export default function StudioWorkspacePanel({
             <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <p>
               {t(
-                "No hay una conexión HubSpot activa en este dominio. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
+                "No hay una conexión HubSpot activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
               )}
             </p>
           </div>

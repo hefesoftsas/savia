@@ -82,7 +82,7 @@ export default function ScreenAdministration({
   objects,
   selected,
   detail,
-  domainTools,
+  tenantTools,
   menuLayout,
   onNavigate,
   onVisibilityChange,
@@ -97,7 +97,7 @@ export default function ScreenAdministration({
   objects: StudioObject[];
   selected: string;
   detail: boolean;
-  domainTools: boolean;
+  tenantTools: boolean;
   menuLayout?: ScreenMenuLayout | null;
   onNavigate: (
     name: string,
@@ -112,15 +112,15 @@ export default function ScreenAdministration({
   ) => Promise<void>;
   onSolutionsChanged?: () => void | Promise<unknown>;
   extensions?: readonly StoreScreenInstallation[];
-  defaultTab?: "screens" | "packages";
-  tab?: "screens" | "packages";
-  onTabChange?: (tab: "screens" | "packages") => void;
+  defaultTab?: "screens" | "packages" | "extensions";
+  tab?: "screens" | "packages" | "extensions";
+  onTabChange?: (tab: "screens" | "packages" | "extensions") => void;
 }) {
   const t = useMessages(studioMessages);
   const locale = useAppLocale();
-  const [currentTab, setCurrentTab] = useState<"screens" | "packages">(
-    defaultTab,
-  );
+  const [currentTab, setCurrentTab] = useState<
+    "screens" | "packages" | "extensions"
+  >(defaultTab);
   const [operations, setOperations] = useState(false);
   const [filter, setFilter] = useState("");
   const [pendingScreen, setPendingScreen] = useState<string | null>(null);
@@ -166,7 +166,7 @@ export default function ScreenAdministration({
         .filter((block) => block.screens.length)
     : activeBlocks;
   const screen = objects.find((o) => o.name === selected);
-  const domainActions = [
+  const tenantActions = [
     {
       label: t("Pantalla desde Savia request"),
       icon: Plug,
@@ -200,7 +200,7 @@ export default function ScreenAdministration({
       icon: Database,
       view: "collection-sources",
       primary: false,
-      visible: domainTools,
+      visible: tenantTools,
     },
     {
       label: t("Integraciones y API"),
@@ -225,15 +225,15 @@ export default function ScreenAdministration({
       visible: objects.length > 0,
     },
     {
-      label: t("Historial del dominio"),
+      label: t("Historial del tenant"),
       icon: History,
       view: "audit",
       primary: false,
       visible: objects.length > 0,
     },
   ].filter((action) => action.visible);
-  const primaryDomainAction = domainActions.find((action) => action.primary);
-  const secondaryDomainActions = domainActions.filter(
+  const primaryTenantAction = tenantActions.find((action) => action.primary);
+  const secondaryTenantActions = tenantActions.filter(
     (action) => !action.primary,
   );
   const screenGroups = [
@@ -248,7 +248,7 @@ export default function ScreenAdministration({
       id: "inactive",
       label: t("Pantallas fuera del menú"),
       subtitle: t(
-        "Fuera del menú del dominio · Accesibles mediante enlaces con permiso",
+        "Fuera del menú del tenant · Accesibles mediante enlaces con permiso",
       ),
       screens: filteredInactive,
       hidden: true,
@@ -642,7 +642,7 @@ export default function ScreenAdministration({
     const runtime = getStudioRuntime();
     const isQuote = ["cotizador", "cotizador_por_pasos"].includes(screen.name);
     const canPublish =
-      runtime.domainId &&
+      runtime.tenantId !== undefined &&
       runtime.publicFormTransport &&
       (isQuote ||
         (!isPluginScreen(screen.name) &&
@@ -705,7 +705,7 @@ export default function ScreenAdministration({
             },
           ]
         : []),
-      ...(domainTools
+      ...(tenantTools
         ? [
             {
               group: "data",
@@ -748,7 +748,7 @@ export default function ScreenAdministration({
             <span>
               {binding
                 ? `${binding.domain ?? binding.sourceId} · ${binding.resource}`
-                : t("Colección local del dominio")}
+                : t("Colección local del tenant")}
             </span>
           </p>
         </header>
@@ -828,16 +828,20 @@ export default function ScreenAdministration({
   return (
     <section aria-label={t("Administrar pantallas")} className="screen-admin">
       <Tabs
-        value={tab ?? currentTab}
+        value={
+          (tab ?? currentTab) === "packages"
+            ? "extensions"
+            : (tab ?? currentTab)
+        }
         onValueChange={(val) => {
-          const nextTab = val as "screens" | "packages";
+          const nextTab = val as "screens" | "packages" | "extensions";
           setCurrentTab(nextTab);
           onTabChange?.(nextTab);
         }}
         className="screen-admin-tabs w-full space-y-6"
       >
         <div className="screen-admin-tabs-nav flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/80 pb-4">
-          <TabsList className="bg-muted/70 p-1 rounded-xl h-11">
+          <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex-wrap">
             <TabsTrigger
               value="screens"
               className="gap-2 px-4 py-2 text-sm font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
@@ -851,11 +855,11 @@ export default function ScreenAdministration({
               )}
             </TabsTrigger>
             <TabsTrigger
-              value="packages"
+              value="extensions"
               className="gap-2 px-4 py-2 text-sm font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
-              <Boxes className="size-4" aria-hidden="true" />
-              <span>{t("Paquetes y extensiones")}</span>
+              <Plug className="size-4" aria-hidden="true" />
+              <span>{t("Funcionalidades")}</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -877,9 +881,9 @@ export default function ScreenAdministration({
             </div>
             <div
               className="screen-admin-actions"
-              aria-label={t("Herramientas del dominio")}
+              aria-label={t("Herramientas del tenant")}
             >
-              {secondaryDomainActions.length > 0 && (
+              {secondaryTenantActions.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -894,15 +898,19 @@ export default function ScreenAdministration({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>
-                      {t("Herramientas del dominio")}
+                      {t("Herramientas del tenant")}
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    {secondaryDomainActions.map((action) => {
+                    {secondaryTenantActions.map((action) => {
                       const Icon = action.icon;
                       return (
                         <DropdownMenuItem
-                          key={action.view}
-                          onSelect={() => onNavigate(selected, action.view)}
+                          key={action.label}
+                          onSelect={() =>
+                            action.extra
+                              ? onNavigate(selected, action.view, action.extra)
+                              : onNavigate(selected, action.view)
+                          }
                         >
                           <Icon aria-hidden="true" />
                           {action.label}
@@ -912,13 +920,13 @@ export default function ScreenAdministration({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-              {primaryDomainAction && (
+              {primaryTenantAction && (
                 <Button
                   type="button"
                   size="icon"
                   aria-label={t("Nueva pantalla")}
                   title={t("Nueva pantalla")}
-                  onClick={() => onNavigate(selected, primaryDomainAction.view)}
+                  onClick={() => onNavigate(selected, primaryTenantAction.view)}
                 >
                   <Plus aria-hidden="true" />
                 </Button>
@@ -1156,13 +1164,14 @@ export default function ScreenAdministration({
         </TabsContent>
 
         <TabsContent
-          value="packages"
-          className="m-0 focus-visible:outline-none"
+          value="extensions"
+          className="m-0 space-y-6 focus-visible:outline-none"
         >
-          <div className="space-y-6">
-            <SolutionManager onChanged={onSolutionsChanged ?? (() => {})} />
-            <PluginStoreManager onChanged={onSolutionsChanged ?? (() => {})} />
-          </div>
+          <SolutionManager onChanged={onSolutionsChanged ?? (() => {})} />
+          <PluginStoreManager
+            hideBundledPlugins
+            onChanged={onSolutionsChanged ?? (() => {})}
+          />
         </TabsContent>
       </Tabs>
       {permanentDeleteTarget ? (

@@ -1,3 +1,5 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { useEffect, useMemo, useState, type ElementType } from "react";
 import Nango from "@nangohq/frontend";
 import Hubspot from "@thesvg/react/hubspot";
@@ -261,6 +263,7 @@ function trustedHubSpotUrl(value: string | null): string | undefined {
 }
 
 function SyncPanel({ crm }: { crm: SyncClient }) {
+  const currentTenant = useCurrentTenant();
   const [rules, setRules] = useState<CrmSyncRule[]>([]);
   const [tenants, setTenants] = useState<CrmSyncTenant[]>([]);
   const [jobs, setJobs] = useState<CrmSyncJob[]>([]);
@@ -288,6 +291,15 @@ function SyncPanel({ crm }: { crm: SyncClient }) {
       setLoadingSync(false);
     }
   }
+
+  useRealtimeRefresh({
+    topics: ["integrations"],
+    tenantId: currentTenant.isPlatformAdmin
+      ? 0
+      : (currentTenant.id ?? undefined),
+    enabled: !currentTenant.isLoading,
+    refresh,
+  });
 
   async function refreshJobs() {
     if (document.hidden) return;
@@ -556,6 +568,7 @@ export function CrmConnectionsPage({
   nangoFactory?: NangoConnectFactory;
   embedded?: boolean;
 }) {
+  const currentTenant = useCurrentTenant();
   const [providers, setProviders] = useState<CrmProvider[]>([]);
   const [connections, setConnections] = useState<CrmConnection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -584,6 +597,15 @@ export function CrmConnectionsPage({
   useEffect(() => {
     void refresh();
   }, [services]);
+
+  useRealtimeRefresh({
+    topics: ["integrations"],
+    tenantId: currentTenant.isPlatformAdmin
+      ? 0
+      : (currentTenant.id ?? undefined),
+    enabled: !currentTenant.isLoading,
+    refresh,
+  });
 
   const connectionsByProvider = useMemo(
     () =>

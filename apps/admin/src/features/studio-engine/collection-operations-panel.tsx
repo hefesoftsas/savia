@@ -52,7 +52,7 @@ export default function CollectionOperationsPanel({
     queryKey: [
       "collection-operations",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       name,
     ],
     queryFn: () =>

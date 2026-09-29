@@ -1,3 +1,5 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { matchTenantApiBasePath } from "@/features/studio/studio-navigation";
 import { Component, useEffect, useMemo, useState } from "react";
 import type { ApiClient } from "@/api/api-client";
 import type { MyDayWidget } from "@savia/studio-shared/my-day-widgets";
@@ -70,6 +72,14 @@ export function PluginWidgetBody({
     ExtensionInstallation[] | undefined
   >(undefined);
   const [failed, setFailed] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const tenantId = matchTenantApiBasePath(widget.apiBasePath);
+  useRealtimeRefresh({
+    topics: ["studio"],
+    tenantId: Number(tenantId),
+    enabled: tenantId !== undefined,
+    refresh: () => setRevision((value) => value + 1),
+  });
 
   const ref = useMemo(() => parsePluginKind(widget.kind), [widget.kind]);
   const contribution = ref ? pluginContributionFor(ref) : undefined;
@@ -94,7 +104,7 @@ export function PluginWidgetBody({
     return () => {
       active = false;
     };
-  }, [apiClient, ref, widget.apiBasePath]);
+  }, [apiClient, ref, widget.apiBasePath, revision]);
 
   const savia = useMemo(
     () =>

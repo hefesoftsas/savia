@@ -1,7 +1,15 @@
-import { resolveLocalizedContent, type LocalizedContent } from "@savia/studio-shared/plugin-localization";
+import {
+  resolveLocalizedContent,
+  type LocalizedContent,
+} from "@savia/studio-shared/plugin-localization";
 import { useAppLocale, useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getStudioRuntime } from "./runtime";
+import {
+  RemoteChangesNotice,
+  useRealtimeRefresh,
+} from "@/realtime/use-realtime-refresh";
 import { Settings2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,17 +112,34 @@ export default function ExtensionManager({
   const [configuredExtensionId, setConfiguredExtensionId] = useState<
     string | null
   >(null);
+  const listGeneration = useRef(0);
 
   async function reload() {
+    const generation = ++listGeneration.current;
     const response = await api<{ data: ExtensionEntry[] }>("/extensions");
-    setEntries(response.data);
+    if (generation === listGeneration.current) setEntries(response.data);
   }
+
+  async function reloadRemoteChanges() {
+    await reload();
+    setConfiguredExtensionId(null);
+  }
+
+  const remoteChanges = useRealtimeRefresh({
+    topics: ["studio"],
+    tenantId: getStudioRuntime().tenantId,
+    blocked: busy !== null || configuredExtensionId !== null,
+    refresh: reloadRemoteChanges,
+    accepts: (event) => event.collection === "objects",
+  });
 
   useEffect(() => {
     let active = true;
+    const generation = ++listGeneration.current;
     api<{ data: ExtensionEntry[] }>("/extensions")
       .then((response) => {
-        if (active) setEntries(response.data);
+        if (active && generation === listGeneration.current)
+          setEntries(response.data);
       })
       .catch((reason) => {
         if (active) setError(message(reason));
@@ -124,6 +149,7 @@ export default function ExtensionManager({
       });
     return () => {
       active = false;
+      if (generation === listGeneration.current) listGeneration.current++;
     };
   }, []);
 
@@ -143,6 +169,7 @@ export default function ExtensionManager({
 
   return (
     <section aria-label={t("Extensiones disponibles")} className="space-y-5">
+      <RemoteChangesNotice {...remoteChanges} />
       <div className="savia-surface-card">
         <header className="flex items-center gap-2 border-b px-6 py-5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">
@@ -173,8 +200,16 @@ export default function ExtensionManager({
         ) : (
           <div className="divide-y" role="list">
             {entries.map((entry) => {
-              const label = resolveLocalizedContent(entry.manifest.label,entry.manifest.labels,locale);
-              const description = resolveLocalizedContent(entry.manifest.description,entry.manifest.descriptions,locale);
+              const label = resolveLocalizedContent(
+                entry.manifest.label,
+                entry.manifest.labels,
+                locale,
+              );
+              const description = resolveLocalizedContent(
+                entry.manifest.description,
+                entry.manifest.descriptions,
+                locale,
+              );
               const active = isActive(entry);
               const pending = busy === entry.manifest.id;
               const connectors = connectorsFor(entry.manifest.id);
@@ -191,9 +226,7 @@ export default function ExtensionManager({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
                     <div className="flex min-w-0 flex-1 basis-72 items-center gap-2">
-                      <h3 className="font-medium text-foreground">
-                        {label}
-                      </h3>
+                      <h3 className="font-medium text-foreground">{label}</h3>
                       <Badge variant={active ? "secondary" : "outline"}>
                         {state(entry)}
                       </Badge>
@@ -204,9 +237,7 @@ export default function ExtensionManager({
                         side="bottom"
                       >
                         <span className="block max-w-xs space-y-1">
-                          <span className="block">
-                            {description}
-                          </span>
+                          <span className="block">{description}</span>
                           <span className="block text-primary-foreground/75">
                             {t("Versión")}{" "}
                             {entry.installed?.version ?? entry.manifest.version}

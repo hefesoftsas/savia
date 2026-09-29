@@ -12,6 +12,11 @@ import type {
 } from "@savia/studio-shared/record-history";
 import { Button } from "@/components/ui/button";
 import { historyRequest, historyScope } from "./record-history-client";
+import { getStudioRuntime } from "./runtime";
+import {
+  RemoteChangesNotice,
+  useRealtimeRefresh,
+} from "@/realtime/use-realtime-refresh";
 
 const actions = {
   created: "Registro creado",
@@ -75,6 +80,19 @@ function HistorySession({
   const [detailRetry, setDetailRetry] = useState(0);
   const cursor = cursors.at(-1);
   const base = `/record-history/${encodeURIComponent(object.name)}/${encodeURIComponent(recordId)}`;
+  const reloadRemoteChanges = () => {
+    setRestoring(false);
+    setRefresh((value) => value + 1);
+  };
+  const remoteChanges = useRealtimeRefresh({
+    topics: ["records"],
+    tenantId: getStudioRuntime().tenantId,
+    blocked: restoring,
+    refresh: reloadRemoteChanges,
+    accepts: (event) =>
+      event.collection === object.name &&
+      (event.id === undefined || String(event.id) === recordId),
+  });
   useEffect(() => {
     const controller = new AbortController();
     setPage(undefined);
@@ -127,6 +145,7 @@ function HistorySession({
   };
   return (
     <section aria-label={t("Historial del registro")} className="grid gap-4">
+      <RemoteChangesNotice {...remoteChanges} />
       {restored && (
         <p role="status">
           {t("Campos restaurados. Se guardó una nueva edición.")}

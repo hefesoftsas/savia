@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -84,9 +85,11 @@ import { UserMenu } from "./user-menu";
 
 function renderMenu() {
   return render(
-    <MemoryRouter>
-      <UserMenu />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <UserMenu />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

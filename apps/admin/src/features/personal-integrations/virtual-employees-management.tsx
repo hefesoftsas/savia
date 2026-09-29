@@ -1,3 +1,7 @@
+import {
+  useRealtimeRefresh,
+  RemoteChangesNotice,
+} from "@/realtime/use-realtime-refresh";
 import { useState, useEffect, useMemo, type ElementType } from "react";
 import { toast } from "sonner";
 import {
@@ -80,13 +84,25 @@ export function VirtualEmployeesManagement({
   assistantConfigClient?: AssistantConfigurationClient;
 }) {
   const t = useMessages(personalIntegrationsMessages);
+  const [realtimeTenant, setRealtimeTenant] = useState<number>();
+  useEffect(() => {
+    let active = true;
+    void assistantConfigClient
+      ?.activeTenant?.()
+      .then((state) => {
+        if (active) setRealtimeTenant(state.activeTenantId ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [assistantConfigClient]);
   const [employees, setEmployees] = useState<VirtualEmployee[]>([]);
   const [models, setModels] = useState<AssistantModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [editingEmployee, setEditingEmployee] = useState<VirtualEmployee | null>(
-    null,
-  );
+  const [editingEmployee, setEditingEmployee] =
+    useState<VirtualEmployee | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
 
@@ -101,7 +117,9 @@ export function VirtualEmployeesManagement({
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const [customCollectionInput, setCustomCollectionInput] = useState("");
   const [collectionSearch, setCollectionSearch] = useState("");
-  const [availableCollections, setAvailableCollections] = useState<SystemCollection[]>([]);
+  const [availableCollections, setAvailableCollections] = useState<
+    SystemCollection[]
+  >([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
   const [model, setModel] = useState("");
   const [status, setStatus] = useState<"active" | "inactive">("active");
@@ -112,7 +130,11 @@ export function VirtualEmployeesManagement({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!assistantConfigClient || typeof assistantConfigClient.models !== "function") return;
+    if (
+      !assistantConfigClient ||
+      typeof assistantConfigClient.models !== "function"
+    )
+      return;
     let active = true;
     assistantConfigClient
       .models()
@@ -158,6 +180,20 @@ export function VirtualEmployeesManagement({
     void loadEmployees();
     void loadCollections();
   }, [client]);
+
+  const remote = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: realtimeTenant,
+    enabled: realtimeTenant !== undefined,
+    blocked: isCreateOpen || Boolean(editingEmployee),
+    refresh: async () => {
+      resetForm();
+      setIsCreateOpen(false);
+      setEditingEmployee(null);
+      await loadEmployees();
+      await loadCollections();
+    },
+  });
 
   function resetForm() {
     setName("");
@@ -382,6 +418,7 @@ export function VirtualEmployeesManagement({
 
   return (
     <div className="space-y-6">
+      <RemoteChangesNotice {...remote} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div>
           <div className="flex items-center gap-1.5">
@@ -436,7 +473,9 @@ export function VirtualEmployeesManagement({
       ) : filteredEmployees.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed bg-card/40">
           <Bot className="size-12 text-muted-foreground mb-3" />
-          <h3 className="font-semibold text-lg">{t("No hay empleados virtuales")}</h3>
+          <h3 className="font-semibold text-lg">
+            {t("No hay empleados virtuales")}
+          </h3>
           <p className="text-sm text-muted-foreground max-w-md mt-1 mb-4">
             {t(
               "Crea tu primer empleado virtual asignándole un rol, colecciones permitidas y documentos para potenciar tu equipo.",
@@ -474,7 +513,9 @@ export function VirtualEmployeesManagement({
                       </div>
                     </div>
                     <Badge
-                      variant={emp.status === "active" ? "default" : "secondary"}
+                      variant={
+                        emp.status === "active" ? "default" : "secondary"
+                      }
                       className="text-[10px] uppercase font-semibold tracking-wider"
                     >
                       {emp.status === "active" ? t("Activo") : t("Inactivo")}
@@ -495,11 +536,17 @@ export function VirtualEmployeesManagement({
                     <span className="inline-flex items-center gap-1 font-medium">
                       <Database className="size-3.5 text-muted-foreground" />
                       {isAll ? (
-                        <Badge variant="outline" className="text-[10px] font-normal py-0">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-normal py-0"
+                        >
                           {t("Todas las colecciones")}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] font-normal py-0">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-normal py-0"
+                        >
                           {t("%{count} colecciones", {
                             count: emp.allowedCollections.length,
                           })}
@@ -509,7 +556,10 @@ export function VirtualEmployeesManagement({
 
                     <span className="inline-flex items-center gap-1 font-medium">
                       <FileCode className="size-3.5 text-muted-foreground" />
-                      <Badge variant="outline" className="text-[10px] font-normal py-0">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-normal py-0"
+                      >
                         {t("%{count} docs RAG", { count: emp.filesCount ?? 0 })}
                       </Badge>
                     </span>
@@ -518,7 +568,10 @@ export function VirtualEmployeesManagement({
                   {emp.model ? (
                     <div className="flex flex-wrap items-center gap-1.5 pt-2 mt-2 border-t text-[11px] text-muted-foreground">
                       <Cpu className="size-3.5 text-primary shrink-0" />
-                      <span className="font-mono text-[11px] font-medium text-foreground/80 truncate max-w-[130px]" title={emp.model}>
+                      <span
+                        className="font-mono text-[11px] font-medium text-foreground/80 truncate max-w-[130px]"
+                        title={emp.model}
+                      >
                         {emp.model}
                       </span>
                       <ModelCapabilityBadges
@@ -572,7 +625,11 @@ export function VirtualEmployeesManagement({
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="profile">{t("Perfil")}</TabsTrigger>
               <TabsTrigger value="prompt">{t("Rol & Prompt")}</TabsTrigger>
@@ -605,7 +662,9 @@ export function VirtualEmployeesManagement({
                       id="emp-handle"
                       placeholder={t("ventas")}
                       value={handle}
-                      onChange={(e) => setHandle(e.target.value.replace(/[@\s]/g, ""))}
+                      onChange={(e) =>
+                        setHandle(e.target.value.replace(/[@\s]/g, ""))
+                      }
                       className="pl-7 font-mono"
                     />
                   </div>
@@ -786,14 +845,14 @@ export function VirtualEmployeesManagement({
                       {collectionSearch.trim() ? (
                         <p>
                           {t(
-                            "No se encontraron colecciones que coincidan con \"%{query}\".",
+                            'No se encontraron colecciones que coincidan con "%{query}".',
                             { query: collectionSearch },
                           )}
                         </p>
                       ) : (
                         <p>
                           {t(
-                            "No hay colecciones disponibles en este dominio. Puedes añadir una abajo.",
+                            "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.",
                           )}
                         </p>
                       )}
@@ -828,7 +887,10 @@ export function VirtualEmployeesManagement({
                                 {col.name}
                               </div>
                               {col.description && (
-                                <div className="text-[10px] text-muted-foreground/80 truncate mt-0.5" title={col.description}>
+                                <div
+                                  className="text-[10px] text-muted-foreground/80 truncate mt-0.5"
+                                  title={col.description}
+                                >
                                   {col.description}
                                 </div>
                               )}
@@ -848,7 +910,9 @@ export function VirtualEmployeesManagement({
                       <Input
                         placeholder={t("nombre_coleccion")}
                         value={customCollectionInput}
-                        onChange={(e) => setCustomCollectionInput(e.target.value)}
+                        onChange={(e) =>
+                          setCustomCollectionInput(e.target.value)
+                        }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
@@ -879,15 +943,21 @@ export function VirtualEmployeesManagement({
                       </Label>
                       <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
                         {selectedCollections.map((colName) => {
-                          const item = allKnownCollections.find((c) => c.name === colName);
+                          const item = allKnownCollections.find(
+                            (c) => c.name === colName,
+                          );
                           return (
                             <Badge
                               key={colName}
                               variant="secondary"
                               className="text-xs gap-1.5 py-1 px-2 border"
                             >
-                              <span className="font-medium text-[11px]">{item?.label || colName}</span>
-                              <span className="font-mono text-[10px] text-muted-foreground">({colName})</span>
+                              <span className="font-medium text-[11px]">
+                                {item?.label || colName}
+                              </span>
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                ({colName})
+                              </span>
                               <button
                                 type="button"
                                 onClick={() => toggleCollection(colName)}
@@ -952,7 +1022,9 @@ export function VirtualEmployeesManagement({
                       </Button>
                     </label>
                     <span className="text-xs text-muted-foreground">
-                      {t("Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)")}
+                      {t(
+                        "Formatos: PDF, Markdown, Texto, CSV, JSON (hasta 10 MB)",
+                      )}
                     </span>
                   </div>
 
@@ -972,7 +1044,9 @@ export function VirtualEmployeesManagement({
                           <div className="flex items-center gap-2 min-w-0">
                             <FileText className="size-4 text-primary shrink-0" />
                             <div className="min-w-0">
-                              <p className="font-medium truncate">{file.name}</p>
+                              <p className="font-medium truncate">
+                                {file.name}
+                              </p>
                               <p className="text-[10px] text-muted-foreground">
                                 {(file.sizeBytes / 1024).toFixed(1)} KB •{" "}
                                 {new Date(file.createdAt).toLocaleDateString()}
@@ -982,19 +1056,28 @@ export function VirtualEmployeesManagement({
 
                           <div className="flex items-center gap-2 shrink-0">
                             {file.ragStatus === "indexed" && (
-                              <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20"
+                              >
                                 <CheckCircle2 className="size-3 mr-1" />
                                 {t("Indexado RAG")}
                               </Badge>
                             )}
                             {file.ragStatus === "pending" && (
-                              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 bg-amber-50">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] text-amber-600 border-amber-300 bg-amber-50"
+                              >
                                 <Clock className="size-3 mr-1" />
                                 {t("Procesando")}
                               </Badge>
                             )}
                             {file.ragStatus === "failed" && (
-                              <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] text-destructive border-destructive/30"
+                              >
                                 <AlertCircle className="size-3 mr-1" />
                                 {t("Error")}
                               </Badge>

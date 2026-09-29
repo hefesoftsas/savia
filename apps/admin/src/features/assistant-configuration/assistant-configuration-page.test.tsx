@@ -21,7 +21,7 @@ import { AssistantConfigurationPage } from "./assistant-configuration-page";
 afterEach(cleanup);
 
 function servicesWithSummary(
-  overrides: Array<{ agencyId: number; model: string | null }> = [],
+  overrides: Array<{ tenantId: number; model: string | null }> = [],
 ) {
   return {
     assistantConfiguration: {
@@ -33,8 +33,8 @@ function servicesWithSummary(
           updatedAt: "2026-09-03T12:00:00.000Z",
           updatedBy: "platform-admin",
         },
-        agencies: overrides.map((override) => ({
-          scope: "agency",
+        tenants: overrides.map((override) => ({
+          scope: "tenant",
           keyState: "not_configured",
           updatedAt: "2026-09-03T12:00:00.000Z",
           updatedBy: "platform-admin",
@@ -50,12 +50,12 @@ function servicesWithSummary(
           outputPricePerMillion: 0.42,
         },
       ]),
-      activeAgency: vi.fn().mockResolvedValue({
-        agencies: [{ id: 101, name: "Agencia Norte" }],
+      activeTenant: vi.fn().mockResolvedValue({
+        tenants: [{ id: 101, name: "Agencia Norte" }],
       }),
       saveGlobal: vi.fn(),
-      saveAgencyOverride: vi.fn(),
-      clearAgencyOverride: vi.fn(),
+      saveTenantOverride: vi.fn(),
+      clearTenantOverride: vi.fn(),
     },
   } as unknown as Pick<AppServices, "assistantConfiguration">;
 }
@@ -80,7 +80,7 @@ describe("AssistantConfigurationPage", () => {
     const services = servicesWithSummary();
     services.assistantConfiguration.summary = vi.fn().mockResolvedValue({
       global: null,
-      agencies: [],
+      tenants: [],
       deployment: {
         keyState: "not_configured",
         model: "deepseek/deepseek-v4-flash",
@@ -97,7 +97,7 @@ describe("AssistantConfigurationPage", () => {
     const services = servicesWithSummary();
     services.assistantConfiguration.summary = vi.fn().mockResolvedValue({
       global: null,
-      agencies: [],
+      tenants: [],
       deployment: {
         keyState: "not_configured",
         model: "deepseek/deepseek-v4-flash",
@@ -134,12 +134,12 @@ describe("AssistantConfigurationPage", () => {
     expect(input.type).toBe("password");
   });
 
-  it("requires confirmation before deleting an agency override", async () => {
+  it("requires confirmation before deleting an tenant override", async () => {
     const user = userEvent.setup();
     render(
       <AssistantConfigurationPage
         services={servicesWithSummary([
-          { agencyId: 101, model: "openai/gpt-5" },
+          { tenantId: 101, model: "openai/gpt-5" },
         ])}
       />,
     );
@@ -166,7 +166,7 @@ describe("AssistantConfigurationPage", () => {
         updatedAt: "2026-09-03T12:05:00.000Z",
         updatedBy: "platform-admin",
       },
-      agencies: [],
+      tenants: [],
     });
     render(<AssistantConfigurationPage services={services} />);
 
@@ -204,7 +204,7 @@ describe("AssistantConfigurationPage", () => {
         updatedAt: "2026-09-03T12:05:00.000Z",
         updatedBy: "platform-admin",
       },
-      agencies: [],
+      tenants: [],
     });
     render(<AssistantConfigurationPage services={services} />);
 
@@ -228,17 +228,17 @@ describe("AssistantConfigurationPage", () => {
     );
   });
 
-  it("can release only an agency key while retaining its local model", async () => {
+  it("can release only an tenant key while retaining its local model", async () => {
     const user = userEvent.setup();
     const services = servicesWithSummary([
-      { agencyId: 101, model: "openai/gpt-5" },
+      { tenantId: 101, model: "openai/gpt-5" },
     ]);
     services.assistantConfiguration.summary = vi.fn().mockResolvedValue({
       global: null,
-      agencies: [
+      tenants: [
         {
-          scope: "agency",
-          agencyId: 101,
+          scope: "tenant",
+          tenantId: 101,
           keyState: "configured",
           model: "openai/gpt-5",
           updatedAt: "2026-09-03T12:00:00.000Z",
@@ -259,7 +259,7 @@ describe("AssistantConfigurationPage", () => {
 
     await waitFor(() =>
       expect(
-        services.assistantConfiguration.saveAgencyOverride,
+        services.assistantConfiguration.saveTenantOverride,
       ).toHaveBeenCalledWith(101, {
         clearApiKey: true,
         model: "openai/gpt-5",

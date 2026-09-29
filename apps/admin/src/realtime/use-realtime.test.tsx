@@ -2,7 +2,6 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
-import { LiveIndicator } from "./live-indicator";
 import { useRealtimeTopics } from "./use-realtime";
 
 class MockWebSocket {
@@ -36,12 +35,15 @@ function servicesWith(post: ReturnType<typeof vi.fn>) {
 
 function Probe({
   onEvent,
+  onConnected,
 }: {
   onEvent?: (event: { topic: string; type: string }) => void;
+  onConnected?: () => void;
 }) {
   const { status, lastEvent } = useRealtimeTopics({
     topics: ["users"],
     onEvent: onEvent as never,
+    onConnected,
   });
   return (
     <div>
@@ -70,16 +72,19 @@ describe("useRealtimeTopics", () => {
         expiresAt: new Date(Date.now() + 15000).toISOString(),
       },
     });
+    const onConnected = vi.fn();
     const onEvent = vi.fn();
     render(
       <AppServicesProvider services={servicesWith(post)}>
-        <Probe onEvent={onEvent} />
+        <Probe onEvent={onEvent} onConnected={onConnected} />
       </AppServicesProvider>,
     );
 
-    expect(post).toHaveBeenCalledWith("/v1/realtime/ticket", {
-      topics: ["users"],
-    });
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith("/v1/realtime/ticket", {
+        topics: ["users"],
+      }),
+    );
     await waitFor(() => {
       expect(MockWebSocket.instances).toHaveLength(1);
     });
@@ -94,6 +99,7 @@ describe("useRealtimeTopics", () => {
       });
     });
     expect(screen.getByTestId("status")).toHaveTextContent("live");
+    expect(onConnected).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       socket.onmessage?.({
@@ -208,11 +214,6 @@ describe("useRealtimeTopics", () => {
     expect(post).toHaveBeenCalledTimes(1);
   });
 
-  it("stays quiet without reconnecting the indicator while offline", () => {
-    const { container } = render(<LiveIndicator status="unavailable" />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
   it("degrades without crashing outside AppServicesProvider", () => {
     function BareProbe() {
       const { status } = useRealtimeTopics({ topics: ["records"] });
@@ -223,21 +224,7 @@ describe("useRealtimeTopics", () => {
   });
 });
 
-describe("LiveIndicator", () => {
-  it("only renders when live so it never gets stuck on connecting", () => {
-    const { container, rerender, unmount } = render(
-      <LiveIndicator status="connecting" />,
-    );
-    expect(container).toBeEmptyDOMElement();
-    rerender(<LiveIndicator status="live" />);
-    expect(screen.getByRole("status")).toHaveTextContent("En vivo");
-    unmount();
-    const { container: unavailableContainer } = render(
-      <LiveIndicator status="unavailable" />,
-    );
-    expect(unavailableContainer).toBeEmptyDOMElement();
-  });
-
+describe("Realtime availability", () => {
   it("treats realtime-unavailable (503) as offline instead of retrying", async () => {
     vi.useFakeTimers();
     const post = vi.fn().mockRejectedValue({ status: 503 });
@@ -258,4 +245,153 @@ describe("LiveIndicator", () => {
     );
     expect(post).toHaveBeenCalledTimes(1);
   });
+});
+
+it("refreshes after reconnecting to recover missed changes", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi.fn().mockResolvedValue({
+    data: { room: "platform", ticket: "ticket", topics: ["users"] },
+  });
+  const connected = vi.fn();
+  render(
+    <AppServicesProvider services={servicesWith(post)}>
+      <Probe onConnected={connected} />
+    </AppServicesProvider>,
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  const first = MockWebSocket.instances[0];
+  await act(async () => {
+    first.onmessage?.({ data: JSON.stringify({ type: "connected" }) });
+    first.onmessage?.({ data: JSON.stringify({ type: "connected" }) });
+  });
+  expect(connected).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    first.onclose?.();
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  expect(MockWebSocket.instances).toHaveLength(2);
+  await act(async () => {
+    MockWebSocket.instances[1].onmessage?.({
+      data: JSON.stringify({ type: "connected" }),
+    });
+  });
+  expect(connected).toHaveBeenCalledTimes(2);
+});
+
+it("shares one room socket across components and filters their topics", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi
+    .fn()
+    .mockResolvedValue({ data: { room: "principal:self", ticket: "shared" } });
+  const account = vi.fn();
+  const notifications = vi.fn();
+  function Subscriber({
+    topic,
+    listener,
+  }: {
+    topic: string;
+    listener: () => void;
+  }) {
+    useRealtimeTopics({ topics: [topic], onEvent: listener });
+    return null;
+  }
+  const services = servicesWith(post);
+  const { rerender, unmount } = render(
+    <AppServicesProvider services={services}>
+      <Subscriber topic="account" listener={account} />
+      <Subscriber topic="notifications" listener={notifications} />
+    </AppServicesProvider>,
+  );
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(post).toHaveBeenCalledWith("/v1/realtime/ticket", {
+    topics: ["account", "notifications"],
+  });
+  const first = MockWebSocket.instances[0];
+  await act(async () =>
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "account", type: "updated" }),
+    }),
+  );
+  expect(account).toHaveBeenCalledOnce();
+  expect(notifications).not.toHaveBeenCalled();
+  rerender(
+    <AppServicesProvider services={services}>
+      <Subscriber topic="notifications" listener={notifications} />
+    </AppServicesProvider>,
+  );
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+  await act(async () =>
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "notifications", type: "updated" }),
+    }),
+  );
+  expect(notifications).not.toHaveBeenCalled();
+  await act(async () =>
+    MockWebSocket.instances[1].onmessage?.({
+      data: JSON.stringify({ topic: "notifications", type: "updated" }),
+    }),
+  );
+  expect(notifications).toHaveBeenCalledOnce();
+  unmount();
+});
+
+it("does not share tickets between tenants or between tenant and personal rooms", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi
+    .fn()
+    .mockResolvedValue({ data: { room: "room", ticket: "ticket" } });
+  function Subscriber({
+    tenantId,
+    topic,
+  }: {
+    tenantId?: number;
+    topic: string;
+  }) {
+    useRealtimeTopics({ topics: [topic], tenantId });
+    return null;
+  }
+  render(
+    <AppServicesProvider services={servicesWith(post)}>
+      <Subscriber tenantId={1} topic="records" />
+      <Subscriber tenantId={2} topic="records" />
+      <Subscriber topic="account" />
+    </AppServicesProvider>,
+  );
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+  expect(post.mock.calls.map((call) => call[1])).toEqual(
+    expect.arrayContaining([
+      { topics: ["records"], tenantId: 1 },
+      { topics: ["records"], tenantId: 2 },
+      { topics: ["account"] },
+    ]),
+  );
+});
+
+it("disconnects pooled sockets when the authenticated session is cleared", async () => {
+  vi.stubGlobal("WebSocket", MockWebSocket);
+  const post = vi
+    .fn()
+    .mockResolvedValue({ data: { room: "platform", ticket: "ticket" } });
+  const onEvent = vi.fn();
+  render(
+    <AppServicesProvider services={servicesWith(post)}>
+      <Probe onEvent={onEvent} />
+    </AppServicesProvider>,
+  );
+  await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+  const socket = MockWebSocket.instances[0];
+  await act(async () =>
+    window.dispatchEvent(new Event("savia:session-cleared")),
+  );
+  expect(screen.getByTestId("status")).toHaveTextContent("unavailable");
+  await act(async () =>
+    socket.onmessage?.({
+      data: JSON.stringify({ topic: "users", type: "updated" }),
+    }),
+  );
+  expect(onEvent).not.toHaveBeenCalled();
 });

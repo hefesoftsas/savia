@@ -146,10 +146,5 @@ export async function createAccessFixture() {
     if (created.status !== 201)
       throw new Error("ACL fixture record: " + (await created.text()));
   }
-  await env.DB.prepare(
-    "INSERT INTO studio_data_domains(id,label,created_by) VALUES ('acl_private','ACL private',?)",
-  )
-    .bind(principalId("platform_admin"))
-    .run();
   return { db: env.DB, actor, principalId, request, dispose: async () => {} };
 }

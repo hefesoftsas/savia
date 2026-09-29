@@ -18,6 +18,11 @@ import {
 } from "../auth/access-repository";
 import { findPrincipal } from "../auth/identity-repository";
 import {
+  publishRealtime,
+  type RealtimeHubClient,
+} from "../realtime/hub-client";
+import { principalRoom, tenantRoom } from "../realtime/protocol";
+import {
   accessScopeSchema,
   accessActions,
   type AccessScope,
@@ -52,6 +57,16 @@ const role = z.object({
   enabled: z.boolean(),
   protected: z.boolean(),
   legacy_role: z.string().nullable(),
+  source: z.enum(["system", "custom"]).optional(),
+  assignedUsers: z
+    .array(
+      z.object({
+        id: z.string(),
+        displayName: z.string(),
+        email: z.string().nullable(),
+      }),
+    )
+    .optional(),
   grants: z.array(grant.extend({ id: z.string(), roleId: z.string() })),
 });
 const errorSchema = z.object({
@@ -91,7 +106,43 @@ const scope = (value: string): AccessScope => {
 };
 const tags = ["Roles & permissions"];
 const base = "/v1/access-control";
-export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
+const roomForScope = (scope: AccessScope) =>
+  tenantRoom(scope === "platform" ? 0 : Number(scope.slice("tenant:".length)));
+
+async function assignedPrincipals(
+  database: D1Database,
+  roleScope: AccessScope,
+  roleId: string,
+): Promise<string[]> {
+  return (
+    await database
+      .prepare(
+        "SELECT principal_id FROM access_assignments WHERE scope=? AND role_id=?",
+      )
+      .bind(roleScope, roleId)
+      .all<{ principal_id: string }>()
+  ).results.map((row) => row.principal_id);
+}
+
+function publishAccountRefreshes(
+  realtime: RealtimeHubClient | undefined,
+  principalIds: string[],
+  actor: string,
+): void {
+  for (const principalId of new Set(principalIds))
+    publishRealtime(realtime, principalRoom(principalId), {
+      topic: "account",
+      type: "updated",
+      collection: "security",
+      actor,
+    });
+}
+
+export function registerAccessControlRoutes(
+  app: OpenAPIHono,
+  db: D1Database,
+  realtime?: RealtimeHubClient,
+) {
   app.use(base + "/*", async (c, next) => {
     c.header("cache-control", "no-store");
     await next();
@@ -193,16 +244,20 @@ export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
     }),
     async (c) => {
       const input = c.req.valid("json");
-      return c.json(
-        await saveAccessRole(db, actorFromContext(c), {
-          ...input,
-          scope: scope(input.scope),
-          grants: input.grants as Parameters<
-            typeof saveAccessRole
-          >[2]["grants"],
-        }),
-        201,
-      );
+      const actor = actorFromContext(c);
+      const roleScope = scope(input.scope);
+      const saved = await saveAccessRole(db, actor, {
+        ...input,
+        scope: roleScope,
+        grants: input.grants as Parameters<typeof saveAccessRole>[2]["grants"],
+      });
+      publishRealtime(realtime, roomForScope(roleScope), {
+        topic: "access-control",
+        type: "created",
+        id: saved.id,
+        actor: actor.principal.id,
+      });
+      return c.json(saved, 201);
     },
   );
   app.openapi(
@@ -224,17 +279,27 @@ export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
     }),
     async (c) => {
       const input = c.req.valid("json");
-      return c.json(
-        await saveAccessRole(db, actorFromContext(c), {
-          ...input,
-          id: c.req.valid("param").id,
-          scope: scope(input.scope),
-          grants: input.grants as Parameters<
-            typeof saveAccessRole
-          >[2]["grants"],
-        }),
-        200,
+      const actor = actorFromContext(c);
+      const roleScope = scope(input.scope);
+      const affectedPrincipals = await assignedPrincipals(
+        db,
+        roleScope,
+        c.req.valid("param").id,
       );
+      const saved = await saveAccessRole(db, actor, {
+        ...input,
+        id: c.req.valid("param").id,
+        scope: roleScope,
+        grants: input.grants as Parameters<typeof saveAccessRole>[2]["grants"],
+      });
+      publishRealtime(realtime, roomForScope(roleScope), {
+        topic: "access-control",
+        type: "updated",
+        id: saved.id,
+        actor: actor.principal.id,
+      });
+      publishAccountRefreshes(realtime, affectedPrincipals, actor.principal.id);
+      return c.json(saved, 200);
     },
   );
   app.openapi(
@@ -252,14 +317,23 @@ export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
     }),
     async (c) => {
       const q = c.req.valid("query");
-      return c.json(
-        await deleteAccessRole(db, actorFromContext(c), {
-          id: c.req.valid("param").id,
-          scope: scope(q.scope),
-          expectedRevision: q.expectedRevision,
-        }),
-        200,
-      );
+      const actor = actorFromContext(c);
+      const roleScope = scope(q.scope);
+      const roleId = c.req.valid("param").id;
+      const affectedPrincipals = await assignedPrincipals(db, roleScope, roleId);
+      const result = await deleteAccessRole(db, actor, {
+        id: roleId,
+        scope: roleScope,
+        expectedRevision: q.expectedRevision,
+      });
+      publishRealtime(realtime, roomForScope(roleScope), {
+        topic: "access-control",
+        type: "deleted",
+        id: roleId,
+        actor: actor.principal.id,
+      });
+      publishAccountRefreshes(realtime, affectedPrincipals, actor.principal.id);
+      return c.json(result, 200);
     },
   );
   app.openapi(
@@ -322,14 +396,27 @@ export function registerAccessControlRoutes(app: OpenAPIHono, db: D1Database) {
     }),
     async (c) => {
       const input = c.req.valid("json");
-      return c.json(
-        await replaceAccessAssignments(db, actorFromContext(c), {
-          ...input,
-          scope: scope(input.scope),
-          principalId: c.req.valid("param").principalId,
-        }),
-        200,
-      );
+      const actor = actorFromContext(c);
+      const roleScope = scope(input.scope);
+      const principalId = c.req.valid("param").principalId;
+      const result = await replaceAccessAssignments(db, actor, {
+        ...input,
+        scope: roleScope,
+        principalId,
+      });
+      publishRealtime(realtime, roomForScope(roleScope), {
+        topic: "access-control",
+        type: "updated",
+        id: principalId,
+        actor: actor.principal.id,
+      });
+      publishRealtime(realtime, principalRoom(principalId), {
+        topic: "account",
+        type: "updated",
+        collection: "security",
+        actor: actor.principal.id,
+      });
+      return c.json(result, 200);
     },
   );
   app.openapi(

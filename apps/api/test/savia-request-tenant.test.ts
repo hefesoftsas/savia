@@ -17,18 +17,18 @@ function appFor(
 describe("Savia request tenant scope", () => {
   it("lets a tenant admin read its own scope and forwards the tenant header", async () => {
     const fetcher = vi.fn(async (request: Request) => {
-      expect(request.headers.get("x-savia-tenant")).toBe("agency:101");
+      expect(request.headers.get("x-savia-tenant")).toBe("tenant:101");
       expect(request.headers.get("x-savia-actor")).toBe(
         "test-agency-administrator",
       );
       expect(request.url).toBe(
-        "https://savia-request.internal/api/flows?tenant=agency%3A101",
+        "https://savia-request.internal/api/flows?tenant=tenant%3A101",
       );
       return Response.json([]);
     });
     const response = await appFor(agencyAdministratorAuthenticator(), {
       fetch: fetcher,
-    }).request("/v1/savia-request/api/flows?tenant=agency%3A101");
+    }).request("/v1/savia-request/api/flows?tenant=tenant%3A101");
     expect(response.status).toBe(200);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -37,7 +37,7 @@ describe("Savia request tenant scope", () => {
     const fetcher = vi.fn(() => Response.json([]));
     const app = appFor(agencyAdministratorAuthenticator(), { fetch: fetcher });
     expect(
-      (await app.request("/v1/savia-request/api/flows?tenant=agency%3A999"))
+      (await app.request("/v1/savia-request/api/flows?tenant=tenant%3A999"))
         .status,
     ).toBe(403);
     expect((await app.request("/v1/savia-request/api/flows")).status).toBe(403);
@@ -50,7 +50,7 @@ describe("Savia request tenant scope", () => {
     expect(
       (
         await memberApp.request(
-          "/v1/savia-request/api/flows/demo/runs?tenant=agency%3A101",
+          "/v1/savia-request/api/flows/demo/runs?tenant=tenant%3A101",
           {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -62,7 +62,7 @@ describe("Savia request tenant scope", () => {
     expect(
       (
         await memberApp.request(
-          "/v1/savia-request/api/flows/demo/variables?tenant=agency%3A101",
+          "/v1/savia-request/api/flows/demo/variables?tenant=tenant%3A101",
           {
             method: "PUT",
             headers: { "content-type": "application/json" },
@@ -76,13 +76,13 @@ describe("Savia request tenant scope", () => {
 
   it("lets platform admins operate in any tenant scope", async () => {
     const fetcher = vi.fn(async (request: Request) => {
-      expect(request.headers.get("x-savia-tenant")).toBe("agency:999");
+      expect(request.headers.get("x-savia-tenant")).toBe("tenant:999");
       return Response.json({ ok: true });
     });
     const response = await appFor(platformAdministratorAuthenticator(), {
       fetch: fetcher,
     }).request(
-      "/v1/savia-request/api/flows/demo/variables?tenant=agency%3A999",
+      "/v1/savia-request/api/flows/demo/variables?tenant=tenant%3A999",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -97,7 +97,7 @@ describe("Savia request tenant scope", () => {
     const fetcher = vi.fn(() => Response.json([]));
     const response = await appFor(platformAdministratorAuthenticator(), {
       fetch: fetcher,
-    }).request("/v1/savia-request/api/flows?tenant=agency%2F..%2Fx");
+    }).request("/v1/savia-request/api/flows?tenant=tenant%2F..%2Fx");
     expect(response.status).toBe(400);
     expect(fetcher).not.toHaveBeenCalled();
   });

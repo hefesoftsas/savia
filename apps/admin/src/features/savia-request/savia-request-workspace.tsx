@@ -1,3 +1,7 @@
+import {
+  useRealtimeRefresh,
+  RemoteChangesNotice,
+} from "@/realtime/use-realtime-refresh";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
@@ -15,12 +19,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { RequestResult } from "../../../../api/src/request-results/contracts";
 import { useAppServices } from "@/features/assistant/assistant-context";
@@ -188,6 +187,20 @@ export function SaviaRequestWorkspace() {
     void api.listRuns(flow.id).then(setRuns, () => setRuns([]));
   }, [api, flow?.id]);
 
+  const remote = useRealtimeRefresh({
+    topics: ["integrations"],
+    tenantId: scope ? Number(scope.replace(/^tenant:/, "")) : 0,
+    blocked: dirty || busy || submitting,
+    accepts: (event) =>
+      !event.collection || event.collection === "savia-request",
+    refresh: async () => {
+      await refreshNavigation();
+      if (flow) {
+        await reloadFlow();
+        setRuns(await api.listRuns(flow.id));
+      }
+    },
+  });
   const working = busy || submitting;
   const step = flow?.steps[stepIndex] ?? flow?.steps[0];
   const variableNames = useMemo(
@@ -262,7 +275,11 @@ export function SaviaRequestWorkspace() {
   const run = () =>
     withSubmission(async () => {
       if (!flow || !(await saveAll())) return;
-      const result = await api.run(flow.id, effectiveMode, executionInput(input));
+      const result = await api.run(
+        flow.id,
+        effectiveMode,
+        executionInput(input),
+      );
       setActiveRun(result);
       setRuns(await api.listRuns(flow.id));
       setTab("run");
@@ -349,6 +366,7 @@ export function SaviaRequestWorkspace() {
       <main className="mx-auto w-full max-w-6xl pb-10">
         <div className="pt-6">
           <SaviaRequestScopeBar />
+          <RemoteChangesNotice {...remote} />
         </div>
         <SecretsScreen />
       </main>
@@ -360,6 +378,7 @@ export function SaviaRequestWorkspace() {
       <main className="mx-auto w-full max-w-6xl pb-10">
         <div className="pt-6">
           <SaviaRequestScopeBar />
+          <RemoteChangesNotice {...remote} />
         </div>
         <header className="py-6">
           <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -451,6 +470,7 @@ export function SaviaRequestWorkspace() {
         <main className="mx-auto w-full max-w-6xl pb-10">
           <div className="pt-6">
             <SaviaRequestScopeBar />
+            <RemoteChangesNotice {...remote} />
           </div>
           <header className="py-6">
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -469,324 +489,337 @@ export function SaviaRequestWorkspace() {
                 </h1>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-              <label className="sr-only" htmlFor="workspace-flow-selector">
-                Flow activo
-              </label>
-              <select
-                className="h-9 min-w-48 rounded-md border bg-background px-3 text-sm"
-                disabled={working}
-                id="workspace-flow-selector"
-                onChange={(event) => void selectFlow(event.target.value)}
-                value={flow.id}
-              >
-                {flows.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name}
-                  </option>
-                ))}
-              </select>
-              <Button
-                disabled={working}
-                onClick={duplicateFlow}
-                type="button"
-                variant="outline"
-              >
-                <Copy /> Duplicar
-              </Button>
-              <Button
-                disabled={working}
-                onClick={removeFlow}
-                type="button"
-                variant="outline"
-              >
-                <Trash2 /> Eliminar
-              </Button>
-              {scope ? (
+                <label className="sr-only" htmlFor="workspace-flow-selector">
+                  Flow activo
+                </label>
+                <select
+                  className="h-9 min-w-48 rounded-md border bg-background px-3 text-sm"
+                  disabled={working}
+                  id="workspace-flow-selector"
+                  onChange={(event) => void selectFlow(event.target.value)}
+                  value={flow.id}
+                >
+                  {flows.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   disabled={working}
-                  onClick={resetFlow}
+                  onClick={duplicateFlow}
                   type="button"
                   variant="outline"
                 >
-                  <RotateCcw /> Restablecer
+                  <Copy /> Duplicar
                 </Button>
-              ) : null}
+                <Button
+                  disabled={working}
+                  onClick={removeFlow}
+                  type="button"
+                  variant="outline"
+                >
+                  <Trash2 /> Eliminar
+                </Button>
+                {scope ? (
+                  <Button
+                    disabled={working}
+                    onClick={resetFlow}
+                    type="button"
+                    variant="outline"
+                  >
+                    <RotateCcw /> Restablecer
+                  </Button>
+                ) : null}
               </div>
             </div>
           </header>
 
           <Card>
             <CardHeader className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm">
-              <strong>{flow.steps.length} pasos</strong>
-              <span className="text-muted-foreground">
-                {dirty ? " · Cambios sin guardar" : " · Guardado"}
-              </span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                aria-label="Modo de ejecución"
-                className="h-9 rounded-md border bg-background px-3 text-sm"
-                disabled={working}
-                onChange={(event) =>
-                  setMode(event.target.value as "mock" | "live")
-                }
-                value={effectiveMode}
-              >
-                <option value="mock" disabled={flow.id === "dane-city-lookup"}>Simulado</option>
-                <option value="live">
-                  Real · {destinationLabel}
-                </option>
-              </select>
-              <Button disabled={working} onClick={run} type="button">
-                <Play />
-                {working
-                  ? "Ejecutando…"
-                  : effectiveMode === "mock"
-                    ? "Ejecutar simulación"
-                    : "Ejecutar real"}
-              </Button>
-            </div>
+              <p className="text-sm">
+                <strong>{flow.steps.length} pasos</strong>
+                <span className="text-muted-foreground">
+                  {dirty ? " · Cambios sin guardar" : " · Guardado"}
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label="Modo de ejecución"
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                  disabled={working}
+                  onChange={(event) =>
+                    setMode(event.target.value as "mock" | "live")
+                  }
+                  value={effectiveMode}
+                >
+                  <option
+                    value="mock"
+                    disabled={flow.id === "dane-city-lookup"}
+                  >
+                    Simulado
+                  </option>
+                  <option value="live">Real · {destinationLabel}</option>
+                </select>
+                <Button disabled={working} onClick={run} type="button">
+                  <Play />
+                  {working
+                    ? "Ejecutando…"
+                    : effectiveMode === "mock"
+                      ? "Ejecutar simulación"
+                      : "Ejecutar real"}
+                </Button>
+              </div>
             </CardHeader>
 
             <CardContent className="space-y-5 pt-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium">
-              Nombre del flow
-              <Input
-                aria-label="Nombre del flow"
-                disabled={working}
-                onChange={(event) =>
-                  updateDraft({ ...flow, name: event.target.value })
-                }
-                value={flow.name}
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Carpeta
-              <Input
-                disabled={working}
-                list="savia-request-folders"
-                onChange={(event) =>
-                  updateDraft({ ...flow, folderPath: event.target.value })
-                }
-                value={flow.folderPath ?? ""}
-              />
-              <datalist id="savia-request-folders">
-                {[
-                  ...new Set([
-                    ...folders,
-                    ...flows.map((candidate) => candidate.folderPath ?? ""),
-                  ]),
-                ]
-                  .filter(Boolean)
-                  .map((path) => (
-                    <option key={path} value={path} />
-                  ))}
-              </datalist>
-            </label>
-          </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Nombre del flow
+                  <Input
+                    aria-label="Nombre del flow"
+                    disabled={working}
+                    onChange={(event) =>
+                      updateDraft({ ...flow, name: event.target.value })
+                    }
+                    value={flow.name}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Carpeta
+                  <Input
+                    disabled={working}
+                    list="savia-request-folders"
+                    onChange={(event) =>
+                      updateDraft({ ...flow, folderPath: event.target.value })
+                    }
+                    value={flow.folderPath ?? ""}
+                  />
+                  <datalist id="savia-request-folders">
+                    {[
+                      ...new Set([
+                        ...folders,
+                        ...flows.map((candidate) => candidate.folderPath ?? ""),
+                      ]),
+                    ]
+                      .filter(Boolean)
+                      .map((path) => (
+                        <option key={path} value={path} />
+                      ))}
+                  </datalist>
+                </label>
+              </div>
 
-          <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
-            <div
-              className="flex flex-wrap gap-1"
-              role="tablist"
-              aria-label="Editor de flow"
-            >
-              {(
-                [
-                  ["steps", "Pasos", Settings2],
-                  ["variables", "Variables", SlidersHorizontal],
-                  ["run", "Ejecutar", Play],
-                  ["history", "Historial", History],
-                ] as const
-              ).map(([id, label, Icon]) => (
-                <Button
-                  aria-selected={tab === id}
-                  key={id}
-                  onClick={() => setTab(id)}
-                  role="tab"
-                  size="sm"
-                  type="button"
-                  variant={tab === id ? "secondary" : "ghost"}
+              <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  className="flex flex-wrap gap-1"
+                  role="tablist"
+                  aria-label="Editor de flow"
                 >
-                  <Icon /> {label}
-                  {id === "steps" ? ` ${flow.steps.length}` : ""}
-                </Button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                disabled={working}
-                onClick={() =>
-                  void withSubmission(async () => {
-                    if (await saveAll()) setNotice("Cambios guardados.");
-                  })
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <Save /> Guardar
-              </Button>
-              <Button
-                disabled={working}
-                onClick={publish}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                Publicar versión
-              </Button>
-            </div>
-          </div>
+                  {(
+                    [
+                      ["steps", "Pasos", Settings2],
+                      ["variables", "Variables", SlidersHorizontal],
+                      ["run", "Ejecutar", Play],
+                      ["history", "Historial", History],
+                    ] as const
+                  ).map(([id, label, Icon]) => (
+                    <Button
+                      aria-selected={tab === id}
+                      key={id}
+                      onClick={() => setTab(id)}
+                      role="tab"
+                      size="sm"
+                      type="button"
+                      variant={tab === id ? "secondary" : "ghost"}
+                    >
+                      <Icon /> {label}
+                      {id === "steps" ? ` ${flow.steps.length}` : ""}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    disabled={working}
+                    onClick={() =>
+                      void withSubmission(async () => {
+                        if (await saveAll()) setNotice("Cambios guardados.");
+                      })
+                    }
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Save /> Guardar
+                  </Button>
+                  <Button
+                    disabled={working}
+                    onClick={publish}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Publicar versión
+                  </Button>
+                </div>
+              </div>
 
-          {notice ? (
-            <p
-              className="rounded-md bg-primary/8 px-3 py-2 text-sm text-primary"
-              role="status"
-            >
-              {notice}
-            </p>
-          ) : null}
-          {error ? (
-            <p
-              className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : null}
+              {notice ? (
+                <p
+                  className="rounded-md bg-primary/8 px-3 py-2 text-sm text-primary"
+                  role="status"
+                >
+                  {notice}
+                </p>
+              ) : null}
+              {error ? (
+                <p
+                  className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              ) : null}
 
-          {tab === "steps" && step ? (
-            <StepsEditor
-              editor={editor}
-              flow={flow}
-              onDelete={() =>
-                setDeletion({
-                  title: "Eliminar paso",
-                  description: `¿Eliminar «${step.name}» de la secuencia?`,
-                  run: () =>
-                    (() => {
-                      const steps = flow.steps.filter(
-                        (_, index) => index !== stepIndex,
-                      );
-                      updateDraft({ ...flow, steps });
-                      void selectFlow(
+              {tab === "steps" && step ? (
+                <StepsEditor
+                  editor={editor}
+                  flow={flow}
+                  onDelete={() =>
+                    setDeletion({
+                      title: "Eliminar paso",
+                      description: `¿Eliminar «${step.name}» de la secuencia?`,
+                      run: () =>
+                        (() => {
+                          const steps = flow.steps.filter(
+                            (_, index) => index !== stepIndex,
+                          );
+                          updateDraft({ ...flow, steps });
+                          void selectFlow(
+                            flow.id,
+                            Math.min(stepIndex, steps.length - 1),
+                          );
+                        })(),
+                    })
+                  }
+                  onAppendStep={() => {
+                    const steps = [...flow.steps, emptyStep()];
+                    updateDraft({ ...flow, steps });
+                    void selectFlow(flow.id, steps.length - 1);
+                  }}
+                  onEditorChange={setEditor}
+                  onReplaceSteps={(steps) => updateDraft({ ...flow, steps })}
+                  onSelectStep={(index) => void selectFlow(flow.id, index)}
+                  onUpdate={updateStep}
+                  selectedIndex={stepIndex}
+                  working={working}
+                />
+              ) : null}
+
+              {tab === "variables" ? (
+                <VariablesEditor
+                  flow={flow}
+                  allowReset={Boolean(scope)}
+                  onReset={(index) => {
+                    void resetVariable(index);
+                  }}
+                  onReveal={async (index) => {
+                    const variable = flow.variables[index];
+                    if (!variable) return;
+                    if (revealed[variable.key]) {
+                      setRevealed((current) => ({
+                        ...current,
+                        [variable.key]: false,
+                      }));
+                      return;
+                    }
+                    if (
+                      variable.secret &&
+                      variable.configured &&
+                      !variable.value
+                    ) {
+                      const value = await api.revealVariable(
                         flow.id,
-                        Math.min(stepIndex, steps.length - 1),
+                        variable.key,
                       );
-                    })(),
-                })
-              }
-              onAppendStep={() => {
-                const steps = [...flow.steps, emptyStep()];
-                updateDraft({ ...flow, steps });
-                void selectFlow(flow.id, steps.length - 1);
-              }}
-              onEditorChange={setEditor}
-              onReplaceSteps={(steps) => updateDraft({ ...flow, steps })}
-              onSelectStep={(index) => void selectFlow(flow.id, index)}
-              onUpdate={updateStep}
-              selectedIndex={stepIndex}
-              working={working}
-            />
-          ) : null}
-
-          {tab === "variables" ? (
-            <VariablesEditor
-              flow={flow}
-              allowReset={Boolean(scope)}
-              onReset={(index) => {
-                void resetVariable(index);
-              }}
-              onReveal={async (index) => {
-                const variable = flow.variables[index];
-                if (!variable) return;
-                if (revealed[variable.key]) {
-                  setRevealed((current) => ({
-                    ...current,
-                    [variable.key]: false,
-                  }));
-                  return;
-                }
-                if (variable.secret && variable.configured && !variable.value) {
-                  const value = await api.revealVariable(flow.id, variable.key);
-                  updateVariable(index, { value: value.value });
-                }
-                setRevealed((current) => ({
-                  ...current,
-                  [variable.key]: true,
-                }));
-              }}
-              onRemove={(index) =>
-                setDeletion({
-                  title: "Eliminar variable",
-                  description: "La variable se retirará del borrador.",
-                  run: () =>
+                      updateVariable(index, { value: value.value });
+                    }
+                    setRevealed((current) => ({
+                      ...current,
+                      [variable.key]: true,
+                    }));
+                  }}
+                  onRemove={(index) =>
+                    setDeletion({
+                      title: "Eliminar variable",
+                      description: "La variable se retirará del borrador.",
+                      run: () =>
+                        updateDraft({
+                          ...flow,
+                          variables: flow.variables.filter(
+                            (_, current) => current !== index,
+                          ),
+                        }),
+                    })
+                  }
+                  onAdd={() =>
                     updateDraft({
                       ...flow,
-                      variables: flow.variables.filter(
-                        (_, current) => current !== index,
-                      ),
-                    }),
-                })
-              }
-              onAdd={() =>
-                updateDraft({
-                  ...flow,
-                  variables: [
-                    ...flow.variables,
-                    { key: "", value: "", secret: false },
-                  ],
-                })
-              }
-              onUpdate={updateVariable}
-              revealed={revealed}
-              working={working}
-            />
-          ) : null}
+                      variables: [
+                        ...flow.variables,
+                        { key: "", value: "", secret: false },
+                      ],
+                    })
+                  }
+                  onUpdate={updateVariable}
+                  revealed={revealed}
+                  working={working}
+                />
+              ) : null}
 
-          {tab === "run" ? (
-            <RunPanel
-              activeRun={activeRun}
-              flow={flow}
-              input={input}
-              mode={effectiveMode}
-              onDemo={() =>
-                void withSubmission(async () =>
-                  setInput(displayInput(await api.demoInput())),
-                )
-              }
-              onInputChange={setInput}
-              onModeChange={setMode}
-              onRun={run}
-              readStandardResult={services.requestResults.read.bind(
-                services.requestResults,
-              )}
-              working={working}
-            />
-          ) : null}
+              {tab === "run" ? (
+                <RunPanel
+                  activeRun={activeRun}
+                  flow={flow}
+                  input={input}
+                  mode={effectiveMode}
+                  onDemo={() =>
+                    void withSubmission(async () =>
+                      setInput(displayInput(await api.demoInput())),
+                    )
+                  }
+                  onInputChange={setInput}
+                  onModeChange={setMode}
+                  onRun={run}
+                  readStandardResult={services.requestResults.read.bind(
+                    services.requestResults,
+                  )}
+                  working={working}
+                />
+              ) : null}
 
-          {tab === "history" ? (
-            <HistoryPanel
-              onRefresh={() =>
-                void withSubmission(async () =>
-                  setRuns(await api.listRuns(flow.id)),
-                )
-              }
-              onSelect={(run) => {
-                setActiveRun(run);
-                setMode(run.mode);
-                setTab("run");
-              }}
-              runs={runs}
-              working={working}
-            />
-          ) : null}
-          {deletion ? (
-            <DeleteDialog action={deletion} onClose={() => setDeletion(null)} />
-          ) : null}
+              {tab === "history" ? (
+                <HistoryPanel
+                  onRefresh={() =>
+                    void withSubmission(async () =>
+                      setRuns(await api.listRuns(flow.id)),
+                    )
+                  }
+                  onSelect={(run) => {
+                    setActiveRun(run);
+                    setMode(run.mode);
+                    setTab("run");
+                  }}
+                  runs={runs}
+                  working={working}
+                />
+              ) : null}
+              {deletion ? (
+                <DeleteDialog
+                  action={deletion}
+                  onClose={() => setDeletion(null)}
+                />
+              ) : null}
             </CardContent>
           </Card>
         </main>
@@ -1344,7 +1377,9 @@ function RunPanel({
             }
             value={mode}
           >
-            <option value="mock" disabled={flow.id === "dane-city-lookup"}>Simulado · sin llamadas externas</option>
+            <option value="mock" disabled={flow.id === "dane-city-lookup"}>
+              Simulado · sin llamadas externas
+            </option>
             <option value="live">
               {requestDestinationLabel(flow)} real · ejecuta requests
             </option>

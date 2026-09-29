@@ -19,6 +19,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 ## Standing guides
 
+- [Codex orchestration](guides/codex-orchestration.md) — Astra coordination, Luna workers, and local permissions.
+
 - [Core localization](localization.md) — ES/EN/PT coverage, translated labels, locale formatting and regression checks.
 
 - [PostgreSQL for Docker](guides/self-hosted-postgres.md) — optional database, offline SQLite import, backup and recovery.
@@ -69,3 +71,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 3. One-off applied work goes to `archive/` (migrations, validation reports).
 4. A PR that changes behavior updates its guide or marks it obsolete.
 5. Irreversible decisions go to `adr/` (1 page, immutable).
+
+- [Automatic refresh coverage and remaining gaps](guides/realtime-coverage.md)
+- [Identity email uniqueness](guides/identity-email-uniqueness.md)
+
+- [Documents and deliveries](guides/document-delivery.md): saved attachments, OneDrive copies and confirmed Outlook sends.

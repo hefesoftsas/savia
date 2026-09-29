@@ -412,12 +412,13 @@ export const settingsMessages = {
     "Loading maps and integrations…",
     "Carregando mapas e integrações…",
   ],
-  "No hay dominios de datos disponibles para Geoapify o integraciones de Studio.":
-    [
-      "No hay dominios de datos disponibles para Geoapify o integraciones de Studio.",
-      "No data domains are available for Geoapify or Studio integrations.",
-      "Não há domínios de dados disponíveis para Geoapify ou integrações do Studio.",
-    ],
+  "No hay tenants disponibles para Geoapify o integraciones de Studio.": [
+    "No hay tenants disponibles para Geoapify o integraciones de Studio.",
+    "No tenants are available for Geoapify or Studio integrations.",
+    "Não há tenants disponíveis para Geoapify ou integrações do Studio.",
+  ],
+  Tenant: ["Tenant", "Tenant", "Tenant"],
+  "Tenant #%{id}": ["Tenant #%{id}", "Tenant #%{id}", "Tenant nº %{id}"],
   "Autocompletar de direcciones en el diseñador cuando eliges Geoapify como proveedor.":
     [
       "Autocompletar de direcciones en el diseñador cuando eliges Geoapify como proveedor.",
@@ -458,10 +459,15 @@ export const settingsMessages = {
     "%{configured} with credentials · %{pending} pending",
     "%{configured} com credenciais · %{pending} pendentes",
   ],
-  "Aún no importaste integraciones en este dominio.": [
-    "Aún no importaste integraciones en este dominio.",
-    "No integrations have been imported into this domain yet.",
-    "Ainda não foram importadas integrações neste domínio.",
+  "Aún no importaste integraciones en este tenant.": [
+    "Aún no importaste integraciones en este tenant.",
+    "You have not imported integrations into this tenant yet.",
+    "Você ainda não importou integrações para este tenant.",
+  ],
+  "Modelo del tenant": [
+    "Modelo del tenant",
+    "Tenant model",
+    "Modelo do tenant",
   ],
   "Administrar integraciones": [
     "Administrar integraciones",
@@ -849,26 +855,26 @@ export const settingsMessages = {
     "Organização nº %{id}",
   ],
   "Agencia #%{id}": ["Agencia #%{id}", "Agency #%{id}", "Agência nº %{id}"],
-  "Configuración de %{agency} guardada.": [
-    "Configuración de %{agency} guardada.",
-    "Configuration for %{agency} saved.",
-    "Configuração de %{agency} salva.",
+  "Configuración de %{tenant} guardada.": [
+    "Configuración de %{tenant} guardada.",
+    "Configuration for %{tenant} saved.",
+    "Configuração de %{tenant} salva.",
   ],
-  "%{agency} vuelve a heredar la configuración global.": [
-    "%{agency} vuelve a heredar la configuración global.",
-    "%{agency} now inherits the global configuration.",
-    "%{agency} volta a herdar a configuração global.",
+  "%{tenant} vuelve a heredar la configuración global.": [
+    "%{tenant} vuelve a heredar la configuración global.",
+    "%{tenant} now inherits the global configuration.",
+    "%{tenant} volta a herdar a configuração global.",
   ],
-  "Volver a heredar en %{agency}": [
-    "Volver a heredar en %{agency}",
-    "Restore inheritance for %{agency}",
-    "Restaurar herança em %{agency}",
+  "Volver a heredar en %{tenant}": [
+    "Volver a heredar en %{tenant}",
+    "Restore inheritance for %{tenant}",
+    "Restaurar herança em %{tenant}",
   ],
-  "Se borrarán la clave y el modelo propios de %{agency}. Esta organización usará la configuración global.":
+  "Se borrarán la clave y el modelo propios de %{tenant}. Este tenant usará la configuración global.":
     [
-      "Se borrarán la clave y el modelo propios de %{agency}. Esta organización usará la configuración global.",
-      "The custom key and model for %{agency} will be removed. This organization will use the global configuration.",
-      "A chave e o modelo próprios de %{agency} serão removidos. Esta organização passará a usar a configuração global.",
+      "Se borrarán la clave y el modelo propios de %{tenant}. Este tenant usará la configuración global.",
+      "The custom key and model for %{tenant} will be removed. This tenant will use the global configuration.",
+      "A chave e o modelo próprios de %{tenant} serão removidos. Este tenant passará a usar a configuração global.",
     ],
   "Se borrarán la clave y el modelo propios de %{agency}. Esta agencia usará la configuración global.":
     [

@@ -67,19 +67,25 @@ async function object(
   fields: Record<string, unknown> = {
     name: { type: "Textbox", label: "Name", required: true },
   },
-  domain = "demo",
+  tenantId = 880011,
 ) {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO studio_data_domains(id,label,created_by) VALUES(?,?,?)",
+    "INSERT OR IGNORE INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(?,?,?,'commercial',1,?,?)",
   )
-    .bind(domain, domain, "test")
+    .bind(
+      tenantId,
+      `form-${tenantId}`,
+      `Form tenant ${tenantId}`,
+      "2026-01-01",
+      "2026-01-01",
+    )
     .run();
   const name = "form_" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   await env.DB.prepare(
     "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES(?,?,?,?,?)",
   )
     .bind(
-      "domain:" + domain,
+      `tenant:${tenantId}`,
       name,
       "Public title",
       "Public description",
@@ -97,7 +103,7 @@ async function publish(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      domainId: "demo",
+      tenantId: 880011,
       objectName,
       kind: "record",
       ...extra,
@@ -156,14 +162,14 @@ it("publishes a safe immutable definition and creates only the server-selected c
     await env.DB.prepare(
       "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
-      .bind("domain:demo", name)
+      .bind("tenant:880011", name)
       .first("n"),
   ).toBe(1);
   expect(
     (
       await submit(instance, link, {
         name: "Other",
-        tenant_id: "domain:private",
+        tenant_id: "tenant:880014",
       })
     ).status,
   ).toBe(422);
@@ -201,7 +207,7 @@ it("rejects non-image logos when publishing", async () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          domainId: "demo",
+          tenantId: 880011,
           objectName: name,
           kind: "record",
           logoImage,
@@ -229,7 +235,7 @@ it("requires administrator management and blocks anonymous methods, expired link
   expect(
     (
       await app({}, false).request(
-        "https://api.test/v1/public-forms?domainId=demo&objectName=" + name,
+        "https://api.test/v1/public-forms?tenantId=880011&objectName=" + name,
       )
     ).status,
   ).toBe(403);
@@ -272,7 +278,7 @@ it("creates a stable Savia short URL that redirects only while the form is activ
   expect(await repeated.json()).toEqual({ data });
 
   const managed = await instance.request(
-    `https://api.test/v1/public-forms?domainId=demo&objectName=${objectName}`,
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${objectName}`,
   );
   const listed = (await managed.json()) as {
     data: Array<{ id: string; shortUrl?: string }>;
@@ -300,7 +306,7 @@ it("creates a stable Savia short URL that redirects only while the form is activ
     ).status,
   ).toBe(404);
   const revoked = await instance.request(
-    `https://api.test/v1/public-forms?domainId=demo&objectName=${objectName}`,
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${objectName}`,
   );
   const revokedLinks = (await revoked.json()) as {
     data: Array<{ id: string; shortUrl?: string }>;
@@ -321,7 +327,7 @@ it("creates and persists an external short URL when publishing and can retry it"
   expect(link.shortUrl).toBe("https://go.cloud.hefesoft.com/abc123");
 
   const listResponse = await instance.request(
-    `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
   );
   const listed = (await listResponse.json()) as {
     data: Array<{ id: string; shortUrl?: string }>;
@@ -352,7 +358,7 @@ it("replaces the Savia-only short URL for existing links when external shortenin
   const shorten = vi.fn(async () => "https://go.cloud.hefesoft.com/existing1");
   const externalApp = app({ shortener: { shorten } });
   const listing = await externalApp.request(
-    `https://api.test/v1/public-forms?domainId=demo&objectName=${name}`,
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
   );
   const listed = (await listing.json()) as {
     data: Array<{ id: string; shortUrl?: string }>;
@@ -488,7 +494,7 @@ it("atomically caps concurrent submissions and replays only the original proof w
     await env.DB.prepare(
       "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
-      .bind("domain:demo", name)
+      .bind("tenant:880011", name)
       .first("n"),
   ).toBe(1);
 });
@@ -544,7 +550,7 @@ it("keeps fields frozen, rejects required private fields, expired links, and for
           extra: { type: "Textbox", label: "New private field" },
         }),
       ),
-      "domain:demo",
+      "tenant:880011",
       name,
     )
     .run();
@@ -565,14 +571,14 @@ it("keeps fields frozen, rejects required private fields, expired links, and for
   const privateName = await object({
     password: { type: "Textbox", label: "Password", required: true },
   });
-  const request = (objectName: string, domainId = "demo") =>
+  const request = (objectName: string, tenantId = 880011) =>
     instance.request("https://api.test/v1/public-forms", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ domainId, objectName, kind: "record" }),
+      body: JSON.stringify({ tenantId, objectName, kind: "record" }),
     });
   expect((await request(privateName)).status).toBe(422);
-  expect((await request(name, "foreign")).status).toBe(404);
+  expect((await request(name, 880015)).status).toBe(404);
 });
 it("limits request bodies and early bursts without invoking captcha", async () => {
   const instance = app();
@@ -651,7 +657,7 @@ it("applies IP and tenant quotas durably even without the optional rate limiter"
       ).bind(
         link.id,
         crypto.randomUUID(),
-        "domain:demo",
+        "tenant:880011",
         hash,
         day,
         "fingerprint",
@@ -679,7 +685,7 @@ it("applies IP and tenant quotas durably even without the optional rate limiter"
   await env.DB.prepare(
     "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<1000) INSERT INTO public_form_submissions(form_id,submission_id,tenant_id,ip_hash,day,fingerprint,captcha_hash,state,created_at) SELECT ?, 'seed-'||n, ?, 'different-ip', ?, 'fingerprint', 'seed-'||n||?, 'failed', ? FROM seq",
   )
-    .bind(link.id, "domain:demo", day, link.id, now)
+    .bind(link.id, "tenant:880011", day, link.id, now)
     .run();
   const otherLink = await publish(instance, name, { dailyLimit: 1000 });
   expect((await submit(instance, otherLink, { name: "One" })).status).toBe(429);
@@ -765,8 +771,8 @@ it("returns the public insurance quote presentation", async () => {
   const frozenSnapshot = {
     version: 1,
     publicationId: crypto.randomUUID(),
-    tenant: "domain:demo",
-    domainId: "demo",
+    tenant: "tenant:880011",
+    tenantId: 880011,
     objectName: "cotizador_por_pasos",
     extensionId: "insurance.quotes",
     extensionVersion: "1.2.0",
@@ -857,7 +863,7 @@ it("ignores the bypass flag outside localhost origins", async () => {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      domainId: "demo",
+      tenantId: 880011,
       objectName: name,
       kind: "record",
     }),
@@ -1035,7 +1041,7 @@ it("serves per-product quote progress for a known submission only", async () => 
     .bind(
       link.id,
       submissionId,
-      "domain:demo",
+      "tenant:880011",
       "iphash",
       new Date().toISOString().slice(0, 10),
       "fingerprint",
@@ -1133,12 +1139,12 @@ it("preserves safe provider failures instead of masking them as 503", async () =
   expect(await response.text()).toContain("cotización");
   expect(execute).toHaveBeenCalledTimes(1);
 });
-it("closes links when their domain disappears and rejects metadata-only remote collections", async () => {
+it("closes links when their tenant becomes inactive and rejects metadata-only remote collections", async () => {
   const instance = app();
-  const name = await object(undefined, "retired");
-  const link = await publish(instance, name, { domainId: "retired" });
-  await env.DB.prepare("DELETE FROM studio_data_domains WHERE id=?")
-    .bind("retired")
+  const name = await object(undefined, 880013);
+  const link = await publish(instance, name, { tenantId: 880013 });
+  await env.DB.prepare("UPDATE tenants SET is_active=0 WHERE id=?")
+    .bind(880013)
     .run();
   expect((await submit(instance, link, { name: "One" })).status).toBe(404);
   const remote = await object();
@@ -1147,13 +1153,13 @@ it("closes links when their domain disappears and rejects metadata-only remote c
   await env.DB.prepare(
     "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
-    .bind(JSON.stringify(config), "domain:demo", remote)
+    .bind(JSON.stringify(config), "tenant:880011", remote)
     .run();
   const response = await instance.request("https://api.test/v1/public-forms", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      domainId: "demo",
+      tenantId: 880011,
       objectName: remote,
       kind: "record",
     }),
@@ -1192,14 +1198,14 @@ it("integrates anonymous submissions with the real API shell while private route
   expect(
     (
       await anonymous.request(
-        "https://api.test/v1/public-forms?domainId=demo&objectName=" + name,
+        "https://api.test/v1/public-forms?tenantId=880011&objectName=" + name,
       )
     ).status,
   ).toBe(401);
   expect(
     (
       await anonymous.request(
-        "https://api.test/v1/data-domains/demo/api/records/" + name,
+        "https://api.test/v1/studio/880011/api/records/" + name,
       )
     ).status,
   ).toBe(401);
@@ -1216,9 +1222,9 @@ it("binds tenant links to active commercial tenants and closes them after deacti
   await env.DB.prepare(
     "UPDATE studio_objects SET tenant_id=? WHERE tenant_id=? AND name=?",
   )
-    .bind("agency:880012", "domain:demo", name)
+    .bind("tenant:880012", "tenant:880011", name)
     .run();
-  const link = await publish(instance, name, { domainId: "tenant:880012" });
+  const link = await publish(instance, name, { tenantId: 880012 });
   expect(
     (await submit(instance, link, { name: "Tenant visitor" })).status,
   ).toBe(200);
@@ -1226,7 +1232,7 @@ it("binds tenant links to active commercial tenants and closes them after deacti
     await env.DB.prepare(
       "SELECT count(*) n FROM studio_records WHERE tenant_id=? AND object_name=?",
     )
-      .bind("agency:880012", name)
+      .bind("tenant:880012", name)
       .first("n"),
   ).toBe(1);
   await env.DB.prepare("UPDATE tenants SET is_active=0 WHERE id=?")
@@ -1261,7 +1267,7 @@ it("excludes conditional section fields and rejects required fields in those sec
   await env.DB.prepare(
     "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
-    .bind(JSON.stringify(config), "domain:demo", name)
+    .bind(JSON.stringify(config), "tenant:880011", name)
     .run();
   const link = await publish(instance, name);
   const definition = (await (
@@ -1276,13 +1282,13 @@ it("excludes conditional section fields and rejects required fields in those sec
   await env.DB.prepare(
     "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
   )
-    .bind(JSON.stringify(config), "domain:demo", name)
+    .bind(JSON.stringify(config), "tenant:880011", name)
     .run();
   const rejected = await instance.request("https://api.test/v1/public-forms", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      domainId: "demo",
+      tenantId: 880011,
       objectName: name,
       kind: "record",
     }),

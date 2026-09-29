@@ -1,3 +1,4 @@
+import { ResourceEditSync } from "@/realtime/resource-realtime";
 import type { ResourceProps } from "ra-core";
 import { required, useCreatePath, useTranslate } from "ra-core";
 import { useWatch } from "react-hook-form";
@@ -19,7 +20,6 @@ import {
   TextInput,
 } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
-import { LiveIndicator } from "@/realtime/live-indicator";
 import { applyRealtimeListEvent } from "@/realtime/realtime-list";
 import { useRealtimeTopics } from "@/realtime/use-realtime";
 import type { TenantRecord } from "@/api/tenant-data-provider";
@@ -185,15 +185,17 @@ function ExistingTenantMemberFields() {
 function TenantListActions() {
   const translate = useTranslate();
   const queryClient = useQueryClient();
-  const { status } = useRealtimeTopics({
+  useRealtimeTopics({
     topics: ["tenants"],
+    onConnected: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+    },
     onEvent: (event) => {
       applyRealtimeListEvent(queryClient, "tenants", event);
     },
   });
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <LiveIndicator status={status} />
       <CreateButton
         label={translate("savia.tenants.newTenant", { _: "Nuevo tenant" })}
       />
@@ -295,7 +297,11 @@ function TenantEdit() {
       title={translate("savia.tenants.editTenant", { _: "Editar tenant" })}
       mutationMode="optimistic"
     >
-      <SimpleForm className="max-w-2xl">
+      <SimpleForm
+        className="max-w-2xl"
+        resetOptions={{ keepDirtyValues: true }}
+      >
+        <ResourceEditSync resource="tenants" />
         <TenantFields />
       </SimpleForm>
     </Edit>

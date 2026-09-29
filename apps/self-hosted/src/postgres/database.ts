@@ -1,3 +1,5 @@
+import { registerDialect } from "@savia/db/dialect";
+import { postgresDialect } from "@savia/db/postgres-dialect";
 import { createPostgresPool, closePostgresPool } from "./pool";
 import { assertPostgresText } from "./text-values";
 import pg, { type PoolClient, type QueryResult } from "pg";
@@ -97,6 +99,7 @@ class PostgresStatement implements D1PreparedStatement {
 export class PostgresDatabase implements D1Database {
   readonly pool: pg.Pool;
   constructor(options: PostgresOptions) {
+    registerDialect(this, postgresDialect);
     if (!["savia_core", "savia_auth", "savia_request"].includes(options.schema))
       throw new Error("Invalid PostgreSQL schema.");
     if (

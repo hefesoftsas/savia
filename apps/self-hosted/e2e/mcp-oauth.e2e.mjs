@@ -203,7 +203,7 @@ test("browser login, MFA and consent produce tools, collection reads and scoped 
   );
 
   // Seed via the real authenticated API, never direct database writes.
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   const collection = "mcp_e2e_records";
   const created = await page.request.post(`${base}/objects`, {
     headers: { origin },

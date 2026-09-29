@@ -5,7 +5,10 @@ import { FieldValueDisplay } from "./field-value-display";
 const RecordHistory = lazy(() => import("./record-history"));
 import { supportsRecordHistory } from "./record-history-client";
 import { canDuplicateRecord } from "./record-duplication";
+import { CreateOfficeAttachment } from "./create-office-attachment";
 import { OfficeEditButton } from "./office-edit-button";
+import { DocumentDeliveryActions } from "./document-delivery-actions";
+import { documentDeliveryMessages } from "@/i18n/locales/document-delivery";
 import { recordOptionLabel } from "./record-option-label";
 import { RecordOriginLinks } from "./record-origin-links";
 import RecordLinks, {
@@ -176,6 +179,7 @@ export default function RecordDetail({
   const uiLocale = intlLocale(useAppLocale());
 
   const t = useMessages(recordsMessages);
+  const deliveryT = useMessages(documentDeliveryMessages);
 
   const labelLocale = useFieldLabelLocale();
   const [duplicating, setDuplicating] = useState(false);
@@ -194,10 +198,7 @@ export default function RecordDetail({
     [kind, setKind] = useState("note"),
     [saving, setSaving] = useState(false),
     [fileError, setFileError] = useState("");
-  const collectionLinks = Boolean(
-    onNavigate &&
-    getStudioRuntime().apiBasePath?.startsWith("/v1/data-domains/"),
-  );
+  const collectionLinks = Boolean(onNavigate);
   const managedCustomer = !supportsLocalRecordTools(object);
   const capabilities = collectionCapabilities(object);
   const client = useQueryClient(),
@@ -215,7 +216,7 @@ export default function RecordDetail({
       "record-links",
       "meta",
       getStudioRuntime().apiBasePath,
-      getStudioRuntime().domainId,
+      getStudioRuntime().tenantId,
       object.name,
       record.id,
       1,
@@ -288,9 +289,7 @@ export default function RecordDetail({
     { id: "tasks", label: t("Tareas") },
     {
       id: "files",
-      label: t("Archivos%{p0}", {
-        p0: files.data ? ` (${files.data.data.length})` : "",
-      }),
+      label: `${deliveryT("Documents")}${files.data ? ` (${files.data.data.length})` : ""}`,
     },
   ].filter(
     (item) =>
@@ -353,6 +352,7 @@ export default function RecordDetail({
               file={file}
               disabled={Boolean(object.config.fields[field]?.readOnly)}
             />
+            <DocumentDeliveryActions file={file} />
             <Button
               type="button"
               size="icon"
@@ -386,7 +386,7 @@ export default function RecordDetail({
       setSaving(false);
     }
   }
-  async function upload(file?: File) {
+  async function upload(file?: File, propagateError = false) {
     if (!file) return;
     setFileError("");
     if (!file.size || file.size > 5 * 1024 * 1024) {
@@ -401,13 +401,18 @@ export default function RecordDetail({
         method: "POST",
         body: form,
       });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as {
+        data: { id: string };
+        error?: string;
+      };
       if (!response.ok)
         throw new Error(data.error ?? t("No se pudo cargar el archivo."));
       refresh();
       toast.success(t("Archivo guardado"));
+      return data.data;
     } catch (error) {
       setFileError((error as Error).message);
+      if (propagateError) throw error;
     } finally {
       setSaving(false);
     }
@@ -841,6 +846,16 @@ export default function RecordDetail({
           )}
           {tab === "files" && (
             <section>
+              <div className="mb-3 flex justify-end">
+                <CreateOfficeAttachment
+                  disabled={
+                    saving ||
+                    !capabilities.update ||
+                    (files.data?.data.length ?? 0) >= 50
+                  }
+                  onCreate={(file) => upload(file, true)}
+                />
+              </div>
               <div className="op-upload">
                 <Paperclip size={24} />
                 <div>
@@ -899,6 +914,7 @@ export default function RecordDetail({
                           )
                         }
                       />
+                      <DocumentDeliveryActions file={file} disabled={saving} />
                       <Button variant="ghost" size="icon" asChild>
                         <a
                           aria-label={t("Descargar %{p0}", { p0: file.name })}

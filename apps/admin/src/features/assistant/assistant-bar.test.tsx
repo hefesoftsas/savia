@@ -38,7 +38,7 @@ function createMockServices(): AppServices {
       }),
     },
     assistantConfiguration: {
-      activeAgency: vi.fn().mockResolvedValue({ agencies: [] }),
+      activeTenant: vi.fn().mockResolvedValue({ tenants: [] }),
       models: vi.fn().mockResolvedValue([
         {
           id: "anthropic/claude-3.5-sonnet",
@@ -66,7 +66,7 @@ function createMockServices(): AppServices {
           customKeySet: true,
           configuredAt: "2026-01-01T00:00:00Z",
         },
-        agencies: [],
+        tenants: [],
         deployment: {
           model: "anthropic/claude-3.5-sonnet",
           configured: true,
@@ -538,7 +538,7 @@ describe("AssistantBar History & Thread Switching", () => {
         customKeySet: true,
         configuredAt: "2026-01-01T00:00:00Z",
       },
-      agencies: [],
+      tenants: [],
       deployment: {
         model: "deepseek/deepseek-chat",
         configured: true,

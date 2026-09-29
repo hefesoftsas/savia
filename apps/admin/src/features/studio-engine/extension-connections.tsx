@@ -1,7 +1,12 @@
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { getStudioRuntime } from "./runtime";
+import {
+  RemoteChangesNotice,
+  useRealtimeRefresh,
+} from "@/realtime/use-realtime-refresh";
 import type {
   ExtensionConnectionSummary,
   ExtensionRuntimeClient,
@@ -53,9 +58,11 @@ export function ExtensionConnections({
   );
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const listGeneration = useRef(0);
 
   const connector = useMemo(
     () => connectors.find((item) => item.connectorId === connectorId),
@@ -63,15 +70,35 @@ export function ExtensionConnections({
   );
 
   async function reload() {
-    setConnections(await client.listConnections(extensionId));
+    const generation = ++listGeneration.current;
+    const listed = await client.listConnections(extensionId);
+    if (generation === listGeneration.current) setConnections(listed);
   }
+
+  async function reloadRemoteChanges() {
+    await reload();
+    setConnectionId("");
+    setConnectorId(connectors[0]?.connectorId ?? "");
+    setValues({});
+    setDraftDirty(false);
+  }
+
+  const remoteChanges = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: getStudioRuntime().tenantId,
+    blocked: busy || draftDirty,
+    refresh: reloadRemoteChanges,
+    accepts: (event) => event.collection === "credentials",
+  });
 
   useEffect(() => {
     let active = true;
+    const generation = ++listGeneration.current;
     void client
       .listConnections(extensionId)
       .then((listed) => {
-        if (active) setConnections(listed);
+        if (active && generation === listGeneration.current)
+          setConnections(listed);
       })
       .catch((reason) => {
         if (active) setError(message(reason));
@@ -81,6 +108,7 @@ export function ExtensionConnections({
       });
     return () => {
       active = false;
+      if (generation === listGeneration.current) listGeneration.current++;
     };
   }, [client, extensionId]);
 
@@ -117,6 +145,7 @@ export function ExtensionConnections({
         values: configuredValues,
       });
       setValues({});
+      setDraftDirty(false);
       setNotice(
         t("Conexión guardada. Los valores secretos no se vuelven a mostrar."),
       );
@@ -153,6 +182,7 @@ export function ExtensionConnections({
       className="border-t bg-muted/20 px-6 py-5"
     >
       <div className="max-w-2xl space-y-4">
+        <RemoteChangesNotice {...remoteChanges} />
         <div>
           <h4 className="text-sm font-semibold">{t("Conexiones")}</h4>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -183,7 +213,10 @@ export function ExtensionConnections({
             <input
               className="h-9 rounded-md border bg-background px-3 text-sm"
               disabled={busy}
-              onChange={(event) => setConnectionId(event.target.value)}
+              onChange={(event) => {
+                setDraftDirty(true);
+                setConnectionId(event.target.value);
+              }}
               value={connectionId}
             />
           </label>
@@ -193,6 +226,7 @@ export function ExtensionConnections({
               className="h-9 rounded-md border bg-background px-3 text-sm"
               disabled={busy}
               onChange={(event) => {
+                setDraftDirty(true);
                 setConnectorId(event.target.value);
                 setValues({});
               }}
@@ -215,12 +249,13 @@ export function ExtensionConnections({
                 <textarea
                   className="min-h-24 rounded-md border bg-background px-3 py-2 text-sm"
                   disabled={busy}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setDraftDirty(true);
                     setValues((current) => ({
                       ...current,
                       [field.name]: event.target.value,
-                    }))
-                  }
+                    }));
+                  }}
                   value={values[field.name] ?? ""}
                 />
               ) : (
@@ -228,12 +263,13 @@ export function ExtensionConnections({
                   autoComplete={field.secret ? "new-password" : undefined}
                   className="h-9 rounded-md border bg-background px-3 text-sm"
                   disabled={busy}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setDraftDirty(true);
                     setValues((current) => ({
                       ...current,
                       [field.name]: event.target.value,
-                    }))
-                  }
+                    }));
+                  }}
                   type={field.secret ? "password" : "text"}
                   value={values[field.name] ?? ""}
                 />

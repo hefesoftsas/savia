@@ -149,7 +149,7 @@ it.skipIf(!postgresTestUrl)(
           name: tenant.name,
           isDedicated: true,
         });
-        const base = "/v1/data-domains/platform/api";
+        const base = "/v1/studio/0/api";
         for (const name of ["source_items", "target_items"])
           await json(
             base + "/objects",

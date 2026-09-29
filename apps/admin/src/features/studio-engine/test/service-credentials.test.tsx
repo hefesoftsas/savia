@@ -58,7 +58,7 @@ it("lists credential sections for maps and integrations", async () => {
     <QueryClientProvider client={new QueryClient()}>
       <ServiceCredentials
         selected="contacts"
-        domainTools={false}
+        tenantTools={false}
         onNavigate={vi.fn()}
       />
     </QueryClientProvider>,

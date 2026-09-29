@@ -99,7 +99,7 @@ afterEach(() => {
 it("loads catalog without writes and binds a domain collection to a screen", async () => {
   const transport = mockTransport();
   const bound = vi.fn();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={bound} />);
   await screen.findByRole("option", {
     name: "Clientes originales · customer-portfolio",
@@ -131,7 +131,7 @@ it("loads catalog without writes and binds a domain collection to a screen", asy
 });
 it("proposes the next valid identifier and preserves a manual edit", async () => {
   const transport = mockTransport([{ name: "clientes_originales" }]);
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   await screen.findByRole("option", {
     name: "Clientes originales · customer-portfolio",
@@ -160,7 +160,7 @@ it("proposes the next valid identifier and preserves a manual edit", async () =>
 });
 it("separates source configuration from collection bindings without losing a draft", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   await screen.findByRole("option", {
     name: "Clientes originales · customer-portfolio",
@@ -190,7 +190,7 @@ it("separates source configuration from collection bindings without losing a dra
 });
 it("uses an icon-only accessible action to add a JSON:API source", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   openSourcesTab();
   const addSource = screen.getByRole("button", {
@@ -201,7 +201,7 @@ it("uses an icon-only accessible action to add a JSON:API source", async () => {
 });
 it("sends source secrets only to backend and never keeps them in the query catalog", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   openSourcesTab();
   fireEvent.click(screen.getByRole("button", { name: "Nueva fuente externa" }));
@@ -228,7 +228,7 @@ it("sends source secrets only to backend and never keeps them in the query catal
 });
 it("keeps remote writes disabled until explicitly selected and binds explicit fields", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   fireEvent.change(screen.getByLabelText("Origen"), {
     target: { value: "jsonapi" },
@@ -297,7 +297,7 @@ it("keeps remote writes disabled until explicitly selected and binds explicit fi
 });
 it("analyzes one remote resource and keeps the inferred binding editable", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   fireEvent.change(screen.getByLabelText("Origen"), {
     target: { value: "jsonapi" },
@@ -346,7 +346,7 @@ it("shows backend errors and retains inputs for correction", async () => {
       ? Response.json({ error: "La fuente no está permitida" }, { status: 422 })
       : Response.json({ data: [] }),
   );
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   openSourcesTab();
   fireEvent.click(screen.getByRole("button", { name: "Nueva fuente externa" }));
@@ -365,7 +365,7 @@ it("shows backend errors and retains inputs for correction", async () => {
 it("offers layout editing without mutating collection schema", async () => {
   const transport = vi.fn(async () => Response.json({ data: object }));
   const saved = vi.fn();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionLayoutDesigner object={object} onSaved={saved} />);
   fireEvent.change(
     screen.getByRole("textbox", { name: "Nombre visible de email" }),
@@ -423,7 +423,7 @@ it("omits unsupported query features instead of forwarding UI capability flags",
       pageInfo: { hasNextPage: false, hasPreviousPage: false },
     }),
   );
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   await dataProvider.getList("remote_items", {
     pagination: { page: 1, perPage: 25 },
     sort: { field: "updated_at", order: "DESC" },
@@ -464,7 +464,7 @@ it("updates a source token explicitly and unbinds only after an inline confirmat
           : {},
     }),
   );
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   openSourcesTab();
   fireEvent.click(
@@ -507,7 +507,7 @@ it("identifies HubSpot bindings and hides unsupported operation configuration", 
       sourceId: "",
     } as any,
   ]);
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={vi.fn()} />);
   fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(await screen.findByText("HubSpot · contacts")).toBeVisible();
@@ -566,7 +566,7 @@ function mockPgTransport() {
 }
 it("creates a Postgres source without ever displaying its password", async () => {
   const transport = mockPgTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   fireEvent.click(screen.getByRole("tab", { name: "Fuentes externas" }));
   fireEvent.click(screen.getByRole("button", { name: "Nueva fuente externa" }));
@@ -602,7 +602,7 @@ it("creates a Postgres source without ever displaying its password", async () =>
 });
 it("updates a Postgres password explicitly", async () => {
   const transport = mockPgTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   fireEvent.click(screen.getByRole("tab", { name: "Fuentes externas" }));
   fireEvent.click(
@@ -628,7 +628,7 @@ it("updates a Postgres password explicitly", async () => {
 });
 it("inspects a Postgres table and binds it read-only without writes", async () => {
   const transport = mockPgTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   fireEvent.change(screen.getByLabelText("Origen"), {
     target: { value: "postgres" },
@@ -715,7 +715,7 @@ it("labels Postgres bindings and hides their operation configuration", async () 
           : {},
     }),
   );
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={vi.fn()} />);
   fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(await screen.findByText("PostgreSQL")).toBeVisible();
@@ -726,7 +726,7 @@ it("labels Postgres bindings and hides their operation configuration", async () 
 
 it("offers four database engines with their connection defaults", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel />);
   openSourcesTab();
   fireEvent.click(screen.getByRole("button", { name: /Nueva fuente/ }));
@@ -744,7 +744,7 @@ it("offers four database engines with their connection defaults", async () => {
 
 it("splits binding into Origen, Datos and Pantalla steps", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   await screen.findByRole("option", {
     name: "Clientes originales · customer-portfolio",
@@ -769,7 +769,7 @@ it("splits binding into Origen, Datos and Pantalla steps", async () => {
 
 it("reveals secret handling guidance through a tooltip instead of inline text", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   openSourcesTab();
   fireEvent.click(screen.getByRole("button", { name: "Nueva fuente externa" }));
@@ -786,7 +786,7 @@ it("reveals secret handling guidance through a tooltip instead of inline text", 
 
 it("shows linked collections in their own tab with a shortcut back", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(<CollectionSourcesPanel onBound={() => {}} />);
   fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(
@@ -800,7 +800,7 @@ it("shows linked collections in their own tab with a shortcut back", async () =>
 
 it("embeds integrations as its own tab and honors the initial section", async () => {
   const transport = mockTransport();
-  setStudioRuntime({ embedded: true, domainId: "platform", transport });
+  setStudioRuntime({ embedded: true, tenantId: 0, transport });
   mount(
     <CollectionSourcesPanel onBound={() => {}} initialSection="integrations" />,
   );

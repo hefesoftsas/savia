@@ -35,13 +35,10 @@ const response: ObjectsResponse = {
 
 describe("normalizeCollections", () => {
   it("keeps visible collections sorted by label", () => {
-    const collections = normalizeCollections(
-      "/v1/data-domains/platform",
-      response,
-    );
+    const collections = normalizeCollections("/v1/studio/0", response);
     expect(collections.map((entry) => entry.name)).toEqual(["polizas"]);
     expect(collections[0]).toMatchObject({
-      apiBasePath: "/v1/data-domains/platform",
+      apiBasePath: "/v1/studio/0",
       label: "Pólizas",
       count: 42,
     });
@@ -50,10 +47,8 @@ describe("normalizeCollections", () => {
 
 describe("normalizeSchema", () => {
   it("extracts typed fields", () => {
-    expect(
-      normalizeSchema("/v1/data-domains/platform", response, "polizas"),
-    ).toEqual({
-      apiBasePath: "/v1/data-domains/platform",
+    expect(normalizeSchema("/v1/studio/0", response, "polizas")).toEqual({
+      apiBasePath: "/v1/studio/0",
       name: "polizas",
       label: "Pólizas",
       fields: [{ name: "estado", label: "Estado", type: "Dropdown" }],
@@ -62,27 +57,27 @@ describe("normalizeSchema", () => {
 
   it("returns undefined for hidden or unknown collections", () => {
     expect(
-      normalizeSchema("/v1/data-domains/platform", response, "hidden_one"),
+      normalizeSchema("/v1/studio/0", response, "hidden_one"),
     ).toBeUndefined();
     expect(
-      normalizeSchema("/v1/data-domains/platform", response, "missing"),
+      normalizeSchema("/v1/studio/0", response, "missing"),
     ).toBeUndefined();
   });
 });
 
 describe("widgetDeepLink", () => {
-  it("links data-domain widgets to the studio screen", () => {
+  it("links tenant widgets to the studio screen", () => {
     expect(
       widgetDeepLink({
         id: "w_1",
-        apiBasePath: "/v1/data-domains/platform",
+        apiBasePath: "/v1/studio/0",
         collection: "polizas",
         kind: "summary",
       } as MyDayWidget),
-    ).toBe("/studio?domain=platform&object=polizas");
+    ).toBe("/studio?tenantId=0&object=polizas");
   });
 
-  it("links agency widgets with agencyId", () => {
+  it("links legacy dynamic CRM widgets with tenantId", () => {
     expect(
       widgetDeepLink({
         id: "w_2",
@@ -90,10 +85,10 @@ describe("widgetDeepLink", () => {
         collection: "clientes",
         kind: "items",
       } as MyDayWidget),
-    ).toBe("/studio?agencyId=101&object=clientes");
+    ).toBe("/studio?tenantId=101&object=clientes");
   });
 
-  it("links agency widgets on the canonical /v1/studio base", () => {
+  it("links tenant widgets on the canonical /v1/studio base", () => {
     expect(
       widgetDeepLink({
         id: "w_3",
@@ -101,6 +96,6 @@ describe("widgetDeepLink", () => {
         collection: "clientes",
         kind: "items",
       } as MyDayWidget),
-    ).toBe("/studio?agencyId=101&object=clientes");
+    ).toBe("/studio?tenantId=101&object=clientes");
   });
 });

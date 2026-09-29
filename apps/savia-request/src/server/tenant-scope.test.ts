@@ -14,8 +14,8 @@ import { seal } from "./store";
 
 let platform: Awaited<ReturnType<typeof getPlatformProxy<Env>>>;
 
-const TENANT_A = "agency:101";
-const TENANT_B = "agency:202";
+const TENANT_A = "tenant:101";
+const TENANT_B = "tenant:202";
 
 async function applyMigrations() {
   for (const migration of readdirSync("migrations")
@@ -23,9 +23,12 @@ async function applyMigrations() {
     .sort()) {
     const statements = readFileSync("migrations/" + migration, "utf8")
       .split(";")
+      .map((statement) =>
+        statement.replace(/^.*--> statement-breakpoint.*$/gm, ""),
+      )
       .filter((statement) => statement.trim());
     for (const statement of statements)
-      await platform.env.DB.exec(statement + ";");
+      await platform.env.DB.prepare(statement).run();
   }
 }
 

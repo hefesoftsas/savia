@@ -23,21 +23,21 @@ type StudioCacheEntry = {
 const entries = new Map<string, StudioCacheEntry>();
 let currentOwner: string | undefined;
 
-function domainKeyOf(domainId: string): string {
-  return domainId.trim() || "default";
+function tenantKeyOf(tenantId: string): string {
+  return tenantId.trim() || "default";
 }
 
 /**
  * Cliente de consultas de Studio conservado en memoria por combinación de
- * sesión y dominio. Vive en los servicios de la app (módulo singleton),
- * fuera de StudioRoot, para reutilizarlo al volver al mismo dominio.
- * Nunca comparte datos entre dominios: cada dominio tiene su entrada.
+ * sesión y tenant. Vive en los servicios de la app (módulo singleton),
+ * fuera de StudioRoot, para reutilizarlo al volver al mismo tenant.
+ * Nunca comparte datos entre tenants: cada tenant tiene su entrada.
  */
 export function getStudioQueryEntry(
-  domainId: string,
+  tenantId: string,
   owner: string,
 ): StudioCacheEntry {
-  const key = domainKeyOf(domainId);
+  const key = tenantKeyOf(tenantId);
   const existing = entries.get(key);
   if (existing && existing.owner === owner) return existing;
   if (existing) {
@@ -60,14 +60,14 @@ export function getStudioQueryEntry(
 }
 
 export function getStudioQueryClient(
-  domainId: string,
+  tenantId: string,
   owner: string,
 ): QueryClient {
-  return getStudioQueryEntry(domainId, owner).client;
+  return getStudioQueryEntry(tenantId, owner).client;
 }
 
-export function isStudioBootstrapped(domainId: string, owner: string): boolean {
-  const entry = entries.get(domainKeyOf(domainId));
+export function isStudioBootstrapped(tenantId: string, owner: string): boolean {
+  const entry = entries.get(tenantKeyOf(tenantId));
   return Boolean(
     entry &&
     entry.owner === owner &&
@@ -76,8 +76,8 @@ export function isStudioBootstrapped(domainId: string, owner: string): boolean {
   );
 }
 
-export function markStudioBootstrapped(domainId: string, owner: string): void {
-  const entry = entries.get(domainKeyOf(domainId));
+export function markStudioBootstrapped(tenantId: string, owner: string): void {
+  const entry = entries.get(tenantKeyOf(tenantId));
   if (entry && entry.owner === owner) {
     entry.bootstrapped = true;
     entry.bootstrapFailed = false;
@@ -85,18 +85,18 @@ export function markStudioBootstrapped(domainId: string, owner: string): void {
 }
 
 export function markStudioBootstrapFailed(
-  domainId: string,
+  tenantId: string,
   owner: string,
 ): void {
-  const entry = entries.get(domainKeyOf(domainId));
+  const entry = entries.get(tenantKeyOf(tenantId));
   if (entry && entry.owner === owner) {
     entry.bootstrapFailed = true;
     entry.bootstrapped = false;
   }
 }
 
-export function clearStudioDomain(domainId: string, owner?: string): void {
-  const key = domainKeyOf(domainId);
+export function clearStudioTenant(tenantId: string, owner?: string): void {
+  const key = tenantKeyOf(tenantId);
   const entry = entries.get(key);
   if (!entry) return;
   if (owner !== undefined && entry.owner !== owner) return;
@@ -126,9 +126,9 @@ export function clearStudioQueryCache(): void {
   currentOwner = undefined;
 }
 
-/** Conserva solo los dominios válidos (p. ej. tras eliminar un dominio). */
-export function pruneStudioQueryCache(validDomainIds: Set<string>): void {
-  const valid = new Set([...validDomainIds].map(domainKeyOf));
+/** Conserva solo los tenants válidos después de cambiar los permisos. */
+export function pruneStudioQueryCache(validTenantIds: Set<string>): void {
+  const valid = new Set([...validTenantIds].map(tenantKeyOf));
   for (const [key, entry] of entries) {
     if (!valid.has(key)) {
       try {

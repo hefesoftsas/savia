@@ -26,7 +26,7 @@ const calls: any[] = [];
 const context: any = {
   db: env.DB,
   files: env.FILES,
-  tenant: "domain:workspace-test",
+  tenant: "tenant:99006",
   actor: {
     principal: { id: "owner", isActive: true },
     globalRoles: ["platform_admin"],
@@ -500,7 +500,7 @@ it("does not share a legacy personal binding or allow inactive actors", async ()
 });
 
 it("lets a tenant member read the shared connection but blocks writes, inactive membership and revoked connections", async () => {
-  const tenantContext = { ...context, tenant: "agency:101" };
+  const tenantContext = { ...context, tenant: "tenant:101" };
   expect(
     (
       await createHubspotWorkspaceApp(tenantContext).request(
@@ -561,7 +561,7 @@ it("lets a tenant member read the shared connection but blocks writes, inactive 
 it("shares related records while excluding private targets and auditing batch reads as reads", async () => {
   const member = {
     ...context,
-    tenant: "agency:101",
+    tenant: "tenant:101",
     actor: {
       principal: { id: "member", isActive: true },
       globalRoles: [],

@@ -94,7 +94,7 @@ it("keeps configuration entry in the view controls instead of duplicating it in 
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -147,7 +147,7 @@ it("shows CRM as the first icon-only records column", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -224,7 +224,7 @@ it("lets CRM users hide the integration column from the table designer", async (
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -288,7 +288,7 @@ it("opens a stale record URL through the collection currently visible", async ()
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -331,7 +331,7 @@ it("replaces a stale collection name in an embedded record URL", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
     navigate,
@@ -359,7 +359,7 @@ it("offers a CSV export for Agency profiles", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -396,7 +396,7 @@ it("offers a CSV export for local record tables", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -420,7 +420,7 @@ it("keeps the trash action compact while preserving its accessible name", async 
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -454,7 +454,7 @@ it("offers bulk selection for local collections that allow deletion", async () =
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -493,7 +493,7 @@ it("reveals directional controls for an overflowing records table", async () => 
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -541,7 +541,7 @@ it("explains how to recover after hiding every table column", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -587,7 +587,7 @@ it("exposes server-backed table filters for agency profiles", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -665,7 +665,7 @@ it("lists custom views and deletes them from the configuration drawer", async ()
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -717,7 +717,7 @@ it("opens a searchable table-column panel and restores the default selection", a
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -806,7 +806,7 @@ it("applies aliases, visibility and drag order to the current table only", async
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -905,7 +905,7 @@ it("saves table aliases and restores them after reopening the records view", asy
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -971,7 +971,7 @@ it("shows a per-row delete action for collections that allow deletion", async ()
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -1010,7 +1010,7 @@ it("hides per-row delete when the collection does not allow deletion", async () 
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -1054,7 +1054,7 @@ it("deletes a record from the row action after confirmation", async () => {
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -1137,7 +1137,7 @@ it("deletes selected records through the bulk action after confirmation", async 
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -1198,7 +1198,7 @@ it("does not offer bulk delete for collections without delete capability", async
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });
@@ -1243,7 +1243,7 @@ it("saves source-form column layout from the records configuration drawer", asyn
   });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     businessSetupEnabled: false,
     transport,
   });

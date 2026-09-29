@@ -31,7 +31,7 @@ const preview = {
 function setup(installed: null | { enabled: boolean; version: string } = null) {
   vi.mocked(api).mockImplementation(async (url) => {
     if (url === "/solutions") return { data: [{ manifest, installed }] };
-    if (url === "/solutions/preview") return { data: preview };
+    if (url === "/solutions/activation-preview") return { data: preview };
     return { data: {} };
   });
   const changed = vi.fn();
@@ -62,17 +62,19 @@ it("keeps package details and secondary actions in contextual tooltips", async (
 it("requires a preview and explicit installation, then refreshes objects", async () => {
   const changed = setup();
   fireEvent.click(
-    await screen.findByRole("button", { name: "Revisar Seguros" }),
+    await screen.findByRole("button", { name: "Habilitar Seguros" }),
   );
   await screen.findByText("Clientes");
   expect(api).not.toHaveBeenCalledWith(
-    "/solutions/install",
+    "/solutions/activate",
     expect.anything(),
     expect.anything(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Instalar paquete" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar habilitación" }),
+  );
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());
-  expect(api).toHaveBeenCalledWith("/solutions/install", "POST", manifest);
+  expect(api).toHaveBeenCalledWith("/solutions/activate", "POST", manifest);
   expect(await screen.findByRole("status")).toHaveTextContent(
     "Paquete instalado",
   );
@@ -94,7 +96,7 @@ it("reviews and explicitly applies a newer catalog package", async () => {
           },
         ],
       };
-    if (url === "/solutions/preview") return { data: nextPreview };
+    if (url === "/solutions/activation-preview") return { data: nextPreview };
     return { data: {} };
   });
   render(<SolutionManager onChanged={vi.fn()} />);
@@ -104,7 +106,7 @@ it("reviews and explicitly applies a newer catalog package", async () => {
   );
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith(
-      "/solutions/preview",
+      "/solutions/activation-preview",
       "POST",
       nextManifest,
     ),
@@ -114,7 +116,7 @@ it("reviews and explicitly applies a newer catalog package", async () => {
   );
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith(
-      "/solutions/install",
+      "/solutions/activate",
       "POST",
       nextManifest,
     ),
@@ -125,7 +127,7 @@ it("reviews and explicitly applies a newer catalog package", async () => {
 });
 it("imports the actual JSON, blocks conflicting packages and clears stale previews after invalid input", async () => {
   setup();
-  await screen.findByRole("button", { name: "Revisar Seguros" });
+  await screen.findByRole("button", { name: "Habilitar Seguros" });
   vi.mocked(api).mockResolvedValueOnce({
     data: {
       ...preview,
@@ -144,9 +146,13 @@ it("imports the actual JSON, blocks conflicting packages and clears stale previe
     "pertenece a otro paquete",
   );
   expect(
-    screen.getByRole("button", { name: "Instalar paquete" }),
+    screen.getByRole("button", { name: "Confirmar habilitación" }),
   ).toBeDisabled();
-  expect(api).toHaveBeenCalledWith("/solutions/preview", "POST", manifest);
+  expect(api).toHaveBeenCalledWith(
+    "/solutions/activation-preview",
+    "POST",
+    manifest,
+  );
   const bad = new File(["bad"], "bad.json");
   Object.defineProperty(bad, "text", { value: async () => "bad" });
   await waitFor(() =>
@@ -158,11 +164,13 @@ it("imports the actual JSON, blocks conflicting packages and clears stale previe
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent("JSON válido"),
   );
-  expect(screen.queryByRole("button", { name: "Instalar paquete" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Confirmar habilitación" }),
+  ).toBeNull();
 });
 it("rejects oversized uploads before reading or sending them", async () => {
   setup();
-  await screen.findByRole("button", { name: "Revisar Seguros" });
+  await screen.findByRole("button", { name: "Habilitar Seguros" });
   const text = vi.fn();
   const file = new File([], "large.json");
   Object.defineProperties(file, {
@@ -194,25 +202,34 @@ it.each([true, false])(
         name: `${enabled ? "Desactivar" : "Activar"} Seguros`,
       }),
     );
+    if (!enabled) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Confirmar habilitación" }),
+      );
+      expect(api).toHaveBeenCalledWith("/solutions/activate", "POST", manifest);
+    } else {
+      expect(api).toHaveBeenCalledWith("/solutions/insurance", "PATCH", {
+        enabled: false,
+      });
+    }
     await waitFor(() => expect(changed).toHaveBeenCalledOnce());
-    expect(api).toHaveBeenCalledWith("/solutions/insurance", "PATCH", {
-      enabled: !enabled,
-    });
   },
 );
 it("keeps a failed installation review available for retry", async () => {
   setup();
   fireEvent.click(
-    await screen.findByRole("button", { name: "Revisar Seguros" }),
+    await screen.findByRole("button", { name: "Habilitar Seguros" }),
   );
   await screen.findByText("Clientes");
   vi.mocked(api).mockRejectedValueOnce(new Error("Permisos insuficientes"));
-  fireEvent.click(screen.getByRole("button", { name: "Instalar paquete" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar habilitación" }),
+  );
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Permisos insuficientes",
   );
   expect(
-    screen.getByRole("button", { name: "Instalar paquete" }),
+    screen.getByRole("button", { name: "Confirmar habilitación" }),
   ).not.toBeDisabled();
 });
 it.each([false, true])(
@@ -272,3 +289,44 @@ it.each([false, true])(
     }
   },
 );
+
+it("previews automatic dependencies without installing until confirmation", async () => {
+  const dependent = { ...manifest, requires: ["insurance.quotes"] };
+  vi.mocked(api).mockImplementation(async (url) => {
+    if (url === "/solutions")
+      return { data: [{ manifest: dependent, installed: null }] };
+    if (url === "/solutions/activation-preview")
+      return {
+        data: {
+          ...preview,
+          canActivate: true,
+          dependencies: [
+            {
+              id: "insurance.quotes",
+              label: "Cotizaciones de seguros",
+              action: "install",
+            },
+          ],
+        },
+      };
+    return { data: {} };
+  });
+  render(<SolutionManager onChanged={vi.fn()} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Habilitar Seguros" }),
+  );
+  expect(
+    await screen.findByText("Cotizaciones de seguros"),
+  ).toBeInTheDocument();
+  expect(api).not.toHaveBeenCalledWith(
+    "/solutions/activate",
+    "POST",
+    dependent,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar habilitación" }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith("/solutions/activate", "POST", dependent),
+  );
+});

@@ -1551,6 +1551,9 @@ export const studioMessages = {
     "Manage screens",
     "Gerenciar telas",
   ],
+  Funcionalidades: ["Funcionalidades", "Features", "Funcionalidades"],
+  Plantillas: ["Plantillas", "Templates", "Modelos"],
+  Extensiones: ["Extensiones", "Extensions", "Extensões"],
   Pantallas: ["Pantallas", "Screens", "Telas"],
   "Paquetes y extensiones": [
     "Paquetes y extensiones",
@@ -1558,11 +1561,6 @@ export const studioMessages = {
     "Pacotes e extensões",
   ],
   disponibles: ["disponibles", "available", "disponíveis"],
-  "Herramientas del dominio": [
-    "Herramientas del dominio",
-    "Domain tools",
-    "Ferramentas do domínio",
-  ],
   "Más herramientas": ["Más herramientas", "More tools", "Mais ferramentas"],
   "Nueva pantalla": ["Nueva pantalla", "New screen", "Nova tela"],
   "Filtrar pantallas": ["Filtrar pantallas", "Filter screens", "Filtrar telas"],
@@ -2342,10 +2340,25 @@ export const studioMessages = {
     "Reports and actions",
     "Relatórios e ações",
   ],
-  "Historial del dominio": [
-    "Historial del dominio",
-    "Domain history",
-    "Histórico do domínio",
+  "Historial del tenant": [
+    "Historial del tenant",
+    "Tenant history",
+    "Histórico do tenant",
+  ],
+  "Fuera del menú del tenant · Accesibles mediante enlaces con permiso": [
+    "Fuera del menú del tenant · Accesibles mediante enlaces con permiso",
+    "Outside the tenant menu · Available through authorized links",
+    "Fora do menu do tenant · Acessíveis por links autorizados",
+  ],
+  "Colección local del tenant": [
+    "Colección local del tenant",
+    "Local tenant collection",
+    "Coleção local do tenant",
+  ],
+  "Herramientas del tenant": [
+    "Herramientas del tenant",
+    "Tenant tools",
+    "Ferramentas do tenant",
   ],
   "Pantallas disponibles": [
     "Pantallas disponibles",
@@ -2361,11 +2374,6 @@ export const studioMessages = {
     "Pantallas fuera del menú",
     "Screens outside the menu",
     "Telas fora do menu",
-  ],
-  "Fuera del menú del dominio · Accesibles mediante enlaces con permiso": [
-    "Fuera del menú del dominio · Accesibles mediante enlaces con permiso",
-    "Outside the domain menu · Accessible through authorized links",
-    "Fora do menu do domínio · Acessíveis por links com permissão",
   ],
   "Conectada a una fuente de datos": [
     "Conectada a una fuente de datos",

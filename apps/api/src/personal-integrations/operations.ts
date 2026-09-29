@@ -167,6 +167,147 @@ function uploadMimeType(input: Record<string, unknown>): string {
   return mimeType;
 }
 
+function microsoftDocumentProvider(
+  value: unknown,
+): "onedrive_personal" | "onedrive_business" {
+  if (value === "onedrive_personal" || value === "onedrive_business")
+    return value;
+  return invalidAction("The document provider is invalid");
+}
+
+function documentName(value: unknown): string {
+  if (typeof value !== "string") return invalidAction("The file name is required");
+  const name = value.trim();
+  if (
+    !name ||
+    name.length > 200 ||
+    name === "." ||
+    name === ".." ||
+    /[\\/\u0000-\u001f\u007f]/.test(name)
+  )
+    return invalidAction("The file name is invalid");
+  return name;
+}
+
+function documentMimeType(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length > 127 ||
+    !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(value)
+  )
+    return invalidAction("The file type is invalid");
+  return value;
+}
+
+function documentBytes(value: unknown, maximum: number): Uint8Array<ArrayBuffer> {
+  if (!(value instanceof Uint8Array) || value.byteLength > maximum)
+    return invalidAction("The file content is invalid or too large");
+  return new Uint8Array(value);
+}
+
+function documentFolderId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 256 ||
+    /[\\/\u0000-\u001f\u007f]/.test(value) ||
+    value === "." ||
+    value === ".."
+  )
+    return invalidAction("The folder ID is invalid");
+  return value;
+}
+
+function assertExpectedConnectionKey(
+  connection: ActivePersonalIntegrationConnection,
+  expectedConnectionKey: string | undefined,
+): void {
+  if (
+    expectedConnectionKey !== undefined &&
+    expectedConnectionKey !== `${connection.id}:${connection.updatedAt}`
+  )
+    throw new PersonalIntegrationUnavailableError(
+      "The reviewed personal integration connection has changed",
+    );
+}
+
+function foldersFromOneDrive(payload: unknown): Array<{ id: string; name: string }> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    throw new PersonalIntegrationUpstreamError();
+  const items = (payload as { value?: unknown }).value;
+  if (!Array.isArray(items)) throw new PersonalIntegrationUpstreamError();
+  return items.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item))
+      throw new PersonalIntegrationUpstreamError();
+    const entry = item as Record<string, unknown>;
+    const folder = entry.folder;
+    if (!("folder" in entry)) return [];
+    if (!folder || typeof folder !== "object" || Array.isArray(folder))
+      throw new PersonalIntegrationUpstreamError();
+    const id = stringValue(entry.id);
+    const name = stringValue(entry.name);
+    if (!id || !name) throw new PersonalIntegrationUpstreamError();
+    return [{ id, name }];
+  });
+}
+
+function nextFolderPagePath(payload: unknown, collectionPath: string): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return null;
+  const record = payload as Record<string, unknown>;
+  if (!("@odata.nextLink" in record)) return null;
+  const nextLink = record["@odata.nextLink"];
+  if (typeof nextLink !== "string" || nextLink.length > 8192)
+    throw new PersonalIntegrationUpstreamError();
+
+  let url: URL;
+  try {
+    url = new URL(nextLink);
+  } catch {
+    throw new PersonalIntegrationUpstreamError();
+  }
+  const graphHosts = new Set([
+    "graph.microsoft.com",
+    "graph.microsoft.us",
+    "dod-graph.microsoft.us",
+    "microsoftgraph.chinacloudapi.cn",
+  ]);
+  if (
+    url.protocol !== "https:" ||
+    !graphHosts.has(url.hostname) ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.hash ||
+    url.pathname !== collectionPath
+  )
+    throw new PersonalIntegrationUpstreamError();
+
+  const allowedParameters = new Set(["$top", "$select", "$skiptoken", "$skip"]);
+  const parameterNames = [...url.searchParams.keys()];
+  if (
+    parameterNames.some((name) => !allowedParameters.has(name)) ||
+    new Set(parameterNames).size !== parameterNames.length ||
+    (url.searchParams.has("$top") && url.searchParams.get("$top") !== "100") ||
+    (url.searchParams.has("$select") &&
+      url.searchParams.get("$select") !== "id,name,folder") ||
+    (!url.searchParams.has("$skiptoken") && !url.searchParams.has("$skip")) ||
+    (url.searchParams.has("$skip") &&
+      !/^\d+$/.test(url.searchParams.get("$skip") ?? ""))
+  )
+    throw new PersonalIntegrationUpstreamError();
+
+  return `${url.pathname}${url.search}`;
+}
+
+function fileBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
 function driveMultipartUpload(input: {
   name: string;
   content: string;
@@ -349,6 +490,109 @@ export class PersonalIntegrationOperations {
     private readonly repository: PersonalIntegrationRepository,
     private readonly nango: PersonalIntegrationNangoClient,
   ) {}
+
+  async listDocumentFolders(input: {
+    principalId: string;
+    provider: "onedrive_personal" | "onedrive_business";
+    parentId?: string;
+  }): Promise<Array<{ id: string; name: string }>> {
+    const provider = microsoftDocumentProvider(input.provider);
+    const parentId =
+      input.parentId === undefined ? undefined : documentFolderId(input.parentId);
+    const connection = await this.connectedConnection(input.principalId, provider);
+    const path = parentId
+      ? `/v1.0/me/drive/items/${encodeURIComponent(parentId)}/children?$top=100&$select=id,name,folder`
+      : "/v1.0/me/drive/root/children?$top=100&$select=id,name,folder";
+    const collectionPath = path.split("?", 1)[0] ?? path;
+    const folders: Array<{ id: string; name: string }> = [];
+    let pagePath: string | null = path;
+    for (let page = 0; page < 10 && pagePath; page += 1) {
+      const response = await this.nango.proxy({
+        method: "GET",
+        path: pagePath,
+        connection,
+      });
+      if (!response.ok) throw new PersonalIntegrationUpstreamError();
+      const payload: unknown = await response.json().catch(() => undefined);
+      folders.push(...foldersFromOneDrive(payload));
+      pagePath = nextFolderPagePath(payload, collectionPath);
+      if (page === 9 && pagePath) throw new PersonalIntegrationUpstreamError();
+    }
+    return folders;
+  }
+
+  async saveDocumentCopy(input: {
+    principalId: string;
+    provider: "onedrive_personal" | "onedrive_business";
+    expectedConnectionKey?: string;
+    folderId?: string;
+    name: string;
+    mimeType: string;
+    content: Uint8Array;
+  }): Promise<{ id: string; name: string; webUrl: string | null }> {
+    const provider = microsoftDocumentProvider(input.provider);
+    const folderId =
+      input.folderId === undefined ? undefined : documentFolderId(input.folderId);
+    const name = documentName(input.name);
+    const mimeType = documentMimeType(input.mimeType);
+    const content = documentBytes(input.content, 5 * 1024 * 1024);
+    const connection = await this.connectedConnection(input.principalId, provider);
+    assertExpectedConnectionKey(connection, input.expectedConnectionKey);
+    const basePath = folderId
+      ? `/v1.0/me/drive/items/${encodeURIComponent(folderId)}`
+      : "/v1.0/me/drive/root";
+    const response = await this.write(connection, "upload-file", {
+      method: "PUT",
+      path: `${basePath}:/${encodeURIComponent(name)}:/content?%40microsoft.graph.conflictBehavior=fail`,
+      rawBody: content,
+      contentType: mimeType,
+    });
+    const payload: unknown = await response.json().catch(() => undefined);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new PersonalIntegrationUpstreamError();
+    const item = payload as Record<string, unknown>;
+    const id = stringValue(item.id);
+    const createdName = stringValue(item.name);
+    if (!id || !createdName) throw new PersonalIntegrationUpstreamError();
+    return { id, name: createdName, webUrl: secureWebLink(item.webUrl) };
+  }
+
+  async sendDocumentEmail(input: {
+    principalId: string;
+    expectedConnectionKey?: string;
+    to: string[];
+    subject: string;
+    body: string;
+    file: { name: string; mimeType: string; content: Uint8Array };
+  }): Promise<void> {
+    const to = emailRecipients({ to: input.to }, "to", true);
+    const subject = requiredActionText(input, "subject", 2000);
+    const body = requiredActionText(input, "body", 10_000);
+    const file = actionObject(input.file as unknown as Record<string, unknown>);
+    const name = documentName(file.name);
+    const mimeType = documentMimeType(file.mimeType);
+    const content = documentBytes(file.content, 2 * 1024 * 1024);
+    const connection = await this.connectedConnection(input.principalId, "outlook");
+    assertExpectedConnectionKey(connection, input.expectedConnectionKey);
+    await this.write(connection, "send-email", {
+      method: "POST",
+      path: "/v1.0/me/sendMail",
+      body: {
+        message: {
+          subject,
+          body: { contentType: "Text", content: body },
+          toRecipients: to.map((address) => ({ emailAddress: { address } })),
+          attachments: [{
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            name,
+            contentType: mimeType,
+            contentBytes: fileBase64(content),
+          }],
+        },
+        saveToSentItems: true,
+      },
+    });
+  }
 
   async searchFiles(input: {
     principalId: string;
@@ -649,7 +893,7 @@ export class PersonalIntegrationOperations {
       method: "POST" | "PUT";
       path: string;
       body?: unknown;
-      rawBody?: string;
+      rawBody?: string | Uint8Array<ArrayBuffer>;
       contentType?: string;
       upstreamHeaders?: Partial<Record<"if-match" | "prefer", string>>;
     },

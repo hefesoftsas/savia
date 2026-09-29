@@ -1,3 +1,7 @@
+> Obsolete: independent data domains have been replaced by tenants. Do not use
+> the migration or workspace-creation instructions below. Follow
+> [tenant-only isolation](../guides/tenant-isolation.md).
+
 # Estudio por dominios de datos
 
 El CRM ya no necesita una agencia para abrir el diseñador. Un dominio agrupa objetos, registros, pantallas, versiones, archivos e integraciones. La persistencia sigue en D1/R2; los objetos configurables no requieren una tabla SQL nueva por pantalla.

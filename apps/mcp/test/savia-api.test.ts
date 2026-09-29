@@ -215,35 +215,23 @@ describe("installed CRM collections", () => {
     const operations = calls.filter((c) => !c.path.endsWith("/objects"));
     expect(operations.map((c) => [c.path, c.method, c.body])).toEqual([
       [
-        "/v1/data-domains/platform/api/records/provider_contacts?page=2&perPage=10&q=a%2Bb",
+        "/v1/studio/0/api/records/provider_contacts?page=2&perPage=10&q=a%2Bb",
         "GET",
         "",
       ],
+      ["/v1/studio/0/api/records/provider_contacts/a%2Fb", "GET", ""],
       [
-        "/v1/data-domains/platform/api/records/provider_contacts/a%2Fb",
-        "GET",
-        "",
-      ],
-      [
-        "/v1/data-domains/platform/api/records/provider_contacts",
+        "/v1/studio/0/api/records/provider_contacts",
         "POST",
         '{"email":"a@test.co"}',
       ],
       [
-        "/v1/data-domains/platform/api/records/provider_contacts/42",
+        "/v1/studio/0/api/records/provider_contacts/42",
         "PATCH",
         '{"email":"b@test.co","_version":2}',
       ],
-      [
-        "/v1/data-domains/platform/api/record-links/provider_contacts/42",
-        "GET",
-        "",
-      ],
-      [
-        "/v1/data-domains/platform/api/records/provider_contacts/42?version=2",
-        "DELETE",
-        "",
-      ],
+      ["/v1/studio/0/api/record-links/provider_contacts/42", "GET", ""],
+      ["/v1/studio/0/api/records/provider_contacts/42?version=2", "DELETE", ""],
     ]);
     expect(calls.every((c) => c.auth === "Bearer caller")).toBe(true);
     const before = operations.length;
@@ -291,7 +279,7 @@ it("discovers and queries authorized collections hidden only from navigation", a
     data: [{ id: "quote-1", name: "COT-1" }],
     total: 1,
   });
-  expect(paths).toContain("/v1/data-domains/platform/api/records/cotizaciones");
+  expect(paths).toContain("/v1/studio/0/api/records/cotizaciones");
 });
 
 it("summarizes a quote in three authorized reads without inventing a winner for tied premiums", async () => {

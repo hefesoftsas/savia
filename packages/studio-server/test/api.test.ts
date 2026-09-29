@@ -494,7 +494,7 @@ it("reads native counts and pages in one D1 batch with matching filters and pagi
     expect(statements).toHaveLength(2);
 });
 
-it("returns up to 200 domain audit events in stable date order", async () => {
+it("returns up to 200 tenant audit events in stable date order", async () => {
   const domainApp = createStudioApp("domain:platform");
   for (let start = 0; start < 201; start += 100) {
     await platform.env.DB.batch(
@@ -525,6 +525,6 @@ it("returns up to 200 domain audit events in stable date order", async () => {
     ),
   );
   expect((await json("/audit?object=agency_audit_fixture")).data).toHaveLength(
-    100,
+    101,
   );
 });

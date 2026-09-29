@@ -2,8 +2,11 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./combined-app";
+import { createTestApp } from "./test-app";
 import { createRealtimeHubClient } from "../src/realtime/hub-client";
+import { ensureBootstrapAdministrator } from "../src/auth/identity-repository";
 import {
+  agencyAdministratorAuthenticator,
   agencyMemberAuthenticator,
   platformAdministratorAuthenticator,
 } from "./auth-fixtures";
@@ -43,6 +46,29 @@ async function seedTenant(id = 101): Promise<void> {
     "INSERT INTO tenants (id, id_slug, name, is_active, created_at, updated_at, kind) VALUES (?, ?, ?, 1, '2026-01-01', '2026-01-01', 'commercial')",
   )
     .bind(id, `realtime-tenant-${id}`, `Realtime Tenant ${id}`)
+    .run();
+}
+
+async function seedMembershipActor(
+  principalId: string,
+  tenantId: number,
+  role: string,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,?,?,?,?,1,'2026-01-01','2026-01-01')",
+  )
+    .bind(
+      principalId,
+      "savia:better-auth",
+      principalId,
+      `${principalId}@savia.test`,
+      principalId,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?, ?,1,'2026-01-01','2026-01-01')",
+  )
+    .bind(`${principalId}-membership`, principalId, tenantId, role)
     .run();
 }
 
@@ -353,6 +379,7 @@ describe("Realtime hub", () => {
 
   it("issues tickets by role and publishes user mutations", async () => {
     await seedTenant();
+    await seedMembershipActor("test-agency-administrator", 101, "agency_admin");
     const hub = createRealtimeHubClient(env.REALTIME_HUB);
     const administratorApp = createApp(
       env.DB,
@@ -424,9 +451,42 @@ describe("Realtime hub", () => {
       topics: ["users"],
     });
 
+    const platformWorkspaceTicket = await administratorApp.request(
+      "/v1/realtime/ticket",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["records"], tenantId: 0 }),
+      },
+    );
+    expect(platformWorkspaceTicket.status).toBe(201);
+    expect(await platformWorkspaceTicket.json()).toMatchObject({
+      data: { room: "tenant:0", topics: ["records"] },
+    });
+
     const viewing = await connectSocket(
       roomStub("platform"),
       ticketBody.data.ticket,
+    );
+    const accessControlApp = createTestApp({
+      auth: agencyAdministratorAuthenticator(),
+      realtime: hub,
+    });
+    const accessControlTicket = await accessControlApp.request(
+      "/v1/realtime/ticket",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["access-control"], tenantId: 101 }),
+      },
+    );
+    expect(accessControlTicket.status).toBe(201);
+    const accessControlTicketBody = (await accessControlTicket.json()) as {
+      data: { ticket: string };
+    };
+    const accessControlSocket = await connectSocket(
+      roomStub("tenant:101"),
+      accessControlTicketBody.data.ticket,
     );
 
     const provisioned = await administratorApp.request("/v1/identity/users", {
@@ -448,6 +508,38 @@ describe("Realtime hub", () => {
     );
     expect(created).toMatchObject({ topic: "users" });
     expect(typeof created.id).toBe("string");
+    const membershipChanged = await waitFor(
+      accessControlSocket.received,
+      (message) => message.topic === "access-control" && message.type === "updated",
+    );
+    expect(membershipChanged).toMatchObject({
+      collection: "memberships",
+      type: "updated",
+    });
+    const provisionedBody = (await provisioned.json()) as {
+      data: { id: string };
+    };
+    const membershipUpdated = await administratorApp.request(
+      `/v1/identity/users/${provisionedBody.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          membership: { tenantId: 101, role: "tenant_admin" },
+        }),
+      },
+    );
+    expect(membershipUpdated.status).toBe(200);
+    const membershipRoleChanged = await waitFor(
+      accessControlSocket.received,
+      (message) => message.topic === "access-control" && message.type === "updated",
+    );
+    expect(membershipRoleChanged).toMatchObject({
+      collection: "memberships",
+      id: provisionedBody.data.id,
+    });
+    accessControlSocket.socket.close();
+    viewing.socket.close();
   });
 
   it("authorizes record topics by tenant membership", async () => {
@@ -489,6 +581,13 @@ describe("Realtime hub", () => {
       body: JSON.stringify({ topics: ["records"] }),
     });
     expect(missingTenant.status).toBe(400);
+
+    const reservedTenant = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"], tenantId: 0 }),
+    });
+    expect(reservedTenant.status).toBe(403);
 
     const foreign = await memberApp.request("/v1/realtime/ticket", {
       method: "POST",
@@ -565,4 +664,92 @@ describe("Realtime hub", () => {
       ),
     ).toBe(true);
   });
+
+  it("authorizes access-control tickets for tenant managers only and scopes tenant 0", async () => {
+    await seedTenant(101);
+    await seedTenant(102);
+    await seedMembershipActor("test-agency-administrator", 101, "agency_admin");
+    await seedMembershipActor("test-agency-member", 101, "viewer");
+    await env.DB.prepare(
+      "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES('test-platform-admin','savia:better-auth','test-platform-admin','admin@savia.test','Platform Admin',1,'2026-01-01','2026-01-01')",
+    ).run();
+    await ensureBootstrapAdministrator(env.DB, "test-platform-admin");
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    const managerApp = createTestApp({
+      auth: agencyAdministratorAuthenticator(),
+      realtime: hub,
+    });
+    const memberApp = createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtime: hub,
+    });
+    const platformApp = createTestApp({
+      auth: platformAdministratorAuthenticator(),
+      realtime: hub,
+    });
+    const ticket = (app: ReturnType<typeof createTestApp>, tenantId: number) =>
+      app.request("/v1/realtime/ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["access-control"], tenantId }),
+      });
+
+    const allowedManager = await ticket(managerApp, 101);
+    expect(allowedManager.status).toBe(201);
+    expect(await allowedManager.json()).toMatchObject({
+      data: { room: "tenant:101", topics: ["access-control"] },
+    });
+    expect((await ticket(managerApp, 102)).status).toBe(403);
+    expect((await ticket(memberApp, 101)).status).toBe(403);
+
+    const platform = await ticket(platformApp, 0);
+    expect(platform.status).toBe(201);
+    expect(await platform.json()).toMatchObject({
+      data: { room: "tenant:0", topics: ["access-control"] },
+    });
+  });
+
+  it("allows principal topics only in the authenticated principal room", async () => {
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    const memberApp = createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtime: hub,
+    });
+    const own = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["notifications", "account"] }),
+    });
+    expect(own.status).toBe(201);
+    expect(await own.json()).toMatchObject({
+      data: {
+        room: "principal:test-agency-member",
+        topics: ["notifications", "account"],
+      },
+    });
+
+    const impersonation = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["notifications"],
+        principalId: "another-principal",
+      }),
+    });
+    expect(impersonation.status).toBe(403);
+
+    const mixedScopes = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records", "notifications"], tenantId: 101 }),
+    });
+    expect(mixedScopes.status).toBe(400);
+
+    const foreignRoom = await memberApp.request(
+      `/v1/realtime/subscribe?room=principal:another-principal&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(foreignRoom.status).toBe(403);
+  });
+
 });

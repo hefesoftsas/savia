@@ -25,7 +25,7 @@ describe("public ZIP entry", () => {
     expect(await bootstrap.text()).toContain("import.meta.url");
 
     const grant = {
-      tenantId: "domain:platform",
+      tenantId: "tenant:0",
       pluginId: "insurance.quotes",
       version: "1.3.1",
       expiresAt: Date.now() + 60_000,

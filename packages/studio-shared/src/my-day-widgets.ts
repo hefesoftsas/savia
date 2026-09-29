@@ -21,12 +21,9 @@ const widgetIdSchema = z.string().regex(/^[a-z0-9_-]{1,48}$/, {
 
 const apiBasePathSchema = z
   .string()
-  .regex(
-    /^\/v1\/(data-domains\/[a-z][a-z0-9_-]{0,47}|dynamic-crm\/[1-9][0-9]*)$/,
-    {
-      message: "El dominio del widget no es válido.",
-    },
-  );
+  .regex(/^\/v1\/((?:studio|dynamic-crm)\/(?:0|[1-9][0-9]*))$/, {
+    message: "El tenant del widget no es válido.",
+  });
 
 const collectionNameSchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/, {
   message: "La colección del widget no es válida.",

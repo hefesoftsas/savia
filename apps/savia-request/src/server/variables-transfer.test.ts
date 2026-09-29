@@ -13,9 +13,12 @@ async function applyMigrations() {
     .sort()) {
     const statements = readFileSync("migrations/" + migration, "utf8")
       .split(";")
+      .map((statement) =>
+        statement.replace(/^.*--> statement-breakpoint.*$/gm, ""),
+      )
       .filter((statement) => statement.trim());
     for (const statement of statements)
-      await platform.env.DB.exec(statement + ";");
+      await platform.env.DB.prepare(statement).run();
   }
 }
 

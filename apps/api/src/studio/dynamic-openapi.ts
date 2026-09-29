@@ -1,3 +1,7 @@
+import {
+  documentDeliveryRequestSchema,
+  documentDeliveryConfirmationSchema,
+} from "@savia/studio-server/document-delivery";
 import { z } from "@hono/zod-openapi";
 import { databaseSourceInputSchema } from "@savia/studio-shared/database-sources";
 import type { StudioObject } from "@savia/studio-shared/metadata";
@@ -191,14 +195,12 @@ export async function dynamicOpenApi(
   agencyId: number | { tenant: string; apiBasePath: string },
 ) {
   const tenant =
-    typeof agencyId === "number" ? `agency:${agencyId}` : agencyId.tenant;
+    typeof agencyId === "number" ? `tenant:${agencyId}` : agencyId.tenant;
   const apiBasePath =
     typeof agencyId === "number"
       ? `/v1/studio/${agencyId}`
       : agencyId.apiBasePath;
-  const isCommercialTenant =
-    typeof agencyId === "number" ||
-    (typeof agencyId === "object" && !agencyId.tenant.startsWith("domain:"));
+  const isCommercialTenant = tenant !== "tenant:0";
   const { results } = await db
     .prepare("SELECT * FROM studio_objects WHERE tenant_id=? ORDER BY name")
     .bind(tenant)
@@ -207,363 +209,354 @@ export async function dynamicOpenApi(
   const objects = results
     .map(parseObject)
     .filter((object) => !disabled.has(object.name));
-  const paths: Paths =
-    isCommercialTenant
-      ? {}
-      : {
-          "/collection-relations": {
-            get: operation(
-              "collection_relations_list",
-              "Relaciones",
-              "Listar relaciones entre colecciones",
-              envelope({ type: "array", items: { type: "object" } }),
-            ),
-            post: operation(
-              "collection_relations_create",
-              "Relaciones",
-              "Definir una relación local",
-              envelope({ type: "object" }),
-              {
-                status: 201,
-                body: {
-                  type: "object",
-                  required: [
-                    "sourceObject",
-                    "targetObject",
-                    "sourceLabel",
-                    "targetLabel",
-                    "cardinality",
-                  ],
-                  properties: {
-                    storage: { type: "string", enum: ["local", "fields"] },
-                    sourceField: { type: "string" },
-                    targetField: { type: "string" },
-                    sourceDisplayField: { type: "string" },
-                    targetDisplayField: { type: "string" },
-                    sourceObject: { type: "string" },
-                    targetObject: { type: "string" },
-                    sourceLabel: { type: "string" },
-                    targetLabel: { type: "string" },
-                    cardinality: {
-                      type: "string",
-                      enum: ["one-to-one", "one-to-many", "many-to-many"],
-                    },
+  const paths: Paths = isCommercialTenant
+    ? {}
+    : {
+        "/collection-relations": {
+          get: operation(
+            "collection_relations_list",
+            "Relaciones",
+            "Listar relaciones entre colecciones",
+            envelope({ type: "array", items: { type: "object" } }),
+          ),
+          post: operation(
+            "collection_relations_create",
+            "Relaciones",
+            "Definir una relación local",
+            envelope({ type: "object" }),
+            {
+              status: 201,
+              body: {
+                type: "object",
+                required: [
+                  "sourceObject",
+                  "targetObject",
+                  "sourceLabel",
+                  "targetLabel",
+                  "cardinality",
+                ],
+                properties: {
+                  storage: { type: "string", enum: ["local", "fields"] },
+                  sourceField: { type: "string" },
+                  targetField: { type: "string" },
+                  sourceDisplayField: { type: "string" },
+                  targetDisplayField: { type: "string" },
+                  sourceObject: { type: "string" },
+                  targetObject: { type: "string" },
+                  sourceLabel: { type: "string" },
+                  targetLabel: { type: "string" },
+                  cardinality: {
+                    type: "string",
+                    enum: ["one-to-one", "one-to-many", "many-to-many"],
                   },
                 },
-                description:
-                  "Guarda la definición en Savia. No modifica esquemas ni vínculos del proveedor externo.",
               },
-            ),
-          },
-          "/collection-relations/{relationId}": {
-            put: operation(
-              "collection_relations_update",
-              "Relaciones",
-              "Editar campos y presentación de una relación",
-              envelope({ type: "object" }),
-              {
-                parameters: [
-                  parameter("relationId", "path", { type: "string" }, true),
+              description:
+                "Guarda la definición en Savia. No modifica esquemas ni vínculos del proveedor externo.",
+            },
+          ),
+        },
+        "/collection-relations/{relationId}": {
+          put: operation(
+            "collection_relations_update",
+            "Relaciones",
+            "Editar campos y presentación de una relación",
+            envelope({ type: "object" }),
+            {
+              parameters: [
+                parameter("relationId", "path", { type: "string" }, true),
+              ],
+              body: {
+                type: "object",
+                required: [
+                  "version",
+                  "sourceObject",
+                  "targetObject",
+                  "sourceLabel",
+                  "targetLabel",
+                  "cardinality",
                 ],
-                body: {
-                  type: "object",
-                  required: [
-                    "version",
-                    "sourceObject",
-                    "targetObject",
-                    "sourceLabel",
-                    "targetLabel",
-                    "cardinality",
-                  ],
-                  properties: {
-                    version: { type: "integer", minimum: 1 },
-                    storage: {
-                      type: "string",
-                      enum: ["local", "fields", "native"],
-                    },
-                    sourceField: { type: "string" },
-                    targetField: { type: "string" },
-                    sourceDisplayField: { type: "string" },
-                    targetDisplayField: { type: "string" },
-                    sourceObject: { type: "string" },
-                    targetObject: { type: "string" },
-                    sourceLabel: { type: "string" },
-                    targetLabel: { type: "string" },
-                    cardinality: {
-                      type: "string",
-                      enum: ["one-to-one", "one-to-many", "many-to-many"],
-                    },
+                properties: {
+                  version: { type: "integer", minimum: 1 },
+                  storage: {
+                    type: "string",
+                    enum: ["local", "fields", "native"],
+                  },
+                  sourceField: { type: "string" },
+                  targetField: { type: "string" },
+                  sourceDisplayField: { type: "string" },
+                  targetDisplayField: { type: "string" },
+                  sourceObject: { type: "string" },
+                  targetObject: { type: "string" },
+                  sourceLabel: { type: "string" },
+                  targetLabel: { type: "string" },
+                  cardinality: {
+                    type: "string",
+                    enum: ["one-to-one", "one-to-many", "many-to-many"],
                   },
                 },
-                description:
-                  "Requiere la versión vigente. Las relaciones nativas permiten presentación; su referencia pertenece al origen. Las relaciones por campos solo se guardan para fuentes y campos compatibles.",
               },
-            ),
-            delete: operation(
-              "collection_relations_delete",
+              description:
+                "Requiere la versión vigente. Las relaciones nativas permiten presentación; su referencia pertenece al origen. Las relaciones por campos solo se guardan para fuentes y campos compatibles.",
+            },
+          ),
+          delete: operation(
+            "collection_relations_delete",
+            "Relaciones",
+            "Eliminar definición y vínculos locales",
+            envelope({ type: "object" }),
+            {
+              parameters: [
+                parameter("relationId", "path", { type: "string" }, true),
+              ],
+              description:
+                "Elimina solo la relación local y sus vínculos. Conserva los registros. No elimina relaciones nativas del origen.",
+            },
+          ),
+        },
+        "/record-links/{object}/{id}": {
+          get: operation(
+            "record_links_list",
+            "Relaciones",
+            "Consultar registros relacionados",
+            envelope({ type: "array", items: { type: "object" } }),
+            {
+              parameters: [
+                parameter("object", "path", { type: "string" }, true),
+                parameter("id", "path", { type: "string" }, true),
+                parameter("page", "query", { type: "integer", minimum: 1 }),
+                parameter("perPage", "query", {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100,
+                }),
+              ],
+            },
+          ),
+        },
+        "/record-links/{object}/{id}/{relationId}": Object.fromEntries(
+          ["post", "delete"].map((method) => [
+            method,
+            operation(
+              `record_links_${method === "post" ? "create" : "delete"}`,
               "Relaciones",
-              "Eliminar definición y vínculos locales",
+              method === "post"
+                ? "Vincular registros"
+                : "Desvincular registros",
               envelope({ type: "object" }),
-              {
-                parameters: [
-                  parameter("relationId", "path", { type: "string" }, true),
-                ],
-                description:
-                  "Elimina solo la relación local y sus vínculos. Conserva los registros. No elimina relaciones nativas del origen.",
-              },
-            ),
-          },
-          "/record-links/{object}/{id}": {
-            get: operation(
-              "record_links_list",
-              "Relaciones",
-              "Consultar registros relacionados",
-              envelope({ type: "array", items: { type: "object" } }),
               {
                 parameters: [
                   parameter("object", "path", { type: "string" }, true),
                   parameter("id", "path", { type: "string" }, true),
-                  parameter("page", "query", { type: "integer", minimum: 1 }),
-                  parameter("perPage", "query", {
-                    type: "integer",
-                    minimum: 1,
-                    maximum: 100,
-                  }),
-                ],
-              },
-            ),
-          },
-          "/record-links/{object}/{id}/{relationId}": Object.fromEntries(
-            ["post", "delete"].map((method) => [
-              method,
-              operation(
-                `record_links_${method === "post" ? "create" : "delete"}`,
-                "Relaciones",
-                method === "post"
-                  ? "Vincular registros"
-                  : "Desvincular registros",
-                envelope({ type: "object" }),
-                {
-                  parameters: [
-                    parameter("object", "path", { type: "string" }, true),
-                    parameter("id", "path", { type: "string" }, true),
-                    parameter("relationId", "path", { type: "string" }, true),
-                  ],
-                  body: {
-                    type: "object",
-                    required: ["targetId"],
-                    properties: { targetId: { type: "string" } },
-                  },
-                  description:
-                    "Solo relaciones locales; valida existencia y cardinalidad. No elimina ni cambia datos del registro.",
-                },
-              ),
-            ]),
-          ),
-          "/sources": {
-            get: operation(
-              "collection_sources_list",
-              "Fuentes y colecciones",
-              "Listar fuentes del dominio",
-              envelope({ type: "array", items: { type: "object" } }),
-            ),
-            post: operation(
-              "collection_sources_create",
-              "Fuentes y colecciones",
-              "Configurar una fuente externa",
-              envelope({ type: "object" }),
-              {
-                status: 201,
-                body: {
-                  anyOf: [
-                    z.toJSONSchema(databaseSourceInputSchema, { io: "input" }),
-                    {
-                      type: "object",
-                      required: ["id", "label", "kind", "baseUrl"],
-                      properties: {
-                        id: { type: "string" },
-                        label: { type: "string" },
-                        kind: { const: "jsonapi" },
-                        baseUrl: { type: "string", format: "uri" },
-                        token: { type: "string", writeOnly: true },
-                        options: { type: "object" },
-                      },
-                    },
-                  ],
-                },
-              },
-            ),
-          },
-          "/sources/{id}/test": {
-            post: operation(
-              "database_source_test",
-              "Fuentes y colecciones",
-              "Probar conexión de base de datos",
-              envelope({ type: "object" }),
-              {
-                parameters: [parameter("id", "path", { type: "string" }, true)],
-              },
-            ),
-          },
-          "/sources/{id}/inspect": {
-            post: operation(
-              "database_source_inspect",
-              "Fuentes y colecciones",
-              "Inspeccionar tablas o colecciones",
-              envelope({ type: "object" }),
-              {
-                parameters: [parameter("id", "path", { type: "string" }, true)],
-                body: {
-                  type: "object",
-                  properties: { resource: { type: "string" } },
-                },
-              },
-            ),
-          },
-          "/sources/{id}": {
-            put: operation(
-              "database_source_update",
-              "Fuentes y colecciones",
-              "Actualizar acceso y permisos de escritura",
-              envelope({ type: "object" }),
-              {
-                parameters: [parameter("id", "path", { type: "string" }, true)],
-                body: {
-                  type: "object",
-                  properties: {
-                    label: { type: "string" },
-                    password: {
-                      type: "string",
-                      writeOnly: true,
-                      nullable: true,
-                    },
-                    writeEnabled: { type: "boolean" },
-                  },
-                },
-              },
-            ),
-          },
-          "/collection-bindings/{name}/sync": {
-            post: operation(
-              "database_source_sync",
-              "Fuentes y colecciones",
-              "Sincronizar campos desde la base",
-              envelope({ type: "object" }),
-              {
-                parameters: [
-                  parameter("name", "path", { type: "string" }, true),
+                  parameter("relationId", "path", { type: "string" }, true),
                 ],
                 body: {
                   type: "object",
-                  required: ["version"],
-                  properties: {
-                    version: { type: "integer" },
-                    fields: { type: "array", items: { type: "string" } },
-                  },
-                },
-              },
-            ),
-          },
-          "/collection-catalog": {
-            get: operation(
-              "collection_catalog",
-              "Fuentes y colecciones",
-              "Consultar colecciones de negocio disponibles",
-              envelope({ type: "array", items: { type: "object" } }),
-            ),
-          },
-          "/collection-bindings/{name}/operations": {
-            get: operation(
-              "collection_operations_get",
-              "Fuentes y colecciones",
-              "Consultar endpoints y mapeos de una colección",
-              envelope({ type: "object" }),
-              {
-                parameters: [
-                  parameter("name", "path", { type: "string" }, true),
-                ],
-              },
-            ),
-            put: operation(
-              "collection_operations_save",
-              "Fuentes y colecciones",
-              "Guardar operaciones y derivar capacidades",
-              envelope({ type: "object" }),
-              {
-                parameters: [
-                  parameter("name", "path", { type: "string" }, true),
-                ],
-                body: {
-                  type: "object",
-                  required: ["version", "operations"],
-                  properties: {
-                    version: { type: "integer" },
-                    operations: {
-                      type: "object",
-                      description:
-                        "list, read, create, update y delete; cada acción es null o un endpoint con method, path, format y mapeos.",
-                    },
-                  },
-                },
-              },
-            ),
-          },
-          "/collection-bindings/{name}/operations/infer": {
-            post: operation(
-              "collection_operations_infer",
-              "Fuentes y colecciones",
-              "Detectar candidatos desde OpenAPI sin ejecutarlos",
-              envelope({ type: "array", items: { type: "object" } }),
-              {
-                parameters: [
-                  parameter("name", "path", { type: "string" }, true),
-                ],
-                body: {
-                  type: "object",
-                  required: ["document"],
-                  properties: {
-                    document: {
-                      description: "Documento OpenAPI 3 JSON o YAML",
-                    },
-                  },
-                },
-              },
-            ),
-          },
-          "/collection-bindings": {
-            get: operation(
-              "collection_bindings_list",
-              "Fuentes y colecciones",
-              "Listar colecciones conectadas",
-              envelope({ type: "array", items: { type: "object" } }),
-            ),
-            post: operation(
-              "collection_bindings_create",
-              "Fuentes y colecciones",
-              "Conectar una colección a una pantalla",
-              envelope({ type: "object" }),
-              {
-                status: 201,
-                body: {
-                  type: "object",
-                  required: ["name", "label"],
-                  properties: {
-                    name: { type: "string" },
-                    label: { type: "string" },
-                    domain: { type: "string" },
-                    collection: { type: "string" },
-                    sourceId: { type: "string" },
-                    resource: { type: "string" },
-                    fields: { type: "object" },
-                    capabilities: { type: "object" },
-                  },
+                  required: ["targetId"],
+                  properties: { targetId: { type: "string" } },
                 },
                 description:
-                  "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server o MongoDB. No copia los registros externos.",
+                  "Solo relaciones locales; valida existencia y cardinalidad. No elimina ni cambia datos del registro.",
               },
             ),
-          },
-        };
+          ]),
+        ),
+        "/sources": {
+          get: operation(
+            "collection_sources_list",
+            "Fuentes y colecciones",
+            "Listar fuentes del dominio",
+            envelope({ type: "array", items: { type: "object" } }),
+          ),
+          post: operation(
+            "collection_sources_create",
+            "Fuentes y colecciones",
+            "Configurar una fuente externa",
+            envelope({ type: "object" }),
+            {
+              status: 201,
+              body: {
+                anyOf: [
+                  z.toJSONSchema(databaseSourceInputSchema, { io: "input" }),
+                  {
+                    type: "object",
+                    required: ["id", "label", "kind", "baseUrl"],
+                    properties: {
+                      id: { type: "string" },
+                      label: { type: "string" },
+                      kind: { const: "jsonapi" },
+                      baseUrl: { type: "string", format: "uri" },
+                      token: { type: "string", writeOnly: true },
+                      options: { type: "object" },
+                    },
+                  },
+                ],
+              },
+            },
+          ),
+        },
+        "/sources/{id}/test": {
+          post: operation(
+            "database_source_test",
+            "Fuentes y colecciones",
+            "Probar conexión de base de datos",
+            envelope({ type: "object" }),
+            {
+              parameters: [parameter("id", "path", { type: "string" }, true)],
+            },
+          ),
+        },
+        "/sources/{id}/inspect": {
+          post: operation(
+            "database_source_inspect",
+            "Fuentes y colecciones",
+            "Inspeccionar tablas o colecciones",
+            envelope({ type: "object" }),
+            {
+              parameters: [parameter("id", "path", { type: "string" }, true)],
+              body: {
+                type: "object",
+                properties: { resource: { type: "string" } },
+              },
+            },
+          ),
+        },
+        "/sources/{id}": {
+          put: operation(
+            "database_source_update",
+            "Fuentes y colecciones",
+            "Actualizar acceso y permisos de escritura",
+            envelope({ type: "object" }),
+            {
+              parameters: [parameter("id", "path", { type: "string" }, true)],
+              body: {
+                type: "object",
+                properties: {
+                  label: { type: "string" },
+                  password: {
+                    type: "string",
+                    writeOnly: true,
+                    nullable: true,
+                  },
+                  writeEnabled: { type: "boolean" },
+                },
+              },
+            },
+          ),
+        },
+        "/collection-bindings/{name}/sync": {
+          post: operation(
+            "database_source_sync",
+            "Fuentes y colecciones",
+            "Sincronizar campos desde la base",
+            envelope({ type: "object" }),
+            {
+              parameters: [parameter("name", "path", { type: "string" }, true)],
+              body: {
+                type: "object",
+                required: ["version"],
+                properties: {
+                  version: { type: "integer" },
+                  fields: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          ),
+        },
+        "/collection-catalog": {
+          get: operation(
+            "collection_catalog",
+            "Fuentes y colecciones",
+            "Consultar colecciones de negocio disponibles",
+            envelope({ type: "array", items: { type: "object" } }),
+          ),
+        },
+        "/collection-bindings/{name}/operations": {
+          get: operation(
+            "collection_operations_get",
+            "Fuentes y colecciones",
+            "Consultar endpoints y mapeos de una colección",
+            envelope({ type: "object" }),
+            {
+              parameters: [parameter("name", "path", { type: "string" }, true)],
+            },
+          ),
+          put: operation(
+            "collection_operations_save",
+            "Fuentes y colecciones",
+            "Guardar operaciones y derivar capacidades",
+            envelope({ type: "object" }),
+            {
+              parameters: [parameter("name", "path", { type: "string" }, true)],
+              body: {
+                type: "object",
+                required: ["version", "operations"],
+                properties: {
+                  version: { type: "integer" },
+                  operations: {
+                    type: "object",
+                    description:
+                      "list, read, create, update y delete; cada acción es null o un endpoint con method, path, format y mapeos.",
+                  },
+                },
+              },
+            },
+          ),
+        },
+        "/collection-bindings/{name}/operations/infer": {
+          post: operation(
+            "collection_operations_infer",
+            "Fuentes y colecciones",
+            "Detectar candidatos desde OpenAPI sin ejecutarlos",
+            envelope({ type: "array", items: { type: "object" } }),
+            {
+              parameters: [parameter("name", "path", { type: "string" }, true)],
+              body: {
+                type: "object",
+                required: ["document"],
+                properties: {
+                  document: {
+                    description: "Documento OpenAPI 3 JSON o YAML",
+                  },
+                },
+              },
+            },
+          ),
+        },
+        "/collection-bindings": {
+          get: operation(
+            "collection_bindings_list",
+            "Fuentes y colecciones",
+            "Listar colecciones conectadas",
+            envelope({ type: "array", items: { type: "object" } }),
+          ),
+          post: operation(
+            "collection_bindings_create",
+            "Fuentes y colecciones",
+            "Conectar una colección a una pantalla",
+            envelope({ type: "object" }),
+            {
+              status: 201,
+              body: {
+                type: "object",
+                required: ["name", "label"],
+                properties: {
+                  name: { type: "string" },
+                  label: { type: "string" },
+                  domain: { type: "string" },
+                  collection: { type: "string" },
+                  sourceId: { type: "string" },
+                  resource: { type: "string" },
+                  fields: { type: "object" },
+                  capabilities: { type: "object" },
+                },
+              },
+              description:
+                "Selecciona domain y collection para un dominio existente, o sourceId, resource y fields para JSON:API, PostgreSQL, MySQL, SQL Server o MongoDB. No copia los registros externos.",
+            },
+          ),
+        },
+      };
   const bundlePath = {
     post: operation(
       "record_bundle_save",
@@ -712,12 +705,12 @@ export async function dynamicOpenApi(
       )
       .map(([key]) => key);
     const managedAgency =
-      tenant === "domain:platform" &&
+      tenant === "tenant:0" &&
       (name === "agencias" ||
         name === "tenants" ||
         name === "organizaciones" ||
         name === "organizations");
-    const managedCustomer = tenant === "domain:platform" && name === "clientes";
+    const managedCustomer = tenant === "tenant:0" && name === "clientes";
     const idSchema: Schema = binding
       ? { type: "string", minLength: 1, maxLength: 256 }
       : managedAgency || managedCustomer
@@ -1004,10 +997,7 @@ export async function dynamicOpenApi(
       if (!capabilities.delete) delete paths[`/published/${name}/{id}`].delete;
     }
 
-    if (
-      isCommercialTenant &&
-      object.config.studio?.business === "customer"
-    ) {
+    if (isCommercialTenant && object.config.studio?.business === "customer") {
       paths[`/business/${name}/{id}/hubspot`] = {
         get: operation(
           `${name}_hubspot_status`,
@@ -1157,27 +1147,43 @@ export async function dynamicOpenApi(
     ["/notifications/read-all", "post", "Mark inbox as read", null],
     ["/notifications/{id}/read", "post", "Mark notification read state", null],
     ["/notifications/{id}/archive", "post", "Archive notification", null],
-    ["/notifications/{id}/resolve", "post", "Resolve notification action", null],
-    ["/notifications/action/{id}", "get", "Resolve notification action state", null],
+    [
+      "/notifications/{id}/resolve",
+      "post",
+      "Resolve notification action",
+      null,
+    ],
+    [
+      "/notifications/action/{id}",
+      "get",
+      "Resolve notification action state",
+      null,
+    ],
     ["/notifications/follows", "get", "List followed collections", null],
     ["/notifications/follow", "post", "Follow a collection", null],
-    ["/notifications/follow/{collection}", "delete", "Unfollow a collection", null],
+    [
+      "/notifications/follow/{collection}",
+      "delete",
+      "Unfollow a collection",
+      null,
+    ],
   ] as const;
   for (const [path, method, summary, body] of notificationRoutes) {
     paths[path] ??= {};
     paths[path][method] = {
       summary,
       tags: ["Notifications"],
-      parameters: path.includes("{id}") || path.includes("{collection}")
-        ? [
-            {
-              in: "path",
-              name: path.includes("{id}") ? "id" : "collection",
-              required: true,
-              schema: { type: "string" },
-            },
-          ]
-        : [],
+      parameters:
+        path.includes("{id}") || path.includes("{collection}")
+          ? [
+              {
+                in: "path",
+                name: path.includes("{id}") ? "id" : "collection",
+                required: true,
+                schema: { type: "string" },
+              },
+            ]
+          : [],
       ...(body
         ? {
             requestBody: {
@@ -1186,7 +1192,10 @@ export async function dynamicOpenApi(
             },
           }
         : {}),
-      responses: { 200: { description: "OK" }, 401: { description: "Unauthorized" } },
+      responses: {
+        200: { description: "OK" },
+        401: { description: "Unauthorized" },
+      },
     };
   }
   for (const [path, method, summary, body] of workflowRoutes) {
@@ -1232,6 +1241,67 @@ export async function dynamicOpenApi(
     { type: "integer", minimum: 1 },
     true,
   );
+  for (const [suffix, method, summary, schema] of [
+    ["", "get", "Get document delivery accounts and history", undefined],
+    ["/folders", "get", "List OneDrive destination folders", undefined],
+    [
+      "/prepare",
+      "post",
+      "Prepare a private five-minute document confirmation",
+      documentDeliveryRequestSchema,
+    ],
+    [
+      "/confirm",
+      "post",
+      "Execute a single-use document confirmation",
+      documentDeliveryConfirmationSchema,
+    ],
+  ] as const) {
+    paths[`/file/{id}/delivery${suffix}`] = {
+      [method]: operation(
+        `document_delivery${suffix.replaceAll("/", "_")}`,
+        "Documents",
+        summary,
+        envelope(
+          suffix === "/folders"
+            ? {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["id", "name"],
+                  properties: {
+                    id: { type: "string" },
+                    name: { type: "string" },
+                  },
+                },
+              }
+            : { type: "object" },
+        ),
+        {
+          parameters: [
+            fileId,
+            ...(suffix === "/folders"
+              ? [
+                  parameter(
+                    "provider",
+                    "query",
+                    {
+                      type: "string",
+                      enum: ["onedrive_personal", "onedrive_business"],
+                    },
+                    true,
+                  ),
+                  parameter("parentId", "query", { type: "string" }),
+                ]
+              : []),
+          ],
+          ...(schema ? { body: z.toJSONSchema(schema) } : {}),
+          description:
+            "Requires current record and attachment read/export permission. External writes require a reviewed, principal-bound confirmation. An unknown outcome must be checked at the provider before retrying.",
+        },
+      ),
+    };
+  }
   const officeFile = {
     type: "object",
     required: ["id", "name", "mime", "size", "version"],
@@ -1331,7 +1401,7 @@ export async function dynamicOpenApi(
       title: "CRM de Savia",
       version: "1.0.0",
       description:
-        "Contrato generado con los objetos y versiones actuales de este dominio de datos. Las condiciones, relaciones y unicidad se validan en el servidor. Requiere permiso de administración del dominio.",
+        "Contrato generado con los objetos y versiones actuales de este tenant. Las condiciones, relaciones y unicidad se validan en el servidor. Requiere permiso de administración del tenant.",
     },
     servers: [{ url: `${apiBasePath}/api` }],
     security: [{ bearerAuth: [] }],

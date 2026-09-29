@@ -7,6 +7,7 @@ import {
   ensureBootstrapAdministrator,
   findPrincipalBySubject,
   upsertPrincipal,
+  setPrincipalActive,
 } from "../src/auth/identity-repository";
 import {
   createOAuthResourceAuthenticator,
@@ -48,7 +49,7 @@ async function applyMigrations() {
 }
 
 async function seedAgency(id = 101): Promise<void> {
-  await installInsuranceFixture(env.DB, "domain:platform", `agency:${id}`);
+  await installInsuranceFixture(env.DB, "tenant:0", `tenant:${id}`);
   await env.DB.prepare(
     "INSERT INTO tenants (id, id_slug, name, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, '2026-01-01', '2026-01-01')",
   )
@@ -71,6 +72,37 @@ async function seedAgency(id = 101): Promise<void> {
     );
   `;
   await env.DB.exec(sql.replace(/\s+/g, " ").trim());
+}
+
+async function seedPlatformAdministratorForAccessControl(): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES('test-platform-admin','savia:better-auth','test-platform-admin','admin@savia.test','Savia Test Administrator',1,'2026-01-01','2026-01-01')",
+  ).run();
+  await ensureBootstrapAdministrator(env.DB, "test-platform-admin");
+}
+
+async function seedCustomAccessRole(
+  id: string,
+  tenantId: number,
+  enabled = true,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO access_revisions(scope,revision) VALUES(?,0)",
+  )
+    .bind(`tenant:${tenantId}`)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO access_roles(id,scope,name,label,description,enabled,protected) VALUES(?,?,?,?,?,?,0)",
+  )
+    .bind(
+      id,
+      `tenant:${tenantId}`,
+      id.replace(/[^a-z0-9_-]/gi, "_").toLowerCase(),
+      id,
+      "",
+      Number(enabled),
+    )
+    .run();
 }
 
 const oauthIssuer = "https://auth.savia.test/api/auth";
@@ -870,6 +902,182 @@ describe("Identity and access", () => {
     });
   });
 
+  it("assigns enabled custom roles in the new member's tenant", async () => {
+    await seedAgency();
+    await seedPlatformAdministratorForAccessControl();
+    await seedCustomAccessRole("custom-test-role", 101);
+    const administrator = identityUserAdministrator();
+    const createUser = vi.spyOn(administrator, "createUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const response = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "custom-role.user@acme.test",
+        firstName: "Custom",
+        lastName: "Role User",
+        membership: { tenantId: 101, role: "operator" },
+        accessRoleIds: ["custom-test-role"],
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const created = await response.json<{ data: { id: string } }>();
+    expect(createUser).toHaveBeenCalledOnce();
+    const assignedRoles = await env.DB.prepare(
+      "SELECT role_id FROM access_assignments WHERE scope='tenant:101' AND principal_id=?",
+    )
+      .bind(created.data.id)
+      .all<{ role_id: string }>();
+    expect(assignedRoles.results.map((row) => row.role_id)).toContain(
+      "custom-test-role",
+    );
+    expect(
+      await env.DB.prepare(
+        "SELECT action,target_id FROM access_audit WHERE action='assignments.saved' AND target_id=?",
+      )
+        .bind(created.data.id)
+        .all(),
+    ).toMatchObject({
+      results: [{ action: "assignments.saved", target_id: created.data.id }],
+    });
+  });
+
+  it("assigns platform custom roles in tenant:0 to a new platform administrator", async () => {
+    await seedAgency();
+    await seedPlatformAdministratorForAccessControl();
+    await seedCustomAccessRole("custom-platform-role", 0);
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      identityUserAdministrator(),
+    );
+
+    const response = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "platform-custom-role@savia.test",
+        firstName: "Platform",
+        lastName: "Custom Role",
+        platformAdmin: true,
+        accessRoleIds: ["custom-platform-role"],
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const created = await response.json<{ data: { id: string } }>();
+    const assigned = await env.DB.prepare(
+      "SELECT role_id FROM access_assignments WHERE scope='tenant:0' AND principal_id=?",
+    )
+      .bind(created.data.id)
+      .all<{ role_id: string }>();
+    expect(assigned.results.map((row) => row.role_id)).toContain(
+      "custom-platform-role",
+    );
+  });
+
+  it("compensates provisioning if a selected custom role becomes unavailable", async () => {
+    await seedAgency();
+    await seedPlatformAdministratorForAccessControl();
+    await seedCustomAccessRole("custom-racing-role", 101);
+    const administrator = identityUserAdministrator({
+      async createUser() {
+        await env.DB.prepare(
+          "UPDATE access_roles SET enabled=0 WHERE scope='tenant:101' AND id='custom-racing-role'",
+        ).run();
+        return {
+          subject: "better-auth-racing-user",
+          email: "racing-role@savia.test",
+          displayName: "Racing Role",
+        };
+      },
+    });
+    const deleteUser = vi.spyOn(administrator, "deleteUser");
+    const sendPasswordReset = vi.spyOn(administrator, "sendPasswordReset");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const response = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "racing-role@savia.test",
+        firstName: "Racing",
+        lastName: "Role",
+        membership: { tenantId: 101, role: "operator" },
+        accessRoleIds: ["custom-racing-role"],
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: "INVALID_ACCESS_ROLE" },
+    });
+    expect(deleteUser).toHaveBeenCalledOnce();
+    expect(sendPasswordReset).not.toHaveBeenCalled();
+    expect(
+      await env.DB.prepare("SELECT id FROM identity_principal WHERE subject=?")
+        .bind("better-auth-racing-user")
+        .first(),
+    ).toBeNull();
+  });
+
+  it("rejects missing, foreign-scope, and disabled roles before external provisioning", async () => {
+    await seedAgency();
+    await seedAgency(102);
+    await seedPlatformAdministratorForAccessControl();
+    await seedCustomAccessRole("custom-foreign-role", 102);
+    await seedCustomAccessRole("custom-disabled-role", 101, false);
+    const administrator = identityUserAdministrator();
+    const createUser = vi.spyOn(administrator, "createUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      administrator,
+    );
+
+    for (const accessRoleId of [
+      "missing-custom-role",
+      "custom-foreign-role",
+      "custom-disabled-role",
+    ]) {
+      const response = await app.request("/v1/identity/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: `${accessRoleId}@acme.test`,
+          firstName: "Invalid",
+          lastName: "Role",
+          membership: { tenantId: 101, role: "operator" },
+          accessRoleIds: [accessRoleId],
+        }),
+      });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { code: "INVALID_ACCESS_ROLE" },
+      });
+    }
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
   it("rejects provisioning an ordinary user without a tenant", async () => {
     const app = createApp(
       env.DB,
@@ -1119,6 +1327,140 @@ describe("Identity and access", () => {
         })
       ).status,
     ).toBe(409);
+  });
+
+  it("rejects a different login subject with the same normalized email without inheriting access", async () => {
+    const original = await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "original-email-owner",
+      email: "owner@savia.test",
+      displayName: "Owner",
+    });
+    await ensureBootstrapAdministrator(env.DB, original.id);
+    await expect(
+      upsertPrincipal(env.DB, {
+        issuer: "savia:better-auth",
+        subject: "replacement-subject",
+        email: " OWNER@SAVIA.TEST ",
+        displayName: "Other login",
+      }),
+    ).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CONFLICT" });
+    expect(
+      await findPrincipalBySubject(
+        env.DB,
+        "savia:better-auth",
+        "replacement-subject",
+      ),
+    ).toBeUndefined();
+    const unchanged = await findPrincipalBySubject(
+      env.DB,
+      "savia:better-auth",
+      "original-email-owner",
+    );
+    expect(unchanged?.id).toBe(original.id);
+  });
+
+  it("rejects duplicate provisioning before creating or messaging an authentication account", async () => {
+    await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "existing-email-owner",
+      email: "duplicate@savia.test",
+      displayName: "Existing",
+    });
+    const createUser = vi.fn();
+    const sendPasswordReset = vi.fn();
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      identityUserAdministrator({ createUser, sendPasswordReset }),
+    );
+    const response = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "DUPLICATE@savia.test",
+        firstName: "Duplicate",
+        lastName: "User",
+        platformAdmin: true,
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: "IDENTITY_EMAIL_CONFLICT" },
+    });
+    expect(createUser).not.toHaveBeenCalled();
+    expect(sendPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it("rejects reactivation when another active principal owns the email", async () => {
+    const inactive = await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "inactive-email-owner",
+      email: "reused@savia.test",
+      displayName: "Inactive",
+    });
+    await env.DB.prepare("UPDATE identity_principal SET is_active=0 WHERE id=?")
+      .bind(inactive.id)
+      .run();
+    await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "active-email-owner",
+      email: "reused@savia.test",
+      displayName: "Active",
+    });
+    await expect(
+      setPrincipalActive(env.DB, inactive.id, true),
+    ).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CONFLICT" });
+    expect(
+      (
+        await findPrincipalBySubject(
+          env.DB,
+          "savia:better-auth",
+          "inactive-email-owner",
+        )
+      )?.isActive,
+    ).toBe(false);
+    const administrator = identityUserAdministrator();
+    const activate = vi.spyOn(administrator, "setAccountActive");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      administrator,
+    );
+    const response = await app.request(
+      `/v1/identity/users/${inactive.id}/suspension`,
+      { method: "DELETE" },
+    );
+    expect(response.status).toBe(409);
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it("allows only one concurrent principal for a normalized email", async () => {
+    const attempts = await Promise.allSettled([
+      upsertPrincipal(env.DB, {
+        issuer: "savia:better-auth",
+        subject: "race-email-one",
+        email: "race-email@savia.test",
+        displayName: "One",
+      }),
+      upsertPrincipal(env.DB, {
+        issuer: "other:provider",
+        subject: "race-email-two",
+        email: " RACE-EMAIL@SAVIA.TEST ",
+        displayName: "Two",
+      }),
+    ]);
+    expect(
+      attempts.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const rejected = attempts.find(
+      (result) => result.status === "rejected",
+    ) as PromiseRejectedResult;
+    expect(rejected.reason).toMatchObject({ code: "IDENTITY_EMAIL_CONFLICT" });
   });
 
   it("keeps one principal when the same Better Auth session arrives concurrently", async () => {

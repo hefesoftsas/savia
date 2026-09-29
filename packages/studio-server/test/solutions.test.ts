@@ -4,9 +4,13 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createStudioApp } from "../src/index";
 import { installSolution } from "../src/solutions";
 import { makeConfig } from "@savia/studio-shared/metadata";
+import { createExtensionRegistry } from "@savia/studio-shared/extension-package";
 import quoterManifest from "../../../solutions/insurance-quoter/manifest.json";
 import managementManifest from "../../../solutions/insurance-management/manifest.json";
 import quotePluginManifest from "../../../store-ports/quotes/savia-extension.json";
+const quotesStore = JSON.parse(
+  readFileSync("../../store-ports/quotes/store.json", "utf8"),
+);
 
 let platform: Awaited<
   ReturnType<typeof getPlatformProxy<{ DB: D1Database; POC_LOCAL: string }>>
@@ -30,10 +34,21 @@ const manifest = {
     },
   ],
 };
-function request(tenant: string, path: string, method = "GET", body?: unknown) {
+const quoteRegistry = createExtensionRegistry([
+  { manifest: quotePluginManifest },
+]);
+function request(
+  tenant: string,
+  path: string,
+  method = "GET",
+  body?: unknown,
+  overrides: Record<string, unknown> = {},
+) {
   const app = createStudioApp(tenant, {
     seedObjects: [],
     solutionCatalog: [manifest],
+    extensionRegistry: quoteRegistry,
+    ...overrides,
   } as any);
   return app.request(
     "http://localhost/api" + path,
@@ -183,6 +198,252 @@ describe("industry packages on real D1", () => {
     expect(JSON.stringify(exported)).not.toContain("Patient-private-973");
     await json("other", "/solutions/install", "POST", exported);
   });
+  it("previews and activates a solution with its extension dependencies", async () => {
+    const tenant = "solution-activation";
+    const packageWithDependency = {
+      ...manifest,
+      id: "insurance.quoter",
+      requires: [quotePluginManifest.id],
+    };
+    const preview = await json(
+      tenant,
+      "/solutions/activation-preview",
+      "POST",
+      packageWithDependency,
+    );
+    expect(preview.data).toMatchObject({
+      canInstall: true,
+      canActivate: true,
+      conflicts: [],
+      dependencies: [
+        {
+          id: quotePluginManifest.id,
+          label: quotePluginManifest.label,
+          action: "install",
+          kind: "extension",
+        },
+      ],
+      objects: [{ name: "appointments", action: "create" }],
+    });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT id FROM studio_extension_installations WHERE tenant_id=?",
+      )
+        .bind(tenant)
+        .first(),
+    ).toBeNull();
+
+    const activated = await json(
+      tenant,
+      "/solutions/activate",
+      "POST",
+      packageWithDependency,
+    );
+    expect(activated.data).toMatchObject({
+      id: packageWithDependency.id,
+      enabled: true,
+      dependencies: [{ id: quotePluginManifest.id, status: "installed" }],
+    });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, quotePluginManifest.id)
+        .first(),
+    ).toMatchObject({ enabled: 1 });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT enabled FROM studio_solution_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, packageWithDependency.id)
+        .first(),
+    ).toMatchObject({ enabled: 1 });
+  });
+  it("activates the real Cotizador after provisioning its quotes extension collections", async () => {
+    const tenant = "real-cotizador-activation";
+    await platform.env.DB.prepare(
+      "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,store_json,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        tenant,
+        quotePluginManifest.id,
+        quotePluginManifest.version,
+        JSON.stringify(quotePluginManifest),
+        JSON.stringify(quotesStore),
+        "export default {}",
+        "activation-test-hash",
+        1,
+      )
+      .run();
+
+    const preview = await json(
+      tenant,
+      "/solutions/activation-preview",
+      "POST",
+      quoterManifest,
+    );
+    expect(preview.data.canActivate).toBe(true);
+    const activated = await json(
+      tenant,
+      "/solutions/activate",
+      "POST",
+      quoterManifest,
+    );
+    expect(activated.data).toMatchObject({ id: quoterManifest.id, enabled: true });
+    expect((await json(tenant, "/objects")).data.map((object: any) => object.name)).toEqual(
+      expect.arrayContaining([
+        "cotizaciones",
+        "cotizaciones_detalle",
+        "cotizador_por_pasos",
+      ]),
+    );
+  });
+  it("keeps unresolved dependencies as activation conflicts without mutations", async () => {
+    const tenant = "solution-activation-missing";
+    const packageWithDependency = {
+      ...manifest,
+      id: "insurance.quoter.missing",
+      requires: ["insurance.missing-extension"],
+    };
+    const preview = await json(
+      tenant,
+      "/solutions/activation-preview",
+      "POST",
+      packageWithDependency,
+    );
+    expect(preview.data.canActivate).toBe(false);
+    expect(preview.data.conflicts).toContain(
+      "Dependencia no disponible: insurance.missing-extension.",
+    );
+    expect(
+      (await request(tenant, "/solutions/activate", "POST", packageWithDependency))
+        .status,
+    ).toBe(409);
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) AS n FROM studio_solution_installations WHERE tenant_id=?",
+      )
+        .bind(tenant)
+        .first(),
+    ).toMatchObject({ n: 0 });
+  });
+  it("rejects circular extension dependencies without mutations", async () => {
+    const tenant = "solution-activation-cycle";
+    const alpha = {
+      format: "savia.extension",
+      formatVersion: 1,
+      id: "cycle.alpha",
+      version: "1.0.0",
+      label: "Cycle Alpha",
+      description: "Test cycle",
+      requires: ["cycle.beta"],
+      apiVersion: 1,
+    };
+    const beta = {
+      ...alpha,
+      id: "cycle.beta",
+      label: "Cycle Beta",
+      requires: ["cycle.alpha"],
+    };
+    for (const extension of [alpha, beta])
+      await platform.env.DB.prepare(
+        "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+      )
+        .bind(
+          tenant,
+          extension.id,
+          extension.version,
+          JSON.stringify(extension),
+          "export default {}",
+          `hash-${extension.id}`,
+          1,
+        )
+        .run();
+    const cyclicSolution = {
+      ...manifest,
+      id: "insurance.cyclic",
+      requires: ["cycle.alpha"],
+    };
+    const preview = await json(
+      tenant,
+      "/solutions/activation-preview",
+      "POST",
+      cyclicSolution,
+    );
+    expect(preview.data.canActivate).toBe(false);
+    expect(preview.data.conflicts.join(" ")).toContain("Dependencia circular");
+    expect(
+      (await request(tenant, "/solutions/activate", "POST", cyclicSolution))
+        .status,
+    ).toBe(409);
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) AS n FROM studio_extension_installations WHERE tenant_id=?",
+      )
+        .bind(tenant)
+        .first(),
+    ).toMatchObject({ n: 0 });
+  });
+  it("returns retryable partial state when extension authorization blocks activation", async () => {
+    const tenant = "solution-activation-partial";
+    await platform.env.DB.prepare(
+      "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+    )
+      .bind(
+        tenant,
+        quotePluginManifest.id,
+        quotePluginManifest.version,
+        JSON.stringify(quotePluginManifest),
+        "export default {}",
+        "partial-hash",
+        1,
+      )
+      .run();
+    const candidate = {
+      ...manifest,
+      id: "insurance.partial",
+      requires: [quotePluginManifest.id],
+    };
+    const response = await request(
+      tenant,
+      "/solutions/activate",
+      "POST",
+      candidate,
+      { canManageExtension: () => false },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      partial: {
+        solutionId: candidate.id,
+        completedDependencies: [],
+        failedDependency: quotePluginManifest.id,
+        retryable: true,
+      },
+    });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) AS n FROM studio_solution_installations WHERE tenant_id=?",
+      )
+        .bind(tenant)
+        .first(),
+    ).toMatchObject({ n: 0 });
+  });
+  it("reactivates an already-installed disabled solution", async () => {
+    const tenant = "solution-reactivation";
+    await json(tenant, "/solutions/install", "POST", manifest);
+    await json(tenant, "/solutions/test.clinic", "PATCH", { enabled: false });
+    const activated = await json(
+      tenant,
+      "/solutions/activate",
+      "POST",
+      manifest,
+    );
+    expect(activated.data).toMatchObject({
+      id: manifest.id,
+      enabled: true,
+      dependencies: [],
+    });
+  });
   it("is idempotent, disables access without deleting records and reactivates", async () => {
     await json("lifecycle", "/solutions/install", "POST", manifest);
     const record = (
@@ -215,6 +476,16 @@ describe("industry packages on real D1", () => {
       manifest,
     );
     expect(preview.data.canInstall).toBe(false);
+    const activation = await json(
+      "collision",
+      "/solutions/activation-preview",
+      "POST",
+      manifest,
+    );
+    expect(activation.data.canActivate).toBe(false);
+    expect(activation.data.conflicts).toContain(
+      "El objeto appointments ya existe y no pertenece a este paquete.",
+    );
     expect(
       (await request("collision", "/solutions/install", "POST", manifest))
         .status,

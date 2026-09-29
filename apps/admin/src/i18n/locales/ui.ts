@@ -294,18 +294,6 @@ export const uiMessages = {
     "A compact form to block time in your connected calendars.",
     "Um formulário compacto para reservar tempo nos calendários conectados.",
   ],
-  Domain: ["Dominio", "Domain", "Domínio"],
-  "Choose a domain": [
-    "Elige un dominio",
-    "Choose a domain",
-    "Escolha um domínio",
-  ],
-  "The domain is the source data space. You will only see collections authorized for your user.":
-    [
-      "El dominio es el espacio de datos de origen. Solo verás colecciones autorizadas para tu usuario.",
-      "The domain is the source data space. You will only see collections authorized for your user.",
-      "O domínio é o espaço de dados de origem. Você verá apenas coleções autorizadas para seu usuário.",
-    ],
   "Choose a collection": [
     "Elige una colección",
     "Choose a collection",
@@ -374,11 +362,6 @@ export const uiMessages = {
     "We couldn't load your collections. Try again.",
     "Não foi possível carregar suas coleções. Tente novamente.",
   ],
-  "We couldn't load this domain's collections.": [
-    "No pudimos cargar las colecciones de este dominio.",
-    "We couldn't load this domain's collections.",
-    "Não foi possível carregar as coleções deste domínio.",
-  ],
   "We couldn't read this collection.": [
     "No pudimos leer esta colección.",
     "We couldn't read this collection.",
@@ -388,11 +371,6 @@ export const uiMessages = {
     "Ese widget ya está en tu tablero.",
     "That widget is already on your dashboard.",
     "Esse widget já está no seu painel.",
-  ],
-  "Choose a domain and a collection.": [
-    "Elige un dominio y una colección.",
-    "Choose a domain and a collection.",
-    "Escolha um domínio e uma coleção.",
   ],
   "This collection has no grouping field for charts.": [
     "Esta colección no tiene campo de agrupación para graficar.",

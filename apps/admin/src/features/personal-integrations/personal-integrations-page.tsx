@@ -1,3 +1,4 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type ElementType } from "react";
 import Nango from "@nangohq/frontend";
@@ -258,7 +259,7 @@ export function PersonalIntegrationsPage({
     try {
       const [nextProviders, nextConnections] = await Promise.all([
         services.personalIntegrations.listProviders(),
-        services.personalIntegrations.listConnections(),
+        services.personalIntegrations.listConnections(true),
       ]);
       setProviders(nextProviders);
       setConnections(nextConnections);
@@ -277,6 +278,8 @@ export function PersonalIntegrationsPage({
   useEffect(() => {
     void refresh();
   }, [services]);
+
+  useRealtimeRefresh({ topics: ["personal-integrations"], refresh });
 
   const connectionsByProvider = useMemo(
     () =>

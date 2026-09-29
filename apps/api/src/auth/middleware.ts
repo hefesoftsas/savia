@@ -6,13 +6,15 @@ export function authenticationErrorResponse(
   error: AuthenticationError,
 ): Response {
   const status =
-    error.code === "AUTHENTICATION_UNAVAILABLE"
-      ? 503
-      : error.code === "AUTHORIZATION_FORBIDDEN" ||
-          error.code === "INSUFFICIENT_SCOPE" ||
-          error.code === "MFA_ENROLLMENT_REQUIRED"
-        ? 403
-        : 401;
+    error.code === "IDENTITY_EMAIL_CONFLICT"
+      ? 409
+      : error.code === "AUTHENTICATION_UNAVAILABLE"
+        ? 503
+        : error.code === "AUTHORIZATION_FORBIDDEN" ||
+            error.code === "INSUFFICIENT_SCOPE" ||
+            error.code === "MFA_ENROLLMENT_REQUIRED"
+          ? 403
+          : 401;
   return Response.json(
     { error: { code: error.code, message: error.message } },
     { status },

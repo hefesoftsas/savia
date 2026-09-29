@@ -30,7 +30,7 @@ import {
 import {
   describeWidgetCollection,
   listWidgetCollections,
-  listWidgetDomains,
+  listWidgetTenants,
 } from "./data";
 import {
   availablePluginWidgets,
@@ -41,7 +41,7 @@ import { autoDetectWidgetConfig } from "./summarize";
 import type {
   WidgetCollection,
   WidgetCollectionSchema,
-  WidgetDomain,
+  WidgetTenant,
 } from "./types";
 
 const AUTO = "__auto";
@@ -64,8 +64,8 @@ export function AddWidgetDialog({
   existingKinds?: string[];
 }) {
   const [source, setSource] = useState<Source>("collection");
-  const [domains, setDomains] = useState<WidgetDomain[]>([]);
-  const [domain, setDomain] = useState("");
+  const [tenants, setTenants] = useState<WidgetTenant[]>([]);
+  const [tenantApiBasePath, setTenantApiBasePath] = useState("");
   const [collections, setCollections] = useState<WidgetCollection[]>([]);
   const [collection, setCollection] = useState("");
   const [schema, setSchema] = useState<WidgetCollectionSchema | null>(null);
@@ -96,13 +96,13 @@ export function AddWidgetDialog({
     let active = true;
     setLoading(true);
     setFeedback(null);
-    void listWidgetDomains(apiClient).then(
+    void listWidgetTenants(apiClient).then(
       (result) => {
         if (!active) return;
-        setDomains(result);
+        setTenants(result);
         const preferred =
           result.find((entry) => entry.kind === "platform") ?? result[0];
-        if (preferred) setDomain(preferred.apiBasePath);
+        if (preferred) setTenantApiBasePath(preferred.apiBasePath);
         setLoading(false);
       },
       () => {
@@ -117,18 +117,19 @@ export function AddWidgetDialog({
   }, [open, apiClient, source]);
 
   useEffect(() => {
-    if (!open || !apiClient || source !== "collection" || !domain) return;
+    if (!open || !apiClient || source !== "collection" || !tenantApiBasePath)
+      return;
     let active = true;
     setLoading(true);
     void Promise.allSettled([
-      listWidgetCollections(apiClient, domain),
-      listWidgetExtensions(apiClient, domain).catch(() => []),
+      listWidgetCollections(apiClient, tenantApiBasePath),
+      listWidgetExtensions(apiClient, tenantApiBasePath).catch(() => []),
     ]).then((results) => {
       if (!active) return;
       if (results[0].status === "fulfilled") {
         setCollections(results[0].value);
       } else {
-        setFeedback("No pudimos cargar las colecciones de este dominio.");
+        setFeedback("No pudimos cargar las colecciones de este tenant.");
       }
       setExtensions(results[1].status === "fulfilled" ? results[1].value : []);
       setCollection("");
@@ -138,19 +139,23 @@ export function AddWidgetDialog({
     return () => {
       active = false;
     };
-  }, [open, apiClient, domain, source]);
+  }, [open, apiClient, tenantApiBasePath, source]);
 
   useEffect(() => {
     if (
       !open ||
       !apiClient ||
       source !== "collection" ||
-      !domain ||
+      !tenantApiBasePath ||
       !collection
     )
       return;
     let active = true;
-    void describeWidgetCollection(apiClient, domain, collection).then(
+    void describeWidgetCollection(
+      apiClient,
+      tenantApiBasePath,
+      collection,
+    ).then(
       (result) => {
         if (!active || !result) return;
         setSchema(result);
@@ -164,7 +169,7 @@ export function AddWidgetDialog({
     return () => {
       active = false;
     };
-  }, [open, apiClient, domain, collection, source]);
+  }, [open, apiClient, tenantApiBasePath, collection, source]);
 
   const detected = useMemo(
     () => (schema ? autoDetectWidgetConfig(schema) : {}),
@@ -221,8 +226,8 @@ export function AddWidgetDialog({
       }
       return;
     }
-    if (!domain || !collection) {
-      setFeedback("Elige un dominio y una colección.");
+    if (!tenantApiBasePath || !collection) {
+      setFeedback("Elige un tenant y una colección.");
       return;
     }
     if (incompatible) {
@@ -240,7 +245,7 @@ export function AddWidgetDialog({
       amountField !== AUTO ? amountField : detected.amountField;
     const widget: MyDayWidget = {
       id: createMyDayWidgetId(),
-      apiBasePath: domain as Extract<
+      apiBasePath: tenantApiBasePath as Extract<
         MyDayWidget,
         { apiBasePath: string }
       >["apiBasePath"],
@@ -349,17 +354,17 @@ export function AddWidgetDialog({
           ) : (
             <>
               <div className="space-y-2">
-                <Label htmlFor="widget-domain">Dominio</Label>
+                <Label htmlFor="widget-tenant">Tenant</Label>
                 <Select
-                  value={domain}
-                  onValueChange={setDomain}
-                  disabled={loading || domains.length === 0}
+                  value={tenantApiBasePath}
+                  onValueChange={setTenantApiBasePath}
+                  disabled={loading || tenants.length === 0}
                 >
-                  <SelectTrigger id="widget-domain" className="w-full">
-                    <SelectValue placeholder="Elige un dominio" />
+                  <SelectTrigger id="widget-tenant" className="w-full">
+                    <SelectValue placeholder="Elige un tenant" />
                   </SelectTrigger>
                   <SelectContent>
-                    {domains.map((entry) => (
+                    {tenants.map((entry) => (
                       <SelectItem
                         key={entry.apiBasePath}
                         value={entry.apiBasePath}
@@ -370,7 +375,7 @@ export function AddWidgetDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  El dominio es el espacio de datos de origen. Solo verás
+                  El tenant es el espacio de datos de origen. Solo verás
                   colecciones autorizadas para tu usuario.
                 </p>
               </div>

@@ -8,7 +8,7 @@ export type StudioRuntime = {
   embedded: boolean;
   localWorkspace?: LocalWorkspace;
   apiBasePath?: string;
-  domainId?: string;
+  tenantId?: number;
   businessSetupEnabled?: boolean;
   transport?: StudioTransport;
   /** Authenticated backend transport for plugins requiring committed records. */

@@ -33,7 +33,7 @@ export function CollectionOptionField({
   const result = useQuery({
     queryKey: [
       "collection-options",
-      runtime.domainId ?? runtime.apiBasePath,
+      runtime.tenantId ?? runtime.apiBasePath,
       objectName,
       props.fieldName,
       props.config?.collectionOptions,

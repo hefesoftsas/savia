@@ -105,6 +105,31 @@ it("delivers once per recipient with two concurrent workers", async () => {
   expect(count).toBe(2);
 });
 
+it("emits delivery callbacks only after the delivery rows are committed", async () => {
+  const repository = new NotificationRepository(fixture.db);
+  const { id } = await repository.accept(input("realtime-delivery", ["alice"]));
+  const delivered: string[] = [];
+  const statusUpdates: Array<{ principalId: string; eventId: string }> = [];
+  const report = await processNotifications(
+    fixture.db,
+    stubPolicy(),
+    options,
+    {
+      onDelivery: (principalId) => delivered.push(principalId),
+      onEventStatus: (principalId, eventId) =>
+        statusUpdates.push({ principalId, eventId }),
+    },
+  );
+  expect(report.delivered).toBe(1);
+  expect(delivered).toEqual(["alice"]);
+  expect(statusUpdates).toEqual([{ principalId: "admin", eventId: id }]);
+  expect(
+    await fixture.db
+      .prepare("SELECT recipient_id FROM notification_deliveries")
+      .first<{ recipient_id: string }>(),
+  ).toEqual({ recipient_id: "alice" });
+});
+
 it("recovers a stale lease after a crash", async () => {
   const repository = new NotificationRepository(fixture.db);
   const { id } = await repository.accept(input("crash", ["alice"]));

@@ -9,9 +9,9 @@ export const STUDIO_NAVIGATION_MESSAGE = "savia-studio-navigation";
 export const STUDIO_NAVIGATION_MESSAGE_LEGACY = "savia-crm-navigation";
 
 /** Carry navigation intent across workspaces, never a record or screen identity. */
-export function studioDomainSearch(current: URLSearchParams, domain: string) {
+export function studioTenantSearch(current: URLSearchParams, tenantId: number) {
   const next = new URLSearchParams();
-  if (domain) next.set("domain", domain);
+  next.set("tenantId", String(tenantId));
   const view = current.get("view") ?? "records";
   const workspaceViews = new Set([
     "admin",
@@ -91,17 +91,14 @@ export function isStudioNavigationMessage(data: unknown): data is {
 }
 
 export function studioHref(input: {
-  domain?: string;
   tenantId?: number;
-  agencyId?: number;
   object?: string;
   view?: string;
   tab?: string;
 }): string {
   const search = new URLSearchParams();
-  if (input.domain) search.set("domain", input.domain);
-  else if (input.tenantId) search.set("tenantId", String(input.tenantId));
-  else if (input.agencyId) search.set("agencyId", String(input.agencyId));
+  if (input.tenantId !== undefined)
+    search.set("tenantId", String(input.tenantId));
   if (input.object) search.set("object", input.object);
   if (input.view && input.view !== "records") search.set("view", input.view);
   if (input.tab) search.set("tab", input.tab);
@@ -110,25 +107,25 @@ export function studioHref(input: {
   return query ? `/studio?${query}` : "/studio";
 }
 
-const AGENCY_API_ID_PATTERN = /^\/v1\/(?:studio|dynamic-crm)\/(\d+)$/;
-const AGENCY_API_PREFIX_PATTERN = /^\/v1\/(?:studio|dynamic-crm)\/.+$/;
+const TENANT_API_ID_PATTERN = /^\/v1\/(?:studio|dynamic-crm)\/(\d+)$/;
+const TENANT_API_PREFIX_PATTERN = /^\/v1\/(?:studio|dynamic-crm)\/.+$/;
 
 /**
  * Numeric agency id from an agency workspace API base. Canonical is
  * `/v1/studio/:id`; `/v1/dynamic-crm/:id` stays as a legacy alias.
  */
-export function matchAgencyApiBasePath(
+export function matchTenantApiBasePath(
   apiBasePath: string | undefined,
 ): string | undefined {
   if (!apiBasePath) return undefined;
-  return AGENCY_API_ID_PATTERN.exec(apiBasePath)?.[1];
+  return TENANT_API_ID_PATTERN.exec(apiBasePath)?.[1];
 }
 
 /** Agency workspace API base (any scope id), both prefixes. */
-export function isAgencyApiBasePath(apiBasePath: string | undefined): boolean {
+export function isTenantApiBasePath(apiBasePath: string | undefined): boolean {
   return (
     typeof apiBasePath === "string" &&
-    AGENCY_API_PREFIX_PATTERN.test(apiBasePath)
+    TENANT_API_PREFIX_PATTERN.test(apiBasePath)
   );
 }
 
@@ -140,11 +137,11 @@ export function visibleStudioObjects(
 
 export function studioSidebarChildren(
   objects: readonly StudioNavigationObject[],
-  domain?: string | number,
+  tenantId?: number,
   currentObject?: string,
 ): StudioSidebarChild[] {
   const visible = visibleStudioObjects(objects);
-  const scope = typeof domain === "number" ? { agencyId: domain } : { domain };
+  const scope = tenantId !== undefined ? { tenantId } : {};
   const fallbackObject = currentObject ?? visible[0]?.name;
   return [
     ...visible.map((object) => ({
@@ -183,19 +180,22 @@ export function studioSidebarChildren(
 }
 
 export function parseStudioSearch(search: string): {
-  domain?: string;
-  agencyId?: number;
+  tenantId?: number;
   object?: string;
   view: string;
 } {
   const params = new URLSearchParams(
     search.startsWith("?") ? search.slice(1) : search,
   );
-  const agencyId = Number(params.get("agencyId"));
+  const rawTenantId = params.get("tenantId");
+  const tenantId = Number(rawTenantId);
   return {
-    domain: params.get("domain") ?? undefined,
-    agencyId:
-      Number.isSafeInteger(agencyId) && agencyId > 0 ? agencyId : undefined,
+    tenantId:
+      rawTenantId !== null &&
+      /^\d+$/.test(rawTenantId) &&
+      Number.isSafeInteger(tenantId)
+        ? tenantId
+        : undefined,
     object: params.get("object") ?? undefined,
     view: params.get("view") ?? "records",
   };
@@ -207,7 +207,7 @@ export function isStudioChildActive(
 ): boolean {
   const current = parseStudioSearch(search);
   const target = parseStudioSearch(child.route.split("?")[1] ?? "");
-  if (target.domain && current.domain && target.domain !== current.domain)
+  if (target.tenantId !== undefined && current.tenantId !== target.tenantId)
     return false;
   if (child.id.startsWith("object:")) {
     const name = child.id.slice("object:".length);

@@ -49,7 +49,7 @@ export function CollectionRelationPicker(props: IFieldProps) {
     queryKey: [
       "relation-options",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       target,
       search,
       page,
@@ -64,7 +64,7 @@ export function CollectionRelationPicker(props: IFieldProps) {
     queryKey: [
       "relation-selected",
       runtime.apiBasePath,
-      runtime.domainId,
+      runtime.tenantId,
       target,
       displayField,
       selected,

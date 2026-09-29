@@ -1,3 +1,7 @@
+> Obsolete: independent data domains have been replaced by tenants. Do not use
+> the migration or workspace-creation instructions below. Follow
+> [tenant-only isolation](../guides/tenant-isolation.md).
+
 # Local legacy data migration into the domain preview
 
 This procedure builds a **new** SQLite database. It never replaces the source or running preview database and makes no network/provider calls. Stop the preview API before a separate installation step; replacing a live SQLite file while its WAL is open is unsafe.

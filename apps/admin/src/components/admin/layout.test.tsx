@@ -78,7 +78,7 @@ function RouteControls() {
         type="button"
         onClick={() =>
           navigate(
-            "/studio?domain=platform&object=customer_profiles&view=screen-relations",
+            "/studio?tenantId=0&object=customer_profiles&view=screen-relations",
           )
         }
       >
@@ -114,7 +114,7 @@ describe("admin layout", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          "/studio?domain=platform&object=customer_profiles&view=admin-screen",
+          "/studio?tenantId=0&object=customer_profiles&view=admin-screen",
         ]}
       >
         <Layout>
@@ -135,7 +135,7 @@ describe("admin layout", () => {
     fireEvent.click(back);
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "/studio?domain=platform&object=customer_profiles&view=admin-screen",
+        "/studio?tenantId=0&object=customer_profiles&view=admin-screen",
       ),
     );
     expect(forward).toBeEnabled();
@@ -143,7 +143,7 @@ describe("admin layout", () => {
     fireEvent.click(forward);
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "/studio?domain=platform&object=customer_profiles&view=screen-relations",
+        "/studio?tenantId=0&object=customer_profiles&view=screen-relations",
       ),
     );
   });

@@ -25,7 +25,7 @@ execution state in the backend, with inspectable results and explicit changes.
 ## Operating Context
 
 Users work in a configurable administrative interface on desktop and mobile.
-Each data domain or workspace isolates its collections and configuration.
+Each tenant workspace isolates its collections and configuration.
 Solution-specific screens retain their specialized behavior and terminology.
 
 ## Capabilities and Constraints

@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ServiceCredentialsPage } from "./service-credentials-page";
 
-vi.mock("./studio-domain-credentials-section", () => ({
-  StudioDomainCredentialsSection: ({
+vi.mock("./studio-tenant-credentials-section", () => ({
+  StudioTenantCredentialsSection: ({
     globalCredentials,
   }: {
     globalCredentials?: React.ReactNode;
@@ -27,15 +27,15 @@ function servicesWithSummary() {
           updatedAt: "2026-09-03T12:00:00.000Z",
           updatedBy: "platform-admin",
         },
-        agencies: [],
+        tenants: [],
       }),
       models: vi.fn().mockResolvedValue([]),
-      activeAgency: vi.fn().mockResolvedValue({
-        agencies: [{ id: 101, name: "Agencia Norte" }],
+      activeTenant: vi.fn().mockResolvedValue({
+        tenants: [{ tenantId: 101, label: "Tenant Norte" }],
       }),
       saveGlobal: vi.fn(),
-      saveAgencyOverride: vi.fn(),
-      clearAgencyOverride: vi.fn(),
+      saveTenantOverride: vi.fn(),
+      clearTenantOverride: vi.fn(),
     },
   } as unknown as AppServices;
 }

@@ -1340,7 +1340,7 @@ function ComposerSection({
   }
 
   const fallbackModelId =
-    summary?.agencies?.[0]?.model ||
+    summary?.tenants?.[0]?.model ||
     summary?.global?.model ||
     summary?.deployment?.model ||
     "";

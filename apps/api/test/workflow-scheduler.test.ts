@@ -75,7 +75,7 @@ it("prunes domain audit history on the preview scheduled tick", async () => {
         "INSERT INTO studio_audit(id,tenant_id,action,object_name,detail,created_at) VALUES (?,?,?,?,?,?)",
       ).bind(
         `scheduled-${String(i).padStart(3, "0")}`,
-        "domain:scheduled-test",
+        "tenant:99004",
         "object.updated",
         "example",
         "{}",
@@ -90,7 +90,7 @@ it("prunes domain audit history on the preview scheduled tick", async () => {
   });
 
   const count = await env.DB.prepare(
-    "SELECT count(*) AS total FROM studio_audit WHERE tenant_id='domain:scheduled-test'",
+    "SELECT count(*) AS total FROM studio_audit WHERE tenant_id='tenant:99004'",
   ).first<{ total: number }>();
   expect(count?.total).toBe(200);
   expect(

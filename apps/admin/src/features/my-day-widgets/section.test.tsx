@@ -38,19 +38,20 @@ function isoDay(offset: number): string {
 function createApiClient() {
   return {
     get: vi.fn(async (path: string) => {
-      if (path === "/v1/data-domains") {
+      if (path === "/v1/tenant-workspaces") {
         return {
           data: [
             {
-              id: "platform",
+              id: "tenant:0",
+              tenantId: 0,
               label: "Platform",
               kind: "platform",
-              apiBasePath: "/v1/data-domains/platform",
+              apiBasePath: "/v1/studio/0",
             },
           ],
         };
       }
-      if (path === "/v1/data-domains/platform/api/objects") {
+      if (path === "/v1/studio/0/api/objects") {
         return objectsPayload;
       }
       if (path.includes("/api/records/polizas/summary")) {
@@ -121,7 +122,7 @@ describe("MyDayWidgetsSection", () => {
           createPreferences([
             {
               id: "w_polizas1",
-              apiBasePath: "/v1/data-domains/platform",
+              apiBasePath: "/v1/studio/0",
               collection: "polizas",
               kind: "summary",
             },
@@ -136,7 +137,7 @@ describe("MyDayWidgetsSection", () => {
     expect(card).toHaveTextContent("Vencida");
     expect(
       screen.getByRole("link", { name: "Ver Pólizas completa" }),
-    ).toHaveAttribute("href", "/studio?domain=platform&object=polizas");
+    ).toHaveAttribute("href", "/studio?tenantId=0&object=polizas");
   });
 
   it("renders an items widget with recent records", async () => {
@@ -147,7 +148,7 @@ describe("MyDayWidgetsSection", () => {
           createPreferences([
             {
               id: "w_polizas2",
-              apiBasePath: "/v1/data-domains/platform",
+              apiBasePath: "/v1/studio/0",
               collection: "polizas",
               kind: "items",
             },
@@ -169,7 +170,7 @@ describe("MyDayWidgetsSection", () => {
           createPreferences([
             {
               id: "w_polizas3",
-              apiBasePath: "/v1/data-domains/platform",
+              apiBasePath: "/v1/studio/0",
               collection: "polizas",
               kind: "chart",
             },
@@ -195,7 +196,7 @@ describe("MyDayWidgetsSection", () => {
           createPreferences([
             {
               id: "w_polizas4",
-              apiBasePath: "/v1/data-domains/platform",
+              apiBasePath: "/v1/studio/0",
               collection: "polizas",
               kind: "actions",
             },
@@ -217,14 +218,14 @@ describe("MyDayWidgetsSection", () => {
     const widgetA = {
       id: "w_a",
       title: "Widget A",
-      apiBasePath: "/v1/data-domains/platform",
+      apiBasePath: "/v1/studio/0",
       collection: "polizas",
       kind: "items",
     };
     const widgetB = {
       id: "w_b",
       title: "Widget B",
-      apiBasePath: "/v1/data-domains/platform",
+      apiBasePath: "/v1/studio/0",
       collection: "polizas",
       kind: "summary",
     };
@@ -258,7 +259,7 @@ describe("MyDayWidgetsSection", () => {
     const preferences = createPreferences([
       {
         id: "w_polizas1",
-        apiBasePath: "/v1/data-domains/platform",
+        apiBasePath: "/v1/studio/0",
         collection: "polizas",
         kind: "summary",
       },

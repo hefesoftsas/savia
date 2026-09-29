@@ -25,6 +25,11 @@ import {
 import { collectionCapabilities } from "./collection-capabilities";
 import { CollectionLayoutDesigner } from "./collection-sources-panel";
 import { DependentOptionsEditor } from "./dependent-options";
+import { getStudioRuntime } from "./runtime";
+import {
+  RemoteChangesNotice,
+  useRealtimeRefresh,
+} from "@/realtime/use-realtime-refresh";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -2285,27 +2290,49 @@ export default function Designer({
   object: StudioObject;
   onSaved: () => void;
 }) {
-  const capabilities = collectionCapabilities(object);
-  if (!capabilities.schema && !capabilities.customFields)
-    return (
-      <CollectionLayoutDesigner
-        key={`${object.name}-${object.version}`}
+  const [session, setSession] = useState(0);
+  const remoteChanges = useRealtimeRefresh({
+    topics: ["studio"],
+    tenantId: getStudioRuntime().tenantId,
+    blocked: true,
+    refresh: () => setSession((value) => value + 1),
+    accepts: (event) =>
+      event.collection === "objects" || event.collection === "fields",
+  });
+  return (
+    <>
+      <RemoteChangesNotice {...remoteChanges} />
+      <DesignerSession
+        key={`${object.name}:${session}`}
         object={object}
         onSaved={onSaved}
       />
-    );
+    </>
+  );
+}
+
+function DesignerSession({
+  object,
+  onSaved,
+}: {
+  object: StudioObject;
+  onSaved: () => void;
+}) {
+  const snapshot = useRef(object).current;
+  const capabilities = collectionCapabilities(snapshot);
+  if (!capabilities.schema && !capabilities.customFields)
+    return <CollectionLayoutDesigner object={snapshot} onSaved={onSaved} />;
   return (
     <DesignerProvider
-      key={`${object.name}-${object.version ?? 1}`}
       initialState={{
         ...createInitialDesignerState(),
-        fields: object.config.fields,
+        fields: snapshot.config.fields,
         fieldOrder:
-          object.config.fieldOrder ?? Object.keys(object.config.fields),
-        settings: object.config.settings ?? {},
+          snapshot.config.fieldOrder ?? Object.keys(snapshot.config.fields),
+        settings: snapshot.config.settings ?? {},
       }}
     >
-      <Editor object={object} onSaved={onSaved} />
+      <Editor object={snapshot} onSaved={onSaved} />
     </DesignerProvider>
   );
 }

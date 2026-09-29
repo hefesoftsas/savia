@@ -29,7 +29,7 @@ it("keeps canonical customer details without querying unsupported generic activi
   vi.mocked(api).mockResolvedValue({ data: { record, relations: [] } });
   setStudioRuntime({
     embedded: true,
-    domainId: "platform",
+    tenantId: 0,
     transport: async () =>
       Response.json({ data: { active: false, links: [] } }),
   });

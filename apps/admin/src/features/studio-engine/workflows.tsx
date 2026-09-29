@@ -1,7 +1,7 @@
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
 import { WorkflowWebhookSettings } from "./workflow-webhooks";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ import {
 import { fieldEntries, type StudioObject } from "@savia/studio-shared/metadata";
 import { api } from "./api";
 import { getStudioRuntime } from "./runtime";
+import { RemoteChangesNotice } from "@/realtime/use-realtime-refresh";
 import {
   newStep,
   stepLabels,
@@ -136,7 +137,7 @@ function FlowListSkeleton({ label }: { label: string }) {
 export default function Workflows({ objects }: { objects: StudioObject[] }) {
   const runtime = getStudioRuntime();
   const scope = JSON.stringify([
-    runtime.domainId,
+    runtime.tenantId,
     runtime.apiBasePath,
     runtime.localWorkspace?.scope,
   ]);
@@ -188,7 +189,9 @@ function WorkspaceWorkflows({
     [kind, setKind] = useState<WorkflowNode["type"]>("transform"),
     [runId, setRunId] = useState<string | null>(null),
     [manualData, setManualData] = useState<Record<string, WorkflowValue>>({}),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [remoteDraft, setRemoteDraft] = useState<Draft | null>(null),
+    [remoteDeleted, setRemoteDeleted] = useState(false);
   const bundles = useQuery({
     queryKey: ["workflow-bundles", scope],
     queryFn: () =>
@@ -226,6 +229,24 @@ function WorkspaceWorkflows({
       }>("/workflow-inbox"),
     refetchInterval: 10000,
   });
+  useEffect(() => {
+    if (!draft?.id || !list.data) {
+      setRemoteDraft(null);
+      setRemoteDeleted(false);
+      return;
+    }
+    const latest = list.data.data.find((flow) => flow.id === draft.id);
+    if (!latest) {
+      setRemoteDraft(null);
+      setRemoteDeleted(true);
+    } else if (latest.revision > draft.revision) {
+      setRemoteDraft(latest);
+      setRemoteDeleted(false);
+    } else {
+      setRemoteDraft(null);
+      setRemoteDeleted(false);
+    }
+  }, [draft?.id, draft?.revision, list.data]);
   const change = (next: Draft) => {
     setDraft(next);
     setDirty(true);
@@ -278,6 +299,8 @@ function WorkspaceWorkflows({
     setNotice("");
     setRunId(null);
     setManualData({});
+    setRemoteDraft(null);
+    setRemoteDeleted(false);
   };
   const node = draft?.definition.nodes.find((n) => n.id === selected);
   const trigger = draft?.definition.trigger;
@@ -318,6 +341,17 @@ function WorkspaceWorkflows({
           {notice}
         </p>
       ) : null}
+      <RemoteChangesNotice
+        changed={Boolean(remoteDraft || remoteDeleted)}
+        reload={() => {
+          if (remoteDraft) choose(remoteDraft);
+          else {
+            setDraft(null);
+            setDirty(false);
+            setRemoteDeleted(false);
+          }
+        }}
+      />
       {list.isPending ? (
         <p role="status" className="wf-muted">
           {t("Cargando flujos…")}

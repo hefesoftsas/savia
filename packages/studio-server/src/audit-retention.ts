@@ -1,6 +1,6 @@
 export const STUDIO_AUDIT_RETENTION_LIMIT = 200;
 
-/** Remove older operational audit events independently for each domain. */
+/** Remove older operational audit events independently for each tenant. */
 export async function purgeStudioAudit(
   db: D1Database,
 ): Promise<{ deleted: number }> {
@@ -12,7 +12,6 @@ export async function purgeStudioAudit(
             PARTITION BY tenant_id ORDER BY created_at DESC, id DESC
           ) AS position
           FROM studio_audit
-          WHERE tenant_id LIKE 'domain:%'
         ) WHERE position > ?
       )`,
     )

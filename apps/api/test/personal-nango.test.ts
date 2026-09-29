@@ -3,20 +3,31 @@ import { createPersonalIntegrationNangoClient } from "../src/personal-integratio
 
 describe("personal Nango proxy", () => {
   it("forwards a fixed raw OneDrive create request with its no-overwrite guard", async () => {
-    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      expect(request.method).toBe("PUT");
-      expect(request.url).toBe(
-        "https://nango.example.test/proxy/v1.0/me/drive/root:/renewal.txt:/content?%40microsoft.graph.conflictBehavior=fail",
-      );
-      expect(request.headers.get("authorization")).toBe("Bearer nango-secret");
-      expect(request.headers.get("connection-id")).toBe("nango-connection");
-      expect(request.headers.get("provider-config-key")).toBe("onedrive-personal");
-      expect(request.headers.get("content-type")).toBe("text/plain; charset=utf-8");
-      expect(request.headers.get("nango-proxy-if-match")).toBe("0");
-      expect(await request.text()).toBe("Renewal details.");
-      return Response.json({ id: "file-1" });
-    });
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        expect(request.method).toBe("PUT");
+        expect(request.url).toBe(
+          "https://nango.example.test/proxy/v1.0/me/drive/root:/renewal.txt:/content?%40microsoft.graph.conflictBehavior=fail",
+        );
+        expect(request.headers.get("authorization")).toBe(
+          "Bearer nango-secret",
+        );
+        expect(request.headers.get("connection-id")).toBe("nango-connection");
+        expect(request.headers.get("provider-config-key")).toBe(
+          "onedrive-personal",
+        );
+        expect(request.headers.get("content-type")).toBe(
+          "text/plain; charset=utf-8",
+        );
+        expect(request.headers.get("nango-proxy-if-match")).toBe("0");
+        expect(request.headers.get("base-url-override")).toBe(
+          "https://graph.microsoft.com",
+        );
+        expect(await request.text()).toBe("Renewal details.");
+        return Response.json({ id: "file-1" });
+      },
+    );
     const client = createPersonalIntegrationNangoClient(
       {
         baseUrl: "https://nango.example.test",
@@ -49,4 +60,38 @@ describe("personal Nango proxy", () => {
 
     expect(response.ok).toBe(true);
   });
+  it.each(["onedrive_personal", "google_drive"] as const)(
+    "pins the Graph destination only for OneDrive Personal (%s)",
+    async (provider) => {
+      const fetcher = vi.fn(async () => Response.json({ value: [] }));
+      const client = createPersonalIntegrationNangoClient(
+        { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+        fetcher,
+      );
+      await client.proxy({
+        method: "GET",
+        path: "/v1.0/me/drive/root/children",
+        connection: {
+          id: "connection",
+          principalId: "principal",
+          provider,
+          status: "connected",
+          externalAccountLabel: null,
+          externalAccountId: null,
+          scopes: [],
+          lastValidatedAt: null,
+          createdAt: "2026-01-01",
+          updatedAt: "2026-01-01",
+          nangoConnectionId: "nango-connection",
+          nangoIntegrationId: "integration",
+        },
+      });
+      const init = (
+        fetcher.mock.calls[0] as unknown as [unknown, RequestInit]
+      )[1];
+      expect(new Headers(init.headers).get("base-url-override")).toBe(
+        provider === "onedrive_personal" ? "https://graph.microsoft.com" : null,
+      );
+    },
+  );
 });

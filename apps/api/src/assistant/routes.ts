@@ -154,10 +154,10 @@ export function registerAssistantRoutes(
       const { results } = await dependencies.db
         .prepare(
           `SELECT name, label, description, tenant_id FROM studio_objects
-           WHERE tenant_id IN (?, 'domain:platform')
+           WHERE tenant_id IN (?, 'tenant:0')
            ORDER BY CASE WHEN tenant_id = ? THEN 0 ELSE 1 END, label ASC, name ASC`,
         )
-        .bind(`agency:${agencyId}`, `agency:${agencyId}`)
+        .bind(`tenant:${agencyId}`, `tenant:${agencyId}`)
         .all<{
           name: string;
           label: string | null;
@@ -181,8 +181,8 @@ export function registerAssistantRoutes(
     } else {
       const tenantIds = actor.memberships
         .filter((m) => m.isActive && (m.tenantId ?? m.agencyId))
-        .map((m) => `agency:${m.tenantId ?? m.agencyId}`);
-      tenantIds.push("domain:platform");
+        .map((m) => `tenant:${m.tenantId ?? m.agencyId}`);
+      if (isPlatform) tenantIds.push("tenant:0");
       const placeholders = tenantIds.map(() => "?").join(",");
       const { results } = await dependencies.db
         .prepare(
@@ -205,7 +205,7 @@ export function registerAssistantRoutes(
       try {
         disabled = await disabledSolutionObjects(
           dependencies.db,
-          `agency:${agencyId}`,
+          `tenant:${agencyId}`,
         );
       } catch {}
     }

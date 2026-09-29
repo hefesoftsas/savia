@@ -16,7 +16,8 @@ import { makeConfig } from "@savia/studio-shared/metadata";
 const state = vi.hoisted(() => ({ scope: "", props: undefined as any }));
 vi.mock("../runtime", () => ({
   getStudioRuntime: () => ({
-    apiBasePath: "/v1/dynamic-crm/test",
+    apiBasePath: "/v1/studio/1",
+    tenantId: 1,
     localWorkspace: state.scope
       ? { scope: state.scope, syncNow: async () => undefined }
       : undefined,
@@ -85,7 +86,7 @@ const object = {
 const scope = (user = "user") =>
   JSON.stringify([
     JSON.stringify(["wrapper-drafts", user]),
-    "/v1/dynamic-crm/test",
+    "/v1/studio/1",
     { role: "editor" },
   ]);
 const key = () => ({

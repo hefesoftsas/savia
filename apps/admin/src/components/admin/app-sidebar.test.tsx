@@ -85,13 +85,13 @@ function createServices(): AppServices {
       disconnect: vi.fn(),
     },
     assistantConfiguration: {
-      summary: vi.fn().mockResolvedValue({ global: null, agencies: [] }),
+      summary: vi.fn().mockResolvedValue({ global: null, tenants: [] }),
       models: vi.fn().mockResolvedValue([]),
-      activeAgency: vi.fn().mockResolvedValue({ agencies: [] }),
+      activeTenant: vi.fn().mockResolvedValue({ tenants: [] }),
       saveGlobal: vi.fn(),
-      saveAgencyOverride: vi.fn(),
-      clearAgencyOverride: vi.fn(),
-      setActiveAgency: vi.fn(),
+      saveTenantOverride: vi.fn(),
+      clearTenantOverride: vi.fn(),
+      setActiveTenant: vi.fn(),
     },
     userPreferences: {
       getSidebarNavigation: vi.fn().mockResolvedValue(defaultLayout),
@@ -111,14 +111,15 @@ function createServices(): AppServices {
     },
     apiClient: {
       get: vi.fn().mockImplementation(async (path: string) =>
-        path === "/v1/data-domains"
+        path === "/v1/tenant-workspaces"
           ? {
               data: [
                 {
-                  id: "platform",
+                  id: "tenant:0",
+                  tenantId: 0,
                   label: "Plataforma",
                   kind: "platform",
-                  apiBasePath: "/v1/data-domains/platform",
+                  apiBasePath: "/v1/studio/0",
                 },
               ],
             }
@@ -378,8 +379,8 @@ describe("AppSidebar navigation preferences", () => {
       const operation = saved.blocks.find(
         (block) => block.kind === "builtin" && block.id === "operation",
       );
-      expect(productivity?.items).toContain("page:platform:account");
-      expect(operation?.items).not.toContain("page:platform:account");
+      expect(productivity?.items).toContain("page:0:account");
+      expect(operation?.items).not.toContain("page:0:account");
     });
     await user.click(screen.getByRole("button", { name: "Listo" }));
     expect(
@@ -403,7 +404,7 @@ describe("AppSidebar navigation preferences", () => {
     const companies = await screen.findByRole("link", { name: /^Empresas/ });
     expect(companies).toHaveAttribute(
       "href",
-      "#/studio?domain=platform&object=account",
+      "#/studio?tenantId=0&object=account",
     );
     expect(companies.closest("li")?.parentElement).toHaveAttribute(
       "data-slot",
@@ -436,7 +437,7 @@ describe("AppSidebar navigation preferences", () => {
         }),
       ).toHaveAttribute(
         "href",
-        "#/studio?domain=platform&object=account&view=admin",
+        "#/studio?tenantId=0&object=account&view=admin",
       ),
     );
   });
@@ -451,7 +452,7 @@ describe("AppSidebar navigation preferences", () => {
     await waitFor(() =>
       expect(operations).toHaveAttribute(
         "href",
-        "#/studio?domain=platform&object=account&view=operations",
+        "#/studio?tenantId=0&object=account&view=operations",
       ),
     );
     expect(screen.getByRole("link", { name: "Empleados IA" })).toHaveAttribute(
@@ -503,7 +504,7 @@ describe("AppSidebar navigation preferences", () => {
     const services = createServices();
     vi.mocked(services.userPreferences.getSidebarNavigation).mockResolvedValue({
       ...defaultLayout,
-      hiddenItems: ["page:platform:account"],
+      hiddenItems: ["page:0:account"],
     });
     render(<App services={services} />);
     // Wait for the asynchronous permission and domain catalog queries before exercising search.
@@ -523,7 +524,7 @@ describe("AppSidebar navigation preferences", () => {
     );
     expect(
       await screen.findByRole("link", { name: /^Empresas/ }),
-    ).toHaveAttribute("href", "#/studio?domain=platform&object=account");
+    ).toHaveAttribute("href", "#/studio?tenantId=0&object=account");
     expect(screen.getByText("Oculta de mi menú")).toBeVisible();
     expect(
       services.userPreferences.saveSidebarNavigation,
@@ -579,7 +580,7 @@ describe("AppSidebar navigation preferences", () => {
 
     await user.click(hideSwitch);
     await waitFor(() => {
-      expect(saved.hiddenItems).toContain("page:platform:account");
+      expect(saved.hiddenItems).toContain("page:0:account");
     });
 
     expect(
@@ -601,7 +602,7 @@ describe("AppSidebar navigation preferences", () => {
       screen.getByRole("button", { name: "Restablecer orden del menú" }),
     );
     await waitFor(() => {
-      expect(saved.hiddenItems ?? []).not.toContain("page:platform:account");
+      expect(saved.hiddenItems ?? []).not.toContain("page:0:account");
     });
 
     await user.click(screen.getByRole("button", { name: "Listo" }));

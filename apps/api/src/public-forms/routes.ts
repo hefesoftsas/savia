@@ -7,14 +7,14 @@ import {
 } from "../auth/middleware";
 import {
   activePublicForm,
-  domainIdSchema,
+  tenantIdSchema,
   managedForm,
   objectNameSchema,
   publishPublicForm,
   publishSchema,
   submissionSchema,
   submitPublicForm,
-  tenantForDomain,
+  tenantKey,
   persistPublicFormShortUrl,
   type PublicFormOptions,
   type PublicFormRow,
@@ -238,7 +238,7 @@ export function registerPublicFormRoutes(
       tags: ["Public forms"],
       request: {
         query: z.object({
-          domainId: domainIdSchema,
+          tenantId: tenantIdSchema,
           objectName: objectNameSchema,
         }),
       },
@@ -250,7 +250,7 @@ export function registerPublicFormRoutes(
         .prepare(
           "SELECT f.*, s.code AS short_code FROM public_forms f LEFT JOIN public_form_short_links s ON s.form_id=f.id WHERE f.tenant_id=? AND f.object_name=? ORDER BY f.created_at DESC",
         )
-        .bind(tenantForDomain(q.domainId), q.objectName)
+        .bind(tenantKey(q.tenantId), q.objectName)
         .all<PublicFormRow>();
       return c.json(
         {
@@ -342,7 +342,7 @@ export function registerPublicFormRoutes(
         await options.quote.assertAvailable?.({
           db,
           tenant: row.tenant_id,
-          domainId: row.domain_id,
+          tenantId: Number(row.tenant_id.slice("tenant:".length)),
           objectName: row.object_name,
           snapshot,
         });
@@ -392,7 +392,7 @@ export function registerPublicFormRoutes(
       await options.quote?.assertAvailable?.({
         db,
         tenant: row.tenant_id,
-        domainId: row.domain_id,
+        tenantId: Number(row.tenant_id.slice("tenant:".length)),
         objectName: row.object_name,
         snapshot: JSON.parse(row.snapshot),
       });
@@ -467,7 +467,7 @@ export function registerPublicFormRoutes(
           ...(await options.quote.quoteStatus({
             db,
             tenant: row.tenant_id,
-            domainId: row.domain_id,
+            tenantId: Number(row.tenant_id.slice("tenant:".length)),
             objectName: row.object_name,
             snapshot: JSON.parse(row.snapshot),
             submission: c.req.valid("param").submissionId,
@@ -505,7 +505,7 @@ export function registerPublicFormRoutes(
       await options.quote.assertAvailable?.({
         db,
         tenant: row.tenant_id,
-        domainId: row.domain_id,
+        tenantId: Number(row.tenant_id.slice("tenant:".length)),
         objectName: row.object_name,
         snapshot: JSON.parse(row.snapshot),
       });
@@ -513,7 +513,7 @@ export function registerPublicFormRoutes(
         await options.quote.lookupVehicle({
           db,
           tenant: row.tenant_id,
-          domainId: row.domain_id,
+          tenantId: Number(row.tenant_id.slice("tenant:".length)),
           objectName: row.object_name,
           snapshot: JSON.parse(row.snapshot),
           plate: c.req.valid("json").plate,

@@ -9,11 +9,7 @@ export type PersonalIntegrationProviderId =
   | "onedrive_business";
 export type PersonalIntegrationAvailability = "enabled" | "unavailable";
 export type PersonalIntegrationConnectionStatus =
-  | "pending"
-  | "connected"
-  | "reconnect_required"
-  | "disconnected"
-  | "failed";
+  "pending" | "connected" | "reconnect_required" | "disconnected" | "failed";
 
 export type PersonalIntegrationProvider = {
   id: PersonalIntegrationProviderId;
@@ -60,7 +56,9 @@ type ConnectionDocument = {
   attributes: Omit<PersonalIntegrationConnection, "id">;
 };
 
-function providerFromDocument(document: ProviderDocument): PersonalIntegrationProvider {
+function providerFromDocument(
+  document: ProviderDocument,
+): PersonalIntegrationProvider {
   return { id: document.id, ...document.attributes };
 }
 
@@ -82,10 +80,7 @@ export class PersonalIntegrationsClient {
     data: PersonalIntegrationConnection[];
     timestamp: number;
   } | null = null;
-  private eventsInflight = new Map<
-    string,
-    Promise<PersonalCalendarEvent[]>
-  >();
+  private eventsInflight = new Map<string, Promise<PersonalCalendarEvent[]>>();
 
   async listProviders(): Promise<PersonalIntegrationProvider[]> {
     const response = await this.api.get<{ data: ProviderDocument[] }>(
@@ -94,10 +89,13 @@ export class PersonalIntegrationsClient {
     return response.data.map(providerFromDocument);
   }
 
-  async listConnections(): Promise<PersonalIntegrationConnection[]> {
+  async listConnections(
+    refresh = false,
+  ): Promise<PersonalIntegrationConnection[]> {
     // Mi día monta dos useMyDayAgenda a la vez (página + sección): comparte
     // el vuelo y cachea 15s para no duplicar /connections ni /events x2.
     if (
+      !refresh &&
       this.connectionsCache &&
       Date.now() - this.connectionsCache.timestamp < 15_000
     ) {

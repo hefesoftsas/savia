@@ -23,7 +23,7 @@ describe("my-day widgets layout", () => {
         { id: "agenda", kind: "agenda" },
         {
           id: "w_abc123",
-          apiBasePath: "/v1/data-domains/platform",
+          apiBasePath: "/v1/studio/0",
           collection: "polizas",
           kind: "summary",
         },
@@ -40,7 +40,7 @@ describe("my-day widgets layout", () => {
       widgets: [
         {
           id: "w_abc123",
-          apiBasePath: "/v1/data-domains/platform",
+          apiBasePath: "/v1/studio/0",
           collection: "polizas",
           kind: "summary",
         },
@@ -67,7 +67,7 @@ describe("my-day widgets layout", () => {
   it("rejects duplicated widget ids", () => {
     const widget = {
       id: "w_dup",
-      apiBasePath: "/v1/data-domains/platform",
+      apiBasePath: "/v1/studio/0",
       collection: "polizas",
       kind: "items",
     };
@@ -98,7 +98,7 @@ describe("my-day widgets layout", () => {
       widgets: [
         {
           id: "w_plugin1",
-          apiBasePath: "/v1/data-domains/platform",
+          apiBasePath: "/v1/studio/0",
           collection: "polizas",
           kind: "plugin:insurance.portfolio-dashboard:summary",
         },

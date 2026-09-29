@@ -4,13 +4,18 @@ import { fileURLToPath } from "node:url";
 // Import only missing values. Existing production values and unrelated rows win.
 // The envelope matches Savia Request's AES-GCM iv.ciphertext storage format.
 // Without `tenant` the platform catalog (flow_variables) is targeted, exactly
-// as before. With `tenant` (e.g. "agency:101") only that tenant's overlays
+// as before. With `tenant` (e.g. "tenant:101") only that tenant's overlays
 // (tenant_flow_variables) are written; flows resolve with the same
 // overlay-then-catalog fallback the worker uses, and tombstoned flows reject.
-const TENANT_PATTERN = /^[A-Za-z0-9:_.-]{1,120}$/;
+const TENANT_PATTERN = /^tenant:(0|[1-9]\d*)$/;
 export async function importVariables({ query, flows, encryptionKey, tenant }) {
   const scope = tenant === undefined || tenant === null ? "" : String(tenant);
-  if (scope && !TENANT_PATTERN.test(scope)) throw new Error("Invalid tenant");
+  if (
+    scope &&
+    (!TENANT_PATTERN.test(scope) ||
+      !Number.isSafeInteger(Number(scope.slice(7))))
+  )
+    throw new Error("Invalid tenant");
   const material = Buffer.from(encryptionKey ?? "", "base64");
   if (material.length !== 32)
     throw new Error("Encryption key must contain 32 bytes");

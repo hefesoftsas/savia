@@ -131,6 +131,8 @@ export function registerAccessMiddleware(app: Hono<Env>, policy: AccessPolicy) {
       /^\/api\/record-history\/[^/]+\/[^/]+\/[^/]+\/restore$/.test(path)
     )
       return next();
+    // Document delivery performs read/export row and field checks on every request.
+    if (/^\/api\/file\/[^/]+\/delivery(?:\/(folders|prepare|confirm))?$/.test(path)) return next();
     const recordMatch =
       /^\/api\/records\/([^/]+)(?:\/([^/]+))?(?:\/(restore|bulk))?$/.exec(path);
     const viewMatch = /^\/api\/views\/([^/]+)$/.exec(path);

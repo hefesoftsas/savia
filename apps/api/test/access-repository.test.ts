@@ -48,7 +48,64 @@ it("stores scoped roles and authorizes only assigned fields", async () => {
   ).toEqual([expect.objectContaining({ fields: ["name"], action: "read" })]);
   expect(
     (await listAccessRoles(f.db, admin, "tenant:101")).roles,
-  ).toContainEqual(expect.objectContaining({ id: role.id, label: "reader" }));
+  ).toContainEqual(
+    expect.objectContaining({
+      id: role.id,
+      label: "reader",
+      source: "custom",
+      assignedUsers: [
+        expect.objectContaining({ id: f.principalId("viewer") }),
+      ],
+    }),
+  );
+});
+it("lists read-only system roles with the same grants as effective access", async () => {
+  const admin = await f.actor("platform_admin");
+  const listed = await listAccessRoles(f.db, admin, "tenant:102");
+  expect(listed.roles).toHaveLength(1);
+  const platformRole = listed.roles[0]!;
+  expect(platformRole).toMatchObject({
+    id: "builtin:tenant:102:platform_admin",
+    scope: "tenant:102",
+    name: "platform_admin",
+    label: "Platform administrator",
+    legacy_role: "platform_admin",
+    source: "system",
+    enabled: true,
+    protected: true,
+    assignedUsers: [
+      expect.objectContaining({ id: f.principalId("platform_admin") }),
+    ],
+  });
+  const policy = await loadAccessPolicy(f.db, admin, "tenant:102");
+  expect(platformRole.grants).toEqual(
+    policy.grants.filter((grant) => grant.roleId === platformRole.id),
+  );
+  await expect(
+    deleteAccessRole(f.db, admin, {
+      scope: "tenant:102",
+      id: platformRole.id,
+      expectedRevision: listed.revision,
+    }),
+  ).rejects.toMatchObject({ status: 404 });
+});
+it("lists only memberships belonging to the requested tenant scope", async () => {
+  const admin = await f.actor("platform_admin");
+  const tenant101 = await listAccessRoles(f.db, admin, "tenant:101");
+  const agencyAdmin = tenant101.roles.find(
+    (role) => role.id === "builtin:tenant:101:agency_admin",
+  );
+  expect(agencyAdmin?.assignedUsers.map((user) => user.id)).toEqual([
+    f.principalId("agency_admin"),
+  ]);
+  const tenant102 = await listAccessRoles(f.db, admin, "tenant:102");
+  expect(
+    tenant102.roles.flatMap((role) => role.assignedUsers.map((user) => user.id)),
+  ).not.toContain(f.principalId("agency_admin"));
+  expect(
+    tenant102.roles.find((role) => role.name === "platform_admin")
+      ?.assignedUsers.map((user) => user.id),
+  ).toEqual([f.principalId("platform_admin")]);
 });
 it("rejects foreign scopes and administrative escalation", async () => {
   const admin = await f.actor("agency_admin");
@@ -101,6 +158,22 @@ it("rejects unknown collections and fields", async () => {
       ],
     }),
   ).rejects.toMatchObject({ status: 422 });
+});
+
+it("creates an empty-grant custom role in the platform tenant scope", async () => {
+  const admin = await f.actor("platform_admin");
+  const policy = await loadAccessPolicy(f.db, admin, "tenant:0");
+  await expect(
+    saveAccessRole(f.db, admin, {
+      scope: "tenant:0",
+      name: "ui_creation_check",
+      label: "UI creation check",
+      description: "",
+      enabled: true,
+      expectedRevision: policy.revision,
+      grants: [],
+    }),
+  ).resolves.toMatchObject({ revision: policy.revision + 1 });
 });
 it("fails stale writes atomically", async () => {
   const admin = await f.actor("agency_admin"),
@@ -161,9 +234,9 @@ it("stops resolving grants after membership suspension", async () => {
 
 it("invalidates only the mapped policy scope when collection schemas change or disappear", async () => {
   const mappings = [
-    ["domain:platform", "platform"],
-    ["agency:101", "tenant:101"],
-    ["domain:acl_private", "domain:acl_private"],
+    ["tenant:0", "tenant:0"],
+    ["tenant:101", "tenant:101"],
+    ["tenant:999", "tenant:999"],
   ] as const;
   for (const [tenant, scope] of mappings) {
     await f.db

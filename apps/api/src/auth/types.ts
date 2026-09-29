@@ -45,6 +45,7 @@ export type ExternalIdentity = {
 export class AuthenticationError extends Error {
   constructor(
     public readonly code:
+      | "IDENTITY_EMAIL_CONFLICT"
       | "AUTHENTICATION_REQUIRED"
       | "AUTHENTICATION_UNAVAILABLE"
       | "INSUFFICIENT_SCOPE"

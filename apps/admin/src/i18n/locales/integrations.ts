@@ -318,10 +318,10 @@ export const personalIntegrationsMessages = {
     'No collections found matching "%{query}".',
     'Nenhuma coleção encontrada para "%{query}".',
   ],
-  "No hay colecciones disponibles en este dominio. Puedes añadir una abajo.": [
-    "No hay colecciones disponibles en este dominio. Puedes añadir una abajo.",
-    "No collections available in this domain. You can add one below.",
-    "Nenhuma coleção disponível neste domínio. Você pode adicionar uma abaixo.",
+  "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.": [
+    "No hay colecciones disponibles en este tenant. Puedes añadir una abajo.",
+    "No collections available in this tenant. You can add one below.",
+    "Nenhuma coleção disponível neste tenant. Você pode adicionar uma abaixo.",
   ],
   "Añadir colección personalizada:": [
     "Añadir colección personalizada:",

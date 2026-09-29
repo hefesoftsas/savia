@@ -154,7 +154,32 @@ it("agrupa varias versiones del mismo plugin en una sola tarjeta", async () => {
   expect(screen.getAllByText("Demo")).toHaveLength(1);
   expect(screen.getByText("2.0.3")).toBeInTheDocument();
   expect(screen.getByText("4 versiones")).toBeInTheDocument();
+  expect(screen.getByText("Mostrando 1 de 1 plugins")).toBeInTheDocument();
+});
+
+it("omits plugins already included in application activation from the unified catalog", async () => {
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path === "/solutions")
+      return { data: [{ manifest: { requires: ["custom.demo"] } }] };
+    if (path === "/plugin-store")
+      return {
+        data: [
+          item,
+          {
+            ...item,
+            manifest: {
+              ...item.manifest,
+              id: "custom.other",
+              label: "Other plugin",
+            },
+          },
+        ],
+      };
+    throw new Error("Unexpected request");
+  });
+  render(<PluginStoreManager hideBundledPlugins onChanged={vi.fn()} />);
+  expect(await screen.findByText("Other plugin")).toBeInTheDocument();
   expect(
-    screen.getByText("Mostrando 1 de 1 plugins"),
-  ).toBeInTheDocument();
+    screen.queryByRole("heading", { name: "Demo" }),
+  ).not.toBeInTheDocument();
 });

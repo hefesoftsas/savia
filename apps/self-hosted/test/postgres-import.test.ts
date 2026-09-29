@@ -128,7 +128,7 @@ it.skipIf(!postgresTestUrl)(
         method: "totp",
       });
       await auth("two-factor/verify-totp", { code: totp(enrollment.totpURI) });
-      const base = "/v1/data-domains/platform/api";
+      const base = "/v1/studio/0/api";
       async function api(path: string, method = "GET", body?: unknown) {
         const response = await app.fetch(
           new Request("http://localhost:8080" + base + path, {

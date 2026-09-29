@@ -1,5 +1,107 @@
 // Built-in automation, integration, and workspace messages. Protocol and brand names retain their spelling.
 export const automationMessages = {
+  "Exportar CSV": ["Exportar CSV", "Export CSV", "Exportar CSV"],
+  Acción: ["Acción", "Action", "Ação"],
+  "Confirmar eliminación": [
+    "Confirmar eliminación",
+    "Confirm deletion",
+    "Confirmar exclusão",
+  ],
+  "Los registros y las pantallas no se eliminarán. Esta acción no se puede deshacer.":
+    [
+      "Los registros y las pantallas no se eliminarán. Esta acción no se puede deshacer.",
+      "Records and screens will not be deleted. This action cannot be undone.",
+      "Os registros e as telas não serão excluídos. Esta ação não pode ser desfeita.",
+    ],
+  "Se eliminará este evento del historial.": [
+    "Se eliminará este evento del historial.",
+    "This event will be deleted from history.",
+    "Este evento será excluído do histórico.",
+  ],
+  "Se eliminará todo el historial de este tenant, incluidos los eventos que no aparecen en la lista.":
+    [
+      "Se eliminará todo el historial de este tenant, incluidos los eventos que no aparecen en la lista.",
+      "All history for this tenant will be deleted, including events not shown in the list.",
+      "Todo o histórico deste tenant será excluído, incluindo eventos não exibidos na lista.",
+    ],
+  "Se eliminará todo el historial de esta pantalla, incluidos los eventos que no aparecen en la lista.":
+    [
+      "Se eliminará todo el historial de esta pantalla, incluidos los eventos que no aparecen en la lista.",
+      "All history for this screen will be deleted, including events not shown in the list.",
+      "Todo o histórico desta tela será excluído, incluindo eventos não exibidos na lista.",
+    ],
+  "Eliminar todos los eventos": [
+    "Eliminar todos los eventos",
+    "Delete all events",
+    "Excluir todos os eventos",
+  ],
+  "No hay eventos en este historial.": [
+    "No hay eventos en este historial.",
+    "No events in this history.",
+    "Não há eventos neste histórico.",
+  ],
+  "Eliminar evento": ["Eliminar evento", "Delete event", "Excluir evento"],
+  "Detalles del evento": [
+    "Detalles del evento",
+    "Event details",
+    "Detalhes do evento",
+  ],
+  "ID del evento": ["ID del evento", "Event ID", "ID do evento"],
+  "Eliminar todos": ["Eliminar todos", "Delete all", "Excluir todos"],
+  "Abre un evento para ver sus detalles. El CSV incluye todo el historial del ámbito consultado.":
+    [
+      "Abre un evento para ver sus detalles. El CSV incluye todo el historial del ámbito consultado.",
+      "Open an event to view its details. CSV includes the entire history in the current scope.",
+      "Abra um evento para ver seus detalhes. O CSV inclui todo o histórico do escopo consultado.",
+    ],
+  "Información del historial": [
+    "Información del historial",
+    "History information",
+    "Informações do histórico",
+  ],
+  "Aplicación desactivada": [
+    "Aplicación desactivada",
+    "Application disabled",
+    "Aplicativo desativado",
+  ],
+  "Aplicación activada": [
+    "Aplicación activada",
+    "Application enabled",
+    "Aplicativo ativado",
+  ],
+  "Aplicación instalada": [
+    "Aplicación instalada",
+    "Application installed",
+    "Aplicativo instalado",
+  ],
+  "Pantalla eliminada": [
+    "Pantalla eliminada",
+    "Screen deleted",
+    "Tela excluída",
+  ],
+  "Para cotizar con proveedores reales, configura sus conexiones después de habilitar el Cotizador.":
+    [
+      "Para cotizar con proveedores reales, configura sus conexiones después de habilitar el Cotizador.",
+      "To request real provider quotes, configure their connections after enabling the quote tool.",
+      "Para cotar com fornecedores reais, configure suas conexões após habilitar o cotador.",
+    ],
+  "Al confirmar se prepararán estos componentes y pantallas:": [
+    "Al confirmar se prepararán estos componentes y pantallas:",
+    "Confirm to prepare these components and screens:",
+    "Ao confirmar, estes componentes e telas serão preparados:",
+  ],
+  "Confirmar habilitación": [
+    "Confirmar habilitación",
+    "Confirm activation",
+    "Confirmar ativação",
+  ],
+  Habilitar: ["Habilitar", "Enable", "Habilitar"],
+  "Opciones avanzadas": [
+    "Opciones avanzadas",
+    "Advanced options",
+    "Opções avançadas",
+  ],
+  Aplicaciones: ["Aplicaciones", "Applications", "Aplicativos"],
   Tenant: ["Tenant", "Tenant", "Tenant"],
   "Selecciona un tenant": [
     "Selecciona un tenant",
@@ -26,27 +128,7 @@ export const automationMessages = {
     "Advanced administration",
     "Administração avançada",
   ],
-  "Dominio activo: %{value0}": [
-    "Dominio activo: %{value0}",
-    "Active domain: %{value0}",
-    "Domínio ativo: %{value0}",
-  ],
-  "Plataforma y dominios independientes. Crear un dominio no crea un tenant.": [
-    "Plataforma y dominios independientes. Crear un dominio no crea un tenant.",
-    "Platform and independent domains. Creating a domain does not create a tenant.",
-    "Plataforma e domínios independentes. Criar um domínio não cria um tenant.",
-  ],
-  "Tenant o dominio": [
-    "Tenant o dominio",
-    "Tenant or domain",
-    "Tenant ou domínio",
-  ],
   Tenants: ["Tenants", "Tenants", "Tenants"],
-  "Dominios independientes": [
-    "Dominios independientes",
-    "Independent domains",
-    "Domínios independentes",
-  ],
   "Las pantallas y los plugins que administras pertenecen a este espacio.": [
     "Las pantallas y los plugins que administras pertenecen a este espacio.",
     "The screens and plugins you manage belong to this workspace.",
@@ -64,11 +146,6 @@ export const automationMessages = {
     "Vamos paso a paso. Podrás revisar tus respuestas antes de guardar.",
     "Let's go step by step. You can review your answers before saving.",
     "Vamos passo a passo. Você poderá revisar suas respostas antes de salvar.",
-  ],
-  "No se pudo preparar el dominio.": [
-    "No se pudo preparar el dominio.",
-    "Could not prepare the domain.",
-    "Não foi possível preparar o domínio.",
   ],
   "Pantalla eliminada del menú": [
     "Pantalla eliminada del menú",
@@ -423,7 +500,7 @@ export const automationMessages = {
     "Clients, quotes, and API",
     "Clientes, cotações e API",
   ],
-  "API del dominio": ["API del dominio", "Domain API", "API do domínio"],
+  "API del tenant": ["API del tenant", "Tenant API", "API do tenant"],
   "Consultando configuración…": [
     "Consultando configuración…",
     "Checking settings…",
@@ -518,11 +595,11 @@ export const automationMessages = {
     "Could not query HubSpot:",
     "Não foi possível consultar o HubSpot:",
   ],
-  "No hay una conexión HubSpot activa en este dominio. Configúrala en las integraciones de Savia y actualiza la disponibilidad.":
+  "No hay una conexión HubSpot activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.":
     [
-      "No hay una conexión HubSpot activa en este dominio. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
-      "There is no active HubSpot connection in this domain. Configure one in Savia integrations and refresh availability.",
-      "Não há uma conexão HubSpot ativa neste domínio. Configure-a nas integrações do Savia e atualize a disponibilidade.",
+      "No hay una conexión HubSpot activa en este tenant. Configúrala en las integraciones de Savia y actualiza la disponibilidad.",
+      "There is no active HubSpot connection in this tenant. Configure one in Savia integrations and refresh availability.",
+      "Não há uma conexão HubSpot ativa neste tenant. Configure-a nas integrações do Savia e atualize a disponibilidade.",
     ],
   de: ["de", "of", "de"],
   "pantallas disponibles": [
@@ -2125,17 +2202,28 @@ export const automationMessages = {
     "Solution packages",
     "Pacotes de soluções",
   ],
+  "Plantillas de aplicaciones": [
+    "Plantillas de aplicaciones",
+    "Application templates",
+    "Modelos de aplicativos",
+  ],
+  "Revisa las pantallas y los cambios antes de instalar. Revisar no modifica el tenant.":
+    [
+      "Revisa las pantallas y los cambios antes de instalar. Revisar no modifica el tenant.",
+      "Review screens and changes before installing. Reviewing does not modify the tenant.",
+      "Revise as telas e alterações antes de instalar. A revisão não modifica o tenant.",
+    ],
   Paquetes: ["Paquetes", "Packages", "Pacotes"],
   "Cómo funcionan los paquetes de soluciones": [
     "Cómo funcionan los paquetes de soluciones",
     "How solution packages work",
     "Como os pacotes de soluções funcionam",
   ],
-  "Un paquete añade modelos y pantallas a este espacio. Revísalo antes de instalarlo.":
+  "Instala un conjunto de pantallas y campos en el tenant. Puedes reutilizarlo en otro tenant sin copiar registros ni credenciales.":
     [
-      "Un paquete añade modelos y pantallas a este espacio. Revísalo antes de instalarlo.",
-      "A package adds models and screens to this workspace. Review it before installing.",
-      "Um pacote adiciona modelos e telas a este espaço. Revise-o antes de instalar.",
+      "Instala un conjunto de pantallas y campos en el tenant. Puedes reutilizarlo en otro tenant sin copiar registros ni credenciales.",
+      "Install a set of screens and fields in the tenant. Reuse it in another tenant without copying records or credentials.",
+      "Instale um conjunto de telas e campos no tenant. Reutilize-o em outro tenant sem copiar registros ou credenciais.",
     ],
   "Importar paquete": ["Importar paquete", "Import package", "Importar pacote"],
   "Importar JSON": ["Importar JSON", "Import JSON", "Importar JSON"],
@@ -2794,63 +2882,24 @@ export const automationMessages = {
   ],
   Notificación: ["Notificación", "Notification", "Notificação"],
   Resolver: ["Resolver", "Resolve", "Resolver"],
-  "No se pudieron cargar los dominios.": [
-    "No se pudieron cargar los dominios.",
-    "Could not load domains.",
-    "Não foi possível carregar os domínios.",
+  "No se pudieron cargar los tenants.": [
+    "No se pudieron cargar los tenants.",
+    "Could not load tenants.",
+    "Não foi possível carregar os tenants.",
   ],
-  "No se pudo crear el dominio.": [
-    "No se pudo crear el dominio.",
-    "Could not create the domain.",
-    "Não foi possível criar o domínio.",
+  "No se pudo preparar el tenant.": [
+    "No se pudo preparar el tenant.",
+    "Could not prepare the tenant.",
+    "Não foi possível preparar o tenant.",
   ],
-  "Dominio: %{value0}": [
-    "Dominio: %{value0}",
-    "Domain: %{value0}",
-    "Domínio: %{value0}",
-  ],
-  "El dominio define qué formularios y registros ves en Studio. Cambia de entorno aquí sin salir de esta pantalla.":
-    [
-      "El dominio define qué formularios y registros ves en Studio. Cambia de entorno aquí sin salir de esta pantalla.",
-      "The domain determines which forms and records you see in Studio. Switch environments here without leaving this screen.",
-      "O domínio define quais formulários e registros você vê no Studio. Altere o ambiente aqui sem sair desta tela.",
-    ],
-  "Dominio de datos": ["Dominio de datos", "Data domain", "Domínio de dados"],
-  "Crear dominio": ["Crear dominio", "Create domain", "Criar domínio"],
+  " en el tenant": [" en el tenant", " in the tenant", " no tenant"],
   "Studio está disponible para administradores de organización y plataforma.": [
     "Studio está disponible para administradores de organización y plataforma.",
     "Studio is available to organization and platform administrators.",
     "O Studio está disponível para administradores de organização e plataforma.",
   ],
-  "Studio está disponible para administradores de agencia y plataforma.": [
-    "Studio está disponible para administradores de agencia y plataforma.",
-    "Studio is available to agency and platform administrators.",
-    "O Studio está disponível para administradores de agência e plataforma.",
-  ],
   CRM: ["CRM", "CRM", "CRM"],
-  "Selecciona un dominio": [
-    "Selecciona un dominio",
-    "Select a domain",
-    "Selecione um domínio",
-  ],
-  "Selecciona un dominio de datos disponible para trabajar.": [
-    "Selecciona un dominio de datos disponible para trabajar.",
-    "Select an available data domain to work in.",
-    "Selecione um domínio de dados disponível para trabalhar.",
-  ],
-  "No tienes dominios de datos disponibles. Solicita acceso a un administrador.":
-    [
-      "No tienes dominios de datos disponibles. Solicita acceso a un administrador.",
-      "You have no available data domains. Request access from an administrator.",
-      "Você não tem domínios de dados disponíveis. Solicite acesso a um administrador.",
-    ],
-  "Nombre del dominio": [
-    "Nombre del dominio",
-    "Domain name",
-    "Nome do domínio",
-  ],
   operaciones: ["operaciones", "operations", "operações"],
-  "Guardar dominio": ["Guardar dominio", "Save domain", "Salvar domínio"],
   "No se pudo abrir el espacio local.": [
     "No se pudo abrir el espacio local.",
     "Could not open the local workspace.",
@@ -2860,11 +2909,6 @@ export const automationMessages = {
     "Recarga para reintentar. No se guardaron cambios localmente.",
     "Reload to retry. No changes were saved locally.",
     "Recarregue para tentar novamente. Nenhuma alteração foi salva localmente.",
-  ],
-  "Estudio del dominio de datos": [
-    "Estudio del dominio de datos",
-    "Data domain studio",
-    "Estúdio do domínio de dados",
   ],
   "Guardado en este dispositivo · sincronización pendiente": [
     "Guardado en este dispositivo · sincronización pendiente",

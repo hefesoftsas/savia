@@ -28,8 +28,49 @@ Verificación: pruebas con nombres arbitrarios y pantallas ocultas, navegación 
 
 ## Addressable navigation tabs
 
-- `/crm?domain=<domain>&view=operations&tab=workflows|automations|reports|tasks|import` opens the corresponding operations tab. Missing or invalid tabs fall back to `tasks`.
-- `/crm?domain=<domain>&view=admin&tab=packages` opens packages and extensions; `tab=screens` opens screen administration. Missing or invalid tabs fall back to screens.
+- `/studio?tenantId=<tenantId>&view=operations&tab=workflows|automations|reports|tasks|import` opens the corresponding operations tab. Missing or invalid tabs fall back to `tasks`.
+- `/studio?tenantId=<tenantId>&view=admin&tab=packages` opens the unified feature catalog (legacy alias); `tab=extensions` opens the same catalog; `tab=screens` opens screen administration. Missing or invalid tabs fall back to screens.
 - `/my-integrations?tab=virtual-employees` opens AI employees; `tab=connections` opens personal accounts and connections. Missing or invalid tabs fall back to connections.
 
 Tab changes preserve existing query parameters and create browser history entries. Back/forward navigation restores the selected tab. Domain screen visibility does not override permissions or a member’s personal menu settings.
+
+## Tenant API tools
+
+Open **Pantallas → Más herramientas → Integraciones y API** to access **Consultar API** and **Descargar OpenAPI** in the integrations tab. These tools use the selected tenant and no longer appear above every Studio screen.
+
+## Unified feature activation
+
+Screen administration has **Pantallas** and **Funcionalidades** tabs. Existing
+`tab=packages` links remain an alias for the feature catalog. Applications and
+independent plugins are listed together; a plugin required by an application is
+not duplicated as a separate install action.
+
+**Habilitar Cotizador** opens a read-only review of the required components and
+screens. **Confirmar habilitación** prepares the dependencies and the application
+in the selected tenant. A missing catalog dependency or a schema conflict blocks
+activation. Failures preserve the review so users can retry; dependencies already
+prepared may remain installed. Real provider connections must still be configured.
+
+**Opciones avanzadas** contains JSON import. Exported application definitions can
+be reused in another tenant without transferring records or credentials.
+
+Practical uses supported by the current catalog:
+
+- Enable **Seguros** to create clients, insurers, policies, payments, and claims.
+- Enable **Cotizador** to prepare its plugin, step-by-step screen, and quote history.
+- Export an application and import it into another tenant to reuse its definitions.
+
+Successful application activation, installation, and enable/disable operations
+invalidate the cached screen and extension catalogs before the UI refreshes.
+The sidebar must show the backend's newly available screens immediately, without
+requiring a reload or a tenant switch.
+
+## Audit history
+
+Expand an audit event to inspect its full identifier, timestamp, target record,
+action, and stored detail payload. **Exportar CSV** exports all retained events in
+the current tenant or screen scope. CSV output quotes fields and neutralizes
+spreadsheet formulas. **Eliminar evento** removes one event; **Eliminar todos**
+removes all events in the current scope, including those beyond the visible list.
+Both deletion actions require confirmation and do not delete business records or
+screens. Destructive audit operations require tenant management permissions.

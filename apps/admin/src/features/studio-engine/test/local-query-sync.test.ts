@@ -43,7 +43,7 @@ it("refreshes locally resolved relation pickers after replication", async () => 
   const client = new QueryClient();
   const key = [
     "relation-selected",
-    "/v1/data-domains/example",
+    "/v1/studio/1",
     "domain-id",
     "accounts",
     "name",

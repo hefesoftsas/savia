@@ -340,7 +340,11 @@ function ruleMappings(
 export async function processCrmSyncJobs(
   db: D1Database,
   dependencies: CrmRouteDependencies,
-  options: { limit?: number; now?: Date } = {},
+  options: {
+    limit?: number;
+    now?: Date;
+    onJobTransition?: (tenantId: number, jobId: string) => void;
+  } = {},
 ) {
   const now = options.now ?? new Date(),
     stamp = now.toISOString();
@@ -353,7 +357,7 @@ export async function processCrmSyncJobs(
     .run();
   const due = await db
     .prepare(
-      `SELECT j.id FROM crm_sync_jobs j JOIN crm_sync_rules r ON r.id=j.rule_id WHERE r.enabled=1 AND EXISTS (SELECT 1 FROM studio_solution_installations i WHERE i.tenant_id='agency:' || r.tenant_id AND i.id IN ('savia.insurance','savia.insurance-management') AND i.enabled=1) AND j.status IN ('pending','failed') AND j.attempts<5 AND j.next_attempt_at<=? ORDER BY j.next_attempt_at,j.id LIMIT ?`,
+      `SELECT j.id FROM crm_sync_jobs j JOIN crm_sync_rules r ON r.id=j.rule_id WHERE r.enabled=1 AND EXISTS (SELECT 1 FROM studio_solution_installations i WHERE i.tenant_id='tenant:' || r.tenant_id AND i.id IN ('savia.insurance','savia.insurance-management') AND i.enabled=1) AND j.status IN ('pending','failed') AND j.attempts<5 AND j.next_attempt_at<=? ORDER BY j.next_attempt_at,j.id LIMIT ?`,
     )
     .bind(stamp, Math.min(20, Math.max(1, options.limit ?? 5)))
     .all<{ id: string }>();
@@ -368,6 +372,19 @@ export async function processCrmSyncJobs(
       .first<JobRow>();
     if (!job) continue;
     processed++;
+    const tenant = await db
+      .prepare("SELECT tenant_id FROM crm_sync_rules WHERE id=?")
+      .bind(job.rule_id)
+      .first<{ tenant_id: number }>();
+    const notifyTransition = () => {
+      if (!tenant) return;
+      try {
+        options.onJobTransition?.(tenant.tenant_id, job.id);
+      } catch {
+        // Realtime is advisory and must not affect synchronization.
+      }
+    };
+    notifyTransition();
     let createUncertain = false;
     let upstreamStatus: number | undefined;
     const finish = async (
@@ -430,6 +447,7 @@ export async function processCrmSyncJobs(
           lease,
         )
         .run();
+      notifyTransition();
     };
     try {
       const rule = await db

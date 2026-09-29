@@ -38,20 +38,15 @@ export async function accessAuthority(
   const tenantId = scope.startsWith("tenant:") ? Number(scope.slice(7)) : null;
   if (tenantId !== null) {
     const tenant = await db
-      .prepare(
-        "SELECT id FROM tenants WHERE id=? AND is_active=1 AND kind='commercial'",
-      )
+      .prepare("SELECT id,kind FROM tenants WHERE id=? AND is_active=1")
       .bind(tenantId)
-      .first();
+      .first<{ id: number; kind: string }>();
     if (!tenant) return denyAccess();
-  } else if (
-    scope !== "platform" &&
-    !(await db
-      .prepare("SELECT id FROM studio_data_domains WHERE id=?")
-      .bind(scope.slice(7))
-      .first())
-  )
-    return denyAccess();
+    if (tenant.kind === "platform" && (tenantId !== 0 || !global))
+      return denyAccess();
+    if (tenant.kind !== "platform" && tenant.kind !== "commercial")
+      return denyAccess();
+  }
   const membership =
     tenantId === null
       ? null

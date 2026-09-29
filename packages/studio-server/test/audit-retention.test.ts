@@ -28,23 +28,23 @@ beforeAll(async () => {
   const rows = [
     ...Array.from({ length: 199 }, (_, i) => [
       `new-${String(i).padStart(3, "0")}`,
-      "domain:platform",
+      "tenant:0",
       "2026-09-24T02:00:00.000Z",
     ]),
-    ["tie-a", "domain:platform", "2026-09-24T01:00:00.000Z"],
-    ["tie-b", "domain:platform", "2026-09-24T01:00:00.000Z"],
-    ["old", "domain:platform", "2026-09-24T00:00:00.000Z"],
+    ["tie-a", "tenant:0", "2026-09-24T01:00:00.000Z"],
+    ["tie-b", "tenant:0", "2026-09-24T01:00:00.000Z"],
+    ["old", "tenant:0", "2026-09-24T00:00:00.000Z"],
     ...Array.from({ length: 201 }, (_, i) => [
       `inventory-${String(i).padStart(3, "0")}`,
-      "domain:inventory",
+      "tenant:2",
       "2026-09-24T01:00:00.000Z",
     ]),
     ...Array.from({ length: 201 }, (_, i) => [
       `agency-${String(i).padStart(3, "0")}`,
-      "agency:1",
+      "tenant:1",
       "2026-09-24T01:00:00.000Z",
     ]),
-    ["untouched", "domain:other", "2026-09-24T00:00:00.000Z"],
+    ["untouched", "tenant:3", "2026-09-24T00:00:00.000Z"],
   ];
   for (let i = 0; i < rows.length; i += 100) {
     await db.batch(
@@ -65,8 +65,8 @@ afterAll(async () => {
   await platform?.dispose();
 });
 
-it("keeps the 200 newest events per domain without pruning agency audit", async () => {
-  expect(await purgeStudioAudit(db)).toEqual({ deleted: 3 });
+it("keeps the 200 newest events independently for every tenant", async () => {
+  expect(await purgeStudioAudit(db)).toEqual({ deleted: 4 });
 
   const { results } = await db
     .prepare(
@@ -74,16 +74,16 @@ it("keeps the 200 newest events per domain without pruning agency audit", async 
     )
     .all<{ tenant_id: string; total: number }>();
   expect(results).toEqual([
-    { tenant_id: "agency:1", total: 201 },
-    { tenant_id: "domain:inventory", total: 200 },
-    { tenant_id: "domain:other", total: 1 },
-    { tenant_id: "domain:platform", total: 200 },
+    { tenant_id: "tenant:0", total: 200 },
+    { tenant_id: "tenant:1", total: 200 },
+    { tenant_id: "tenant:2", total: 200 },
+    { tenant_id: "tenant:3", total: 1 },
   ]);
   const removed = await db
     .prepare(
       "SELECT id FROM studio_audit WHERE id IN ('old','tie-a','tie-b','agency-000') ORDER BY id",
     )
     .all<{ id: string }>();
-  expect(removed.results.map((row) => row.id)).toEqual(["agency-000", "tie-b"]);
+  expect(removed.results.map((row) => row.id)).toEqual(["tie-b"]);
   expect(await purgeStudioAudit(db)).toEqual({ deleted: 0 });
 });

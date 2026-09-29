@@ -14,8 +14,8 @@ import {
 } from "./public-forms/routes";
 import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { registerRequestPageRoutes } from "./request-pages/routes";
-import { registerDataDomainRoutes } from "./routes/data-domains";
 import { registerStudioRoutes } from "./routes/studio";
+import { registerTenantWorkspaceRoutes } from "./routes/tenant-workspaces";
 import { registerPublicPluginEntryRoutes } from "./routes/public-plugin-entry";
 import { registerTenantRoutes } from "./routes/tenants";
 
@@ -51,6 +51,7 @@ import type { SqlBridgeClient } from "./studio/sql-bridge";
 import { registerCrmAutomaticSyncRoutes } from "./routes/crm-automatic-sync";
 import { registerIdentityRoutes } from "./routes/identity";
 import { registerRealtimeRoutes } from "./realtime/routes";
+import { registerRealtimeMutationHints } from "./realtime/mutation-hints";
 import type { RealtimeHubClient } from "./realtime/hub-client";
 import {
   registerPersonalIntegrationRoutes,
@@ -103,9 +104,10 @@ export function createApp(
     oauthResource,
     oauthUrls,
   );
+  registerRealtimeMutationHints(app, realtime, db);
   installRequestResultEnvelope(app);
   registerPublicPluginEntryRoutes(app, db, studioIntegrationKey);
-  registerAccessControlRoutes(app, db);
+  registerAccessControlRoutes(app, db, realtime);
   registerAssistantRoutes(app, assistantService, {
     db,
     documents,
@@ -125,7 +127,7 @@ export function createApp(
       betterAuthOAuthClientAdministrator(resolvedAuthService),
     realtime,
   );
-  registerRealtimeRoutes(app, realtime);
+  registerRealtimeRoutes(app, db, realtime);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerLookupRoutes(app, saviaRequestService);
   registerWorkflowWebhookRoutes(app, db, {
@@ -159,22 +161,9 @@ export function createApp(
     runtimeReleaseCatalog.beforeSolutionInstall(saviaRequestService),
     saviaRequestService,
     realtime,
+    personalIntegrations,
   );
-  registerDataDomainRoutes(
-    app,
-    db,
-    documents,
-    studioIntegrationKey,
-    crm,
-    externalCollections,
-    collectionGatewayFactory,
-    sqlBridge,
-    extensionActionExecutor,
-    extensionConnectionsEncryptionKey,
-    runtimeReleaseCatalog.beforeSolutionInstall(saviaRequestService),
-    saviaRequestService,
-    realtime,
-  );
+  registerTenantWorkspaceRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
   registerUserPreferenceRoutes(app, db);
   const notificationAuth = authenticationMiddleware(
@@ -193,7 +182,7 @@ export function createApp(
     session.set("principalId", actor.principal.id);
     session.set(
       "tenant",
-      membership ? `agency:${membership.tenantId ?? membership.agencyId}` : "",
+      membership ? `tenant:${membership.tenantId ?? membership.agencyId}` : "",
     );
     await next();
   };

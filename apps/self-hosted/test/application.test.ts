@@ -63,7 +63,7 @@ async function applicationScenario(postgresUrl?: string) {
   });
   let app: Awaited<ReturnType<typeof createApplication>> | undefined;
   const cookies = new Map<string, string>();
-  const base = "/v1/data-domains/platform/api";
+  const base = "/v1/studio/0/api";
   async function request(
     path: string,
     method = "GET",

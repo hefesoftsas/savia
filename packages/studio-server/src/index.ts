@@ -3,6 +3,7 @@ import { dialectFor } from "@savia/db/dialect";
 import { registerRecordHistory } from "./record-history";
 import { historyDatabase } from "./record-history-storage";
 import { STUDIO_AUDIT_RETENTION_LIMIT } from "./audit-retention";
+import { registerDocumentDelivery, type DocumentDeliveryBridge } from "./document-delivery";
 import { registerOfficeFiles } from "./office-files";
 import { Hono } from "hono";
 import { registerLocalSync } from "./local-sync";
@@ -59,6 +60,20 @@ import {
   registerNotifications,
   type NotificationRouteOptions,
 } from "./notifications/routes";
+
+function auditCsvCell(value: unknown): string {
+  const text =
+    typeof value === "string"
+      ? value
+      : value === null || value === undefined
+        ? ""
+        : typeof value === "object"
+          ? JSON.stringify(value)
+          : String(value);
+  const safe = /^[\s\uFEFF]*[=+\-@]/u.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
 export function createStudioApp(
   tenantKey?: string,
   options?: {
@@ -68,6 +83,7 @@ export function createStudioApp(
     integrationFetch?: typeof fetch;
     apiBasePath?: string;
     entryGrantSecret?: string;
+    documentDelivery?: DocumentDeliveryBridge;
   } & SolutionOptions &
     ExtensionOptions &
     WorkflowOptions &
@@ -778,6 +794,79 @@ export function createStudioApp(
       .run();
     return c.json({ ok: true });
   });
+  app.get("/api/audit/export.csv", async (c) => {
+    const tenant = c.get("tenant");
+    const object = c.req.query("object");
+    const query =
+      object === undefined
+        ? "SELECT id,action,object_name,record_id,created_at,detail FROM studio_audit WHERE tenant_id=? ORDER BY created_at DESC,id DESC"
+        : "SELECT id,action,object_name,record_id,created_at,detail FROM studio_audit WHERE tenant_id=? AND object_name=? ORDER BY created_at DESC,id DESC";
+    const rows = await c.env.DB.prepare(query)
+      .bind(...(object === undefined ? [tenant] : [tenant, object]))
+      .all<{
+        id: string;
+        action: string;
+        object_name: string;
+        record_id: string | null;
+        created_at: string;
+        detail: string;
+      }>();
+    const columns = [
+      "id",
+      "action",
+      "object_name",
+      "record_id",
+      "created_at",
+      "detail",
+    ];
+    const csv = [
+      columns.map(auditCsvCell).join(","),
+      ...rows.results.map((row) => {
+        let detail: unknown = row.detail;
+        try {
+          detail = JSON.parse(row.detail);
+        } catch {
+          // Preserve malformed historical data as text in the export.
+        }
+        return [
+          row.id,
+          row.action,
+          row.object_name,
+          row.record_id,
+          row.created_at,
+          typeof detail === "string" ? detail : JSON.stringify(detail),
+        ]
+          .map(auditCsvCell)
+          .join(",");
+      }),
+    ].join("\r\n");
+    c.header("content-type", "text/csv; charset=utf-8");
+    c.header("content-disposition", 'attachment; filename="audit.csv"');
+    c.header("cache-control", "no-store");
+    return c.body(`\uFEFF${csv}\r\n`);
+  });
+  app.delete("/api/audit/:id", async (c) => {
+    const deleted = await c.env.DB.prepare(
+      "DELETE FROM studio_audit WHERE tenant_id=? AND id=?",
+    )
+      .bind(c.get("tenant"), c.req.param("id"))
+      .run();
+    if (!deleted.meta.changes)
+      return fail("El evento de auditoría no existe.", 404);
+    return c.json({ ok: true });
+  });
+  app.delete("/api/audit", async (c) => {
+    const tenant = c.get("tenant");
+    const object = c.req.query("object");
+    const query =
+      object === undefined
+        ? "DELETE FROM studio_audit WHERE tenant_id=?"
+        : "DELETE FROM studio_audit WHERE tenant_id=? AND object_name=?";
+    const result = await c.env.DB.prepare(query)
+      .bind(...(object === undefined ? [tenant] : [tenant, object]))
+      .run();
+    return c.json({ ok: true, deleted: result.meta.changes });
+  });
   app.get("/api/audit", async (c) => {
     const tenant = c.get("tenant");
     const { results } = await c.env.DB.prepare(
@@ -787,7 +876,7 @@ export function createStudioApp(
         tenant,
         c.req.query("object") ?? null,
         c.req.query("object") ?? null,
-        tenant.startsWith("domain:") ? STUDIO_AUDIT_RETENTION_LIMIT : 100,
+        STUDIO_AUDIT_RETENTION_LIMIT,
       )
       .all<any>();
     return c.json({
@@ -828,6 +917,7 @@ export function createStudioApp(
   registerGeocodingSettings(app);
   registerLocalSync(app, trigger);
   registerOfficeFiles(app);
+  registerDocumentDelivery(app, options?.documentDelivery);
   registerOperations(app);
   registerWorkflows(app, options);
   registerNotifications(app, options);

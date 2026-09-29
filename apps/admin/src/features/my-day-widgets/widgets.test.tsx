@@ -11,7 +11,7 @@ it("renders a tenant ZIP widget through the dashboard card", async () => {
     id: "plugin-widget",
     title: "Resumen",
     kind: "plugin:custom.demo:resumen",
-    apiBasePath: "/v1/data-domains/platform",
+    apiBasePath: "/v1/studio/0",
     collection: "polizas",
   };
   const apiClient = {

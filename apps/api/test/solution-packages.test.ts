@@ -132,18 +132,27 @@ beforeAll(async () => {
         "INSERT INTO crm_records(id,tenant_id,object_name,data) VALUES ('legacy-record','agency:101','polizas','{\"name\":\"Póliza existente\"}')",
       ).run();
     }
-    for (const statement of sql.split("--> statement-breakpoint")) {
-      const normalized = statement
-        .replace(/^--.*$/gm, "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (normalized) await env.DB.exec(normalized);
+    const statements = sql
+      .split("--> statement-breakpoint")
+      .map((statement) =>
+        statement
+          .replace(/^--.*$/gm, "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      )
+      .filter(Boolean);
+    if (path.endsWith("0077_tenant_only_isolation.sql")) {
+      await env.DB.batch(
+        statements.map((statement) => env.DB.prepare(statement)),
+      );
+      continue;
     }
+    for (const statement of statements) await env.DB.exec(statement);
   }
 });
 it("adopts existing insurance without rewriting schemas or records", async () => {
   const row = await env.DB.prepare(
-    "SELECT version,enabled FROM studio_solution_installations WHERE tenant_id='agency:101' AND id='savia.insurance'",
+    "SELECT version,enabled FROM studio_solution_installations WHERE tenant_id='tenant:101' AND id='savia.insurance'",
   ).first();
   expect(row).toEqual({ version: "0.0.0", enabled: 1 });
   const response = await app().request(
@@ -154,7 +163,7 @@ it("adopts existing insurance without rewriting schemas or records", async () =>
   expect(
     (
       await env.DB.prepare(
-        "SELECT label FROM studio_objects WHERE tenant_id='agency:101' AND name='polizas'",
+        "SELECT label FROM studio_objects WHERE tenant_id='tenant:101' AND name='polizas'",
       ).first()
     )?.label,
   ).toBe("Mis pólizas");
@@ -168,7 +177,7 @@ it("processes CRM jobs for a management-only insurance installation", async () =
     "INSERT INTO agency_crm_connections(id,agency_id,created_by_principal_id,provider,nango_connection_id,nango_integration_id,status,created_at,updated_at) VALUES ('crm-sync-connection',102,'crm-sync-test','hubspot','nango-test','hubspot-test','connected','2026-01-01','2026-01-01')",
   ).run();
   await env.DB.prepare(
-    "INSERT INTO studio_solution_installations(tenant_id,id,version,manifest) VALUES ('agency:102','savia.insurance-management','1.0.0','{}')",
+    "INSERT INTO studio_solution_installations(tenant_id,id,version,manifest) VALUES ('tenant:102','savia.insurance-management','1.0.0','{}')",
   ).run();
   await env.DB.prepare(
     "INSERT INTO crm_sync_rules(id,principal_id,tenant_id,provider,connection_id,external_account_id,account_label) VALUES ('crm-sync-rule','crm-sync-test',102,'hubspot','crm-sync-connection','account-test','Test')",
@@ -269,13 +278,12 @@ it("lists the optional insurance release and accepts a generic package", async (
     (await foreign.request(base + "/solutions/example.projects/export")).status,
   ).toBe(403);
 });
-it("makes the installer available in an empty custom data domain", async () => {
+it("makes the installer available in an empty tenant workspace", async () => {
   const api = app();
-  await api.request(
-    "/v1/data-domains",
-    post({ name: "solutiontest", label: "Soluciones" }),
-  );
-  const base = "/v1/data-domains/solutiontest/api";
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO tenants(id,id_slug,name,kind,is_active,created_at,updated_at) VALUES(98230,'solution-test','Solution test','commercial',1,'2026-01-01','2026-01-01')",
+  ).run();
+  const base = "/v1/studio/98230/api";
   const manifest = {
     ...genericSolution,
     id: "example.inventory",

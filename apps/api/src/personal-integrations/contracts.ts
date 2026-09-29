@@ -87,7 +87,7 @@ export type PersonalIntegrationNangoClient = {
     path: string;
     connection: ActivePersonalIntegrationConnection;
     body?: unknown;
-    rawBody?: string;
+    rawBody?: string | Uint8Array<ArrayBuffer>;
     contentType?: string;
     upstreamHeaders?: Partial<Record<"if-match" | "prefer", string>>;
   }): Promise<Response>;

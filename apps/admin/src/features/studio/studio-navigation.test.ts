@@ -6,8 +6,8 @@ import {
   isStudioNavigationMessage,
   parseStudioSearch,
   summarizeStudioObject,
-  matchAgencyApiBasePath,
-  isAgencyApiBasePath,
+  matchTenantApiBasePath,
+  isTenantApiBasePath,
 } from "./studio-navigation";
 
 describe("CRM sidebar navigation", () => {
@@ -28,12 +28,12 @@ describe("CRM sidebar navigation", () => {
       "Administrar",
     ]);
     expect(children[0]).toMatchObject({
-      route: "/studio?agencyId=101&object=account",
+      route: "/studio?tenantId=101&object=account",
       count: 0,
-      removeRoute: "/studio?agencyId=101&object=account&view=remove-screen",
+      removeRoute: "/studio?tenantId=101&object=account&view=remove-screen",
     });
     expect(children.find((child) => child.id === "studio:admin")?.route).toBe(
-      "/studio?agencyId=101&object=contact&view=admin",
+      "/studio?tenantId=101&object=contact&view=admin",
     );
   });
 
@@ -42,19 +42,19 @@ describe("CRM sidebar navigation", () => {
       [{ name: "account", label: "Empresas", count: 0, hidden: false }],
       9,
     );
-    expect(isStudioChildActive(children[0], "agencyId=9&object=account")).toBe(
+    expect(isStudioChildActive(children[0], "tenantId=9&object=account")).toBe(
       true,
     );
     expect(
       isStudioChildActive(
         children[0],
-        "agencyId=9&object=account&view=remove-screen",
+        "tenantId=9&object=account&view=remove-screen",
       ),
     ).toBe(true);
     expect(
       isStudioChildActive(
         children.find((child) => child.id === "studio:admin")!,
-        "agencyId=9&object=account&view=screens",
+        "tenantId=9&object=account&view=screens",
       ),
     ).toBe(true);
   });
@@ -71,20 +71,19 @@ describe("CRM sidebar navigation", () => {
       children.filter((child) => child.id === "object:clientes"),
     ).toHaveLength(1);
     expect(children[0]).toMatchObject({
-      route: "/studio?agencyId=12&object=clientes",
+      route: "/studio?tenantId=12&object=clientes",
       count: 3,
     });
   });
 
   it("parses CRM search params and hrefs without dropping the agency", () => {
-    expect(parseStudioSearch("?agencyId=12&object=task&view=create")).toEqual({
-      domain: undefined,
-      agencyId: 12,
+    expect(parseStudioSearch("?tenantId=12&object=task&view=create")).toEqual({
+      tenantId: 12,
       object: "task",
       view: "create",
     });
-    expect(studioHref({ agencyId: 12, object: "task" })).toBe(
-      "/studio?agencyId=12&object=task",
+    expect(studioHref({ tenantId: 12, object: "task" })).toBe(
+      "/studio?tenantId=12&object=task",
     );
   });
 
@@ -126,22 +125,20 @@ describe("CRM sidebar navigation", () => {
       section: "administration",
       icon: "settings-2",
     });
-    expect(studioSidebarChildren([object!], "platform")[0]).toMatchObject({
+    expect(studioSidebarChildren([object!], 0)[0]).toMatchObject({
       section: "administration",
       icon: "settings-2",
     });
   });
 });
 
-it("keeps domain scope and distinguishes identical objects across domains", () => {
+it("keeps tenant scope and distinguishes identical objects across tenants", () => {
   const child = studioSidebarChildren(
     [{ name: "agencias", label: "Agencias", count: 1, hidden: false }],
-    "platform",
+    0,
   )[0];
-  expect(child.route).toBe("/studio?domain=platform&object=agencias");
-  expect(isStudioChildActive(child, "domain=custom&object=agencias")).toBe(
-    false,
-  );
+  expect(child.route).toBe("/studio?tenantId=0&object=agencias");
+  expect(isStudioChildActive(child, "tenantId=4&object=agencias")).toBe(false);
 });
 
 it("omits unknown collection counts while preserving explicit zero and positive counts", () => {
@@ -156,7 +153,7 @@ it("omits unknown collection counts while preserving explicit zero and positive 
     label: "Clientes",
     count: 12,
   })!;
-  const children = studioSidebarChildren([unknown, zero, known], "platform");
+  const children = studioSidebarChildren([unknown, zero, known], 0);
   expect(
     children.find((child) => child.id === "object:polizas")?.count,
   ).toBeUndefined();
@@ -167,13 +164,15 @@ it("omits unknown collection counts while preserving explicit zero and positive 
 });
 
 it("matches agency API bases on the canonical path and the legacy alias", () => {
-  expect(matchAgencyApiBasePath("/v1/studio/101")).toBe("101");
-  expect(matchAgencyApiBasePath("/v1/dynamic-crm/101")).toBe("101");
-  expect(matchAgencyApiBasePath("/v1/data-domains/platform")).toBeUndefined();
-  expect(matchAgencyApiBasePath(undefined)).toBeUndefined();
-  expect(isAgencyApiBasePath("/v1/studio/12")).toBe(true);
-  expect(isAgencyApiBasePath("/v1/dynamic-crm/12")).toBe(true);
-  expect(isAgencyApiBasePath("/v1/dynamic-crm/test")).toBe(true);
-  expect(isAgencyApiBasePath("/v1/data-domains/x")).toBe(false);
-  expect(isAgencyApiBasePath(undefined)).toBe(false);
+  expect(matchTenantApiBasePath("/v1/studio/101")).toBe("101");
+  expect(matchTenantApiBasePath("/v1/dynamic-crm/101")).toBe("101");
+  expect(matchTenantApiBasePath("/v1/data-domains/platform")).toBeUndefined();
+  expect(matchTenantApiBasePath("/v1/studio/0")).toBe("0");
+  expect(matchTenantApiBasePath(undefined)).toBeUndefined();
+  expect(isTenantApiBasePath("/v1/studio/12")).toBe(true);
+  expect(isTenantApiBasePath("/v1/dynamic-crm/12")).toBe(true);
+  expect(isTenantApiBasePath("/v1/dynamic-crm/test")).toBe(true);
+  expect(isTenantApiBasePath("/v1/data-domains/x")).toBe(false);
+  expect(isTenantApiBasePath("/v1/studio/0")).toBe(true);
+  expect(isTenantApiBasePath(undefined)).toBe(false);
 });

@@ -1,3 +1,4 @@
+import type { DocumentDeliveryBridge } from "@savia/studio-server/document-delivery";
 import { dialectFor } from "@savia/db/dialect";
 import { historyDatabase } from "@savia/studio-server/record-history-storage";
 import {
@@ -43,6 +44,7 @@ export type CollectionGatewayContext = {
   files: R2Bucket;
   tenant: string;
   publicApiBasePath?: string;
+  documentDelivery?: DocumentDeliveryBridge;
   actor: AppActor;
   accessPolicy?: AccessPolicy;
   integrationKey?: string;
@@ -64,7 +66,7 @@ export function canManageTenantExtensions(
   tenant: string,
 ): boolean {
   if (actor.globalRoles.includes("platform_admin")) return true;
-  const tenantId = Number(tenant.replace(/^agency:/, ""));
+  const tenantId = Number(tenant.replace(/^tenant:/, ""));
   if (!Number.isInteger(tenantId)) return false;
   return actor.memberships.some(
     (membership) =>
@@ -101,6 +103,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
   const local = () =>
     createStudioApp(tenant, {
       principalId: actor.principal.id,
+      documentDelivery: context.documentDelivery,
       apiBasePath: context.publicApiBasePath,
       entryGrantSecret: integrationKey,
       policy: createNotificationPolicy(db),

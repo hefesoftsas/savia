@@ -24,7 +24,7 @@ afterEach(() => {
   setStudioRuntime({});
 });
 it("keeps CRM associations in their own tab and shows option labels in information", async () => {
-  setStudioRuntime({ apiBasePath: "/v1/data-domains/sales" });
+  setStudioRuntime({ apiBasePath: "/v1/studio/5" });
   const record = { id: "1", dealname: "Renovación anual", pipeline: "default" };
   vi.mocked(api).mockImplementation(async (path) =>
     path.startsWith("/record-links/")
@@ -94,7 +94,7 @@ it("keeps CRM associations in their own tab and shows option labels in informati
 });
 
 it("shows declarative quote details and opens the selected detail", async () => {
-  setStudioRuntime({ apiBasePath: "/v1/data-domains/platform" });
+  setStudioRuntime({ apiBasePath: "/v1/studio/0" });
   const record = { id: "quote-1", name: "COT-20260917-P3ZJ" };
   const onNavigate = vi.fn();
   vi.mocked(api).mockImplementation(async (path) => {
@@ -156,7 +156,7 @@ it("shows declarative quote details and opens the selected detail", async () => 
 });
 
 it("shows a right arrow when the record detail tabs overflow", async () => {
-  setStudioRuntime({ apiBasePath: "/v1/data-domains/sales" });
+  setStudioRuntime({ apiBasePath: "/v1/studio/5" });
   const record = { id: "1", dealname: "Renovación anual" };
   const relations = Array.from({ length: 10 }, (_, index) => ({
     definition: { id: `relation-${index}`, storage: "native" },

@@ -125,9 +125,9 @@ test("imports tenant overlays without touching the platform catalog", async () =
         query,
         flows,
         encryptionKey,
-        tenant: "agency:101",
+        tenant: "tenant:101",
       }),
-      { flows: 1, imported: 3, preserved: 0, tenant: "agency:101" },
+      { flows: 1, imported: 3, preserved: 0, tenant: "tenant:101" },
     );
     // Globals untouched.
     assert.equal(
@@ -142,7 +142,7 @@ test("imports tenant overlays without touching the platform catalog", async () =
     // Overlay rows sealed when secret.
     const token = db
       .prepare(
-        "SELECT value,secret,updated_at FROM tenant_flow_variables WHERE tenant_id='agency:101' AND key='existing'",
+        "SELECT value,secret,updated_at FROM tenant_flow_variables WHERE tenant_id='tenant:101' AND key='existing'",
       )
       .get();
     assert.equal(token.secret, 1);
@@ -154,15 +154,15 @@ test("imports tenant overlays without touching the platform catalog", async () =
         query,
         flows,
         encryptionKey,
-        tenant: "agency:101",
+        tenant: "tenant:101",
       }),
-      { flows: 1, imported: 0, preserved: 3, tenant: "agency:101" },
+      { flows: 1, imported: 0, preserved: 3, tenant: "tenant:101" },
     );
     // Other tenants isolated.
     assert.equal(
       db
         .prepare(
-          "SELECT count(*) AS n FROM tenant_flow_variables WHERE tenant_id='agency:202'",
+          "SELECT count(*) AS n FROM tenant_flow_variables WHERE tenant_id='tenant:202'",
         )
         .get().n,
       0,
@@ -176,10 +176,10 @@ test("rejects invalid tenants and tombstoned flows before any write", async () =
   const { db, query } = fixture();
   try {
     db.exec(
-      "INSERT INTO tenant_flows VALUES('agency:101','quote','{\"deleted\":true}','2026-01-01T00:00:00.000Z')",
+      "INSERT INTO tenant_flows VALUES('tenant:101','quote','{\"deleted\":true}','2026-01-01T00:00:00.000Z')",
     );
     await assert.rejects(
-      importVariables({ query, flows, encryptionKey, tenant: "agency:101" }),
+      importVariables({ query, flows, encryptionKey, tenant: "tenant:101" }),
       /Missing flow/,
     );
     await assert.rejects(

@@ -557,7 +557,7 @@ it.each(["agency", "integration", "sync-rule"])(
       const principal = await upsertPrincipal(env.DB, {
           issuer: "test",
           subject: crypto.randomUUID(),
-          email: "branding-test@example.test",
+          email: `branding-${reference}@example.test`,
           displayName: "Tester",
         }),
         connection = crypto.randomUUID(),

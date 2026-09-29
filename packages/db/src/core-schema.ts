@@ -373,21 +373,34 @@ export const assistantActiveTenants = sqliteTable(
   ],
 );
 
-export const requestPageRuns = sqliteTable('request_page_runs', {
-  id: text('id').primaryKey().notNull(),
-  principalId: text('principal_id').notNull(),
-  domainId: text('domain_id').notNull(),
-  pageName: text('page_name').notNull(),
-  actionId: text('action_id').notNull(),
-  actionLabel: text('action_label').notNull(),
-  mode: text('mode', {enum:['mock','live']}).notNull(),
-  status: text('status', {enum:['running','complete','failed']}).notNull(),
-  formValues: text('form_values').notNull(),
-  result: text('result'),
-  error: text('error'),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-}, table => [index('request_page_runs_owner_page').on(table.principalId,table.domainId,table.pageName,table.createdAt)]);
+export const requestPageRuns = sqliteTable(
+  "request_page_runs",
+  {
+    id: text("id").primaryKey().notNull(),
+    principalId: text("principal_id").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    pageName: text("page_name").notNull(),
+    actionId: text("action_id").notNull(),
+    actionLabel: text("action_label").notNull(),
+    mode: text("mode", { enum: ["mock", "live"] }).notNull(),
+    status: text("status", {
+      enum: ["running", "complete", "failed"],
+    }).notNull(),
+    formValues: text("form_values").notNull(),
+    result: text("result"),
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("request_page_runs_owner_page").on(
+      table.principalId,
+      table.tenantId,
+      table.pageName,
+      table.createdAt,
+    ),
+  ],
+);
 
 export const assistantVirtualEmployees = sqliteTable(
   "assistant_virtual_employees",

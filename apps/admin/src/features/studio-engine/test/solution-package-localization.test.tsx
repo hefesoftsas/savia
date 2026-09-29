@@ -55,9 +55,8 @@ const preview = {
 
 function renderWithLocale(locale: "es" | "en" | "pt") {
   vi.mocked(api).mockImplementation(async (url) => {
-    if (url === "/solutions")
-      return { data: [{ manifest, installed: null }] };
-    if (url === "/solutions/preview") return { data: preview };
+    if (url === "/solutions") return { data: [{ manifest, installed: null }] };
+    if (url === "/solutions/activation-preview") return { data: preview };
     return { data: {} };
   });
   const store = memoryStore({ locale });
@@ -79,7 +78,7 @@ it("shows translated package labels while keeping stored defaults", async () => 
 it("resolves preview object labels from the candidate and falls back", async () => {
   renderWithLocale("en");
   fireEvent.click(
-    await screen.findByRole("button", { name: "Review Insurance" }),
+    await screen.findByRole("button", { name: "Enable Insurance" }),
   );
   expect(await screen.findByText("Customers")).toBeInTheDocument();
   // "Pólizas" has no English override, so the default label is preserved.

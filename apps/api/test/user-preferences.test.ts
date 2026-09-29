@@ -340,7 +340,7 @@ describe("user sidebar navigation preferences", () => {
       widgets: [
         {
           id: "w_polizas1",
-          apiBasePath: "/v1/data-domains/platform",
+          apiBasePath: "/v1/studio/0",
           collection: "polizas",
           kind: "summary",
         },
@@ -435,7 +435,7 @@ describe("user sidebar navigation preferences", () => {
           widgets: [
             {
               id: "not valid!",
-              apiBasePath: "/v1/data-domains/platform",
+              apiBasePath: "/v1/studio/0",
               collection: "polizas",
               kind: "summary",
             },
@@ -456,7 +456,7 @@ describe("user sidebar navigation preferences", () => {
       widgets: [
         {
           id: "w_plugin1",
-          apiBasePath: "/v1/data-domains/platform",
+          apiBasePath: "/v1/studio/0",
           collection: "polizas",
           kind: "plugin:insurance.portfolio-dashboard:summary",
           config: { limit: 5, sort: "updated_at", order: "DESC" as const },

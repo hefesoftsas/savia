@@ -711,4 +711,18 @@ describe("general workflows on real D1", () => {
     expect(await repo.executions(id)).toHaveLength(2);
     await repo.setEnabled(id, false);
   });
+  it("calls realtime transition hooks with committed workspace execution IDs", async () => {
+    const { repo, id } = await published(valueFlow("realtime"));
+    const run = await repo.start(id, {}, owner, "realtime-transition");
+    const transitions: Array<{ workspace: string; executionId: string }> = [];
+    await processWorkflows(db, async () => true, {
+      onExecutionTransition(workspace, executionId) {
+        transitions.push({ workspace, executionId });
+      },
+    });
+    expect(transitions.length).toBeGreaterThan(0);
+    expect(transitions.every((event) => event.workspace === tenant)).toBe(true);
+    expect(transitions.every((event) => event.executionId === run.id)).toBe(true);
+    expect((await repo.execution(run.id)).status).toBe("completed");
+  });
 });

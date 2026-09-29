@@ -60,14 +60,10 @@ describe("tenant deletion purges Savia Request overlays", () => {
         .bind(id)
         .first(),
     ).toBe(null);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(
       fetch.mock.calls.map(([request]) => [request.method, request.url]),
     ).toEqual([
-      [
-        "DELETE",
-        `https://savia-request.internal/api/admin/tenants/agency:${id}`,
-      ],
       [
         "DELETE",
         `https://savia-request.internal/api/admin/tenants/tenant:${id}`,

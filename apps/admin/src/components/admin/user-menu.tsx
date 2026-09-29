@@ -1,3 +1,5 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
 import { Link } from "react-router-dom";
@@ -42,7 +44,16 @@ export type UserMenuProps = {
 export function UserMenu({ children }: UserMenuProps) {
   const t = useMessages(settingsMessages);
   const authProvider = useAuthProvider();
+  const cache = useQueryClient();
   const { data: identity, refetch } = useGetIdentity();
+  useRealtimeRefresh({
+    topics: ["account"],
+    refresh: async () => {
+      window.dispatchEvent(new Event("savia:account-changed"));
+      window.dispatchEvent(new Event("savia:identity-changed"));
+      await cache.invalidateQueries({ queryKey: ["auth"] });
+    },
+  });
   const logout = useLogout();
   const translate = useTranslate();
   const { isMobile } = useSidebar();

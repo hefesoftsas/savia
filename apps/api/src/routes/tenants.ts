@@ -604,7 +604,7 @@ export function registerTenantRoutes(
   app.openapi(deleteDefinition, async (c) => {
     requirePlatformAdministrator(actorFromContext(c));
     const id = c.req.valid("param").tenantId;
-    // Memberships and domain records must not be orphaned by tenant removal.
+    // Memberships and tenant records must not be orphaned by tenant removal.
     const commercial = await db
       .prepare("SELECT 1 FROM tenants WHERE id=? AND kind='commercial'")
       .bind(id)
@@ -616,7 +616,7 @@ export function registerTenantRoutes(
       .prepare(
         "SELECT 1 FROM identity_tenant_membership WHERE tenant_id=? UNION ALL SELECT 1 FROM studio_objects WHERE tenant_id=? LIMIT 1",
       )
-      .bind(id, `agency:${id}`)
+      .bind(id, `tenant:${id}`)
       .first();
     if (linked) return c.json(conflict, 409);
     const tables =
@@ -637,7 +637,7 @@ export function registerTenantRoutes(
             .prepare(
               `SELECT 1 FROM "${name}" WHERE tenant_id=? OR tenant_id LIKE ? LIMIT 1`,
             )
-            .bind(`agency:${id}`, `agency:${id}:%`),
+            .bind(`tenant:${id}`, `tenant:${id}:%`),
         ),
       );
       if (remaining.some((result) => result.results.length > 0))
@@ -659,7 +659,7 @@ export function registerTenantRoutes(
     // linger in the request store. The core record is already gone, so a
     // purge failure is logged loudly instead of failing the deletion.
     if (saviaRequestService) {
-      for (const scope of [`agency:${id}`, `tenant:${id}`]) {
+      for (const scope of [`tenant:${id}`]) {
         try {
           const purged = await saviaRequestService.fetch(
             new Request(

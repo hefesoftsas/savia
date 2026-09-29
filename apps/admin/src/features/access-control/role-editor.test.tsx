@@ -100,3 +100,68 @@ it.each(["Percentage", "Rating", "Currency"])(
     ]);
   },
 );
+
+it("submits a new role from the header action and normalizes its identifier", async () => {
+  const onSave = vi.fn().mockResolvedValue({ id: "new-role" });
+  render(
+    <>
+      <button type="submit" form="access-role-editor">
+        Save from header
+      </button>
+      <RoleEditor scope="tenant:0" revision={1} catalog={[]} onSave={onSave} />
+    </>,
+  );
+  fireEvent.change(screen.getByLabelText("Role name"), {
+    target: { value: "Test" },
+  });
+  fireEvent.change(screen.getByLabelText("Display name"), {
+    target: { value: "Test" },
+  });
+  expect(screen.getByLabelText("Role name")).toHaveValue("test");
+  fireEvent.click(screen.getByRole("button", { name: "Save from header" }));
+  expect(onSave).toHaveBeenCalledWith(
+    expect.objectContaining({ name: "test", label: "Test" }),
+    undefined,
+  );
+});
+
+it("preserves an unsaved draft and warns when a remote revision arrives", () => {
+  const onSave = vi.fn();
+  const { rerender } = render(
+    <RoleEditor scope="tenant:3" revision={1} catalog={[]} onSave={onSave} />,
+  );
+  fireEvent.change(screen.getByLabelText("Display name"), {
+    target: { value: "Unsaved changes" },
+  });
+  rerender(
+    <RoleEditor scope="tenant:3" revision={2} catalog={[]} onSave={onSave} />,
+  );
+  expect(screen.getByLabelText("Display name")).toHaveValue("Unsaved changes");
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Permissions changed elsewhere",
+  );
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it("does not recreate a role removed in another session", () => {
+  const save = vi.fn();
+  const { rerender } = render(
+    <RoleEditor scope="tenant:3" revision={1} catalog={[]} onSave={save} />,
+  );
+  fireEvent.change(screen.getByLabelText("Role name"), {
+    target: { value: "draft" },
+  });
+  rerender(
+    <RoleEditor
+      scope="tenant:3"
+      revision={2}
+      catalog={[]}
+      onSave={save}
+      unavailable
+    />,
+  );
+  expect(screen.getByLabelText("Role name")).toHaveValue("draft");
+  expect(screen.getByRole("button", { name: "Save role" })).toBeDisabled();
+  expect(screen.getByRole("alert")).toHaveTextContent("removed");
+  expect(save).not.toHaveBeenCalled();
+});

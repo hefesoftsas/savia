@@ -1,14 +1,15 @@
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useAppLocale } from "@/i18n/core";
 import { localizedExtensionObjectLabel } from "@/features/studio-engine/extension-screens";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppServices } from "@/features/assistant/assistant-context";
 import {
-  STUDIO_DOMAINS_CHANGED,
-  listStudioDomains,
-  selectStudioDomain,
-  type StudioDomain,
-} from "./studio-domains";
+  STUDIO_TENANTS_CHANGED,
+  listStudioTenants,
+  selectStudioTenant,
+  type StudioTenant,
+} from "./studio-tenants";
 import {
   studioSidebarChildren,
   isStudioNavigationMessage,
@@ -19,52 +20,63 @@ import {
 } from "./studio-navigation";
 
 export function useStudioSidebarNavigation(enabled: boolean): {
-  agencyId?: number;
-  domainId?: string;
+  tenantId?: number;
   children: StudioSidebarChild[];
 } {
   const services = useAppServices();
   const locale = useAppLocale();
   const location = useLocation();
   const current = parseStudioSearch(location.search);
-  const [domains, setDomains] = useState<StudioDomain[]>([]);
+  const [tenants, setTenants] = useState<StudioTenant[]>([]);
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [snapshot, setSnapshot] = useState<{
-    domainId: string;
+    tenantId: number;
     objects: StudioNavigationObject[];
   }>();
   useEffect(() => {
     const refresh = () => setCatalogVersion((value) => value + 1);
-    window.addEventListener(STUDIO_DOMAINS_CHANGED, refresh);
-    return () => window.removeEventListener(STUDIO_DOMAINS_CHANGED, refresh);
+    window.addEventListener(STUDIO_TENANTS_CHANGED, refresh);
+    return () => window.removeEventListener(STUDIO_TENANTS_CHANGED, refresh);
   }, []);
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    void listStudioDomains(services).then(
+    void listStudioTenants(services).then(
       (result) => {
-        if (active) setDomains(result);
+        if (active) setTenants(result);
       },
       () => {
-        if (active) setDomains([]);
+        if (active) setTenants([]);
       },
     );
     return () => {
       active = false;
     };
   }, [enabled, services, catalogVersion]);
-  const domain = selectStudioDomain(domains, current.domain, current.agencyId);
+  const tenant = selectStudioTenant(tenants, current.tenantId);
+  const [remoteRevision, setRemoteRevision] = useState(0);
+  useRealtimeRefresh({
+    topics: ["studio", "records"],
+    tenantId: tenant?.tenantId,
+    enabled: enabled && !!tenant,
+    refresh: () => setRemoteRevision((value) => value + 1),
+  });
+  useRealtimeRefresh({
+    topics: ["account"],
+    enabled,
+    refresh: () => setCatalogVersion((value) => value + 1),
+  });
   useEffect(() => {
-    if (!enabled || !domain) return;
+    if (!enabled || !tenant) return;
     let active = true;
     const load = () =>
       services.apiClient.get<{ data: unknown[] }>(
-        `${domain.apiBasePath}/api/objects`,
+        `${tenant.apiBasePath}/api/objects`,
       );
     void (
-      services.localData
+      services.localData && remoteRevision === 0
         ? services.localData.cachedMetadata(
-            `navigation:${domain.apiBasePath}`,
+            `navigation:${tenant.apiBasePath}`,
             load,
           )
         : load()
@@ -72,7 +84,7 @@ export function useStudioSidebarNavigation(enabled: boolean): {
       .then((response) => {
         if (active)
           setSnapshot({
-            domainId: domain.id,
+            tenantId: tenant.tenantId,
             objects: response.data
               .map((row) =>
                 summarizeStudioObject(
@@ -83,12 +95,18 @@ export function useStudioSidebarNavigation(enabled: boolean): {
           });
       })
       .catch(() => {
-        if (active) setSnapshot({ domainId: domain.id, objects: [] });
+        if (active) setSnapshot({ tenantId: tenant.tenantId, objects: [] });
       });
     return () => {
       active = false;
     };
-  }, [domain?.id, domain?.apiBasePath, enabled, services]);
+  }, [
+    tenant?.tenantId,
+    tenant?.apiBasePath,
+    enabled,
+    services,
+    remoteRevision,
+  ]);
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (
@@ -97,12 +115,12 @@ export function useStudioSidebarNavigation(enabled: boolean): {
       )
         return;
       if (
-        !domain ||
-        (event.data as { domainId?: string }).domainId !== domain.id
+        !tenant ||
+        (event.data as { tenantId?: number }).tenantId !== tenant.tenantId
       )
         return;
       setSnapshot({
-        domainId: domain.id,
+        tenantId: tenant.tenantId,
         objects: event.data.objects
           .map((row) => summarizeStudioObject(row))
           .filter((row): row is StudioNavigationObject => Boolean(row)),
@@ -110,12 +128,31 @@ export function useStudioSidebarNavigation(enabled: boolean): {
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [domain?.id]);
+  }, [tenant?.tenantId]);
   const children = useMemo(() => {
     if (!enabled) return [];
     const objects =
-      snapshot?.domainId === domain?.id ? (snapshot?.objects ?? []) : [];
-    return studioSidebarChildren(objects.map(object => ({...object,label:localizedExtensionObjectLabel(object.name,object.label,locale)})), domain?.id, current.object).map(item => item.id === "studio:admin" ? {...item,label:locale === "en" ? "Manage" : locale === "pt" ? "Administrar" : "Administrar"} : item);
-  }, [enabled, snapshot, domain?.id, domains, current.object, locale]);
-  return { agencyId: domain?.agencyId, domainId: domain?.id, children };
+      snapshot?.tenantId === tenant?.tenantId ? (snapshot?.objects ?? []) : [];
+    return studioSidebarChildren(
+      objects.map((object) => ({
+        ...object,
+        label: localizedExtensionObjectLabel(object.name, object.label, locale),
+      })),
+      tenant?.tenantId,
+      current.object,
+    ).map((item) =>
+      item.id === "studio:admin"
+        ? {
+            ...item,
+            label:
+              locale === "en"
+                ? "Manage"
+                : locale === "pt"
+                  ? "Administrar"
+                  : "Administrar",
+          }
+        : item,
+    );
+  }, [enabled, snapshot, tenant?.tenantId, tenants, current.object, locale]);
+  return { tenantId: tenant?.tenantId, children };
 }

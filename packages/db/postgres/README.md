@@ -64,6 +64,15 @@ on each public form, matching SQLite migration `0076_public_form_logo.sql`.
 Existing installations apply it after the installed bundles migration; the
 baseline remains unchanged.
 
+`0020_identity_principal_email_uniqueness.sql` prevents future active principals
+from sharing an email after `lower(trim(email))`, including across issuers. It
+leaves existing rows untouched and allows issuer/subject login upserts for a
+principal already present before the guard was installed. Email checks take a
+transaction-scoped advisory lock so concurrent inserts and updates for the same
+normalized email are serialized. The guard function is `VOLATILE`, so at the
+default `READ COMMITTED` isolation level its collision query gets a fresh
+snapshot after any advisory-lock wait.
+
 Native pools discard failed idle connections without logging their credential-bearing
 client objects. Shutdown waits for socket removal as well as pool shutdown before
 allowing database teardown; the next query after an idle connection loss obtains

@@ -700,8 +700,8 @@ it("coalesces bundle realtime hints and versions to one per affected collection"
 it("publishes bounded hints from tenant and platform bundle routes only after success", async () => {
   await seedTenantAgency(env.DB, 101);
   for (const [tenant, prefix, room] of [
-    ["agency:101", "/v1/dynamic-crm/101/api", "tenant:101"],
-    ["domain:platform", "/v1/data-domains/platform/api", "platform"],
+    ["tenant:101", "/v1/dynamic-crm/101/api", "tenant:101"],
+    ["tenant:0", "/v1/studio/0/api", "tenant:0"],
   ]) {
     const { relationId } = await fixture("one-to-many", tenant);
     const events: { room: string; event: unknown }[] = [];
@@ -872,8 +872,9 @@ it("rolls back a parent when a child create ID collides, including deleted recor
 it("enforces scoped bundle row and field grants and projects immutable replays", async () => {
   const { accessDatabase } =
     await import("@savia/studio-server/access-authorization");
-  const { tenant, relationId } = await fixture();
-  const scope = `domain:${tenant}` as const;
+  const tenant = "tenant:99003";
+  const { relationId } = await fixture("one-to-many", tenant);
+  const scope = tenant as const;
   await env.DB.prepare(
     "INSERT INTO access_revisions(scope,revision) VALUES (?,1)",
   )
