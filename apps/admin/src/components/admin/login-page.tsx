@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAuthProvider, useNotify, useTranslate } from "ra-core";
-import { LoaderCircle } from "lucide-react";
+import { PwaSplash } from "@/pwa/pwa-splash";
 import { Notification } from "@/components/admin/notification";
 
 /**
@@ -44,16 +44,13 @@ export const LoginPage = (_props: { redirectTo?: string }) => {
   }, [authProvider, notify]);
 
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-3 bg-secondary p-6 text-foreground">
-      <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-        <LoaderCircle className="size-5 animate-spin" />
-      </div>
-      <p className="text-sm font-medium text-muted-foreground">
-        {translate("savia.auth.signingIn", {
+    <>
+      <PwaSplash
+        message={translate("savia.auth.signingIn", {
           _: "Iniciando sesión con Savia…",
         })}
-      </p>
+      />
       <Notification />
-    </main>
+    </>
   );
 };

@@ -101,6 +101,358 @@ it("loads the plugin shell through the selected tenant", () => {
   );
 });
 
+it("prefetches screen settings while the plugin iframe starts and reuses them", async () => {
+  let resolveSettings!: (response: Response) => void;
+  const transport = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        resolveSettings = resolve;
+      }),
+  );
+  setStudioRuntime({
+    embedded: false,
+    apiBasePath: "/v1/studio/42",
+    transport,
+  });
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Cotizador"
+      screen={{ object: "cotizador_por_pasos", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+  expect(transport).toHaveBeenCalledWith(
+    "/api/extensions/insurance.quotes/settings",
+    expect.objectContaining({ method: "GET" }),
+  );
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "quote-settings",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+  await act(async () =>
+    resolveSettings(
+      Response.json({
+        data: { value: { products: [{ id: "tenant-product" }] }, version: 7 },
+      }),
+    ),
+  );
+
+  expect(transport).toHaveBeenCalledTimes(1);
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "response",
+      id: "quote-settings",
+      ok: true,
+      data: {
+        data: { value: { products: [{ id: "tenant-product" }] }, version: 7 },
+      },
+    }),
+    "*",
+  );
+});
+
+it("drops a pending settings prefetch when the authenticated identity changes", async () => {
+  let resolvePrevious!: (response: Response) => void;
+  const transport = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvePrevious = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ data: { value: { owner: "current" }, version: 2 } }),
+    );
+  setStudioRuntime({ embedded: false, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Cotizador"
+      screen={{ object: "cotizador", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "old-settings",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+  fireEvent(window, new Event("savia:identity-changed"));
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
+  await act(async () =>
+    resolvePrevious(
+      Response.json({ data: { value: { owner: "previous" }, version: 1 } }),
+    ),
+  );
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "response",
+      id: "old-settings",
+      ok: false,
+    }),
+    "*",
+  );
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "current-settings",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "response",
+        id: "current-settings",
+        ok: true,
+        data: { data: { value: { owner: "current" }, version: 2 } },
+      }),
+      "*",
+    ),
+  );
+  expect(transport).toHaveBeenCalledTimes(2);
+});
+
+it("does not reuse prefetched settings after a settings write", async () => {
+  const transport = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ data: { value: { enabled: true }, version: 1 } }),
+    )
+    .mockResolvedValueOnce(Response.json({ data: { version: 2 } }))
+    .mockResolvedValueOnce(
+      Response.json({ data: { value: { enabled: false }, version: 2 } }),
+    );
+  setStudioRuntime({ embedded: false, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Cotizador"
+      screen={{ object: "cotizador", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "write-settings",
+        path: "/extensions/insurance.quotes/settings",
+        method: "PUT",
+        body: { value: { enabled: false }, version: 1 },
+      },
+    }),
+  );
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "read-settings-again",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(3));
+  expect(transport).toHaveBeenNthCalledWith(
+    3,
+    "/api/extensions/insurance.quotes/settings",
+    expect.objectContaining({ method: "GET" }),
+  );
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "read-settings-again", ok: true }),
+      "*",
+    ),
+  );
+});
+
+it("uses fresh settings on reads after the startup prefetch has been consumed", async () => {
+  const transport = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ data: { value: { revision: 1 }, version: 1 } }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ data: { value: { revision: 2 }, version: 2 } }),
+    );
+  setStudioRuntime({ embedded: false, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Cotizador"
+      screen={{ object: "cotizador", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+
+  for (const id of ["startup-settings", "fresh-settings"]) {
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id,
+          path: "/extensions/insurance.quotes/settings",
+        },
+      }),
+    );
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({ id, ok: true }),
+        "*",
+      ),
+    );
+  }
+
+  expect(transport).toHaveBeenCalledTimes(2);
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "fresh-settings",
+      data: { data: { value: { revision: 2 }, version: 2 } },
+    }),
+    "*",
+  );
+});
+
+it("retries settings through the host after the prefetched request fails", async () => {
+  const transport = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ error: "Unavailable" }, { status: 503 }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ data: { value: { revision: 2 }, version: 2 } }),
+    );
+  setStudioRuntime({ embedded: false, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Cotizador"
+      screen={{ object: "cotizador", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "failed-settings",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "failed-settings", ok: false }),
+      "*",
+    ),
+  );
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "retry-settings",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "retry-settings", ok: true }),
+      "*",
+    ),
+  );
+  expect(transport).toHaveBeenCalledTimes(2);
+});
+
+it("does not prefetch again after the session is cleared", async () => {
+  const transport = vi.fn(async () =>
+    Response.json({ data: { value: { revision: 1 }, version: 1 } }),
+  );
+  setStudioRuntime({ embedded: false, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.quotes"
+      title="Cotizador"
+      screen={{ object: "cotizador", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+  fireEvent(window, new Event("savia:session-cleared"));
+  await act(async () => Promise.resolve());
+  expect(transport).toHaveBeenCalledTimes(1);
+
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "session-read",
+        path: "/extensions/insurance.quotes/settings",
+      },
+    }),
+  );
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
+});
+
 it("sends the current host theme when the plugin becomes ready", () => {
   document.documentElement.style.setProperty("--foreground", "rgb(20 30 40)");
   render(<CustomPluginFrame pluginId="insurance.quotes" title="Cotizador" />);

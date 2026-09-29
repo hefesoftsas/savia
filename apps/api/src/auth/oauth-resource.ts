@@ -1,6 +1,11 @@
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import type { ResourceServerMetadata } from "@better-auth/oauth-provider";
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
+import {
+  createLocalJWKSet,
+  errors as joseErrors,
+  jwtVerify,
+  type JSONWebKeySet,
+} from "jose";
 import { AuthenticationError } from "./types";
 
 export const SAVIA_READ_SCOPE = "savia.api.read";
@@ -93,6 +98,141 @@ function isJsonWebKeySet(value: unknown): value is JSONWebKeySet {
   );
 }
 
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const JWKS_ROTATION_REFRESH_COOLDOWN_MS = 30 * 1000;
+const MAX_CACHED_ISSUERS_PER_SERVICE = 8;
+
+type CachedJwks = {
+  resolver: ReturnType<typeof createLocalJWKSet>;
+  expiresAt: number;
+};
+
+type JwksCacheEntry = {
+  cached?: CachedJwks;
+  refreshPromise?: Promise<CachedJwks>;
+  lastRotationRefreshAt?: number;
+};
+
+const jwksCacheByService = new WeakMap<
+  OAuthJwksService,
+  Map<string, JwksCacheEntry>
+>();
+
+function jwksCacheEntryFor(
+  service: OAuthJwksService,
+  issuer: string,
+): JwksCacheEntry {
+  let entries = jwksCacheByService.get(service);
+  if (!entries) {
+    entries = new Map();
+    jwksCacheByService.set(service, entries);
+  }
+
+  const now = Date.now();
+  for (const [cachedIssuer, entry] of entries) {
+    if (
+      cachedIssuer !== issuer &&
+      !entry.refreshPromise &&
+      entry.cached &&
+      entry.cached.expiresAt <= now
+    ) {
+      entries.delete(cachedIssuer);
+    }
+  }
+
+  let entry = entries.get(issuer);
+  if (!entry) {
+    if (entries.size >= MAX_CACHED_ISSUERS_PER_SERVICE) {
+      const evictable = [...entries].find(
+        ([, candidate]) => !candidate.refreshPromise,
+      );
+      if (evictable) entries.delete(evictable[0]);
+    }
+    entry = {};
+    entries.set(issuer, entry);
+  }
+  return entry;
+}
+
+function refreshJwks(
+  service: OAuthJwksService,
+  entry: JwksCacheEntry,
+): Promise<CachedJwks> {
+  if (entry.refreshPromise) return entry.refreshPromise;
+
+  const refresh = (async () => {
+    try {
+      const response = await service.fetch(
+        new Request("https://savia-auth.internal/api/auth/jwks", {
+          headers: { accept: "application/json" },
+        }),
+      );
+      if (!response.ok) {
+        throw new Error("Jwks failed: authentication service response");
+      }
+      const jwks = await response.json().catch(() => undefined);
+      if (!isJsonWebKeySet(jwks)) {
+        throw new Error("Jwks failed: invalid authentication service response");
+      }
+      let resolver: ReturnType<typeof createLocalJWKSet>;
+      try {
+        resolver = createLocalJWKSet(jwks);
+      } catch {
+        throw new Error("Jwks failed: invalid authentication service response");
+      }
+      const cached = { resolver, expiresAt: Date.now() + JWKS_CACHE_TTL_MS };
+      entry.cached = cached;
+      return cached;
+    } catch (error) {
+      entry.cached = undefined;
+      throw error;
+    }
+  })();
+  entry.refreshPromise = refresh;
+  void refresh.then(
+    () => {
+      if (entry.refreshPromise === refresh) entry.refreshPromise = undefined;
+    },
+    () => {
+      if (entry.refreshPromise === refresh) entry.refreshPromise = undefined;
+    },
+  );
+  return refresh;
+}
+
+async function currentJwks(
+  service: OAuthJwksService,
+  issuer: string,
+): Promise<{ entry: JwksCacheEntry; jwks: CachedJwks }> {
+  const entry = jwksCacheEntryFor(service, issuer);
+  const now = Date.now();
+  if (entry.cached && entry.cached.expiresAt > now)
+    return { entry, jwks: entry.cached };
+  return { entry, jwks: await refreshJwks(service, entry) };
+}
+
+async function refreshAfterUnknownKey(
+  service: OAuthJwksService,
+  entry: JwksCacheEntry,
+  failedResolver: ReturnType<typeof createLocalJWKSet>,
+): Promise<CachedJwks> {
+  if (entry.refreshPromise) return entry.refreshPromise;
+  if (entry.cached?.resolver !== failedResolver) {
+    if (entry.cached) return entry.cached;
+    return refreshJwks(service, entry);
+  }
+
+  const now = Date.now();
+  if (
+    entry.lastRotationRefreshAt !== undefined &&
+    now - entry.lastRotationRefreshAt < JWKS_ROTATION_REFRESH_COOLDOWN_MS
+  ) {
+    return entry.cached;
+  }
+  entry.lastRotationRefreshAt = now;
+  return refreshJwks(service, entry);
+}
+
 /**
  * Verifies JWTs with the authentication worker through a Cloudflare service
  * binding. Calling the public JWKS route from a Worker can re-enter the edge
@@ -102,27 +242,29 @@ export function serviceBoundOAuthAccessTokenVerifier(
   service: OAuthJwksService,
 ): OAuthAccessTokenVerifier {
   return async (request, configuration) => {
-    const response = await service.fetch(
-      new Request("https://savia-auth.internal/api/auth/jwks", {
-        headers: { accept: "application/json" },
-      }),
-    );
-    if (!response.ok) {
-      throw new Error("Jwks failed: authentication service response");
-    }
-    const jwks = await response.json().catch(() => undefined);
-    if (!isJsonWebKeySet(jwks)) {
-      throw new Error("Jwks failed: invalid authentication service response");
-    }
-    const { payload } = await jwtVerify(
-      bearerAccessToken(request),
-      createLocalJWKSet(jwks),
-      {
+    const token = bearerAccessToken(request);
+    const cacheIssuer = configuration.issuer.replace(/\/$/, "");
+    const { entry, jwks } = await currentJwks(service, cacheIssuer);
+    try {
+      const { payload } = await jwtVerify(token, jwks.resolver, {
         audience: configuration.resource,
         issuer: configuration.issuer,
-      },
-    );
-    return payload as Record<string, unknown>;
+      });
+      return payload as Record<string, unknown>;
+    } catch (exception) {
+      if (!(exception instanceof joseErrors.JWKSNoMatchingKey)) throw exception;
+      const refreshed = await refreshAfterUnknownKey(
+        service,
+        entry,
+        jwks.resolver,
+      );
+      if (refreshed.resolver === jwks.resolver) throw exception;
+      const { payload } = await jwtVerify(token, refreshed.resolver, {
+        audience: configuration.resource,
+        issuer: configuration.issuer,
+      });
+      return payload as Record<string, unknown>;
+    }
   };
 }
 

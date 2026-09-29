@@ -24,7 +24,10 @@ are the executable spec: read them before the runbooks.
   invariants in the `tenants` / `tenant-membership` tests. Successful auth
   bootstrap is shared per auth database and configuration; a changed
   environment configuration initializes its bootstrap separately, and failed
-  initialization can be retried.
+  initialization can be retried. The API caches the parsed public JWKS per auth
+  service binding and issuer for up to five minutes, refreshing on expiry or
+  an unknown signing key; signature, issuer, audience, and expiry are still
+  checked for every bearer token. Cookie-session checks are not cached.
 - **Insurance results**: `apps/api/src/insurance-results/` (`README.md`,
   `InsuranceResult` contract) + `packages/insurance-portfolio-dashboard/`.
 - **Legacy**: `apps/legacy-api/` (opt-in Postgres source, `/legacy` routes),

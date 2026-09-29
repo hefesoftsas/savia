@@ -44,6 +44,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [related-record-editing.md](related-record-editing.md) — related subforms, editable tables, atomic saves and recoverable drafts.
 
 - [tenant-branding.md](tenant-branding.md) — tenant login pages, logos, colors and administrator permissions.
+- [Authentication loading](guides/authentication-loading.md) — shared app and OAuth pending states.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
 - [cookie-consent.md](cookie-consent.md) — mandatory once-per-user cookie consent banner for the SPA and public forms.

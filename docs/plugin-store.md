@@ -18,6 +18,12 @@ The host shows a loading state until the sandbox announces readiness; startup
 errors or a missing readiness message after 30 seconds offer a retry. Retrying
 creates a fresh iframe, and pending replies from the previous frame are discarded.
 
+For screen frames, the host starts the standard tenant-scoped settings GET while
+the shell and entry module load. The first `savia.settings.get()` consumes that
+frame-local request; later reads and reads after a settings write go to the API
+again. Identity changes discard pending settings results, and a cleared session
+does not start a replacement request. Widgets do not prefetch settings.
+
 After deploying, compare full reloads and return navigation separately. Record
 time until the plugin form and required settings are visible, and confirm entry
 revalidation in the browser network panel. Local tests verify request counts,

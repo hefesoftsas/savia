@@ -1,3 +1,8 @@
+import {
+  SAVIA_LOADING_MESSAGE,
+  SAVIA_LOADING_LOGO,
+  saviaLoadingCss,
+} from "@savia/tenant-host/loading";
 import { cn } from "@/lib/utils";
 
 export type PwaSpinnerSize = "xs" | "sm" | "md" | "lg" | "xl";
@@ -32,7 +37,7 @@ export function PwaSpinner({
   );
 }
 
-export const PWA_SPLASH_MESSAGE = "Cargando Savia…";
+export const PWA_SPLASH_MESSAGE = SAVIA_LOADING_MESSAGE;
 
 /**
  * Full-screen branded boot splash for PWA cold start and lazy
@@ -52,22 +57,19 @@ export function PwaSplash({
   loadingSecondary?: string;
 }) {
   return (
-    <main
-      role="status"
-      aria-label={message}
-      className="flex min-h-svh flex-col items-center justify-center gap-5 bg-background px-6"
-    >
-      <span className="relative flex size-24 items-center justify-center">
+    <main role="status" aria-label={message} className="savia-loading">
+      <style>{saviaLoadingCss}</style>
+      <span className="savia-loading-mark">
         <PwaSpinner size="xl" className="savia-ring-cover" />
         <img
-          src="/savia-icon-192-v3.png"
+          src={SAVIA_LOADING_LOGO}
           alt=""
           width={64}
           height={64}
           className="size-16 rounded-2xl"
         />
       </span>
-      <p className="text-sm text-muted-foreground">{message}</p>
+      <p>{message}</p>
     </main>
   );
 }

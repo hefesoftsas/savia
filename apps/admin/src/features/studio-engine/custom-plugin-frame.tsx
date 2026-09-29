@@ -14,6 +14,12 @@ type PluginFrameRequest = {
   body?: unknown;
 };
 
+type PrefetchedSettings = {
+  frameKey: string;
+  sessionGeneration: number;
+  promise: Promise<unknown>;
+};
+
 const THEME_VARIABLES = [
   "--background",
   "--foreground",
@@ -72,6 +78,9 @@ export function CustomPluginFrame({
   const [readyFrame, setReadyFrame] = useState<string | null>(null);
   const [failedFrame, setFailedFrame] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [sessionRevision, setSessionRevision] = useState(0);
+  const sessionGeneration = useRef(0);
+  const prefetchedSettings = useRef<PrefetchedSettings | null>(null);
   const shellPath =
     src ??
     `${getStudioRuntime().apiBasePath ?? ""}/api/plugin-store/${encodeURIComponent(pluginId)}/shell`;
@@ -85,6 +94,48 @@ export function CustomPluginFrame({
   );
   const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}`;
   const frameKey = `${shellUrl}#${attempt}`;
+  const settingsPath = `/extensions/${encodeURIComponent(pluginId)}/settings`;
+
+  useEffect(() => {
+    const invalidatePrefetch = (restartForNewIdentity: boolean) => {
+      sessionGeneration.current += 1;
+      prefetchedSettings.current = null;
+      if (restartForNewIdentity) setSessionRevision(sessionGeneration.current);
+    };
+    const onSessionCleared = () => invalidatePrefetch(false);
+    const onIdentityChanged = () => invalidatePrefetch(true);
+    window.addEventListener("savia:session-cleared", onSessionCleared);
+    window.addEventListener("savia:identity-changed", onIdentityChanged);
+    return () => {
+      window.removeEventListener("savia:session-cleared", onSessionCleared);
+      window.removeEventListener("savia:identity-changed", onIdentityChanged);
+    };
+  }, []);
+
+  // Screen plugins may read their standard settings endpoint during startup.
+  // Start that authenticated tenant request alongside the shell/entry fetch;
+  // widgets do not need package settings and therefore skip this prefetch.
+  useEffect(() => {
+    if (!screen) {
+      prefetchedSettings.current = null;
+      return;
+    }
+    const request: PrefetchedSettings = {
+      frameKey,
+      sessionGeneration: sessionGeneration.current,
+      promise: pluginApiFetch<unknown>(`/api${settingsPath}`, {
+        method: "GET",
+      }),
+    };
+    prefetchedSettings.current = request;
+    // The frame may not call settings.get, but a prefetch failure must not be
+    // reported as an unhandled rejection. The original promise stays awaitable.
+    void request.promise.catch(() => undefined);
+    return () => {
+      if (prefetchedSettings.current === request)
+        prefetchedSettings.current = null;
+    };
+  }, [frameKey, screen?.object, screen?.view, sessionRevision, settingsPath]);
 
   useEffect(() => {
     if (readyFrame === frameKey) return;
@@ -140,18 +191,43 @@ export function CustomPluginFrame({
         return;
       }
       const source = frameRef.current?.contentWindow;
+      const method = message.method ?? "GET";
+      const requestGeneration = sessionGeneration.current;
+      const isSettingsRead =
+        message.path === settingsPath && method.toUpperCase() === "GET";
+      if (message.path === settingsPath && method.toUpperCase() !== "GET")
+        prefetchedSettings.current = null;
+      const prefetched = prefetchedSettings.current;
+      const reusableSettings =
+        isSettingsRead &&
+        prefetched?.frameKey === frameKey &&
+        prefetched.sessionGeneration === requestGeneration
+          ? prefetched.promise
+          : null;
+      if (reusableSettings) prefetchedSettings.current = null;
       try {
-        const data = await pluginApiFetch<unknown>(
-          "/api" + message.path,
-          message.body === undefined
-            ? { method: message.method ?? "GET" }
-            : {
-                method: message.method ?? "GET",
-                body: JSON.stringify(message.body),
-              },
-        );
+        const data = await (reusableSettings ??
+          pluginApiFetch<unknown>(
+            "/api" + message.path,
+            message.body === undefined
+              ? { method }
+              : { method, body: JSON.stringify(message.body) },
+          ));
         // A previous frame must never deliver a pending response to its replacement.
         if (source !== frameRef.current?.contentWindow) return;
+        if (requestGeneration !== sessionGeneration.current) {
+          frameRef.current?.contentWindow?.postMessage(
+            {
+              ns: "savia-plugin",
+              type: "response",
+              id: message.id,
+              ok: false,
+              error: "La sesión cambió durante la solicitud.",
+            },
+            "*",
+          );
+          return;
+        }
         frameRef.current?.contentWindow?.postMessage(
           {
             ns: "savia-plugin",

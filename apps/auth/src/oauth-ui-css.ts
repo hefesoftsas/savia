@@ -1,9 +1,12 @@
+import { saviaLoadingCss } from "@savia/tenant-host/loading";
 import {
   parseTenantBranding,
   brandingForeground,
   type TenantBranding,
 } from "@savia/tenant-host/branding";
-export const oauthUiCss = String.raw`:root {
+export const oauthUiCss =
+  saviaLoadingCss +
+  String.raw`:root {
   --background: #f7f9fb;
   --foreground: #102a43;
   --muted: #61758a;

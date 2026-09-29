@@ -121,6 +121,38 @@ function validOAuthClaims(overrides: Record<string, unknown> = {}) {
   };
 }
 
+async function signingKey(kid: string) {
+  const pair = await generateKeyPair("EdDSA");
+  const jwk = await exportJWK(pair.publicKey);
+  jwk.kid = kid;
+  return { ...pair, jwk };
+}
+
+async function signedOAuthToken(
+  privateKey: CryptoKey,
+  kid: string,
+  options: {
+    issuer?: string;
+    audience?: string;
+    issuedAt?: number;
+  } = {},
+) {
+  const issuedAt = options.issuedAt ?? Math.floor(Date.now() / 1000);
+  return new SignJWT(validOAuthClaims())
+    .setProtectedHeader({ alg: "EdDSA", kid })
+    .setIssuer(options.issuer ?? oauthIssuer)
+    .setAudience(options.audience ?? oauthResource)
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(issuedAt + 3600)
+    .sign(privateKey);
+}
+
+function bearerRequest(token: string) {
+  return new Request("https://api.savia.test/v1/identity/me", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+}
+
 function oauthAuthenticator(claims = validOAuthClaims()) {
   return createOAuthResourceAuthenticator({
     issuer: oauthIssuer,
@@ -706,6 +738,336 @@ describe("Identity and access", () => {
       ),
     ).resolves.toMatchObject({ subject: "oauth-administrator" });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses successful JWKS across recreated verifiers until the five-minute TTL expires", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const key = await signingKey("cached-key");
+    const token = await signedOAuthToken(key.privateKey, "cached-key", {
+      issuedAt: now,
+    });
+    const fetch = vi.fn(async () => Response.json({ keys: [key.jwk] }));
+    const service = { fetch };
+    const authenticate = () =>
+      createOAuthResourceAuthenticator({
+        issuer: `${oauthIssuer}/`,
+        resource: `${oauthResource}/`,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now * 1000);
+
+    try {
+      await expect(authenticate()).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      await expect(authenticate()).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      clock.mockReturnValue((now + 301) * 1000);
+      await expect(authenticate()).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("coalesces concurrent first JWKS loads across verifier instances", async () => {
+    const key = await signingKey("concurrent-key");
+    const token = await signedOAuthToken(key.privateKey, "concurrent-key");
+    let finishFetch!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => {
+      finishFetch = resolve;
+    });
+    const fetch = vi.fn(() => response);
+    const service = { fetch };
+    const authenticate = () =>
+      createOAuthResourceAuthenticator({
+        issuer: oauthIssuer,
+        resource: oauthResource,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+
+    const one = authenticate();
+    const two = authenticate();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    finishFetch(Response.json({ keys: [key.jwk] }));
+
+    await expect(Promise.all([one, two])).resolves.toEqual([
+      expect.objectContaining({ subject: "oauth-administrator" }),
+      expect.objectContaining({ subject: "oauth-administrator" }),
+    ]);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("retries failed JWKS loads and fails closed instead of using expired keys", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const now = Math.floor(Date.now() / 1000);
+    const key = await signingKey("expired-cache-key");
+    const token = await signedOAuthToken(key.privateKey, "expired-cache-key", {
+      issuedAt: now,
+    });
+    const fetch = vi
+      .fn<() => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json({ keys: [key.jwk] }))
+      .mockResolvedValueOnce(
+        Response.json({ error: "temporarily unavailable" }, { status: 503 }),
+      )
+      .mockResolvedValueOnce(Response.json({ keys: [key.jwk] }));
+    const service = { fetch };
+    const authenticate = () =>
+      createOAuthResourceAuthenticator({
+        issuer: oauthIssuer,
+        resource: oauthResource,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now * 1000);
+
+    try {
+      await expect(authenticate()).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      clock.mockReturnValue((now + 301) * 1000);
+      await expect(authenticate()).rejects.toMatchObject({
+        code: "AUTHENTICATION_REQUIRED",
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      await expect(authenticate()).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      clock.mockRestore();
+      consoleError.mockRestore();
+    }
+  });
+
+  it("refreshes once for a rotated key and throttles unknown-kid refreshes", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const now = Math.floor(Date.now() / 1000);
+    const oldKey = await signingKey("old-key");
+    const newKey = await signingKey("new-key");
+    const unknownKey = await signingKey("unknown-key");
+    const oldToken = await signedOAuthToken(oldKey.privateKey, "old-key", {
+      issuedAt: now,
+    });
+    const newToken = await signedOAuthToken(newKey.privateKey, "new-key", {
+      issuedAt: now,
+    });
+    const unknownToken = await signedOAuthToken(
+      unknownKey.privateKey,
+      "unknown-key",
+      { issuedAt: now },
+    );
+    const fetch = vi
+      .fn<() => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json({ keys: [oldKey.jwk] }))
+      .mockResolvedValueOnce(Response.json({ keys: [oldKey.jwk, newKey.jwk] }))
+      .mockResolvedValue(Response.json({ keys: [oldKey.jwk, newKey.jwk] }));
+    const service = { fetch };
+    const authenticate = (token: string) =>
+      createOAuthResourceAuthenticator({
+        issuer: oauthIssuer,
+        resource: oauthResource,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now * 1000);
+
+    try {
+      await expect(authenticate(oldToken)).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      await expect(authenticate(newToken)).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      await expect(authenticate(unknownToken)).rejects.toMatchObject({
+        code: "AUTHENTICATION_REQUIRED",
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      clock.mockReturnValue((now + 31) * 1000);
+      await expect(authenticate(unknownToken)).rejects.toMatchObject({
+        code: "AUTHENTICATION_REQUIRED",
+      });
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      clock.mockRestore();
+      consoleError.mockRestore();
+    }
+  });
+
+  it("invalidates the previous key set after a failed rotation refresh", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const now = Math.floor(Date.now() / 1000);
+    const oldKey = await signingKey("retained-key");
+    const unknownKey = await signingKey("unpublished-key");
+    const oldToken = await signedOAuthToken(oldKey.privateKey, "retained-key", {
+      issuedAt: now,
+    });
+    const unknownToken = await signedOAuthToken(
+      unknownKey.privateKey,
+      "unpublished-key",
+      { issuedAt: now },
+    );
+    const fetch = vi
+      .fn<() => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json({ keys: [oldKey.jwk] }))
+      .mockResolvedValueOnce(
+        Response.json({ error: "temporarily unavailable" }, { status: 503 }),
+      )
+      .mockResolvedValueOnce(Response.json({ keys: [oldKey.jwk] }));
+    const service = { fetch };
+    const authenticate = (token: string) =>
+      createOAuthResourceAuthenticator({
+        issuer: oauthIssuer,
+        resource: oauthResource,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+
+    try {
+      await expect(authenticate(oldToken)).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      await expect(authenticate(unknownToken)).rejects.toMatchObject({
+        code: "AUTHENTICATION_REQUIRED",
+      });
+      await expect(authenticate(oldToken)).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("normalizes direct verifier issuer keys before caching", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const key = await signingKey("direct-verifier-key");
+    const normalizedToken = await signedOAuthToken(
+      key.privateKey,
+      "direct-verifier-key",
+      { issuer: oauthIssuer, issuedAt: now },
+    );
+    const slashToken = await signedOAuthToken(
+      key.privateKey,
+      "direct-verifier-key",
+      { issuer: `${oauthIssuer}/`, issuedAt: now },
+    );
+    const fetch = vi.fn(async () => Response.json({ keys: [key.jwk] }));
+    const verifier = serviceBoundOAuthAccessTokenVerifier({ fetch });
+
+    await expect(
+      verifier(bearerRequest(normalizedToken), {
+        issuer: oauthIssuer,
+        resource: oauthResource,
+      }),
+    ).resolves.toMatchObject({ sub: "oauth-administrator" });
+    await expect(
+      verifier(bearerRequest(slashToken), {
+        issuer: `${oauthIssuer}/`,
+        resource: oauthResource,
+      }),
+    ).resolves.toMatchObject({ sub: "oauth-administrator" });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("isolates the public-key cache by service binding and normalized issuer", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const key = await signingKey("isolated-key");
+    const serviceFetch = vi.fn(async () => Response.json({ keys: [key.jwk] }));
+    const serviceOne = { fetch: serviceFetch };
+    const tokenOne = await signedOAuthToken(key.privateKey, "isolated-key", {
+      issuedAt: now,
+    });
+    const authenticate = (
+      service: { fetch: (request: Request) => Promise<Response> },
+      issuer: string,
+      token: string,
+    ) =>
+      createOAuthResourceAuthenticator({
+        issuer,
+        resource: oauthResource,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+
+    await expect(
+      authenticate(serviceOne, oauthIssuer, tokenOne),
+    ).resolves.toMatchObject({ subject: "oauth-administrator" });
+    await expect(
+      authenticate(serviceOne, `${oauthIssuer}/`, tokenOne),
+    ).resolves.toMatchObject({ subject: "oauth-administrator" });
+    expect(serviceFetch).toHaveBeenCalledTimes(1);
+
+    const serviceTwoFetch = vi.fn(async () =>
+      Response.json({ keys: [key.jwk] }),
+    );
+    const tokenTwo = await signedOAuthToken(key.privateKey, "isolated-key", {
+      issuer: `${oauthIssuer}/other`,
+      issuedAt: now,
+    });
+    await expect(
+      authenticate({ fetch: serviceTwoFetch }, oauthIssuer, tokenOne),
+    ).resolves.toMatchObject({ subject: "oauth-administrator" });
+    await expect(
+      authenticate(serviceOne, `${oauthIssuer}/other`, tokenTwo),
+    ).resolves.toMatchObject({ subject: "oauth-administrator" });
+    expect(serviceTwoFetch).toHaveBeenCalledTimes(1);
+    expect(serviceFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("continues checking issuer and audience for every token with cached JWKS", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const now = Math.floor(Date.now() / 1000);
+    const key = await signingKey("claims-key");
+    const validToken = await signedOAuthToken(key.privateKey, "claims-key", {
+      issuedAt: now,
+    });
+    const wrongAudienceToken = await signedOAuthToken(
+      key.privateKey,
+      "claims-key",
+      { audience: "https://other-api.savia.test", issuedAt: now },
+    );
+    const wrongIssuerToken = await signedOAuthToken(
+      key.privateKey,
+      "claims-key",
+      { issuer: "https://other-auth.savia.test/api/auth", issuedAt: now },
+    );
+    const fetch = vi.fn(async () => Response.json({ keys: [key.jwk] }));
+    const service = { fetch };
+    const authenticate = (token: string) =>
+      createOAuthResourceAuthenticator({
+        issuer: oauthIssuer,
+        resource: oauthResource,
+        verifyAccessToken: serviceBoundOAuthAccessTokenVerifier(service),
+      }).authenticate(bearerRequest(token));
+
+    try {
+      await expect(authenticate(validToken)).resolves.toMatchObject({
+        subject: "oauth-administrator",
+      });
+      await expect(authenticate(wrongAudienceToken)).rejects.toMatchObject({
+        code: "AUTHENTICATION_REQUIRED",
+      });
+      await expect(authenticate(wrongIssuerToken)).rejects.toMatchObject({
+        code: "AUTHENTICATION_REQUIRED",
+      });
+      expect(fetch).toHaveBeenCalledOnce();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("publishes protected-resource metadata for OAuth clients", async () => {

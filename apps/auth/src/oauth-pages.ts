@@ -1,3 +1,4 @@
+import { saviaLoadingHtml } from "@savia/tenant-host/loading";
 import {
   parseTenantBranding,
   type TenantBranding,
@@ -40,7 +41,8 @@ function page(
   </head>
   <body${restartAttribute}>
     <!-- THESIS: Login opens on Savia's identity in motion while keeping access steps clear. OWN-WORLD: the light workspace meets a deep-navy stage with teal accents. STORY: visitors see the animated logo, enter credentials and continue through standard authentication. FIRST VIEWPORT: desktop places the form left and the logo right; mobile puts the logo above the form. FORM: Shadcn login-02 split; MFA and consent retain their assurance panel. -->
-    ${content}
+    <div data-oauth-content>${content}</div>
+    ${saviaLoadingHtml}
     ${showLoginAnimation ? '<script src="/login/lottie-light.min.js" defer></script>' : ""}
     <script src="/api/auth/oauth-ui.js" defer></script>
   </body>
@@ -315,6 +317,7 @@ const oauthUiScript = String.raw`(() => {
     if (!(error instanceof Error) || error.code !== "invalid_signature") return false;
     const restartUrl = document.body && document.body.dataset && document.body.dataset.oauthRestartUrl;
     if (typeof restartUrl !== "string" || !restartUrl) return false;
+    redirecting = true;
     window.location.replace(restartUrl);
     return true;
   }
@@ -329,6 +332,7 @@ const oauthUiScript = String.raw`(() => {
     ];
     const redirect = candidates.find((value) => typeof value === "string");
     if (typeof redirect !== "string") return false;
+    redirecting = true;
     window.location.assign(redirect);
     return true;
   }
@@ -345,7 +349,13 @@ const oauthUiScript = String.raw`(() => {
     return typeof value === "string" ? value : "";
   }
 
+  let redirecting = false;
   function setSubmitting(form, submitting) {
+    const loading = document.querySelector("[data-oauth-loading]");
+    const content = document.querySelector("[data-oauth-content]");
+    const showLoading = submitting || redirecting;
+    if (loading) loading.hidden = !showLoading;
+    if (content) content.hidden = showLoading;
     const button = form.querySelector('button[type="submit"]');
     if (button) button.disabled = submitting;
   }
