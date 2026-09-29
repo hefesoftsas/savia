@@ -1,6 +1,11 @@
 import type { MessageCatalog } from "../core";
 
 export const documentDeliveryMessages = {
+  "nombre@ejemplo.com": [
+    "nombre@ejemplo.com",
+    "name@example.com",
+    "nome@exemplo.com",
+  ],
   "Crear archivo": ["Crear archivo", "Create file", "Criar arquivo"],
   Documento: ["Documento", "Document", "Documento"],
   "Hoja de cálculo": ["Hoja de cálculo", "Spreadsheet", "Planilha"],

@@ -762,7 +762,7 @@ export function DocumentDeliveryActions({
                             <Input
                               id={`delivery-to-${file.id}`}
                               autoComplete="email"
-                              placeholder="nombre@ejemplo.com"
+                              placeholder={t("nombre@ejemplo.com")}
                               value={to}
                               onChange={(event) => setTo(event.target.value)}
                             />
