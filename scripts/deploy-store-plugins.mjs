@@ -167,10 +167,18 @@ export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
           type: "application/zip",
         }),
       );
-      await call(`/upload?tenant=${encodeURIComponent(tenant)}`, {
-        method: "POST",
-        body: form,
-      });
+      try {
+        await call(`/upload?tenant=${encodeURIComponent(tenant)}`, {
+          method: "POST",
+          body: form,
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Plugin ${artifact.manifest.id}@${artifact.manifest.version} upload to ${tenant} failed: ${detail}`,
+          { cause: error },
+        );
+      }
     }
     for (const artifact of artifacts) {
       if (artifact.optional) {

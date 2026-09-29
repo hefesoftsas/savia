@@ -467,7 +467,9 @@ secret and can only upload/install against workspaces discovered in that databas
 Version numbers remain immutable: bump the manifest version when changing code
 or `store.json`. Repeated deployment of identical content is safe. Upload rejects
 changed JavaScript or configuration under an existing version, even if its
-manifest is unchanged. ZIP metadata/timestamps do not count as content changes.
+manifest is unchanged. Release upload errors identify the plugin id, version,
+and tenant; publish changed content as a new version. ZIP metadata/timestamps do
+not count as content changes.
 Newer tenant versions are retained and activated instead of being downgraded.
 
 A failure in any workspace fails the release workflow. Workspaces are updated

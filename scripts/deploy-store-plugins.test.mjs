@@ -133,9 +133,7 @@ test("optional release plugins are uploaded but never auto-installed", async () 
         fetch: async (url) => {
           calls.push(url);
           return Response.json(
-            url.endsWith("/tenants")
-              ? { tenants: ["tenant:1"] }
-              : { data: {} },
+            url.endsWith("/tenants") ? { tenants: ["tenant:1"] } : { data: {} },
           );
         },
       },
@@ -146,16 +144,11 @@ test("optional release plugins are uploaded but never auto-installed", async () 
       installed: 1,
       optional: 1,
     });
-    assert.equal(
-      calls.filter((url) => url.includes("/upload?")).length,
-      2,
-    );
+    assert.equal(calls.filter((url) => url.includes("/upload?")).length, 2);
     const installs = calls.filter((url) => url.includes("/install?"));
     assert.equal(installs.length, 1);
     assert.ok(installs[0].includes("custom.required"));
-    assert.ok(
-      !installs.some((url) => url.includes("insurance.opportunities")),
-    );
+    assert.ok(!installs.some((url) => url.includes("insurance.opportunities")));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -202,6 +195,40 @@ test("release ZIP dependency ordering rejects cycles and duplicate plugin IDs", 
       () => releaseArtifacts(directory),
       /Circular plugin dependency/,
     );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("upload conflicts identify the immutable plugin version and tenant", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "savia-deploy-conflict-"));
+  const path = join(directory, "customer-portal.zip");
+  writeFileSync(path, "plugin bytes");
+  const artifacts = [
+    {
+      path,
+      manifest: { id: "insurance.customer-portal", version: "1.1.1" },
+    },
+  ];
+  const calls = [];
+  try {
+    await assert.rejects(
+      deployArtifacts(artifacts, "http://127.0.0.1", "session", {
+        log() {},
+        fetch: async (url) => {
+          calls.push(url);
+          return url.endsWith("/tenants")
+            ? Response.json({ tenants: ["tenant:0"] })
+            : Response.json(
+                { error: "Esta versión ya existe con otro contenido." },
+                { status: 409 },
+              );
+        },
+      }),
+      /insurance\.customer-portal@1\.1\.1.*tenant:0.*HTTP 409/,
+    );
+    assert.equal(calls.length, 2);
+    assert.ok(calls[1].includes("/upload?tenant=tenant%3A0"));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
