@@ -888,6 +888,70 @@ export async function dynamicOpenApi(
       if (!capabilities.delete) delete paths[`/published/${name}/{id}`].delete;
     }
   }
+  paths["/objects/{name}/deletion-preview"] = {
+    get: operation(
+      "preview_screen_deletion",
+      "Collections",
+      "Preview permanent screen deletion and incoming dependencies",
+      envelope({
+        type: "object",
+        required: ["root", "screens", "totalRecords", "token"],
+        properties: {
+          root: { type: "string" },
+          screens: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["name", "label", "recordCount", "blockedReason"],
+              properties: {
+                name: { type: "string" },
+                label: { type: "string" },
+                recordCount: { type: "integer", minimum: 0 },
+                blockedReason: { type: ["string", "null"] },
+              },
+            },
+          },
+          totalRecords: { type: "integer", minimum: 0 },
+          token: { type: "string" },
+        },
+      }),
+      {
+        parameters: [parameter("name", "path", { type: "string" }, true)],
+        description:
+          "Tenant administrators only. Recursively includes screens referencing the selected screen, including cycles, but not independent referenced parents. Counts include trashed records. Source-backed and managed screens cannot be deleted. The token binds confirmation to the reviewed scope.",
+      },
+    ),
+  };
+  paths["/objects/{name}"] = {
+    ...paths["/objects/{name}"],
+    delete: operation(
+      "delete_screen",
+      "Collections",
+      "Permanently delete a local screen",
+      envelope({
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          deleted: { type: "boolean" },
+          deletedRecords: { type: "integer", minimum: 0 },
+          deletedObjects: { type: "array", items: { type: "string" } },
+        },
+      }),
+      {
+        parameters: [parameter("name", "path", { type: "string" }, true)],
+        body: {
+          type: "object",
+          properties: {
+            deleteRecords: { type: "boolean", default: false },
+            deleteRelated: { type: "boolean", default: false },
+            deletionToken: { type: "string" },
+          },
+        },
+        description:
+          "Tenant administrators only. Dependent screen deletion is opt-in and requires deleteRelated=true, deleteRecords=true, and the current deletion-preview token. Deletes the reviewed set atomically. A changed preview returns 409; protected or source-backed screens block the operation.",
+      },
+    ),
+  };
   paths["/objects/{name}/performance"] = {
     patch: operation(
       "configure_record_performance",

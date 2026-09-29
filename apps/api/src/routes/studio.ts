@@ -134,6 +134,15 @@ export function registerStudioRoutes(
         "AUTHORIZATION_FORBIDDEN",
         "Solo los administradores pueden eliminar eventos de auditoría.",
       );
+    // A deletion preview includes dependent schemas and counts across the tenant.
+    if (
+      !manager &&
+      /^\/api\/objects\/[^/]+\/deletion-preview$/.test(requestedPath)
+    )
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "Screen deletion requires tenant administration access.",
+      );
     if (!manager && !accessPolicy) {
       if (
         !canAccessSharedCrm(actor, tenantKey) ||

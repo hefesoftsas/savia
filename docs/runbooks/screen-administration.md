@@ -74,3 +74,28 @@ spreadsheet formulas. **Eliminar evento** removes one event; **Eliminar todos**
 removes all events in the current scope, including those beyond the visible list.
 Both deletion actions require confirmation and do not delete business records or
 screens. Destructive audit operations require tenant management permissions.
+
+## Permanent deletion and dependent screens
+
+Tenant administrators can preview permanent deletion from screen administration.
+The dialog loads the selected screen and recursively finds screens that reference
+it, through relation fields or collection relations in the same tenant. References
+from the selected screen to an independent parent do not include that parent.
+
+The option to delete dependent screens and their data is **off by default**.
+The preview lists each affected screen and its record count, including records
+in the trash. Previews are limited to 100 affected screens; larger dependency sets
+must be reduced before deletion. Selecting this option requires reviewing the expanded scope and
+acknowledging record deletion. Source-backed and managed screens block deletion;
+unlink or manage them through their own administration first.
+
+Confirmation deletes the reviewed local screens, their records, relation links,
+and associated local metadata atomically. A changed schema, dependency set, or
+record count invalidates the preview: reload it and confirm the new scope. Cycles
+are treated as one deletion set, with no partial deletion on failure. The tenant's
+users, credentials, and unrelated screens are outside this operation. File metadata
+is removed with records; physical blobs in object storage are not purged by this
+operation.
+
+The API reference for the preview and deletion options is generated in the tenant's
+OpenAPI document. Both operations require tenant administration access.

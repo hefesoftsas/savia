@@ -80,6 +80,14 @@ it("publishes individual typed paths from current agency metadata and refreshes 
   expect(response.headers.get("cache-control")).toBe("no-store");
   const spec: any = await response.json();
   expect(spec.openapi).toBe("3.1.0");
+  expect(spec.paths["/objects/{name}/deletion-preview"].get.operationId).toBe(
+    "preview_screen_deletion",
+  );
+  expect(
+    spec.paths["/objects/{name}"].delete.requestBody.content["application/json"]
+      .schema.properties.deleteRelated.default,
+  ).toBe(false);
+
   expect(
     spec.paths["/objects/{name}/performance"].patch.requestBody.content[
       "application/json"

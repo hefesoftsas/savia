@@ -58,6 +58,7 @@ import {
   createObject,
   configureObjectPerformance,
   deleteObject,
+  previewScreenDeletion,
   patchScreenMeta,
   previewSchema,
   publishSchema,
@@ -410,9 +411,23 @@ export function createStudioApp(
       ),
     });
   });
+  app.get("/api/objects/:name/deletion-preview", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      data: await previewScreenDeletion(
+        c.env.DB,
+        c.get("tenant"),
+        c.req.param("name"),
+      ),
+    });
+  });
   app.delete("/api/objects/:name", async (c) => {
     const parsed = z
-      .object({ deleteRecords: z.boolean().optional() })
+      .object({
+        deleteRecords: z.boolean().optional(),
+        deleteRelated: z.boolean().optional(),
+        deletionToken: z.string().optional(),
+      })
       .safeParse(await c.req.json().catch(() => ({})));
     const body = parsed.success ? parsed.data : {};
     return c.json({

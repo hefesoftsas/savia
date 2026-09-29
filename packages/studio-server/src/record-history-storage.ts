@@ -20,9 +20,16 @@ export function historyDatabase(
   const originals = new WeakMap<D1PreparedStatement, D1PreparedStatement>();
   const knownStatements = new WeakSet<D1PreparedStatement>();
   const recordWrites = new WeakSet<D1PreparedStatement>();
+  const leadingLocks = new WeakSet<D1PreparedStatement>();
   const batch = async <T = unknown>(
     statements: D1PreparedStatement[],
   ): Promise<D1Result<T>[]> => {
+    let lockPrefix = 0;
+    while (
+      lockPrefix < statements.length &&
+      leadingLocks.has(statements[lockPrefix])
+    )
+      lockPrefix++;
     const raw = statements.map(
       (statement) => originals.get(statement) ?? statement,
     );
@@ -36,26 +43,32 @@ export function historyDatabase(
     )
       return db.batch<T>(raw);
     const result = await db.batch<T>([
+      ...raw.slice(0, lockPrefix),
       db
         .prepare(
           "INSERT INTO studio_record_history_context(tenant_id,actor_kind,actor_id,cause_id) VALUES (?,?,?,?)",
         )
         .bind(tenant, actor.kind, actor.id, actor.causeId ?? null),
-      ...raw,
+      ...raw.slice(lockPrefix),
       db
         .prepare("DELETE FROM studio_record_history_context WHERE tenant_id=?")
         .bind(tenant),
     ]);
-    return result.slice(1, -1);
+    return [
+      ...result.slice(0, lockPrefix),
+      ...result.slice(lockPrefix + 1, -1),
+    ];
   };
   const wrap = (
     statement: D1PreparedStatement,
     writes: boolean,
+    leadingLock = false,
   ): D1PreparedStatement => {
     const proxy = new Proxy(statement, {
       get(target, key) {
         if (key === "bind")
-          return (...args: unknown[]) => wrap(target.bind(...args), writes);
+          return (...args: unknown[]) =>
+            wrap(target.bind(...args), writes, leadingLock);
         if (writes && (key === "run" || key === "all"))
           return async () => (await batch([target]))[0];
         if (writes && key === "first")
@@ -71,23 +84,27 @@ export function historyDatabase(
     originals.set(proxy, statement);
     knownStatements.add(proxy);
     knownStatements.add(statement);
-    if (writes) {
+    if (writes && !leadingLock) {
       recordWrites.add(proxy);
       recordWrites.add(statement);
     }
+    if (leadingLock) leadingLocks.add(proxy);
     return proxy;
   };
   const wrapped = new Proxy(db, {
     get(target, key) {
       if (key === "batch") return batch;
       if (key === "prepare")
-        return (sql: string) =>
-          wrap(
+        return (sql: string) => {
+          const isLeadingLock = /^\s*LOCK\s+TABLE\b/i.test(sql);
+          return wrap(
             target.prepare(sql),
             !/^(?:\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)*(?:SELECT|EXPLAIN)\b/i.test(
               sql,
             ) && /\bstudio_records\b/i.test(sql),
+            isLeadingLock,
           );
+        };
       const value = Reflect.get(target, key, target);
       return typeof value === "function" ? value.bind(target) : value;
     },

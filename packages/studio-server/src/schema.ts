@@ -22,6 +22,7 @@ import {
   checkRelations,
 } from "./services";
 import { fail } from "./context";
+import type { ScreenDeletionPreview } from "@savia/studio-shared/screen-deletion";
 export const migrationSchema = z
   .object({
     rename: z.record(z.string(), z.string()).default({}),
@@ -657,6 +658,19 @@ async function assertObjectCanBeDeleted(
         );
     }
   }
+  if (await tableExists(db, "studio_collection_relations")) {
+    const incoming = await db
+      .prepare(
+        "SELECT source_object FROM studio_collection_relations WHERE tenant_id=? AND target_object=? AND source_object<>? LIMIT 1",
+      )
+      .bind(tenant, object.name, object.name)
+      .first<{ source_object: string }>();
+    if (incoming)
+      return fail(
+        `Quita la relación en «${incoming.source_object}» antes de eliminar esta pantalla.`,
+        409,
+      );
+  }
   return records?.total ?? 0;
 }
 
@@ -667,6 +681,196 @@ async function tableExists(db: D1Database, name: string) {
       .bind(...dialectFor(db).tableExists(name).parameters)
       .first(),
   );
+}
+
+const MAX_SCREEN_DELETION_SCOPE = 100;
+
+type DeletionObjectRow = {
+  name: string;
+  label: string;
+  description: string;
+  config: string;
+  version: number;
+};
+
+type CollectionRelationRow = {
+  id: string;
+  source_object: string;
+  target_object: string;
+  storage: string;
+  version: number;
+};
+
+function screenDeletionBlocker(row: DeletionObjectRow): string | null {
+  const config = JSON.parse(row.config) as StudioObject["config"];
+  if (config.studio?.collection)
+    return "Desvincula la colección desde Fuentes y colecciones antes de eliminar la pantalla.";
+  if (
+    ["managed-agency", "managed-customer"].includes(
+      config.studio?.business ?? "",
+    )
+  )
+    return "Esta pantalla administrada no se puede eliminar aquí.";
+  return null;
+}
+
+async function sha256(value: unknown): Promise<string> {
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(value)),
+  );
+  return Array.from(new Uint8Array(bytes), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function screenDeletionSnapshot(
+  db: D1Database,
+  tenant: string,
+  root: string,
+) {
+  const { results: objectRows } = await db
+    .prepare(
+      `SELECT name,label,description,${dialectFor(db).name === "postgres" ? "config::text" : "config"} AS config,version FROM studio_objects WHERE tenant_id=? ORDER BY name`,
+    )
+    .bind(tenant)
+    .all<DeletionObjectRow>();
+  const objects = new Map(objectRows.map((row) => [row.name, row]));
+  const rootObject = objects.get(root);
+  if (!rootObject) return fail("El objeto no existe.", 404);
+  const hasRelations = await tableExists(db, "studio_collection_relations");
+  const hasLinks = await tableExists(db, "studio_record_links");
+  const relations = hasRelations
+    ? (
+        await db
+          .prepare(
+            "SELECT id,source_object,target_object,storage,version FROM studio_collection_relations WHERE tenant_id=? ORDER BY id",
+          )
+          .bind(tenant)
+          .all<CollectionRelationRow>()
+      ).results
+    : [];
+  const inboundByTarget = new Map<string, Set<string>>();
+  for (const row of objectRows) {
+    const config = JSON.parse(row.config) as StudioObject["config"];
+    for (const field of Object.values(config.fields ?? {})) {
+      const relation = field.config?.relation;
+      if (typeof relation !== "string") continue;
+      const incoming = inboundByTarget.get(relation) ?? new Set<string>();
+      incoming.add(row.name);
+      inboundByTarget.set(relation, incoming);
+    }
+  }
+  for (const relation of relations) {
+    const incoming =
+      inboundByTarget.get(relation.target_object) ?? new Set<string>();
+    incoming.add(relation.source_object);
+    inboundByTarget.set(relation.target_object, incoming);
+  }
+
+  const closure = new Set<string>([root]);
+  const queue = [root];
+  while (queue.length) {
+    const current = queue.shift()!;
+    for (const dependent of inboundByTarget.get(current) ?? []) {
+      if (!objects.has(dependent) || closure.has(dependent)) continue;
+      closure.add(dependent);
+      if (closure.size > MAX_SCREEN_DELETION_SCOPE)
+        return fail(
+          `La eliminación alcanza más de ${MAX_SCREEN_DELETION_SCOPE} pantallas; reduce las dependencias antes de continuar.`,
+          413,
+        );
+      queue.push(dependent);
+    }
+  }
+  const names = [...closure].sort();
+  const screens = [];
+  const recordRevisions = new Map<string, number>();
+  for (const name of names) {
+    const row = objects.get(name)!;
+    const result = await db
+      .prepare(
+        "SELECT count(*) AS total FROM studio_records WHERE tenant_id=? AND object_name=?",
+      )
+      .bind(tenant, name)
+      .first<{ total: number }>();
+    screens.push({
+      name,
+      label: row.label,
+      recordCount: Number(result?.total ?? 0),
+      blockedReason: screenDeletionBlocker(row),
+    });
+    const revision = await db
+      .prepare(
+        "SELECT revision FROM studio_record_counts WHERE tenant_id=? AND object_name=?",
+      )
+      .bind(tenant, name)
+      .first<{ revision: number }>();
+    recordRevisions.set(name, Number(revision?.revision ?? 0));
+  }
+  const closureNames = new Set(names);
+  const scopedRelations = relations.filter(
+    (relation) =>
+      closureNames.has(relation.source_object) ||
+      closureNames.has(relation.target_object),
+  );
+  const relationLinkCounts: Array<[string, number]> = [];
+  if (hasLinks) {
+    for (const relation of scopedRelations) {
+      const count = await db
+        .prepare(
+          "SELECT count(*) AS total FROM studio_record_links WHERE tenant_id=? AND relation_id=?",
+        )
+        .bind(tenant, relation.id)
+        .first<{ total: number }>();
+      relationLinkCounts.push([relation.id, Number(count?.total ?? 0)]);
+    }
+  }
+  const token = await sha256({
+    tenant,
+    root,
+    closure: names,
+    // Include all tenant object configs so a newly added inbound dependency invalidates confirmation.
+    objectScope: objectRows.map((row) => [
+      row.name,
+      row.label,
+      row.config,
+      row.version,
+    ]),
+    screens: screens.map((screen) => [
+      screen.name,
+      screen.recordCount,
+      recordRevisions.get(screen.name),
+    ]),
+    relations,
+    links: relationLinkCounts,
+  });
+  return {
+    preview: {
+      root,
+      screens,
+      totalRecords: screens.reduce(
+        (total, screen) => total + screen.recordCount,
+        0,
+      ),
+      token,
+    } satisfies ScreenDeletionPreview,
+    objectRows,
+    relations,
+    closureNames: names,
+    recordRevisions,
+    relationLinkCounts,
+    hasRelations,
+    hasLinks,
+  };
+}
+
+export async function previewScreenDeletion(
+  db: D1Database,
+  tenant: string,
+  name: string,
+): Promise<ScreenDeletionPreview> {
+  return (await screenDeletionSnapshot(db, tenant, name)).preview;
 }
 
 async function deleteObjectDataStatements(
@@ -685,12 +889,15 @@ async function deleteObjectDataStatements(
     );
   }
   if (await tableExists(db, "studio_collection_relations")) {
+    if (await tableExists(db, "studio_record_links"))
+      statements.push(
+        db
+          .prepare(
+            "DELETE FROM studio_record_links WHERE tenant_id=? AND relation_id IN (SELECT id FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?))",
+          )
+          .bind(tenant, tenant, name, name),
+      );
     statements.push(
-      db
-        .prepare(
-          "DELETE FROM studio_record_links WHERE tenant_id=? AND relation_id IN (SELECT id FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?))",
-        )
-        .bind(tenant, tenant, name, name),
       db
         .prepare(
           "DELETE FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?)",
@@ -744,53 +951,251 @@ async function deleteObjectDataStatements(
     db
       .prepare("DELETE FROM studio_records WHERE tenant_id=? AND object_name=?")
       .bind(tenant, name),
+    ...((await tableExists(db, "studio_record_history"))
+      ? [
+          db
+            .prepare(
+              "DELETE FROM studio_record_history WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, name),
+        ]
+      : []),
+    ...((await tableExists(db, "studio_record_read_cache"))
+      ? [
+          db
+            .prepare(
+              "DELETE FROM studio_record_read_cache WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, name),
+        ]
+      : []),
+    ...((await tableExists(db, "studio_record_counts"))
+      ? [
+          db
+            .prepare(
+              "DELETE FROM studio_record_counts WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, name),
+        ]
+      : []),
+    ...((await tableExists(db, "studio_record_summary_definitions"))
+      ? [
+          db
+            .prepare(
+              "DELETE FROM studio_record_summary_definitions WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, name),
+        ]
+      : []),
+    ...((await tableExists(db, "studio_record_summary_groups"))
+      ? [
+          db
+            .prepare(
+              "DELETE FROM studio_record_summary_groups WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, name),
+        ]
+      : []),
+    ...((await tableExists(db, "studio_solution_objects"))
+      ? [
+          db
+            .prepare(
+              "DELETE FROM studio_solution_objects WHERE tenant_id=? AND object_name=?",
+            )
+            .bind(tenant, name),
+        ]
+      : []),
   );
   return statements;
-}
-
-function deleteObjectMetadataStatements(
-  db: D1Database,
-  tenant: string,
-  name: string,
-) {
-  return [
-    db
-      .prepare(
-        "DELETE FROM studio_automation_runs WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-    db
-      .prepare(
-        "DELETE FROM studio_automations WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-    db
-      .prepare("DELETE FROM studio_views WHERE tenant_id=? AND object_name=?")
-      .bind(tenant, name),
-    db
-      .prepare(
-        "DELETE FROM studio_schema_data WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-    db
-      .prepare(
-        "DELETE FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-    db
-      .prepare(
-        "DELETE FROM studio_unique_values WHERE tenant_id=? AND object_name=?",
-      )
-      .bind(tenant, name),
-  ];
 }
 
 export async function deleteObject(
   db: D1Database,
   tenant: string,
   name: string,
-  options: { deleteRecords?: boolean } = {},
+  options: {
+    deleteRecords?: boolean;
+    deleteRelated?: boolean;
+    deletionToken?: string;
+  } = {},
 ) {
+  if (options.deleteRelated || options.deletionToken) {
+    const cascade = Boolean(options.deleteRelated);
+    if (cascade && (!options.deleteRecords || !options.deletionToken))
+      return fail(
+        "Confirma la eliminación de los registros y proporciona la vista previa vigente.",
+        422,
+      );
+    if (!options.deletionToken)
+      return fail("Se necesita la vista previa de eliminación.", 422);
+    const snapshot = await screenDeletionSnapshot(db, tenant, name);
+    if (snapshot.preview.token !== options.deletionToken)
+      return fail(
+        "La vista previa cambió. Recárgala antes de confirmar la eliminación.",
+        409,
+      );
+    if (!cascade && snapshot.preview.screens.length > 1)
+      return fail(
+        "Hay pantallas dependientes. Confirma su eliminación desde la vista previa o quita sus relaciones.",
+        409,
+      );
+    const blocked = snapshot.preview.screens.find(
+      (screen) => screen.blockedReason,
+    );
+    if (blocked)
+      return fail(
+        `No se puede eliminar «${blocked.label}»: ${blocked.blockedReason}`,
+        409,
+      );
+    if (
+      !cascade &&
+      !options.deleteRecords &&
+      (snapshot.preview.screens[0]?.recordCount ?? 0) > 0
+    )
+      return fail(
+        "Esta pantalla tiene registros. Confirma la eliminación de los datos para continuar.",
+        409,
+      );
+    const {
+      closureNames: allClosureNames,
+      objectRows,
+      relations,
+      hasRelations,
+      hasLinks,
+      recordRevisions,
+      relationLinkCounts,
+    } = snapshot;
+    const closureNames = cascade ? allClosureNames : [name];
+    const byName = new Map(objectRows.map((row) => [row.name, row]));
+    const statements: D1PreparedStatement[] = [];
+    const guardEnds: D1PreparedStatement[] = [];
+    if (dialectFor(db).name === "postgres") {
+      statements.push(
+        db.prepare("LOCK TABLE studio_objects IN SHARE ROW EXCLUSIVE MODE"),
+        db.prepare("LOCK TABLE studio_records IN SHARE ROW EXCLUSIVE MODE"),
+      );
+      if (hasRelations)
+        statements.push(
+          db.prepare(
+            "LOCK TABLE studio_collection_relations IN SHARE ROW EXCLUSIVE MODE",
+          ),
+        );
+      if (hasLinks)
+        statements.push(
+          db.prepare(
+            "LOCK TABLE studio_record_links IN SHARE ROW EXCLUSIVE MODE",
+          ),
+        );
+    }
+    const objectCount = guard(
+      db,
+      "SELECT count(*)=? FROM studio_objects WHERE tenant_id=?",
+      [objectRows.length, tenant],
+    );
+    statements.push(objectCount.start);
+    guardEnds.push(objectCount.end);
+    for (const row of objectRows) {
+      const versionGuard = guard(
+        db,
+        dialectFor(db).name === "postgres"
+          ? "SELECT version=? AND label=? AND config::jsonb=?::jsonb FROM studio_objects WHERE tenant_id=? AND name=?"
+          : "SELECT version=? AND label=? AND config=? FROM studio_objects WHERE tenant_id=? AND name=?",
+        [row.version, row.label, row.config, tenant, row.name],
+      );
+      statements.push(versionGuard.start);
+      guardEnds.push(versionGuard.end);
+    }
+    for (const screen of snapshot.preview.screens) {
+      const recordGuard = guard(
+        db,
+        "SELECT count(*)=? FROM studio_records WHERE tenant_id=? AND object_name=?",
+        [screen.recordCount, tenant, screen.name],
+      );
+      statements.push(recordGuard.start);
+      guardEnds.push(recordGuard.end);
+      const revisionGuard = guard(
+        db,
+        "SELECT COALESCE((SELECT revision FROM studio_record_counts WHERE tenant_id=? AND object_name=?),0)=?",
+        [tenant, screen.name, recordRevisions.get(screen.name) ?? 0],
+      );
+      statements.push(revisionGuard.start);
+      guardEnds.push(revisionGuard.end);
+    }
+    if (hasRelations) {
+      const relationCount = guard(
+        db,
+        "SELECT count(*)=? FROM studio_collection_relations WHERE tenant_id=?",
+        [relations.length, tenant],
+      );
+      statements.push(relationCount.start);
+      guardEnds.push(relationCount.end);
+      for (const relation of relations) {
+        const relationGuard = guard(
+          db,
+          "SELECT count(*)=1 FROM studio_collection_relations WHERE tenant_id=? AND id=? AND source_object=? AND target_object=? AND version=?",
+          [
+            tenant,
+            relation.id,
+            relation.source_object,
+            relation.target_object,
+            relation.version,
+          ],
+        );
+        statements.push(relationGuard.start);
+        guardEnds.push(relationGuard.end);
+      }
+      if (hasLinks)
+        for (const [relationId, count] of relationLinkCounts) {
+          const linkGuard = guard(
+            db,
+            "SELECT count(*)=? FROM studio_record_links WHERE tenant_id=? AND relation_id=?",
+            [count, tenant, relationId],
+          );
+          statements.push(linkGuard.start);
+          guardEnds.push(linkGuard.end);
+        }
+    }
+    const dropIndexes = await Promise.all(
+      closureNames.map((objectName) => {
+        const object = byName.get(objectName)!;
+        const config = JSON.parse(object.config) as StudioObject["config"];
+        return recordIndexStatements(
+          db,
+          tenant,
+          objectName,
+          config.performance?.indexes,
+          [],
+        );
+      }),
+    );
+    statements.push(...dropIndexes.flat());
+    for (const objectName of closureNames) {
+      statements.push(
+        ...(await deleteObjectDataStatements(db, tenant, objectName)),
+      );
+      statements.push(
+        db
+          .prepare("DELETE FROM studio_objects WHERE tenant_id=? AND name=?")
+          .bind(tenant, objectName),
+        audit(db, tenant, "object.deleted", objectName, null, {
+          label: byName.get(objectName)!.label,
+          deletedRecords:
+            snapshot.preview.screens.find(
+              (screen) => screen.name === objectName,
+            )?.recordCount ?? 0,
+          cascadeRoot: name,
+        }),
+      );
+    }
+    statements.push(...guardEnds);
+    await transaction(db, statements);
+    return {
+      name,
+      deleted: true,
+      deletedRecords: options.deleteRecords ? snapshot.preview.totalRecords : 0,
+      deletedObjects: closureNames,
+    };
+  }
   const object = await getObject(db, tenant, name);
   const recordCount = await assertObjectCanBeDeleted(db, tenant, object, {
     allowRecords: options.deleteRecords,
@@ -805,9 +1210,7 @@ export async function deleteObject(
   );
   const statements = [
     ...dropIndexes,
-    ...(cascadeData
-      ? await deleteObjectDataStatements(db, tenant, name)
-      : deleteObjectMetadataStatements(db, tenant, name)),
+    ...(await deleteObjectDataStatements(db, tenant, name)),
     db
       .prepare("DELETE FROM studio_objects WHERE tenant_id=? AND name=?")
       .bind(tenant, name),
@@ -830,5 +1233,6 @@ export async function deleteObject(
     name,
     deleted: true,
     deletedRecords: cascadeData ? recordCount : 0,
+    deletedObjects: [name],
   };
 }

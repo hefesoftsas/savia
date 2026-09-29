@@ -77,3 +77,31 @@ describe("legacy authorization compatibility", () => {
     },
   );
 });
+
+it.each([
+  ["platform_admin", 200],
+  ["tenant_admin", 200],
+  ["agency_admin", 200],
+  ["operator", 403],
+  ["viewer", 403],
+] as const)(
+  "restricts screen deletion previews to administrators: %s",
+  async (role, status) => {
+    const response = await f.request(
+      role,
+      101,
+      "/v1/studio/101/api/objects/acl_contacts/deletion-preview",
+    );
+    expect(response.status).toBe(status);
+    if (status === 200) {
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toMatchObject({
+        data: {
+          root: "acl_contacts",
+          totalRecords: 1,
+          screens: [{ name: "acl_contacts", recordCount: 1 }],
+        },
+      });
+    }
+  },
+);

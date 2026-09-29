@@ -10,6 +10,24 @@ import ScreenAdministration from "../screen-administration";
 import { setStudioRuntime } from "../runtime";
 import { makeConfig } from "@savia/studio-shared/metadata";
 
+const loadDeletionPreview = async (target: {
+  name: string;
+  label: string;
+  count?: number;
+}) => ({
+  root: target.name,
+  screens: [
+    {
+      name: target.name,
+      label: target.label,
+      recordCount: target.count ?? 0,
+      blockedReason: null,
+    },
+  ],
+  totalRecords: target.count ?? 0,
+  token: "test-preview-token",
+});
+
 afterEach(() => {
   cleanup();
   setStudioRuntime({ embedded: false });
@@ -140,6 +158,7 @@ it("shows sidebar subtitles without labeling ordinary screens as compiled plugin
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={vi.fn(async () => undefined)}
       onDeletePermanent={vi.fn(async () => undefined)}
+      onLoadDeletionPreview={loadDeletionPreview}
     />,
   );
 
@@ -188,6 +207,7 @@ it("labels an active tenant ZIP screen as a plugin", () => {
       onVisibilityChange={vi.fn(async () => undefined)}
       onMenuLayoutChange={vi.fn(async () => undefined)}
       onDeletePermanent={vi.fn(async () => undefined)}
+      onLoadDeletionPreview={loadDeletionPreview}
     />,
   );
 

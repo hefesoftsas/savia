@@ -1533,6 +1533,74 @@ export const studioMessages = {
     "Delete permanently",
     "Excluir permanentemente",
   ],
+  "Eliminar también las pantallas dependientes y sus datos": [
+    "Eliminar también las pantallas dependientes y sus datos",
+    "Also delete dependent screens and their data",
+    "Excluir também as telas dependentes e seus dados",
+  ],
+  "Cargando vista previa de eliminación…": [
+    "Cargando vista previa de eliminación…",
+    "Loading deletion preview…",
+    "Carregando prévia da exclusão…",
+  ],
+  "No se pudo cargar la vista previa.": [
+    "No se pudo cargar la vista previa.",
+    "Could not load the deletion preview.",
+    "Não foi possível carregar a prévia da exclusão.",
+  ],
+  "Se eliminarán estas pantallas y sus registros:": [
+    "Se eliminarán estas pantallas y sus registros:",
+    "These screens and their records will be deleted:",
+    "Estas telas e seus registros serão excluídos:",
+  ],
+  "Pantalla seleccionada y pantallas dependientes detectadas:": [
+    "Pantalla seleccionada y pantallas dependientes detectadas:",
+    "Selected screen and detected dependent screens:",
+    "Tela selecionada e telas dependentes detectadas:",
+  ],
+  "Se eliminarán %{v1} pantallas y %{v2} registros, incluida «%{v3}».": [
+    "Se eliminarán %{v1} pantallas y %{v2} registros, incluida «%{v3}».",
+    "%{v1} screens and %{v2} records will be deleted, including “%{v3}”.",
+    "%{v1} telas e %{v2} registros serão excluídos, incluindo “%{v3}”.",
+  ],
+  "Pantallas incluidas en la eliminación": [
+    "Pantallas incluidas en la eliminación",
+    "Screens included in deletion",
+    "Telas incluídas na exclusão",
+  ],
+  "Hay pantallas dependientes. Elimina sus relaciones primero o activa la opción para eliminarlas también.":
+    [
+      "Hay pantallas dependientes. Elimina sus relaciones primero o activa la opción para eliminarlas también.",
+      "Dependent screens exist. Remove their relations first or enable the option to delete them too.",
+      "Há telas dependentes. Remova primeiro as relações ou ative a opção para excluí-las também.",
+    ],
+  "No se puede eliminar la cascada mientras haya pantallas dependientes protegidas o externas.":
+    [
+      "No se puede eliminar la cascada mientras haya pantallas dependientes protegidas o externas.",
+      "The cascade cannot run while protected or external dependent screens remain.",
+      "A exclusão em cascata não pode ocorrer enquanto houver telas dependentes protegidas ou externas.",
+    ],
+  "La eliminación no se confirmó. Revisa la vista previa y confirma de nuevo.":
+    [
+      "La eliminación no se confirmó. Revisa la vista previa y confirma de nuevo.",
+      "Deletion was not confirmed. Review the preview and confirm again.",
+      "A exclusão não foi confirmada. Revise a prévia e confirme novamente.",
+    ],
+  "No se pudo eliminar la pantalla.": [
+    "No se pudo eliminar la pantalla.",
+    "Could not delete the screen.",
+    "Não foi possível excluir a tela.",
+  ],
+  "Se eliminaron %{value0} registros de la pantalla «%{value1}»": [
+    "Se eliminaron %{value0} registros de la pantalla «%{value1}»",
+    "Deleted %{value0} records from the screen “%{value1}”",
+    "Foram excluídos %{value0} registros da tela “%{value1}”",
+  ],
+  "Se eliminaron %{value0} pantallas y %{value1} registros": [
+    "Se eliminaron %{value0} pantallas y %{value1} registros",
+    "Deleted %{value0} screens and %{value1} records",
+    "Foram excluídas %{value0} telas e %{value1} registros",
+  ],
   Inactiva: ["Inactiva", "Inactive", "Inativa"],
   "Recuperar en el menú": [
     "Recuperar en el menú",

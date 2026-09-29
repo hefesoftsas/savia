@@ -3,6 +3,7 @@ import { ExtensionLocaleBridge } from "@/i18n/app-locale-provider";
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { defaultAppLocale, isAppLocale } from "@/i18n/app-locale";
 import { automationMessages } from "@/i18n/locales/automation";
+import { studioMessages } from "@/i18n/locales/studio";
 import { isTenantApiBasePath } from "@/features/studio/studio-navigation";
 import {
   canDuplicateRecord,
@@ -26,6 +27,7 @@ import React, {
   Fragment,
   Suspense,
   lazy,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -114,6 +116,7 @@ import {
 import { getStudioRuntime } from "./runtime";
 import { StudioRealtimeBridge } from "./studio-realtime";
 import { useListObjects, getListObjectsQueryKey } from "./generated/studio";
+import type { ScreenDeletionPreview } from "@savia/studio-shared/screen-deletion";
 import {
   fieldEntries,
   makeConfig,
@@ -151,6 +154,7 @@ import {
 import { CustomPluginFrame } from "./custom-plugin-frame";
 import { StudioHelpTooltip } from "./studio-help-tooltip";
 import "./screen-manager.css";
+const studioAppMessages = { ...automationMessages, ...studioMessages };
 const PublicLinkManager = lazy(() =>
   import("../public-forms/public-link-manager").then((module) => ({
     default: module.PublicLinkManager,
@@ -317,7 +321,7 @@ function App({
   embedded?: boolean;
   search?: string;
 }) {
-  const t = useMessages(automationMessages);
+  const t = useMessages(studioAppMessages);
   const extensionLocale = useAppLocale();
   const extensionLocaleRef = useRef(extensionLocale);
   extensionLocaleRef.current = extensionLocale;
@@ -704,39 +708,77 @@ function App({
       throw error;
     }
   };
+  const loadScreenDeletionPreview = useCallback(
+    async (target: StudioObject) => {
+      const response = await api<{ data: ScreenDeletionPreview }>(
+        `/objects/${encodeURIComponent(target.name)}/deletion-preview`,
+      );
+      return response.data;
+    },
+    [],
+  );
   const deleteScreenPermanently = async (
     target: StudioObject,
-    options: { deleteRecords?: boolean } = {},
+    options: {
+      deleteRecords?: boolean;
+      deleteRelated?: boolean;
+      deletionToken?: string;
+    } = {},
   ) => {
     try {
-      await api(`/objects/${target.name}`, "DELETE", {
+      const response = await api<{
+        data: {
+          name: string;
+          deleted: true;
+          deletedRecords: number;
+          deletedObjects: string[];
+        };
+      }>(`/objects/${encodeURIComponent(target.name)}`, "DELETE", {
         deleteRecords: Boolean(options.deleteRecords),
+        deleteRelated: Boolean(options.deleteRelated),
+        deletionToken: options.deletionToken,
       });
+      const deletedNames = new Set(response.data.deletedObjects);
       activeQueryClient.setQueryData(
         getListObjectsQueryKey(),
-        (previous: { data: StudioObject[] } | undefined) =>
+        (
+          previous:
+            { data: StudioObject[]; [key: string]: unknown } | undefined,
+        ) =>
           previous
             ? {
                 ...previous,
-                data: previous.data.filter((item) => item.name !== target.name),
+                data: previous.data.filter(
+                  (item) => !deletedNames.has(item.name),
+                ),
               }
             : previous,
       );
       await refresh();
-      const deletedRecords = Boolean(
-        options.deleteRecords && (target.count ?? 0) > 0,
-      );
+      const deletedRecords = response.data.deletedRecords;
+      const deletedScreenCount = response.data.deletedObjects.length;
       toast.success(
-        deletedRecords
-          ? t("Pantalla «%{value0}» y sus registros eliminados", {
-              value0: target.label,
+        deletedScreenCount > 1 || options.deleteRelated
+          ? t("Se eliminaron %{value0} pantallas y %{value1} registros", {
+              value0: deletedScreenCount,
+              value1: deletedRecords,
             })
-          : t("Pantalla «%{value0}» eliminada permanentemente", {
-              value0: target.label,
-            }),
+          : deletedRecords > 0
+            ? t(
+                "Se eliminaron %{value0} registros de la pantalla «%{value1}»",
+                {
+                  value0: deletedRecords,
+                  value1: target.label,
+                },
+              )
+            : t("Pantalla «%{value0}» eliminada permanentemente", {
+                value0: target.label,
+              }),
       );
-      if (selected === target.name) {
-        const remaining = objects.filter((item) => item.name !== target.name);
+      if (deletedNames.has(selected)) {
+        const remaining = objects.filter(
+          (item) => !deletedNames.has(item.name),
+        );
         const nextVisible = sortScreens(
           remaining.filter((item) => !item.config.studio?.screen?.hidden),
         )[0];
@@ -851,6 +893,7 @@ function App({
                 menuLayout={resolvedMenuLayout}
                 onMenuLayoutChange={saveMenuLayout}
                 onDeletePermanent={deleteScreenPermanently}
+                onLoadDeletionPreview={loadScreenDeletionPreview}
                 onSolutionsChanged={refresh}
                 extensions={extensionInstallations}
                 tab={
@@ -1188,6 +1231,7 @@ function App({
                 menuLayout={resolvedMenuLayout}
                 onMenuLayoutChange={saveMenuLayout}
                 onDeletePermanent={deleteScreenPermanently}
+                onLoadDeletionPreview={loadScreenDeletionPreview}
                 onSolutionsChanged={refresh}
                 extensions={extensionInstallations}
                 tab={

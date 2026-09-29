@@ -426,6 +426,233 @@ it("deletes local screens with records when deleteRecords is true", async () => 
   ).toBe(false);
 });
 
+it("previews and cascades only inbound and transitive screen dependencies", async () => {
+  const config = (relation?: string) => {
+    const value = makeConfig({ name: { type: "Textbox", label: "Name" } });
+    if (relation)
+      value.fields.link = {
+        type: "Dropdown",
+        label: "Link",
+        config: { relation },
+      } as any;
+    return value;
+  };
+  for (const [name, relation] of [
+    ["cascade_parent", undefined],
+    ["cascade_root", "cascade_parent"],
+    ["cascade_child", "cascade_root"],
+    ["cascade_grandchild", "cascade_child"],
+    ["cascade_collection_child", undefined],
+    ["cascade_unrelated", "cascade_parent"],
+  ] as const) {
+    await platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    )
+      .bind("demo", name, name, JSON.stringify(config(relation)))
+      .run();
+  }
+  // A cycle must terminate, and the remote tenant's inbound screen stays outside the graph.
+  await platform.env.DB.prepare(
+    "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name=?",
+  )
+    .bind(JSON.stringify(config("cascade_child")), "demo", "cascade_root")
+    .run();
+  await platform.env.DB.prepare(
+    "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+  )
+    .bind(
+      "other",
+      "cascade_other_tenant",
+      "Other",
+      JSON.stringify(config("cascade_root")),
+    )
+    .run();
+  await platform.env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS studio_collection_relations (tenant_id TEXT NOT NULL,id TEXT NOT NULL,source_object TEXT NOT NULL,target_object TEXT NOT NULL,source_label TEXT NOT NULL,target_label TEXT NOT NULL,cardinality TEXT NOT NULL,source_field TEXT NOT NULL DEFAULT 'id',target_field TEXT NOT NULL DEFAULT 'id',storage TEXT NOT NULL DEFAULT 'local',version INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(tenant_id,id))",
+  ).run();
+  await platform.env.DB.prepare(
+    "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES (?,?,?,?,?,?,?)",
+  )
+    .bind(
+      "demo",
+      "cascade-collection-relation",
+      "cascade_collection_child",
+      "cascade_root",
+      "Cascade collection child",
+      "Cascade root",
+      "many-to-many",
+    )
+    .run();
+  for (const [name, id, deletedAt] of [
+    ["cascade_root", "cascade-root-record", null],
+    ["cascade_child", "cascade-child-record", null],
+    ["cascade_grandchild", "cascade-grandchild-record", "2026-01-01T00:00:00Z"],
+    ["cascade_collection_child", "cascade-collection-record", null],
+    ["cascade_parent", "cascade-parent-record", null],
+    ["cascade_unrelated", "cascade-unrelated-record", null],
+  ] as const)
+    await platform.env.DB.prepare(
+      "INSERT INTO studio_records(id,tenant_id,object_name,data,deleted_at) VALUES (?,?,?,?,?)",
+    )
+      .bind(id, "demo", name, JSON.stringify({ name: id }), deletedAt)
+      .run();
+
+  const preview = (await json("/objects/cascade_root/deletion-preview")).data;
+  expect(preview.screens.map((screen: any) => screen.name)).toEqual([
+    "cascade_child",
+    "cascade_collection_child",
+    "cascade_grandchild",
+    "cascade_root",
+  ]);
+  expect(preview.totalRecords).toBe(4);
+  expect(
+    preview.screens.find((screen: any) => screen.name === "cascade_grandchild")
+      .recordCount,
+  ).toBe(1);
+  const result = await request("/objects/cascade_root", "DELETE", {
+    deleteRecords: true,
+    deleteRelated: true,
+    deletionToken: preview.token,
+  });
+  expect(result.status).toBe(200);
+  expect((await result.json()).data).toMatchObject({
+    name: "cascade_root",
+    deleted: true,
+    deletedRecords: 4,
+    deletedObjects: [
+      "cascade_child",
+      "cascade_collection_child",
+      "cascade_grandchild",
+      "cascade_root",
+    ],
+  });
+  const remaining = await platform.env.DB.prepare(
+    "SELECT name FROM studio_objects WHERE tenant_id=? AND name LIKE 'cascade_%' ORDER BY name",
+  )
+    .bind("demo")
+    .all<any>();
+  expect(remaining.results.map((row: any) => row.name)).toEqual([
+    "cascade_parent",
+    "cascade_unrelated",
+  ]);
+  expect(
+    await platform.env.DB.prepare(
+      "SELECT count(*) AS total FROM studio_records WHERE tenant_id=? AND object_name LIKE 'cascade_%'",
+    )
+      .bind("demo")
+      .first<any>(),
+  ).toMatchObject({ total: 2 });
+  expect(
+    await platform.env.DB.prepare(
+      "SELECT count(*) AS total FROM studio_objects WHERE tenant_id=? AND name=?",
+    )
+      .bind("other", "cascade_other_tenant")
+      .first<any>(),
+  ).toMatchObject({ total: 1 });
+});
+
+it("rejects stale cascades and reports protected dependents in the preview", async () => {
+  const local = makeConfig({ name: { type: "Textbox", label: "Name" } });
+  const dependent = makeConfig({
+    name: { type: "Textbox", label: "Name" },
+    ref: { type: "Dropdown", label: "Ref", config: { relation: "stale_root" } },
+  });
+  await platform.env.DB.batch([
+    platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    ).bind("demo", "stale_root", "Root", JSON.stringify(local)),
+    platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    ).bind(
+      "demo",
+      "stale_remote",
+      "Remote",
+      JSON.stringify({ ...dependent, studio: { collection: "remote-source" } }),
+    ),
+  ]);
+  const blockedPreview = (await json("/objects/stale_root/deletion-preview"))
+    .data;
+  expect(
+    blockedPreview.screens.find((screen: any) => screen.name === "stale_remote")
+      .blockedReason,
+  ).toMatch(/Desvincula la colección/);
+  const blocked = await request("/objects/stale_root", "DELETE", {
+    deleteRecords: true,
+    deleteRelated: true,
+    deletionToken: blockedPreview.token,
+  });
+  expect(blocked.status).toBe(409);
+  expect(
+    await platform.env.DB.prepare(
+      "SELECT count(*) AS total FROM studio_objects WHERE tenant_id='demo' AND name='stale_root'",
+    ).first<any>(),
+  ).toMatchObject({ total: 1 });
+
+  await platform.env.DB.prepare(
+    "DELETE FROM studio_objects WHERE tenant_id=? AND name=?",
+  )
+    .bind("demo", "stale_remote")
+    .run();
+  await platform.env.DB.prepare(
+    "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+  )
+    .bind(
+      "stale-record",
+      "demo",
+      "stale_root",
+      JSON.stringify({ name: "before" }),
+    )
+    .run();
+  const preview = (await json("/objects/stale_root/deletion-preview")).data;
+  await platform.env.DB.prepare(
+    "UPDATE studio_records SET data=?,version=version+1 WHERE tenant_id=? AND object_name=?",
+  )
+    .bind(JSON.stringify({ name: "updated in place" }), "demo", "stale_root")
+    .run();
+  const stale = await request("/objects/stale_root", "DELETE", {
+    deleteRecords: true,
+    deleteRelated: true,
+    deletionToken: preview.token,
+  });
+  expect(stale.status).toBe(409);
+});
+
+it("rolls back every object when a cascade mutation fails", async () => {
+  const root = makeConfig({ name: { type: "Textbox", label: "Name" } });
+  const child = makeConfig({
+    name: { type: "Textbox", label: "Name" },
+    ref: {
+      type: "Dropdown",
+      label: "Ref",
+      config: { relation: "rollback_root" },
+    },
+  });
+  await platform.env.DB.batch([
+    platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    ).bind("demo", "rollback_root", "Root", JSON.stringify(root)),
+    platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES (?,?,?,?)",
+    ).bind("demo", "rollback_child", "Child", JSON.stringify(child)),
+    platform.env.DB.prepare(
+      "CREATE TRIGGER reject_cascade_delete BEFORE DELETE ON studio_objects WHEN OLD.name='rollback_child' BEGIN SELECT RAISE(ABORT,'cascade_test_failure'); END",
+    ),
+  ]);
+  const preview = (await json("/objects/rollback_root/deletion-preview")).data;
+  const failed = await request("/objects/rollback_root", "DELETE", {
+    deleteRecords: true,
+    deleteRelated: true,
+    deletionToken: preview.token,
+  });
+  expect(failed.status).toBeGreaterThanOrEqual(500);
+  expect(
+    await platform.env.DB.prepare(
+      "SELECT count(*) AS total FROM studio_objects WHERE tenant_id='demo' AND name IN ('rollback_root','rollback_child')",
+    ).first<any>(),
+  ).toMatchObject({ total: 2 });
+  await platform.env.DB.prepare("DROP TRIGGER reject_cascade_delete").run();
+});
+
 it("reads native counts and pages in one D1 batch with matching filters and pagination", async () => {
   await json("/objects", "POST", {
     name: "page_batch",

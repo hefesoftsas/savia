@@ -1,7 +1,7 @@
 import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
 import { studioMessages } from "@/i18n/locales/studio";
 import { getStudioRuntime } from "./runtime";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import type { StudioObject } from "@savia/studio-shared/metadata";
+import type { ScreenDeletionPreview } from "@savia/studio-shared/screen-deletion";
 import {
   moveMenuSectionBlock,
   moveScreenToSection,
@@ -88,6 +89,7 @@ export default function ScreenAdministration({
   onVisibilityChange,
   onMenuLayoutChange,
   onDeletePermanent,
+  onLoadDeletionPreview,
   onSolutionsChanged,
   extensions,
   defaultTab = "screens",
@@ -108,8 +110,15 @@ export default function ScreenAdministration({
   onMenuLayoutChange: (layout: ScreenMenuLayout) => Promise<void>;
   onDeletePermanent: (
     screen: StudioObject,
-    options: { deleteRecords: boolean },
+    options: {
+      deleteRecords: boolean;
+      deleteRelated: boolean;
+      deletionToken?: string;
+    },
   ) => Promise<void>;
+  onLoadDeletionPreview: (
+    screen: StudioObject,
+  ) => Promise<ScreenDeletionPreview>;
   onSolutionsChanged?: () => void | Promise<unknown>;
   extensions?: readonly StoreScreenInstallation[];
   defaultTab?: "screens" | "packages" | "extensions";
@@ -127,7 +136,6 @@ export default function ScreenAdministration({
   const [removingScreen, setRemovingScreen] = useState<string | null>(null);
   const [permanentDeleteTarget, setPermanentDeleteTarget] =
     useState<StudioObject | null>(null);
-  const [deleteRecordsAck, setDeleteRecordsAck] = useState(false);
   const [draggingScreen, setDraggingScreen] = useState<string | null>(null);
   const [dropTargetScreen, setDropTargetScreen] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<string | null>(null);
@@ -270,16 +278,19 @@ export default function ScreenAdministration({
     await setScreenVisibility(target, false);
   };
   const openPermanentDelete = (target: StudioObject) => {
-    setDeleteRecordsAck(false);
     setPermanentDeleteTarget(target);
   };
-  const deleteScreenPermanently = async (target: StudioObject) => {
-    const recordCount = target.count ?? 0;
+  const deleteScreenPermanently = async (
+    target: StudioObject,
+    options: {
+      deleteRecords: boolean;
+      deleteRelated: boolean;
+      deletionToken?: string;
+    },
+  ) => {
     setPendingScreen(target.name);
     try {
-      await onDeletePermanent(target, {
-        deleteRecords: recordCount > 0,
-      });
+      await onDeletePermanent(target, options);
       setPermanentDeleteTarget(null);
       setRemovingScreen(null);
     } finally {
@@ -1176,12 +1187,14 @@ export default function ScreenAdministration({
       </Tabs>
       {permanentDeleteTarget ? (
         <PermanentDeleteDialog
+          key={permanentDeleteTarget.name}
           screen={permanentDeleteTarget}
           pending={pendingScreen === permanentDeleteTarget.name}
-          deleteRecordsAck={deleteRecordsAck}
-          onDeleteRecordsAckChange={setDeleteRecordsAck}
+          onLoadPreview={onLoadDeletionPreview}
           onClose={() => setPermanentDeleteTarget(null)}
-          onConfirm={() => void deleteScreenPermanently(permanentDeleteTarget)}
+          onConfirm={(options) =>
+            deleteScreenPermanently(permanentDeleteTarget, options)
+          }
         />
       ) : null}
     </section>
@@ -1191,23 +1204,113 @@ export default function ScreenAdministration({
 function PermanentDeleteDialog({
   screen,
   pending,
-  deleteRecordsAck,
-  onDeleteRecordsAckChange,
+  onLoadPreview,
   onClose,
   onConfirm,
 }: {
   screen: StudioObject;
   pending: boolean;
-  deleteRecordsAck: boolean;
-  onDeleteRecordsAckChange: (value: boolean) => void;
+  onLoadPreview: (screen: StudioObject) => Promise<ScreenDeletionPreview>;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (options: {
+    deleteRecords: boolean;
+    deleteRelated: boolean;
+    deletionToken?: string;
+  }) => Promise<void>;
 }) {
   const t = useMessages(studioMessages);
+  const [preview, setPreview] = useState<ScreenDeletionPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [deletionError, setDeletionError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [deleteRelated, setDeleteRelated] = useState(false);
+  const [deleteRecordsAck, setDeleteRecordsAck] = useState(false);
+  useEffect(() => {
+    setDeleteRelated(false);
+    setDeleteRecordsAck(false);
+    setDeletionError(null);
+  }, [screen.name]);
+  useEffect(() => {
+    let current = true;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreview(null);
+    void onLoadPreview(screen)
+      .then((result) => {
+        if (current) setPreview(result);
+      })
+      .catch((error: unknown) => {
+        if (current)
+          setPreviewError(
+            error instanceof Error
+              ? error.message
+              : t("No se pudo cargar la vista previa."),
+          );
+      })
+      .finally(() => {
+        if (current) setPreviewLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [onLoadPreview, retry, screen, t]);
+
   const hasSource = Boolean(screen.config.studio?.collection);
-  const recordCount = screen.count ?? 0;
-  const hasRecords = recordCount > 0;
-  const canConfirm = !hasSource && (!hasRecords || deleteRecordsAck);
+  const recordCount =
+    preview?.screens.find((item) => item.name === screen.name)?.recordCount ??
+    screen.count ??
+    0;
+  const scopeRecordCount = deleteRelated
+    ? (preview?.totalRecords ?? recordCount)
+    : recordCount;
+  const hasRecords = scopeRecordCount > 0;
+  const cascadeScreens =
+    preview?.screens.filter((item) => item.name !== screen.name) ?? [];
+  const previewScreens = preview
+    ? preview.screens.some((item) => item.name === screen.name)
+      ? preview.screens
+      : [
+          {
+            name: screen.name,
+            label: screen.label,
+            recordCount,
+            blockedReason: null,
+          },
+          ...preview.screens,
+        ]
+    : [];
+  const blockedScreens =
+    preview?.screens.filter((item) => item.blockedReason) ?? [];
+  const rootScreen = preview?.screens.find((item) => item.name === screen.name);
+  const canConfirm =
+    !hasSource &&
+    !previewLoading &&
+    Boolean(preview) &&
+    !previewError &&
+    !(deleteRelated && blockedScreens.length > 0) &&
+    !rootScreen?.blockedReason &&
+    !(cascadeScreens.length > 0 && !deleteRelated) &&
+    (!hasRecords || deleteRecordsAck);
+  const confirmDelete = async () => {
+    if (!preview || !canConfirm) return;
+    setDeletionError(null);
+    try {
+      await onConfirm({
+        deleteRecords: deleteRelated || hasRecords,
+        deleteRelated,
+        deletionToken: preview.token,
+      });
+    } catch (error) {
+      setDeletionError(
+        error instanceof Error
+          ? error.message
+          : t("No se pudo eliminar la pantalla."),
+      );
+      setDeleteRecordsAck(false);
+      setRetry((value) => value + 1);
+    }
+  };
   return (
     <Dialog
       open
@@ -1223,33 +1326,147 @@ function PermanentDeleteDialog({
               ? t(
                   "Desvincula la fuente de datos antes de eliminar esta pantalla.",
                 )
-              : hasRecords
+              : deleteRelated
                 ? t(
-                    "«%{v1}» tiene %{v2} registro%{v3}. Se borrará la pantalla, su configuración y todos los datos relacionados.",
+                    "Se eliminarán %{v1} pantallas y %{v2} registros, incluida «%{v3}».",
                     {
-                      v1: screen.label,
-                      v2: recordCount,
-                      v3: recordCount === 1 ? "" : "s",
+                      v1: previewScreens.length,
+                      v2: preview?.totalRecords ?? scopeRecordCount,
+                      v3: screen.label,
                     },
                   )
-                : t("Se borrará «%{v1}» y su configuración.", {
-                    v1: screen.label,
-                  })}
+                : hasRecords
+                  ? t(
+                      "«%{v1}» tiene %{v2} registro%{v3}. Se borrará la pantalla, su configuración y todos los datos relacionados.",
+                      {
+                        v1: screen.label,
+                        v2: scopeRecordCount,
+                        v3: scopeRecordCount === 1 ? "" : "s",
+                      },
+                    )
+                  : t("Se borrará «%{v1}» y su configuración.", {
+                      v1: screen.label,
+                    })}
           </DialogDescription>
         </DialogHeader>
+        {previewLoading ? (
+          <p className="screen-admin-delete-status" role="status">
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+            {t("Cargando vista previa de eliminación…")}
+          </p>
+        ) : null}
+        {previewError ? (
+          <div className="screen-admin-delete-error" role="alert">
+            <p>
+              {t("No se pudo cargar la vista previa.")} {previewError}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() => setRetry((value) => value + 1)}
+            >
+              {t("Reintentar")}
+            </Button>
+          </div>
+        ) : null}
+        {deletionError ? (
+          <p className="screen-admin-delete-error" role="alert">
+            {t(
+              "La eliminación no se confirmó. Revisa la vista previa y confirma de nuevo.",
+            )}{" "}
+            {deletionError}
+          </p>
+        ) : null}
+        {preview && !hasSource ? (
+          <div className="screen-admin-delete-preview">
+            <p className="screen-admin-delete-preview-title">
+              {deleteRelated
+                ? t("Se eliminarán estas pantallas y sus registros:")
+                : t(
+                    "Pantalla seleccionada y pantallas dependientes detectadas:",
+                  )}
+            </p>
+            <ul aria-label={t("Pantallas incluidas en la eliminación")}>
+              {previewScreens.map((item) => (
+                <li key={item.name}>
+                  <span>
+                    <strong>{item.label}</strong>
+                    <code>{item.name}</code>
+                  </span>
+                  <span>
+                    {item.recordCount} {t("registros")}
+                  </span>
+                  {item.blockedReason ? (
+                    <span className="screen-admin-delete-block-reason">
+                      {item.blockedReason}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {preview && !hasSource ? (
+          <label className="screen-admin-delete-cascade">
+            <Checkbox
+              checked={deleteRelated}
+              disabled={pending || previewLoading}
+              onCheckedChange={(checked) => {
+                setDeleteRelated(checked === true);
+                setDeleteRecordsAck(false);
+                setDeletionError(null);
+              }}
+            />
+            <span>
+              {t("Eliminar también las pantallas dependientes y sus datos")}
+            </span>
+          </label>
+        ) : null}
+        {preview && cascadeScreens.length > 0 && !deleteRelated ? (
+          <p className="screen-admin-delete-dependents">
+            {t(
+              "Hay pantallas dependientes. Elimina sus relaciones primero o activa la opción para eliminarlas también.",
+            )}
+          </p>
+        ) : null}
+        {preview && rootScreen?.blockedReason ? (
+          <p className="screen-admin-delete-error" role="alert">
+            <strong>{screen.label}</strong> <code>{screen.name}</code>:{" "}
+            {rootScreen.blockedReason}
+          </p>
+        ) : null}
+        {preview && deleteRelated && blockedScreens.length > 0 ? (
+          <div className="screen-admin-delete-error" role="alert">
+            <p>
+              {t(
+                "No se puede eliminar la cascada mientras haya pantallas dependientes protegidas o externas.",
+              )}
+            </p>
+            <ul>
+              {blockedScreens.map((item) => (
+                <li key={item.name}>
+                  <strong>{item.label}</strong> <code>{item.name}</code>:{" "}
+                  {item.blockedReason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {hasRecords && !hasSource ? (
           <label className="screen-admin-delete-ack">
             <Checkbox
               checked={deleteRecordsAck}
-              disabled={pending}
+              disabled={pending || previewLoading || !preview}
               onCheckedChange={(checked) =>
-                onDeleteRecordsAckChange(checked === true)
+                setDeleteRecordsAck(checked === true)
               }
             />
             <span>
-              {t("Entiendo que también se eliminarán")} {recordCount}{" "}
+              {t("Entiendo que también se eliminarán")} {scopeRecordCount}{" "}
               {t("registro")}
-              {recordCount === 1 ? "" : "s"} {t("y no se puede deshacer")}
+              {scopeRecordCount === 1 ? "" : "s"} {t("y no se puede deshacer")}
             </span>
           </label>
         ) : null}
@@ -1269,7 +1486,7 @@ function PermanentDeleteDialog({
             type="button"
             variant="destructive"
             disabled={pending || !canConfirm}
-            onClick={onConfirm}
+            onClick={() => void confirmDelete()}
           >
             {pending ? (
               <>
