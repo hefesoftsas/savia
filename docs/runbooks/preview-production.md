@@ -59,7 +59,7 @@ can still refer to live external accounts: interactive operations use those
 accounts. Scheduled synchronization is disabled in preview to avoid duplicate
 background work. A workflow-only scheduler runs once per minute so explicitly active
 workflows and incoming webhooks can execute; it also retains the newest 200
-operational audit events per domain. It does not invoke CRM synchronization or
+operational audit events per domain. It does not invoke external CRM operations or
 scheduled collection record-history maintenance. Preview OAuth origins and service
 bindings point to preview.
 

@@ -11,8 +11,7 @@ New installations have two independent choices in the catalog:
 - **Seguros** (`savia.insurance-management`) installs customers, insurers,
   policies, payments, and claims. It can be installed without the quote plugin.
   Policy records keep an optional quote reference as text, so the two packages
-  can be installed independently or together. It also enables the existing
-  CRM synchronization worker for its tenant.
+  can be installed independently or together.
 
 The previous all-in-one `savia.insurance` manifest remains available to
 existing installations. This split does not delete, transfer, or rewrite

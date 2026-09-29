@@ -3,7 +3,6 @@ import { maintainRecordHistory } from "@savia/studio-server/record-history-stora
 import { purgeStudioAudit } from "@savia/studio-server/audit-retention";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
-import { processCrmSyncJobs } from "./external-crm/auto-sync";
 import { runScheduledNotifications } from "./notifications";
 import { runScheduledWorkflows } from "./workflows";
 import { AssistantConfigurationRepository } from "./assistant/configuration";
@@ -212,26 +211,6 @@ export function assistantRuntimeFromEnvironment(
   };
 }
 
-export async function runScheduledCrmSync(
-  environment: RuntimeEnvironment,
-  realtime?: import("./realtime/hub-client").RealtimeHubClient,
-): Promise<{ processed: number }> {
-  return processCrmSyncJobs(
-    environment.DB,
-    crmRoutesFromEnvironment(environment),
-    {
-      onJobTransition(tenantId, jobId) {
-        publishRealtime(realtime, tenantRoom(tenantId), {
-          topic: "integrations",
-          type: "updated",
-          collection: "runs",
-          id: jobId,
-        });
-      },
-    },
-  );
-}
-
 async function runScheduledAuditRetention(db: D1Database): Promise<void> {
   const report = await purgeStudioAudit(db);
   if (report.deleted > 0)
@@ -357,7 +336,6 @@ const runtime = {
       return;
     }
     const results = await Promise.allSettled([
-      runScheduledCrmSync(environment, realtime),
       runScheduledWorkflows(
         environment.DB,
         studioIntegrationKeyFromEnvironment(environment),

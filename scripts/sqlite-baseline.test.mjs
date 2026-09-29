@@ -19,7 +19,7 @@ for (const directory of [
         .sort();
       assert.deepEqual(
         files,
-        directory.includes("studio-server")
+        !directory.includes("packages/db/")
           ? ["0001_initial.sql"]
           : ["0001_initial.sql", "0002_bootstrap.sql"],
       );
@@ -64,6 +64,38 @@ test("schema snapshots exclude installer history and Cloudflare internals", () =
     );
     assert.equal(snapshot.seedCount, 0);
     assert.match(snapshot.schema, /CREATE TABLE items/);
+  } finally {
+    db.close();
+  }
+});
+
+test("fresh core has no retired industry, customer or migration bookkeeping tables", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(readFileSync("packages/db/migrations/0001_initial.sql", "utf8"));
+    db.exec(readFileSync("packages/db/migrations/0002_bootstrap.sql", "utf8"));
+    const objects = db
+      .prepare("SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL")
+      .all();
+    const retired =
+      /\b(?:agencies|agency_branches|agency_contacts|auto_light_quote_\w+|customer_\w+|managed_customer_\w+|insurer_companies|ramos|sub_ramos|legacy_import_\w+|tenant_consolidation_\w+|tenant_namespace_migrations|crm_sync_rules|crm_sync_jobs|crm_sync_mappings|business_commercialunit|app_economicactivity|document_ownership|attachment_uploads|countries|departments|cities|categories)\b/;
+    assert.doesNotMatch(
+      readFileSync("packages/db/postgres/0001_initial.sql", "utf8"),
+      retired,
+      "PostgreSQL baseline must also exclude retired tables and dependencies",
+    );
+    for (const object of objects)
+      assert.doesNotMatch(object.sql, retired, object.name);
+    // Tenant creation must work without the removed agency mirror.
+    db.exec(
+      "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(7,'example','Example',1,'now','now','commercial')",
+    );
+    db.exec("UPDATE tenants SET name='Updated' WHERE id=7");
+    assert.equal(
+      db.prepare("SELECT name FROM tenants WHERE id=7").get().name,
+      "Updated",
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
   } finally {
     db.close();
   }

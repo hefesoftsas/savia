@@ -98,10 +98,6 @@ CREATE TABLE savia_request.tenant_folders (
     tenant_id text NOT NULL,
     path text NOT NULL
 );
-CREATE TABLE savia_request.tenant_namespace_migrations (
-    old_key text NOT NULL,
-    tenant_id bigint NOT NULL
-);
 ALTER TABLE ONLY savia_request.bundle_flow_state
     ADD CONSTRAINT bundle_flow_state_pkey PRIMARY KEY (scope, flow_id);
 ALTER TABLE ONLY savia_request.flow_runs
@@ -130,8 +126,6 @@ ALTER TABLE ONLY savia_request.tenant_flows
     ADD CONSTRAINT tenant_flows_pkey PRIMARY KEY (tenant_id, flow_id);
 ALTER TABLE ONLY savia_request.tenant_folders
     ADD CONSTRAINT tenant_folders_pkey PRIMARY KEY (tenant_id, path);
-ALTER TABLE ONLY savia_request.tenant_namespace_migrations
-    ADD CONSTRAINT tenant_namespace_migrations_pkey PRIMARY KEY (old_key);
 CREATE INDEX savia_request_audit_scope_idx ON savia_request.savia_request_audit USING btree (tenant_id, created_at DESC, id DESC);
 CREATE INDEX tenant_flow_runs_scope_idx ON savia_request.tenant_flow_runs USING btree (tenant_id, flow_id, created_at);
 CREATE INDEX tenant_flow_versions_scope_idx ON savia_request.tenant_flow_versions USING btree (tenant_id, flow_id, created_at);

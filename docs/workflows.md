@@ -142,8 +142,9 @@ are limited to 32 KiB, and the existing execution-context limit still applies.
 
 Apply `packages/db/migrations/0058_workflow_webhooks.sql` (host) or
 `packages/studio-server/migrations/0018_workflow_webhooks.sql` (standalone) before using
-webhooks. Existing definitions require no rewrite. Preview runs a workflow-only scheduler once per minute; external CRM synchronization
-remains disabled. Other hosts with cron disabled need an intentional scheduler tick.
+webhooks. Existing definitions require no rewrite. Preview runs a workflow-only
+scheduler once per minute. Other hosts with cron disabled need an intentional
+scheduler tick.
 
 ## Persistence, recovery and authorization
 
@@ -177,9 +178,9 @@ remains disabled. Other hosts with cron disabled need an intentional scheduler t
 ## Runtime decision and verification
 
 The executor is a bounded D1 scheduler (up to 100 steps and 50 due schedules per tick).
-It runs with the API scheduled handler alongside existing CRM synchronization. Production
-configuration schedules one tick per minute. Preview uses the same cadence in
-workflow-only mode, without CRM synchronization or history maintenance. Local `pnpm dev` uses
+It runs with the API scheduled handler. Production configuration schedules one
+tick per minute. Preview uses the same cadence in workflow-only mode, without
+history maintenance. Local `pnpm dev` uses
 the existing development scheduled-event runner. Delays have scheduler-granularity timing,
 not second-accurate delivery.
 

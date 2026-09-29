@@ -57,18 +57,6 @@ export type PersonalEvent = {
   endsAt: string | null;
 };
 
-export type CrmSyncJob = {
-  id: string;
-  ruleId: string;
-  customerId: number;
-  provider: string;
-  status: "pending" | "processing" | "synced" | "failed" | "blocked";
-  attempts: number;
-  lastError: string | null;
-  updatedAt: string;
-  externalUrl: string | null;
-};
-
 export type SaviaExtensionStatus = {
   manifest: {
     id: string;
@@ -216,14 +204,6 @@ export class SaviaApiClient {
       `/v1/personal-integrations/actions/${encode(actionId)}/execute`,
       { method: "POST" },
     );
-  }
-
-  getCrmSyncStatus(customerId?: number): Promise<{ data: CrmSyncJob[] }> {
-    const query =
-      customerId === undefined
-        ? ""
-        : `?customerId=${encode(String(customerId))}`;
-    return this.request(`/v1/crm/sync-jobs${query}`);
   }
 
   async extensionStatus(id: string): Promise<SaviaExtensionStatus> {

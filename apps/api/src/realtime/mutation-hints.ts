@@ -123,29 +123,17 @@ function classify(
       collection: "integrations",
       alsoTenantZero: true,
     };
-  if (/^\/v1\/crm\/sync-rules(?:\/|$)/.test(path) && explicitTenantId)
-    return {
-      room: "tenant",
-      tenantId: explicitTenantId,
-      topic: "integrations",
-      collection: "integrations",
-      alsoTenantZero: true,
-    };
-  if (/^\/v1\/crm\/sync-jobs(?:\/|$)/.test(path) && explicitTenantId)
-    return {
-      room: "tenant",
-      tenantId: explicitTenantId,
-      topic: "integrations",
-      collection: "runs",
-      alsoTenantZero: true,
-    };
 
   if (path.startsWith("/api/notifications/")) {
     if (path === "/api/notifications/settings")
       return { room: "tenant", topic: "settings", collection: "configuration" };
     if (path.startsWith("/api/notifications/admin/")) return undefined;
     if (path.startsWith("/api/notifications/follow"))
-      return { room: "principal", topic: "notifications", collection: "follows" };
+      return {
+        room: "principal",
+        topic: "notifications",
+        collection: "follows",
+      };
     return { room: "principal", topic: "notifications", collection: "inbox" };
   }
 
@@ -260,7 +248,7 @@ export function registerRealtimeMutationHints(
       explicitTenantId = undefined;
     if (
       db &&
-      /^\/v1\/crm\/(?:connections|sync-rules)(?:\/|$)/.test(url.pathname) &&
+      /^\/v1\/crm\/connections(?:\/|$)/.test(url.pathname) &&
       !explicitTenantId &&
       context.req.method !== "DELETE"
     ) {
@@ -272,33 +260,6 @@ export function registerRealtimeMutationHints(
       const candidate = Number(body?.agencyId ?? body?.tenantId);
       if (Number.isSafeInteger(candidate) && candidate > 0)
         explicitTenantId = candidate;
-    }
-    if (
-      db &&
-      /^\/v1\/crm\/(?:sync-rules|sync-jobs)\/([^/]+)/.test(url.pathname)
-    ) {
-      const match = /^\/v1\/crm\/(sync-rules|sync-jobs)\/([^/]+)/.exec(
-        url.pathname,
-      );
-      if (match && !explicitTenantId) {
-        try {
-          const row =
-            match[1] === "sync-rules"
-              ? await db
-                  .prepare("SELECT tenant_id FROM crm_sync_rules WHERE id=?")
-                  .bind(match[2])
-                  .first<{ tenant_id: number }>()
-              : await db
-                  .prepare(
-                    "SELECT r.tenant_id FROM crm_sync_jobs j JOIN crm_sync_rules r ON r.id=j.rule_id WHERE j.id=?",
-                  )
-                  .bind(match[2])
-                  .first<{ tenant_id: number }>();
-          if (row) explicitTenantId = row.tenant_id;
-        } catch {
-          // Optional integration schema: mutations remain available without realtime.
-        }
-      }
     }
     let hint = classify(
       context.req.method,

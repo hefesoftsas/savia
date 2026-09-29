@@ -11,7 +11,7 @@ test("core composition does not register legacy business implementations", () =>
     "registerInsuranceResultRoutes",
   ])
     assert.ok(!core.includes(legacy), legacy);
-  assert.ok(core.includes("registerCrmAutomaticSyncRoutes"));
+  assert.ok(!core.includes("registerCrmAutomaticSyncRoutes"));
   assert.equal(
     existsSync(new URL("../apps/legacy-api/src/index.ts", import.meta.url)),
     false,

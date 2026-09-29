@@ -25,9 +25,10 @@ are optional solution packages rather than prerequisites of the core.
    new attempts, they never mutate the previous one.
 3. **Assistant**: bar available on authenticated screens; reads data over MCP
    and prepares changes the user explicitly confirms.
-4. **External CRM**: contacts/companies, HubSpot sync per agency (manual or
-   automatic queue). "CRM" elsewhere in the UI now means this integration —
-   the low-code designer itself is called **Studio**.
+4. **External CRM**: generic contacts/companies capabilities and the connected
+   CRM workspace. Legacy customer-profile synchronization is retired. “CRM”
+   elsewhere in the UI means this integration; the low-code designer itself
+   is called **Studio**.
 5. **Solution packages**: configuration installable per space
    (`solutions/insurance/`); see [solution-packages.md](../solution-packages.md).
 6. **Workflows**: native record events, manual actions and schedules connected

@@ -3,8 +3,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./schema": "./src/schema.ts",
-    "./internal-schema": "./src/internal-schema.generated.ts",
     "./core-schema": "./src/core-schema.ts",
     "./dialect": "./src/dialect.ts",
     "./postgres-dialect": "./src/postgres-dialect.ts",

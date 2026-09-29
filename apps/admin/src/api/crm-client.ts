@@ -31,32 +31,6 @@ export type CrmConnectSession = {
   apiUrl: string;
 };
 
-export type CrmSyncRule = {
-  id: string;
-  tenantId: number;
-  tenantName: string;
-  provider: "hubspot";
-  accountLabel: string;
-  enabled: boolean;
-  connectionId: string;
-  createdAt: string;
-};
-
-export type CrmSyncTenant = { id: number; name: string };
-export type CrmSyncJobStatus =
-  "pending" | "processing" | "synced" | "failed" | "blocked";
-export type CrmSyncJob = {
-  id: string;
-  ruleId: string;
-  customerId: number;
-  provider: string;
-  status: CrmSyncJobStatus;
-  attempts: number;
-  lastError: string | null;
-  updatedAt: string;
-  externalUrl: string | null;
-};
-
 type CrmProviderDocument = {
   id: CrmProviderId;
   kind: "crm-provider";
@@ -140,57 +114,5 @@ export class CrmClient {
     return this.api.delete(
       `/v1/crm/connections/${providerPath(provider)}${agencyQuery(agencyId)}`,
     );
-  }
-
-  async listSyncRules(): Promise<{
-    rules: CrmSyncRule[];
-    tenants: CrmSyncTenant[];
-  }> {
-    return (
-      await this.api.get<{
-        data: { rules: CrmSyncRule[]; tenants: CrmSyncTenant[] };
-      }>("/v1/crm/sync-rules")
-    ).data;
-  }
-
-  async createSyncRule(tenantId: number): Promise<CrmSyncRule> {
-    return (
-      await this.api.post<{ data: CrmSyncRule }>("/v1/crm/sync-rules", {
-        tenantId,
-        provider: "hubspot",
-      })
-    ).data;
-  }
-
-  async setSyncRuleEnabled(id: string, enabled: boolean): Promise<CrmSyncRule> {
-    return (
-      await this.api.patch<{ data: CrmSyncRule }>(
-        `/v1/crm/sync-rules/${encodeURIComponent(id)}`,
-        { enabled },
-      )
-    ).data;
-  }
-
-  async deleteSyncRule(id: string): Promise<void> {
-    await this.api.delete(`/v1/crm/sync-rules/${encodeURIComponent(id)}`);
-  }
-
-  async listSyncJobs(customerId?: number): Promise<CrmSyncJob[]> {
-    const query =
-      customerId === undefined
-        ? ""
-        : `?customerId=${encodeURIComponent(String(customerId))}`;
-    return (
-      await this.api.get<{ data: CrmSyncJob[] }>(`/v1/crm/sync-jobs${query}`)
-    ).data;
-  }
-
-  async retrySyncJob(id: string): Promise<{ queued: true }> {
-    return (
-      await this.api.post<{ data: { queued: true } }>(
-        `/v1/crm/sync-jobs/${encodeURIComponent(id)}/retry`,
-        {},
-      )
-    ).data;
   }
 }

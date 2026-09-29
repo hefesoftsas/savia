@@ -48,7 +48,6 @@ import type { AssistantService } from "./assistant/contracts";
 import { registerAssistantRoutes } from "./assistant/routes";
 import { registerCrmRoutes, type CrmRouteDependencies } from "./routes/crm";
 import type { SqlBridgeClient } from "./studio/sql-bridge";
-import { registerCrmAutomaticSyncRoutes } from "./routes/crm-automatic-sync";
 import { registerIdentityRoutes } from "./routes/identity";
 import { registerRealtimeRoutes } from "./realtime/routes";
 import { registerRealtimeMutationHints } from "./realtime/mutation-hints";
@@ -146,7 +145,6 @@ export function createApp(
   registerRequestPageRoutes(app, db, saviaRequestService);
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
-  registerCrmAutomaticSyncRoutes(app, db);
   registerStudioRoutes(
     app,
     db,

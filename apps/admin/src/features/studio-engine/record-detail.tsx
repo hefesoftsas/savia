@@ -19,7 +19,6 @@ import {
   collectionCapabilities,
   supportsLocalRecordTools,
 } from "./collection-capabilities";
-import { CustomerActions } from "./business-panel";
 import { getStudioRuntime } from "./runtime";
 import { studioFetch, downloadCrm } from "./api";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -521,18 +520,6 @@ export default function RecordDetail({
           </div>
         </nav>
         <div className="op-detail-body">
-          {getStudioRuntime().embedded &&
-            object.config.studio?.business === "customer" &&
-            getStudioRuntime().businessSetupEnabled !== false &&
-            onQuotation && (
-              <CustomerActions
-                key={base}
-                objectName={object.name}
-                recordId={record.id}
-                onQuotation={onQuotation}
-                onRefresh={refresh}
-              />
-            )}
           <OperationError error={detail.error} retry={() => detail.refetch()} />
           {tab === "summary" && (
             <>

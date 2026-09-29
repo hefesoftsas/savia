@@ -28,8 +28,8 @@ Events are captured transactionally; a bounded, leased dispatcher
 Retry schedule after a failed attempt: ~1, 5, 15, 60, 240 minutes with jitter;
 five failures persist. Budgets per tick: 50 events, 100 recipients,
 1,000 recipient attempts, 20s soft budget. `runScheduledNotifications` runs on
-both the workflow-only and full scheduler paths; CRM sync stays disabled in
-workflow-only mode.
+both workflow scheduler paths. The retired customer-profile CRM synchronization
+worker is no longer part of the scheduler.
 
 ## Inbox
 

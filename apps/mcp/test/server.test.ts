@@ -249,27 +249,6 @@ describe("Savia FastMCP server", () => {
       await client.close();
     }
   });
-  it("exposes CRM sync status as a read-only tool", async () => {
-    const apiUrl = await startApi(async (request) => {
-      expect(request.url).toBe("/v1/crm/sync-jobs?customerId=42");
-      return { data: [{ id: "job-1", customerId: 42, status: "synced" }] };
-    });
-    const server = createSaviaMcpServer(new SaviaApiClient(apiUrl));
-    const client = await Client.connect(server);
-    try {
-      const tools = await client.listTools();
-      const tool = tools.find(
-        (item) => item.name === "savia_get_crm_sync_status",
-      );
-      expect(tool?.annotations?.readOnlyHint).toBe(true);
-      const result = await client.callTool("savia_get_crm_sync_status", {
-        customerId: 42,
-      });
-      expect(JSON.stringify(result)).toContain('"status":"synced"');
-    } finally {
-      await client.close();
-    }
-  });
   it("exposes the domain API as tools, a resource, and an operating prompt", async () => {
     const apiUrl = await startApi(async (request) => {
       if (request.url === "/v1/domains") {

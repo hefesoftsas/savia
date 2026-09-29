@@ -64,17 +64,14 @@
 5. Para desconectar, usa la misma pantalla. Savia borra la conexión en Nango y
    marca el vínculo local como desconectado.
 
-## Cambio de permisos para sincronizar clientes
+## Scopes de la conexión
 
-La sincronización de clientes naturales crea o actualiza contactos. Para
-clientes de tipo jurídico también crea o actualiza la empresa y relaciona su
-representante legal; por eso requiere `crm.objects.companies.write`.
-
-Después de añadir ese permiso en la integración de Nango y en la aplicación
-OAuth de HubSpot, cada agencia que ya esté conectada debe usar **Reconectar
-HubSpot** y aprobar el consentimiento actualizado. Una conexión existente no
-obtiene permisos nuevos de forma retroactiva. No ejecutes una sincronización de
-clientes jurídicos hasta que la reconexión termine como **Conectado**.
+Solicita únicamente los scopes que necesiten las operaciones activas de la
+integración. Para consultar o modificar empresas de HubSpot, configura
+`crm.objects.companies.read` y/o `crm.objects.companies.write` en Nango y en la
+aplicación OAuth. Las conexiones existentes deben reconectarse para aprobar
+scopes nuevos. La sincronización de perfiles operativos de clientes fue
+retirada; una conexión HubSpot por sí sola no exporta registros de Savia.
 
 ## Verificación después del despliegue
 
@@ -88,10 +85,8 @@ clientes jurídicos hasta que la reconexión termine como **Conectado**.
 4. Prueba una solicitud con una agencia distinta y confirma `403`; prueba antes
    de conectar y confirma `409` sin datos de HubSpot.
 5. Desconecta la cuenta y confirma que una consulta posterior vuelve a `409`.
-6. Con una agencia reconectada, sincroniza primero un cliente natural de prueba
-   y después un cliente jurídico de prueba. Comprueba que cada resultado abre
-   únicamente el enlace de CRM devuelto por Savia y que ningún secreto aparece
-   en la interfaz, solicitudes o registros.
+6. Usa el espacio de trabajo CRM conectado para las operaciones disponibles y
+   confirma que ningún secreto aparece en la interfaz, solicitudes o registros.
 
 ## Diagnóstico seguro
 

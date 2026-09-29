@@ -22,9 +22,6 @@ export const crmConnectionStatusSchema = z.enum(crmConnectionStatuses);
 export type CrmProviderId = (typeof crmProviderIds)[number];
 export type CrmConnectionStatus = (typeof crmConnectionStatuses)[number];
 
-export const customerCrmObjectKinds = ["contact", "company"] as const;
-export type CustomerCrmObjectKind = (typeof customerCrmObjectKinds)[number];
-
 export const crmListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().min(1).max(200).optional(),
@@ -108,29 +105,6 @@ export type ActiveCrmConnection = CrmConnection & {
   nangoIntegrationId: string;
   externalAccountId: string | null;
 };
-
-export type CustomerCrmSyncRecord = {
-  principalId: string;
-  agencyId: number;
-  tenantId?: number;
-  customerProfileId: number;
-  provider: CrmProviderId;
-  objectKind: CustomerCrmObjectKind;
-  externalObjectId: string;
-  lastSyncedAt: string | null;
-  lastFailureCode: string | null;
-  lastFailureAt: string | null;
-};
-
-export type CustomerCrmSyncRecordInput = Pick<
-  CustomerCrmSyncRecord,
-  | "agencyId"
-  | "principalId"
-  | "customerProfileId"
-  | "provider"
-  | "objectKind"
-  | "externalObjectId"
->;
 
 export type NangoConnectionSummary = {
   connectionId: string;
@@ -251,9 +225,7 @@ export type CrmRepository = {
     agencyId: number,
     principalId: string,
   ): Promise<CrmConnection[]>;
-  listConnectionsForPrincipal(
-    principalId: string,
-  ): Promise<CrmConnection[]>;
+  listConnectionsForPrincipal(principalId: string): Promise<CrmConnection[]>;
   findActiveConnection(
     agencyId: number,
     provider: CrmProviderId,
@@ -280,62 +252,6 @@ export type CrmRepository = {
   ): Promise<boolean>;
   appendAuditEvent(event: CrmAuditEvent): Promise<void>;
 };
-
-export type CustomerCrmSyncRepository = {
-  find(
-    agencyId: number,
-    customerProfileId: number,
-    provider: CrmProviderId,
-    objectKind: CustomerCrmObjectKind,
-    principalId: string,
-  ): Promise<CustomerCrmSyncRecord | undefined>;
-  listByCustomerIds(
-    agencyId: number,
-    customerProfileIds: number[],
-    provider: CrmProviderId,
-    principalId: string,
-  ): Promise<CustomerCrmSyncRecord[]>;
-  upsertSuccess(input: CustomerCrmSyncRecordInput): Promise<void>;
-  recordFailure(
-    input: Omit<CustomerCrmSyncRecordInput, "externalObjectId"> & {
-      failureCode: string;
-    },
-  ): Promise<boolean>;
-};
-
-export type CustomerCrmPrimaryLink = {
-  provider: CrmProviderId;
-  objectKind: CustomerCrmObjectKind;
-  url: string;
-};
-
-export type CustomerCrmSyncStatus =
-  "created" | "updated" | "skipped" | "failed";
-
-export type CustomerCrmSyncReason =
-  | "AMBIGUOUS_COMPANY"
-  | "AMBIGUOUS_CONTACT"
-  | "CRM_CONNECTION_NOT_READY"
-  | "CRM_RECONNECT_REQUIRED"
-  | "CRM_UNAVAILABLE"
-  | "CUSTOMER_NOT_FOUND"
-  | "CUSTOMER_NOT_SYNCABLE"
-  | "UPSTREAM_FAILURE";
-
-export type CustomerCrmSyncItem = {
-  customerId: number;
-  provider: CrmProviderId;
-  status: CustomerCrmSyncStatus;
-  reason?: CustomerCrmSyncReason;
-  primaryLink?: CustomerCrmPrimaryLink;
-};
-
-export type CustomerCrmSyncResponse = {
-  items: CustomerCrmSyncItem[];
-  summary: Record<CustomerCrmSyncStatus, number>;
-};
-
-export type CustomerCrmLink = CustomerCrmPrimaryLink & { customerId: number };
 
 export class CrmUnavailableError extends Error {
   readonly code = "CRM_UNAVAILABLE" as const;

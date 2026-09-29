@@ -1,8 +1,8 @@
 # Native PostgreSQL baseline
 
 `0001_initial.sql` is the native PostgreSQL schema snapshot for the final
-SQLite-compatible core schema recorded in `manifest.json`. It is generated from
-the fully applied native schema chain, so it includes the final tables,
+SQLite-compatible core schema recorded in `manifest.json`. The final pre-production cleanup removes inherited industry/customer tables
+and obsolete migration bookkeeping from both dialects. It includes the platform tables,
 constraints, indexes, functions, views, and triggers without replaying obsolete
 renames, table removals, or tenant migrations. PostgreSQL-only derived data such
 as SQLite FTS and read-cache tables remains intentionally absent.
@@ -20,7 +20,7 @@ for preproduction; once released, treat them as immutable.
 Flags remain integers, JSON remains text, timestamps remain API-compatible UTC
 text, and IDs use bigint with checked conversion in the adapter. Native trigger
 functions preserve access invalidation, synchronization tombstones, history,
-workflow dispatch, tenant/agency mirroring, and relation guards. PostgreSQL
+workflow dispatch, tenant access invalidation and relation guards. PostgreSQL
 sequences can have gaps after rollback; application revisions, history rows, and
 synchronization tombstones remain transactional.
 

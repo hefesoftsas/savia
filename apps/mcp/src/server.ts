@@ -161,17 +161,6 @@ export function createSaviaMcpServer(
 
   server.tool(
     {
-      name: "savia_get_crm_sync_status",
-      description:
-        "Read recent automatic CRM synchronization status, optionally for one Savia customer.",
-      annotations: { readOnlyHint: true },
-      input: z.object({ customerId: z.number().int().positive().optional() }),
-    },
-    async ({ customerId }) => clientForRequest().getCrmSyncStatus(customerId),
-  );
-
-  server.tool(
-    {
       name: "savia_get_document",
       description: "Get one document from a public Savia domain collection.",
       annotations: { readOnlyHint: true },

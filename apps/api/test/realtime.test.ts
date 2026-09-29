@@ -206,7 +206,6 @@ describe("Realtime hub", () => {
     await env.DB.exec("DELETE FROM identity_tenant_membership");
     await env.DB.exec("DELETE FROM identity_global_role");
     await env.DB.exec("DELETE FROM identity_principal");
-    await env.DB.exec("DELETE FROM agencies");
     await env.DB.exec("DELETE FROM tenants");
   });
 
@@ -510,7 +509,8 @@ describe("Realtime hub", () => {
     expect(typeof created.id).toBe("string");
     const membershipChanged = await waitFor(
       accessControlSocket.received,
-      (message) => message.topic === "access-control" && message.type === "updated",
+      (message) =>
+        message.topic === "access-control" && message.type === "updated",
     );
     expect(membershipChanged).toMatchObject({
       collection: "memberships",
@@ -532,7 +532,8 @@ describe("Realtime hub", () => {
     expect(membershipUpdated.status).toBe(200);
     const membershipRoleChanged = await waitFor(
       accessControlSocket.received,
-      (message) => message.topic === "access-control" && message.type === "updated",
+      (message) =>
+        message.topic === "access-control" && message.type === "updated",
     );
     expect(membershipRoleChanged).toMatchObject({
       collection: "memberships",
@@ -741,7 +742,10 @@ describe("Realtime hub", () => {
     const mixedScopes = await memberApp.request("/v1/realtime/ticket", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ topics: ["records", "notifications"], tenantId: 101 }),
+      body: JSON.stringify({
+        topics: ["records", "notifications"],
+        tenantId: 101,
+      }),
     });
     expect(mixedScopes.status).toBe(400);
 
@@ -751,5 +755,4 @@ describe("Realtime hub", () => {
     );
     expect(foreignRoom.status).toBe(403);
   });
-
 });

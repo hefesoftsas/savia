@@ -10,14 +10,15 @@ const unavailableDb = new Proxy(
   },
 ) as D1Database;
 describe("independent API contracts", () => {
-  it("publishes core automatic CRM synchronization without legacy domains", async () => {
+  it("publishes tenant CRM connections without legacy synchronization routes", async () => {
     const app = createApp(unavailableDb);
     const response = await app.request("/openapi.json");
     expect(response.status).toBe(200);
     const doc: any = await response.json();
     expect(doc.info.title).toBe("Savia Core API");
     expect(doc.paths["/v1/tenants"]).toBeDefined();
-    expect(doc.paths["/v1/crm/sync-rules"]).toBeDefined();
+    expect(doc.paths["/v1/crm/connections"]).toBeDefined();
+    expect(doc.paths["/v1/crm/sync-rules"]).toBeUndefined();
     expect(doc.paths["/v1/crm/customer-sync"]).toBeUndefined();
     expect(
       doc.paths["/v1/insurance-results/flows/{flowId}/runs"],
@@ -31,7 +32,7 @@ describe("independent API contracts", () => {
         }),
         "/v1/tenants",
       ],
-      [createCoreAppForSync(unavailableDb), "/v1/crm/sync-rules"],
+      [createCoreAppForSync(unavailableDb), "/v1/crm/connections"],
     ] as const) {
       const response = await app.request(path);
       expect(response.status).toBe(401);

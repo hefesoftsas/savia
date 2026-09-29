@@ -249,8 +249,10 @@ it.skipIf(!postgresTestUrl)(
       requestSource.close();
       const coreSource = new DatabaseSync(join(directory, "core.sqlite"));
       coreSource
-        .prepare("INSERT INTO countries(id,name,code) VALUES(?,?,?)")
-        .run(900000, "Import fixture", "IF");
+        .prepare(
+          "INSERT INTO workflow_events(id,workspace_id,collection,kind,before_state,after_state) VALUES(?,?,?,?,?,?)",
+        )
+        .run(900000, "tenant:900000", "import_fixture", "created", "{}", "{}");
       coreSource.close();
       const checksums = async () =>
         Promise.all(
@@ -308,11 +310,13 @@ it.skipIf(!postgresTestUrl)(
             (t) => t.schema === "savia_request" && t.table === "flows",
           )?.importedRows,
         ).toBe(1002);
-        const nextCountry = await db
-          .prepare("INSERT INTO countries(name,code) VALUES(?,?) RETURNING id")
-          .bind("Next imported country", "NI")
+        const nextEvent = await db
+          .prepare(
+            "INSERT INTO workflow_events(workspace_id,collection,kind,before_state,after_state) VALUES(?,?,?,?,?) RETURNING id",
+          )
+          .bind("tenant:900001", "import_fixture", "created", "{}", "{}")
           .first<number>("id");
-        expect(nextCountry).toBeGreaterThan(900000);
+        expect(nextEvent).toBeGreaterThan(900000);
 
         const importedSecret = await db
           .prepare(
@@ -385,7 +389,7 @@ it.skipIf(!postgresTestUrl)(
             const sql = typeof args[0] === "string" ? args[0] : "";
             if (sql.startsWith('INSERT INTO "savia_auth"."user"'))
               copiedAuthentication = true;
-            if (sql.startsWith('INSERT INTO "savia_core"."countries"'))
+            if (sql.startsWith('INSERT INTO "savia_core"."workflow_events"'))
               return Promise.reject(new Error("Injected row-copy failure"));
             return Reflect.apply(query, this, args);
           } as typeof query);

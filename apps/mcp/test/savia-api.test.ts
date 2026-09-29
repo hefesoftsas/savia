@@ -40,21 +40,6 @@ async function requestText(request: IncomingMessage): Promise<string> {
 }
 
 describe("SaviaApiClient", () => {
-  it("reads CRM sync status with an optional customer filter", async () => {
-    const received: string[] = [];
-    const baseUrl = await testServer((request, response) => {
-      received.push(request.url ?? "");
-      response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify({ data: [] }));
-    });
-    const client = new SaviaApiClient(baseUrl);
-    await client.getCrmSyncStatus();
-    await client.getCrmSyncStatus(42);
-    expect(received).toEqual([
-      "/v1/crm/sync-jobs",
-      "/v1/crm/sync-jobs?customerId=42",
-    ]);
-  });
   it("forwards a document command through the public Domain API", async () => {
     const received: { url?: string; method?: string; body?: string } = {};
     const baseUrl = await testServer(async (request, response) => {

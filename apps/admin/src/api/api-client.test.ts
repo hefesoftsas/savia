@@ -104,8 +104,6 @@ describe("ApiClient", () => {
     "/v1/customer-portfolio/commands/update-customer-profile",
     "/v1/reference-values/identification-types",
     "/v1/insurance-catalog/products",
-    "/v1/crm/customer-sync",
-    "/v1/crm/customer-sync-links",
   ])(
     "keeps tenant path %s on the core worker with authentication",
     async (path) => {
@@ -128,9 +126,6 @@ describe("ApiClient", () => {
   it.each([
     "/api/records/contacts",
     "/v1/crm/connections",
-    "/v1/crm/sync-rules/rule-1",
-    "/v1/crm/sync-jobs",
-    "/v1/crm/sync-rules-other",
     "/v1/domains-other",
     "/v1/assistant/configuration/global",
   ])("keeps generic %s on core", async (path) => {

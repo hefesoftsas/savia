@@ -119,27 +119,3 @@ export function compareManifest(expected, actual) {
 
   return { matches: mismatches.length === 0, mismatches };
 }
-
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-export function manifestSql(manifest) {
-  const normalized = validateManifest(manifest);
-  const sql = [
-    "BEGIN TRANSACTION;",
-    "INSERT INTO `legacy_import_snapshots` (`id`, `created_at`, `manifest_sha256`, `stream_count`)",
-    `VALUES (${sqlString(normalized.snapshotId)}, ${sqlString(normalized.createdAt)}, ${sqlString(manifestSha256(normalized))}, ${normalized.streams.length})`,
-    "ON CONFLICT (`id`) DO NOTHING;",
-  ];
-
-  for (const stream of normalized.streams) {
-    sql.push(
-      "INSERT INTO `legacy_import_streams` (`snapshot_id`, `source_type`, `source_name`, `destination_prefix`, `record_count`, `byte_count`, `sha256`)",
-      `VALUES (${sqlString(normalized.snapshotId)}, ${sqlString(stream.sourceType)}, ${sqlString(stream.sourceName)}, ${sqlString(stream.destinationPrefix)}, ${stream.records}, ${stream.bytes}, ${sqlString(stream.sha256)})`,
-      "ON CONFLICT (`snapshot_id`, `source_type`, `source_name`) DO NOTHING;",
-    );
-  }
-  sql.push("COMMIT;");
-  return `${sql.join("\n")}\n`;
-}

@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   compareManifest,
-  manifestSql,
   validateManifest,
 } from "./legacy-import-manifest.mjs";
 
@@ -38,34 +37,6 @@ test("rejects a manifest with duplicate source streams", () => {
       }),
     /duplicate/,
   );
-});
-
-test("renders a deterministic idempotent SQL manifest", () => {
-  const reverseOrdered = {
-    ...manifest,
-    streams: [
-      {
-        ...stream,
-        sourceName: "legacy-quotes:user",
-        destinationPrefix: "legacy-import/snapshot-1/legacy-quotes/user",
-        sha256: "b".repeat(64),
-      },
-      stream,
-    ],
-  };
-
-  const sql = manifestSql(reverseOrdered);
-
-  assert.equal(
-    sql,
-    manifestSql({
-      ...reverseOrdered,
-      streams: [...reverseOrdered.streams].reverse(),
-    }),
-  );
-  assert.match(sql, /INSERT INTO `legacy_import_snapshots`/);
-  assert.match(sql, /ON CONFLICT \(`id`\) DO NOTHING/);
-  assert.ok(sql.indexOf("core:agency") < sql.indexOf("legacy-quotes:user"));
 });
 
 test("reports stream differences without accepting a partial snapshot", () => {

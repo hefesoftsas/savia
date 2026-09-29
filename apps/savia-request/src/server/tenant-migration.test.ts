@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
-const baselineFiles = ["0001_initial.sql", "0002_bootstrap.sql"];
+const baselineFiles = ["0001_initial.sql"];
 
 function database() {
   const db = new DatabaseSync(":memory:");
@@ -23,10 +23,10 @@ it("baseline keeps global defaults and tenant secret overrides in distinct scope
     expect(
       db
         .prepare(
-          "SELECT tenant_id FROM tenant_namespace_migrations WHERE old_key='domain:platform'",
+          "SELECT name FROM sqlite_master WHERE name='tenant_namespace_migrations'",
         )
         .get(),
-    ).toEqual({ tenant_id: 0 });
+    ).toBeUndefined();
 
     db.exec(`
       INSERT INTO flows(id,definition) VALUES('flow','{"id":"flow"}');

@@ -663,26 +663,6 @@ export async function dynamicOpenApi(
         },
       },
     },
-    CrmHubSpotStatus: {
-      type: "object",
-      required: ["status"],
-      properties: {
-        status: {
-          type: "string",
-          enum: [
-            "not_synced",
-            "synced",
-            "syncing",
-            "uncertain",
-            "connection_required",
-          ],
-        },
-        externalObjectId: { type: "string" },
-        url: { type: "string", format: "uri" },
-        lastSyncedAt: { type: "string" },
-        operation: { type: "string", enum: ["created", "updated"] },
-      },
-    },
   };
   for (const object of objects) {
     const name = object.name;
@@ -711,14 +691,13 @@ export async function dynamicOpenApi(
         name === "tenants" ||
         name === "organizaciones" ||
         name === "organizations");
-    const managedCustomer = tenant === "tenant:0" && name === "clientes";
     const idSchema: Schema = binding
       ? { type: "string", minLength: 1, maxLength: 256 }
-      : managedAgency || managedCustomer
+      : managedAgency
         ? { type: "string", pattern: "^[1-9][0-9]*$" }
         : { type: "string", format: "uuid" };
     const objectRecordId =
-      binding || managedAgency || managedCustomer
+      binding || managedAgency
         ? parameter("id", "path", idSchema, true)
         : recordId;
     const base: Schema = {
@@ -869,99 +848,10 @@ export async function dynamicOpenApi(
           ],
           description: binding
             ? "Eliminación en el origen mediante su adaptador; no implica papelera local."
-            : managedCustomer
-              ? "Eliminación permanente del perfil, sujeta a las restricciones de relaciones. No admite restauración."
-              : "Borrado lógico sujeto a las restricciones de relaciones.",
+            : "Borrado lógico sujeto a las restricciones de relaciones.",
         },
       ),
     };
-    if (managedCustomer) {
-      paths["/business/managed-clientes/sync"] = {
-        get: operation(
-          "clientes_batch_sync_state",
-          object.label,
-          "Consultar conexiones CRM de la selección",
-          envelope({
-            type: "object",
-            properties: {
-              activeCustomerIds: { type: "array", items: { type: "integer" } },
-            },
-          }),
-          {
-            parameters: [
-              parameter(
-                "customerIds",
-                "query",
-                { type: "string" },
-                true,
-                "Entre 1 y 100 IDs separados por comas.",
-              ),
-            ],
-          },
-        ),
-        post: operation(
-          "clientes_batch_sync",
-          object.label,
-          "Sincronizar selección con HubSpot",
-          envelope({
-            type: "object",
-            properties: {
-              items: { type: "array", items: { type: "object" } },
-              summary: { type: "object" },
-            },
-          }),
-          {
-            body: {
-              type: "object",
-              required: ["customerIds"],
-              additionalProperties: false,
-              properties: {
-                customerIds: {
-                  type: "array",
-                  minItems: 1,
-                  maxItems: 100,
-                  items: { type: "integer", minimum: 1 },
-                },
-              },
-            },
-            description:
-              "Sincronización explícita con la conexión de cada agencia; devuelve el resultado por cliente.",
-          },
-        ),
-      };
-      paths[`/business/managed-clientes/{id}/sync`] = {
-        get: operation(
-          "clientes_sync_state",
-          object.label,
-          "Consultar conexión CRM y enlaces",
-          envelope({
-            type: "object",
-            properties: {
-              active: { type: "boolean" },
-              links: { type: "array", items: { type: "object" } },
-            },
-          }),
-          { parameters: [objectRecordId] },
-        ),
-        post: operation(
-          "clientes_sync",
-          object.label,
-          "Sincronizar cliente con HubSpot",
-          envelope({
-            type: "object",
-            properties: {
-              items: { type: "array", items: { type: "object" } },
-              summary: { type: "object" },
-            },
-          }),
-          {
-            parameters: [objectRecordId],
-            description:
-              "Sincronización explícita de persona natural o jurídica con la conexión activa de su agencia.",
-          },
-        ),
-      };
-    }
     if (managedAgency) delete paths[`/published/${name}/{id}`].delete;
     if (binding) {
       const listing = paths[`/published/${name}`].get as {
@@ -996,58 +886,6 @@ export async function dynamicOpenApi(
       if (!capabilities.read) delete paths[`/published/${name}/{id}`].get;
       if (!capabilities.update) delete paths[`/published/${name}/{id}`].patch;
       if (!capabilities.delete) delete paths[`/published/${name}/{id}`].delete;
-    }
-
-    if (isCommercialTenant && object.config.studio?.business === "customer") {
-      paths[`/business/${name}/{id}/hubspot`] = {
-        get: operation(
-          `${name}_hubspot_status`,
-          object.label,
-          "Consultar vínculo con HubSpot",
-          envelope(ref("CrmHubSpotStatus")),
-          { parameters: [objectRecordId] },
-        ),
-        post: operation(
-          `${name}_hubspot_sync`,
-          object.label,
-          "Sincronizar con HubSpot",
-          envelope(ref("CrmHubSpotStatus")),
-          {
-            parameters: [objectRecordId],
-            description:
-              "Envía el registro a la conexión HubSpot de esta agencia. Acción externa explícita; no reintentar automáticamente un resultado incierto.",
-          },
-        ),
-      };
-      if (
-        objects.some(
-          (o) =>
-            o.name === "cotizaciones" &&
-            o.config.studio?.business === "quotation",
-        )
-      )
-        paths[`/business/${name}/{id}/quotations`] = {
-          post: operation(
-            `${name}_quotation_create`,
-            object.label,
-            "Crear borrador de cotización relacionado",
-            envelope(ref("cotizaciones_Record")),
-            {
-              parameters: [recordId, { ...idempotency, required: true }],
-              body: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  name: { type: "string", minLength: 1, maxLength: 200 },
-                  plate: { type: "string", maxLength: 20 },
-                },
-              },
-              status: 201,
-              description:
-                "Guarda una cotización en estado draft vinculada al cliente; no ejecuta aseguradoras.",
-            },
-          ),
-        };
     }
   }
   paths["/objects/{name}/performance"] = {

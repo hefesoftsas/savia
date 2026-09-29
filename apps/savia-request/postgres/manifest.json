@@ -4,11 +4,7 @@
   "sourceMigrations": [
     {
       "filename": "0001_initial.sql",
-      "sha256": "9993a2f30bc3114899b4e42145f9a098f4623d344f7fcd01d3b2b0a5d051690c"
-    },
-    {
-      "filename": "0002_bootstrap.sql",
-      "sha256": "1f41e0e46e786295c2e9031992fd2cfbcb049276d2fe78b7ea92876cb3de8bd4"
+      "sha256": "0673736587cb662cd970632cadefb922d5853e8454f90b35d4d8e66a519ff5c2"
     }
   ],
   "objects": [
@@ -96,11 +92,6 @@
       "type": "table",
       "name": "tenant_folders",
       "table": "tenant_folders"
-    },
-    {
-      "type": "table",
-      "name": "tenant_namespace_migrations",
-      "table": "tenant_namespace_migrations"
     }
   ],
   "tables": [
@@ -152,10 +143,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "scope",
-            "flow_id"
-          ],
+          "columns": ["scope", "flow_id"],
           "origin": "pk"
         }
       ],
@@ -225,9 +213,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -273,10 +259,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "flow_id",
-            "key"
-          ],
+          "columns": ["flow_id", "key"],
           "origin": "pk"
         }
       ],
@@ -322,9 +305,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -354,9 +335,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -378,9 +357,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "path"
-          ],
+          "columns": ["path"],
           "origin": "pk"
         }
       ],
@@ -418,9 +395,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -490,9 +465,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -538,10 +511,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "tenant_id",
-            "id"
-          ],
+          "columns": ["tenant_id", "id"],
           "origin": "pk"
         }
       ],
@@ -619,9 +589,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -683,11 +651,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "tenant_id",
-            "flow_id",
-            "key"
-          ],
+          "columns": ["tenant_id", "flow_id", "key"],
           "origin": "pk"
         }
       ],
@@ -741,9 +705,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "id"
-          ],
+          "columns": ["id"],
           "origin": "pk"
         }
       ],
@@ -789,10 +751,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "tenant_id",
-            "flow_id"
-          ],
+          "columns": ["tenant_id", "flow_id"],
           "origin": "pk"
         }
       ],
@@ -822,42 +781,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "tenant_id",
-            "path"
-          ],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "tenant_namespace_migrations",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "old_key",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "tenant_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [],
-      "seedRows": 1,
-      "uniqueKeys": [
-        {
-          "columns": [
-            "old_key"
-          ],
+          "columns": ["tenant_id", "path"],
           "origin": "pk"
         }
       ],

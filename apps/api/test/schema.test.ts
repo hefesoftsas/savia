@@ -44,7 +44,45 @@ describe("full D1 schema projection", () => {
     ).all<TableInfo>();
     const names = tables.results.map((table) => table.name);
 
-    expect(names).toHaveLength(155);
+    expect(names).not.toEqual(
+      expect.arrayContaining([
+        "agencies",
+        "agency_branches",
+        "agency_contacts",
+        "app_economicactivity",
+        "attachment_uploads",
+        "auto_light_quote_offers",
+        "auto_light_quote_requests",
+        "business_commercialunit",
+        "categories",
+        "cities",
+        "countries",
+        "crm_sync_jobs",
+        "crm_sync_mappings",
+        "crm_sync_rules",
+        "customer_address",
+        "customer_client",
+        "customer_clientagency",
+        "customer_crm_sync_records",
+        "customer_group",
+        "customer_legalperson",
+        "customer_legalpersoncontact",
+        "customer_naturalperson",
+        "departments",
+        "document_ownership",
+        "insurer_companies",
+        "legacy_import_snapshots",
+        "legacy_import_streams",
+        "managed_customer_extensions",
+        "managed_customer_requests",
+        "ramos",
+        "sub_ramos",
+        "tenant_consolidation_agency_bootstraps",
+        "tenant_consolidation_discards",
+        "tenant_consolidation_sources",
+        "tenant_namespace_migrations",
+      ]),
+    );
     expect(names).toEqual(
       expect.arrayContaining([
         "studio_record_counts",
@@ -101,9 +139,6 @@ describe("full D1 schema projection", () => {
         "plugin_store_artifacts",
         "studio_solution_objects",
         "studio_business_links",
-        "tenant_namespace_migrations",
-        "managed_customer_extensions",
-        "managed_customer_requests",
         "studio_collection_sources",
         "crm_collection_bindings",
         "studio_collection_requests",
@@ -160,23 +195,12 @@ describe("full D1 schema projection", () => {
         "flow_variables",
         "flow_runs",
         "folders",
-        "agencies",
         "server_id_sequences",
         "admin_oauth_transactions",
-        "legacy_import_snapshots",
-        "legacy_import_streams",
-        "insurer_companies",
-        "customer_address",
-        "customer_clientagency",
-        "attachment_uploads",
         "identity_principal",
         "identity_global_role",
         "identity_tenant_membership",
         "tenants",
-        "tenant_consolidation_sources",
-        "tenant_consolidation_discards",
-        "tenant_consolidation_agency_bootstraps",
-        "document_ownership",
         "assistant_pending_actions",
         "tenant_crm_connections",
         "tenant_crm_connection_audit_events",
@@ -187,11 +211,8 @@ describe("full D1 schema projection", () => {
         "user_my_day_widgets",
         "user_provider_credentials",
         "user_provider_credential_audit_events",
-        "customer_crm_sync_records",
         "assistant_openrouter_settings",
         "assistant_active_tenants",
-        "auto_light_quote_requests",
-        "auto_light_quote_offers",
         "notification_events",
         "notification_deliveries",
         "notification_recipient_retries",
@@ -207,7 +228,7 @@ describe("full D1 schema projection", () => {
       "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
     ).all<{ name: string }>();
     const viewNames = views.results.map((view) => view.name);
-    expect(viewNames).toEqual(
+    expect(viewNames).not.toEqual(
       expect.arrayContaining([
         "agency_crm_connections",
         "agency_crm_connection_audit_events",
@@ -224,12 +245,6 @@ describe("full D1 schema projection", () => {
     expect(crmConnectionColumns.results.map((column) => column.name)).toContain(
       "tenant_id",
     );
-    const legacyCrmConnectionColumns = await env.DB.prepare(
-      "PRAGMA table_info(agency_crm_connections)",
-    ).all<{ name: string }>();
-    expect(
-      legacyCrmConnectionColumns.results.map((column) => column.name),
-    ).toContain("agency_id");
     const personalConnectionIndexes = await env.DB.prepare(
       "PRAGMA index_list(personal_integration_connections)",
     ).all<IndexInfo>();
@@ -250,111 +265,6 @@ describe("full D1 schema projection", () => {
     expect(tenantColumns.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "kind", type: "TEXT" }),
-      ]),
-    );
-  });
-
-  it("keeps portable types and relational constraints in the internal schema", async () => {
-    const [addressColumns, profileColumns, profileForeignKeys] =
-      await Promise.all([
-        env.DB.prepare("PRAGMA table_info(customer_address)").all<TableInfo>(),
-        env.DB.prepare(
-          "PRAGMA table_info(customer_clientagency)",
-        ).all<TableInfo>(),
-        env.DB.prepare(
-          "PRAGMA foreign_key_list(customer_clientagency)",
-        ).all<ForeignKey>(),
-      ]);
-
-    expect(addressColumns.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "coordinates", type: "TEXT" }),
-      ]),
-    );
-    expect(profileColumns.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "id", type: "INTEGER" }),
-      ]),
-    );
-    expect(profileForeignKeys.results.length).toBeGreaterThan(0);
-  });
-
-  it("projects the private attachment metadata relation", async () => {
-    const [columns, foreignKeys] = await Promise.all([
-      env.DB.prepare("PRAGMA table_info(attachment_uploads)").all<TableInfo>(),
-      env.DB.prepare(
-        "PRAGMA foreign_key_list(attachment_uploads)",
-      ).all<ForeignKey>(),
-    ]);
-
-    expect(columns.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "object_key", type: "TEXT" }),
-        expect.objectContaining({ name: "status", type: "TEXT" }),
-      ]),
-    );
-    expect(foreignKeys.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ from: "agency_id", table: "agencies" }),
-      ]),
-    );
-  });
-
-  it("projects the one-agency document ownership registry", async () => {
-    const [columns, foreignKeys] = await Promise.all([
-      env.DB.prepare("PRAGMA table_info(document_ownership)").all<TableInfo>(),
-      env.DB.prepare(
-        "PRAGMA foreign_key_list(document_ownership)",
-      ).all<ForeignKey>(),
-    ]);
-
-    expect(columns.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "domain", type: "TEXT" }),
-        expect.objectContaining({ name: "collection", type: "TEXT" }),
-        expect.objectContaining({ name: "document_id", type: "TEXT" }),
-        expect.objectContaining({ name: "agency_id", type: "BIGINT" }),
-      ]),
-    );
-    expect(foreignKeys.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ from: "agency_id", table: "agencies" }),
-      ]),
-    );
-  });
-
-  it("records immutable proof for every legacy import stream", async () => {
-    const [snapshots, streams, foreignKeys] = await Promise.all([
-      env.DB.prepare(
-        "PRAGMA table_info(legacy_import_snapshots)",
-      ).all<TableInfo>(),
-      env.DB.prepare(
-        "PRAGMA table_info(legacy_import_streams)",
-      ).all<TableInfo>(),
-      env.DB.prepare(
-        "PRAGMA foreign_key_list(legacy_import_streams)",
-      ).all<ForeignKey>(),
-    ]);
-
-    expect(snapshots.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "manifest_sha256", type: "TEXT" }),
-        expect.objectContaining({ name: "stream_count", type: "INTEGER" }),
-      ]),
-    );
-    expect(streams.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "snapshot_id", type: "TEXT" }),
-        expect.objectContaining({ name: "sha256", type: "TEXT" }),
-      ]),
-    );
-    expect(foreignKeys.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: "snapshot_id",
-          table: "legacy_import_snapshots",
-          to: "id",
-        }),
       ]),
     );
   });

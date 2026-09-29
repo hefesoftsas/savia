@@ -82,41 +82,14 @@ function agencyActor(agencyId: number): AppActor {
 async function seedAgencyAndMember(agencyId: number) {
   const now = "2026-01-01T00:00:00.000Z";
   await env.DB.prepare(
-    `INSERT OR IGNORE INTO agencies (
-      id, id_slug, created_at, updated_at, name, address, id_check_digit,
-      id_number, lr_id_number, lr_id_type, lr_name, payments_email, is_active,
-      email, is_in_house, email_domain, birthday_from_email, payment_from_email,
-      renewal_from_email, home_url, short_name, seller_required, has_compliance,
-      surnames, type, theme
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    "INSERT OR IGNORE INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,1,?,?,'commercial')",
   )
     .bind(
       agencyId,
-      `assistant-agency-${agencyId}`,
+      `assistant-tenant-${agencyId}`,
+      `Assistant Tenant ${agencyId}`,
       now,
       now,
-      `Assistant Agency ${agencyId}`,
-      "Calle 1 # 2-3",
-      "4",
-      `900123${agencyId}`,
-      "12345678",
-      "CC",
-      "Ada Lovelace",
-      `payments-${agencyId}@savia.test`,
-      1,
-      `hello-${agencyId}@savia.test`,
-      0,
-      `agency-${agencyId}.test`,
-      `birthdays-${agencyId}@savia.test`,
-      `payments-${agencyId}@savia.test`,
-      `renewals-${agencyId}@savia.test`,
-      `https://agency-${agencyId}.test`,
-      `Agency ${agencyId}`,
-      0,
-      0,
-      "Lovelace",
-      "broker",
-      "default",
     )
     .run();
   await env.DB.prepare(
@@ -156,7 +129,7 @@ describe("assistant OpenRouter configuration", () => {
   beforeAll(applyMigrations);
 
   beforeEach(async () => {
-    await env.DB.exec("DELETE FROM assistant_active_agencies");
+    await env.DB.exec("DELETE FROM assistant_active_tenants");
     await env.DB.exec("DELETE FROM identity_tenant_membership");
     await env.DB.exec("DELETE FROM assistant_openrouter_settings");
   });
@@ -297,7 +270,7 @@ describe("assistant OpenRouter configuration", () => {
 
     await expect(
       env.DB.prepare(
-        "SELECT principal_id FROM assistant_active_agencies WHERE principal_id = ?",
+        "SELECT principal_id FROM assistant_active_tenants WHERE principal_id = ?",
       )
         .bind("test-agency-member")
         .first(),
@@ -313,12 +286,6 @@ describe("assistant OpenRouter configuration", () => {
     });
     await settings.setActiveAgency("test-agency-member", 102, agencyActor(102));
 
-    await env.DB.prepare("DELETE FROM agencies WHERE id = ?").bind(102).run();
-    await expect(
-      env.DB.prepare(
-        "SELECT id FROM assistant_openrouter_settings WHERE id = 'agency:102'",
-      ).first(),
-    ).resolves.not.toBeNull();
     await env.DB.prepare("DELETE FROM tenants WHERE id = ?").bind(102).run();
 
     await expect(
@@ -328,7 +295,7 @@ describe("assistant OpenRouter configuration", () => {
     ).resolves.toBeNull();
     await expect(
       env.DB.prepare(
-        "SELECT principal_id FROM assistant_active_agencies WHERE agency_id = 102",
+        "SELECT principal_id FROM assistant_active_tenants WHERE tenant_id = 102",
       ).first(),
     ).resolves.toBeNull();
   });
@@ -337,7 +304,7 @@ describe("assistant OpenRouter configuration", () => {
     const settings = repository();
     await seedAgencyAndMember(103);
     await settings.setActiveAgency("test-agency-member", 103, agencyActor(103));
-    await env.DB.prepare("UPDATE agencies SET is_active = 0 WHERE id = ?")
+    await env.DB.prepare("UPDATE tenants SET is_active = 0 WHERE id = ?")
       .bind(103)
       .run();
 
@@ -349,7 +316,7 @@ describe("assistant OpenRouter configuration", () => {
   it("rejects selecting an inactive agency", async () => {
     const settings = repository();
     await seedAgencyAndMember(104);
-    await env.DB.prepare("UPDATE agencies SET is_active = 0 WHERE id = ?")
+    await env.DB.prepare("UPDATE tenants SET is_active = 0 WHERE id = ?")
       .bind(104)
       .run();
 

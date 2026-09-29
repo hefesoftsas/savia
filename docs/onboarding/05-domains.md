@@ -18,7 +18,7 @@ are the executable spec: read them before the runbooks.
 - **Assistant and MCP**: `apps/api/src/assistant/` (service, configuration,
   presentations), `apps/mcp/`; personal integrations (Google/Microsoft) and
   HubSpot via Nango: runbooks `nango-personal-productivity`, `nango-hubspot`,
-  `crm-auto-sync`, `connected-crm-workspace`.
+  `connected-crm-workspace`.
 - **Auth and tenants**: `apps/auth/` (Better Auth, admin bootstrap, TOTP MFA,
   OAuth/OIDC) + `apps/api/src/routes/identity.ts`, `tenants.ts`;
   invariants in the `tenants` / `tenant-membership` tests. Successful auth

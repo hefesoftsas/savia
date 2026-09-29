@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { render } from "./locale-test-render";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BusinessPanel, CustomerActions } from "../business-panel";
+import { BusinessPanel } from "../business-panel";
 import { api, studioFetch } from "../api";
 vi.mock("../api", () => ({
   api: vi.fn(),
@@ -47,57 +47,6 @@ it("installs templates explicitly and refreshes objects, preserving error recove
     screen.getByRole("button", { name: "Instalar Clientes y Cotizaciones" }),
   );
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
-});
-it("loads saved HubSpot state and only synchronizes after an explicit click", async () => {
-  vi.mocked(api).mockResolvedValue({
-    data: { status: "synced", externalObjectId: "123" },
-  });
-  mount(
-    <CustomerActions
-      objectName="clientes"
-      recordId="c1"
-      onQuotation={vi.fn()}
-      onRefresh={vi.fn()}
-    />,
-  );
-  expect(await screen.findByText(/Sincronizado/)).toBeTruthy();
-  expect(vi.mocked(api).mock.calls.every((call) => call[1] !== "POST")).toBe(
-    true,
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Sincronizar con HubSpot" }),
-  );
-  await waitFor(() =>
-    expect(api).toHaveBeenCalledWith("/business/clientes/c1/hubspot", "POST"),
-  );
-});
-it("reuses quotation attempt key after a lost response and opens the returned record", async () => {
-  const opened = vi.fn();
-  let fail = true;
-  vi.mocked(api).mockImplementation(async (path) => {
-    if (path.endsWith("/quotations")) {
-      if (fail) throw new Error("Conexión interrumpida");
-      return { data: { id: "q1" } };
-    }
-    return { data: { status: "not_synced" } };
-  });
-  mount(
-    <CustomerActions
-      objectName="clientes"
-      recordId="c1"
-      onQuotation={opened}
-      onRefresh={vi.fn()}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Crear cotización" }));
-  await screen.findByText("Conexión interrumpida");
-  fail = false;
-  fireEvent.click(screen.getByRole("button", { name: "Crear cotización" }));
-  await waitFor(() => expect(opened).toHaveBeenCalledWith({ id: "q1" }));
-  const calls = vi
-    .mocked(api)
-    .mock.calls.filter((call) => call[0].endsWith("/quotations"));
-  expect(calls[0][3]).toEqual(calls[1][3]);
 });
 it("opens API documentation in a new browser tab", () => {
   const open = vi.spyOn(window, "open").mockImplementation(() => null);

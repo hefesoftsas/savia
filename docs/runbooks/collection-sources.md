@@ -2,9 +2,9 @@
 
 ## Arquitectura
 
-El dominio agrupa pantallas y sus colecciones. La fuente describe cómo acceder a los datos. Una colección conectada declara campos y operaciones; el gateway selecciona su adaptador en el servidor. Agencias y Clientes conservan sus adaptadores operativos y sus identidades. Las colecciones del registro de dominios existente se pueden conectar inicialmente para consulta. JSON:API permite operaciones remotas explícitamente habilitadas.
+El dominio agrupa pantallas y sus colecciones. La fuente describe cómo acceder a los datos. Una colección conectada declara campos y operaciones; el gateway selecciona su adaptador en el servidor. Las colecciones del registro de dominios existente se pueden conectar inicialmente para consulta. JSON:API permite operaciones remotas explícitamente habilitadas.
 
-Los registros configurables locales siguen usando D1. Una colección conectada no copia automáticamente los datos del origen, ni agrega columnas a bases externas. Los campos del origen se describen para renderizar el formulario; no se crean propiedades externas mediante el diseñador. No hay sincronización bidireccional implícita. El servicio especializado de HubSpot sigue independiente y conserva sus permisos.
+Los registros configurables locales siguen usando D1. Una colección conectada no copia automáticamente los datos del origen, ni agrega columnas a bases externas. Los campos del origen se describen para renderizar el formulario; no se crean propiedades externas mediante el diseñador. No hay sincronización bidireccional implícita. HubSpot sigue disponible mediante las capacidades genéricas del espacio de trabajo CRM.
 
 ## Diseño de referencia y procedencia
 
@@ -28,7 +28,7 @@ En CRM, selecciona Plataforma o un dominio independiente y abre Integraciones Op
 
 Para una fuente JSON:API, el administrador indica la ruta fija del recurso y puede usar **Analizar recurso** antes de vincularlo. JSON:API no define un catálogo universal de recursos, por lo que la URL base no permite enumerarlos automáticamente. El análisis consulta exactamente una primera página de un registro, devuelve solo campos, relaciones, tipo y metadatos de paginación, y deja ese JSON editable. No devuelve valores de la muestra ni credenciales, no persiste la muestra y conserva los límites de HTTPS público, DNS, redirecciones, 10 segundos y 1 MB del adaptador remoto.
 
-El diseñador de colecciones conectadas permite ordenar y mostrar campos y configurar columnas; no altera el esquema remoto. Para colecciones del catálogo, los campos se infieren de una muestra y el acceso es de consulta. Agencias y Clientes mantienen sus adaptadores de negocio con escritura y campos adicionales. Las colecciones locales conservan el diseñador completo. Otros motores de bases de datos requieren nuevos adaptadores; HubSpot conserva su sincronización especializada, no se transforma automáticamente en una fuente JSON:API.
+El diseñador de colecciones conectadas permite ordenar y mostrar campos y configurar columnas; no altera el esquema remoto. Para colecciones del catálogo, los campos se infieren de una muestra y el acceso es de consulta. Las colecciones locales conservan el diseñador completo. Otros motores de bases de datos requieren nuevos adaptadores. HubSpot sigue disponible mediante las capacidades genéricas del espacio de trabajo CRM; ya no sincroniza perfiles operativos de clientes.
 
 ## Verificación local 2026-09-08
 
@@ -41,6 +41,6 @@ El diseñador de colecciones conectadas permite ordenar y mostrar campos y confi
 
 ## Reinicio local solicitado
 
-El 2026-09-08 se vaciaron las 23 tablas crm_* y managed_customer_* de la copia local. Respaldo SQLite consistente: /tmp/savia-crm-reset-20260908-105357.sqlite. Se conservaron las 90 agencias, 48.745 clientes y 50.105 perfiles operativos. Después se vinculó únicamente agencias a agency-network/agency-profiles, el recurso publicado en GET /v1/agency-network/agency-profiles. La conexión usa el adaptador interno del mismo recurso; no importa automáticamente un esquema OpenAPI ni invoca HTTP local. OpenAPI describe attributes sin propiedades tipadas, por lo que los campos se infieren de la muestra del recurso. La vista Directorio de agencias muestra seis columnas; los datos no se copian a crm_records.
+El procedimiento local de vista previa del 2026-09-08 es histórico y depende de tablas y perfiles operativos que ya fueron retirados. No lo uses como una guía de migración. La vinculación de colecciones soportadas, análisis de recursos y configuración de columnas descritos arriba siguen vigentes.
 
 Plataforma ya no instala automáticamente los objetos administrados al abrirse. Los adaptadores anteriores siguen disponibles cuando su metadata está instalada explícitamente. La pantalla inicial permite conectar una colección en un CRM vacío.

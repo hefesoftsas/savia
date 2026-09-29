@@ -26,11 +26,6 @@ CREATE TABLE tenant_flows (tenant_id TEXT NOT NULL, flow_id TEXT NOT NULL, defin
 --> statement-breakpoint
 CREATE TABLE tenant_folders (tenant_id TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY(tenant_id, path));
 --> statement-breakpoint
-CREATE TABLE tenant_namespace_migrations (
-  old_key TEXT PRIMARY KEY,
-  tenant_id BIGINT NOT NULL
-);
---> statement-breakpoint
 CREATE INDEX savia_request_audit_scope_idx ON savia_request_audit(tenant_id, created_at DESC, id DESC);
 --> statement-breakpoint
 CREATE INDEX tenant_flow_runs_scope_idx ON tenant_flow_runs(tenant_id, flow_id, created_at);

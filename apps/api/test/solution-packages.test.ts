@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import { processCrmSyncJobs } from "../src/external-crm/auto-sync";
 import type { IdentityUserAdministrator } from "../src/auth/better-auth";
 import {
   platformAdministratorAuthenticator,
@@ -166,28 +165,6 @@ it("serves an explicitly installed solution from the final schema", async () => 
     )?.label,
   ).toBe("Mis pólizas");
 });
-it("processes CRM jobs for a management-only insurance installation", async () => {
-  await seedTenantAgency(env.DB, 102);
-  await env.DB.prepare(
-    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,created_at,updated_at) VALUES ('crm-sync-test','test','crm-sync-test','sync@example.test','Sync Test','2026-01-01','2026-01-01')",
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO agency_crm_connections(id,agency_id,created_by_principal_id,provider,nango_connection_id,nango_integration_id,status,created_at,updated_at) VALUES ('crm-sync-connection',102,'crm-sync-test','hubspot','nango-test','hubspot-test','connected','2026-01-01','2026-01-01')",
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO studio_solution_installations(tenant_id,id,version,manifest) VALUES ('tenant:102','savia.insurance-management','1.0.0','{}')",
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO crm_sync_rules(id,principal_id,tenant_id,provider,connection_id,external_account_id,account_label) VALUES ('crm-sync-rule','crm-sync-test',102,'hubspot','crm-sync-connection','account-test','Test')",
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO crm_sync_jobs(id,rule_id,customer_id,next_attempt_at) VALUES ('crm-sync-job','crm-sync-rule',999,'2026-01-01T00:00:00.000Z')",
-  ).run();
-
-  expect(
-    await processCrmSyncJobs(env.DB, {}, { now: new Date("2030-01-01") }),
-  ).toEqual({ processed: 1 });
-});
 it("lists the optional insurance release and accepts a generic package", async () => {
   const api = app(identityUserAdministrator());
   const tenantResponse = await api.request(
@@ -253,10 +230,10 @@ it("lists the optional insurance release and accepts a generic package", async (
     ),
   ).toContain("Proyecto de prueba");
   expect(
-    await env.DB.prepare("SELECT id FROM agencies WHERE tenant_id=?")
+    await env.DB.prepare("SELECT id FROM tenants WHERE id=?")
       .bind(tenant.id)
       .first(),
-  ).toBeNull();
+  ).toEqual({ id: tenant.id });
   const viewer = createApp(
     env.DB,
     env.DOCUMENTS,

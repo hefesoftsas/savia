@@ -1,7 +1,6 @@
 -- Native PostgreSQL initial schema snapshot generated from the final applied migration chain.
 -- Seed rows are kept in 0002_bootstrap.sql and remain conditional on savia.seed.
 SET LOCAL check_function_bodies TO false;
-
 CREATE FUNCTION savia_core.access_global_role_added_fn() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'savia_core', 'pg_catalog'
@@ -97,120 +96,6 @@ BEGIN
 UPDATE access_revisions SET revision=revision+1 WHERE scope='tenant:'||NEW.id;
 RETURN NEW;
 END $$;
-CREATE FUNCTION savia_core.agency_crm_connection_audit_events_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$ BEGIN
-INSERT INTO "tenant_crm_connection_audit_events" (
-    "id", "connection_id", "tenant_id", "principal_id", "provider",
-    "event_type", "outcome", "error_code", "created_at"
-  ) VALUES (
-    NEW."id", NEW."connection_id", NEW."agency_id", NEW."principal_id", NEW."provider",
-    NEW."event_type", NEW."outcome", NEW."error_code", NEW."created_at"
-  );
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.agency_crm_connections_delete_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$ BEGIN
-DELETE FROM "tenant_crm_connections" WHERE "id" = OLD."id";
-RETURN OLD;
-END $$;
-CREATE FUNCTION savia_core.agency_crm_connections_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$ BEGIN
-INSERT INTO "tenant_crm_connections" (
-    "id", "tenant_id", "created_by_principal_id", "provider",
-    "nango_connection_id", "nango_integration_id", "status",
-    "external_account_label", "scopes", "last_validated_at",
-    "disconnected_at", "created_at", "updated_at", "external_account_id"
-  ) VALUES (
-    NEW."id", NEW."agency_id", NEW."created_by_principal_id", NEW."provider",
-    NEW."nango_connection_id", NEW."nango_integration_id", NEW."status",
-    NEW."external_account_label", COALESCE(NEW."scopes", '[]'), NEW."last_validated_at",
-    NEW."disconnected_at", NEW."created_at", NEW."updated_at", NEW."external_account_id"
-  );
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.agency_crm_connections_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$ BEGIN
-UPDATE "tenant_crm_connections" SET
-    "tenant_id" = NEW."agency_id",
-    "nango_connection_id" = NEW."nango_connection_id",
-    "nango_integration_id" = NEW."nango_integration_id",
-    "status" = NEW."status",
-    "external_account_label" = NEW."external_account_label",
-    "external_account_id" = NEW."external_account_id",
-    "scopes" = COALESCE(NEW."scopes", OLD."scopes", '[]'),
-    "last_validated_at" = NEW."last_validated_at",
-    "disconnected_at" = NEW."disconnected_at",
-    "updated_at" = NEW."updated_at"
-  WHERE "id" = OLD."id";
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.agency_tenant_create_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at)
- VALUES(NEW.id,NEW.id_slug,NEW.name,NEW.is_active,NEW.created_at,NEW.updated_at)
- ON CONFLICT(id) DO UPDATE SET id_slug=excluded.id_slug,name=excluded.name,is_active=excluded.is_active,updated_at=excluded.updated_at;
- UPDATE agencies SET tenant_id=NEW.id WHERE id=NEW.id;
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.agency_tenant_identity_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-IF NEW.tenant_id IS NOT NULL AND NEW.tenant_id != NEW.id THEN
-RAISE EXCEPTION 'Agency profile must use its tenant identity';
-END IF;
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.agency_tenant_identity_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-IF NEW.id != OLD.id OR NEW.tenant_id IS NULL OR NEW.tenant_id != NEW.id THEN
-RAISE EXCEPTION 'Agency profile must use its tenant identity';
-END IF;
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.agency_tenant_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-IF NEW.id_slug != OLD.id_slug OR NEW.name != OLD.name OR NEW.is_active != OLD.is_active OR NEW.updated_at != OLD.updated_at THEN
-UPDATE tenants SET id_slug=NEW.id_slug,name=NEW.name,is_active=NEW.is_active,updated_at=NEW.updated_at WHERE id=NEW.id;
-END IF;
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.assistant_active_agencies_delete_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$ BEGIN
-DELETE FROM "assistant_active_tenants" WHERE "principal_id" = OLD."principal_id";
-RETURN OLD;
-END $$;
-CREATE FUNCTION savia_core.assistant_active_agencies_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$ BEGIN
-INSERT INTO "assistant_active_tenants" ("principal_id", "tenant_id", "updated_at")
-  VALUES (NEW."principal_id", NEW."agency_id", NEW."updated_at")
-  ON CONFLICT("principal_id") DO UPDATE SET
-    "tenant_id" = excluded."tenant_id",
-    "updated_at" = excluded."updated_at";
-RETURN NEW;
-END $$;
 CREATE FUNCTION savia_core.crm_history_delete_fn() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'savia_core', 'pg_catalog'
@@ -279,206 +164,6 @@ CREATE FUNCTION savia_core.crm_relation_definition_update_fn() RETURNS trigger
 BEGIN
 IF (NEW.source_field<>OLD.source_field OR NEW.target_field<>OLD.target_field OR NEW.storage<>OLD.storage) AND EXISTS(SELECT 1 FROM studio_record_links WHERE tenant_id=OLD.tenant_id AND relation_id=OLD.id) THEN RAISE EXCEPTION 'relation_mapping_has_links'; END IF;
  IF (NEW.cardinality='one-to-one' AND EXISTS(SELECT 1 FROM studio_record_links WHERE tenant_id=OLD.tenant_id AND relation_id=OLD.id GROUP BY source_id HAVING count(*)>1)) OR (NEW.cardinality IN ('one-to-one','one-to-many') AND EXISTS(SELECT 1 FROM studio_record_links WHERE tenant_id=OLD.tenant_id AND relation_id=OLD.id GROUP BY target_id HAVING count(*)>1)) THEN RAISE EXCEPTION 'relation_cardinality_conflict'; END IF;
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_address_delete_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_naturalperson WHERE home_address_id=OLD.id)
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN OLD;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_address_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_naturalperson WHERE home_address_id=NEW.id)
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_address_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_naturalperson WHERE home_address_id=NEW.id)
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_clientagency_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id=NEW.id
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET
- revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
- updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_clientagency_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id=NEW.id
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET
- revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
- updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_deleted_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-UPDATE crm_sync_jobs SET revision=revision+1,status='blocked',last_error='SOURCE_DELETED',updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') WHERE customer_id=OLD.id;
-RETURN OLD;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_legalperson_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id=NEW.client_id
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET
- revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
- updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_legalperson_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id=NEW.client_id
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET
- revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
- updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_legalpersoncontact_delete_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_legalperson WHERE id=OLD.legal_person_id)
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN OLD;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_legalpersoncontact_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_legalperson WHERE id=NEW.legal_person_id)
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_legalpersoncontact_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id IN (SELECT client_id FROM customer_legalperson WHERE id=NEW.legal_person_id)
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_naturalperson_insert_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id=NEW.client_id
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET
- revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
- updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
-RETURN NEW;
-END $$;
-CREATE FUNCTION savia_core.crm_sync_customer_naturalperson_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-INSERT INTO crm_sync_jobs(id,rule_id,customer_id)
- SELECT r.id || ':' || p.id,r.id,p.id FROM crm_sync_rules r JOIN customer_clientagency p ON p.agency_id=r.tenant_id
- WHERE r.enabled=1 AND p.id=NEW.client_id
- ON CONFLICT(rule_id,customer_id) DO UPDATE SET
- revision=crm_sync_jobs.revision+1,
- status=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.status ELSE 'pending' END,
- attempts=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.attempts ELSE 0 END,
- last_error=CASE WHEN crm_sync_jobs.status='processing' OR (crm_sync_jobs.status='blocked' AND COALESCE(crm_sync_jobs.last_error,'')<>'RULE_PAUSED') THEN crm_sync_jobs.last_error ELSE NULL END,
- next_attempt_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
- updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 RETURN NEW;
 END $$;
 CREATE FUNCTION savia_core.crm_sync_delete_fn() RETURNS trigger
@@ -684,16 +369,6 @@ CREATE FUNCTION savia_core.savia_workflow_json_type(value json) RETURNS text
  WHEN 'number' THEN CASE WHEN value::text ~ '[.eE]' OR (value::text)::numeric NOT BETWEEN -9223372036854775808 AND 9223372036854775807 THEN 'real' ELSE 'integer' END
  WHEN 'string' THEN 'text' ELSE json_typeof(value) END
 $$;
-CREATE FUNCTION savia_core.tenant_agency_update_fn() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'savia_core', 'pg_catalog'
-    AS $$
-BEGIN
-IF NEW.id_slug != OLD.id_slug OR NEW.name != OLD.name OR NEW.is_active != OLD.is_active OR NEW.updated_at != OLD.updated_at THEN
-UPDATE agencies SET id_slug=NEW.id_slug,name=NEW.name,is_active=NEW.is_active,updated_at=NEW.updated_at WHERE tenant_id=NEW.id;
-END IF;
-RETURN NEW;
-END $$;
 CREATE FUNCTION savia_core.workflow_event_dispatch_fn() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'savia_core', 'pg_catalog'
@@ -802,71 +477,6 @@ CREATE TABLE savia_core.admin_oauth_transactions (
     expires_at text NOT NULL,
     created_at text NOT NULL
 );
-CREATE TABLE savia_core.agencies (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    address text NOT NULL,
-    id_check_digit text NOT NULL,
-    id_number text NOT NULL,
-    phone text,
-    logo text,
-    city_id bigint,
-    coordinates text,
-    lr_id_number text NOT NULL,
-    lr_id_type text NOT NULL,
-    lr_name text NOT NULL,
-    payments_email text NOT NULL,
-    is_active bigint NOT NULL,
-    email text NOT NULL,
-    is_in_house bigint NOT NULL,
-    email_domain text NOT NULL,
-    birthday_from_email text NOT NULL,
-    payment_from_email text NOT NULL,
-    renewal_from_email text NOT NULL,
-    home_url text NOT NULL,
-    short_name text NOT NULL,
-    seller_required bigint NOT NULL,
-    has_compliance bigint NOT NULL,
-    default_cc_emails text,
-    surnames text NOT NULL,
-    type text NOT NULL,
-    theme text NOT NULL,
-    retirement_date text,
-    tenant_id bigint
-);
-CREATE TABLE savia_core.agency_branches (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    is_active bigint NOT NULL,
-    agency_id bigint NOT NULL,
-    city_id bigint NOT NULL
-);
-CREATE TABLE savia_core.agency_contacts (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    surname text NOT NULL,
-    email text NOT NULL,
-    phone text NOT NULL,
-    "position" text NOT NULL,
-    agency_id bigint NOT NULL
-);
-ALTER TABLE savia_core.agency_contacts ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.agency_contacts_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
 CREATE TABLE savia_core.tenant_crm_connection_audit_events (
     id text NOT NULL,
     connection_id text NOT NULL,
@@ -878,17 +488,6 @@ CREATE TABLE savia_core.tenant_crm_connection_audit_events (
     error_code text,
     created_at text NOT NULL
 );
-CREATE VIEW savia_core.agency_crm_connection_audit_events AS
- SELECT id,
-    connection_id,
-    tenant_id AS agency_id,
-    principal_id,
-    provider,
-    event_type,
-    outcome,
-    error_code,
-    created_at
-   FROM savia_core.tenant_crm_connection_audit_events;
 CREATE TABLE savia_core.tenant_crm_connections (
     id text NOT NULL,
     tenant_id bigint NOT NULL,
@@ -907,45 +506,11 @@ CREATE TABLE savia_core.tenant_crm_connections (
     CONSTRAINT agency_crm_connections_provider_check CHECK ((provider = ANY (ARRAY['hubspot'::text, 'salesforce'::text, 'zoho'::text, 'pipedrive'::text]))),
     CONSTRAINT agency_crm_connections_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'connected'::text, 'reconnect_required'::text, 'disconnected'::text, 'failed'::text])))
 );
-CREATE VIEW savia_core.agency_crm_connections AS
- SELECT id,
-    tenant_id AS agency_id,
-    created_by_principal_id,
-    provider,
-    nango_connection_id,
-    nango_integration_id,
-    status,
-    external_account_label,
-    scopes,
-    last_validated_at,
-    disconnected_at,
-    created_at,
-    updated_at,
-    external_account_id
-   FROM savia_core.tenant_crm_connections;
-CREATE TABLE savia_core.app_economicactivity (
-    id bigint NOT NULL,
-    code text NOT NULL,
-    name text NOT NULL
-);
-ALTER TABLE savia_core.app_economicactivity ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.app_economicactivity_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
 CREATE TABLE savia_core.assistant_active_tenants (
     principal_id text NOT NULL,
     tenant_id bigint NOT NULL,
     updated_at text NOT NULL
 );
-CREATE VIEW savia_core.assistant_active_agencies AS
- SELECT principal_id,
-    tenant_id AS agency_id,
-    updated_at
-   FROM savia_core.assistant_active_tenants;
 CREATE TABLE savia_core.assistant_openrouter_settings (
     id text NOT NULL,
     scope text NOT NULL,
@@ -1009,121 +574,12 @@ CREATE TABLE savia_core.assistant_virtual_employees (
     created_by text,
     CONSTRAINT assistant_virtual_employees_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text])))
 );
-CREATE TABLE savia_core.attachment_uploads (
-    id text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    expires_at text NOT NULL,
-    agency_id bigint NOT NULL,
-    domain text NOT NULL,
-    collection text NOT NULL,
-    aggregate_id bigint NOT NULL,
-    object_key text NOT NULL,
-    original_name text NOT NULL,
-    content_type text NOT NULL,
-    byte_size bigint NOT NULL,
-    sha256 text,
-    status text NOT NULL,
-    source_table text,
-    source_document_id bigint,
-    CONSTRAINT attachment_uploads_byte_size_check CHECK ((byte_size > 0)),
-    CONSTRAINT attachment_uploads_status_check CHECK ((status = ANY (ARRAY['issued'::text, 'ready'::text, 'rejected'::text, 'discarded'::text])))
-);
-CREATE TABLE savia_core.auto_light_quote_offers (
-    id text NOT NULL,
-    quote_request_id text NOT NULL,
-    provider text NOT NULL,
-    operation_id text NOT NULL,
-    attempt_number bigint NOT NULL,
-    status text NOT NULL,
-    started_at text,
-    completed_at text,
-    http_status bigint,
-    provider_reference text,
-    normalized_result text,
-    sanitized_response text,
-    error_code text,
-    error_message text,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    credential_owner_principal_id text,
-    CONSTRAINT auto_light_quote_offers_attempt_number_check CHECK ((attempt_number > 0)),
-    CONSTRAINT auto_light_quote_offers_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'successful'::text, 'failed'::text])))
-);
-CREATE TABLE savia_core.auto_light_quote_requests (
-    id text NOT NULL,
-    agency_id bigint NOT NULL,
-    created_by_principal_id text NOT NULL,
-    plate text NOT NULL,
-    vehicle_source text NOT NULL,
-    vehicle_snapshot text NOT NULL,
-    applicant_snapshot text NOT NULL,
-    coverage_preferences text NOT NULL,
-    status text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    CONSTRAINT auto_light_quote_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'successful'::text, 'partial'::text, 'failed'::text]))),
-    CONSTRAINT auto_light_quote_requests_vehicle_source_check CHECK ((vehicle_source = ANY (ARRAY['equidad'::text, 'sura'::text])))
-);
 CREATE TABLE savia_core.bundle_flow_state (
     scope text NOT NULL,
     flow_id text NOT NULL,
     bundle_version text NOT NULL,
     content_hash text NOT NULL,
     updated_at text NOT NULL
-);
-CREATE TABLE savia_core.business_commercialunit (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    created_by text NOT NULL,
-    agency_id bigint NOT NULL,
-    edited_by text NOT NULL
-);
-ALTER TABLE savia_core.business_commercialunit ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.business_commercialunit_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.categories (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    external_id bigint
-);
-CREATE TABLE savia_core.cities (
-    id bigint NOT NULL,
-    name text NOT NULL,
-    department_id bigint NOT NULL,
-    external_id bigint NOT NULL
-);
-ALTER TABLE savia_core.cities ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.cities_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.countries (
-    id bigint NOT NULL,
-    name text NOT NULL,
-    code text NOT NULL
-);
-ALTER TABLE savia_core.countries ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.countries_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
 );
 CREATE TABLE savia_core.crm_collection_bindings (
     tenant_id text NOT NULL,
@@ -1153,30 +609,6 @@ ALTER TABLE savia_core.crm_sync_changes ALTER COLUMN sequence ADD GENERATED BY D
     NO MAXVALUE
     CACHE 1
 );
-CREATE TABLE savia_core.crm_sync_jobs (
-    id text NOT NULL,
-    rule_id text NOT NULL,
-    customer_id bigint NOT NULL,
-    revision bigint DEFAULT 1 NOT NULL,
-    synced_revision bigint DEFAULT 0 NOT NULL,
-    status text DEFAULT 'pending'::text NOT NULL,
-    attempts bigint DEFAULT 0 NOT NULL,
-    next_attempt_at text DEFAULT to_char((clock_timestamp() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'::text) NOT NULL,
-    lease_token text,
-    lease_started_at text,
-    last_error text,
-    external_url text,
-    updated_at text DEFAULT to_char((clock_timestamp() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'::text) NOT NULL,
-    CONSTRAINT crm_sync_jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'synced'::text, 'failed'::text, 'blocked'::text])))
-);
-CREATE TABLE savia_core.crm_sync_mappings (
-    rule_id text NOT NULL,
-    customer_id bigint NOT NULL,
-    object_kind text NOT NULL,
-    external_object_id text NOT NULL,
-    updated_at text DEFAULT to_char((clock_timestamp() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'::text) NOT NULL,
-    CONSTRAINT crm_sync_mappings_object_kind_check CHECK ((object_kind = ANY (ARRAY['contact'::text, 'company'::text])))
-);
 CREATE TABLE savia_core.crm_sync_receipts (
     tenant_id text NOT NULL,
     principal_id text NOT NULL,
@@ -1185,209 +617,6 @@ CREATE TABLE savia_core.crm_sync_receipts (
     response text NOT NULL,
     before_state text,
     effects_applied bigint DEFAULT 0 NOT NULL
-);
-CREATE TABLE savia_core.crm_sync_rules (
-    id text NOT NULL,
-    principal_id text NOT NULL,
-    tenant_id bigint NOT NULL,
-    provider text NOT NULL,
-    connection_id text NOT NULL,
-    external_account_id text NOT NULL,
-    account_label text NOT NULL,
-    enabled bigint DEFAULT 1 NOT NULL,
-    created_at text DEFAULT to_char((clock_timestamp() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'::text) NOT NULL,
-    CONSTRAINT crm_sync_rules_enabled_check CHECK ((enabled = ANY (ARRAY[(0)::bigint, (1)::bigint]))),
-    CONSTRAINT crm_sync_rules_provider_check CHECK ((provider = ANY (ARRAY['hubspot'::text, 'salesforce'::text, 'zoho'::text, 'pipedrive'::text])))
-);
-CREATE TABLE savia_core.customer_address (
-    id bigint NOT NULL,
-    address text NOT NULL,
-    city_id bigint NOT NULL,
-    coordinates text,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    complement text NOT NULL
-);
-ALTER TABLE savia_core.customer_address ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_address_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.customer_client (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    id_number text NOT NULL,
-    migration_slug text NOT NULL,
-    external_id text NOT NULL
-);
-ALTER TABLE savia_core.customer_client ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_client_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.customer_clientagency (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    agency_id bigint NOT NULL,
-    client_id bigint NOT NULL,
-    created_by text NOT NULL,
-    created_by_slug text NOT NULL,
-    birthday_notification bigint NOT NULL,
-    payment_notification bigint NOT NULL,
-    renewal_notification bigint NOT NULL,
-    commercial_unit_id bigint,
-    group_id bigint,
-    document_url text NOT NULL,
-    computed_data text NOT NULL,
-    completed_at text,
-    origin_from_prospects bigint NOT NULL
-);
-ALTER TABLE savia_core.customer_clientagency ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_clientagency_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.customer_crm_sync_records (
-    principal_id text NOT NULL,
-    agency_id bigint NOT NULL,
-    customer_profile_id bigint NOT NULL,
-    provider text NOT NULL,
-    object_kind text NOT NULL,
-    external_object_id text NOT NULL,
-    last_synced_at text,
-    last_failure_code text,
-    last_failure_at text,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    CONSTRAINT customer_crm_sync_records_object_kind_check CHECK ((object_kind = ANY (ARRAY['contact'::text, 'company'::text]))),
-    CONSTRAINT customer_crm_sync_records_provider_check CHECK ((provider = ANY (ARRAY['hubspot'::text, 'salesforce'::text, 'zoho'::text, 'pipedrive'::text])))
-);
-CREATE TABLE savia_core.customer_group (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    agency_id bigint,
-    description text NOT NULL
-);
-ALTER TABLE savia_core.customer_group ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_group_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.customer_legalperson (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    id_number text NOT NULL,
-    id_check_digit text NOT NULL,
-    incorporation_date text,
-    lr_name text NOT NULL,
-    lr_id_type text NOT NULL,
-    lr_id_number text NOT NULL,
-    address_id bigint,
-    business_activity_id bigint,
-    client_id bigint NOT NULL
-);
-ALTER TABLE savia_core.customer_legalperson ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_legalperson_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.customer_legalpersoncontact (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    surname text NOT NULL,
-    email text NOT NULL,
-    phone text NOT NULL,
-    "position" text NOT NULL,
-    legal_person_id bigint NOT NULL,
-    is_main bigint NOT NULL,
-    name text NOT NULL,
-    comments text NOT NULL
-);
-ALTER TABLE savia_core.customer_legalpersoncontact ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_legalpersoncontact_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.customer_naturalperson (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    surname text NOT NULL,
-    birth_date text,
-    phone text NOT NULL,
-    id_type text NOT NULL,
-    id_number text NOT NULL,
-    id_issue_at text,
-    marital_status text NOT NULL,
-    occupation text NOT NULL,
-    company text NOT NULL,
-    home_address_id bigint,
-    work_address_id bigint,
-    genre text NOT NULL,
-    name text NOT NULL,
-    email text NOT NULL,
-    client_id bigint NOT NULL
-);
-ALTER TABLE savia_core.customer_naturalperson ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.customer_naturalperson_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.departments (
-    id bigint NOT NULL,
-    name text NOT NULL,
-    country_id bigint NOT NULL,
-    external_id bigint NOT NULL
-);
-ALTER TABLE savia_core.departments ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.departments_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.document_ownership (
-    domain text NOT NULL,
-    collection text NOT NULL,
-    document_id text NOT NULL,
-    agency_id bigint NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL
 );
 CREATE TABLE savia_core.extension_action_runs (
     tenant_id text NOT NULL,
@@ -1498,57 +727,6 @@ CREATE TABLE savia_core.installed_bundles (
     id text NOT NULL,
     version text NOT NULL,
     installed_at text NOT NULL
-);
-CREATE TABLE savia_core.insurer_companies (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    id_number text NOT NULL,
-    name_long text NOT NULL,
-    id_check_digit text NOT NULL,
-    external_id bigint,
-    reconciliation_type text NOT NULL,
-    payment_url text NOT NULL,
-    vendu_code text NOT NULL,
-    collection_reconciliation_type text NOT NULL,
-    payment_information text NOT NULL,
-    assistance_line text NOT NULL,
-    is_active bigint NOT NULL
-);
-CREATE TABLE savia_core.legacy_import_snapshots (
-    id text NOT NULL,
-    created_at text NOT NULL,
-    manifest_sha256 text NOT NULL,
-    stream_count bigint NOT NULL,
-    CONSTRAINT legacy_import_snapshots_stream_count_check CHECK ((stream_count >= 0))
-);
-CREATE TABLE savia_core.legacy_import_streams (
-    snapshot_id text NOT NULL,
-    source_type text NOT NULL,
-    source_name text NOT NULL,
-    destination_prefix text NOT NULL,
-    record_count bigint NOT NULL,
-    byte_count bigint NOT NULL,
-    sha256 text NOT NULL,
-    CONSTRAINT legacy_import_streams_byte_count_check CHECK ((byte_count >= 0)),
-    CONSTRAINT legacy_import_streams_record_count_check CHECK ((record_count >= 0))
-);
-CREATE TABLE savia_core.managed_customer_extensions (
-    tenant_id text NOT NULL,
-    profile_id bigint NOT NULL,
-    data text DEFAULT '{}'::text NOT NULL,
-    version bigint DEFAULT 1 NOT NULL,
-    updated_at text NOT NULL,
-    CONSTRAINT managed_customer_extensions_data_check CHECK (savia_core.savia_json_valid(data))
-);
-CREATE TABLE savia_core.managed_customer_requests (
-    tenant_id text NOT NULL,
-    request_key text NOT NULL,
-    fingerprint text NOT NULL,
-    response text NOT NULL,
-    CONSTRAINT managed_customer_requests_response_check CHECK (savia_core.savia_json_valid(response))
 );
 CREATE TABLE savia_core.notification_admin_audit (
     id text NOT NULL,
@@ -1716,24 +894,6 @@ CREATE TABLE savia_core.public_forms (
     CONSTRAINT public_forms_kind_check CHECK ((kind = ANY (ARRAY['record'::text, 'quote'::text]))),
     CONSTRAINT public_forms_return_result_check CHECK ((return_result = ANY (ARRAY[(0)::bigint, (1)::bigint]))),
     CONSTRAINT public_forms_snapshot_check CHECK (savia_core.savia_json_valid(snapshot))
-);
-CREATE TABLE savia_core.ramos (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    sub_ramo_id bigint NOT NULL,
-    tax_iva text NOT NULL,
-    external_id bigint,
-    manage_reinvestment bigint NOT NULL,
-    has_monthly_payment bigint NOT NULL,
-    allow_custom_renewal_days bigint NOT NULL,
-    is_non_renewable bigint NOT NULL,
-    insurance_subject_validation text NOT NULL,
-    insurance_subject_validation_message text NOT NULL,
-    monthly_payment_form_label text NOT NULL,
-    compliance_policy_type text NOT NULL
 );
 CREATE TABLE savia_core.request_page_runs (
     id text NOT NULL,
@@ -2104,15 +1264,6 @@ CREATE TABLE savia_core.studio_write_guards (
     valid bigint NOT NULL,
     CONSTRAINT crm_write_guards_valid_check CHECK ((valid = 1))
 );
-CREATE TABLE savia_core.sub_ramos (
-    id bigint NOT NULL,
-    id_slug text NOT NULL,
-    created_at text NOT NULL,
-    updated_at text NOT NULL,
-    name text NOT NULL,
-    category_id bigint NOT NULL,
-    external_ids text
-);
 CREATE TABLE savia_core.tenant_branding (
     tenant_id bigint NOT NULL,
     config text NOT NULL,
@@ -2151,39 +1302,6 @@ CREATE TABLE savia_core.tenant_bundles (
     version text NOT NULL,
     installed_at text NOT NULL
 );
-CREATE TABLE savia_core.tenant_consolidation_agency_bootstraps (
-    target_tenant_id bigint NOT NULL,
-    source_tenant_id bigint NOT NULL,
-    temporary_short_name text NOT NULL
-);
-ALTER TABLE savia_core.tenant_consolidation_agency_bootstraps ALTER COLUMN target_tenant_id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.tenant_consolidation_agency_bootstraps_target_tenant_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-CREATE TABLE savia_core.tenant_consolidation_discards (
-    source_tenant_id bigint NOT NULL,
-    target_tenant_id bigint NOT NULL,
-    table_name text NOT NULL,
-    record_key text NOT NULL,
-    discarded_at text NOT NULL
-);
-CREATE TABLE savia_core.tenant_consolidation_sources (
-    source_tenant_id bigint NOT NULL,
-    target_tenant_id bigint NOT NULL,
-    consolidated_at text NOT NULL
-);
-ALTER TABLE savia_core.tenant_consolidation_sources ALTER COLUMN source_tenant_id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME savia_core.tenant_consolidation_sources_source_tenant_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
 CREATE TABLE savia_core.tenant_flow_runs (
     id text NOT NULL,
     tenant_id text NOT NULL,
@@ -2218,10 +1336,6 @@ CREATE TABLE savia_core.tenant_flows (
 CREATE TABLE savia_core.tenant_folders (
     tenant_id text NOT NULL,
     path text NOT NULL
-);
-CREATE TABLE savia_core.tenant_namespace_migrations (
-    old_key text NOT NULL,
-    tenant_id bigint NOT NULL
 );
 CREATE TABLE savia_core.tenants (
     id bigint NOT NULL,
@@ -2448,18 +1562,10 @@ ALTER TABLE ONLY savia_core.access_roles
     ADD CONSTRAINT access_roles_scope_name_key UNIQUE (scope, name);
 ALTER TABLE ONLY savia_core.admin_oauth_transactions
     ADD CONSTRAINT admin_oauth_transactions_pkey PRIMARY KEY (state);
-ALTER TABLE ONLY savia_core.agencies
-    ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.agency_branches
-    ADD CONSTRAINT agency_branches_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.agency_contacts
-    ADD CONSTRAINT agency_contacts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.tenant_crm_connection_audit_events
     ADD CONSTRAINT agency_crm_connection_audit_events_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.tenant_crm_connections
     ADD CONSTRAINT agency_crm_connections_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.app_economicactivity
-    ADD CONSTRAINT app_economicactivity_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.assistant_active_tenants
     ADD CONSTRAINT assistant_active_agencies_pkey PRIMARY KEY (principal_id);
 ALTER TABLE ONLY savia_core.assistant_openrouter_settings
@@ -2472,24 +1578,8 @@ ALTER TABLE ONLY savia_core.assistant_virtual_employee_files
     ADD CONSTRAINT assistant_virtual_employee_files_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.assistant_virtual_employees
     ADD CONSTRAINT assistant_virtual_employees_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.attachment_uploads
-    ADD CONSTRAINT attachment_uploads_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.auto_light_quote_offers
-    ADD CONSTRAINT auto_light_quote_offers_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.auto_light_quote_offers
-    ADD CONSTRAINT auto_light_quote_offers_request_operation_attempt_unique UNIQUE (quote_request_id, operation_id, attempt_number);
-ALTER TABLE ONLY savia_core.auto_light_quote_requests
-    ADD CONSTRAINT auto_light_quote_requests_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.bundle_flow_state
     ADD CONSTRAINT bundle_flow_state_pkey PRIMARY KEY (scope, flow_id);
-ALTER TABLE ONLY savia_core.business_commercialunit
-    ADD CONSTRAINT business_commercialunit_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.categories
-    ADD CONSTRAINT categories_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.cities
-    ADD CONSTRAINT cities_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.countries
-    ADD CONSTRAINT countries_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.studio_access_deliveries
     ADD CONSTRAINT crm_access_deliveries_pkey PRIMARY KEY (principal_id, scope, revision, object_name, record_id);
 ALTER TABLE ONLY savia_core.studio_audit
@@ -2562,18 +1652,8 @@ ALTER TABLE ONLY savia_core.crm_sync_changes
     ADD CONSTRAINT crm_sync_changes_pkey PRIMARY KEY (sequence);
 ALTER TABLE ONLY savia_core.crm_sync_changes
     ADD CONSTRAINT crm_sync_changes_tenant_id_object_name_id_key UNIQUE (tenant_id, object_name, id);
-ALTER TABLE ONLY savia_core.crm_sync_jobs
-    ADD CONSTRAINT crm_sync_jobs_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.crm_sync_jobs
-    ADD CONSTRAINT crm_sync_jobs_rule_id_customer_id_key UNIQUE (rule_id, customer_id);
-ALTER TABLE ONLY savia_core.crm_sync_mappings
-    ADD CONSTRAINT crm_sync_mappings_pkey PRIMARY KEY (rule_id, customer_id, object_kind);
 ALTER TABLE ONLY savia_core.crm_sync_receipts
     ADD CONSTRAINT crm_sync_receipts_pkey PRIMARY KEY (tenant_id, principal_id, mutation_id);
-ALTER TABLE ONLY savia_core.crm_sync_rules
-    ADD CONSTRAINT crm_sync_rules_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.crm_sync_rules
-    ADD CONSTRAINT crm_sync_rules_principal_id_tenant_id_provider_connection_i_key UNIQUE (principal_id, tenant_id, provider, connection_id, external_account_id);
 ALTER TABLE ONLY savia_core.studio_tasks
     ADD CONSTRAINT crm_tasks_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.studio_unique_values
@@ -2582,26 +1662,6 @@ ALTER TABLE ONLY savia_core.studio_views
     ADD CONSTRAINT crm_views_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.studio_write_guards
     ADD CONSTRAINT crm_write_guards_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_address
-    ADD CONSTRAINT customer_address_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_client
-    ADD CONSTRAINT customer_client_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_clientagency
-    ADD CONSTRAINT customer_clientagency_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_crm_sync_records
-    ADD CONSTRAINT customer_crm_sync_records_pkey PRIMARY KEY (principal_id, agency_id, customer_profile_id, provider, object_kind);
-ALTER TABLE ONLY savia_core.customer_group
-    ADD CONSTRAINT customer_group_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_legalperson
-    ADD CONSTRAINT customer_legalperson_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_legalpersoncontact
-    ADD CONSTRAINT customer_legalpersoncontact_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.customer_naturalperson
-    ADD CONSTRAINT customer_naturalperson_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.departments
-    ADD CONSTRAINT departments_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.document_ownership
-    ADD CONSTRAINT document_ownership_pkey PRIMARY KEY (domain, collection, document_id);
 ALTER TABLE ONLY savia_core.extension_action_runs
     ADD CONSTRAINT extension_action_runs_pkey PRIMARY KEY (tenant_id, run_id);
 ALTER TABLE ONLY savia_core.extension_connection_audit_events
@@ -2632,18 +1692,6 @@ ALTER TABLE ONLY savia_core.identity_tenant_membership
     ADD CONSTRAINT identity_tenant_membership_principal_id_key UNIQUE (principal_id);
 ALTER TABLE ONLY savia_core.installed_bundles
     ADD CONSTRAINT installed_bundles_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.insurer_companies
-    ADD CONSTRAINT insurer_companies_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.legacy_import_snapshots
-    ADD CONSTRAINT legacy_import_snapshots_manifest_sha256_key UNIQUE (manifest_sha256);
-ALTER TABLE ONLY savia_core.legacy_import_snapshots
-    ADD CONSTRAINT legacy_import_snapshots_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY savia_core.legacy_import_streams
-    ADD CONSTRAINT legacy_import_streams_pkey PRIMARY KEY (snapshot_id, source_type, source_name);
-ALTER TABLE ONLY savia_core.managed_customer_extensions
-    ADD CONSTRAINT managed_customer_extensions_pkey PRIMARY KEY (tenant_id, profile_id);
-ALTER TABLE ONLY savia_core.managed_customer_requests
-    ADD CONSTRAINT managed_customer_requests_pkey PRIMARY KEY (tenant_id, request_key);
 ALTER TABLE ONLY savia_core.notification_admin_audit
     ADD CONSTRAINT notification_admin_audit_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.notification_deliveries
@@ -2684,16 +1732,12 @@ ALTER TABLE ONLY savia_core.public_forms
     ADD CONSTRAINT public_forms_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.public_forms
     ADD CONSTRAINT public_forms_token_key UNIQUE (token);
-ALTER TABLE ONLY savia_core.ramos
-    ADD CONSTRAINT ramos_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.request_page_runs
     ADD CONSTRAINT request_page_runs_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.savia_request_audit
     ADD CONSTRAINT savia_request_audit_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.server_id_sequences
     ADD CONSTRAINT server_id_sequences_pkey PRIMARY KEY (resource);
-ALTER TABLE ONLY savia_core.sub_ramos
-    ADD CONSTRAINT sub_ramos_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.tenant_branding_assets
     ADD CONSTRAINT tenant_branding_assets_object_key_key UNIQUE (object_key);
 ALTER TABLE ONLY savia_core.tenant_branding_assets
@@ -2702,12 +1746,6 @@ ALTER TABLE ONLY savia_core.tenant_branding
     ADD CONSTRAINT tenant_branding_pkey PRIMARY KEY (tenant_id);
 ALTER TABLE ONLY savia_core.tenant_bundles
     ADD CONSTRAINT tenant_bundles_pkey PRIMARY KEY (tenant_id, id);
-ALTER TABLE ONLY savia_core.tenant_consolidation_agency_bootstraps
-    ADD CONSTRAINT tenant_consolidation_agency_bootstraps_pkey PRIMARY KEY (target_tenant_id);
-ALTER TABLE ONLY savia_core.tenant_consolidation_discards
-    ADD CONSTRAINT tenant_consolidation_discards_pkey PRIMARY KEY (source_tenant_id, table_name, record_key);
-ALTER TABLE ONLY savia_core.tenant_consolidation_sources
-    ADD CONSTRAINT tenant_consolidation_sources_pkey PRIMARY KEY (source_tenant_id);
 ALTER TABLE ONLY savia_core.tenant_flow_runs
     ADD CONSTRAINT tenant_flow_runs_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY savia_core.tenant_flow_variables
@@ -2718,8 +1756,6 @@ ALTER TABLE ONLY savia_core.tenant_flows
     ADD CONSTRAINT tenant_flows_pkey PRIMARY KEY (tenant_id, flow_id);
 ALTER TABLE ONLY savia_core.tenant_folders
     ADD CONSTRAINT tenant_folders_pkey PRIMARY KEY (tenant_id, path);
-ALTER TABLE ONLY savia_core.tenant_namespace_migrations
-    ADD CONSTRAINT tenant_namespace_migrations_pkey PRIMARY KEY (old_key);
 ALTER TABLE ONLY savia_core.tenants
     ADD CONSTRAINT tenants_id_slug_key UNIQUE (id_slug);
 ALTER TABLE ONLY savia_core.tenants
@@ -2775,18 +1811,8 @@ ALTER TABLE ONLY savia_core.workflows
 CREATE INDEX access_audit_scope ON savia_core.access_audit USING btree (scope, created_at);
 CREATE INDEX access_grants_role ON savia_core.access_grants USING btree (scope, role_id);
 CREATE INDEX admin_oauth_transactions_expires_at_index ON savia_core.admin_oauth_transactions USING btree (expires_at);
-CREATE UNIQUE INDEX agencies_id_slug_unique ON savia_core.agencies USING btree (id_slug);
-CREATE UNIQUE INDEX agencies_short_name_unique ON savia_core.agencies USING btree (short_name);
-CREATE UNIQUE INDEX agencies_tenant_unique ON savia_core.agencies USING btree (tenant_id);
-CREATE INDEX agency_branches_agency_id_index ON savia_core.agency_branches USING btree (agency_id);
-CREATE INDEX agency_branches_city_id_index ON savia_core.agency_branches USING btree (city_id);
-CREATE UNIQUE INDEX agency_branches_id_slug_unique ON savia_core.agency_branches USING btree (id_slug);
-CREATE INDEX agency_contacts_agency_id_index ON savia_core.agency_contacts USING btree (agency_id);
-CREATE UNIQUE INDEX agency_contacts_id_slug_unique ON savia_core.agency_contacts USING btree (id_slug);
 CREATE INDEX agency_crm_connection_audit_events_agency_created_at_index ON savia_core.tenant_crm_connection_audit_events USING btree (tenant_id, created_at);
 CREATE INDEX agency_crm_connection_audit_events_connection_created_at_index ON savia_core.tenant_crm_connection_audit_events USING btree (connection_id, created_at);
-CREATE INDEX app_economicactivity_code_a9ea7a57_like ON savia_core.app_economicactivity USING btree (code);
-CREATE UNIQUE INDEX app_economicactivity_code_key ON savia_core.app_economicactivity USING btree (code);
 CREATE INDEX assistant_active_agencies_agency_index ON savia_core.assistant_active_tenants USING btree (tenant_id);
 CREATE INDEX assistant_active_tenants_tenant_index ON savia_core.assistant_active_tenants USING btree (tenant_id);
 CREATE UNIQUE INDEX assistant_openrouter_settings_agency_unique ON savia_core.assistant_openrouter_settings USING btree (agency_id) WHERE (scope = 'agency'::text);
@@ -2796,75 +1822,13 @@ CREATE INDEX assistant_virtual_employee_files_employee_index ON savia_core.assis
 CREATE UNIQUE INDEX assistant_virtual_employees_agency_handle ON savia_core.assistant_virtual_employees USING btree (agency_id, handle) WHERE (agency_id IS NOT NULL);
 CREATE INDEX assistant_virtual_employees_agency_index ON savia_core.assistant_virtual_employees USING btree (agency_id);
 CREATE UNIQUE INDEX assistant_virtual_employees_global_handle ON savia_core.assistant_virtual_employees USING btree (handle) WHERE (agency_id IS NULL);
-CREATE INDEX attachment_uploads_agency_status_index ON savia_core.attachment_uploads USING btree (agency_id, status);
-CREATE UNIQUE INDEX attachment_uploads_object_key_unique ON savia_core.attachment_uploads USING btree (object_key);
-CREATE INDEX attachment_uploads_target_index ON savia_core.attachment_uploads USING btree (domain, collection, aggregate_id);
-CREATE INDEX auto_light_quote_offers_request_created_at_index ON savia_core.auto_light_quote_offers USING btree (quote_request_id, created_at);
-CREATE INDEX auto_light_quote_requests_agency_created_at_index ON savia_core.auto_light_quote_requests USING btree (agency_id, created_at);
-CREATE INDEX business_commercialunit_agency_id_3f578aee ON savia_core.business_commercialunit USING btree (agency_id);
-CREATE INDEX business_commercialunit_id_slug_93b24ac2_like ON savia_core.business_commercialunit USING btree (id_slug);
-CREATE UNIQUE INDEX business_commercialunit_id_slug_key ON savia_core.business_commercialunit USING btree (id_slug);
-CREATE UNIQUE INDEX categories_id_slug_unique ON savia_core.categories USING btree (id_slug);
-CREATE INDEX cities_department_id_index ON savia_core.cities USING btree (department_id);
-CREATE UNIQUE INDEX cities_external_id_unique ON savia_core.cities USING btree (external_id);
-CREATE UNIQUE INDEX countries_code_unique ON savia_core.countries USING btree (code);
-CREATE UNIQUE INDEX countries_name_unique ON savia_core.countries USING btree (name);
 CREATE INDEX crm_sync_changes_scope ON savia_core.crm_sync_changes USING btree (tenant_id, object_name, sequence);
-CREATE INDEX crm_sync_jobs_due ON savia_core.crm_sync_jobs USING btree (status, next_attempt_at);
-CREATE INDEX customer_address_city_id_121281ad ON savia_core.customer_address USING btree (city_id);
-CREATE INDEX customer_address_coordinates_0b250f3d_id ON savia_core.customer_address USING btree (coordinates);
-CREATE INDEX customer_client_external_id_ff2ecb68 ON savia_core.customer_client USING btree (external_id);
-CREATE INDEX customer_client_external_id_ff2ecb68_like ON savia_core.customer_client USING btree (external_id);
-CREATE INDEX customer_client_id_slug_51651e62_like ON savia_core.customer_client USING btree (id_slug);
-CREATE UNIQUE INDEX customer_client_id_slug_key ON savia_core.customer_client USING btree (id_slug);
-CREATE INDEX customer_client_migration_slug_87cd0ef0 ON savia_core.customer_client USING btree (migration_slug);
-CREATE INDEX customer_client_migration_slug_87cd0ef0_like ON savia_core.customer_client USING btree (migration_slug);
-CREATE INDEX customer_clientagency_agency_id_2219f9d3 ON savia_core.customer_clientagency USING btree (agency_id);
-CREATE UNIQUE INDEX customer_clientagency_client_id_agency_id_8d00008e_uniq ON savia_core.customer_clientagency USING btree (client_id, agency_id);
-CREATE INDEX customer_clientagency_client_id_f7514a49 ON savia_core.customer_clientagency USING btree (client_id);
-CREATE INDEX customer_clientagency_commercial_unit_id_c62e178e ON savia_core.customer_clientagency USING btree (commercial_unit_id);
-CREATE INDEX customer_clientagency_created_by_slug_fc0af2df ON savia_core.customer_clientagency USING btree (created_by_slug);
-CREATE INDEX customer_clientagency_created_by_slug_fc0af2df_like ON savia_core.customer_clientagency USING btree (created_by_slug);
-CREATE INDEX customer_clientagency_group_id_45d26c9d ON savia_core.customer_clientagency USING btree (group_id);
-CREATE INDEX customer_clientagency_id_slug_44ceaef1_like ON savia_core.customer_clientagency USING btree (id_slug);
-CREATE UNIQUE INDEX customer_clientagency_id_slug_key ON savia_core.customer_clientagency USING btree (id_slug);
-CREATE INDEX customer_crm_sync_records_customer_provider_index ON savia_core.customer_crm_sync_records USING btree (customer_profile_id, provider);
-CREATE INDEX customer_group_agency_id_3b3c328d ON savia_core.customer_group USING btree (agency_id);
-CREATE INDEX customer_group_id_slug_07cbc3f2_like ON savia_core.customer_group USING btree (id_slug);
-CREATE UNIQUE INDEX customer_group_id_slug_key ON savia_core.customer_group USING btree (id_slug);
-CREATE INDEX customer_legalperson_address_id_93d0acf3 ON savia_core.customer_legalperson USING btree (address_id);
-CREATE INDEX customer_legalperson_business_activity_id_fbcde3c5 ON savia_core.customer_legalperson USING btree (business_activity_id);
-CREATE INDEX customer_legalperson_client_agency_id_3baf8ef1 ON savia_core.customer_legalperson USING btree (client_id);
-CREATE INDEX customer_legalperson_id_slug_7402ef0d_like ON savia_core.customer_legalperson USING btree (id_slug);
-CREATE UNIQUE INDEX customer_legalperson_id_slug_key ON savia_core.customer_legalperson USING btree (id_slug);
-CREATE INDEX customer_legalperson_lr_id_type_df272121 ON savia_core.customer_legalperson USING btree (lr_id_type);
-CREATE INDEX customer_legalperson_lr_id_type_df272121_like ON savia_core.customer_legalperson USING btree (lr_id_type);
-CREATE INDEX customer_legalpersoncontact_id_slug_4fbb0989_like ON savia_core.customer_legalpersoncontact USING btree (id_slug);
-CREATE UNIQUE INDEX customer_legalpersoncontact_id_slug_key ON savia_core.customer_legalpersoncontact USING btree (id_slug);
-CREATE INDEX customer_legalpersoncontact_legal_person_id_af37b447 ON savia_core.customer_legalpersoncontact USING btree (legal_person_id);
-CREATE INDEX customer_naturalperson_client_agency_id_d669e098 ON savia_core.customer_naturalperson USING btree (client_id);
-CREATE INDEX customer_naturalperson_genre_5fb8d699 ON savia_core.customer_naturalperson USING btree (genre);
-CREATE INDEX customer_naturalperson_genre_5fb8d699_like ON savia_core.customer_naturalperson USING btree (genre);
-CREATE INDEX customer_naturalperson_home_address_id_94875213 ON savia_core.customer_naturalperson USING btree (home_address_id);
-CREATE INDEX customer_naturalperson_id_slug_745981bd_like ON savia_core.customer_naturalperson USING btree (id_slug);
-CREATE UNIQUE INDEX customer_naturalperson_id_slug_key ON savia_core.customer_naturalperson USING btree (id_slug);
-CREATE INDEX customer_naturalperson_id_type_bc04fc36 ON savia_core.customer_naturalperson USING btree (id_type);
-CREATE INDEX customer_naturalperson_id_type_bc04fc36_like ON savia_core.customer_naturalperson USING btree (id_type);
-CREATE INDEX customer_naturalperson_marital_status_0279a05c ON savia_core.customer_naturalperson USING btree (marital_status);
-CREATE INDEX customer_naturalperson_marital_status_0279a05c_like ON savia_core.customer_naturalperson USING btree (marital_status);
-CREATE INDEX customer_naturalperson_work_address_id_191ca03d ON savia_core.customer_naturalperson USING btree (work_address_id);
-CREATE INDEX departments_country_id_index ON savia_core.departments USING btree (country_id);
-CREATE UNIQUE INDEX departments_external_id_unique ON savia_core.departments USING btree (external_id);
-CREATE INDEX document_ownership_agency_index ON savia_core.document_ownership USING btree (agency_id, domain, collection);
 CREATE INDEX extension_action_runs_tenant_updated_index ON savia_core.extension_action_runs USING btree (tenant_id, updated_at DESC);
 CREATE INDEX extension_connection_audit_events_tenant_created_index ON savia_core.extension_connection_audit_events USING btree (tenant_id, created_at DESC);
 CREATE INDEX extension_connections_tenant_updated_index ON savia_core.extension_connections USING btree (tenant_id, updated_at DESC);
 CREATE INDEX extension_settings_tenant_updated_index ON savia_core.extension_settings USING btree (tenant_id, updated_at DESC);
 CREATE INDEX identity_tenant_membership_tenant_index ON savia_core.identity_tenant_membership USING btree (tenant_id);
 CREATE INDEX idx_plugin_store_artifacts_tenant ON savia_core.plugin_store_artifacts USING btree (tenant_id, id);
-CREATE INDEX insurer_companies_collection_reconciliation_type_index ON savia_core.insurer_companies USING btree (collection_reconciliation_type);
-CREATE UNIQUE INDEX insurer_companies_id_slug_unique ON savia_core.insurer_companies USING btree (id_slug);
-CREATE INDEX insurer_companies_reconciliation_type_index ON savia_core.insurer_companies USING btree (reconciliation_type);
 CREATE INDEX notification_audit_scope ON savia_core.notification_admin_audit USING btree (workspace_id, created_at, id);
 CREATE INDEX notification_events_due ON savia_core.notification_events USING btree (status, next_retry, lease_until, created_at, id);
 CREATE INDEX notification_followers ON savia_core.notification_subscriptions USING btree (workspace_id, collection, principal_id, created_at);
@@ -2879,8 +1843,6 @@ CREATE INDEX public_form_submissions_ip_day ON savia_core.public_form_submission
 CREATE INDEX public_form_submissions_link_day ON savia_core.public_form_submissions USING btree (form_id, day);
 CREATE INDEX public_form_submissions_tenant_day ON savia_core.public_form_submissions USING btree (tenant_id, day);
 CREATE INDEX public_forms_management ON savia_core.public_forms USING btree (tenant_id, object_name, created_at);
-CREATE UNIQUE INDEX ramos_id_slug_unique ON savia_core.ramos USING btree (id_slug);
-CREATE INDEX ramos_sub_ramo_id_index ON savia_core.ramos USING btree (sub_ramo_id);
 CREATE INDEX request_page_runs_owner_page ON savia_core.request_page_runs USING btree (principal_id, tenant_id, page_name, created_at);
 CREATE INDEX savia_request_audit_scope_idx ON savia_core.savia_request_audit USING btree (tenant_id, created_at DESC, id DESC);
 CREATE INDEX studio_file_drafts_expiry ON savia_core.studio_file_drafts USING btree (tenant_id, expires_at);
@@ -2898,8 +1860,6 @@ CREATE INDEX studio_records_active_updated_order ON savia_core.studio_records US
 CREATE INDEX studio_records_object ON savia_core.studio_records USING btree (tenant_id, object_name, updated_at);
 CREATE INDEX studio_tasks_due ON savia_core.studio_tasks USING btree (tenant_id, status, due_at);
 CREATE INDEX studio_unique_record ON savia_core.studio_unique_values USING btree (tenant_id, record_id);
-CREATE INDEX sub_ramos_category_id_index ON savia_core.sub_ramos USING btree (category_id);
-CREATE UNIQUE INDEX sub_ramos_id_slug_unique ON savia_core.sub_ramos USING btree (id_slug);
 CREATE INDEX tenant_branding_assets_tenant ON savia_core.tenant_branding_assets USING btree (tenant_id);
 CREATE INDEX tenant_crm_connection_audit_events_connection_created_at_index ON savia_core.tenant_crm_connection_audit_events USING btree (connection_id, created_at);
 CREATE INDEX tenant_crm_connection_audit_events_tenant_created_at_index ON savia_core.tenant_crm_connection_audit_events USING btree (tenant_id, created_at);
@@ -2908,8 +1868,6 @@ CREATE INDEX tenant_crm_connections_owner_index ON savia_core.tenant_crm_connect
 CREATE INDEX tenant_crm_connections_tenant_provider_index ON savia_core.tenant_crm_connections USING btree (tenant_id, provider);
 CREATE INDEX tenant_flow_runs_scope_idx ON savia_core.tenant_flow_runs USING btree (tenant_id, flow_id, created_at);
 CREATE INDEX tenant_flow_versions_scope_idx ON savia_core.tenant_flow_versions USING btree (tenant_id, flow_id, created_at);
-CREATE UNIQUE INDEX unique_agency_commercial_unit ON savia_core.business_commercialunit USING btree (agency_id, name);
-CREATE UNIQUE INDEX unique_id_number ON savia_core.customer_client USING btree (id_number) WHERE (NOT (upper(id_number) = upper(''::text)));
 CREATE INDEX user_provider_credential_audit_events_owner_created_at_index ON savia_core.user_provider_credential_audit_events USING btree (owner_principal_id, created_at);
 CREATE INDEX user_provider_credentials_owner_index ON savia_core.user_provider_credentials USING btree (owner_principal_id);
 CREATE UNIQUE INDEX user_provider_credentials_owner_provider_unique ON savia_core.user_provider_credentials USING btree (owner_principal_id, provider);
@@ -2927,29 +1885,6 @@ CREATE TRIGGER access_principal_changed AFTER UPDATE OF is_active ON savia_core.
 CREATE TRIGGER access_tenant_created AFTER INSERT ON savia_core.tenants FOR EACH ROW EXECUTE FUNCTION savia_core.access_tenant_created_fn();
 CREATE TRIGGER access_tenant_removed AFTER DELETE ON savia_core.tenants FOR EACH ROW EXECUTE FUNCTION savia_core.access_tenant_removed_fn();
 CREATE TRIGGER access_tenant_state_changed AFTER UPDATE OF is_active, kind ON savia_core.tenants FOR EACH ROW EXECUTE FUNCTION savia_core.access_tenant_state_changed_fn();
-CREATE TRIGGER agency_crm_connection_audit_events_insert INSTEAD OF INSERT ON savia_core.agency_crm_connection_audit_events FOR EACH ROW EXECUTE FUNCTION savia_core.agency_crm_connection_audit_events_insert_fn();
-CREATE TRIGGER agency_crm_connections_delete INSTEAD OF DELETE ON savia_core.agency_crm_connections FOR EACH ROW EXECUTE FUNCTION savia_core.agency_crm_connections_delete_fn();
-CREATE TRIGGER agency_crm_connections_insert INSTEAD OF INSERT ON savia_core.agency_crm_connections FOR EACH ROW EXECUTE FUNCTION savia_core.agency_crm_connections_insert_fn();
-CREATE TRIGGER agency_crm_connections_update INSTEAD OF UPDATE ON savia_core.agency_crm_connections FOR EACH ROW EXECUTE FUNCTION savia_core.agency_crm_connections_update_fn();
-CREATE TRIGGER agency_tenant_create AFTER INSERT ON savia_core.agencies FOR EACH ROW EXECUTE FUNCTION savia_core.agency_tenant_create_fn();
-CREATE TRIGGER agency_tenant_identity_insert BEFORE INSERT ON savia_core.agencies FOR EACH ROW EXECUTE FUNCTION savia_core.agency_tenant_identity_insert_fn();
-CREATE TRIGGER agency_tenant_identity_update BEFORE UPDATE OF id, tenant_id ON savia_core.agencies FOR EACH ROW EXECUTE FUNCTION savia_core.agency_tenant_identity_update_fn();
-CREATE TRIGGER agency_tenant_update AFTER UPDATE OF id_slug, name, is_active, updated_at ON savia_core.agencies FOR EACH ROW EXECUTE FUNCTION savia_core.agency_tenant_update_fn();
-CREATE TRIGGER assistant_active_agencies_delete INSTEAD OF DELETE ON savia_core.assistant_active_agencies FOR EACH ROW EXECUTE FUNCTION savia_core.assistant_active_agencies_delete_fn();
-CREATE TRIGGER assistant_active_agencies_insert INSTEAD OF INSERT ON savia_core.assistant_active_agencies FOR EACH ROW EXECUTE FUNCTION savia_core.assistant_active_agencies_insert_fn();
-CREATE TRIGGER crm_sync_customer_address_delete AFTER DELETE ON savia_core.customer_address FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_address_delete_fn();
-CREATE TRIGGER crm_sync_customer_address_insert AFTER INSERT ON savia_core.customer_address FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_address_insert_fn();
-CREATE TRIGGER crm_sync_customer_address_update AFTER UPDATE ON savia_core.customer_address FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_address_update_fn();
-CREATE TRIGGER crm_sync_customer_clientagency_insert AFTER INSERT ON savia_core.customer_clientagency FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_clientagency_insert_fn();
-CREATE TRIGGER crm_sync_customer_clientagency_update AFTER UPDATE ON savia_core.customer_clientagency FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_clientagency_update_fn();
-CREATE TRIGGER crm_sync_customer_deleted AFTER DELETE ON savia_core.customer_clientagency FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_deleted_fn();
-CREATE TRIGGER crm_sync_customer_legalperson_insert AFTER INSERT ON savia_core.customer_legalperson FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_legalperson_insert_fn();
-CREATE TRIGGER crm_sync_customer_legalperson_update AFTER UPDATE ON savia_core.customer_legalperson FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_legalperson_update_fn();
-CREATE TRIGGER crm_sync_customer_legalpersoncontact_delete AFTER DELETE ON savia_core.customer_legalpersoncontact FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_legalpersoncontact_delete_fn();
-CREATE TRIGGER crm_sync_customer_legalpersoncontact_insert AFTER INSERT ON savia_core.customer_legalpersoncontact FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_legalpersoncontact_insert_fn();
-CREATE TRIGGER crm_sync_customer_legalpersoncontact_update AFTER UPDATE ON savia_core.customer_legalpersoncontact FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_legalpersoncontact_update_fn();
-CREATE TRIGGER crm_sync_customer_naturalperson_insert AFTER INSERT ON savia_core.customer_naturalperson FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_naturalperson_insert_fn();
-CREATE TRIGGER crm_sync_customer_naturalperson_update AFTER UPDATE ON savia_core.customer_naturalperson FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_customer_naturalperson_update_fn();
 CREATE TRIGGER crm_sync_delete AFTER DELETE ON savia_core.studio_records FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_delete_fn();
 CREATE TRIGGER crm_sync_insert AFTER INSERT ON savia_core.studio_records FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_insert_fn();
 CREATE TRIGGER crm_sync_update AFTER UPDATE ON savia_core.studio_records FOR EACH ROW EXECUTE FUNCTION savia_core.crm_sync_update_fn();
@@ -2964,7 +1899,6 @@ CREATE TRIGGER studio_history_update AFTER UPDATE ON savia_core.studio_records F
 CREATE TRIGGER studio_record_links_cardinality BEFORE INSERT ON savia_core.studio_record_links FOR EACH ROW EXECUTE FUNCTION savia_core.crm_record_links_cardinality_fn();
 CREATE TRIGGER studio_record_links_storage BEFORE INSERT ON savia_core.studio_record_links FOR EACH ROW EXECUTE FUNCTION savia_core.crm_record_links_storage_fn();
 CREATE TRIGGER studio_relation_definition_update BEFORE UPDATE ON savia_core.studio_collection_relations FOR EACH ROW EXECUTE FUNCTION savia_core.crm_relation_definition_update_fn();
-CREATE TRIGGER tenant_agency_update AFTER UPDATE OF id_slug, name, is_active, updated_at ON savia_core.tenants FOR EACH ROW EXECUTE FUNCTION savia_core.tenant_agency_update_fn();
 CREATE TRIGGER workflow_event_dispatch AFTER INSERT ON savia_core.workflow_events FOR EACH ROW EXECUTE FUNCTION savia_core.workflow_event_dispatch_fn();
 CREATE TRIGGER workflow_record_created AFTER INSERT ON savia_core.studio_records FOR EACH ROW EXECUTE FUNCTION savia_core.workflow_record_write_fn();
 CREATE TRIGGER workflow_record_deleted AFTER UPDATE OF deleted_at ON savia_core.studio_records FOR EACH ROW EXECUTE FUNCTION savia_core.workflow_record_delete_fn();
@@ -2978,14 +1912,6 @@ ALTER TABLE ONLY savia_core.access_grants
     ADD CONSTRAINT access_grants_scope_role_id_fkey FOREIGN KEY (scope, role_id) REFERENCES savia_core.access_roles(scope, id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.access_roles
     ADD CONSTRAINT access_roles_scope_fkey FOREIGN KEY (scope) REFERENCES savia_core.access_revisions(scope);
-ALTER TABLE ONLY savia_core.agencies
-    ADD CONSTRAINT agencies_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES savia_core.tenants(id);
-ALTER TABLE ONLY savia_core.agency_branches
-    ADD CONSTRAINT agency_branches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id);
-ALTER TABLE ONLY savia_core.agency_branches
-    ADD CONSTRAINT agency_branches_city_id_fkey FOREIGN KEY (city_id) REFERENCES savia_core.cities(id);
-ALTER TABLE ONLY savia_core.agency_contacts
-    ADD CONSTRAINT agency_contacts_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id);
 ALTER TABLE ONLY savia_core.tenant_crm_connection_audit_events
     ADD CONSTRAINT agency_crm_connection_audit_events_agency_id_fkey FOREIGN KEY (tenant_id) REFERENCES savia_core.tenants(id);
 ALTER TABLE ONLY savia_core.tenant_crm_connection_audit_events
@@ -3010,20 +1936,6 @@ ALTER TABLE ONLY savia_core.assistant_virtual_employee_files
     ADD CONSTRAINT assistant_virtual_employee_files_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES savia_core.assistant_virtual_employees(id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.assistant_virtual_employees
     ADD CONSTRAINT assistant_virtual_employees_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.tenants(id) ON DELETE CASCADE;
-ALTER TABLE ONLY savia_core.attachment_uploads
-    ADD CONSTRAINT attachment_uploads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id);
-ALTER TABLE ONLY savia_core.auto_light_quote_offers
-    ADD CONSTRAINT auto_light_quote_offers_credential_owner_principal_id_fkey FOREIGN KEY (credential_owner_principal_id) REFERENCES savia_core.identity_principal(id);
-ALTER TABLE ONLY savia_core.auto_light_quote_offers
-    ADD CONSTRAINT auto_light_quote_offers_quote_request_id_fkey FOREIGN KEY (quote_request_id) REFERENCES savia_core.auto_light_quote_requests(id) ON DELETE RESTRICT;
-ALTER TABLE ONLY savia_core.auto_light_quote_requests
-    ADD CONSTRAINT auto_light_quote_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id) ON DELETE RESTRICT;
-ALTER TABLE ONLY savia_core.auto_light_quote_requests
-    ADD CONSTRAINT auto_light_quote_requests_created_by_principal_id_fkey FOREIGN KEY (created_by_principal_id) REFERENCES savia_core.identity_principal(id) ON DELETE RESTRICT;
-ALTER TABLE ONLY savia_core.business_commercialunit
-    ADD CONSTRAINT business_commercialu_agency_id_3f578aee_fk_business_ FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.cities
-    ADD CONSTRAINT cities_department_id_fkey FOREIGN KEY (department_id) REFERENCES savia_core.departments(id);
 ALTER TABLE ONLY savia_core.studio_business_links
     ADD CONSTRAINT crm_business_links_tenant_id_record_id_fkey FOREIGN KEY (tenant_id, record_id) REFERENCES savia_core.studio_records(tenant_id, id);
 ALTER TABLE ONLY savia_core.crm_collection_bindings
@@ -3044,64 +1956,14 @@ ALTER TABLE ONLY savia_core.studio_records
     ADD CONSTRAINT crm_records_tenant_id_object_name_fkey FOREIGN KEY (tenant_id, object_name) REFERENCES savia_core.studio_objects(tenant_id, name);
 ALTER TABLE ONLY savia_core.studio_solution_objects
     ADD CONSTRAINT crm_solution_objects_tenant_id_solution_id_fkey FOREIGN KEY (tenant_id, solution_id) REFERENCES savia_core.studio_solution_installations(tenant_id, id);
-ALTER TABLE ONLY savia_core.crm_sync_jobs
-    ADD CONSTRAINT crm_sync_jobs_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES savia_core.crm_sync_rules(id);
-ALTER TABLE ONLY savia_core.crm_sync_mappings
-    ADD CONSTRAINT crm_sync_mappings_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES savia_core.crm_sync_rules(id);
-ALTER TABLE ONLY savia_core.crm_sync_rules
-    ADD CONSTRAINT crm_sync_rules_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES savia_core.tenant_crm_connections(id);
-ALTER TABLE ONLY savia_core.crm_sync_rules
-    ADD CONSTRAINT crm_sync_rules_principal_id_fkey FOREIGN KEY (principal_id) REFERENCES savia_core.identity_principal(id);
-ALTER TABLE ONLY savia_core.crm_sync_rules
-    ADD CONSTRAINT crm_sync_rules_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES savia_core.tenants(id);
 ALTER TABLE ONLY savia_core.studio_tasks
     ADD CONSTRAINT crm_tasks_tenant_id_record_id_fkey FOREIGN KEY (tenant_id, record_id) REFERENCES savia_core.studio_records(tenant_id, id) ON DELETE CASCADE;
-ALTER TABLE ONLY savia_core.customer_address
-    ADD CONSTRAINT customer_address_city_id_121281ad_fk_app_city_id FOREIGN KEY (city_id) REFERENCES savia_core.cities(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_clientagency
-    ADD CONSTRAINT customer_clientagenc_commercial_unit_id_c62e178e_fk_business_ FOREIGN KEY (commercial_unit_id) REFERENCES savia_core.business_commercialunit(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_clientagency
-    ADD CONSTRAINT customer_clientagency_agency_id_2219f9d3_fk_business_agency_id FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_clientagency
-    ADD CONSTRAINT customer_clientagency_client_id_f7514a49_fk_customer_client_id FOREIGN KEY (client_id) REFERENCES savia_core.customer_client(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_clientagency
-    ADD CONSTRAINT customer_clientagency_group_id_45d26c9d_fk_customer_group_id FOREIGN KEY (group_id) REFERENCES savia_core.customer_group(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_crm_sync_records
-    ADD CONSTRAINT customer_crm_sync_records_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id);
-ALTER TABLE ONLY savia_core.customer_crm_sync_records
-    ADD CONSTRAINT customer_crm_sync_records_customer_profile_id_fkey FOREIGN KEY (customer_profile_id) REFERENCES savia_core.customer_clientagency(id);
-ALTER TABLE ONLY savia_core.customer_crm_sync_records
-    ADD CONSTRAINT customer_crm_sync_records_principal_id_fkey FOREIGN KEY (principal_id) REFERENCES savia_core.identity_principal(id);
-ALTER TABLE ONLY savia_core.customer_group
-    ADD CONSTRAINT customer_group_agency_id_3b3c328d_fk_business_agency_id FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_legalperson
-    ADD CONSTRAINT customer_legalperson_address_id_93d0acf3_fk_customer_address_id FOREIGN KEY (address_id) REFERENCES savia_core.customer_address(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_legalperson
-    ADD CONSTRAINT customer_legalperson_business_activity_id_fbcde3c5_fk_app_econo FOREIGN KEY (business_activity_id) REFERENCES savia_core.app_economicactivity(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_legalperson
-    ADD CONSTRAINT customer_legalperson_client_id_4bf9637a_fk_customer_ FOREIGN KEY (client_id) REFERENCES savia_core.customer_clientagency(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_legalpersoncontact
-    ADD CONSTRAINT customer_legalperson_legal_person_id_af37b447_fk_customer_ FOREIGN KEY (legal_person_id) REFERENCES savia_core.customer_legalperson(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_naturalperson
-    ADD CONSTRAINT customer_naturalpers_client_id_64a2c072_fk_customer_ FOREIGN KEY (client_id) REFERENCES savia_core.customer_clientagency(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_naturalperson
-    ADD CONSTRAINT customer_naturalpers_home_address_id_94875213_fk_customer_ FOREIGN KEY (home_address_id) REFERENCES savia_core.customer_address(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.customer_naturalperson
-    ADD CONSTRAINT customer_naturalpers_work_address_id_191ca03d_fk_customer_ FOREIGN KEY (work_address_id) REFERENCES savia_core.customer_address(id) DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE ONLY savia_core.departments
-    ADD CONSTRAINT departments_country_id_fkey FOREIGN KEY (country_id) REFERENCES savia_core.countries(id);
-ALTER TABLE ONLY savia_core.document_ownership
-    ADD CONSTRAINT document_ownership_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES savia_core.agencies(id) ON DELETE RESTRICT;
 ALTER TABLE ONLY savia_core.identity_global_role
     ADD CONSTRAINT identity_global_role_principal_id_fkey FOREIGN KEY (principal_id) REFERENCES savia_core.identity_principal(id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.identity_tenant_membership
     ADD CONSTRAINT identity_tenant_membership_principal_id_fkey FOREIGN KEY (principal_id) REFERENCES savia_core.identity_principal(id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.identity_tenant_membership
     ADD CONSTRAINT identity_tenant_membership_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES savia_core.tenants(id) ON DELETE CASCADE;
-ALTER TABLE ONLY savia_core.legacy_import_streams
-    ADD CONSTRAINT legacy_import_streams_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES savia_core.legacy_import_snapshots(id) ON DELETE RESTRICT;
-ALTER TABLE ONLY savia_core.managed_customer_extensions
-    ADD CONSTRAINT managed_customer_extensions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES savia_core.customer_clientagency(id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.notification_deliveries
     ADD CONSTRAINT notification_deliveries_event_id_fkey FOREIGN KEY (event_id) REFERENCES savia_core.notification_events(id);
 ALTER TABLE ONLY savia_core.notification_recipient_retries
@@ -3116,10 +1978,6 @@ ALTER TABLE ONLY savia_core.public_form_short_links
     ADD CONSTRAINT public_form_short_links_form_id_fkey FOREIGN KEY (form_id) REFERENCES savia_core.public_forms(id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.public_form_submissions
     ADD CONSTRAINT public_form_submissions_form_id_fkey FOREIGN KEY (form_id) REFERENCES savia_core.public_forms(id);
-ALTER TABLE ONLY savia_core.ramos
-    ADD CONSTRAINT ramos_sub_ramo_id_fkey FOREIGN KEY (sub_ramo_id) REFERENCES savia_core.sub_ramos(id);
-ALTER TABLE ONLY savia_core.sub_ramos
-    ADD CONSTRAINT sub_ramos_category_id_fkey FOREIGN KEY (category_id) REFERENCES savia_core.categories(id);
 ALTER TABLE ONLY savia_core.tenant_branding_assets
     ADD CONSTRAINT tenant_branding_assets_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES savia_core.tenants(id) ON DELETE CASCADE;
 ALTER TABLE ONLY savia_core.tenant_branding

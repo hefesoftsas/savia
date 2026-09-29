@@ -55,23 +55,6 @@ async function seedAgency(id = 101): Promise<void> {
   )
     .bind(id, `identity-acme-${id}`, `Identity Acme ${id}`)
     .run();
-  const sql = `
-    INSERT INTO agencies (
-      id, tenant_id, id_slug, created_at, updated_at, name, address, id_check_digit,
-      id_number, lr_id_number, lr_id_type, lr_name, payments_email, is_active,
-      email, is_in_house, email_domain, birthday_from_email, payment_from_email,
-      renewal_from_email, home_url, short_name, seller_required, has_compliance,
-      surnames, type, theme
-    ) VALUES (
-      ${id}, ${id}, 'identity-acme-${id}', '2026-01-01T00:00:00.000Z',
-      '2026-01-01T00:00:00.000Z', 'Identity Acme ${id}', 'Calle 1 # 2-3', '4',
-      '900123456', '12345678', 'CC', 'Ada Lovelace', 'payments@acme.test', 1,
-      'hello@acme.test', 0, 'acme.test', 'birthdays@acme.test',
-      'payments@acme.test', 'renewals@acme.test', 'https://acme.test', 'Acme ${id}',
-      0, 0, 'Lovelace', 'broker', 'default'
-    );
-  `;
-  await env.DB.exec(sql.replace(/\s+/g, " ").trim());
 }
 
 async function seedPlatformAdministratorForAccessControl(): Promise<void> {
@@ -313,15 +296,9 @@ function identityUserAdministrator(
 describe("Identity and access", () => {
   beforeAll(applyMigrations);
   beforeEach(async () => {
-    await env.DB.exec("DELETE FROM document_ownership");
-    await env.DB.exec("DELETE FROM customer_naturalperson");
-    await env.DB.exec("DELETE FROM customer_legalperson");
-    await env.DB.exec("DELETE FROM customer_clientagency");
-    await env.DB.exec("DELETE FROM customer_client");
     await env.DB.exec("DELETE FROM identity_tenant_membership");
     await env.DB.exec("DELETE FROM identity_global_role");
     await env.DB.exec("DELETE FROM identity_principal");
-    await env.DB.exec("DELETE FROM agencies");
     // These fixtures recreate tenant IDs; clear their scoped ACL state as well.
     await env.DB.exec("DELETE FROM access_roles WHERE scope LIKE 'tenant:%'");
     await env.DB.exec(

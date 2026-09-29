@@ -533,71 +533,48 @@ it("blocks tenant deletion while an image upload is in flight", async () => {
       .first("is_active"),
   ).toBe(1);
 });
-it.each(["agency", "integration", "sync-rule"])(
-  "keeps tenant active and published images intact when %s references reject deletion",
-  async (reference) => {
-    const { seedTenantAgency } = await import("./tenant-fixtures");
-    const { upsertPrincipal } = await import("../src/auth/identity-repository");
-    const t = await tenant(),
-      instance = createTestApp({
-        auth: platformAdministratorAuthenticator(),
-        documents: env.DOCUMENTS,
-      });
-    const image = await upload(instance, t.id);
-    expect(image.status).toBe(201);
-    const {
-      data: { url },
-    } = (await image.json()) as any;
-    const initial = await read(instance, t.id);
-    expect(
-      (await put(instance, t.id, { ...initial.data, logoUrl: url })).status,
-    ).toBe(200);
-    if (reference === "agency") await seedTenantAgency(env.DB, t.id);
-    else {
-      const principal = await upsertPrincipal(env.DB, {
-          issuer: "test",
-          subject: crypto.randomUUID(),
-          email: `branding-${reference}@example.test`,
-          displayName: "Tester",
-        }),
-        connection = crypto.randomUUID(),
-        now = new Date().toISOString();
-      const connectionTenant =
-        reference === "sync-rule" ? (await tenant()).id : t.id;
-      await env.DB.prepare(
-        "INSERT INTO agency_crm_connections(id,agency_id,created_by_principal_id,provider,nango_connection_id,nango_integration_id,status,created_at,updated_at) VALUES(?,?,?,'hubspot',?,?,'connected',?,?)",
-      )
-        .bind(
-          connection,
-          connectionTenant,
-          principal.id,
-          connection,
-          "test",
-          now,
-          now,
-        )
-        .run();
-      if (reference === "sync-rule")
-        await env.DB.prepare(
-          "INSERT INTO crm_sync_rules(id,principal_id,tenant_id,provider,connection_id,external_account_id,account_label) VALUES(?,?,?,'hubspot',?,'test','Test')",
-        )
-          .bind(crypto.randomUUID(), principal.id, t.id, connection)
-          .run();
-    }
-    const response = await instance.request(
-      "https://api.test/v1/tenants/" + t.id,
-      { method: "DELETE" },
-    );
-    expect(response.status).toBe(409);
-    expect(
-      await env.DB.prepare("SELECT is_active FROM tenants WHERE id=?")
-        .bind(t.id)
-        .first("is_active"),
-    ).toBe(1);
-    expect((await instance.request("https://api.test" + url)).status).toBe(200);
-    expect((await read(instance, t.id)).data.logoUrl).toBe(url);
-  },
-);
+it("keeps tenant active and published images intact when a CRM connection blocks deletion", async () => {
+  const { upsertPrincipal } = await import("../src/auth/identity-repository");
+  const t = await tenant(),
+    instance = createTestApp({
+      auth: platformAdministratorAuthenticator(),
+      documents: env.DOCUMENTS,
+    });
+  const image = await upload(instance, t.id);
+  expect(image.status).toBe(201);
+  const {
+    data: { url },
+  } = (await image.json()) as any;
+  const initial = await read(instance, t.id);
+  expect(
+    (await put(instance, t.id, { ...initial.data, logoUrl: url })).status,
+  ).toBe(200);
+  const principal = await upsertPrincipal(env.DB, {
+      issuer: "test",
+      subject: crypto.randomUUID(),
+      email: "branding-integration@example.test",
+      displayName: "Tester",
+    }),
+    connection = crypto.randomUUID(),
+    now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO tenant_crm_connections(id,tenant_id,created_by_principal_id,provider,nango_connection_id,nango_integration_id,status,created_at,updated_at) VALUES(?,?,?,'hubspot',?,?,'connected',?,?)",
+  )
+    .bind(connection, t.id, principal.id, connection, "test", now, now)
+    .run();
+  const response = await instance.request(
+    "https://api.test/v1/tenants/" + t.id,
+    { method: "DELETE" },
+  );
+  expect(response.status).toBe(409);
+  expect(
+    await env.DB.prepare("SELECT is_active FROM tenants WHERE id=?")
+      .bind(t.id)
+      .first("is_active"),
+  ).toBe(1);
+  expect((await instance.request("https://api.test" + url)).status).toBe(200);
+  expect((await read(instance, t.id)).data.logoUrl).toBe(url);
+});
 it("deletes an eligible tenant and its published image through the API", async () => {
   const t = await tenant(),
     instance = createTestApp({

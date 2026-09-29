@@ -30,14 +30,6 @@ test("baseline keeps the platform namespace and tenant-owned rows in separate sc
     assert.equal(
       db
         .prepare(
-          "SELECT tenant_id FROM tenant_namespace_migrations WHERE old_key='domain:platform'",
-        )
-        .get().tenant_id,
-      0,
-    );
-    assert.equal(
-      db
-        .prepare(
           "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='studio_data_domains'",
         )
         .get().n,

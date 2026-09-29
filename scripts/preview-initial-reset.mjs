@@ -11,7 +11,6 @@ export const retainedIdentityTables = [
   "identity_global_role",
   "identity_tenant_membership",
   "tenants",
-  "agencies",
   "access_revisions",
   "access_roles",
   "access_grants",
