@@ -64,3 +64,17 @@ The backend validates the explicit resource list and availability before writing
 metadata. Unknown, empty, or unavailable selections fail without partially
 installing screens. The generated tenant OpenAPI document describes the selection
 payload. Legacy callers that omit the selection retain the install-all behavior.
+
+### Removing HubSpot screens and refreshing navigation
+
+Installed HubSpot screens expose **Uninstall** in the same catalog. Confirming
+removes the Savia screen and its binding; the HubSpot connection and remote records
+remain intact. Cancel leaves the screen installed. Screens with local records or
+dependent screen fields cannot be unlinked until those dependencies are resolved.
+After uninstalling, the resource can be selected and installed again.
+
+Successful installation clears the cached object catalog before refreshing the
+screen list. Installation and removal refresh navigation without waiting for a
+full HubSpot availability scan or unrelated queries. The catalog updates installed
+badges from the completed operation; **Refresh availability** checks remote access
+when needed.

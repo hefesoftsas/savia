@@ -404,6 +404,7 @@ it.each([
   ["/api/collection-bindings", "POST"],
   ["/api/collection-bindings/external/sync", "POST"],
   ["/api/collection-bindings/external", "DELETE"],
+  ["/api/crm-workspace/install", "POST"],
   ["/api/sources/external", "PATCH"],
 ])("refreshes backend collection metadata after %s", async (path, method) => {
   const local = { ...store(), scope: `external-metadata-${path}` };

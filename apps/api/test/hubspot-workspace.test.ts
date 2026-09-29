@@ -210,6 +210,126 @@ it("installs only selected resources and avoids provider calls for other resourc
     "hubspot_companies",
   ]);
 });
+it("uninstalls only an empty unreferenced local HubSpot screen", async () => {
+  const tenant = "tenant:selective-install";
+  const sources = createCollectionSourceApp(env.DB, env.FILES, tenant, "owner");
+  const path = "/api/collection-bindings/hubspot_companies";
+  await env.DB.prepare(
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
+  )
+    .bind(
+      tenant,
+      "hubspot_company_reference",
+      "Reference",
+      "",
+      JSON.stringify({
+        fields: {
+          company: {
+            type: "Dropdown",
+            label: "Company",
+            config: { relation: "hubspot_companies" },
+          },
+        },
+      }),
+    )
+    .run();
+  expect((await sources.request(path, { method: "DELETE" })).status).toBe(409);
+  expect(
+    await env.DB.prepare(
+      "SELECT 1 FROM studio_objects WHERE tenant_id=? AND name='hubspot_companies'",
+    )
+      .bind(tenant)
+      .first(),
+  ).toBeTruthy();
+  await env.DB.prepare(
+    "DELETE FROM studio_objects WHERE tenant_id=? AND name='hubspot_company_reference'",
+  )
+    .bind(tenant)
+    .run();
+
+  await env.DB.prepare(
+    "INSERT INTO studio_objects(tenant_id,name,label,description,config) VALUES (?,?,?,?,?)",
+  )
+    .bind(
+      tenant,
+      "hubspot_relation_source",
+      "Source",
+      "",
+      JSON.stringify({ fields: {} }),
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO studio_collection_relations(tenant_id,id,source_object,target_object,source_label,target_label,cardinality) VALUES (?,?,?,?,?,?,?)",
+  )
+    .bind(
+      tenant,
+      "hubspot-uninstall-relation",
+      "hubspot_relation_source",
+      "hubspot_companies",
+      "Source",
+      "Companies",
+      "many-to-many",
+    )
+    .run();
+  expect((await sources.request(path, { method: "DELETE" })).status).toBe(409);
+  await env.DB.prepare(
+    "DELETE FROM studio_collection_relations WHERE tenant_id=? AND id=?",
+  )
+    .bind(tenant, "hubspot-uninstall-relation")
+    .run();
+  await env.DB.prepare(
+    "DELETE FROM studio_objects WHERE tenant_id=? AND name='hubspot_relation_source'",
+  )
+    .bind(tenant)
+    .run();
+
+  await env.DB.prepare(
+    "INSERT INTO studio_records(id,tenant_id,object_name,data) VALUES (?,?,?,?)",
+  )
+    .bind(
+      "hubspot-local-record",
+      tenant,
+      "hubspot_companies",
+      JSON.stringify({ name: "Local" }),
+    )
+    .run();
+  expect((await sources.request(path, { method: "DELETE" })).status).toBe(409);
+  await env.DB.prepare("DELETE FROM studio_records WHERE tenant_id=? AND id=?")
+    .bind(tenant, "hubspot-local-record")
+    .run();
+
+  const remoteCalls = calls.length;
+  const response = await sources.request(path, { method: "DELETE" });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    data: { name: "hubspot_companies", unbound: true },
+  });
+  expect(calls).toHaveLength(remoteCalls);
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) AS total FROM studio_objects WHERE tenant_id=? AND name='hubspot_companies'",
+    )
+      .bind(tenant)
+      .first<{ total: number }>(),
+  ).toMatchObject({ total: 0 });
+  expect(
+    await env.DB.prepare(
+      "SELECT count(*) AS total FROM crm_collection_bindings WHERE tenant_id=? AND object_name='hubspot_companies'",
+    )
+      .bind(tenant)
+      .first<{ total: number }>(),
+  ).toMatchObject({ total: 0 });
+  const refreshed = await createHubspotWorkspaceApp({
+    ...context,
+    tenant,
+  }).request("/api/crm-workspace");
+  expect(refreshed.status).toBe(200);
+  expect(
+    ((await refreshed.json()) as any).data.objects.find(
+      (item: any) => item.resource === "companies",
+    ).installed,
+  ).toBe(false);
+});
 it("rejects invalid and unavailable resource lists before installation writes", async () => {
   const tenant = "tenant:invalid-install";
   const app = createHubspotWorkspaceApp({ ...context, tenant });

@@ -25,6 +25,10 @@ const catalog = {
     },
   ],
 };
+const installedCatalog = {
+  ...catalog,
+  objects: [{ ...catalog.objects[0]!, installed: true }, catalog.objects[1]!],
+};
 function mount(request: any, onInstalled = vi.fn(), scope = "sales") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -215,6 +219,132 @@ it("preserves the chosen screens after failure and retries with the same explici
   expect(
     screen.getByRole("button", { name: "Instalar seleccionadas (0)" }),
   ).toBeDisabled();
+});
+
+it("confirms HubSpot uninstall, preserves remote records, and refreshes only object and binding queries", async () => {
+  const request = vi.fn(async (path: string) =>
+    path.startsWith("/collection-bindings/") ? undefined : installedCatalog,
+  );
+  const { client } = mount(request);
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  const cancel = vi.spyOn(client, "cancelQueries");
+  await screen.findByText("Instalada");
+  fireEvent.click(screen.getByRole("button", { name: "Desinstalar" }));
+  expect(
+    screen.getByText("Los registros de HubSpot se conservarán."),
+  ).toBeInTheDocument();
+  expect(request).not.toHaveBeenCalledWith(
+    "/collection-bindings/hubspot_contacts",
+    "DELETE",
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar desinstalación" }),
+  );
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      "/collection-bindings/hubspot_contacts",
+      "DELETE",
+    ),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("checkbox", { name: "Seleccionar Contactos" }),
+    ).toBeEnabled(),
+  );
+  expect(
+    client.getQueryData<any>(["crm-workspace", "sales"])?.objects[0]?.installed,
+  ).toBe(false);
+  expect(cancel).toHaveBeenCalledWith({
+    queryKey: ["crm-workspace", "sales"],
+    exact: true,
+  });
+  await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+  expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
+    expect.arrayContaining([
+      ["/api/objects"],
+      ["collection-bindings", "sales"],
+    ]),
+  );
+  expect(invalidate.mock.calls.every(([filters]) => filters?.queryKey)).toBe(
+    true,
+  );
+});
+
+it("keeps uninstall confirmation after a failure so the user can retry", async () => {
+  let deleteCalls = 0;
+  const request = vi.fn(async (path: string) => {
+    if (path.startsWith("/collection-bindings/")) {
+      deleteCalls += 1;
+      if (deleteCalls === 1) throw new Error("Binding is in use");
+      return undefined;
+    }
+    return installedCatalog;
+  });
+  mount(request);
+  await screen.findByText("Instalada");
+  fireEvent.click(screen.getByRole("button", { name: "Desinstalar" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar desinstalación" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Binding is in use",
+  );
+  expect(
+    screen.getByRole("group", {
+      name: "Confirmar desinstalación de Contactos",
+    }),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar desinstalación" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("checkbox", { name: "Seleccionar Contactos" }),
+    ).toBeEnabled(),
+  );
+  expect(deleteCalls).toBe(2);
+});
+
+it("supports canceling uninstall and reinstalling the screen later", async () => {
+  const calls: Array<[string, string | undefined, unknown]> = [];
+  const request = vi.fn(
+    async (path: string, method?: string, body?: unknown) => {
+      calls.push([path, method, body]);
+      if (path.startsWith("/collection-bindings/")) return undefined;
+      if (path.endsWith("/install"))
+        return { objects: [{ name: "hubspot_contacts", label: "Contactos" }] };
+      return installedCatalog;
+    },
+  );
+  mount(request);
+  await screen.findByText("Instalada");
+  fireEvent.click(screen.getByRole("button", { name: "Desinstalar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+  expect(calls.some(([path]) => path.startsWith("/collection-bindings/"))).toBe(
+    false,
+  );
+  expect(screen.getByText("Instalada")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Desinstalar" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Confirmar desinstalación" }),
+  );
+  const contacts = await screen.findByRole("checkbox", {
+    name: "Seleccionar Contactos",
+  });
+  expect(contacts).toBeEnabled();
+  fireEvent.click(contacts);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Instalar seleccionadas (1)" }),
+  );
+  await waitFor(() =>
+    expect(calls).toContainEqual([
+      "/crm-workspace/install",
+      "POST",
+      { resources: ["contacts"] },
+    ]),
+  );
+  expect(screen.getByText("Instalada")).toBeInTheDocument();
 });
 it("allows retry after a catalog error", async () => {
   mount(

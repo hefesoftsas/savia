@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { FieldHelp } from "./field-help";
+import { getListObjectsQueryKey } from "./generated/studio";
 
 type WorkspaceObject = {
   name: string;
@@ -67,7 +68,10 @@ export default function StudioWorkspacePanel({
   const [selectedResources, setSelectedResources] = useState<Set<string>>(
     () => new Set(),
   );
+  const [uninstallTarget, setUninstallTarget] = useState<string | null>(null);
+  const [uninstallingName, setUninstallingName] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const uninstallInFlight = useRef(false);
   const selectionScope = JSON.stringify([
     scope,
     workspace.data?.connected,
@@ -86,6 +90,7 @@ export default function StudioWorkspacePanel({
     if (previousSelectionScope.current !== selectionScope) {
       previousSelectionScope.current = selectionScope;
       setSelectedResources(new Set());
+      setUninstallTarget(null);
     }
   }, [selectionScope]);
 
@@ -112,7 +117,8 @@ export default function StudioWorkspacePanel({
     const resources = selected
       .filter((object) => object.available && !object.installed)
       .map((object) => object.resource);
-    if (inFlight.current || resources.length === 0) return;
+    if (inFlight.current || uninstallInFlight.current || resources.length === 0)
+      return;
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -130,7 +136,31 @@ export default function StudioWorkspacePanel({
           ),
         );
       setSelectedResources(new Set());
-      await client.invalidateQueries();
+      await client.cancelQueries({
+        queryKey: ["crm-workspace", scope],
+        exact: true,
+      });
+      const installedNames = new Set(
+        installed.objects.map((object) => object.name),
+      );
+      client.setQueryData<Workspace>(["crm-workspace", scope], (previous) =>
+        previous
+          ? {
+              ...previous,
+              objects: previous.objects.map((object) =>
+                installedNames.has(object.name)
+                  ? { ...object, installed: true }
+                  : object,
+              ),
+            }
+          : previous,
+      );
+      void client
+        .invalidateQueries({
+          queryKey: ["collection-bindings", scope],
+          exact: true,
+        })
+        .catch(() => undefined);
       const first = installed.objects[0];
       await onInstalled(first);
       setNotice(
@@ -152,6 +182,57 @@ export default function StudioWorkspacePanel({
     } finally {
       inFlight.current = false;
       setBusy(false);
+    }
+  }
+
+  async function uninstall(object: WorkspaceObject) {
+    if (uninstallInFlight.current || inFlight.current || !object.installed)
+      return;
+    uninstallInFlight.current = true;
+    setUninstallingName(object.name);
+    setError("");
+    setNotice("");
+    try {
+      await request(
+        `/collection-bindings/${encodeURIComponent(object.name)}`,
+        "DELETE",
+      );
+      await client.cancelQueries({
+        queryKey: ["crm-workspace", scope],
+        exact: true,
+      });
+      client.setQueryData<Workspace>(["crm-workspace", scope], (previous) =>
+        previous
+          ? {
+              ...previous,
+              objects: previous.objects.map((entry) =>
+                entry.name === object.name
+                  ? { ...entry, installed: false }
+                  : entry,
+              ),
+            }
+          : previous,
+      );
+      setUninstallTarget(null);
+      setNotice(t("Pantalla desvinculada de HubSpot."));
+      void client
+        .invalidateQueries({ queryKey: getListObjectsQueryKey(), exact: true })
+        .catch(() => undefined);
+      void client
+        .invalidateQueries({
+          queryKey: ["collection-bindings", scope],
+          exact: true,
+        })
+        .catch(() => undefined);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : t("No se pudo desinstalar la pantalla. Vuelve a intentarlo."),
+      );
+    } finally {
+      uninstallInFlight.current = false;
+      setUninstallingName(null);
     }
   }
 
@@ -248,7 +329,12 @@ export default function StudioWorkspacePanel({
                     <div className="flex min-w-0 items-center gap-2">
                       <Checkbox
                         checked={selectedResources.has(object.resource)}
-                        disabled={busy || !object.available || object.installed}
+                        disabled={
+                          busy ||
+                          Boolean(uninstallingName) ||
+                          !object.available ||
+                          object.installed
+                        }
                         aria-label={t("Seleccionar %{value0}", {
                           value0: object.label,
                         })}
@@ -285,6 +371,70 @@ export default function StudioWorkspacePanel({
                       {object.reason}
                     </p>
                   )}
+                  {object.installed ? (
+                    <div className="mt-2 space-y-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          uninstallTarget === object.name
+                            ? "destructive"
+                            : "outline"
+                        }
+                        disabled={busy || Boolean(uninstallingName)}
+                        onClick={() =>
+                          setUninstallTarget((current) =>
+                            current === object.name ? null : object.name,
+                          )
+                        }
+                      >
+                        {t("Desinstalar")}
+                      </Button>
+                      {uninstallTarget === object.name ? (
+                        <div
+                          className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5"
+                          role="group"
+                          aria-label={t(
+                            "Confirmar desinstalación de %{value0}",
+                            {
+                              value0: object.label,
+                            },
+                          )}
+                        >
+                          <p className="m-0 text-xs leading-5 text-foreground">
+                            {t("Desinstalar %{value0} de Savia?", {
+                              value0: object.label,
+                            })}{" "}
+                            <strong>
+                              {t("Los registros de HubSpot se conservarán.")}
+                            </strong>
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              disabled={Boolean(uninstallingName)}
+                              onClick={() => void uninstall(object)}
+                            >
+                              {uninstallingName === object.name
+                                ? t("Desinstalando…")
+                                : t("Confirmar desinstalación")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={Boolean(uninstallingName)}
+                              onClick={() => setUninstallTarget(null)}
+                            >
+                              {t("Cancelar")}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -318,6 +468,7 @@ export default function StudioWorkspacePanel({
           size="sm"
           disabled={
             busy ||
+            Boolean(uninstallingName) ||
             selectable.length === 0 ||
             selected.length === selectable.length
           }
@@ -333,7 +484,7 @@ export default function StudioWorkspacePanel({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={busy || selected.length === 0}
+          disabled={busy || Boolean(uninstallingName) || selected.length === 0}
           onClick={() => setSelectedResources(new Set())}
         >
           {t("Limpiar selección")}
@@ -341,7 +492,12 @@ export default function StudioWorkspacePanel({
         <Button
           type="button"
           size="sm"
-          disabled={busy || workspace.isFetching || selected.length === 0}
+          disabled={
+            busy ||
+            Boolean(uninstallingName) ||
+            workspace.isFetching ||
+            selected.length === 0
+          }
           onClick={() => void install()}
         >
           <Sparkles className="size-3.5" aria-hidden="true" />
@@ -364,7 +520,7 @@ export default function StudioWorkspacePanel({
           type="button"
           variant="outline"
           size="sm"
-          disabled={busy || workspace.isFetching}
+          disabled={busy || Boolean(uninstallingName) || workspace.isFetching}
           onClick={() => void workspace.refetch()}
         >
           <RefreshCw

@@ -836,7 +836,9 @@ function App({
       <Suspense fallback={<Loading />}>
         <CollectionSourcesPanel
           onBound={async (bound) => {
-            await refresh();
+            await activeQueryClient.invalidateQueries({
+              queryKey: getListObjectsQueryKey(),
+            });
             navigate(bound.name, "admin-screen");
           }}
           onImported={(name) => {
@@ -870,7 +872,9 @@ function App({
               <Suspense fallback={<Loading />}>
                 <CollectionSourcesPanel
                   onBound={async (bound) => {
-                    await refresh();
+                    await activeQueryClient.invalidateQueries({
+                      queryKey: getListObjectsQueryKey(),
+                    });
                     navigate(bound.name, "admin-screen");
                   }}
                   onImported={(name) => {
@@ -1635,7 +1639,9 @@ function App({
               <CollectionSourcesPanel
                 initialSection={location.get("tab") ?? undefined}
                 onBound={async (bound) => {
-                  await refresh();
+                  await activeQueryClient.invalidateQueries({
+                    queryKey: getListObjectsQueryKey(),
+                  });
                   navigate(bound.name);
                 }}
               />

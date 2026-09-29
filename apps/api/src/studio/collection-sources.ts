@@ -24,6 +24,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { z } from "@hono/zod-openapi";
+import { dialectFor } from "@savia/db/dialect";
 import {
   emptyCollectionDomainProvider,
   type CollectionDomainProvider,
@@ -1012,13 +1013,64 @@ export function createCollectionSourceApp(
     const name = c.req.param("name");
     const row = await binding(db, tenant, name);
     if (!row) fail("Enlace no encontrado.", 404);
+    const relationValue = dialectFor(db).jsonValue(
+      dialectFor(db).jsonValue("field.value", "$.config"),
+      "$.relation",
+    );
+    const fieldRelationSql = `SELECT o.name FROM studio_objects o,${dialectFor(db).jsonEach("o.config", "$.fields", "field")} WHERE o.tenant_id=? AND o.name<>? AND ${relationValue}=? LIMIT 1`;
+    const fieldRelation = await db
+      .prepare(fieldRelationSql)
+      .bind(tenant, name, name)
+      .first<{ name: string }>();
+    if (fieldRelation)
+      fail(
+        `Quita la relación en «${fieldRelation.name}» antes de desvincular esta colección.`,
+        409,
+      );
+    const relationsTable = dialectFor(db).tableExists(
+      "studio_collection_relations",
+    );
+    const hasRelations = await db
+      .prepare(relationsTable.sql)
+      .bind(...relationsTable.parameters)
+      .first();
+    let collectionRelation: { source_object: string } | null = null;
+    if (hasRelations) {
+      collectionRelation = await db
+        .prepare(
+          "SELECT source_object FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?) LIMIT 1",
+        )
+        .bind(tenant, name, name)
+        .first<{ source_object: string }>();
+      if (collectionRelation)
+        fail(
+          `Quita la relación de colección «${collectionRelation.source_object}» antes de desvincular esta pantalla.`,
+          409,
+        );
+    }
     const empty = guard(
       db,
       "SELECT count(*)=0 FROM studio_records WHERE tenant_id=? AND object_name=?",
       [tenant, name],
     );
+    const fieldsUnreferenced = guard(
+      db,
+      fieldRelationSql.replace("SELECT o.name", "SELECT count(*)=0"),
+      [tenant, name, name],
+    );
+    const collectionRelationsUnreferenced = hasRelations
+      ? guard(
+          db,
+          "SELECT count(*)=0 FROM studio_collection_relations WHERE tenant_id=? AND (source_object=? OR target_object=?)",
+          [tenant, name, name],
+        )
+      : undefined;
     await transaction(db, [
       empty.start,
+      fieldsUnreferenced.start,
+      ...(collectionRelationsUnreferenced
+        ? [collectionRelationsUnreferenced.start]
+        : []),
       db
         .prepare(
           "DELETE FROM crm_collection_bindings WHERE tenant_id=? AND object_name=?",
@@ -1039,6 +1091,10 @@ export function createCollectionSourceApp(
         sourceId: row.source_id,
         resource: row.resource,
       }),
+      fieldsUnreferenced.end,
+      ...(collectionRelationsUnreferenced
+        ? [collectionRelationsUnreferenced.end]
+        : []),
       empty.end,
     ]);
     return c.json({ data: { name, unbound: true } });

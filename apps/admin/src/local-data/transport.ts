@@ -358,6 +358,7 @@ export function createLocalTransport(
       }
       if (
         segments[1] === "objects" ||
+        (segments[1] === "crm-workspace" && segments[2] === "install") ||
         solutionCatalogMutation ||
         extensionCatalogMutation ||
         (segments[1] === "record-history-settings" && method === "PUT") ||

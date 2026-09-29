@@ -656,6 +656,38 @@ export const automationMessages = {
     "Selecionar %{value0}",
   ],
   Instalada: ["Instalada", "Installed", "Instalada"],
+  Desinstalar: ["Desinstalar", "Uninstall", "Desinstalar"],
+  "Confirmar desinstalación": [
+    "Confirmar desinstalación",
+    "Confirm uninstall",
+    "Confirmar desinstalação",
+  ],
+  "Confirmar desinstalación de %{value0}": [
+    "Confirmar desinstalación de %{value0}",
+    "Confirm uninstall of %{value0}",
+    "Confirmar desinstalação de %{value0}",
+  ],
+  "Desinstalar %{value0} de Savia?": [
+    "¿Desinstalar %{value0} de Savia?",
+    "Uninstall %{value0} from Savia?",
+    "Desinstalar %{value0} do Savia?",
+  ],
+  "Los registros de HubSpot se conservarán.": [
+    "Los registros de HubSpot se conservarán.",
+    "HubSpot records will be kept.",
+    "Os registros do HubSpot serão mantidos.",
+  ],
+  "Desinstalando…": ["Desinstalando…", "Uninstalling…", "Desinstalando…"],
+  "Pantalla desvinculada de HubSpot.": [
+    "Pantalla desvinculada de HubSpot.",
+    "Screen uninstalled from HubSpot.",
+    "Tela desvinculada do HubSpot.",
+  ],
+  "No se pudo desinstalar la pantalla. Vuelve a intentarlo.": [
+    "No se pudo desinstalar la pantalla. Vuelve a intentarlo.",
+    "Could not uninstall the screen. Try again.",
+    "Não foi possível desinstalar a tela. Tente novamente.",
+  ],
   "por instalar": ["por instalar", "to install", "para instalar"],
   "en catálogo": ["en catálogo", "in catalog", "no catálogo"],
   "Actualizar disponibilidad": [
