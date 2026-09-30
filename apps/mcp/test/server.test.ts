@@ -81,6 +81,7 @@ describe("Savia FastMCP server", () => {
     const requests: string[] = [];
     const apiUrl = await startApi(async (request) => {
       requests.push(request.url ?? "");
+      if (request.url === "/v1/assistant/active-tenant") return { tenants: [] };
       if (request.url === "/v1/studio/0/api/extensions") {
         return {
           data: [
@@ -141,7 +142,9 @@ describe("Savia FastMCP server", () => {
       });
       expect(typeof summary.asOf).toBe("string");
       expect(requests).toEqual([
+        "/v1/assistant/active-tenant",
         "/v1/studio/0/api/extensions",
+        "/v1/assistant/active-tenant",
         "/v1/studio/0/api/objects",
         "/v1/studio/0/api/records/polizas?page=1&perPage=200",
       ]);
@@ -154,6 +157,7 @@ describe("Savia FastMCP server", () => {
     const requests: string[] = [];
     const apiUrl = await startApi(async (request) => {
       requests.push(request.url ?? "");
+      if (request.url === "/v1/assistant/active-tenant") return { tenants: [] };
       if (request.url === "/v1/studio/0/api/extensions") {
         return {
           data: [
@@ -180,7 +184,10 @@ describe("Savia FastMCP server", () => {
       await expect(
         client.callTool("savia_extension_insurance_portfolio", {}),
       ).rejects.toThrow("extension is not active");
-      expect(requests).toEqual(["/v1/studio/0/api/extensions"]);
+      expect(requests).toEqual([
+        "/v1/assistant/active-tenant",
+        "/v1/studio/0/api/extensions",
+      ]);
     } finally {
       await client.close();
     }
@@ -341,6 +348,7 @@ describe("Savia FastMCP server", () => {
     let authorization: string | undefined;
     const apiUrl = await startApi(async (request) => {
       authorization = request.headers.authorization;
+      if (request.url === "/v1/assistant/active-tenant") return { tenants: [] };
       expect(request.url).toBe("/v1/studio/0/api/objects");
       return { data: [] };
     });
