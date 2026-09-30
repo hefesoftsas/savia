@@ -11,6 +11,10 @@
       "sha256": "c73cb84bea0fd0316de37a2488154f2e53c83dcbce6d5a4eca8ed5f5416be62a"
     },
     {
+      "filename": "0003_tenant_slug_aliases.sql",
+      "sha256": "817cbc6b16d21d3923ab013f403d4f8880267e86c0dcaac7b36472e249cd8aa1"
+    },
+    {
       "filename": "0004_tenant_user_limits.sql",
       "sha256": "80a09e3b4729022959cc743ab17807af4f1e1070ab42c78a348beb29174b1191"
     }
@@ -327,6 +331,11 @@
       "type": "index",
       "name": "tenant_flow_versions_scope_idx",
       "table": "tenant_flow_versions"
+    },
+    {
+      "type": "index",
+      "name": "tenant_slug_aliases_tenant_id",
+      "table": "tenant_slug_aliases"
     },
     {
       "type": "index",
@@ -807,6 +816,11 @@
       "type": "table",
       "name": "tenant_folders",
       "table": "tenant_folders"
+    },
+    {
+      "type": "table",
+      "name": "tenant_slug_aliases",
+      "table": "tenant_slug_aliases"
     },
     {
       "type": "table",
@@ -7983,6 +7997,45 @@
       "checkCount": 0
     },
     {
+      "name": "tenant_slug_aliases",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "slug",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "BIGINT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["slug"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
       "name": "tenant_user_limits",
       "columns": [
         {
@@ -8015,9 +8068,7 @@
       "seedRows": 0,
       "uniqueKeys": [
         {
-          "columns": [
-            "tenant_id"
-          ],
+          "columns": ["tenant_id"],
           "origin": "pk"
         }
       ],

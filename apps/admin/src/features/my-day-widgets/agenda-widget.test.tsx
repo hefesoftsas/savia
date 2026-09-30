@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PersonalCalendarEvent } from "@/api/personal-integrations-client";
 import { useMyDayAgenda, type PersonalIntegrationsLike } from "./agenda-widget";
@@ -29,6 +29,7 @@ function integrations(overrides: Partial<PersonalIntegrationsLike> = {}) {
 }
 
 afterEach(() => {
+  cleanup();
   window.dispatchEvent(new Event("savia:session-cleared"));
   vi.restoreAllMocks();
 });

@@ -1,3 +1,4 @@
+import { resolveTenantSlug } from "../tenant-slugs";
 import { dialectFor } from "@savia/db/dialect";
 import {
   defaultTenantBranding,
@@ -90,12 +91,7 @@ export async function readTenantBrandingForRequest(
     canonicalHost,
   );
   if (!slug) return null;
-  const tenant = await db
-    .prepare(
-      "SELECT id,name FROM tenants WHERE id_slug=? AND kind='commercial' AND is_active=1",
-    )
-    .bind(slug)
-    .first<Tenant>();
+  const tenant = await resolveTenantSlug(db, slug);
   return tenant ? readTenantBranding(db, tenant) : null;
 }
 export async function saveTenantBranding(

@@ -11,9 +11,23 @@ import {
   isReservedTenantSlug,
   normalizeTenantSlug,
   parseTenantSlugFromHostname,
+  tenantSlugFromName,
 } from "../src/tenant-host";
 
 describe("tenant-host", () => {
+  it("derives a DNS-safe tenant slug from a name", () => {
+    expect(tenantSlugFromName("  Asociación Ñandú & Hijos  ")).toBe(
+      "asociacion-nandu-hijos",
+    );
+    expect(tenantSlugFromName("---")).toBe("tenant");
+  });
+
+  it("bounds generated slugs and avoids reserved names", () => {
+    expect(tenantSlugFromName("admin")).toBe("admin-team");
+    expect(tenantSlugFromName("x".repeat(70))).toBe("x".repeat(63));
+    expect(tenantSlugFromName("a".repeat(62) + "!b")).toBe("a".repeat(62));
+  });
+
   it("parses the Slack-style tenant subdomain", () => {
     expect(
       parseTenantSlugFromHostname(
@@ -155,4 +169,3 @@ describe("tenant-host", () => {
     ).toBe(".savia-preview.hefesoft.com");
   });
 });
-

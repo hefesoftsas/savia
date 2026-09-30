@@ -4,6 +4,7 @@ import {
   buildTenantOrigin,
   KNOWN_CANONICAL_HOSTS,
   normalizeTenantSlug,
+  parseTenantSlugFromHostname,
 } from "@savia/tenant-host";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
@@ -18,7 +19,10 @@ export function TenantAccessUrl({ slug }: { slug?: string | null }) {
   const normalizedSlug = normalizeTenantSlug(slug);
   const hostname = window.location.hostname;
   const canonical = KNOWN_CANONICAL_HOSTS.find(
-    (host) => hostname === host || hostname === `${normalizedSlug}.${host}`,
+    (host) =>
+      hostname === host ||
+      (hostname.endsWith(`.${host}`) &&
+        parseTenantSlugFromHostname(hostname, host) !== null),
   );
   // Unknown deployment hosts must not produce links to an unrelated environment.
   if (!normalizedSlug || !canonical) return null;

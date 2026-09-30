@@ -211,6 +211,8 @@ const saviaEnglish = {
         name: "Tenant name",
         idSlug: "Identifier",
         idSlugHelper: "Unique tenant identifier.",
+        urlHelper:
+          "The tenant URL is assigned automatically from its name and stays the same if the name changes.",
         isActive: "Active",
         isActiveHelper: "Disabling the tenant suspends access for its members.",
         initialAdminEmail: "First administrator email",
@@ -761,6 +763,8 @@ const saviaSpanish = {
         name: "Nombre del tenant",
         idSlug: "Identificador",
         idSlugHelper: "Identificador único del tenant.",
+        urlHelper:
+          "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
         isActive: "Activo",
         isActiveHelper:
           "Desactivar el tenant suspende el acceso de sus miembros.",
@@ -1311,6 +1315,8 @@ const saviaPortuguese = {
         name: "Nome do tenant",
         idSlug: "Identificador",
         idSlugHelper: "Identificador exclusivo do tenant.",
+        urlHelper:
+          "A URL do tenant é atribuída automaticamente com base no nome e permanece igual quando ele é renomeado.",
         isActive: "Ativo",
         isActiveHelper: "Desativar o tenant suspende o acesso de seus membros.",
         initialAdminEmail: "E-mail do primeiro administrador",

@@ -10,14 +10,11 @@ import {
 import { seedTenantAgency } from "./tenant-fixtures";
 
 const migrations = Object.entries(
-  import.meta.glob<string>(
-    "../../../packages/db/migrations/000{1_initial,2_bootstrap}.sql",
-    {
-      eager: true,
-      import: "default",
-      query: "?raw",
-    },
-  ),
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
 ).sort(([a], [b]) => a.localeCompare(b));
 const genericSolution = {
   format: "savia.solution",
@@ -114,10 +111,9 @@ const post = (body: unknown, method = "POST") => ({
   body: JSON.stringify(body),
 });
 beforeAll(async () => {
-  expect(migrations.map(([path]) => path.split("/").at(-1))).toEqual([
-    "0001_initial.sql",
-    "0002_bootstrap.sql",
-  ]);
+  expect(
+    migrations.slice(0, 2).map(([path]) => path.split("/").at(-1)),
+  ).toEqual(["0001_initial.sql", "0002_bootstrap.sql"]);
   for (const [path, sql] of migrations) {
     const statements = sql
       .split("--> statement-breakpoint")

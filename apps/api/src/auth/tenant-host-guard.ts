@@ -1,3 +1,4 @@
+import { resolveTenantSlug } from "../tenant-slugs";
 import type { MiddlewareHandler } from "hono";
 import {
   buildTenantHostname,
@@ -36,7 +37,9 @@ export function tenantSlugFromApiRequest(
   request: Request,
   canonicalHost: string = DEFAULT_CANONICAL_HOST,
 ): string | null {
-  const headerSlug = normalizeTenantSlug(request.headers.get(TENANT_SLUG_HEADER));
+  const headerSlug = normalizeTenantSlug(
+    request.headers.get(TENANT_SLUG_HEADER),
+  );
   if (headerSlug) return headerSlug;
   try {
     return parseTenantSlugFromHostname(
@@ -111,7 +114,8 @@ export function tenantHostGuard(
       return;
     }
     const slugs = await commercialSlugsForActor(db, actor);
-    if ([...slugs.values()].includes(slug)) {
+    const requestedTenant = await resolveTenantSlug(db, slug);
+    if (requestedTenant && slugs.has(requestedTenant.id)) {
       await next();
       return;
     }

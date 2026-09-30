@@ -41,15 +41,11 @@ function TenantFields() {
         })}
         validate={required()}
       />
-      <TextInput
-        source="idSlug"
-        label={translate("savia.tenants.fields.idSlug", {
-          _: "Identificador",
+      <p className="text-sm text-muted-foreground md:col-span-2">
+        {translate("savia.tenants.fields.urlHelper", {
+          _: "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
         })}
-        helperText={translate("savia.tenants.fields.idSlugHelper", {
-          _: "Identificador único del tenant.",
-        })}
-      />
+      </p>
       <BooleanInput
         source="isActive"
         label={translate("savia.tenants.fields.isActive", {

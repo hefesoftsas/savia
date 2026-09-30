@@ -161,3 +161,25 @@ describe("GET /v1/tenants/current", () => {
     expect(response.status).toBe(404);
   });
 });
+
+it("allows only the owner through a legacy alias and uses the canonical URL in mismatch responses", async () => {
+  await env.DB.prepare(
+    "INSERT INTO tenant_slug_aliases(slug,tenant_id) VALUES(?,?)",
+  )
+    .bind("legacy-merka", 101)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_slug_aliases(slug,tenant_id) VALUES(?,?)",
+  )
+    .bind("legacy-other", 202)
+    .run();
+  const app = createTestApp({ auth: agencyMemberAuthenticator() });
+  const own = await app.request(
+    "https://legacy-merka.savia-preview.hefesoft.com/v1/identity/me",
+  );
+  expect(own.status).toBe(200);
+  const other = await app.request(
+    "https://legacy-other.savia-preview.hefesoft.com/v1/identity/me",
+  );
+  expect(other.status).toBe(403);
+});

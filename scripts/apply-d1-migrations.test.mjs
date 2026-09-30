@@ -56,6 +56,14 @@ test("initial D1 schema and bootstrap apply once with intact triggers", () => {
       db.prepare("SELECT count(*) n FROM _savia_migrations").get().n,
       migrationCount,
     );
+    assert.equal(
+      db
+        .prepare(
+          "SELECT count(*) n FROM tenant_slug_aliases WHERE slug='savia-platform' AND tenant_id=0",
+        )
+        .get().n,
+      1,
+    );
     assert.ok(
       db
         .prepare(
