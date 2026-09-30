@@ -1,10 +1,10 @@
 # Public forms
 
-Owner: Savia platform team. Last reviewed: 2026-09-23.
+Owner: Savia platform team. Last reviewed: 2026-09-29.
 
 ## Publishing
 
-Forms remain private until a platform administrator opens a screen's configuration,
+Forms remain private until a platform or tenant administrator opens a screen's configuration,
 navigates to the dedicated **Enlace público** page, confirms the published snapshot,
 and creates a link. The administrator can set an expiration (with quick presets for 24h,
 7d, 30d, or no expiration) and a daily submission budget. Administrators may
@@ -165,7 +165,13 @@ fallback links usable.
 The anonymous API only exposes the intentionally published field definition and
 accepts submissions. It provides no collection listing, record lookup, history,
 update, or delete capability. Management remains authenticated and restricted to
-platform administrators. Public responses are not cached and are marked noindex.
+platform administrators or active tenant administrators (`tenant_admin`, including
+its legacy `agency_admin` role) within their own active commercial tenant. Tenant
+administrators cannot manage the platform workspace (`tenant:0`) or another
+tenant's links. Creation and listing validate the requested tenant; shortening,
+revocation, and deletion authorize against the link's stored tenant, regardless
+of caller-supplied tenant parameters. Operators and viewers cannot manage links.
+Public responses are not cached and are marked noindex.
 The random link token cannot be used as an administrative credential.
 
 Before any side effect, D1 atomically reserves the submission and enforces per-link,
