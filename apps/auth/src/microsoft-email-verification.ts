@@ -37,6 +37,8 @@ export const MICROSOFT_CONSUMER_DIRECTORY =
   "9188040d-6c67-4c5b-b112-36a304b66dad";
 const TABLE =
   "CREATE TABLE IF NOT EXISTS microsoft_email_binding (provider_subject TEXT PRIMARY KEY, provider_tenant_id TEXT NOT NULL, tenant_id BIGINT NOT NULL, user_id TEXT NOT NULL, verified_email TEXT NOT NULL, created_at TEXT NOT NULL)";
+const RECOVERY_TABLE =
+  "CREATE TABLE IF NOT EXISTS microsoft_registration_recovery (user_id TEXT PRIMARY KEY, intent_id TEXT NOT NULL UNIQUE, provider_subject TEXT NOT NULL, tenant_id BIGINT NOT NULL, email TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL)";
 type Profile = {
   tid?: unknown;
   oid?: unknown;
@@ -44,6 +46,7 @@ type Profile = {
   name?: unknown;
 };
 type LocalUser = {
+  name?: string;
   id: string;
   email: string;
   emailVerified: boolean;
@@ -305,10 +308,89 @@ export async function completeMicrosoftVerification(
     "content-type": "application/json",
     "x-savia-bridge-key": env.SAVIA_INTERNAL_BRIDGE_KEY,
   };
+  await env.AUTH_DB.exec(RECOVERY_TABLE);
+  await env.AUTH_DB.prepare(
+    'DELETE FROM microsoft_registration_recovery WHERE user_id IN (SELECT r.user_id FROM microsoft_registration_recovery r WHERE r.created_at<? AND NOT EXISTS(SELECT 1 FROM "user" u WHERE u.id=r.user_id) LIMIT 100)',
+  )
+    .bind(new Date(Date.now() - 20 * 60 * 1000).toISOString())
+    .run();
+  if (user && !bound) {
+    const recovery = await env.AUTH_DB.prepare(
+      "SELECT * FROM microsoft_registration_recovery WHERE user_id=?",
+    )
+      .bind(user.id)
+      .first<{
+        user_id: string;
+        intent_id: string;
+        provider_subject: string;
+        tenant_id: number;
+        email: string;
+        name: string;
+      }>();
+    if (recovery && recovery.intent_id !== pending.id) {
+      // Only a fresh ownership proof for the same immutable provider identity may reconcile an orphan.
+      if (
+        user.name !== recovery.name ||
+        user.role !== "user" ||
+        !user.emailVerified
+      )
+        throw denied();
+      if (
+        !settings.allowRegistration ||
+        recovery.provider_subject !== pending.providerSubject ||
+        recovery.tenant_id !== pending.tenantId ||
+        recovery.email !== pending.email
+      )
+        throw denied();
+      const compensation = await env.SAVIA_IDENTITY.fetch(
+        new Request(
+          `https://savia-identity.internal/_internal/social-registration/${recovery.intent_id}`,
+          { method: "DELETE", headers },
+        ),
+      );
+      const result = (await compensation.json().catch(() => null)) as {
+        removed?: boolean;
+      } | null;
+      if (!compensation.ok || result?.removed !== true) throw denied();
+      const removed = await env.AUTH_DB.prepare(
+        'DELETE FROM "user" WHERE id=? AND email=? AND name=? AND "emailTenantId"=? AND role=\'user\' AND (banned=FALSE OR banned IS NULL) AND NOT EXISTS(SELECT 1 FROM microsoft_email_binding WHERE user_id=?) AND NOT EXISTS(SELECT 1 FROM "account" WHERE "userId"=?) AND NOT EXISTS(SELECT 1 FROM "session" WHERE "userId"=?) RETURNING id',
+      )
+        .bind(
+          recovery.user_id,
+          recovery.email,
+          recovery.name,
+          recovery.tenant_id,
+          recovery.user_id,
+          recovery.user_id,
+          recovery.user_id,
+        )
+        .first();
+      if (!removed) throw denied();
+      await env.AUTH_DB.prepare(
+        "DELETE FROM microsoft_registration_recovery WHERE user_id=?",
+      )
+        .bind(recovery.user_id)
+        .run();
+      user = null;
+    }
+  }
   const ownedId = `ms-${pending.id}`;
   let created = false;
   if (!user) {
     if (!settings.allowRegistration) throw denied();
+    await env.AUTH_DB.prepare(
+      "INSERT INTO microsoft_registration_recovery(user_id,intent_id,provider_subject,tenant_id,email,name,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id) DO NOTHING",
+    )
+      .bind(
+        ownedId,
+        pending.id,
+        pending.providerSubject,
+        pending.tenantId,
+        pending.email,
+        pending.email.split("@")[0],
+        new Date().toISOString(),
+      )
+      .run();
     user = await adapter.create<Record<string, unknown>, LocalUser>({
       model: "user",
       forceAllowId: true,
@@ -391,6 +473,11 @@ export async function completeMicrosoftVerification(
       saved.verified_email !== pending.email
     )
       throw denied();
+    await env.AUTH_DB.prepare(
+      "DELETE FROM microsoft_registration_recovery WHERE user_id=?",
+    )
+      .bind(user.id)
+      .run();
   } catch (error) {
     if (created) {
       const removed = await env.SAVIA_IDENTITY.fetch(
@@ -399,11 +486,21 @@ export async function completeMicrosoftVerification(
           { method: "DELETE", headers },
         ),
       ).catch(() => null);
-      if (removed?.ok)
+      const removal = (await removed?.json().catch(() => null)) as
+        { removed?: boolean } | null | undefined;
+      if (removed?.ok && removal?.removed === true)
         await env.AUTH_DB.prepare(
-          'DELETE FROM "user" WHERE id=? AND email=? AND "emailTenantId"=? AND role=\'user\' AND (banned=FALSE OR banned IS NULL) AND NOT EXISTS(SELECT 1 FROM microsoft_email_binding WHERE user_id=?)',
+          'DELETE FROM "user" WHERE id=? AND email=? AND "emailTenantId"=? AND role=\'user\' AND (banned=FALSE OR banned IS NULL) AND name=? AND NOT EXISTS(SELECT 1 FROM microsoft_email_binding WHERE user_id=?) AND NOT EXISTS(SELECT 1 FROM "account" WHERE "userId"=?) AND NOT EXISTS(SELECT 1 FROM "session" WHERE "userId"=?)',
         )
-          .bind(ownedId, pending.email, pending.tenantId, ownedId)
+          .bind(
+            ownedId,
+            pending.email,
+            pending.tenantId,
+            pending.email.split("@")[0],
+            ownedId,
+            ownedId,
+            ownedId,
+          )
           .run();
     }
     throw error;

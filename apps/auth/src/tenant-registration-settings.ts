@@ -1,3 +1,5 @@
+import { registrationPasswordAllowed } from "./email-registration";
+import type { TenantSSOAdapter } from "./tenant-sso";
 import {
   accountEmailAvailable,
   type AccountEmailDependencies,
@@ -91,6 +93,7 @@ export async function tenantRegistrationSettingsResponse(
   request: Request,
   env: AccountEmailEnvironment,
   deps: AccountEmailDependencies,
+  adapter?: TenantSSOAdapter,
 ): Promise<Response | null> {
   const match = new URL(request.url).pathname.match(
     /^\/_internal\/tenant-registration\/(\d+)(\/effective)?$/,
@@ -202,7 +205,14 @@ export async function tenantRegistrationSettingsResponse(
       ...safe,
       secretConfigured: !!secretKey,
       emailReady,
-      ...(match[2] ? { secretKey } : {}),
+      ...(match[2]
+        ? {
+            secretKey,
+            passwordAllowed: adapter
+              ? await registrationPasswordAllowed(adapter, tenantId)
+              : false,
+          }
+        : {}),
     });
   } catch {
     return json(

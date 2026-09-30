@@ -45,6 +45,7 @@ const settingsResponse = z.object({
   allowRegistration: z.boolean().default(false),
   allowMicrosoftPersonalAccounts: z.boolean().default(false),
   microsoftTenantId: z.string(),
+  emailReady: z.boolean().optional(),
   googleAvailable: z.boolean(),
   microsoftAvailable: z.boolean(),
   googleCallbackUrl: z.string(),

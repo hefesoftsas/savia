@@ -3,6 +3,7 @@ import {
   registerTenantRegistrationSettingsRoutes,
   deleteTenantRegistrationSettings,
 } from "./tenant-registration/settings-routes";
+import { registerPublicTenantRegistrationRoutes } from "./tenant-registration/public-routes";
 import {
   registerTenantSSORoutes,
   deleteTenantSSOSettings,
@@ -127,12 +128,20 @@ export function createApp(
     undefined,
     undefined,
     identityBridgeKey,
+    publicForms,
   );
   registerRealtimeMutationHints(app, realtime, db);
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantRegistrationSettingsRoutes(
+    app,
+    db,
+    resolvedAuthService,
+    identityBridgeKey,
+    publicForms,
+  );
+  registerPublicTenantRegistrationRoutes(
     app,
     db,
     resolvedAuthService,

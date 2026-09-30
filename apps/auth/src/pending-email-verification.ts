@@ -210,7 +210,7 @@ export async function cleanupPendingVerifications(
 /** Backend-only abuse budget shared across pending intents; keys contain hashes, not addresses. */
 export async function limitVerificationMail(
   env: AccountEmailEnvironment,
-  input: { tenantId: number; email: string; ip: string },
+  input: { tenantId: number; email: string; ip?: string },
 ): Promise<void> {
   await env.AUTH_DB.exec(
     "CREATE TABLE IF NOT EXISTS verification_mail_budget (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at BIGINT NOT NULL)",
@@ -223,10 +223,14 @@ export async function limitVerificationMail(
       key: `mail:address:${input.tenantId}:${await verificationHash(input.email.trim().toLowerCase())}:${window}`,
       max: 5,
     },
-    {
-      key: `mail:ip:${input.tenantId}:${await verificationHash(input.ip)}:${window}`,
-      max: 20,
-    },
+    ...(input.ip
+      ? [
+          {
+            key: `mail:ip:${input.tenantId}:${await verificationHash(input.ip)}:${window}`,
+            max: 20,
+          },
+        ]
+      : []),
   ];
   for (const budget of budgets) {
     const row = await env.AUTH_DB.prepare(

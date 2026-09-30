@@ -1,3 +1,7 @@
+import {
+  accountEmailAvailable,
+  type AccountEmailDependencies,
+} from "./account-email";
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import {
   APIError,
@@ -606,6 +610,7 @@ export async function tenantSocialResponse(
   request: Request,
   environment: AuthWorkerEnvironment & SocialEnvironment,
   adapter: TenantSSOAdapter,
+  dependencies: AccountEmailDependencies = {},
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const providers = socialProviders(environment);
@@ -628,7 +633,13 @@ export async function tenantSocialResponse(
   if (!Number.isSafeInteger(tenantId) || tenantId <= 0)
     return json({ error: "Invalid tenant" }, 400);
   let existing = await byTenant(adapter, tenantId);
+  const emailReady = await accountEmailAvailable(
+    environment,
+    dependencies,
+    tenantId,
+  ).catch(() => false);
   const response = () => ({
+    emailReady,
     configured: !!existing,
     googleEnabled: existing?.googleEnabled ?? false,
     microsoftEnabled: existing?.microsoftEnabled ?? false,

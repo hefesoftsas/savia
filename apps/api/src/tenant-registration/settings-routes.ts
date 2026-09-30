@@ -15,6 +15,7 @@ export const registrationSettingsSchema = z.object({
   secretConfigured: z.boolean(),
   emailReady: z.boolean(),
   revision: z.string(),
+  passwordAllowed: z.boolean().optional(),
 });
 const inputSchema = z
   .object({
@@ -101,7 +102,7 @@ export function registrationReadiness(
   let captchaReady = false;
   try {
     captchaConfiguration(registrationCaptchaOptions(base, settings));
-    captchaReady = true;
+    captchaReady = !!base.rateLimiter;
   } catch {
     /* Fail closed on missing credentials. */
   }
@@ -110,7 +111,10 @@ export function registrationReadiness(
     captchaProvider,
     captchaReady,
     registrationReady:
-      settings.allowEmailRegistration && settings.emailReady && captchaReady,
+      settings.allowEmailRegistration &&
+      settings.emailReady &&
+      captchaReady &&
+      settings.passwordAllowed !== false,
   };
 }
 export async function deleteTenantRegistrationSettings(

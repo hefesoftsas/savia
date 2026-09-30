@@ -501,3 +501,112 @@ it("creates only a user role after both proofs and compensates a failed Viewer b
     }),
   ).toMatchObject({ role: "user", emailVerified: true, emailTenantId: 723004 });
 });
+
+it("recovers an owned unbound account after finalization and compensation outages", async () => {
+  const { completeMicrosoftVerification } =
+    await import("../src/microsoft-email-verification");
+  const { sendPendingVerification, consumePendingVerification } =
+    await import("../src/pending-email-verification");
+  const settings = await policy();
+  await adapter.update({
+    model: "tenantSocialSettings",
+    where: [{ field: "tenantId", value: 723004 }],
+    update: { allowRegistration: true },
+  });
+  const email = `recover-${crypto.randomUUID()}@example.test`;
+  const subject = crypto.randomUUID();
+  async function proof() {
+    const pending = await beginMicrosoftVerification(
+      { ...consumer, oid: subject, email },
+      {
+        attemptId: crypto.randomUUID(),
+        tenantId: 723004,
+        provider: "microsoft",
+        revision: settings.revision,
+        returnOrigin: "https://team.example.test",
+        expiresAt: Date.now() + 600000,
+      },
+      "recovery-browser",
+      environment,
+      adapter,
+    );
+    let link = "";
+    await sendPendingVerification(
+      {
+        id: pending.id,
+        browserNonce: "recovery-browser",
+        origin: "https://team.example.test",
+      },
+      environment,
+      {
+        sendTransactionalEmail: async (mail) => {
+          link = mail.text.match(/https:\/\/[^\s]+/)![0];
+        },
+      },
+    );
+    await consumePendingVerification(
+      {
+        id: pending.id,
+        token: new URL(link).searchParams.get("token")!,
+        browserNonce: "recovery-browser",
+        origin: "https://team.example.test",
+        purpose: "microsoft_link",
+        tenantId: 723004,
+      },
+      environment,
+    );
+    return pending;
+  }
+  const first = await proof();
+  await expect(
+    completeMicrosoftVerification(
+      first,
+      {
+        ...environment,
+        SAVIA_IDENTITY: {
+          fetch: async () => {
+            throw new Error("Bridge unavailable");
+          },
+        },
+      },
+      adapter,
+    ),
+  ).rejects.toThrow();
+  expect(
+    await adapter.findOne({
+      model: "user",
+      where: [{ field: "email", value: email }],
+    }),
+  ).toBeTruthy();
+  const second = await proof();
+  const paths: string[] = [];
+  await completeMicrosoftVerification(
+    second,
+    {
+      ...environment,
+      SAVIA_IDENTITY: {
+        fetch: async (request) => {
+          paths.push(new URL(request.url).pathname);
+          if (request.method === "DELETE")
+            return Response.json({ removed: true });
+          return new Response(null, {
+            status: new URL(request.url).pathname.endsWith("/eligible")
+              ? 403
+              : 201,
+          });
+        },
+      },
+    },
+    adapter,
+  );
+  expect(paths).toContain(`/_internal/social-registration/${first.id}`);
+  expect(paths).not.toContain("/_internal/social-registration/eligible");
+  expect(
+    await provenMicrosoftIdentity(
+      { ...consumer, oid: subject, email },
+      723004,
+      environment,
+      adapter,
+    ),
+  ).toMatchObject({ email });
+});

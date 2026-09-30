@@ -64,6 +64,7 @@ function loginPage(
   branding?: TenantBranding,
   accountState?: { panel: "forgot" | "verify"; notice?: string },
   emailAvailable = false,
+  allowEmailRegistration = false,
 ): Response {
   const title = branding
     ? `${branding.loginTitle} | ${branding.displayName}`
@@ -77,6 +78,7 @@ function loginPage(
         tenantSlug,
         branding,
         emailAvailable,
+        allowEmailRegistration,
         initialPanel:
           accountState?.panel === "forgot" && !emailAvailable
             ? undefined
@@ -160,6 +162,7 @@ export function oauthPageResponse(
     restartUrl?: string;
     branding?: TenantBranding;
     emailAvailable?: boolean;
+    allowEmailRegistration?: boolean;
   },
 ): Response | undefined {
   if (request.method !== "GET") return undefined;
@@ -185,6 +188,7 @@ export function oauthPageResponse(
               panel: "forgot",
             },
             options?.emailAvailable,
+            options?.allowEmailRegistration,
           )
         : loginPage(
             options?.restartUrl,
@@ -192,6 +196,7 @@ export function oauthPageResponse(
             branding,
             undefined,
             options?.emailAvailable,
+            options?.allowEmailRegistration,
           );
     case "/api/auth/forgot-password":
       return loginPage(
@@ -202,6 +207,7 @@ export function oauthPageResponse(
           panel: "forgot",
         },
         options?.emailAvailable,
+        options?.allowEmailRegistration,
       );
     case "/api/auth/mfa-enroll":
       return mfaEnrollmentPage(branding, options?.restartUrl);

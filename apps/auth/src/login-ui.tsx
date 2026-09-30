@@ -229,12 +229,14 @@ function LoginContent({
   initialPanel,
   initialNotice,
   emailAvailable = false,
+  allowEmailRegistration = false,
 }: {
   tenantSlug?: string | null;
   branding?: TenantBranding;
   initialPanel?: "forgot" | "verify";
   initialNotice?: string;
   emailAvailable?: boolean;
+  allowEmailRegistration?: boolean;
 } = {}) {
   const workspaceKicker = tenantSlug
     ? `Espacio de trabajo · ${tenantSlug}`
@@ -328,6 +330,11 @@ function LoginContent({
       </form>
       {tenantSlug ? (
         <>
+          {allowEmailRegistration ? (
+            <a className="oauth-account-action" href="/register">
+              Crear una cuenta
+            </a>
+          ) : null}
           <div className="oauth-federated" data-social-login hidden>
             <div className="oauth-login-divider">
               <span>o continúa con</span>
@@ -733,6 +740,7 @@ export function renderOAuthSurface(
     initialPanel?: "forgot" | "verify";
     initialNotice?: string;
     emailAvailable?: boolean;
+    allowEmailRegistration?: boolean;
     verification?: { id: string; email: string; notice?: string };
   },
 ): string {
@@ -777,6 +785,7 @@ export function renderOAuthSurface(
         initialPanel={options?.initialPanel}
         initialNotice={options?.initialNotice}
         emailAvailable={options?.emailAvailable}
+        allowEmailRegistration={options?.allowEmailRegistration}
       />
     ) : screen === "enroll" ? (
       <EnrollmentContent branding={options?.branding} />
