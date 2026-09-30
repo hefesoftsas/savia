@@ -115,7 +115,11 @@ export async function gatewayFetch(
   }
   if (!isServicePath(pathname)) {
     const response = await env.ASSETS.fetch(request);
-    if (pathname === "/public/forms" || pathname.startsWith("/public/forms/")) {
+    if (
+      pathname === "/register" ||
+      pathname === "/public/forms" ||
+      pathname.startsWith("/public/forms/")
+    ) {
       const publicPage = new Response(response.body, response);
       publicPage.headers.set("Cache-Control", "no-store");
       publicPage.headers.set("Referrer-Policy", "no-referrer");

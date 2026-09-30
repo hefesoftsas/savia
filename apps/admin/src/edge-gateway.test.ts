@@ -61,9 +61,12 @@ describe("edge gateway", () => {
   it("serves fingerprinted assets with immutable cache headers", async () => {
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = {
-      fetch: vi.fn(async () => new Response("js", {
-        headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
-      })),
+      fetch: vi.fn(
+        async () =>
+          new Response("js", {
+            headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+          }),
+      ),
     };
 
     const response = await gatewayFetch(
@@ -81,9 +84,12 @@ describe("edge gateway", () => {
   it("keeps must-revalidate on non-fingerprinted assets", async () => {
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = {
-      fetch: vi.fn(async () => new Response("html", {
-        headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
-      })),
+      fetch: vi.fn(
+        async () =>
+          new Response("html", {
+            headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+          }),
+      ),
     };
 
     const response = await gatewayFetch(
@@ -122,9 +128,12 @@ describe("edge gateway", () => {
   it("serves the manifest with hourly cache headers", async () => {
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = {
-      fetch: vi.fn(async () => new Response("{}", {
-        headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
-      })),
+      fetch: vi.fn(
+        async () =>
+          new Response("{}", {
+            headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+          }),
+      ),
     };
 
     const response = await gatewayFetch(
@@ -144,9 +153,12 @@ describe("edge gateway", () => {
     expect(serviceWorkerCacheControl("/assets/main-CfLYpzF0.js")).toBeNull();
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = {
-      fetch: vi.fn(async () => new Response("worker", {
-        headers: { "Cache-Control": "public, max-age=3600" },
-      })),
+      fetch: vi.fn(
+        async () =>
+          new Response("worker", {
+            headers: { "Cache-Control": "public, max-age=3600" },
+          }),
+      ),
     };
     const response = await gatewayFetch(
       new Request("https://savia.example.workers.dev/sw.js"),
@@ -202,24 +214,27 @@ describe("edge gateway", () => {
   });
 });
 
-it("serves public pages without leaking their link via referrers or caching", async () => {
-  const api = { fetch: vi.fn(async () => Response.json({})) };
-  const assets = { fetch: vi.fn(async () => new Response("public shell")) };
-  const response = await gatewayFetch(
-    new Request("https://savia.example/public/forms/fixture"),
-    { API: api, ASSETS: assets },
-  );
-  expect(await response.text()).toBe("public shell");
-  expect(api.fetch).not.toHaveBeenCalled();
-  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
-  expect(response.headers.get("Cache-Control")).toBe("no-store");
-  expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-  await gatewayFetch(
-    new Request("https://savia.example/api/public/forms/fixture"),
-    { API: api, ASSETS: assets },
-  );
-  expect(api.fetch).toHaveBeenCalledOnce();
-});
+it.each(["/public/forms/fixture", "/register"])(
+  "serves public page %s without leaking its link or caching",
+  async (path) => {
+    const api = { fetch: vi.fn(async () => Response.json({})) };
+    const assets = { fetch: vi.fn(async () => new Response("public shell")) };
+    const response = await gatewayFetch(
+      new Request("https://savia.example" + path),
+      { API: api, ASSETS: assets },
+    );
+    expect(await response.text()).toBe("public shell");
+    expect(api.fetch).not.toHaveBeenCalled();
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    await gatewayFetch(
+      new Request("https://savia.example/api/public/forms/fixture"),
+      { API: api, ASSETS: assets },
+    );
+    expect(api.fetch).toHaveBeenCalledOnce();
+  },
+);
 
 it("forwards Savia short URLs to the API redirect handler", async () => {
   const api = {

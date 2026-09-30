@@ -94,6 +94,7 @@ export default defineConfig({
           /^\/api/,
           /^\/v1/,
           /^\/public\/forms/,
+          /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
         ],
         cleanupOutdatedCaches: true,
