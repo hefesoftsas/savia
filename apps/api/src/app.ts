@@ -1,4 +1,8 @@
 import {
+  registerTenantRegistrationSettingsRoutes,
+  deleteTenantRegistrationSettings,
+} from "./tenant-registration/settings-routes";
+import {
   registerTenantSSORoutes,
   deleteTenantSSOSettings,
   setTenantSSOActivity,
@@ -127,6 +131,13 @@ export function createApp(
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerTenantRegistrationSettingsRoutes(
+    app,
+    db,
+    resolvedAuthService,
+    identityBridgeKey,
+    publicForms,
+  );
   registerSocialRegistrationRoutes(
     app,
     db,
@@ -228,6 +239,11 @@ export function createApp(
     saviaRequestService,
     resolvedAuthService && identityBridgeKey
       ? async (tenantId) => {
+          await deleteTenantRegistrationSettings(
+            resolvedAuthService,
+            identityBridgeKey,
+            tenantId,
+          );
           await deleteTenantSocialSettings(
             resolvedAuthService,
             identityBridgeKey,

@@ -1,3 +1,4 @@
+import { tenantRegistrationSettingsResponse } from "./tenant-registration-settings";
 import { exchangeMcpToken } from "./mcp-exchange";
 import {
   socialProviders,
@@ -822,6 +823,12 @@ export function createAuthHandler(
         pathname === "/_internal/oauth/mcp-exchange"
       )
         return exchangeMcpToken(request, oauthRuntime(environment), auth);
+      const registrationSettings = await tenantRegistrationSettingsResponse(
+        request,
+        environment,
+        dependencies,
+      );
+      if (registrationSettings) return registrationSettings;
       const tenantSSO = await tenantSSOResponse(
         request,
         environment,
