@@ -1,10 +1,8 @@
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
-import {
-  actorFromContext,
-  requirePlatformAdministrator,
-} from "../auth/middleware";
+import { actorFromContext } from "../auth/middleware";
+import type { AppActor } from "../auth/types";
 import {
   activePublicForm,
   tenantIdSchema,
@@ -27,31 +25,41 @@ const jsonResponse = {
     "application/json": { schema: z.record(z.string(), z.unknown()) },
   },
 };
+async function requireFormManager(
+  db: D1Database,
+  actor: AppActor,
+  scope: string,
+) {
+  const denied = () =>
+    new HTTPException(403, {
+      message: "A tenant administrator for this form is required.",
+    });
+  if (!actor.principal.isActive) throw denied();
+  if (actor.globalRoles.includes("platform_admin")) return;
+  const membership = actor.memberships.find((entry) => {
+    const tenantId = entry.tenantId ?? entry.agencyId;
+    return (
+      entry.isActive &&
+      tenantId > 0 &&
+      tenantKey(tenantId) === scope &&
+      ["tenant_admin", "agency_admin"].includes(entry.role)
+    );
+  });
+  if (!membership) throw denied();
+  const tenant = await db
+    .prepare(
+      "SELECT id FROM tenants WHERE id=? AND kind='commercial' AND is_active=1",
+    )
+    .bind(membership.tenantId ?? membership.agencyId)
+    .first();
+  if (!tenant) throw denied();
+}
+
 export function registerPublicFormRoutes(
   app: OpenAPIHono,
   db: D1Database,
   options: PublicFormsOptions = {},
 ) {
-  app.use("/v1/public-forms", async (c, next) => {
-    try {
-      requirePlatformAdministrator(actorFromContext(c));
-    } catch {
-      throw new HTTPException(403, {
-        message: "Platform administrator required.",
-      });
-    }
-    await next();
-  });
-  app.use("/v1/public-forms/*", async (c, next) => {
-    try {
-      requirePlatformAdministrator(actorFromContext(c));
-    } catch {
-      throw new HTTPException(403, {
-        message: "Platform administrator required.",
-      });
-    }
-    await next();
-  });
   app.use("/api/public/forms/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
     c.header("X-Robots-Tag", "noindex, nofollow");
@@ -106,18 +114,20 @@ export function registerPublicFormRoutes(
       const now = new Date().toISOString();
       const form = await db
         .prepare(
-          "SELECT id,token,expires_at,revoked_at,short_url FROM public_forms WHERE id=?",
+          "SELECT id,tenant_id,token,expires_at,revoked_at,short_url FROM public_forms WHERE id=?",
         )
         .bind(id)
         .first<{
           id: string;
+          tenant_id: string;
           token: string;
           expires_at: string | null;
           revoked_at: string | null;
           short_url: string | null;
         }>();
+      if (!form) return c.json({ error: "Public form unavailable." }, 404);
+      await requireFormManager(db, actorFromContext(c), form.tenant_id);
       if (
-        !form ||
         form.revoked_at !== null ||
         (form.expires_at !== null && form.expires_at <= now)
       )
@@ -218,18 +228,17 @@ export function registerPublicFormRoutes(
       },
       responses: { 201: jsonResponse },
     }),
-    async (c) =>
-      c.json(
+    async (c) => {
+      const input = c.req.valid("json");
+      const actor = actorFromContext(c);
+      await requireFormManager(db, actor, tenantKey(input.tenantId));
+      return c.json(
         {
-          data: await publishPublicForm(
-            db,
-            options,
-            actorFromContext(c).principal.id,
-            c.req.valid("json"),
-          ),
+          data: await publishPublicForm(db, options, actor.principal.id, input),
         },
         201,
-      ),
+      );
+    },
   );
   app.openapi(
     createRoute({
@@ -246,6 +255,7 @@ export function registerPublicFormRoutes(
     }),
     async (c) => {
       const q = c.req.valid("query");
+      await requireFormManager(db, actorFromContext(c), tenantKey(q.tenantId));
       const result = await db
         .prepare(
           "SELECT f.*, s.code AS short_code FROM public_forms f LEFT JOIN public_form_short_links s ON s.form_id=f.id WHERE f.tenant_id=? AND f.object_name=? ORDER BY f.created_at DESC",
@@ -271,18 +281,33 @@ export function registerPublicFormRoutes(
         params: z.object({ id: z.string().uuid() }),
         query: z.object({ hard: z.string().optional() }),
       },
-      responses: { 200: jsonResponse },
+      responses: { 200: jsonResponse, 404: jsonResponse },
     }),
     async (c) => {
       const id = c.req.valid("param").id;
+      const row = await db
+        .prepare(
+          "SELECT tenant_id,revoked_at,expires_at FROM public_forms WHERE id=?",
+        )
+        .bind(id)
+        .first<{
+          tenant_id: string;
+          revoked_at: string | null;
+          expires_at: string | null;
+        }>();
+      const actor = actorFromContext(c);
+      if (!row) {
+        if (
+          actor.principal.isActive &&
+          actor.globalRoles.includes("platform_admin")
+        )
+          return c.json({ ok: true }, 200);
+        return c.json({ error: "Public form unavailable." }, 404);
+      }
+      await requireFormManager(db, actor, row.tenant_id);
       // Hard deletion is only for dead links: removing an active link would
       // silently drop its deduplication reservations. Revoke first.
       if (c.req.valid("query").hard === "true") {
-        const row = await db
-          .prepare("SELECT revoked_at,expires_at FROM public_forms WHERE id=?")
-          .bind(id)
-          .first<{ revoked_at: string | null; expires_at: string | null }>();
-        if (!row) return c.json({ ok: true }, 200);
         const dead =
           row.revoked_at !== null ||
           (row.expires_at !== null &&
