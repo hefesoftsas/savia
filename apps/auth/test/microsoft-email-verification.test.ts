@@ -390,7 +390,7 @@ it("does not turn local registration or an unconsumed mail intent into Microsoft
   ).toBeNull();
 });
 
-it("creates only a user role after both proofs and compensates a failed Viewer bridge", async () => {
+it("creates only a user role after both proofs and retains recoverable failed provisioning", async () => {
   const { completeMicrosoftVerification } =
     await import("../src/microsoft-email-verification");
   const { sendPendingVerification, consumePendingVerification } =
@@ -461,7 +461,7 @@ it("creates only a user role after both proofs and compensates a failed Viewer b
       model: "user",
       where: [{ field: "email", value: email }],
     }),
-  ).toBeNull();
+  ).toMatchObject({ role: "user", emailVerified: true });
   // A fresh proved attempt succeeds with the fixed minimum-auth role.
   const pending2 = { ...pending, id: crypto.randomUUID() };
   await environment.AUTH_DB.prepare(
@@ -502,7 +502,7 @@ it("creates only a user role after both proofs and compensates a failed Viewer b
   ).toMatchObject({ role: "user", emailVerified: true, emailTenantId: 723004 });
 });
 
-it("recovers an owned unbound account after finalization and compensation outages", async () => {
+it("recovers an owned unbound account without deleting concurrent administrator edits", async () => {
   const { completeMicrosoftVerification } =
     await import("../src/microsoft-email-verification");
   const { sendPendingVerification, consumePendingVerification } =
@@ -587,8 +587,14 @@ it("recovers an owned unbound account after finalization and compensation outage
       SAVIA_IDENTITY: {
         fetch: async (request) => {
           paths.push(new URL(request.url).pathname);
-          if (request.method === "DELETE")
-            return Response.json({ removed: true });
+          expect(request.method).toBe("POST");
+          const body = (await request.json()) as { attemptId: string };
+          expect(body.attemptId).toBe(first.id);
+          await adapter.update({
+            model: "user",
+            where: [{ field: "id", value: `ms-${first.id}` }],
+            update: { name: "Administrator renamed user" },
+          });
           return new Response(null, {
             status: new URL(request.url).pathname.endsWith("/eligible")
               ? 403
@@ -599,7 +605,13 @@ it("recovers an owned unbound account after finalization and compensation outage
     },
     adapter,
   );
-  expect(paths).toContain(`/_internal/social-registration/${first.id}`);
+  expect(paths).not.toContain(`/_internal/social-registration/${first.id}`);
+  expect(
+    await adapter.findOne({
+      model: "user",
+      where: [{ field: "email", value: email }],
+    }),
+  ).toMatchObject({ id: `ms-${first.id}`, name: "Administrator renamed user" });
   expect(paths).not.toContain("/_internal/social-registration/eligible");
   expect(
     await provenMicrosoftIdentity(

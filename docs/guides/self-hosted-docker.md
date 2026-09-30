@@ -115,3 +115,7 @@ For an optional PostgreSQL application database, see [PostgreSQL for Docker](sel
 ### Authentication page verification
 
 After starting Docker, verify that `/api/auth/login`, `/api/auth/mfa-enroll` and `/api/auth/consent` return HTML successfully. The server-rendered login surface imports React explicitly so it also works when the native loader starts from the repository root without the authentication package’s JSX configuration. The Docker integration suite covers these pages separately from JSON authentication endpoints.
+
+## Tenant email registration
+
+Tenant administrators configure independent email/password registration under **Service credentials → User registration**. Docker reuses the bundled ALTCHA widget, server-managed CAPTCHA secret and native limiter; no Cloudflare account is required. Configure tenant SMTP before enabling the switch. The anonymous form stays unavailable without complete prerequisites, even when a localhost public-form bypass is enabled. New accounts must verify their email and receive Viewer access within the tenant quota. See [tenant registration](tenant-registration.md).

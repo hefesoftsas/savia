@@ -198,7 +198,7 @@ export function RegistrationPage() {
                         name="name"
                         autoComplete="name"
                         required
-                        maxLength={200}
+                        maxLength={100}
                       />
                     </div>
                     <div className="space-y-2">

@@ -89,3 +89,5 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Initial database baseline](guides/database-initial-baseline.md) — fresh installation and pre-production reset.
 
 - [Shared private plugin registry](guides/plugin-registry.md): publish immutable releases once and import them across environments.
+
+- [Tenant email registration](guides/tenant-registration.md): independent tenant opt-in, Turnstile/ALTCHA configuration, verified Viewer provisioning and quota handling.

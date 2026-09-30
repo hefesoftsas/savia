@@ -63,3 +63,5 @@ The provider must supply an email-verification signal Savia accepts. A Microsoft
 ## Testing and limits
 
 Automated tests cover configuration, callback policy, tenant isolation, account eligibility, and MFA handling without contacting Google or Microsoft. A live provider sign-in requires real OAuth credentials, the registered callback URL, and either an eligible pre-existing Savia tenant membership or tenant self-registration enabled. Local tests cannot verify provider consent, claim configuration, or the external login flow without those credentials.
+
+If personal Microsoft provisioning loses its service response, the unbound account remains guarded. A fresh email proof retries the owned provisioning attempt under current tenant policy without deleting accounts or administrator edits. Provider binding and sessions become available only after successful finalization.
