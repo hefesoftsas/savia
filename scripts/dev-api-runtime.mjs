@@ -25,6 +25,7 @@ const permitted = (name) =>
     "SAVIA_INTERNAL_BRIDGE_KEY",
     "SAVIA_DISABLE_CAPTCHA",
     "SAVIA_MOCK_QUOTES",
+    "PLUGIN_REGISTRY_TENANTS",
     "SQL_BRIDGE_URL",
     "SQL_BRIDGE_SECRET",
   ].includes(name);
@@ -39,6 +40,7 @@ export async function prepareApiRuntime(
   );
   const supplied = {
     ...(await environmentFile(resolve(secrets, "assistant-api.dev.env"))),
+    ...(await environmentFile(resolve(secrets, "plugin-registry.dev.env"))),
     ...(await environmentFile(resolve(secrets, "mcp.dev.env"))),
     ...(await environmentFile(resolve(secrets, "connector-gateway.dev.env"))),
     ...Object.fromEntries(
@@ -90,7 +92,15 @@ export async function prepareApiRuntime(
     await writeFile(
       variablesFile,
       Object.entries(vars)
-        .map(([key, value]) => `${key}=${JSON.stringify(String(value))}`)
+        .map(([key, value]) => {
+          const text = String(value);
+          const quote = ["'", '"', "`"].find(
+            (candidate) => !text.includes(candidate),
+          );
+          if (!quote)
+            throw new Error(`Cannot encode environment variable ${key}.`);
+          return `${key}=${quote}${text}${quote}`;
+        })
         .join("\n"),
       { mode: 0o600 },
     );

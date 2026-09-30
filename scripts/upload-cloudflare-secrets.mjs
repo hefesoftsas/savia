@@ -95,6 +95,8 @@ export function buildSecretUploads(environment, values) {
         return [key, resolved[source]];
       }),
     );
+    if (app === "api" && values.PLUGIN_REGISTRY_TENANTS)
+      secrets.PLUGIN_REGISTRY_TENANTS = values.PLUGIN_REGISTRY_TENANTS;
     if (app === "api" && values.OPENROUTER_API_KEY)
       secrets.OPENROUTER_API_KEY = values.OPENROUTER_API_KEY;
     if (app === "api" && values.SQL_BRIDGE_URL) {

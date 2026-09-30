@@ -2,7 +2,7 @@ import { migrationStatements } from "./migration-statements";
 import deploymentWorker, {
   deploymentTenants,
 } from "../../../scripts/plugin-deployment/worker";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { existsSync } from "node:fs";
 import { readFileSync, readdirSync } from "node:fs";
@@ -2119,5 +2119,327 @@ describe("release deployment worker", () => {
         })
       ).status,
     ).toBe(200);
+  });
+});
+
+describe("explicit plugin store install versions", () => {
+  it("installs the requested version, rejects implicit downgrade, and permits only an explicit admin rollback", async () => {
+    const older = pluginZip({ manifest: { version: "1.0.0" } });
+    const newer = pluginZip({ manifest: { version: "2.0.0" } });
+    const selectedTenant = "store-version-selected";
+    expect((await uploadZip(selectedTenant, older)).status).toBe(200);
+    expect((await uploadZip(selectedTenant, newer)).status).toBe(200);
+    const selected = await api(
+      selectedTenant,
+      "/extensions/custom.demo/install",
+      "POST",
+      { version: "1.0.0" },
+    );
+    expect(selected.status).toBe(200);
+    expect(selected.json.data.version).toBe("1.0.0");
+
+    const rollbackTenant = "store-version-rollback";
+    expect((await uploadZip(rollbackTenant, older)).status).toBe(200);
+    expect((await uploadZip(rollbackTenant, newer)).status).toBe(200);
+    const studio = createStudioApp(rollbackTenant, {
+      seedObjects: [],
+      principalId: "admin-user",
+      canManageExtension: () => true,
+    });
+    const install = (body?: unknown) =>
+      studio.request(
+        "http://localhost/api/extensions/custom.demo/install",
+        body === undefined
+          ? { method: "POST" }
+          : {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(body),
+            },
+        platform.env,
+      );
+    expect((await install()).status).toBe(200);
+    expect((await install({ version: "1.0.0" })).status).toBe(409);
+    const malformed = await studio.request(
+      "http://localhost/api/extensions/custom.demo/install",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{",
+      },
+      platform.env,
+    );
+    expect(malformed.status).toBe(400);
+    const noAdmin = createStudioApp(rollbackTenant, {
+      seedObjects: [],
+      principalId: "ordinary-user",
+    });
+    const deniedRollback = await noAdmin.request(
+      "http://localhost/api/extensions/custom.demo/install",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: "1.0.0", allowDowngrade: true }),
+      },
+      platform.env,
+    );
+    expect(deniedRollback.status).toBe(403);
+    const rolledBack = await install({
+      version: "1.0.0",
+      allowDowngrade: true,
+    });
+    expect(rolledBack.status).toBe(200);
+    expect(await rolledBack.json()).toMatchObject({
+      data: { id: "custom.demo", version: "1.0.0", enabled: true },
+    });
+  });
+});
+
+describe("studio plugin registry consumer", () => {
+  const registry = {
+    url: "https://registry.example",
+    token: "registry-secret",
+  };
+
+  it("fails closed for registry routes when tenant admin authorization is absent", async () => {
+    const studio = createStudioApp("registry-tenant", {
+      seedObjects: [],
+      principalId: "registry-user",
+      pluginRegistry: registry,
+    });
+    const list = await studio.request(
+      "http://localhost/api/plugin-store/registry",
+      {},
+      platform.env,
+    );
+    const imported = await studio.request(
+      "http://localhost/api/plugin-store/registry/import",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: "custom.demo",
+          version: "1.0.0",
+          sha256: "a".repeat(64),
+        }),
+      },
+      platform.env,
+    );
+    expect(list.status).toBe(403);
+    expect(imported.status).toBe(403);
+    expect(await list.text()).not.toContain(registry.token);
+  });
+
+  it("lists validated releases with cursor and keeps credentials server-side", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(
+          "https://registry.example/v1/plugins?cursor=next-1",
+        );
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${registry.token}`,
+        );
+        return Response.json({
+          data: [
+            {
+              id: "custom.demo",
+              version: "1.0.0",
+              label: "Demo",
+              sha256: "a".repeat(64),
+              sizeBytes: 123,
+              createdAt: "2026-09-30T12:00:00.000Z",
+            },
+          ],
+          cursor: null,
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-tenant", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const response = await studio.request(
+        "http://localhost/api/plugin-store/registry?cursor=next-1",
+        {},
+        platform.env,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      const body = (await response.json()) as any;
+      expect(body).toMatchObject({
+        configured: true,
+        cursor: null,
+        data: [{ id: "custom.demo" }],
+      });
+      expect(JSON.stringify(body)).not.toContain(registry.token);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects caller-supplied URLs before any registry fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-tenant", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const response = await studio.request(
+        "http://localhost/api/plugin-store/registry/import",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: "custom.demo",
+            version: "1.0.0",
+            sha256: "a".repeat(64),
+            url: "https://attacker.example/evil.zip",
+          }),
+        },
+        platform.env,
+      );
+      expect(response.status).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("checks the requested digest and manifest identity before persistence", async () => {
+    const zip = pluginZip();
+    const digestBytes = await crypto.subtle.digest(
+      "SHA-256",
+      zip as unknown as ArrayBuffer,
+    );
+    const digest = [...new Uint8Array(digestBytes)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const fetchMock = vi.fn(
+      async () => new Response(zip, { headers: { "x-plugin-sha256": digest } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-import-checks", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const request = (id: string, sha256: string) =>
+        studio.request(
+          "http://localhost/api/plugin-store/registry/import",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id, version: "1.0.0", sha256 }),
+          },
+          platform.env,
+        );
+      expect((await request("custom.demo", "a".repeat(64))).status).toBe(422);
+      expect((await request("custom.other", digest)).status).toBe(422);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("persists an imported artifact locally so it remains available during a registry outage", async () => {
+    const zip = pluginZip();
+    const digestBytes = await crypto.subtle.digest(
+      "SHA-256",
+      zip as unknown as ArrayBuffer,
+    );
+    const digest = [...new Uint8Array(digestBytes)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(zip, { headers: { "x-plugin-sha256": digest } }),
+      )
+      .mockRejectedValueOnce(new Error("registry unavailable"));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-import-outage", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const imported = await studio.request(
+        "http://localhost/api/plugin-store/registry/import",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: "custom.demo",
+            version: "1.0.0",
+            sha256: digest,
+          }),
+        },
+        platform.env,
+      );
+      expect(imported.status).toBe(200);
+      const catalog = await studio.request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      );
+      expect(catalog.status).toBe(200);
+      expect(await catalog.json()).toMatchObject({
+        data: [{ manifest: { id: "custom.demo" }, version: "1.0.0" }],
+      });
+      const unavailable = await studio.request(
+        "http://localhost/api/plugin-store/registry",
+        {},
+        platform.env,
+      );
+      expect(unavailable.status).toBe(503);
+      const stillLocal = await studio.request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      );
+      expect(stillLocal.status).toBe(200);
+      expect(await stillLocal.json()).toMatchObject({
+        data: [{ manifest: { id: "custom.demo" } }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("bounds expanded ZIP bytes and rejects repeated paths", async () => {
+    const oversized = makeZip([
+      { name: "dist/plugin.js", data: new Uint8Array(2 * 1024 * 1024 + 1) },
+    ]);
+    expect((await uploadZip("registry-zip-bounds", oversized)).status).toBe(
+      422,
+    );
+    const manifest = {
+      format: "savia.extension",
+      formatVersion: 1,
+      id: "custom.duplicate",
+      version: "1.0.0",
+      label: "Duplicate",
+      description: "Duplicate entry test.",
+      requires: [],
+      apiVersion: 1,
+    };
+    const duplicate = makeZip([
+      { name: "savia-extension.json", data: text(JSON.stringify(manifest)) },
+      { name: "dist/plugin.js", data: text("export function render() {}") },
+      { name: "dist/plugin.js", data: text("export function render() {}") },
+    ]);
+    expect((await uploadZip("registry-zip-duplicate", duplicate)).status).toBe(
+      422,
+    );
   });
 });

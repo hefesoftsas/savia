@@ -1,3 +1,5 @@
+import { runtimePluginRegistryForTenant } from "./studio/plugin-registry-config";
+import { createCollectionGateway } from "./studio/collection-gateway";
 import { remoteMcpResponse } from "./mcp-gateway";
 import { maintainRecordHistory } from "@savia/studio-server/record-history-storage";
 import { purgeStudioAudit } from "@savia/studio-server/audit-retention";
@@ -72,6 +74,7 @@ type AssistantSecrets = {
 
 export type RuntimeEnvironment = {
   SAVIA_WORKFLOW_ONLY_SCHEDULE?: string;
+  PLUGIN_REGISTRY_TENANTS?: string;
   DB: D1Database;
   DOCUMENTS: R2Bucket;
   REALTIME_HUB?: DurableObjectNamespace;
@@ -337,7 +340,14 @@ const runtime = {
           : {}),
         ...overrides.publicForms,
       },
-      overrides.collectionGatewayFactory,
+      (context) =>
+        (overrides.collectionGatewayFactory ?? createCollectionGateway)({
+          ...context,
+          pluginRegistry: runtimePluginRegistryForTenant(
+            environment.PLUGIN_REGISTRY_TENANTS,
+            context.tenant,
+          ),
+        }),
       identityBridgeKey,
     ).fetch(request, environment);
     return response;

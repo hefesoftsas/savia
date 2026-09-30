@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "savia-plugin-registry",
+  "compatibility_date": "2026-08-31",
+  "main": "src/index.ts",
+  "r2_buckets": [
+    {
+      "binding": "PLUGIN_REGISTRY",
+      "bucket_name": "savia-plugin-registry",
+    },
+  ],
+}

@@ -44,6 +44,7 @@ export type CollectionGatewayContext = {
   files: R2Bucket;
   tenant: string;
   publicApiBasePath?: string;
+  pluginRegistry?: { url: string; token: string };
   documentDelivery?: DocumentDeliveryBridge;
   actor: AppActor;
   accessPolicy?: AccessPolicy;
@@ -106,6 +107,7 @@ export function createCollectionGateway(context: CollectionGatewayContext) {
       documentDelivery: context.documentDelivery,
       apiBasePath: context.publicApiBasePath,
       entryGrantSecret: integrationKey,
+      pluginRegistry: context.pluginRegistry,
       policy: createNotificationPolicy(db),
       integrationFetch: context.collectionFetch,
       authorizeWorkflow: async ({ workspace }) =>

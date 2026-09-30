@@ -136,3 +136,28 @@ test("release plugins deploy to all workspaces using existing environment creden
     );
   }
 });
+
+test("registry deployment exposes Cloudflare credentials only to the deploy step", async () => {
+  const registry = await workflow("deploy-plugin-registry.yml");
+  const beforeSteps = registry.split("    steps:")[0];
+  assert.doesNotMatch(beforeSteps, /CLOUDFLARE_API_TOKEN/);
+  assert.match(
+    registry,
+    /name: Deploy registry[\s\S]*?env:[\s\S]*?CLOUDFLARE_API_TOKEN:/,
+  );
+  assert.doesNotMatch(registry, /r2 bucket delete|r2 object delete/);
+});
+
+test("environment deployments forward the private registry tenant map", async () => {
+  for (const name of ["deploy-preview.yml", "deploy-cloudflare.yml"]) {
+    const source = await workflow(name);
+    const upload = source.slice(
+      source.indexOf("name: Upload secrets"),
+      source.indexOf("name: Deploy savia-auth"),
+    );
+    assert.match(
+      upload,
+      /PLUGIN_REGISTRY_TENANTS: \$\{\{ secrets\.PLUGIN_REGISTRY_TENANTS \}\}/,
+    );
+  }
+});

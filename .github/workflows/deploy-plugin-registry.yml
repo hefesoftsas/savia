@@ -1,0 +1,46 @@
+name: Deploy shared plugin registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savia-plugin-registry-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: plugin-registry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @savia/plugin-registry test
+      - run: pnpm --filter @savia/plugin-registry typecheck
+      # The persistent R2 bucket is provisioned separately and never reset here.
+      - name: Deploy registry and its hashed credential configuration
+        working-directory: apps/plugin-registry
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_REGISTRY_API_TOKEN }}
+          REGISTRY_CREDENTIALS: ${{ secrets.PLUGIN_REGISTRY_CREDENTIALS }}
+        run: |
+          node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            const value = process.env.REGISTRY_CREDENTIALS;
+            if (!value || !Array.isArray(JSON.parse(value)) || !JSON.parse(value).length) throw new Error("Missing registry credentials");
+            writeFileSync(".registry-secrets.json", JSON.stringify({REGISTRY_CREDENTIALS:value}), {mode:0o600});
+          '
+          trap 'rm -f .registry-secrets.json' EXIT
+          pnpm exec wrangler deploy
+          pnpm exec wrangler secret bulk .registry-secrets.json

@@ -1,3 +1,4 @@
+import { PluginRegistry } from "./plugin-registry";
 import { resolveLocalizedContent } from "@savia/studio-shared/plugin-localization";
 import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
 import { useAppLocale, useMessages } from "@/i18n/core";
@@ -312,6 +313,13 @@ export default function PluginStoreManager({
   return (
     <section aria-label={t("Mis plugins")} className="space-y-5">
       <RemoteChangesNotice {...remoteChanges} />
+      <PluginRegistry
+        key={getStudioRuntime().tenantId}
+        onImported={async () => {
+          await reload();
+          await onChanged();
+        }}
+      />
       <div className="savia-surface-card overflow-hidden">
         <header className="flex flex-wrap items-center gap-2 border-b px-6 py-5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">

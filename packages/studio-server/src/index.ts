@@ -79,7 +79,7 @@ import {
   type SolutionOptions,
 } from "./solutions";
 import { registerExtensions, type ExtensionOptions } from "./extensions";
-import { registerPluginStore } from "./plugin-store";
+import { registerPluginStore, type PluginStoreOptions } from "./plugin-store";
 import { registerExtensionActions } from "./extension-actions";
 import { registerExtensionSummaries } from "./extension-summaries";
 import { registerWorkflows, type WorkflowOptions } from "./workflows/routes";
@@ -113,6 +113,7 @@ export function createStudioApp(
     documentDelivery?: DocumentDeliveryBridge;
   } & SolutionOptions &
     ExtensionOptions &
+    PluginStoreOptions &
     WorkflowOptions &
     NotificationRouteOptions,
 ) {
