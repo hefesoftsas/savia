@@ -46,7 +46,7 @@ The last command reads the JSON secret interactively. Generate a separate random
 
 The Worker denies all access before valid credentials exist. Use its HTTPS origin or attach a dedicated domain. Keep bucket lifecycle rules from expiring release objects. Configure an appropriate R2 bucket retention lock and independent scheduled backups of **both objects and custom metadata**; API immutability alone does not prevent a Cloudflare account operator from deleting the bucket. Back up credential configuration securely and test restoration with a pinned release. Retention and backup policies require operator configuration; this implementation does not silently create a retention lock or backup schedule.
 
-`.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. Its `plugin-registry` GitHub environment needs `CLOUDFLARE_ACCOUNT_ID`, a scoped `CLOUDFLARE_REGISTRY_API_TOKEN`, and `PLUGIN_REGISTRY_CREDENTIALS`. Provision the bucket before running it. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
+`.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. It uses the protected `production` GitHub environment with its existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, plus `PLUGIN_REGISTRY_CREDENTIALS`. Credentials are available only in the deployment step; installation and tests run without them. The independent Worker and bucket remain outside preview teardown. Provision the bucket before running it. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
 
 ## Configure consumers
 
@@ -110,3 +110,11 @@ node --test scripts/plugin-registry.test.mjs scripts/dev-api-runtime.test.mjs
 ```
 
 Registry tests exercise real emulated R2 through workerd. They do not assert that a remote bucket, retention policy, backup schedule, or deployment has been provisioned.
+
+## Provisioned shared service (2026-09-30)
+
+The shared service is deployed at `https://savia-plugin-registry.jose-douglas-dev.workers.dev` with the dedicated `savia-plugin-registry` R2 bucket. A 30-day retention rule covers every object. The `savia` namespace currently contains the 25 first-party release plugins, including both customer portal versions (26 releases total). `deployment/plugins/registry.lock.json` pins the selected releases; it does not change the existing automatic deployment policy.
+
+The initial publication reused 24 retained ZIPs after comparing their contents with the repository packages (the portal's earlier version differs only by its manifest version). The current portal and quotes releases were packaged from the repository. Tenant-authored packages were not shared. All six configured reader credentials (four preview tenants and two production tenants) were verified, read-only publication was rejected, and all 26 release ZIPs were downloaded with verified digests into a protected local recovery copy. Scheduled independent backups remain an operator follow-up.
+
+The environment-specific tenant maps are stored in the API Worker secrets and GitHub environment secrets. They take effect in the UI when the consumer changes pass review and deploy through the existing preview/production gates. The central service is already active independently of that rollout.

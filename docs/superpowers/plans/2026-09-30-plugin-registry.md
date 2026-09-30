@@ -51,4 +51,4 @@ The user approved implementation with “si hazlo”. Proceed without additional
 
 ## Operational work outside this implementation
 
-The central Cloudflare bucket, remote credentials, tenant mappings, retention and backups have not been provisioned. Preview and production have not been deployed or migrated by this task. Docker configuration and typechecking are covered; a live Docker integration run was not performed.
+The central Worker and R2 bucket are provisioned, with scoped remote credentials, exact tenant mappings in both API Workers and GitHub environments, and a 30-day retention rule. All 26 published releases were downloaded and digest-verified into a protected local recovery copy. Scheduled independent backups are not configured. Preview and production consumer code awaits the protected pull-request and deployment gates. Docker configuration and typechecking are covered; a live Docker integration run was not performed.
