@@ -29,6 +29,11 @@ const PublicForm = lazy(async () => {
     await import("./features/public-forms/public-form-page");
   return { default: PublicFormPage };
 });
+const PublicRegistration = lazy(async () => {
+  const { RegistrationPage } =
+    await import("./features/tenant-registration/registration-page");
+  return { default: RegistrationPage };
+});
 /** Public visitors never initialize authenticated services or the admin replica. */
 export function ApplicationRoot({
   pathname = window.location.pathname,
@@ -36,7 +41,9 @@ export function ApplicationRoot({
   pathname?: string;
 }) {
   const publicPath =
-    pathname === "/public/forms" || pathname.startsWith("/public/forms/");
+    pathname === "/register" ||
+    pathname === "/public/forms" ||
+    pathname.startsWith("/public/forms/");
   if (publicPath) return <PublicApplication pathname={pathname} />;
   return (
     <Suspense
@@ -99,7 +106,9 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
         </label>
       </div>
       <Suspense fallback={<PwaSplash message={t("Cargando…")} />}>
-        {match ? (
+        {pathname === "/register" ? (
+          <PublicRegistration />
+        ) : match ? (
           <PublicForm token={match[1]} />
         ) : (
           <main className="p-6" role="alert">

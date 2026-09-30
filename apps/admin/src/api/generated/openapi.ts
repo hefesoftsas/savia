@@ -701,7 +701,10 @@ export interface paths {
               microsoftEnabled: boolean;
               /** @default false */
               allowRegistration: boolean;
+              /** @default false */
+              allowMicrosoftPersonalAccounts: boolean;
               microsoftTenantId: string;
+              emailReady?: boolean;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
               googleCallbackUrl: string;
@@ -727,6 +730,8 @@ export interface paths {
             microsoftEnabled: boolean;
             /** @default false */
             allowRegistration?: boolean;
+            /** @default false */
+            allowMicrosoftPersonalAccounts?: boolean;
             microsoftTenantId: string;
           };
         };
@@ -744,7 +749,10 @@ export interface paths {
               microsoftEnabled: boolean;
               /** @default false */
               allowRegistration: boolean;
+              /** @default false */
+              allowMicrosoftPersonalAccounts: boolean;
               microsoftTenantId: string;
+              emailReady?: boolean;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
               googleCallbackUrl: string;
@@ -778,7 +786,10 @@ export interface paths {
               microsoftEnabled: boolean;
               /** @default false */
               allowRegistration: boolean;
+              /** @default false */
+              allowMicrosoftPersonalAccounts: boolean;
               microsoftTenantId: string;
+              emailReady?: boolean;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
               googleCallbackUrl: string;
@@ -788,6 +799,352 @@ export interface paths {
         };
       };
     };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/registration-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Safe tenant registration settings and readiness */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              allowEmailRegistration: boolean;
+              /** @enum {string} */
+              captchaMode: "inherit" | "tenant";
+              siteKey: string;
+              secretConfigured: boolean;
+              emailReady: boolean;
+              revision: string;
+              passwordAllowed?: boolean;
+              /** @enum {string} */
+              captchaProvider: "turnstile" | "altcha";
+              captchaReady: boolean;
+              registrationReady: boolean;
+            };
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            allowEmailRegistration: boolean;
+            /** @enum {string} */
+            captchaMode: "inherit" | "tenant";
+            siteKey?: string;
+            secretKey?: string | null;
+          };
+        };
+      };
+      responses: {
+        /** @description Safe tenant registration settings and readiness */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              allowEmailRegistration: boolean;
+              /** @enum {string} */
+              captchaMode: "inherit" | "tenant";
+              siteKey: string;
+              secretConfigured: boolean;
+              emailReady: boolean;
+              revision: string;
+              passwordAllowed?: boolean;
+              /** @enum {string} */
+              captchaProvider: "turnstile" | "altcha";
+              captchaReady: boolean;
+              registrationReady: boolean;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Safe tenant registration settings and readiness */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              allowEmailRegistration: boolean;
+              /** @enum {string} */
+              captchaMode: "inherit" | "tenant";
+              siteKey: string;
+              secretConfigured: boolean;
+              emailReady: boolean;
+              revision: string;
+              passwordAllowed?: boolean;
+              /** @enum {string} */
+              captchaProvider: "turnstile" | "altcha";
+              captchaReady: boolean;
+              registrationReady: boolean;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/public/registration": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant registration response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            passwordConfirmation: string;
+            captchaToken: string;
+            /** Format: uuid */
+            requestId: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Tenant registration response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/public/registration/challenge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant registration response */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        429: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Tenant registration response */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;

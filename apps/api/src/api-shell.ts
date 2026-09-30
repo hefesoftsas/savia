@@ -1,3 +1,8 @@
+import {
+  registrationBridge,
+  registrationReadiness,
+} from "./tenant-registration/settings-routes";
+import type { CaptchaOptions } from "./public-forms/captcha";
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { returnOriginFromRequest } from "./auth/admin-oauth";
 import { readTenantBrandingForRequest } from "./tenant-branding/service";
@@ -59,6 +64,7 @@ const localPublicAuthUrls = publicAuthUrls("http://127.0.0.1:8787");
 
 function publicAuthHeaders(request: Request): Headers {
   const headers = new Headers(request.headers);
+  headers.delete("x-savia-registration-ready");
   headers.delete("x-savia-tenant-branding");
   headers.delete("x-savia-tenant-email-id");
   headers.delete("x-savia-social-tenant-id");
@@ -365,6 +371,7 @@ export function createApiShell(
   configureMiddleware?: (app: OpenAPIHono) => void,
   tenantHost?: { canonicalHost?: string },
   identityBridgeKey?: string,
+  registrationCaptcha?: CaptchaOptions,
 ): OpenAPIHono {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
@@ -520,6 +527,8 @@ export function createApiShell(
       [
         "/api/auth/login",
         "/api/auth/forgot-password",
+        "/api/auth/microsoft-email-verification",
+        "/api/auth/microsoft-email-verification/verify",
         "/api/auth/mfa-enroll",
         "/api/auth/consent",
         "/api/auth/oauth-ui.css",
@@ -560,6 +569,32 @@ export function createApiShell(
           if (tenant) {
             headers.set("x-savia-tenant-email-id", String(tenant.id));
             headers.set("x-savia-bridge-key", identityBridgeKey);
+            if (
+              context.req.path === "/api/auth/login" &&
+              registrationCaptcha &&
+              new URL(context.req.url).hostname !== canonicalHost
+            ) {
+              const effective = (await registrationBridge(
+                resolvedAuthService,
+                identityBridgeKey,
+                tenant.id,
+                "GET",
+                undefined,
+                true,
+              )) as Parameters<typeof registrationReadiness>[1] & {
+                passwordAllowed?: boolean;
+              };
+              const ready = registrationReadiness(
+                registrationCaptcha,
+                effective,
+              );
+              if (
+                ready.registrationReady &&
+                effective.passwordAllowed === true &&
+                registrationCaptcha.rateLimiter
+              )
+                headers.set("x-savia-registration-ready", "true");
+            }
           }
         }
       } catch {
@@ -575,13 +610,19 @@ export function createApiShell(
       ),
     );
   }
-  app.use(
-    "/v1/*",
-    authenticationMiddleware(
-      db,
-      authenticator ??
-        betterAuthAuthenticator(resolvedAuthService, oauthResource),
-    ),
+  const anonymousRegistration = (path: string) =>
+    ["/v1/public/registration", "/v1/public/registration/challenge"].includes(
+      path,
+    );
+  const authenticate = authenticationMiddleware(
+    db,
+    authenticator ??
+      betterAuthAuthenticator(resolvedAuthService, oauthResource),
+  );
+  app.use("/v1/*", (context, next) =>
+    anonymousRegistration(context.req.path)
+      ? next()
+      : authenticate(context, next),
   );
   app.use(
     "/api/assistant/*",
@@ -601,7 +642,9 @@ export function createApiShell(
   );
   if (canonicalHost) {
     const guard = tenantHostGuard(db, canonicalHost);
-    app.use("/v1/*", guard);
+    app.use("/v1/*", (context, next) =>
+      anonymousRegistration(context.req.path) ? next() : guard(context, next),
+    );
     app.use("/api/assistant/*", guard);
   }
   registerHealthRoute(app, db);

@@ -21,6 +21,10 @@
     {
       "filename": "0005_social_registration.sql",
       "sha256": "1ac9863f0e7fa3769aa8e2bd10d84fd61e3f10e5fb955ae5c95e52d75b31fd18"
+    },
+    {
+      "filename": "0006_email_registration.sql",
+      "sha256": "1107168c2e3b7c35135df070af078425a70e8986e23192c819f9d41cf5fbf776"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -110,6 +114,11 @@
       "type": "index",
       "name": "crm_sync_changes_scope",
       "table": "crm_sync_changes"
+    },
+    {
+      "type": "index",
+      "name": "email_registration_audit_tenant_created_index",
+      "table": "email_registration_audit"
     },
     {
       "type": "index",
@@ -210,6 +219,11 @@
       "type": "index",
       "name": "public_forms_management",
       "table": "public_forms"
+    },
+    {
+      "type": "index",
+      "name": "registration_captcha_consumption_expiry_index",
+      "table": "registration_captcha_consumption"
     },
     {
       "type": "index",
@@ -458,6 +472,21 @@
     },
     {
       "type": "table",
+      "name": "email_registration_audit",
+      "table": "email_registration_audit"
+    },
+    {
+      "type": "table",
+      "name": "email_registration_cancellation",
+      "table": "email_registration_cancellation"
+    },
+    {
+      "type": "table",
+      "name": "email_registration_ledger",
+      "table": "email_registration_ledger"
+    },
+    {
+      "type": "table",
       "name": "extension_action_runs",
       "table": "extension_action_runs"
     },
@@ -595,6 +624,11 @@
       "type": "table",
       "name": "public_forms",
       "table": "public_forms"
+    },
+    {
+      "type": "table",
+      "name": "registration_captcha_consumption",
+      "table": "registration_captcha_consumption"
     },
     {
       "type": "table",
@@ -2468,6 +2502,238 @@
       "uniqueKeys": [
         {
           "columns": ["tenant_id", "principal_id", "mutation_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 0
+    },
+    {
+      "name": "email_registration_audit",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "attempt_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "reason",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "email_registration_cancellation",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "attempt_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cancelled",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["attempt_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "email_registration_ledger",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "attempt_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "auth_subject",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "email",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "revision",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "membership_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "identity_tenant_membership",
+          "from": "membership_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "identity_principal",
+          "from": "principal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["membership_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["principal_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["auth_subject"],
+          "origin": "u"
+        },
+        {
+          "columns": ["attempt_id"],
           "origin": "pk"
         }
       ],
@@ -4564,6 +4830,83 @@
         }
       ],
       "checkCount": 5
+    },
+    {
+      "name": "registration_captcha_consumption",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "proof_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "request_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "fingerprint",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["request_id"],
+          "origin": "u"
+        },
+        {
+          "columns": ["proof_hash"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
     },
     {
       "name": "request_page_runs",
@@ -8255,45 +8598,6 @@
       "uniqueKeys": [
         {
           "columns": ["tenant_id", "path"],
-          "origin": "pk"
-        }
-      ],
-      "checkCount": 0
-    },
-    {
-      "name": "tenant_slug_aliases",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "slug",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "tenant_id",
-          "type": "BIGINT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": [
-        {
-          "id": 0,
-          "table": "tenants",
-          "from": "tenant_id",
-          "to": "id",
-          "on_update": "NO ACTION",
-          "on_delete": "CASCADE"
-        }
-      ],
-      "seedRows": 0,
-      "uniqueKeys": [
-        {
-          "columns": ["slug"],
           "origin": "pk"
         }
       ],

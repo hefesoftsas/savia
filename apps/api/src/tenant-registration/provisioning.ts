@@ -7,7 +7,6 @@ type RegistrationInput = {
   subject: string;
   email: string;
   displayName: string;
-  provider: "google" | "microsoft";
   revision: string;
 };
 
@@ -29,12 +28,11 @@ const registrationInput = z
     subject: z.string().trim().min(1).max(512),
     email: z.string().trim().email().max(254),
     displayName: z.string().trim().min(1).max(200),
-    provider: z.enum(["google", "microsoft"]),
     revision: z.string().trim().min(1).max(200),
   })
   .strict();
 
-type SocialBridge = Pick<AuthService, "fetch">;
+type EmailBridge = Pick<AuthService, "fetch">;
 
 function sameAttempt(row: LedgerRow, input: RegistrationInput): boolean {
   return (
@@ -42,7 +40,6 @@ function sameAttempt(row: LedgerRow, input: RegistrationInput): boolean {
     row.tenantId === input.tenantId &&
     row.subject === input.subject &&
     row.email === input.email &&
-    row.provider === input.provider &&
     row.revision === input.revision
   );
 }
@@ -53,7 +50,7 @@ async function ledgerByAttempt(
 ): Promise<LedgerRow | null> {
   return db
     .prepare(
-      "SELECT attempt_id AS attemptId,tenant_id AS tenantId,auth_subject AS subject,email,provider,revision,principal_id,membership_id FROM social_registration_ledger WHERE attempt_id=?",
+      "SELECT attempt_id AS attemptId,tenant_id AS tenantId,auth_subject AS subject,email,revision,principal_id,membership_id FROM email_registration_ledger WHERE attempt_id=?",
     )
     .bind(attemptId)
     .first<LedgerRow>();
@@ -65,7 +62,7 @@ async function cancellationExists(
 ): Promise<boolean> {
   const cancellation = await db
     .prepare(
-      "SELECT attempt_id FROM social_registration_cancellation WHERE attempt_id=? AND cancelled=1",
+      "SELECT attempt_id FROM email_registration_cancellation WHERE attempt_id=? AND cancelled=1",
     )
     .bind(attemptId)
     .first<{ attempt_id: string }>();
@@ -102,7 +99,7 @@ async function recordAudit(
 ): Promise<void> {
   await db
     .prepare(
-      "INSERT INTO social_registration_audit(id,tenant_id,attempt_id,event,reason,created_at) VALUES(?,?,?,?,?,?)",
+      "INSERT INTO email_registration_audit(id,tenant_id,attempt_id,event,reason,created_at) VALUES(?,?,?,?,?,?)",
     )
     .bind(
       crypto.randomUUID(),
@@ -116,7 +113,7 @@ async function recordAudit(
 }
 
 async function registrationPolicy(
-  bridge: SocialBridge | undefined,
+  bridge: EmailBridge | undefined,
   key: string | undefined,
   input: RegistrationInput,
 ): Promise<{ allowed: boolean; reason?: string }> {
@@ -126,7 +123,7 @@ async function registrationPolicy(
   try {
     response = await bridge.fetch(
       new Request(
-        `https://savia-auth.internal/_internal/tenant-social/${input.tenantId}`,
+        `https://savia-auth.internal/_internal/tenant-registration/${input.tenantId}`,
         { headers: { "x-savia-bridge-key": key } },
       ),
     );
@@ -135,18 +132,12 @@ async function registrationPolicy(
   }
   if (!response.ok) return { allowed: false, reason: "policy_unavailable" };
   const settings = (await response.json().catch(() => null)) as {
-    active?: unknown;
-    allowRegistration?: unknown;
-    googleEnabled?: unknown;
-    microsoftEnabled?: unknown;
+    allowEmailRegistration?: unknown;
     revision?: unknown;
   } | null;
   if (
-    settings?.active !== true ||
-    settings.allowRegistration !== true ||
-    settings.revision !== input.revision ||
-    (input.provider === "google" && settings.googleEnabled !== true) ||
-    (input.provider === "microsoft" && settings.microsoftEnabled !== true)
+    settings?.allowEmailRegistration !== true ||
+    settings.revision !== input.revision
   )
     return { allowed: false, reason: "policy_rejected" };
   return { allowed: true };
@@ -164,18 +155,18 @@ function conflictMessage(error: unknown): "capacity" | "identity" | null {
   return null;
 }
 
-export async function finalizeSocialRegistration(
+export async function finalizeEmailRegistration(
   db: D1Database,
   input: RegistrationInput,
 ): Promise<RegistrationResult> {
   if (await cancellationExists(db, input.attemptId))
-    throw new Error("SOCIAL_REGISTRATION_CANCELLED");
+    throw new Error("EMAIL_REGISTRATION_CANCELLED");
   const previous = await ledgerByAttempt(db, input.attemptId);
   if (previous) {
     if (!sameAttempt(previous, input))
-      throw new Error("SOCIAL_REGISTRATION_CONFLICT");
+      throw new Error("EMAIL_REGISTRATION_CONFLICT");
     if (!(await finalizedRowsAreActive(db, previous, input)))
-      throw new Error("SOCIAL_REGISTRATION_STALE");
+      throw new Error("EMAIL_REGISTRATION_STALE");
     return {
       principalId: previous.principal_id,
       membershipId: previous.membership_id,
@@ -187,7 +178,7 @@ export async function finalizeSocialRegistration(
     .prepare("SELECT id FROM tenants WHERE id=? AND is_active=1")
     .bind(input.tenantId)
     .first<{ id: number }>();
-  if (!tenant) throw new Error("SOCIAL_REGISTRATION_TENANT_INACTIVE");
+  if (!tenant) throw new Error("EMAIL_REGISTRATION_TENANT_INACTIVE");
 
   const existingSubject = await db
     .prepare(
@@ -202,7 +193,7 @@ export async function finalizeSocialRegistration(
     .bind(input.email)
     .first<{ id: string }>();
   if (existingSubject || existingEmail)
-    throw new Error("SOCIAL_REGISTRATION_IDENTITY_CONFLICT");
+    throw new Error("EMAIL_REGISTRATION_IDENTITY_CONFLICT");
 
   const principalId = crypto.randomUUID();
   const membershipId = crypto.randomUUID();
@@ -210,12 +201,12 @@ export async function finalizeSocialRegistration(
   await db.batch([
     db
       .prepare(
-        "INSERT INTO social_registration_cancellation(attempt_id,cancelled,created_at) VALUES(?,0,?) ON CONFLICT(attempt_id) DO UPDATE SET attempt_id=excluded.attempt_id",
+        "INSERT INTO email_registration_cancellation(attempt_id,cancelled,created_at) VALUES(?,0,?) ON CONFLICT(attempt_id) DO UPDATE SET attempt_id=excluded.attempt_id",
       )
       .bind(input.attemptId, now),
     db
       .prepare(
-        "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) SELECT ?,'savia:better-auth',?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM social_registration_cancellation WHERE attempt_id=? AND cancelled=1)",
+        "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) SELECT ?,'savia:better-auth',?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM email_registration_cancellation WHERE attempt_id=? AND cancelled=1)",
       )
       .bind(
         principalId,
@@ -234,14 +225,13 @@ export async function finalizeSocialRegistration(
       .bind(membershipId, principalId, input.tenantId, now, now),
     db
       .prepare(
-        "INSERT INTO social_registration_ledger(attempt_id,auth_subject,tenant_id,email,provider,revision,principal_id,membership_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO email_registration_ledger(attempt_id,auth_subject,tenant_id,email,revision,principal_id,membership_id,created_at) VALUES(?,?,?,?,?,?,?,?)",
       )
       .bind(
         input.attemptId,
         input.subject,
         input.tenantId,
         input.email,
-        input.provider,
         input.revision,
         principalId,
         membershipId,
@@ -249,79 +239,32 @@ export async function finalizeSocialRegistration(
       ),
     db
       .prepare(
-        "INSERT INTO social_registration_audit(id,tenant_id,attempt_id,event,reason,created_at) VALUES(?,?,?,'finalized',NULL,?)",
+        "INSERT INTO email_registration_audit(id,tenant_id,attempt_id,event,reason,created_at) VALUES(?,?,?,'finalized',NULL,?)",
       )
       .bind(crypto.randomUUID(), input.tenantId, input.attemptId, now),
   ]);
   return { principalId, membershipId, created: true };
 }
 
-export function registerSocialRegistrationRoutes(
+export function registerEmailRegistrationRoutes(
   app: OpenAPIHono,
   db: D1Database,
-  authService?: SocialBridge,
+  authService?: EmailBridge,
   bridgeKey?: string,
 ): void {
-  app.post("/_internal/social-registration/eligible", async (c) => {
-    if (!bridgeKey?.trim() || c.req.header("x-savia-bridge-key") !== bridgeKey)
-      return c.json({ error: "Forbidden" }, 401);
-    const parsed = registrationInput.safeParse(
-      await c.req.json().catch(() => null),
-    );
-    if (!parsed.success || parsed.data.provider !== "microsoft")
-      return c.json({ error: "Invalid Microsoft binding" }, 400);
-    const input = parsed.data;
-    if (!authService)
-      return c.json({ error: "Authentication unavailable" }, 503);
-    const response = await authService
-      .fetch(
-        new Request(
-          `https://savia-auth.internal/_internal/tenant-social/${input.tenantId}`,
-          { headers: { "x-savia-bridge-key": bridgeKey } },
-        ),
-      )
-      .catch(() => null);
-    const policy = response?.ok
-      ? ((await response.json().catch(() => null)) as {
-          active?: boolean;
-          microsoftEnabled?: boolean;
-          allowMicrosoftPersonalAccounts?: boolean;
-          revision?: string;
-        } | null)
-      : null;
-    if (
-      !policy?.active ||
-      !policy.microsoftEnabled ||
-      !policy.allowMicrosoftPersonalAccounts ||
-      policy.revision !== input.revision
-    )
-      return c.json({ error: "Microsoft linking not authorized" }, 403);
-    const member = await db
-      .prepare(
-        "SELECT p.id FROM identity_principal p JOIN identity_tenant_membership m ON m.principal_id=p.id JOIN tenants t ON t.id=m.tenant_id WHERE p.issuer='savia:better-auth' AND p.subject=? AND p.email=? AND p.is_active=1 AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin')",
-      )
-      .bind(input.subject, input.email, input.tenantId)
-      .first();
-    if (!member)
-      return c.json(
-        { error: "Precreated active tenant membership required" },
-        403,
-      );
-    return c.json({ eligible: true }, 200);
-  });
-  app.post("/_internal/social-registration", async (c) => {
+  app.post("/_internal/email-registration", async (c) => {
     if (!bridgeKey?.trim())
-      return c.json({ error: "Social registration service unavailable." }, 503);
+      return c.json({ error: "Email registration service unavailable." }, 503);
     if (c.req.header("x-savia-bridge-key") !== bridgeKey)
       return c.json({ error: "Forbidden" }, 401);
     const parsed = registrationInput.safeParse(
       await c.req.json().catch(() => null),
     );
     if (!parsed.success)
-      return c.json({ error: "Invalid social registration." }, 400);
+      return c.json({ error: "Invalid email registration." }, 400);
     const input = parsed.data;
     if (!authService)
-      return c.json({ error: "Social registration policy unavailable." }, 503);
+      return c.json({ error: "Email registration policy unavailable." }, 503);
 
     const policy = await registrationPolicy(authService, bridgeKey, input);
     if (!policy.allowed) {
@@ -335,17 +278,17 @@ export function registerSocialRegistrationRoutes(
         ).catch(() => undefined);
       return c.json(
         {
-          error: "Social registration is not allowed by current tenant policy.",
+          error: "Email registration is not allowed by current tenant policy.",
         },
         policy.reason === "policy_unavailable" ? 503 : 409,
       );
     }
     try {
-      return c.json(await finalizeSocialRegistration(db, input), 200);
+      return c.json(await finalizeEmailRegistration(db, input), 200);
     } catch (error) {
       if (await cancellationExists(db, input.attemptId))
         return c.json(
-          { error: "Social registration attempt was cancelled." },
+          { error: "Email registration attempt was cancelled." },
           409,
         );
       const replay = await ledgerByAttempt(db, input.attemptId).catch(
@@ -362,7 +305,7 @@ export function registerSocialRegistrationRoutes(
             200,
           );
         return c.json(
-          { error: "Social registration result is no longer active." },
+          { error: "Email registration result is no longer active." },
           409,
         );
       }
@@ -377,25 +320,25 @@ export function registerSocialRegistrationRoutes(
         );
       if (
         error instanceof Error &&
-        error.message === "SOCIAL_REGISTRATION_CONFLICT"
+        error.message === "EMAIL_REGISTRATION_CONFLICT"
       )
         return c.json(
           {
             error:
-              "Social registration attempt conflicts with an existing result.",
+              "Email registration attempt conflicts with an existing result.",
           },
           409,
         );
       if (
         error instanceof Error &&
-        (error.message === "SOCIAL_REGISTRATION_TENANT_INACTIVE" ||
-          error.message === "SOCIAL_REGISTRATION_STALE")
+        (error.message === "EMAIL_REGISTRATION_TENANT_INACTIVE" ||
+          error.message === "EMAIL_REGISTRATION_STALE")
       )
         return c.json(
           {
             error:
-              error.message === "SOCIAL_REGISTRATION_STALE"
-                ? "Social registration result is no longer active."
+              error.message === "EMAIL_REGISTRATION_STALE"
+                ? "Email registration result is no longer active."
                 : "Tenant is inactive.",
           },
           409,
@@ -405,28 +348,28 @@ export function registerSocialRegistrationRoutes(
       if (
         reason === "identity" ||
         (error instanceof Error &&
-          error.message === "SOCIAL_REGISTRATION_IDENTITY_CONFLICT")
+          error.message === "EMAIL_REGISTRATION_IDENTITY_CONFLICT")
       )
         return c.json(
-          { error: "Social identity conflicts with an existing account." },
+          { error: "Email identity conflicts with an existing account." },
           409,
         );
       return c.json(
-        { error: "Social registration could not be finalized." },
+        { error: "Email registration could not be finalized." },
         500,
       );
     }
   });
 
-  app.delete("/_internal/social-registration/:attemptId", async (c) => {
+  app.delete("/_internal/email-registration/:attemptId", async (c) => {
     if (!bridgeKey?.trim())
-      return c.json({ error: "Social registration service unavailable." }, 503);
+      return c.json({ error: "Email registration service unavailable." }, 503);
     if (c.req.header("x-savia-bridge-key") !== bridgeKey)
       return c.json({ error: "Forbidden" }, 401);
     const attemptId = c.req.param("attemptId");
     await db
       .prepare(
-        "INSERT INTO social_registration_cancellation(attempt_id,cancelled,created_at) VALUES(?,1,?) ON CONFLICT(attempt_id) DO UPDATE SET cancelled=1",
+        "INSERT INTO email_registration_cancellation(attempt_id,cancelled,created_at) VALUES(?,1,?) ON CONFLICT(attempt_id) DO UPDATE SET cancelled=1",
       )
       .bind(attemptId, new Date().toISOString())
       .run();
@@ -454,7 +397,7 @@ export function registerSocialRegistrationRoutes(
         .bind(row.principal_id, row.subject, row.email),
       db
         .prepare(
-          "DELETE FROM social_registration_ledger WHERE attempt_id=? AND (NOT EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=?) OR (EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.issuer='savia:better-auth' AND p.subject=? AND p.email=? AND p.is_active=1) AND NOT EXISTS(SELECT 1 FROM identity_tenant_membership m WHERE m.principal_id=?) AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=? ) AND NOT EXISTS(SELECT 1 FROM access_assignments a WHERE a.principal_id=? AND a.role_id NOT LIKE 'builtin:%')))",
+          "DELETE FROM email_registration_ledger WHERE attempt_id=? AND (NOT EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=?) OR (EXISTS(SELECT 1 FROM identity_principal p WHERE p.id=? AND p.issuer='savia:better-auth' AND p.subject=? AND p.email=? AND p.is_active=1) AND NOT EXISTS(SELECT 1 FROM identity_tenant_membership m WHERE m.principal_id=?) AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=? ) AND NOT EXISTS(SELECT 1 FROM access_assignments a WHERE a.principal_id=? AND a.role_id NOT LIKE 'builtin:%')))",
         )
         .bind(
           attemptId,
@@ -468,7 +411,7 @@ export function registerSocialRegistrationRoutes(
         ),
       db
         .prepare(
-          "INSERT INTO social_registration_audit(id,tenant_id,attempt_id,event,reason,created_at) SELECT ?,?,?,'compensated',NULL,? WHERE NOT EXISTS(SELECT 1 FROM social_registration_ledger WHERE attempt_id=?)",
+          "INSERT INTO email_registration_audit(id,tenant_id,attempt_id,event,reason,created_at) SELECT ?,?,?,'compensated',NULL,? WHERE NOT EXISTS(SELECT 1 FROM email_registration_ledger WHERE attempt_id=?)",
         )
         .bind(crypto.randomUUID(), row.tenantId, attemptId, now, attemptId),
     ]);

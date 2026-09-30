@@ -6,7 +6,8 @@ import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 
-type Screen = "login" | "enroll" | "consent" | "verified";
+type Screen =
+  "login" | "enroll" | "consent" | "verified" | "microsoft-verification";
 
 function SaviaMark({ branding }: { branding?: TenantBranding }) {
   return (
@@ -228,12 +229,14 @@ function LoginContent({
   initialPanel,
   initialNotice,
   emailAvailable = false,
+  allowEmailRegistration = false,
 }: {
   tenantSlug?: string | null;
   branding?: TenantBranding;
   initialPanel?: "forgot" | "verify";
   initialNotice?: string;
   emailAvailable?: boolean;
+  allowEmailRegistration?: boolean;
 } = {}) {
   const workspaceKicker = tenantSlug
     ? `Espacio de trabajo · ${tenantSlug}`
@@ -327,6 +330,11 @@ function LoginContent({
       </form>
       {tenantSlug ? (
         <>
+          {allowEmailRegistration ? (
+            <a className="oauth-account-action" href="/register">
+              Crear una cuenta
+            </a>
+          ) : null}
           <div className="oauth-federated" data-social-login hidden>
             <div className="oauth-login-divider">
               <span>o continúa con</span>
@@ -732,16 +740,52 @@ export function renderOAuthSurface(
     initialPanel?: "forgot" | "verify";
     initialNotice?: string;
     emailAvailable?: boolean;
+    allowEmailRegistration?: boolean;
+    verification?: { id: string; email: string; notice?: string };
   },
 ): string {
   const content =
-    screen === "login" ? (
+    screen === "microsoft-verification" ? (
+      <Shell screen="verified" branding={options?.branding}>
+        <div className="oauth-heading">
+          <p className="oauth-kicker">Microsoft</p>
+          <h1>Verifica tu correo para continuar</h1>
+          <p>
+            Confirma que este correo te pertenece para acceder a tu equipo. Abre
+            el enlace en este navegador.
+          </p>
+        </div>
+        {options?.verification?.notice && (
+          <p role="status">{options.verification.notice}</p>
+        )}
+        <form
+          method="post"
+          action="/api/auth/microsoft-email-verification/send"
+        >
+          <input type="hidden" name="id" value={options?.verification?.id} />
+          <Label htmlFor="verification-email">Correo electrónico</Label>
+          <Input
+            id="verification-email"
+            name="email"
+            type="email"
+            defaultValue={options?.verification?.email}
+            autoComplete="email"
+            required
+          />
+          <Button type="submit">Enviar enlace de verificación</Button>
+        </form>
+        <a className="oauth-action-link" href="/api/auth/login">
+          Volver al inicio de sesión
+        </a>
+      </Shell>
+    ) : screen === "login" ? (
       <LoginContent
         tenantSlug={options?.tenantSlug}
         branding={options?.branding}
         initialPanel={options?.initialPanel}
         initialNotice={options?.initialNotice}
         emailAvailable={options?.emailAvailable}
+        allowEmailRegistration={options?.allowEmailRegistration}
       />
     ) : screen === "enroll" ? (
       <EnrollmentContent branding={options?.branding} />

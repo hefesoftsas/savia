@@ -1,3 +1,7 @@
+import {
+  accountEmailAvailable,
+  type AccountEmailDependencies,
+} from "./account-email";
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import {
   APIError,
@@ -30,6 +34,7 @@ type Settings = {
   microsoftEnabled: boolean;
   microsoftTenantId: string;
   allowRegistration: boolean;
+  allowMicrosoftPersonalAccounts: boolean;
   active: boolean;
   revision: string;
 };
@@ -54,6 +59,7 @@ type Proof = {
   issued?: boolean;
   displayName?: string;
 };
+const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const proofs = new WeakMap<object, Proof>();
 export const SOCIAL_MFA_PREFIX = "savia-social-mfa:";
 const isProvider = (id: unknown): id is Provider =>
@@ -95,7 +101,7 @@ export function socialProviders(
       clientId: microsoftId,
       clientSecret: microsoftSecret,
       disableSignUp: false,
-      tenantId: "organizations",
+      tenantId: "common",
       prompt: "select_account",
       disableDefaultScope: true,
       disableProfilePhoto: true,
@@ -111,6 +117,8 @@ export function parseSocialSettings(value: unknown) {
     typeof input.googleEnabled !== "boolean" ||
     typeof input.microsoftEnabled !== "boolean" ||
     typeof input.microsoftTenantId !== "string" ||
+    (input.allowMicrosoftPersonalAccounts !== undefined &&
+      typeof input.allowMicrosoftPersonalAccounts !== "boolean") ||
     (input.allowRegistration !== undefined &&
       typeof input.allowRegistration !== "boolean")
   )
@@ -132,6 +140,8 @@ export function parseSocialSettings(value: unknown) {
     microsoftEnabled: input.microsoftEnabled,
     microsoftTenantId,
     allowRegistration: input.allowRegistration === true,
+    allowMicrosoftPersonalAccounts:
+      input.allowMicrosoftPersonalAccounts === true,
   };
 }
 
@@ -161,6 +171,12 @@ export const tenantSocialPlugin = () =>
           googleEnabled: { type: "boolean", required: true, input: false },
           microsoftEnabled: { type: "boolean", required: true, input: false },
           microsoftTenantId: { type: "string", required: true, input: false },
+          allowMicrosoftPersonalAccounts: {
+            type: "boolean",
+            required: true,
+            defaultValue: false,
+            input: false,
+          },
           allowRegistration: {
             type: "boolean",
             required: true,
@@ -242,11 +258,17 @@ export async function validateSocialIdentity(
     const settings = registration
       ? await byTenant(ctx.context.adapter, registration.tenantId)
       : await assertAllowed(ctx.context.adapter, local, provider);
-    if (!settings) throw deny();
+    if (!settings || (registration && settings.allowRegistration !== true))
+      throw deny();
     if (
       provider === "microsoft" &&
-      String(source.oauth?.profile?.tid ?? "").toLowerCase() !==
-        settings.microsoftTenantId
+      !(
+        String(source.oauth?.profile?.tid ?? "").toLowerCase() ===
+          settings.microsoftTenantId ||
+        (settings.allowMicrosoftPersonalAccounts === true &&
+          String(source.oauth?.profile?.tid ?? "").toLowerCase() ===
+            MICROSOFT_CONSUMER_TENANT_ID)
+      )
     )
       throw deny();
     if (registration) {
@@ -588,6 +610,7 @@ export async function tenantSocialResponse(
   request: Request,
   environment: AuthWorkerEnvironment & SocialEnvironment,
   adapter: TenantSSOAdapter,
+  dependencies: AccountEmailDependencies = {},
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const providers = socialProviders(environment);
@@ -610,12 +633,20 @@ export async function tenantSocialResponse(
   if (!Number.isSafeInteger(tenantId) || tenantId <= 0)
     return json({ error: "Invalid tenant" }, 400);
   let existing = await byTenant(adapter, tenantId);
+  const emailReady = await accountEmailAvailable(
+    environment,
+    dependencies,
+    tenantId,
+  ).catch(() => false);
   const response = () => ({
+    emailReady,
     configured: !!existing,
     googleEnabled: existing?.googleEnabled ?? false,
     microsoftEnabled: existing?.microsoftEnabled ?? false,
     microsoftTenantId: existing?.microsoftTenantId ?? "",
     allowRegistration: existing?.allowRegistration === true,
+    allowMicrosoftPersonalAccounts:
+      existing?.allowMicrosoftPersonalAccounts === true,
     active: existing?.active ?? false,
     revision: existing?.revision ?? "",
     googleAvailable: !!providers.google,

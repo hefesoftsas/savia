@@ -21,6 +21,9 @@ vi.mock("./components/admin/appearance-cache", () => ({
 vi.mock("./pwa/register-service-worker", () => ({
   registerPwaServiceWorker: calls.worker,
 }));
+vi.mock("./features/tenant-registration/registration-captcha", () => ({
+  RegistrationCaptcha: () => null,
+}));
 vi.mock("./features/public-forms/public-form-page", () => ({
   PublicFormPage: ({ token }: { token: string }) => (
     <div>Public form {token}</div>
@@ -74,4 +77,28 @@ it("lets anonymous visitors switch ES/EN/PT and updates document language withou
     ),
   );
   expect(document.documentElement.lang).toBe("pt-BR");
+});
+
+it("opens tenant registration anonymously without loading private services", async () => {
+  vi.stubGlobal("fetch", async () =>
+    Response.json({
+      tenantId: 4,
+      tenantName: "Savia Team",
+      captchaProvider: "altcha",
+      loginUrl: "/api/auth/login",
+    }),
+  );
+  const previous = calls.admin.mock.calls.length;
+  render(<ApplicationRoot pathname="/register" />);
+  expect(
+    await screen.findByRole(
+      "heading",
+      {
+        name: /Crea tu cuenta|Create your account|Crie sua conta/,
+      },
+      { timeout: 5000 },
+    ),
+  ).toBeInTheDocument();
+  expect(calls.admin.mock.calls.length).toBe(previous);
+  vi.unstubAllGlobals();
 });

@@ -36,6 +36,8 @@ import { tenantSSOMessages } from "@/features/tenant-sso/tenant-sso-messages";
 import { tenantSignInMessages } from "@/features/tenant-sso/tenant-sign-in-messages";
 import { TenantSocialSettingsPanel } from "@/features/tenant-social/tenant-social-settings-panel";
 import { tenantSocialMessages } from "@/features/tenant-social/tenant-social-messages";
+import { TenantRegistrationSettingsPanel } from "@/features/tenant-registration/tenant-registration-settings-panel";
+import { tenantRegistrationMessages } from "@/features/tenant-registration/tenant-registration-messages";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
 import { api } from "@/features/studio-engine/api";
 import {
@@ -174,6 +176,7 @@ export function StudioTenantCredentialsSection({
   const emailT = useMessages(tenantEmailMessages);
   const ssoT = useMessages(tenantSSOMessages);
   const socialT = useMessages(tenantSocialMessages);
+  const registrationT = useMessages(tenantRegistrationMessages);
   const signInT = useMessages(tenantSignInMessages);
   const locale = intlLocale(useAppLocale());
   const navigate = useNavigate();
@@ -298,6 +301,13 @@ export function StudioTenantCredentialsSection({
           >
             {socialT("Google / Microsoft")}
           </CredentialTab>
+          <CredentialTab
+            value="registration"
+            tooltip={registrationT("User registration")}
+            disabled
+          >
+            {registrationT("User registration")}
+          </CredentialTab>
         </TabsList>
         <TabsContent value="global" className="credentials-tabs-panel">
           <GlobalCredentialsPanel
@@ -387,6 +397,13 @@ export function StudioTenantCredentialsSection({
             >
               {socialT("Google / Microsoft")}
             </CredentialTab>
+            <CredentialTab
+              value="registration"
+              tooltip={registrationT("User registration")}
+              disabled
+            >
+              {registrationT("User registration")}
+            </CredentialTab>
           </TabsList>
           <TabsContent value="global" className="credentials-tabs-panel">
             <GlobalCredentialsPanel
@@ -427,7 +444,7 @@ export function StudioTenantCredentialsSection({
     "integrations",
     "sources",
     "email",
-    ...(!isPlatformWorkspace ? ["sso", "social"] : []),
+    ...(!isPlatformWorkspace ? ["sso", "social", "registration"] : []),
   ].includes(requestedTab)
     ? requestedTab
     : "global";
@@ -692,6 +709,12 @@ export function StudioTenantCredentialsSection({
               >
                 {socialT("Google / Microsoft")}
               </CredentialTab>
+              <CredentialTab
+                value="registration"
+                tooltip={registrationT("User registration")}
+              >
+                {registrationT("User registration")}
+              </CredentialTab>
             </>
           ) : null}
         </TabsList>
@@ -731,6 +754,16 @@ export function StudioTenantCredentialsSection({
             </TabsContent>
             <TabsContent value="social" className="credentials-tabs-panel">
               <TenantSocialSettingsPanel
+                key={tenant.tenantId}
+                tenantId={tenant.tenantId}
+                services={services}
+              />
+            </TabsContent>
+            <TabsContent
+              value="registration"
+              className="credentials-tabs-panel"
+            >
+              <TenantRegistrationSettingsPanel
                 key={tenant.tenantId}
                 tenantId={tenant.tenantId}
                 services={services}

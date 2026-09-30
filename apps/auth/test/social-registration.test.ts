@@ -9,6 +9,8 @@ describe("federated first login", () => {
     verified = true,
     trusted = true,
     stale = false,
+    provider: "google" | "microsoft" = "google",
+    personalAllowed = false,
   ) {
     const email = `register-${crypto.randomUUID()}@example.test`;
     const tenantId = 700000 + Math.floor(Math.random() * 100000);
@@ -30,6 +32,8 @@ describe("federated first login", () => {
       SAVIA_INTERNAL_BRIDGE_KEY: "registration-test",
       SAVIA_GOOGLE_CLIENT_ID: "test",
       SAVIA_GOOGLE_CLIENT_SECRET: "secret",
+      SAVIA_MICROSOFT_CLIENT_ID: "ms-test",
+      SAVIA_MICROSOFT_CLIENT_SECRET: "ms-secret",
       SAVIA_IDENTITY: { fetch: finalize },
     };
     await createAuthHandler(environment).fetch(
@@ -44,14 +48,15 @@ describe("federated first login", () => {
       data: {
         tenantId,
         googleEnabled: true,
-        microsoftEnabled: false,
-        microsoftTenantId: "",
+        microsoftEnabled: true,
+        microsoftTenantId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        allowMicrosoftPersonalAccounts: personalAllowed,
         allowRegistration,
         active: true,
         revision: "r1",
       },
     });
-    const google = context.socialProviders.find((p) => p.id === "google")!;
+    const google = context.socialProviders.find((p) => p.id === provider)!;
     google.validateAuthorizationCode = async () => ({
       accessToken: "fixture-token",
     });
@@ -63,7 +68,13 @@ describe("federated first login", () => {
         name: "New Member",
         emailVerified: verified,
       },
-      data: { sub: providerSubject, email_verified: verified, email },
+      data: {
+        sub: providerSubject,
+        oid: providerSubject,
+        tid: "9188040d-6c67-4c5b-b112-36a304b66dad",
+        email_verified: verified,
+        email,
+      },
     });
     const start = await auth.handler(
       new Request("http://127.0.0.1:8787/api/auth/sign-in/social", {
@@ -75,7 +86,7 @@ describe("federated first login", () => {
           "x-savia-social-tenant-id": String(tenantId),
         },
         body: JSON.stringify({
-          provider: "google",
+          provider,
           callbackURL: "http://127.0.0.1:8787/api/auth/sso-complete",
           disableRedirect: true,
         }),
@@ -95,7 +106,7 @@ describe("federated first login", () => {
       });
     const response = await auth.handler(
       new Request(
-        `http://127.0.0.1:8787/api/auth/callback/google?code=fixture&state=${encodeURIComponent(state)}`,
+        `http://127.0.0.1:8787/api/auth/callback/${provider}?code=fixture&state=${encodeURIComponent(state)}`,
         { headers: { cookie } },
       ),
     );
@@ -112,7 +123,7 @@ describe("federated first login", () => {
     const replay = async () => {
       await auth.handler(
         new Request(
-          `http://127.0.0.1:8787/api/auth/callback/google?code=fixture&state=${encodeURIComponent(state)}`,
+          `http://127.0.0.1:8787/api/auth/callback/${provider}?code=fixture&state=${encodeURIComponent(state)}`,
           { headers: { cookie } },
         ),
       );
@@ -123,6 +134,45 @@ describe("federated first login", () => {
     };
     return { finalize, user, sessions, response, tenantId, replay };
   }
+  it("requires both personal-account and registration opt-ins for Microsoft creation", async () => {
+    const allowed = await fixture(
+      true,
+      false,
+      true,
+      true,
+      false,
+      "microsoft",
+      true,
+    );
+    expect(allowed.user).toMatchObject({
+      role: "user",
+      emailTenantId: allowed.tenantId,
+      emailVerified: true,
+    });
+    expect(allowed.sessions).toHaveLength(1);
+    expect(await allowed.finalize.mock.calls[0][0].json()).toMatchObject({
+      provider: "microsoft",
+      tenantId: allowed.tenantId,
+    });
+    for (const [registration, personal, verified] of [
+      [false, true, true],
+      [true, false, true],
+      [true, true, false],
+    ]) {
+      const denied = await fixture(
+        registration,
+        false,
+        verified,
+        true,
+        false,
+        "microsoft",
+        personal,
+      );
+      expect(denied.user).toBeNull();
+      expect(denied.sessions).toHaveLength(0);
+      expect(denied.finalize).not.toHaveBeenCalled();
+    }
+  });
   it("registers a verified viewer only with tenant opt-in", async () => {
     const f = await fixture(true);
     expect(f.user).toMatchObject({

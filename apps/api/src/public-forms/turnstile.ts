@@ -42,6 +42,10 @@ export function turnstileConfiguration(options: TurnstileOptions) {
 export async function verifyTurnstile(
   options: TurnstileOptions,
   input: { token: string; submissionId: string; formId: string; ip: string },
+  binding: { action: "public_submit" | "tenant_signup"; cdata: string } = {
+    action: "public_submit",
+    cdata: input.formId,
+  },
 ) {
   const config = turnstileConfiguration(options);
   let result: any;
@@ -96,8 +100,8 @@ export async function verifyTurnstile(
   if (
     result?.success !== true ||
     result.hostname !== config.hostname ||
-    result.action !== "public_submit" ||
-    result.cdata !== input.formId
+    result.action !== binding.action ||
+    result.cdata !== binding.cdata
   )
     throw new HTTPException(403, {
       message: "Verification failed. Complete the challenge again.",

@@ -1,3 +1,15 @@
+import { getIP } from "@better-auth/core/utils/ip";
+import { limitVerificationMail } from "./pending-email-verification";
+import {
+  emailRegistrationResponse,
+  emailRegistrationHooks,
+  registrationPasswordAllowed,
+} from "./email-registration";
+import { microsoftEmailVerificationPlugin } from "./microsoft-email-verification";
+import {
+  tenantRegistrationSettingsResponse,
+  readTenantRegistrationSettings,
+} from "./tenant-registration-settings";
 import { exchangeMcpToken } from "./mcp-exchange";
 import {
   socialProviders,
@@ -29,6 +41,7 @@ import {
   cookieDomainForHost,
   isAllowedPublicOrigin,
   normalizeCanonicalHost,
+  parseTenantSlugFromHostname,
 } from "@savia/tenant-host/tenant-host";
 import { toString as qrCodeSvg } from "qrcode";
 import {
@@ -245,6 +258,10 @@ export function createBetterAuth(
       session: {
         create: {
           before: async (session, ctx) => {
+            await emailRegistrationHooks(environment).session?.create?.before?.(
+              session,
+              ctx,
+            );
             await tenantSSOHooks.session?.create?.before?.(session, ctx);
             await socialHooks.session?.create?.before?.(session, ctx);
           },
@@ -279,6 +296,7 @@ export function createBetterAuth(
       },
     },
     emailVerification: {
+      expiresIn: 900,
       sendVerificationEmail: async ({ user, url }) => {
         await deliverAccountEmail(
           verificationEmail(url, user.email),
@@ -306,6 +324,7 @@ export function createBetterAuth(
         ),
     },
     plugins: [
+      microsoftEmailVerificationPlugin(environment, dependencies),
       tenantSSOPlugin(),
       tenantSocialPlugin(),
       admin(),
@@ -796,8 +815,21 @@ export function createAuthHandler(
       body: JSON.stringify(messageBody),
       headers: new Headers(request.headers),
     });
-    const completion = auth
-      .handler(forwarded)
+    const completion = (async () => {
+      if (verification && typeof body.email === "string") {
+        const context = await auth.$context;
+        const user = await context.adapter.findOne<{ emailTenantId?: number }>({
+          model: "user",
+          where: [{ field: "email", value: body.email.trim().toLowerCase() }],
+        });
+        await limitVerificationMail(environment, {
+          tenantId: user?.emailTenantId ?? 0,
+          email: body.email,
+          ip: getIP(request, context.options) ?? "unknown",
+        });
+      }
+      return auth.handler(forwarded);
+    })()
       .then((response) => {
         if (response.status === 429) {
           console.warn("Savia account email request was rate limited");
@@ -822,6 +854,20 @@ export function createAuthHandler(
         pathname === "/_internal/oauth/mcp-exchange"
       )
         return exchangeMcpToken(request, oauthRuntime(environment), auth);
+      const registrationSettings = await tenantRegistrationSettingsResponse(
+        request,
+        environment,
+        dependencies,
+        (await auth.$context).adapter,
+      );
+      if (registrationSettings) return registrationSettings;
+      const emailRegistration = await emailRegistrationResponse(
+        request,
+        environment,
+        dependencies,
+        auth,
+      );
+      if (emailRegistration) return emailRegistration;
       const tenantSSO = await tenantSSOResponse(
         request,
         environment,
@@ -832,6 +878,7 @@ export function createAuthHandler(
         request,
         environment,
         (await auth.$context).adapter,
+        dependencies,
       );
       if (social) return social;
       const loginUiRequest =
@@ -839,6 +886,26 @@ export function createAuthHandler(
         ["/api/auth/login", "/api/auth/forgot-password"].includes(pathname);
       const oauthPage = oauthPageResponse(request, {
         restartUrl: adminLoginUrl(environment),
+        allowEmailRegistration:
+          loginUiRequest &&
+          pathname === "/api/auth/login" &&
+          request.headers.get("x-savia-registration-ready") === "true" &&
+          !!parseTenantSlugFromHostname(new URL(request.url).hostname) &&
+          (await (async () => {
+            const tenantId = trustedAccountEmailTenantId(request, environment);
+            if (!tenantId) return false;
+            const settings = await readTenantRegistrationSettings(
+              environment,
+              tenantId,
+            ).catch(() => null);
+            return (
+              !!settings?.allowEmailRegistration &&
+              (await registrationPasswordAllowed(
+                (await auth.$context).adapter,
+                tenantId,
+              ))
+            );
+          })()),
         branding: tenantBrandingFromHeader(
           request.headers.get("x-savia-tenant-branding"),
         ),

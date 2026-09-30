@@ -53,6 +53,28 @@ export const tenantSocialMessages = {
     "Enable Microsoft sign-in",
     "Ativar entrada com Microsoft",
   ],
+  "Allow personal Microsoft accounts": [
+    "Permitir cuentas personales de Microsoft",
+    "Allow personal Microsoft accounts",
+    "Permitir contas pessoais da Microsoft",
+  ],
+  "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.":
+    [
+      "El primer inicio de sesión con una cuenta personal de Microsoft requiere la verificación de correo de Savia. Las cuentas de Microsoft ya verificadas pueden seguir iniciando sesión.",
+      "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.",
+      "O primeiro acesso com uma conta pessoal da Microsoft exige a verificação de e-mail do Savia. Contas Microsoft já verificadas podem continuar entrando.",
+    ],
+  "Configure email delivery": [
+    "Configurar entrega de correo",
+    "Configure email delivery",
+    "Configurar entrega de e-mail",
+  ],
+  "When enabled, personal Microsoft accounts can sign in alongside accounts from the configured organization directory.":
+    [
+      "Al activarlo, las cuentas personales de Microsoft también podrán iniciar sesión junto con las cuentas del directorio organizacional configurado.",
+      "When enabled, personal Microsoft accounts can sign in alongside accounts from the configured organization directory.",
+      "Quando ativado, contas pessoais da Microsoft também poderão entrar junto com as contas do diretório organizacional configurado.",
+    ],
   "Google credentials are not available in this deployment.": [
     "Las credenciales de Google no están disponibles en este despliegue.",
     "Google credentials are not available in this deployment.",
@@ -68,11 +90,11 @@ export const tenantSocialMessages = {
     "Microsoft Entra tenant ID",
     "ID do tenant do Microsoft Entra",
   ],
-  "Enter the UUID of your Microsoft Entra directory. Personal Microsoft accounts are not supported.":
+  "Enter your organization's Microsoft Entra directory UUID. Personal accounts can be enabled separately.":
     [
-      "Ingresa el UUID de tu directorio de Microsoft Entra. No se admiten cuentas personales de Microsoft.",
-      "Enter the UUID of your Microsoft Entra directory. Personal Microsoft accounts are not supported.",
-      "Digite o UUID do diretório do Microsoft Entra. Contas pessoais da Microsoft não são compatíveis.",
+      "Ingresa el UUID del directorio organizacional de Microsoft Entra. Las cuentas personales se pueden permitir por separado.",
+      "Enter your organization's Microsoft Entra directory UUID. Personal accounts can be enabled separately.",
+      "Digite o UUID do diretório organizacional do Microsoft Entra. Contas pessoais podem ser permitidas separadamente.",
     ],
   "Google callback URL": [
     "URL de retorno de Google",
