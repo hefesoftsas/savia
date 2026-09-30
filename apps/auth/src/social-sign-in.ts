@@ -254,7 +254,8 @@ export async function validateSocialIdentity(
     const settings = registration
       ? await byTenant(ctx.context.adapter, registration.tenantId)
       : await assertAllowed(ctx.context.adapter, local, provider);
-    if (!settings) throw deny();
+    if (!settings || (registration && settings.allowRegistration !== true))
+      throw deny();
     if (
       provider === "microsoft" &&
       !(

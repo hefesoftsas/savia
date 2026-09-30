@@ -520,6 +520,8 @@ export function createApiShell(
       [
         "/api/auth/login",
         "/api/auth/forgot-password",
+        "/api/auth/microsoft-email-verification",
+        "/api/auth/microsoft-email-verification/verify",
         "/api/auth/mfa-enroll",
         "/api/auth/consent",
         "/api/auth/oauth-ui.css",

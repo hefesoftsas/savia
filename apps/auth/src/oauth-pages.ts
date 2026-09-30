@@ -716,3 +716,15 @@ export function tenantBrandingFromHeader(
     return undefined;
   }
 }
+
+export function microsoftVerificationPage(
+  verification: { id: string; email: string; notice?: string },
+  branding?: TenantBranding,
+): Response {
+  return htmlResponse(
+    page(
+      "Verifica tu correo | Savia",
+      renderOAuthSurface("microsoft-verification", { verification, branding }),
+    ),
+  );
+}

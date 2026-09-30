@@ -262,6 +262,53 @@ export function registerSocialRegistrationRoutes(
   authService?: SocialBridge,
   bridgeKey?: string,
 ): void {
+  app.post("/_internal/social-registration/eligible", async (c) => {
+    if (!bridgeKey?.trim() || c.req.header("x-savia-bridge-key") !== bridgeKey)
+      return c.json({ error: "Forbidden" }, 401);
+    const parsed = registrationInput.safeParse(
+      await c.req.json().catch(() => null),
+    );
+    if (!parsed.success || parsed.data.provider !== "microsoft")
+      return c.json({ error: "Invalid Microsoft binding" }, 400);
+    const input = parsed.data;
+    if (!authService)
+      return c.json({ error: "Authentication unavailable" }, 503);
+    const response = await authService
+      .fetch(
+        new Request(
+          `https://savia-auth.internal/_internal/tenant-social/${input.tenantId}`,
+          { headers: { "x-savia-bridge-key": bridgeKey } },
+        ),
+      )
+      .catch(() => null);
+    const policy = response?.ok
+      ? ((await response.json().catch(() => null)) as {
+          active?: boolean;
+          microsoftEnabled?: boolean;
+          allowMicrosoftPersonalAccounts?: boolean;
+          revision?: string;
+        } | null)
+      : null;
+    if (
+      !policy?.active ||
+      !policy.microsoftEnabled ||
+      !policy.allowMicrosoftPersonalAccounts ||
+      policy.revision !== input.revision
+    )
+      return c.json({ error: "Microsoft linking not authorized" }, 403);
+    const member = await db
+      .prepare(
+        "SELECT p.id FROM identity_principal p JOIN identity_tenant_membership m ON m.principal_id=p.id JOIN tenants t ON t.id=m.tenant_id WHERE p.issuer='savia:better-auth' AND p.subject=? AND p.email=? AND p.is_active=1 AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin')",
+      )
+      .bind(input.subject, input.email, input.tenantId)
+      .first();
+    if (!member)
+      return c.json(
+        { error: "Precreated active tenant membership required" },
+        403,
+      );
+    return c.json({ eligible: true }, 200);
+  });
   app.post("/_internal/social-registration", async (c) => {
     if (!bridgeKey?.trim())
       return c.json({ error: "Social registration service unavailable." }, 503);

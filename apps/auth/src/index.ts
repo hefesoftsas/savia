@@ -1,3 +1,4 @@
+import { microsoftEmailVerificationPlugin } from "./microsoft-email-verification";
 import { tenantRegistrationSettingsResponse } from "./tenant-registration-settings";
 import { exchangeMcpToken } from "./mcp-exchange";
 import {
@@ -307,6 +308,7 @@ export function createBetterAuth(
         ),
     },
     plugins: [
+      microsoftEmailVerificationPlugin(environment, dependencies),
       tenantSSOPlugin(),
       tenantSocialPlugin(),
       admin(),

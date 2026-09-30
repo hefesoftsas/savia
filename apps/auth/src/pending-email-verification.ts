@@ -206,3 +206,42 @@ export async function cleanupPendingVerifications(
     .bind(Date.now())
     .run();
 }
+
+/** Backend-only abuse budget shared across pending intents; keys contain hashes, not addresses. */
+export async function limitVerificationMail(
+  env: AccountEmailEnvironment,
+  input: { tenantId: number; email: string; ip: string },
+): Promise<void> {
+  await env.AUTH_DB.exec(
+    "CREATE TABLE IF NOT EXISTS verification_mail_budget (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+  );
+  const window = Math.floor(Date.now() / 3_600_000),
+    now = Date.now();
+  const budgets = [
+    { key: `mail:tenant:${input.tenantId}:${window}`, max: 200 },
+    {
+      key: `mail:address:${input.tenantId}:${await verificationHash(input.email.trim().toLowerCase())}:${window}`,
+      max: 5,
+    },
+    {
+      key: `mail:ip:${input.tenantId}:${await verificationHash(input.ip)}:${window}`,
+      max: 20,
+    },
+  ];
+  for (const budget of budgets) {
+    const row = await env.AUTH_DB.prepare(
+      "INSERT INTO verification_mail_budget(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=verification_mail_budget.count+1 RETURNING count",
+    )
+      .bind(budget.key, now + 3_600_000)
+      .first<{ count: number }>();
+    if (!row || row.count > budget.max)
+      throw new Error(
+        "Verification email rate limit exceeded. Try again later.",
+      );
+  }
+  await env.AUTH_DB.prepare(
+    "DELETE FROM verification_mail_budget WHERE key IN (SELECT key FROM verification_mail_budget WHERE expires_at<? LIMIT 100)",
+  )
+    .bind(now)
+    .run();
+}

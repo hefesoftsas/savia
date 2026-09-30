@@ -150,3 +150,22 @@ describe("pending email ownership verification", () => {
     ).toMatchObject({ id: pending.id });
   });
 });
+
+it("bounds mail across separate intents for the same tenant and address", async () => {
+  const { limitVerificationMail } =
+    await import("../src/pending-email-verification");
+  const email = `limited-${crypto.randomUUID()}@example.test`;
+  for (let i = 0; i < 5; i++)
+    await limitVerificationMail(environment, {
+      tenantId: 712004,
+      email,
+      ip: "192.0.2.44",
+    });
+  await expect(
+    limitVerificationMail(environment, {
+      tenantId: 712004,
+      email,
+      ip: "192.0.2.45",
+    }),
+  ).rejects.toThrow();
+});

@@ -15,6 +15,7 @@ export const REGISTRATION_PREFIX = "savia-social-registration:";
 type Settings = {
   active: boolean;
   allowRegistration: boolean;
+  allowMicrosoftPersonalAccounts?: boolean;
   googleEnabled: boolean;
   microsoftEnabled: boolean;
   revision: string;
@@ -35,7 +36,11 @@ async function policy(
   });
   if (
     !settings?.active ||
-    settings.allowRegistration !== true ||
+    (settings.allowRegistration !== true &&
+      !(
+        provider === "microsoft" &&
+        settings.allowMicrosoftPersonalAccounts === true
+      )) ||
     !(provider === "google"
       ? settings.googleEnabled
       : settings.microsoftEnabled)

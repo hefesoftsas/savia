@@ -6,6 +6,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@better-auth/core": "1.7.6",
     "@better-auth/oauth-provider": "1.7.6",
     "@better-auth/sso": "1.7.6",
     "@savia/db": "workspace:*",
