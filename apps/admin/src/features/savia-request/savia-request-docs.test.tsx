@@ -69,7 +69,7 @@ describe("SaviaRequestDocs", () => {
   it("loads the reference in the caller's tenant scope", async () => {
     renderDocs();
     expect(await screen.findByTestId("scalar-url")).toHaveTextContent(
-      "/v1/savia-request/api/openapi.json?tenant=agency%3A101",
+      "/v1/savia-request/api/openapi.json?tenant=tenant%3A101",
     );
   });
 });

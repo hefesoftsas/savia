@@ -12,7 +12,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Building2, LoaderCircle } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { CustomRoutes, memoryStore, Resource, useTranslate } from "ra-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navigate, Route } from "react-router-dom";
@@ -444,41 +444,28 @@ function BetterAuthCallback({
     };
   }, [onComplete, services, translate]);
 
+  if (!error) return <PwaSplash />;
+
   return (
     <main className="flex min-h-svh items-center justify-center bg-secondary p-6 text-foreground">
       <section className="w-full max-w-md rounded-xl border bg-card p-7 shadow-sm">
         <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          {error ? (
-            <Building2 className="size-5" />
-          ) : (
-            <LoaderCircle className="size-5 animate-spin" />
-          )}
+          <Building2 className="size-5" />
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight">
-          {error
-            ? translate("savia.auth.signInFailed", {
-                _: "No pudimos iniciar sesión",
-              })
-            : translate("savia.auth.connecting", {
-                _: "Conectando con Savia",
-              })}
+          {translate("savia.auth.signInFailed", {
+            _: "No pudimos iniciar sesión",
+          })}
         </h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {error ??
-            translate("savia.auth.validatingSession", {
-              _: "Estamos validando tu sesión segura con Better Auth.",
-            })}
-        </p>
-        {error ? (
-          <Button
-            className="mt-6 w-full"
-            onClick={() => window.location.replace(window.location.origin)}
-          >
-            {translate("savia.auth.returnHome", {
-              _: "Volver al inicio",
-            })}
-          </Button>
-        ) : null}
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{error}</p>
+        <Button
+          className="mt-6 w-full"
+          onClick={() => window.location.replace(window.location.origin)}
+        >
+          {translate("savia.auth.returnHome", {
+            _: "Volver al inicio",
+          })}
+        </Button>
       </section>
     </main>
   );

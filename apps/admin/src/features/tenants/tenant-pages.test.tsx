@@ -1,3 +1,4 @@
+// @vitest-environment-options {"url":"https://savia-preview.hefesoft.com/"}
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,7 +54,11 @@ function services() {
           total: resource === "tenants" ? 1 : 0,
         }),
       ),
-      getOne: vi.fn().mockResolvedValue({ data: tenant }),
+      getOne: vi.fn().mockImplementation((_resource, params) =>
+        Promise.resolve({
+          data: Number(params.id) === 0 ? platformTenant : tenant,
+        }),
+      ),
       getMany: vi.fn().mockResolvedValue({ data: [] }),
       getManyReference: vi.fn(),
       create: vi
@@ -166,14 +171,14 @@ describe("generic tenant pages", () => {
       expect(window.location.hash).toContain("#/users");
       expect(new URLSearchParams(query).get("filter")).toBe('{"tenantId":101}');
     });
-    expect(await screen.findByText("Usuarios del tenant #101")).toBeVisible();
+    expect(await screen.findByText("Usuarios de Comunidad")).toBeVisible();
 
     await user.click(
       screen.getByRole("button", { name: "Ver todos los usuarios" }),
     );
     await waitFor(() => {
       expect(
-        screen.queryByText("Usuarios del tenant #101"),
+        screen.queryByText("Usuarios de Comunidad"),
       ).not.toBeInTheDocument();
     });
   });
@@ -200,7 +205,9 @@ describe("generic tenant pages", () => {
       const [, query = ""] = window.location.hash.split("?");
       expect(new URLSearchParams(query).get("filter")).toBe('{"tenantId":0}');
     });
-    expect(await screen.findByText("Usuarios del tenant #0")).toBeVisible();
+    expect(
+      await screen.findByText("Usuarios de Plataforma Savia"),
+    ).toBeVisible();
   });
 
   it("exposes the new-tenant action from the generic tenant list", async () => {
@@ -240,6 +247,17 @@ describe("generic tenant pages", () => {
         total: resource === "users" ? 1 : 0,
       }),
     );
+    const createdTenant = {
+      ...tenant,
+      name: "Nueva comunidad",
+      idSlug: "nueva-comunidad-2",
+    };
+    vi.mocked(appServices.dataProvider.create).mockResolvedValue({
+      data: createdTenant,
+    });
+    vi.mocked(appServices.dataProvider.getOne).mockResolvedValue({
+      data: createdTenant,
+    });
     await renderApp(appServices);
     expect(await screen.findByText("Nuevo tenant")).toBeVisible();
     // The shared text inputs do not associate their labels programmatically,
@@ -288,6 +306,14 @@ describe("generic tenant pages", () => {
         }),
       ),
     );
+    const url = "https://nueva-comunidad-2.savia-preview.hefesoft.com";
+    expect(
+      await screen.findByRole("textbox", { name: "Tu URL de Savia" }),
+    ).toHaveValue(url);
+    expect(window.location.hash).toBe("#/tenants/101");
+    await user.click(screen.getByRole("button", { name: "Copiar enlace" }));
+    expect(await navigator.clipboard.readText()).toBe(url);
+    expect(await screen.findByText("Enlace copiado.")).toBeVisible();
   });
 
   it("edits the tenant state and explains the effect on member access", async () => {

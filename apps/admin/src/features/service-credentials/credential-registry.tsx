@@ -112,7 +112,7 @@ export function CredentialsHelpTooltip({
           {description ? <p>{description}</p> : null}
           <p>
             {translate("savia.serviceCredentials.helpTooltipContent", {
-              _: "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Globales: una clave por espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
+              _: "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Servicios: credenciales de plataforma o del espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
             })}
           </p>
         </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, Share2 } from "lucide-react";
+import { Copy, ExternalLink, Share2 } from "lucide-react";
 import {
   buildTenantOrigin,
   KNOWN_CANONICAL_HOSTS,
@@ -81,6 +81,12 @@ export function TenantAccessUrl({ slug }: { slug?: string | null }) {
           onFocus={(event) => event.currentTarget.select()}
         />
         <div className="tenant-branding-actions">
+          <Button asChild variant="outline">
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              <ExternalLink aria-hidden="true" />
+              {t("Open in new window")}
+            </a>
+          </Button>
           <Button
             type="button"
             variant="secondary"

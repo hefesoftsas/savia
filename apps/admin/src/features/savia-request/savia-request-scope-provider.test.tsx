@@ -70,11 +70,11 @@ describe("SaviaRequestProvider tenant scope", () => {
 
     await waitFor(() =>
       expect(get).toHaveBeenCalledWith(
-        expect.stringContaining("?tenant=agency%3A101"),
+        expect.stringContaining("?tenant=tenant%3A101"),
       ),
     );
     for (const [path] of get.mock.calls)
-      expect(String(path)).toContain("?tenant=agency%3A101");
+      expect(String(path)).toContain("?tenant=tenant%3A101");
     expect(await screen.findByText("hijo")).toBeVisible();
   });
 });

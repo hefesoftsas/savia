@@ -6,14 +6,22 @@ import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 
 export const SAVIA_REQUEST_SCOPE_KEY = "savia-request-scope";
 
-const SCOPE_PATTERN = /^[A-Za-z0-9:_.-]{1,120}$/;
+const SCOPE_PATTERN = /^tenant:(0|[1-9]\d*)$/;
 
 export function isValidScope(value: string): boolean {
-  return SCOPE_PATTERN.test(value.trim());
+  const scope = value.trim();
+  return (
+    SCOPE_PATTERN.test(scope) && Number.isSafeInteger(Number(scope.slice(7)))
+  );
 }
 
 export function scopeForTenantId(id: number): string {
-  return `agency:${id}`;
+  return `tenant:${id}`;
+}
+
+// Read legacy selections as the same tenant; requests only use canonical scopes.
+function canonicalOverride(value: string | null | undefined): string {
+  return (value?.trim() ?? "").replace(/^agency:/, "tenant:");
 }
 
 export type ScopeMembership = {
@@ -48,7 +56,7 @@ export function resolveScope(input: {
   override?: string | null;
 }): string | undefined {
   const adminScopes = adminMembershipScopes(input.memberships);
-  const override = input.override?.trim() ?? "";
+  const override = canonicalOverride(input.override);
   if (override) {
     if (!isValidScope(override)) return fallback(input);
     if (input.isPlatformAdmin || adminScopes.includes(override))
@@ -81,7 +89,9 @@ export function scopeLabel(scope: string | undefined): string {
 function readStoredOverride(): string | null {
   try {
     if (typeof window === "undefined") return null;
-    const stored = window.localStorage.getItem(SAVIA_REQUEST_SCOPE_KEY);
+    const stored = canonicalOverride(
+      window.localStorage.getItem(SAVIA_REQUEST_SCOPE_KEY),
+    );
     return stored && isValidScope(stored) ? stored : null;
   } catch {
     return null;

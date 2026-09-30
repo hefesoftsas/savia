@@ -97,15 +97,15 @@ export function UserMenu({ children }: UserMenuProps) {
             aria-label={openMenuLabel}
             size="lg"
             tooltip={openMenuLabel}
-            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            className="h-auto gap-3 p-3 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
-            <Avatar className="size-8 rounded-lg">
+            <Avatar className="size-8 shrink-0 rounded-lg">
               <AvatarImage src={identity?.avatar} role="presentation" />
               <AvatarFallback className="rounded-lg">
                 {identity?.fullName?.charAt(0)}
               </AvatarFallback>
             </Avatar>
-            <span className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="grid min-w-0 flex-1 gap-0.5 text-left text-sm leading-snug group-data-[collapsible=icon]:hidden">
               <span
                 className="line-clamp-2 font-medium break-words"
                 title={identity?.fullName}

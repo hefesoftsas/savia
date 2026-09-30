@@ -68,10 +68,23 @@ function renderScopeBar() {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.removeItem("savia-request-scope");
   vi.restoreAllMocks();
 });
 
 describe("SaviaRequestScopeBar platform picker", () => {
+  it("restores a legacy saved selection as the same canonical tenant", async () => {
+    window.localStorage.setItem("savia-request-scope", "agency:101");
+    const { get } = renderScopeBar();
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith(
+        expect.stringContaining("?tenant=tenant%3A101"),
+      ),
+    );
+    expect(get.mock.calls.some(([path]) => path.includes("agency%3A"))).toBe(
+      false,
+    );
+  });
   it("lists commercial tenants and scopes requests on selection", async () => {
     const user = userEvent.setup();
     const { get } = renderScopeBar();
@@ -87,10 +100,10 @@ describe("SaviaRequestScopeBar platform picker", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Catálogo compartido de plataforma/)).toBeVisible();
 
-    await user.selectOptions(select, "agency:101");
+    await user.selectOptions(select, "tenant:101");
     await waitFor(() =>
       expect(get).toHaveBeenCalledWith(
-        expect.stringContaining("?tenant=agency%3A101"),
+        expect.stringContaining("?tenant=tenant%3A101"),
       ),
     );
     expect(await screen.findByText("Ámbito:", { exact: false })).toBeVisible();

@@ -12,7 +12,7 @@ beforeEach(() => {
 
 describe("savia-request-cache", () => {
   it("preserves snapshots per scope without mixing tenants", () => {
-    writeSaviaRequestSnapshot("agency:1", {
+    writeSaviaRequestSnapshot("tenant:1", {
       flows: [],
       folders: ["A"],
       flow: null,
@@ -20,13 +20,13 @@ describe("savia-request-cache", () => {
       error: null,
       updatedAt: 1,
     });
-    expect(readSaviaRequestSnapshot("agency:1")?.folders).toEqual(["A"]);
-    expect(readSaviaRequestSnapshot("agency:2")).toBeUndefined();
+    expect(readSaviaRequestSnapshot("tenant:1")?.folders).toEqual(["A"]);
+    expect(readSaviaRequestSnapshot("tenant:2")).toBeUndefined();
     expect(readSaviaRequestSnapshot(undefined)?.folders).toBeUndefined();
   });
 
   it("clears one scope or everything on session changes", () => {
-    writeSaviaRequestSnapshot("agency:1", {
+    writeSaviaRequestSnapshot("tenant:1", {
       flows: [],
       folders: ["A"],
       flow: null,
@@ -42,8 +42,8 @@ describe("savia-request-cache", () => {
       error: null,
       updatedAt: 1,
     });
-    clearSaviaRequestSnapshot("agency:1");
-    expect(readSaviaRequestSnapshot("agency:1")).toBeUndefined();
+    clearSaviaRequestSnapshot("tenant:1");
+    expect(readSaviaRequestSnapshot("tenant:1")).toBeUndefined();
     expect(readSaviaRequestSnapshot(undefined)?.folders).toEqual(["P"]);
     clearAllSaviaRequestSnapshots();
     expect(readSaviaRequestSnapshot(undefined)).toBeUndefined();

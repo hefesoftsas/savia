@@ -1,8 +1,24 @@
 import { render } from "@/features/studio-engine/test/locale-test-render";
 import { cleanup, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServices } from "@/app-services";
 import { ServiceCredentialsPage } from "./service-credentials-page";
+
+const permissionState = vi.hoisted(() => ({
+  permissions: { canManageIdentity: true } as
+    { canManageIdentity: boolean } | undefined,
+  isPending: false,
+}));
+
+vi.mock("ra-core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ra-core")>()),
+  usePermissions: () => permissionState,
+}));
+
+beforeEach(() => {
+  permissionState.permissions = { canManageIdentity: true };
+  permissionState.isPending = false;
+});
 
 vi.mock("./studio-tenant-credentials-section", () => ({
   StudioTenantCredentialsSection: ({
@@ -41,6 +57,24 @@ function servicesWithSummary() {
 }
 
 describe("ServiceCredentialsPage", () => {
+  it.each(["tenant", "pending"])(
+    "does not fetch platform credentials for %s permissions",
+    (state) => {
+      permissionState.permissions =
+        state === "tenant" ? { canManageIdentity: false } : undefined;
+      permissionState.isPending = state === "pending";
+      const services = servicesWithSummary();
+      render(<ServiceCredentialsPage services={services} />);
+
+      expect(
+        screen.getByRole("heading", { name: "Claves y servicios" }),
+      ).toBeVisible();
+      expect(services.assistantConfiguration.summary).not.toHaveBeenCalled();
+      expect(screen.queryByText("OpenRouter")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    },
+  );
+
   it("shows global AI credentials inside the unified credentials screen", async () => {
     render(<ServiceCredentialsPage services={servicesWithSummary()} />);
 

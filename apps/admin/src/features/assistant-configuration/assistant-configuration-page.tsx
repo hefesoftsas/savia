@@ -536,7 +536,7 @@ export function AssistantConfigurationPanel({
         <CredentialEntry
           title="OpenRouter"
           description={t(
-            "Asistente de IA: clave y modelo predeterminado del espacio.",
+            "AI assistant: platform-wide default key and model.",
           )}
           descriptionAsTooltip
           requirement="required"

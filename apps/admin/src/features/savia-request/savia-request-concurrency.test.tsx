@@ -205,7 +205,7 @@ describe("SaviaRequestProvider concurrencia", () => {
       expect(get).toHaveBeenCalledWith(expect.stringContaining("/flows/autos")),
     );
 
-    scopeState.scope = "agency:99";
+    scopeState.scope = "tenant:99";
     rerender(
       <MemoryRouter initialEntries={["/savia-request?flow=autos&step=0"]}>
         <AppServicesProvider services={services}>

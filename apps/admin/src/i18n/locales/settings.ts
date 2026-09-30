@@ -6,6 +6,11 @@ export const settingsMessages = {
       "Savia assigns this URL to your organization. It cannot be edited here. Share it to access your workspace.",
       "O Savia atribui esta URL à sua organização. Ela não pode ser editada aqui. Compartilhe-a para acessar seu espaço.",
     ],
+  "Open in new window": [
+    "Abrir en nueva ventana",
+    "Open in new window",
+    "Abrir em nova janela",
+  ],
   "Copiar enlace": ["Copiar enlace", "Copy link", "Copiar link"],
   "Compartir enlace": ["Compartir enlace", "Share link", "Compartilhar link"],
   "Enlace copiado.": ["Enlace copiado.", "Link copied.", "Link copiado."],
@@ -377,6 +382,34 @@ export const settingsMessages = {
     "Minha organização",
   ],
   "Mi agencia": ["Mi agencia", "My agency", "Minha agência"],
+  "Users in %{name}": [
+    "Usuarios de %{name}",
+    "Users in %{name}",
+    "Usuários de %{name}",
+  ],
+  "Tenant users": ["Usuarios del tenant", "Tenant users", "Usuários do tenant"],
+  "Platform credentials": [
+    "Credenciales de plataforma",
+    "Platform credentials",
+    "Credenciais da plataforma",
+  ],
+  "Workspace credentials": [
+    "Credenciales del espacio",
+    "Workspace credentials",
+    "Credenciais do espaço",
+  ],
+  Services: ["Servicios", "Services", "Serviços"],
+  "Shared platform configuration. Only platform administrators can manage it.":
+    [
+      "Configuración compartida de la plataforma. Solo los administradores de plataforma pueden gestionarla.",
+      "Shared platform configuration. Only platform administrators can manage it.",
+      "Configuração compartilhada da plataforma. Somente administradores da plataforma podem gerenciá-la.",
+    ],
+  "Service credentials, grouped by platform or workspace.": [
+    "Credenciales de servicios, agrupadas por plataforma o espacio.",
+    "Service credentials, grouped by platform or workspace.",
+    "Credenciais de serviços, agrupadas por plataforma ou espaço.",
+  ],
   "Credenciales globales": [
     "Credenciales globales",
     "Global credentials",
@@ -645,10 +678,10 @@ export const settingsMessages = {
   ],
   Guardar: ["Guardar", "Save", "Salvar"],
   "Eliminar clave": ["Eliminar clave", "Delete key", "Excluir chave"],
-  "Asistente de IA: clave y modelo predeterminado del espacio.": [
-    "Asistente de IA: clave y modelo predeterminado del espacio.",
-    "AI assistant: workspace key and default model.",
-    "Assistente de IA: chave e modelo padrão do espaço.",
+  "AI assistant: platform-wide default key and model.": [
+    "Asistente de IA: clave y modelo predeterminados de la plataforma.",
+    "AI assistant: platform-wide default key and model.",
+    "Assistente de IA: chave e modelo padrão da plataforma.",
   ],
   Global: ["Global", "Global", "Global"],
   "Por organización": [

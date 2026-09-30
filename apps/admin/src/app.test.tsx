@@ -368,9 +368,15 @@ describe("App", () => {
     expect(saviaRequest.closest("li")).toContainElement(flowNavigation);
   });
 
-  it("opens the unified service credentials screen from its protected route", async () => {
+  it("keeps platform credentials hidden on the tenant credentials route", async () => {
     window.location.hash = "#/service-credentials";
     const services = createServices();
+    services.authProvider.getPermissions = vi.fn().mockResolvedValue({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: false,
+      memberships: [{ tenantId: 101, role: "admin" }],
+    });
     services.assistantConfiguration.activeTenant = vi.fn().mockResolvedValue({
       tenants: [{ id: 101, name: "Tenant Norte" }],
     });
@@ -383,11 +389,10 @@ describe("App", () => {
       }),
     ).toBeVisible();
     expect(
-      await screen.findByRole("heading", {
-        name: "OpenRouter",
-      }),
-    ).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Globales" })).toBeVisible();
+      screen.queryByRole("heading", { name: "OpenRouter" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Servicios" })).toBeVisible();
     expect(screen.getByRole("tab", { name: /Integraciones/i })).toBeVisible();
     expect(
       screen.queryByRole("tab", { name: /Por (organización|agencia)/i }),
@@ -502,6 +507,24 @@ describe("App", () => {
     expect(window.location.hash).toBe("#/login");
     expect(
       screen.queryByRole("button", { name: "Iniciar sesión con Savia" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses the Savia loading screen while the OAuth callback is pending", () => {
+    const services = createServices();
+    services.authSession.handleCallback = vi.fn(
+      () => new Promise<void>(() => {}),
+    );
+    window.history.replaceState({}, "", "/auth/callback?code=code&state=state");
+
+    render(<App services={services} />);
+
+    expect(
+      screen.getByRole("status", { name: "Cargando Savia…" }),
+    ).toBeVisible();
+    expect(screen.queryByText("Conectando con Savia")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Estamos validando tu sesión segura con Better Auth."),
     ).not.toBeInTheDocument();
   });
 

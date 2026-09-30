@@ -9,12 +9,43 @@ import {
 
 describe("savia-request-scope", () => {
   it("formats tenant scopes and labels", () => {
-    expect(scopeForTenantId(101)).toBe("agency:101");
-    expect(scopeLabel("agency:101")).toBe("agency:101");
+    expect(scopeForTenantId(101)).toBe("tenant:101");
+    expect(scopeLabel("tenant:101")).toBe("tenant:101");
     expect(scopeLabel(undefined)).toBe("Plataforma (catálogo global)");
-    expect(isValidScope("agency:101")).toBe(true);
+    expect(isValidScope("tenant:101")).toBe(true);
     expect(isValidScope("agency/../x")).toBe(false);
     expect(isValidScope("")).toBe(false);
+    for (const invalid of [
+      "agency:101",
+      "tenant:-1",
+      "tenant:01",
+      "tenant:1.5",
+      "tenant:9007199254740992",
+      "random",
+    ]) {
+      expect(isValidScope(invalid)).toBe(false);
+    }
+    expect(isValidScope("tenant:0")).toBe(true);
+  });
+
+  it("maps legacy selections to the same canonical tenant without extending permissions", () => {
+    expect(
+      resolveScope({ isPlatformAdmin: true, override: "agency:999" }),
+    ).toBe("tenant:999");
+    expect(
+      resolveScope({
+        isPlatformAdmin: false,
+        memberships: [{ tenantId: 101, role: "tenant_admin" }],
+        override: "agency:101",
+      }),
+    ).toBe("tenant:101");
+    expect(
+      resolveScope({
+        isPlatformAdmin: false,
+        memberships: [{ tenantId: 101, role: "tenant_admin" }],
+        override: "agency:999",
+      }),
+    ).toBe("tenant:101");
   });
 
   it("collects only administrator memberships", () => {
@@ -25,7 +56,7 @@ describe("savia-request-scope", () => {
         { tenantId: 303, role: "tenant_admin" },
         { agencyId: 101, role: "agency_admin" },
       ]),
-    ).toEqual(["agency:101", "agency:303"]);
+    ).toEqual(["tenant:101", "tenant:303"]);
     expect(adminMembershipScopes(undefined)).toEqual([]);
   });
 
@@ -37,7 +68,7 @@ describe("savia-request-scope", () => {
         isPlatformAdmin: false,
         override: null,
       }),
-    ).toBe("agency:101");
+    ).toBe("tenant:101");
   });
 
   it("auto-scopes tenant admins with a single membership", () => {
@@ -48,7 +79,7 @@ describe("savia-request-scope", () => {
         isPlatformAdmin: false,
         override: null,
       }),
-    ).toBe("agency:101");
+    ).toBe("tenant:101");
   });
 
   it("keeps the platform catalog without scope", () => {
@@ -79,17 +110,17 @@ describe("savia-request-scope", () => {
         dedicatedTenantId: 101,
         memberships: [{ agencyId: 101, role: "agency_admin" }],
         isPlatformAdmin: true,
-        override: "agency:999",
+        override: "tenant:999",
       }),
-    ).toBe("agency:999");
+    ).toBe("tenant:999");
     expect(
       resolveScope({
         dedicatedTenantId: null,
         memberships: [{ agencyId: 101, role: "agency_admin" }],
         isPlatformAdmin: false,
-        override: "agency:999",
+        override: "tenant:999",
       }),
-    ).toBe("agency:101");
+    ).toBe("tenant:101");
     expect(
       resolveScope({
         dedicatedTenantId: null,

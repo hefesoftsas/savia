@@ -94,18 +94,20 @@ function GlobalCredentialsPanel({
 }) {
   const t = useMessages(settingsMessages);
   return (
-    <CredentialGroup
-      title={t("Credenciales globales")}
-      description={t(
-        "Una clave por espacio. Solo se usa cuando activas el servicio correspondiente.",
-      )}
-      descriptionAsTooltip
-    >
+    <>
       {globalCredentials}
-      {loadingMessage}
-      {geoapifyEntry}
-      {freeServicesEntry}
-    </CredentialGroup>
+      <CredentialGroup
+        title={t("Workspace credentials")}
+        description={t(
+          "Una clave por espacio. Solo se usa cuando activas el servicio correspondiente.",
+        )}
+        descriptionAsTooltip
+      >
+        {loadingMessage}
+        {geoapifyEntry}
+        {freeServicesEntry}
+      </CredentialGroup>
+    </>
   );
 }
 
@@ -245,10 +247,10 @@ export function StudioTenantCredentialsSection({
           <CredentialTab
             value="global"
             tooltip={t(
-              "Una clave por espacio para IA y servicios opcionales como Geoapify.",
+              "Service credentials, grouped by platform or workspace.",
             )}
           >
-            {t("Globales")}
+            {t("Services")}
           </CredentialTab>
           <CredentialTab value="integrations" tooltip="" disabled>
             {t("Integraciones")}
@@ -284,10 +286,10 @@ export function StudioTenantCredentialsSection({
           <CredentialTab
             value="global"
             tooltip={t(
-              "Una clave por espacio para IA y servicios opcionales como Geoapify.",
+              "Service credentials, grouped by platform or workspace.",
             )}
           >
-            {t("Globales")}
+            {t("Services")}
           </CredentialTab>
           <CredentialTab value="integrations" tooltip="" disabled>
             {t("Integraciones")}
@@ -522,10 +524,10 @@ export function StudioTenantCredentialsSection({
           <CredentialTab
             value="global"
             tooltip={t(
-              "Una clave por espacio para IA y servicios opcionales como Geoapify.",
+              "Service credentials, grouped by platform or workspace.",
             )}
           >
-            {t("Globales")}
+            {t("Services")}
           </CredentialTab>
           <CredentialTab
             value="integrations"
