@@ -46,12 +46,15 @@ globalThis.fetch=async (_url,options)=>{const {sql,batch}=JSON.parse(options.bod
 test("initial D1 schema and bootstrap apply once with intact triggers", () => {
   const f = fixture();
   try {
+    const migrationCount = readdirSync("packages/db/migrations").filter(
+      (file) => file.endsWith(".sql"),
+    ).length;
     const first = f.run();
     assert.equal(first.status, 0, first.stderr);
     const db = new DatabaseSync(f.file);
     assert.equal(
       db.prepare("SELECT count(*) n FROM _savia_migrations").get().n,
-      2,
+      migrationCount,
     );
     assert.ok(
       db
@@ -69,6 +72,10 @@ test("initial D1 schema and bootstrap apply once with intact triggers", () => {
     const second = f.run();
     assert.equal(second.status, 0, second.stderr);
     const after = new DatabaseSync(f.file);
+    assert.equal(
+      after.prepare("SELECT count(*) n FROM _savia_migrations").get().n,
+      migrationCount,
+    );
     assert.equal(
       after.prepare("SELECT name FROM tenants WHERE id=0").get().name,
       "Preserved",

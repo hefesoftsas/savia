@@ -17,12 +17,15 @@ for (const directory of [
       const files = readdirSync(directory)
         .filter((f) => f.endsWith(".sql"))
         .sort();
+      const baselineCount = directory.includes("packages/db/") ? 2 : 1;
       assert.deepEqual(
-        files,
-        !directory.includes("packages/db/")
+        files.slice(0, baselineCount),
+        baselineCount === 1
           ? ["0001_initial.sql"]
           : ["0001_initial.sql", "0002_bootstrap.sql"],
       );
+      // Apply the full current migration stream after checking its immutable
+      // initial baseline prefix.
       for (const file of files)
         source.exec(readFileSync(directory + "/" + file, "utf8"));
       const snapshot = sqliteBaseline(source);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "vitest";
@@ -191,7 +191,12 @@ test("all production migration scripts apply and reopen without replaying seeds"
     import.meta.url,
   ).pathname;
   const applied = await db.migrate(decodeURIComponent(migrations));
-  assert.deepEqual(applied, ["0001_initial.sql", "0002_bootstrap.sql"]);
+  assert.deepEqual(
+    applied,
+    readdirSync(decodeURIComponent(migrations))
+      .filter((file) => file.endsWith(".sql"))
+      .sort(),
+  );
   assert.ok(
     await db
       .prepare(
