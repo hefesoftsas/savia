@@ -24,6 +24,8 @@ export type CreateIdentityUserInput = {
   lastName: string;
   platformAdmin: boolean;
   temporaryPassword?: string;
+  tenantId?: number;
+  emailVerified?: boolean;
 };
 
 export type CreatedIdentityUser = {
@@ -36,6 +38,7 @@ export type ManagedIdentityUser = CreatedIdentityUser & {
   role: "admin" | "user";
   isBanned: boolean;
   twoFactorEnabled: boolean;
+  emailVerified?: boolean;
 };
 
 export type IdentityUserAdministrator = {
@@ -48,7 +51,12 @@ export type IdentityUserAdministrator = {
   ): Promise<CreatedIdentityUser>;
   updateUser(
     subject: string,
-    input: { displayName?: string; platformAdmin?: boolean },
+    input: {
+      displayName?: string;
+      platformAdmin?: boolean;
+      emailVerified?: boolean;
+      tenantId?: number | null;
+    },
     request: Request,
   ): Promise<ManagedIdentityUser>;
   setAccountActive(
@@ -134,6 +142,7 @@ type AuthServiceUser = {
     role: string | null;
     isBanned: boolean;
     twoFactorEnabled: boolean;
+    emailVerified?: boolean;
   };
 };
 
@@ -155,6 +164,9 @@ function managedUser(user: AuthServiceUser["user"]): ManagedIdentityUser {
     role: user.role,
     isBanned: user.isBanned,
     twoFactorEnabled: user.twoFactorEnabled,
+    ...(typeof user.emailVerified === "boolean"
+      ? { emailVerified: user.emailVerified }
+      : {}),
   };
 }
 
@@ -357,6 +369,10 @@ export function betterAuthUserAdministrator(
             name: `${input.firstName} ${input.lastName}`.trim(),
             password: input.temporaryPassword ?? generatedPassword(),
             role: input.platformAdmin ? "admin" : "user",
+            emailVerified: input.emailVerified ?? false,
+            ...(input.tenantId === undefined
+              ? {}
+              : { tenantId: input.tenantId }),
           }),
         },
       );
@@ -376,6 +392,12 @@ export function betterAuthUserAdministrator(
             ...(input.platformAdmin === undefined
               ? {}
               : { role: input.platformAdmin ? "admin" : "user" }),
+            ...(input.emailVerified === undefined
+              ? {}
+              : { emailVerified: input.emailVerified }),
+            ...(input.tenantId === undefined
+              ? {}
+              : { tenantId: input.tenantId }),
           }),
         },
       );

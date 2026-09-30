@@ -7,6 +7,7 @@
     "test:e2e:mcp": "node scripts/mcp-e2e.mjs",
     "test:e2e:mcp:runner": "node --test scripts/mcp-e2e.test.mjs",
     "dev": "sh scripts/dev-local.sh",
+    "dev:mail": "docker compose up -d mailpit",
     "legacy:postgres": "docker compose --profile legacy-source up -d postgres",
     "typecheck": "pnpm run typecheck:core && pnpm run typecheck:insurance",
     "typecheck:core": "pnpm --filter @savia/api exec tsc --noEmit && pnpm --filter @savia/admin exec tsc --noEmit && pnpm --filter @savia/auth exec tsc --noEmit && pnpm --filter @savia/db exec tsc --noEmit && pnpm --filter @savia/studio-shared exec tsc --noEmit && pnpm --filter @savia/studio-server exec tsc --noEmit && pnpm --filter @savia/db-bridge exec tsc --noEmit && pnpm --filter @savia/legacy-exporter exec tsc --noEmit && pnpm --filter @savia/mcp exec tsc --noEmit && pnpm --filter @savia/connector-gateway exec tsc --noEmit && pnpm --filter @savia/release-catalog exec tsc --noEmit && pnpm --filter @savia/request run typecheck && pnpm --filter @savia/self-hosted typecheck",
@@ -30,7 +31,8 @@
     "store:pack": "node scripts/pack-store-plugin.mjs",
     "store:port": "node scripts/generate-store-port.mjs",
     "store:publish": "node scripts/publish-store-plugins.mjs",
-    "savia:credentials:import": "node scripts/import-bitwarden-credentials.mjs"
+    "savia:credentials:import": "node scripts/import-bitwarden-credentials.mjs",
+    "test:sso": "pnpm --filter @savia/self-hosted test:sso"
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",

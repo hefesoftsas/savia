@@ -66,6 +66,7 @@ const managedActorSchema = actorSchema.extend({
       role: z.enum(["admin", "user"]),
       isBanned: z.boolean(),
       twoFactorEnabled: z.boolean(),
+      emailVerified: z.boolean().optional(),
     }),
   }),
 });
@@ -138,6 +139,7 @@ const userProvisionSchema = z
     firstName: z.string().min(1),
     lastName: z.string().min(1),
     platformAdmin: z.boolean().default(false),
+    emailVerified: z.boolean().default(false),
     temporaryPassword: z.string().min(12).max(128).optional(),
     membership: membershipInputSchema.optional(),
     accessRoleIds: z.array(z.string().min(1).max(200)).max(100).optional(),
@@ -225,6 +227,7 @@ const updateIdentityUserSchema = z
     firstName: z.string().min(1).optional(),
     lastName: z.string().min(1).optional(),
     platformAdmin: z.boolean().optional(),
+    emailVerified: z.boolean().optional(),
     membership: membershipInputSchema.optional(),
   })
   .refine(
@@ -232,6 +235,7 @@ const updateIdentityUserSchema = z
       input.firstName !== undefined ||
       input.lastName !== undefined ||
       input.platformAdmin !== undefined ||
+      input.emailVerified !== undefined ||
       input.membership !== undefined,
     { message: "At least one change is required" },
   );
@@ -534,6 +538,9 @@ function managedActorDocument(actor: AppActor, account: ManagedIdentityUser) {
         role: account.role,
         isBanned: account.isBanned,
         twoFactorEnabled: account.twoFactorEnabled,
+        ...(typeof account.emailVerified === "boolean"
+          ? { emailVerified: account.emailVerified }
+          : {}),
       },
     },
   };
@@ -805,6 +812,10 @@ export function registerIdentityRoutes(
         lastName: input.lastName,
         platformAdmin: input.platformAdmin,
         temporaryPassword: input.temporaryPassword,
+        tenantId: input.platformAdmin
+          ? undefined
+          : (input.membership?.tenantId ?? input.membership?.agencyId),
+        emailVerified: input.emailVerified,
       },
       context.req.raw,
     );
@@ -902,6 +913,15 @@ export function registerIdentityRoutes(
       (tenantId !== undefined && requestedTenant !== tenantId)
     )
       return notFound(context);
+    const previousEmailTenantId =
+      targetActor.memberships[0]?.tenantId ??
+      targetActor.memberships[0]?.agencyId ??
+      null;
+    await userAdministrator.updateUser(
+      principal.subject,
+      { tenantId: requestedTenant },
+      context.req.raw,
+    );
     try {
       await grantMembership(
         d1,
@@ -910,6 +930,11 @@ export function registerIdentityRoutes(
         input.role,
       );
     } catch (error) {
+      await userAdministrator.updateUser(
+        principal.subject,
+        { tenantId: previousEmailTenantId },
+        context.req.raw,
+      );
       if (error instanceof TenantMembershipInvariantError) {
         return membershipInvariantResponse(context, error);
       }
@@ -1035,9 +1060,26 @@ export function registerIdentityRoutes(
         : [input.firstName, input.lastName]
             .filter((part): part is string => Boolean(part))
             .join(" ");
+    const previousEmailTenantId =
+      targetActor.memberships[0]?.tenantId ??
+      targetActor.memberships[0]?.agencyId ??
+      null;
+    const nextEmailTenantId =
+      input.platformAdmin === true
+        ? null
+        : input.membership
+          ? (input.membership.tenantId ?? input.membership.agencyId!)
+          : undefined;
     const account = await userAdministrator.updateUser(
       target.subject,
-      { displayName, platformAdmin: input.platformAdmin },
+      {
+        displayName,
+        platformAdmin: input.platformAdmin,
+        emailVerified: input.emailVerified,
+        ...(nextEmailTenantId === undefined
+          ? {}
+          : { tenantId: nextEmailTenantId }),
+      },
       context.req.raw,
     );
     const savedPrincipal = displayName
@@ -1053,16 +1095,21 @@ export function registerIdentityRoutes(
           input.membership?.role,
         );
       } catch (error) {
-        if (
-          input.platformAdmin === false &&
-          targetActor.globalRoles.includes("platform_admin")
-        ) {
-          await userAdministrator.updateUser(
-            target.subject,
-            { platformAdmin: true },
-            context.req.raw,
-          );
-        }
+        await userAdministrator.updateUser(
+          target.subject,
+          {
+            ...(input.platformAdmin === undefined
+              ? {}
+              : {
+                  platformAdmin:
+                    targetActor.globalRoles.includes("platform_admin"),
+                }),
+            ...(nextEmailTenantId === undefined
+              ? {}
+              : { tenantId: previousEmailTenantId }),
+          },
+          context.req.raw,
+        );
         if (error instanceof TenantMembershipInvariantError) {
           return membershipInvariantResponse(context, error);
         }
@@ -1077,6 +1124,11 @@ export function registerIdentityRoutes(
           input.membership.role,
         );
       } catch (error) {
+        await userAdministrator.updateUser(
+          target.subject,
+          { tenantId: previousEmailTenantId },
+          context.req.raw,
+        );
         if (error instanceof TenantMembershipInvariantError) {
           return membershipInvariantResponse(context, error);
         }
@@ -1129,14 +1181,37 @@ export function registerIdentityRoutes(
         404,
       );
     }
+    const targetActor = await loadActor(d1, target);
     if (
-      !targetBelongsToScope(await loadActor(d1, target), tenantId) ||
+      !targetBelongsToScope(targetActor, tenantId) ||
       (tenantId !== undefined && Number(agencyId) !== tenantId)
     )
       return notFound(context);
+    const previousEmailTenantId =
+      targetActor.memberships[0]?.tenantId ??
+      targetActor.memberships[0]?.agencyId ??
+      null;
+    const nextEmailTenantId =
+      targetActor.memberships
+        .filter(
+          (membership) =>
+            (membership.tenantId ?? membership.agencyId) !== Number(agencyId),
+        )
+        .map((membership) => membership.tenantId ?? membership.agencyId)[0] ??
+      null;
+    await userAdministrator?.updateUser(
+      target.subject,
+      { tenantId: nextEmailTenantId },
+      context.req.raw,
+    );
     try {
       await removeMembership(d1, principalId, agencyId);
     } catch (error) {
+      await userAdministrator?.updateUser(
+        target.subject,
+        { tenantId: previousEmailTenantId },
+        context.req.raw,
+      );
       if (error instanceof TenantMembershipInvariantError) {
         return membershipInvariantResponse(context, error);
       }

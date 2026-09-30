@@ -7,6 +7,16 @@ import { fileURLToPath } from "node:url";
 export function buildSecretUploads(environment, values) {
   if (!["production", "preview"].includes(environment))
     throw new Error("Unsupported deployment environment");
+  const oauthCredentialPairs = [
+    ["SAVIA_GOOGLE_CLIENT_ID", "SAVIA_GOOGLE_CLIENT_SECRET"],
+    ["SAVIA_MICROSOFT_CLIENT_ID", "SAVIA_MICROSOFT_CLIENT_SECRET"],
+  ];
+  for (const [clientId, clientSecret] of oauthCredentialPairs) {
+    if (Boolean(values[clientId]) !== Boolean(values[clientSecret]))
+      throw new Error(
+        `${clientId} and ${clientSecret} must be configured together`,
+      );
+  }
   if (values.SQL_BRIDGE_URL || values.SQL_BRIDGE_SECRET) {
     if (!values.SQL_BRIDGE_URL || !values.SQL_BRIDGE_SECRET)
       throw new Error(
@@ -90,6 +100,14 @@ export function buildSecretUploads(environment, values) {
     if (app === "api" && values.SQL_BRIDGE_URL) {
       secrets.SQL_BRIDGE_URL = values.SQL_BRIDGE_URL;
       secrets.SQL_BRIDGE_SECRET = values.SQL_BRIDGE_SECRET;
+    }
+    if (app === "auth") {
+      for (const [clientId, clientSecret] of oauthCredentialPairs) {
+        if (values[clientId]) {
+          secrets[clientId] = values[clientId];
+          secrets[clientSecret] = values[clientSecret];
+        }
+      }
     }
     return {
       app,

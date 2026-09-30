@@ -2,6 +2,13 @@
 
 Administration lists the domain screens using `studio.screen.hidden`. “Pantallas disponibles” are eligible for navigation; their actual presence in a member’s sidebar also depends on permissions and personal menu preferences. “Pantallas fuera del menú” remain accessible through authorized direct links. Hiding a screen does not change access permissions.
 
+Tenant administrators can create and manage screens only within their authorized
+tenant. Studio initializes its core schema through `/api/bootstrap`; opening
+screen administration or creating a screen does not install optional business
+packages or require their external collection service. Install those capabilities
+through their explicit setup flow. A missing business service must not prevent
+an empty tenant from creating its first screen.
+
 Configurar abre `view=admin-screen&object=<nombre>` con opciones de esa pantalla: registros, campos y formulario, presentación de formularios y visibilidad, operaciones del API para colecciones enlazadas, relaciones en dominios de datos e historial. Los endpoints se configuran directamente en un panel lateral sin pasar por el listado global de fuentes.
 
 Relaciones usa `screen-relations` y filtra conexiones y nodos por la pantalla seleccionada. Historial usa `screen-audit`; el API filtra `crm_audit.object_name` antes de aplicar el límite de resultados. Presentación usa `screen-settings` y entrega solo esa pantalla al gestor. El retorno mantiene el contexto de configuración.

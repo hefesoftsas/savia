@@ -124,6 +124,7 @@ const newTenantUserSchema = z
     lastName: z.string().trim().min(1).max(100),
     role: tenantRole,
     temporaryPassword: z.string().min(12).max(128).optional(),
+    emailVerified: z.boolean().optional(),
   })
   .strict();
 const existingTenantMemberSchema = z
@@ -357,6 +358,7 @@ async function createTenantWithExistingMember(
     existingMember: { principalId: string; role: z.infer<typeof tenantRole> };
   },
   realtime?: RealtimeHubClient,
+  userAdministrator?: IdentityUserAdministrator,
 ) {
   const principal = await findPrincipal(db, input.existingMember.principalId);
   if (!principal || !principal.isActive) return c.json(userMissing, 404);
@@ -369,8 +371,23 @@ async function createTenantWithExistingMember(
     );
   const now = new Date().toISOString();
   let tenantId: number | undefined;
+  const previousMembership = await db
+    .prepare(
+      "SELECT tenant_id FROM identity_tenant_membership WHERE principal_id=? AND is_active=1",
+    )
+    .bind(principal.id)
+    .first<{ tenant_id: number }>();
+  let emailScopeChanged = false;
   try {
     tenantId = await insertTenant(db, input, now);
+    if (userAdministrator && principal.issuer === userAdministrator.issuer) {
+      await userAdministrator.updateUser(
+        principal.subject,
+        { tenantId },
+        c.req.raw,
+      );
+      emailScopeChanged = true;
+    }
     await assignOrTransferMembership(
       db,
       principal.id,
@@ -378,6 +395,12 @@ async function createTenantWithExistingMember(
       input.existingMember.role,
     );
   } catch (error) {
+    if (emailScopeChanged)
+      await userAdministrator!.updateUser(
+        principal.subject,
+        { tenantId: previousMembership?.tenant_id ?? null },
+        c.req.raw,
+      );
     if (tenantId !== undefined)
       await db.prepare("DELETE FROM tenants WHERE id=?").bind(tenantId).run();
     if (error instanceof TenantMembershipInvariantError)
@@ -426,6 +449,8 @@ export function registerTenantRoutes(
   realtime?: RealtimeHubClient,
   documents?: R2Bucket,
   saviaRequestService?: SaviaRequestService,
+  deleteEmailSettings?: (tenantId: number) => Promise<void>,
+  setTenantSSOActivity?: (tenantId: number, active: boolean) => Promise<void>,
 ) {
   app.openapi(listRoute, async (c) => {
     const actor = actorFromContext(c);
@@ -524,6 +549,7 @@ export function registerTenantRoutes(
           };
         },
         realtime,
+        userAdministrator,
       );
     }
     if (!userAdministrator) {
@@ -542,11 +568,11 @@ export function registerTenantRoutes(
     let principalId: string | undefined;
     let tenantId: number | undefined;
     try {
+      tenantId = await insertTenant(db, input, now);
       authenticatedUser = await userAdministrator.createUser(
-        { ...input.initialUser!, platformAdmin: false },
+        { ...input.initialUser!, platformAdmin: false, tenantId },
         c.req.raw,
       );
-      tenantId = await insertTenant(db, input, now);
       const principal = await upsertPrincipal(db, {
         issuer: userAdministrator.issuer,
         subject: authenticatedUser.subject,
@@ -560,6 +586,12 @@ export function registerTenantRoutes(
         tenantId,
         input.initialUser!.role,
       );
+      if (!input.initialUser!.temporaryPassword) {
+        await userAdministrator.sendPasswordReset(
+          authenticatedUser.subject,
+          c.req.raw,
+        );
+      }
     } catch (error) {
       if (principalId) await deletePrincipal(db, principalId);
       if (tenantId)
@@ -592,6 +624,9 @@ export function registerTenantRoutes(
       .bind(id)
       .first<TenantRow>();
     if (!current) return c.json(missing, 404);
+    const activityChanged =
+      input.isActive !== undefined &&
+      Boolean(current.isActive) !== input.isActive;
     try {
       const slugStatements = await tenantSlugChangeStatements(
         db,
@@ -599,6 +634,8 @@ export function registerTenantRoutes(
         current.idSlug,
         input.idSlug ?? current.idSlug,
       );
+      if (activityChanged && input.isActive === false)
+        await setTenantSSOActivity?.(id, false);
       await db.batch([
         ...slugStatements,
         db
@@ -617,6 +654,21 @@ export function registerTenantRoutes(
       if (isUniqueConstraint(error) || error instanceof TenantSlugConflictError)
         return c.json(conflict, 409);
       throw error;
+    }
+    if (activityChanged && input.isActive === true) {
+      try {
+        await setTenantSSOActivity?.(id, true);
+      } catch (error) {
+        // Keep the tenant inactive if auth could not restore SSO access. This
+        // also makes a subsequent PATCH isActive=true retry the bridge call.
+        await db
+          .prepare(
+            "UPDATE tenants SET is_active=0,updated_at=? WHERE id=? AND kind='commercial'",
+          )
+          .bind(new Date().toISOString(), id)
+          .run();
+        throw error;
+      }
     }
     const row = await db
       .prepare(`${select} WHERE t.id=? AND t.kind='commercial'`)
@@ -667,6 +719,9 @@ export function registerTenantRoutes(
       if (remaining.some((result) => result.results.length > 0))
         return c.json(conflict, 409);
     }
+    // Remove credentials before deleting the core row: numeric tenant IDs may
+    // be reused, so a new tenant must never inherit a former tenant's SMTP.
+    await deleteEmailSettings?.(id);
     await deleteTenantBrandingAssets(db, documents, id);
     try {
       const deleted = await db

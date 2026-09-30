@@ -338,6 +338,7 @@ const runtime = {
         ...overrides.publicForms,
       },
       overrides.collectionGatewayFactory,
+      identityBridgeKey,
     ).fetch(request, environment);
     return response;
   },

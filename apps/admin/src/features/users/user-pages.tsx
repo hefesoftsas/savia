@@ -1,3 +1,4 @@
+import { EmailVerificationField, EmailVerificationStatus } from "./email-verification-field";
 import {
   ResourceEditSync,
   ResourceReadSync,
@@ -718,7 +719,7 @@ function UserShowContent() {
         />
         <UserReadOnlyField
           label={translate("savia.users.fields.email", { _: "Correo" })}
-          value={record.email}
+          value={<span className="grid gap-1">{record.email}<span className="text-sm text-muted-foreground"><EmailVerificationStatus verified={record.emailVerified} /></span></span>}
         />
         <UserReadOnlyField
           label={translate("savia.users.fields.platformRole", {
@@ -822,6 +823,7 @@ function UserIdentityFields({ edit = false }: { edit?: boolean }) {
         validate={edit ? undefined : requiredField}
         className="md:col-span-2"
       />
+      <EmailVerificationField />
     </UserSection>
   );
 }

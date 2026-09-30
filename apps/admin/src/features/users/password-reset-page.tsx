@@ -4,6 +4,20 @@ import { Building2, CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useMessages } from "@/i18n/core";
+
+const messages = {
+  "Request another link": [
+    "Solicitar otro enlace",
+    "Request another link",
+    "Solicitar outro link",
+  ],
+  "Password length": [
+    "Usa al menos 12 caracteres.",
+    "Use at least 12 characters.",
+    "Use pelo menos 12 caracteres.",
+  ],
+} as const;
 
 function requestUrl(baseUrl: string, path: string): string {
   return new URL(path, `${baseUrl.replace(/\/$/, "")}/`).toString();
@@ -11,12 +25,16 @@ function requestUrl(baseUrl: string, path: string): string {
 
 export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
   const translate = useTranslate();
+  const t = useMessages(messages);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [complete, setComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const token = new URLSearchParams(window.location.search).get("token");
+  const invalidLink =
+    !token || new URLSearchParams(window.location.search).has("error");
+  const recoveryUrl = requestUrl(apiUrl, "/api/auth/forgot-password");
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -28,10 +46,10 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
       );
       return;
     }
-    if (password.length < 8) {
+    if (password.length < 12) {
       setError(
         translate("savia.passwordReset.errors.minLength", {
-          _: "La contraseña debe tener al menos 8 caracteres.",
+          _: "La contraseña debe tener al menos 12 caracteres.",
         }),
       );
       return;
@@ -82,7 +100,10 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-background p-6 text-foreground">
-      <section className="w-full max-w-md rounded-xl border bg-card p-7 shadow-sm">
+      <section
+        className="w-full max-w-md rounded-xl border bg-card p-7"
+        aria-live="polite"
+      >
         <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
           {complete ? (
             <CheckCircle2 className="size-5" />
@@ -116,12 +137,23 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
             <Building2 className="size-4" />
             {translate("savia.passwordReset.goToSavia", { _: "Ir a Savia" })}
           </Button>
+        ) : invalidLink ? (
+          <div className="mt-6 grid gap-4">
+            <p role="alert" className="text-sm text-destructive">
+              {translate("savia.passwordReset.errors.failed", {
+                _: "El enlace expiró o no fue posible actualizar la contraseña.",
+              })}
+            </p>
+            <Button asChild>
+              <a href={recoveryUrl}>{t("Request another link")}</a>
+            </Button>
+          </div>
         ) : (
           <form
             className="mt-6 grid gap-4"
             onSubmit={(event) => void submit(event)}
           >
-            <label className="grid gap-2">
+            <div className="grid gap-2">
               <Label htmlFor="new-password">
                 {translate("savia.passwordReset.newPassword", {
                   _: "Nueva contraseña",
@@ -134,9 +166,15 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={submitting}
+                required
+                minLength={12}
+                aria-describedby="password-length"
               />
-            </label>
-            <label className="grid gap-2">
+              <p id="password-length" className="text-sm text-muted-foreground">
+                {t("Password length")}
+              </p>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="confirm-password">
                 {translate("savia.passwordReset.confirmPassword", {
                   _: "Confirmar contraseña",
@@ -149,9 +187,23 @@ export function PasswordResetPage({ apiUrl }: { apiUrl: string }) {
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
                 disabled={submitting}
+                required
+                minLength={12}
               />
-            </label>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            </div>
+            {error ? (
+              <div className="grid gap-2">
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+                <a
+                  className="text-sm text-primary underline underline-offset-4"
+                  href={recoveryUrl}
+                >
+                  {t("Request another link")}
+                </a>
+              </div>
+            ) : null}
             <Button type="submit" disabled={submitting || !token}>
               {submitting
                 ? translate("savia.passwordReset.submitting", {

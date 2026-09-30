@@ -2,6 +2,7 @@ import { TenantAccessUrl } from "@/features/tenant-branding/tenant-access-url";
 import "@/features/tenant-branding/tenant-branding.css";
 import { ResourceEditSync } from "@/realtime/resource-realtime";
 import type { ResourceProps } from "ra-core";
+import { EmailVerificationField } from "@/features/users/email-verification-field";
 import {
   required,
   useCreatePath,
@@ -126,6 +127,7 @@ function InitialTenantUserFields() {
               },
             )}
           />
+          <EmailVerificationField source="initialUser.emailVerified" />
         </>
       )}
     </>

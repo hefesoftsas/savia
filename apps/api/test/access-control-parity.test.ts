@@ -4,6 +4,7 @@ import {
   type FixtureRole,
 } from "./access-control-fixtures";
 import { hasAgencyCapability } from "../src/auth/access-policy";
+import { makeConfig } from "@savia/studio-shared/metadata";
 let f: Awaited<ReturnType<typeof createAccessFixture>>;
 beforeAll(async () => {
   f = await createAccessFixture();
@@ -105,3 +106,98 @@ it.each([
     }
   },
 );
+
+it("limits tenant-admin screen creation and metadata access to its own tenant", async () => {
+  const ownScreen = "acl_tenant_admin_screen";
+  const globalScreen = "acl_global_screen";
+  await f.db
+    .prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES ('tenant:0',?,?, '', ?, 1)",
+    )
+    .bind(
+      globalScreen,
+      "Global screen",
+      JSON.stringify(makeConfig({ name: { type: "Textbox", label: "Name" } })),
+    )
+    .run();
+
+  const headers = { "content-type": "application/json" };
+  const created = await f.request(
+    "tenant_admin",
+    101,
+    "/v1/studio/101/api/objects",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: ownScreen,
+        label: "Tenant screen",
+        config: makeConfig({ name: { type: "Textbox", label: "Name" } }),
+      }),
+    },
+  );
+  expect(created.status).toBe(201);
+
+  const ownList = await f.request(
+    "tenant_admin",
+    101,
+    "/v1/studio/101/api/objects",
+  );
+  expect(ownList.status).toBe(200);
+  expect(await ownList.text()).toContain(ownScreen);
+
+  for (const tenantId of [102, 0]) {
+    const path = `/v1/studio/${tenantId}/api`;
+    const createResponse = await f.request(
+      "tenant_admin",
+      101,
+      `${path}/objects`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: `acl_forbidden_screen_${tenantId}`,
+          label: "Forbidden screen",
+          config: makeConfig({ name: { type: "Textbox", label: "Name" } }),
+        }),
+      },
+    );
+    expect(createResponse.status).toBe(403);
+
+    const listResponse = await f.request(
+      "tenant_admin",
+      101,
+      `${path}/objects`,
+    );
+    expect(listResponse.status).toBe(403);
+
+    const target = tenantId === 0 ? globalScreen : "acl_contacts";
+    const editResponse = await f.request(
+      "tenant_admin",
+      101,
+      `${path}/objects/${target}/screen`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ label: "Unauthorized edit" }),
+      },
+    );
+    expect(editResponse.status).toBe(403);
+  }
+
+  const [foreignObject, globalObject, forbiddenObjects] = await Promise.all([
+    f.db
+      .prepare("SELECT label FROM studio_objects WHERE tenant_id='tenant:102' AND name='acl_contacts'")
+      .first<{ label: string }>(),
+    f.db
+      .prepare("SELECT label FROM studio_objects WHERE tenant_id='tenant:0' AND name=?")
+      .bind(globalScreen)
+      .first<{ label: string }>(),
+    f.db
+      .prepare("SELECT count(*) AS count FROM studio_objects WHERE name IN ('acl_forbidden_screen_102','acl_forbidden_screen_0')")
+      .first<{ count: number }>(),
+  ]);
+  expect(foreignObject?.label).toBe("ACL contacts");
+  expect(globalObject?.label).toBe("Global screen");
+  expect(forbiddenObjects?.count).toBe(0);
+});

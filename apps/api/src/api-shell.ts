@@ -1,6 +1,8 @@
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { returnOriginFromRequest } from "./auth/admin-oauth";
 import { readTenantBrandingForRequest } from "./tenant-branding/service";
+import { resolveTenantSlug } from "./tenant-slugs";
+import { parseTenantSlugFromHostname } from "@savia/tenant-host/tenant-host";
 import { RealtimeHubError } from "./realtime/hub-client";
 import { installRequestResultEnvelope } from "./request-results/routes";
 
@@ -54,6 +56,14 @@ type ScalarOAuthClient = {
 };
 
 const localPublicAuthUrls = publicAuthUrls("http://127.0.0.1:8787");
+
+function publicAuthHeaders(request: Request): Headers {
+  const headers = new Headers(request.headers);
+  headers.delete("x-savia-tenant-branding");
+  headers.delete("x-savia-tenant-email-id");
+  headers.delete("x-savia-bridge-key");
+  return headers;
+}
 
 type OpenApiDocument = ReturnType<OpenAPIHono["getOpenAPI31Document"]>;
 
@@ -353,6 +363,7 @@ export function createApiShell(
   document = openApiDocument,
   configureMiddleware?: (app: OpenAPIHono) => void,
   tenantHost?: { canonicalHost?: string },
+  identityBridgeKey?: string,
 ): OpenAPIHono {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
@@ -423,7 +434,7 @@ export function createApiShell(
     return resolvedAuthService.fetch(
       new Request(context.req.url, {
         method: "POST",
-        headers: context.req.raw.headers,
+        headers: publicAuthHeaders(context.req.raw),
         body: JSON.stringify(context.req.valid("json")),
       }),
     );
@@ -433,7 +444,7 @@ export function createApiShell(
     return resolvedAuthService.fetch(
       new Request(context.req.url, {
         method: "POST",
-        headers: context.req.raw.headers,
+        headers: publicAuthHeaders(context.req.raw),
         body: JSON.stringify(context.req.valid("json")),
       }),
     );
@@ -443,7 +454,7 @@ export function createApiShell(
     return resolvedAuthService.fetch(
       new Request(context.req.url, {
         method: "POST",
-        headers: context.req.raw.headers,
+        headers: publicAuthHeaders(context.req.raw),
         body: JSON.stringify(context.req.valid("json")),
       }),
     );
@@ -453,7 +464,7 @@ export function createApiShell(
     return resolvedAuthService.fetch(
       new Request(context.req.url, {
         method: "POST",
-        headers: context.req.raw.headers,
+        headers: publicAuthHeaders(context.req.raw),
         body: JSON.stringify(context.req.valid("json")),
       }),
     );
@@ -463,7 +474,7 @@ export function createApiShell(
     return resolvedAuthService.fetch(
       new Request(context.req.url, {
         method: "POST",
-        headers: context.req.raw.headers,
+        headers: publicAuthHeaders(context.req.raw),
         body: JSON.stringify(context.req.valid("json")),
       }),
     );
@@ -473,7 +484,7 @@ export function createApiShell(
     return resolvedAuthService.fetch(
       new Request(context.req.url, {
         method: "POST",
-        headers: context.req.raw.headers,
+        headers: publicAuthHeaders(context.req.raw),
         body: JSON.stringify(context.req.valid("json")),
       }),
     );
@@ -485,12 +496,14 @@ export function createApiShell(
   app.all("/api/auth/*", async (context) => {
     if (!resolvedAuthService) return authenticationUnavailableResponse();
     // Never forward a caller-supplied identity payload to the authentication UI.
-    const headers = new Headers(context.req.raw.headers);
-    headers.delete("x-savia-tenant-branding");
+    const headers = publicAuthHeaders(context.req.raw);
+    // This envelope is created below from the request hostname and is honored
+    // by auth only when accompanied by the API's internal bridge key.
     if (
       context.req.method === "GET" &&
       [
         "/api/auth/login",
+        "/api/auth/forgot-password",
         "/api/auth/mfa-enroll",
         "/api/auth/consent",
         "/api/auth/oauth-ui.css",
@@ -516,6 +529,23 @@ export function createApiShell(
             "x-savia-tenant-branding",
             encodeURIComponent(JSON.stringify(branding)),
           );
+        if (
+          identityBridgeKey?.trim() &&
+          context.req.method === "GET" &&
+          ["/api/auth/login", "/api/auth/forgot-password"].includes(
+            context.req.path,
+          )
+        ) {
+          const slug = parseTenantSlugFromHostname(
+            new URL(brandingRequest.url).hostname,
+            canonicalHost,
+          );
+          const tenant = slug ? await resolveTenantSlug(db, slug) : null;
+          if (tenant) {
+            headers.set("x-savia-tenant-email-id", String(tenant.id));
+            headers.set("x-savia-bridge-key", identityBridgeKey);
+          }
+        }
       } catch {
         // Branding is cosmetic: a failed lookup must not prevent authentication.
       }

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  deliverSmtpEmail,
   sendSmtpEmail,
   type SMTPConnection,
   type SMTPSettings,
@@ -16,7 +17,7 @@ const settings: SMTPSettings = {
 class RecordedConnection implements SMTPConnection {
   readonly commands: string[] = [];
   closed = false;
-  private readonly responses = [
+  private responses = [
     "220 mail.hefesoft.com ESMTP ready\r\n",
     "250-mail.hefesoft.com\r\n250 AUTH PLAIN\r\n",
     "235 Authentication succeeded\r\n",
@@ -89,5 +90,112 @@ describe("SMTP delivery", () => {
     ).rejects.toThrow("Invalid SMTP recipient");
     expect(connection.commands).toEqual([]);
     expect(connection.closed).toBe(true);
+  });
+
+  it("allows unauthenticated delivery only when both credentials are empty", async () => {
+    const connection = new RecordedConnection();
+    connection["responses"] = [
+      "220 mail.hefesoft.com ESMTP ready\r\n",
+      "250 mail.hefesoft.com\r\n",
+      "250 Sender accepted\r\n",
+      "250 Recipient accepted\r\n",
+      "354 End data\r\n",
+      "250 Message accepted\r\n",
+      "221 Closing connection\r\n",
+    ];
+    await sendSmtpEmail(
+      { ...settings, username: "", password: "" },
+      { to: "person@example.test", subject: "Hello", text: "Test" },
+      connection,
+    );
+    expect(
+      connection.commands.some((command) => command.startsWith("AUTH ")),
+    ).toBe(false);
+  });
+
+  it("upgrades the connection before sending credentials with STARTTLS", async () => {
+    const connection = new RecordedConnection();
+    connection["responses"] = [
+      "220 mail.hefesoft.com ESMTP ready\r\n",
+      "250 mail.hefesoft.com\r\n",
+      "220 Ready to start TLS\r\n",
+      "250 mail.hefesoft.com\r\n",
+      "235 Authentication succeeded\r\n",
+      "250 Sender accepted\r\n",
+      "250 Recipient accepted\r\n",
+      "354 End data\r\n",
+      "250 Message accepted\r\n",
+      "221 Closing connection\r\n",
+    ];
+    let upgraded = false;
+    connection.startTls = async () => {
+      upgraded = true;
+    };
+    await sendSmtpEmail(
+      { ...settings, security: "starttls" },
+      { to: "person@example.test", subject: "Hello", text: "Test" },
+      connection,
+    );
+    expect(upgraded).toBe(true);
+    expect(connection.commands.indexOf("STARTTLS\r\n")).toBeLessThan(
+      connection.commands.findIndex((command) => command.startsWith("AUTH ")),
+    );
+  });
+
+  it("rejects unencrypted delivery unless it is explicitly enabled for local development", async () => {
+    await expect(
+      sendSmtpEmail(
+        { ...settings, security: "plain" },
+        { to: "person@example.test", subject: "Hello", text: "Test" },
+        new RecordedConnection(),
+      ),
+    ).rejects.toThrow("only allowed for local development");
+  });
+
+  it("selects STARTTLS transport mode and closes the socket after handshake failure", async () => {
+    const close = vi.fn(async () => undefined);
+    const socket = {
+      readable: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("500 unexpected\r\n"));
+          controller.close();
+        },
+      }),
+      writable: new WritableStream<Uint8Array>(),
+      opened: Promise.resolve({}),
+      close,
+      startTls: vi.fn(),
+    } as unknown as Socket;
+    let transport: unknown;
+    await expect(
+      deliverSmtpEmail(
+        { ...settings, security: "starttls" },
+        { to: "person@example.test", subject: "Hello", text: "Test" },
+        (_address, options) => {
+          transport = options.secureTransport;
+          return socket;
+        },
+      ),
+    ).rejects.toThrow("SMTP server rejected the message");
+    expect(transport).toBe("starttls");
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes a socket when its SMTP greeting exceeds the timeout", async () => {
+    const close = vi.fn(async () => undefined);
+    const socket = {
+      readable: new ReadableStream<Uint8Array>(),
+      writable: new WritableStream<Uint8Array>(),
+      opened: Promise.resolve({}),
+      close,
+    } as unknown as Socket;
+    await expect(
+      deliverSmtpEmail(
+        { ...settings, timeoutMs: 1_000 },
+        { to: "person@example.test", subject: "Hello", text: "Test" },
+        () => socket,
+      ),
+    ).rejects.toThrow("SMTP connection timed out");
+    expect(close).toHaveBeenCalledOnce();
   });
 });

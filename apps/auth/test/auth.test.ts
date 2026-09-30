@@ -151,6 +151,7 @@ it("bridge suspension revokes existing Better Auth sessions", async () => {
         name: "Bridge Ban",
         password,
         role: "user",
+        emailVerified: true,
       }),
     }),
   );
@@ -1033,4 +1034,207 @@ describe("Savia Better Auth worker", () => {
     );
     expect(response.status).toBe(200);
   });
+});
+
+it("adds accessible password recovery and verification states to the login screen", async () => {
+  const handler = createAuthHandler(env, {
+    sendTransactionalEmail: async () => {},
+  });
+  const requestPage = (path: string) =>
+    handler.fetch(new Request(`${origin}${path}`));
+  const [login, forgot, verified, expired] = await Promise.all([
+    requestPage("/api/auth/login?client_id=scalar&sig=signed"),
+    requestPage("/api/auth/forgot-password"),
+    requestPage("/api/auth/email-verified"),
+    requestPage("/api/auth/email-verified?error=token_expired"),
+  ]);
+  const loginHtml = await login.text();
+  const forgotHtml = await forgot.text();
+  const verifiedHtml = await verified.text();
+  const expiredHtml = await expired.text();
+
+  expect(loginHtml).toContain('data-oauth-form="request-password-reset"');
+  expect(loginHtml).toContain('data-oauth-form="send-verification-email"');
+  expect(loginHtml).toContain('aria-live="polite"');
+  expect(forgot.status).toBe(200);
+  expect(forgotHtml).toContain('data-oauth-form="request-password-reset"');
+  expect(forgotHtml).toMatch(/data-oauth-panel="forgot"(?! hidden)/);
+  expect(verified.status).toBe(200);
+  expect(verifiedHtml).toContain("Correo verificado");
+  expect(verifiedHtml).toContain('href="/api/auth/login"');
+  expect(expiredHtml).toContain("El enlace expiró o no es válido");
+  expect(expiredHtml).toMatch(/data-oauth-panel="verify"(?! hidden)/);
+});
+
+it("blocks unverified bridge users until their one-time verification link is consumed", async () => {
+  const bridgeKey = "test-only-verification-bridge";
+  const delivered: Array<{ to: string; subject: string; text: string }> = [];
+  const handler = createAuthHandler(
+    { ...env, SAVIA_INTERNAL_BRIDGE_KEY: bridgeKey },
+    { sendTransactionalEmail: async (email) => void delivered.push(email) },
+  );
+  const email = `verify-${crypto.randomUUID()}@savia.test`;
+  const password = "Verify-Account-Password-123!";
+  const created = await handler.fetch(
+    new Request(`${origin}/_internal/users`, {
+      method: "POST",
+      headers: {
+        "x-savia-bridge-key": bridgeKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ email, name: "Verify User", password }),
+    }),
+  );
+  const loginBeforeVerification = await handler.fetch(
+    new Request(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }),
+  );
+
+  expect(created.status).toBe(201);
+  expect((await created.json()).user).toMatchObject({ emailVerified: false });
+  expect(delivered).toHaveLength(1);
+  expect(delivered[0]).toMatchObject({
+    to: email,
+    subject: expect.stringContaining("Verifica"),
+  });
+  expect(loginBeforeVerification.status).toBe(403);
+
+  const verificationUrl = delivered[0].text.match(/https?:\/\/[^\s]+/)?.[0];
+  expect(verificationUrl).toBeTruthy();
+  const verified = await handler.fetch(new Request(verificationUrl!));
+  const loginAfterVerification = await handler.fetch(
+    new Request(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }),
+  );
+
+  expect(verified.status).toBe(302);
+  expect(verified.headers.get("location")).toContain("email-verified");
+  expect(loginAfterVerification.status).toBe(200);
+});
+
+it("allows bridge administrators to explicitly bypass verification for one user", async () => {
+  const bridgeKey = "test-only-verification-bypass-bridge";
+  const delivered: Array<{ to: string; subject: string; text: string }> = [];
+  const handler = createAuthHandler(
+    { ...env, SAVIA_INTERNAL_BRIDGE_KEY: bridgeKey },
+    { sendTransactionalEmail: async (email) => void delivered.push(email) },
+  );
+  const email = `verified-${crypto.randomUUID()}@savia.test`;
+  const created = await handler.fetch(
+    new Request(`${origin}/_internal/users`, {
+      method: "POST",
+      headers: {
+        "x-savia-bridge-key": bridgeKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        name: "Verified User",
+        password: "Verified-Account-Password-123!",
+        emailVerified: true,
+        tenantId: 42,
+      }),
+    }),
+  );
+  const login = await handler.fetch(
+    new Request(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password: "Verified-Account-Password-123!",
+      }),
+    }),
+  );
+  const account = await env.AUTH_DB.prepare(
+    'SELECT emailVerified, emailTenantId FROM "user" WHERE email = ?',
+  )
+    .bind(email)
+    .first<{ emailVerified: number; emailTenantId: number }>();
+
+  expect(created.status).toBe(201);
+  expect((await created.json()).user).toMatchObject({ emailVerified: true });
+  expect(login.status).toBe(200);
+  expect(delivered).toHaveLength(0);
+  expect(account).toEqual({ emailVerified: 1, emailTenantId: 42 });
+});
+
+it("uses generic password recovery responses and consumes reset tokens once", async () => {
+  const delivered: Array<{ to: string; subject: string; text: string }> = [];
+  const auth = createBetterAuth(env, {
+    sendTransactionalEmail: async (email) => void delivered.push(email),
+  });
+  const known = await auth.handler(
+    new Request(`${origin}/api/auth/request-password-reset`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ email: "savia.admin@example.test" }),
+    }),
+  );
+  const unknown = await auth.handler(
+    new Request(`${origin}/api/auth/request-password-reset`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({
+        email: `missing-${crypto.randomUUID()}@savia.test`,
+      }),
+    }),
+  );
+  expect(await known.json()).toEqual(await unknown.json());
+  expect(unknown.status).toBe(200);
+  expect(delivered).toHaveLength(1);
+
+  const resetUrl = new URL(delivered[0].text.match(/https?:\/\/[^\s]+/)![0]);
+  const token =
+    resetUrl.searchParams.get("token") ??
+    resetUrl.pathname.split("/").filter(Boolean).at(-1);
+  expect(token).toBeTruthy();
+  const reset = await auth.handler(
+    new Request(`${origin}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({
+        token,
+        newPassword: "Changed-Admin-Password-456!",
+      }),
+    }),
+  );
+  const replay = await auth.handler(
+    new Request(`${origin}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({
+        token,
+        newPassword: "Changed-Admin-Password-789!",
+      }),
+    }),
+  );
+
+  expect(reset.status).toBe(200);
+  expect(replay.ok).toBe(false);
+});
+
+it("keeps password recovery generic when email delivery is unavailable", async () => {
+  const handler = createAuthHandler(env);
+  const postRecovery = (email: string) =>
+    handler.fetch(
+      new Request(`${origin}/api/auth/request-password-reset`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      }),
+    );
+  const [known, unknown] = await Promise.all([
+    postRecovery("savia.admin@example.test"),
+    postRecovery(`missing-${crypto.randomUUID()}@savia.test`),
+  ]);
+
+  expect(known.status).toBe(200);
+  expect(await known.json()).toEqual(await unknown.json());
 });

@@ -62,6 +62,8 @@ function loginPage(
   restartUrl?: string,
   tenantSlug?: string | null,
   branding?: TenantBranding,
+  accountState?: { panel: "forgot" | "verify"; notice?: string },
+  emailAvailable = false,
 ): Response {
   const title = branding
     ? `${branding.loginTitle} | ${branding.displayName}`
@@ -71,7 +73,16 @@ function loginPage(
   return htmlResponse(
     page(
       title,
-      renderOAuthSurface("login", { tenantSlug, branding }),
+      renderOAuthSurface("login", {
+        tenantSlug,
+        branding,
+        emailAvailable,
+        initialPanel:
+          accountState?.panel === "forgot" && !emailAvailable
+            ? undefined
+            : accountState?.panel,
+        initialNotice: accountState?.notice,
+      }),
       restartUrl,
       !!branding?.loginAnimationUrl || !branding?.coverUrl,
     ),
@@ -96,6 +107,31 @@ function consentPage(branding?: TenantBranding): Response {
   );
 }
 
+function verifiedPage(
+  branding?: TenantBranding,
+  verificationError?: string | null,
+): Response {
+  if (verificationError) {
+    return htmlResponse(
+      page(
+        `Verifica tu correo | ${branding?.displayName ?? "Savia"}`,
+        renderOAuthSurface("login", {
+          branding,
+          initialPanel: "verify",
+          initialNotice:
+            "El enlace expiró o no es válido. Solicita un nuevo enlace de verificación.",
+        }),
+      ),
+    );
+  }
+  return htmlResponse(
+    page(
+      `Correo verificado | ${branding?.displayName ?? "Savia"}`,
+      renderOAuthSurface("verified", { branding }),
+    ),
+  );
+}
+
 function scriptResponse(): Response {
   return new Response(oauthUiScript, {
     headers: {
@@ -116,19 +152,63 @@ function styleResponse(branding?: TenantBranding): Response {
 
 export function oauthPageResponse(
   request: Request,
-  options?: { restartUrl?: string; branding?: TenantBranding },
+  options?: {
+    restartUrl?: string;
+    branding?: TenantBranding;
+    emailAvailable?: boolean;
+  },
 ): Response | undefined {
   if (request.method !== "GET") return undefined;
   const url = new URL(request.url);
   const tenantSlug = parseTenantSlugFromHostname(url.hostname);
   const branding = parseTenantBranding(options?.branding) ?? undefined;
   switch (url.pathname) {
+    case "/api/auth/sso-complete":
+      return htmlResponse(
+        page(
+          "Completando inicio de sesión | Savia",
+          '<main class="oauth-shell"><section data-sso-complete><h1>Completando inicio de sesión</h1><p id="oauth-status" role="status">Validando tu acceso…</p><a href="/api/auth/login">Volver al inicio de sesión</a></section></main>',
+          options?.restartUrl,
+        ),
+      );
     case "/api/auth/login":
-      return loginPage(options?.restartUrl, tenantSlug, branding);
+      return url.searchParams.get("mode") === "forgot"
+        ? loginPage(
+            options?.restartUrl,
+            tenantSlug,
+            branding,
+            {
+              panel: "forgot",
+            },
+            options?.emailAvailable,
+          )
+        : loginPage(
+            options?.restartUrl,
+            tenantSlug,
+            branding,
+            undefined,
+            options?.emailAvailable,
+          );
+    case "/api/auth/forgot-password":
+      return loginPage(
+        options?.restartUrl,
+        tenantSlug,
+        branding,
+        {
+          panel: "forgot",
+        },
+        options?.emailAvailable,
+      );
     case "/api/auth/mfa-enroll":
       return mfaEnrollmentPage(branding);
     case "/api/auth/consent":
       return consentPage(branding);
+    case "/api/auth/email-verified":
+      return verifiedPage(
+        branding,
+        url.searchParams.get("error") ??
+          url.searchParams.get("error_description"),
+      );
     case "/api/auth/oauth-ui.js":
       return scriptResponse();
     case "/api/auth/oauth-ui.css":
@@ -146,6 +226,9 @@ const oauthUiScript = String.raw`(() => {
   const twoFactor = document.querySelector("[data-oauth-two-factor]");
   const enrollment = document.querySelector("[data-oauth-enrollment]");
   const passwordInput = document.querySelector("#password");
+  const loginPanel = document.querySelector('[data-oauth-form="sign-in"]');
+  const recoveryPanel = document.querySelector('[data-oauth-panel="forgot"]');
+  const verificationPanel = document.querySelector('[data-oauth-panel="verify"]');
   const passwordToggle = document.querySelector("[data-oauth-password-toggle]");
   const loginAnimation = document.querySelector("[data-oauth-login-animation]");
 
@@ -398,6 +481,101 @@ const oauthUiScript = String.raw`(() => {
     if (!redirectFromServer(result)) await continueAfterEnrollment();
   }
 
+  function showAccountPanel(name) {
+    if (loginPanel) loginPanel.hidden = name !== "login";
+    const social = document.querySelector("[data-social-login]");
+    if (social) social.hidden = name !== "login" || social.dataset.available !== "true";
+    if (recoveryPanel) recoveryPanel.hidden = name !== "forgot";
+    if (verificationPanel) verificationPanel.hidden = name !== "verify";
+    const ssoPanel = document.querySelector('[data-oauth-panel="sso"]');
+    if (ssoPanel) ssoPanel.hidden = name !== "sso";
+    const actions = document.querySelector("[data-oauth-account-actions]");
+    if (actions) actions.hidden = name !== "login";
+    if (name === "sso") {
+      const email = document.querySelector("#email");
+      const ssoEmail = document.querySelector("#sso-email");
+      if (ssoEmail && email && !ssoEmail.value) ssoEmail.value = email.value;
+    }
+    const activePanel = document.querySelector('[data-oauth-panel="' + name + '"]');
+    if (activePanel) {
+      for (const form of activePanel.querySelectorAll("form")) form.hidden = false;
+      activePanel.querySelector("input")?.focus();
+    }
+    setStatus("");
+  }
+
+  async function startSSO(providerId) {
+    const callback = new URL("/api/auth/sso-complete", window.location.origin);
+    // Carry the existing OAuth continuation through the signed SAML RelayState.
+    callback.search = window.location.search;
+    const result = await request("sign-in/sso", {providerId, callbackURL: callback.href});
+    if (!redirectFromServer(result)) throw new Error("No fue posible iniciar SSO.");
+  }
+
+  const socialLogin = document.querySelector("[data-social-login]");
+  if (socialLogin) {
+    fetch("/api/auth/savia-social/providers", {credentials:"same-origin"})
+      .then(response => response.ok ? response.json() : {providers:[]})
+      .then(({providers}) => {
+        if (!Array.isArray(providers)) return;
+        for (const button of socialLogin.querySelectorAll("[data-social-provider]")) {
+          button.hidden = !providers.includes(button.dataset.socialProvider);
+          button.addEventListener("click", async () => {
+            const buttons = [...socialLogin.querySelectorAll("button")];
+            buttons.forEach(item => item.disabled = true);
+            setStatus("Conectando con tu proveedor de identidad…");
+            try {
+              const callback = new URL("/api/auth/sso-complete", window.location.origin);
+              callback.search = window.location.search;
+              const result = await request("sign-in/social", {provider:button.dataset.socialProvider, callbackURL:callback.href, errorCallbackURL:callback.href});
+              if (!redirectFromServer(result)) throw new Error("No fue posible iniciar sesión con este proveedor.");
+            } catch (error) {
+              setStatus(error instanceof Error ? error.message : "No fue posible iniciar sesión.");
+              buttons.forEach(item => item.disabled = false);
+            }
+          });
+        }
+        socialLogin.dataset.available = providers.length ? "true" : "false";
+        socialLogin.hidden = !providers.length || !loginPanel || loginPanel.hidden;
+      }).catch(() => { socialLogin.hidden = true; });
+  }
+
+  async function submitSSODiscovery(form) {
+    const email = formValue(form, "email").trim();
+    const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+    const response = await fetch("/api/auth/savia-sso/connections?domain=" + encodeURIComponent(domain), {credentials:"same-origin"});
+    if (!response.ok) throw new Error("No fue posible consultar las conexiones de SSO.");
+    const result = await response.json();
+    const choices = document.querySelector("[data-sso-connections]");
+    if (choices) choices.replaceChildren();
+    if (!result.connections?.length) throw new Error("No encontramos una conexión SSO para este correo. Consulta con tu administrador.");
+    if (result.connections.length === 1) return startSSO(result.connections[0].providerId);
+    for (const connection of result.connections) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = connection.displayName;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await startSSO(connection.providerId); }
+        catch (error) { setStatus(error instanceof Error ? error.message : "No fue posible iniciar SSO."); button.disabled = false; }
+      });
+      choices?.append(button);
+    }
+    setStatus("Selecciona tu organización para continuar.");
+  }
+
+  async function submitRecovery(form) {
+    await request("request-password-reset", { email: formValue(form, "email") });
+    form.hidden = true;
+    setStatus("Si encontramos una cuenta con ese correo, recibirás un enlace para recuperar la contraseña.");
+  }
+
+  async function submitVerification(form) {
+    await request("send-verification-email", { email: formValue(form, "email") });
+    form.hidden = true;
+    setStatus("Si la cuenta necesita verificación, recibirás un enlace en ese correo.");
+  }
+
   async function submitSecondFactor(form, path) {
     const result = await request(path, { code: formValue(form, "code") });
     if (!redirectFromServer(result)) await continueAfterEnrollment();
@@ -441,14 +619,26 @@ const oauthUiScript = String.raw`(() => {
   }
 
   function bindForms() {
+    for (const control of document.querySelectorAll("[data-oauth-show]")) {
+      control.addEventListener("click", () => showAccountPanel(control.dataset.oauthShow));
+    }
     for (const form of document.querySelectorAll("[data-oauth-form]")) {
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         setSubmitting(form, true);
         try {
           switch (form.dataset.oauthForm) {
+            case "sso-discover":
+              await submitSSODiscovery(form);
+              break;
             case "sign-in":
               await submitSignIn(form);
+              break;
+            case "request-password-reset":
+              await submitRecovery(form);
+              break;
+            case "send-verification-email":
+              await submitVerification(form);
               break;
             case "verify-totp":
               await submitSecondFactor(form, "two-factor/verify-totp");
@@ -470,13 +660,32 @@ const oauthUiScript = String.raw`(() => {
           }
         } catch (error) {
           if (!restartExpiredAuthorization(error)) {
-            setStatus(error instanceof Error ? error.message : "No fue posible completar la solicitud.");
+            if (error && error.code === "EMAIL_NOT_VERIFIED" && form.dataset.oauthForm === "sign-in") {
+              const verificationEmail = document.querySelector("#verification-email");
+              if (verificationEmail) verificationEmail.value = formValue(form, "email");
+              showAccountPanel("verify");
+              setStatus("Verifica tu correo antes de iniciar sesión. Puedes solicitar un nuevo enlace aquí.");
+            } else {
+              setStatus(error instanceof Error ? error.message : "No fue posible completar la solicitud.");
+            }
           }
         } finally {
           setSubmitting(form, false);
         }
       });
     }
+  }
+
+  if (document.querySelector("[data-sso-complete]")) {
+    if (new URLSearchParams(window.location.search).has("error")) {
+      setStatus("No fue posible validar tu acceso con el proveedor. Usa tu cuenta verificada y el método autorizado por tu organización, o consulta con tu administrador.");
+    } else continueAfterEnrollment().catch(error => { if (!restartExpiredAuthorization(error)) setStatus(error instanceof Error ? error.message : "No fue posible completar SSO."); });
+  }
+
+  if (new URLSearchParams(window.location.search).get("mode") === "sso-mfa" && twoFactor) {
+    if (loginPanel) loginPanel.hidden = true;
+    twoFactor.hidden = false;
+    setStatus("Ingresa tu segundo factor para completar el acceso.");
   }
 
   renderConsentDetails();

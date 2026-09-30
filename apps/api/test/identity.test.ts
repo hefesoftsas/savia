@@ -1343,6 +1343,109 @@ describe("Identity and access", () => {
     expect(updateUser).not.toHaveBeenCalled();
   });
 
+  it("restores the auth email tenant when a membership change is rejected", async () => {
+    await seedAgency(101);
+    await seedAgency(202);
+    const principal = await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "email-tenant-rollback-user",
+      email: "email-tenant-rollback@savia.test",
+      displayName: "Email Tenant Rollback",
+    });
+    const { grantMembership } = await import("../src/auth/identity-repository");
+    await grantMembership(env.DB, principal.id, 101, "operator");
+    const administrator = identityUserAdministrator();
+    const updateUser = vi.spyOn(administrator, "updateUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const response = await app.request(
+      `/v1/identity/users/${principal.id}/memberships`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenantId: 202, role: "viewer" }),
+      },
+    );
+
+    expect(response.status).toBe(409);
+    expect(updateUser).toHaveBeenNthCalledWith(
+      1,
+      principal.subject,
+      { tenantId: 202 },
+      expect.any(Request),
+    );
+    expect(updateUser).toHaveBeenNthCalledWith(
+      2,
+      principal.subject,
+      { tenantId: 101 },
+      expect.any(Request),
+    );
+    expect(
+      await env.DB.prepare(
+        "SELECT tenant_id FROM identity_tenant_membership WHERE principal_id=?",
+      )
+        .bind(principal.id)
+        .first(),
+    ).toEqual({ tenant_id: 101 });
+  });
+
+  it("restores the auth email tenant when an identity update cannot change membership", async () => {
+    await seedAgency(101);
+    await seedAgency(202);
+    const principal = await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "email-tenant-update-rollback-user",
+      email: "email-tenant-update-rollback@savia.test",
+      displayName: "Email Tenant Update Rollback",
+    });
+    const { grantMembership } = await import("../src/auth/identity-repository");
+    await grantMembership(env.DB, principal.id, 101, "operator");
+    const administrator = identityUserAdministrator();
+    const updateUser = vi.spyOn(administrator, "updateUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const response = await app.request(`/v1/identity/users/${principal.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        membership: { tenantId: 202, role: "viewer" },
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(updateUser).toHaveBeenNthCalledWith(
+      1,
+      principal.subject,
+      expect.objectContaining({ tenantId: 202 }),
+      expect.any(Request),
+    );
+    expect(updateUser).toHaveBeenNthCalledWith(
+      2,
+      principal.subject,
+      { tenantId: 101 },
+      expect.any(Request),
+    );
+    expect(
+      await env.DB.prepare(
+        "SELECT tenant_id FROM identity_tenant_membership WHERE principal_id=?",
+      )
+        .bind(principal.id)
+        .first(),
+    ).toEqual({ tenant_id: 101 });
+  });
+
   it("checks tenant active-user capacity before creating the auth account", async () => {
     await seedAgency(101);
     await env.DB.prepare(
@@ -1417,12 +1520,14 @@ describe("Identity and access", () => {
 
   it("provisions a Better Auth user and stores only its identity and membership", async () => {
     await seedAgency();
+    const administrator = identityUserAdministrator();
+    const createUser = vi.spyOn(administrator, "createUser");
     const app = createApp(
       env.DB,
       env.DOCUMENTS,
       undefined,
       platformAdministratorAuthenticator(),
-      identityUserAdministrator(),
+      administrator,
     );
 
     const response = await app.request("/v1/identity/users", {
@@ -1433,11 +1538,19 @@ describe("Identity and access", () => {
         firstName: "New",
         lastName: "User",
         platformAdmin: false,
+        emailVerified: true,
         membership: { agencyId: 101, role: "operator" },
       }),
     });
 
     expect(response.status).toBe(201);
+    expect(createUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        emailVerified: true,
+        tenantId: 101,
+      }),
+      expect.any(Request),
+    );
     const created = await response.json<{
       data: { id: string; kind: string; attributes: { email: string } };
     }>();

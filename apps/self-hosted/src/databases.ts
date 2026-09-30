@@ -11,6 +11,20 @@ import {
 } from "./postgres/migrations";
 import type { Configuration } from "./config";
 
+async function makeLegacyAuthAccountIssuerOptional(
+  client: import("pg").PoolClient,
+): Promise<void> {
+  const column = await client.query<{ is_nullable: string }>(
+    `SELECT is_nullable FROM information_schema.columns
+     WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
+    ["savia_auth", "account", "issuer"],
+  );
+  if (column.rows[0]?.is_nullable === "NO")
+    await client.query(
+      'ALTER TABLE "savia_auth"."account" ALTER COLUMN "issuer" DROP NOT NULL',
+    );
+}
+
 export interface DatabaseSet {
   core: D1Database;
   auth: D1Database;
@@ -70,6 +84,7 @@ export function openDatabases(
             client,
           });
           await client.query("CREATE SCHEMA IF NOT EXISTS savia_auth");
+          await makeLegacyAuthAccountIssuerOptional(client);
           await authenticate();
         }),
       close: async () => {

@@ -35,6 +35,7 @@ export type TestAppOptions = {
   extensionConnectionsEncryptionKey?: Param<20>;
   realtime?: Param<21>;
   publicForms?: Param<22>;
+  identityBridgeKey?: Param<24>;
 };
 
 /**
@@ -68,5 +69,7 @@ export function createTestApp(options: TestAppOptions = {}) {
     options.extensionConnectionsEncryptionKey,
     options.realtime,
     options.publicForms,
+    undefined,
+    options.identityBridgeKey,
   );
 }

@@ -1,6 +1,19 @@
+import {
+  registerTenantSSORoutes,
+  deleteTenantSSOSettings,
+  setTenantSSOActivity,
+} from "./tenant-sso/routes";
+import {
+  registerTenantSocialRoutes,
+  deleteTenantSocialSettings,
+} from "./tenant-social/routes";
 import { createCollectionGateway } from "./studio/collection-gateway";
 import { registerWorkflowWebhookRoutes } from "./workflow-webhooks";
 import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
+import {
+  deleteTenantEmailSettings,
+  registerTenantEmailRoutes,
+} from "./tenant-email/routes";
 import { canonicalHostForApi } from "./auth/tenant-host-guard";
 import { registerAccessControlRoutes } from "./routes/access-control";
 import {
@@ -95,6 +108,7 @@ export function createApp(
   realtime?: RealtimeHubClient,
   publicForms?: PublicFormsOptions,
   collectionGatewayFactory: typeof createCollectionGateway = createCollectionGateway,
+  identityBridgeKey?: string,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -103,8 +117,15 @@ export function createApp(
     resolvedAuthService,
     oauthResource,
     oauthUrls,
+    undefined,
+    undefined,
+    undefined,
+    identityBridgeKey,
   );
   registerRealtimeMutationHints(app, realtime, db);
+  registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
   installRequestResultEnvelope(app);
   registerPublicPluginEntryRoutes(app, db, studioIntegrationKey);
   registerAccessControlRoutes(app, db, realtime);
@@ -198,6 +219,34 @@ export function createApp(
     realtime,
     documents,
     saviaRequestService,
+    resolvedAuthService && identityBridgeKey
+      ? async (tenantId) => {
+          await deleteTenantSocialSettings(
+            resolvedAuthService,
+            identityBridgeKey,
+            tenantId,
+          );
+          await deleteTenantSSOSettings(
+            resolvedAuthService,
+            identityBridgeKey,
+            tenantId,
+          );
+          await deleteTenantEmailSettings(
+            resolvedAuthService,
+            identityBridgeKey,
+            tenantId,
+          );
+        }
+      : undefined,
+    resolvedAuthService && identityBridgeKey
+      ? (tenantId, active) =>
+          setTenantSSOActivity(
+            resolvedAuthService,
+            identityBridgeKey,
+            tenantId,
+            active,
+          )
+      : undefined,
   );
   registerAccountAvatarRoutes(app, documents, resolvedAuthService);
   registerTenantBrandingRoutes(

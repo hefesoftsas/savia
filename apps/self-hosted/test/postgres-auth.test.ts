@@ -4,6 +4,71 @@ import { createAuthHandler } from "../../auth/src/index";
 import { openPostgresDatabase } from "../src/postgres/database";
 import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
 
+it.skipIf(!postgresTestUrl)(
+  "verifies a preexisting PostgreSQL bootstrap administrator at startup",
+  async () => {
+    await withPostgresFixture(async (_core, url) => {
+      const db = openPostgresDatabase({
+        connectionString: url,
+        schema: "savia_auth",
+        maxConnections: 3,
+      });
+      let restartedDb: ReturnType<typeof openPostgresDatabase> | undefined;
+      try {
+        const origin = "http://localhost:8080";
+        const email = "existing-bootstrap-admin@example.test";
+        const environment = {
+          AUTH_DB: db,
+          BETTER_AUTH_URL: origin,
+          BETTER_AUTH_SECRET: "existing-admin-secret-".repeat(3),
+          BETTER_AUTH_BOOTSTRAP_EMAIL: email,
+          BETTER_AUTH_BOOTSTRAP_PASSWORD: "Existing-Admin-Password-123!",
+        };
+        const initial = createAuthHandler(environment, { database: db.pool });
+        const initialResponse = await initial.fetch(
+          new Request(origin + "/api/auth/get-session"),
+        );
+        expect(
+          initialResponse.status,
+          await initialResponse.clone().text(),
+        ).toBe(200);
+        await db
+          .prepare('UPDATE "user" SET "emailVerified" = false WHERE email = ?')
+          .bind(email)
+          .run();
+
+        restartedDb = openPostgresDatabase({
+          connectionString: url,
+          schema: "savia_auth",
+          maxConnections: 3,
+        });
+        const restarted = createAuthHandler(
+          { ...environment, AUTH_DB: restartedDb },
+          {
+            database: restartedDb.pool,
+          },
+        );
+        const restartResponse = await restarted.fetch(
+          new Request(origin + "/api/auth/get-session"),
+        );
+        expect(
+          restartResponse.status,
+          await restartResponse.clone().text(),
+        ).toBe(200);
+        const user = await restartedDb
+          .prepare('SELECT "emailVerified" FROM "user" WHERE email = ?')
+          .bind(email)
+          .first<{ emailVerified: boolean }>();
+        expect(user?.emailVerified).toBe(true);
+      } finally {
+        await restartedDb?.close();
+        await db.close();
+      }
+    });
+  },
+  180000,
+);
+
 function totp(uri: string) {
   const url = new URL(uri);
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";

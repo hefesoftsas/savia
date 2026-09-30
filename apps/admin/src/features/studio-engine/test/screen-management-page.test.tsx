@@ -25,6 +25,33 @@ const screens = [
   },
 ];
 
+it("opens tenant screen creation without an optional business service", async () => {
+  const transport = vi.fn(async (path: string) => {
+    if (path.startsWith("/api/business/"))
+      return Response.json(
+        { error: "El servicio de esta colección no está disponible." },
+        { status: 503 },
+      );
+    return Response.json({ data: [] });
+  });
+  setStudioRuntime({
+    embedded: true,
+    businessSetupEnabled: true,
+    transport,
+  });
+
+  render(<Root embedded search="tenantId=6&view=new-object" />);
+
+  expect(await screen.findByRole("dialog")).toBeVisible();
+  expect(
+    screen.queryByText("No pudimos conectar con Studio"),
+  ).not.toBeInTheDocument();
+  expect(transport).toHaveBeenCalledWith("/api/bootstrap", { method: "POST" });
+  expect(
+    transport.mock.calls.some(([path]) => path === "/api/business/setup"),
+  ).toBe(false);
+});
+
 it("separates menu ordering from screen settings and keeps section creation compact", async () => {
   const user = userEvent.setup();
   const transport = vi.fn(async (path: string) => {
