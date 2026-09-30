@@ -55,7 +55,19 @@ it.skipIf(!postgresTestUrl)(
         );
         api = createApiShell(core, undefined, auth);
         registerEmailRegistrationRoutes(api, core, auth, "native-registration");
-        registerPublicTenantRegistrationRoutes(api,core,auth,"native-registration",{publicOrigin:origin,captchaProvider:"altcha",altchaSecret:"native-altcha-registration-secret-32-bytes",rateLimiter:{limit:async()=>({success:true})},disableCaptcha:true});
+        registerPublicTenantRegistrationRoutes(
+          api,
+          core,
+          auth,
+          "native-registration",
+          {
+            publicOrigin: origin,
+            captchaProvider: "altcha",
+            altchaSecret: "native-altcha-registration-secret-32-bytes",
+            rateLimiter: { limit: async () => ({ success: true }) },
+            disableCaptcha: true,
+          },
+        );
         const headers = {
           "content-type": "application/json",
           "x-savia-bridge-key": "native-registration",
@@ -73,12 +85,29 @@ it.skipIf(!postgresTestUrl)(
         );
         expect(saved.status, await saved.clone().text()).toBe(200);
         const settings = (await saved.json()) as { revision: string };
-        const publicConfig = await api.fetch(new Request("https://native.savia-native.test/v1/public/registration"));
-        expect(publicConfig.status,await publicConfig.clone().text()).toBe(200);
-        expect(await publicConfig.json()).toMatchObject({tenantId,captchaProvider:"altcha"});
-        const challenge = await api.fetch(new Request("https://native.savia-native.test/v1/public/registration/challenge"));
+        const publicConfig = await api.fetch(
+          new Request(
+            "https://native.savia-native.test/v1/public/registration",
+          ),
+        );
+        expect(publicConfig.status, await publicConfig.clone().text()).toBe(
+          200,
+        );
+        expect(await publicConfig.json()).toMatchObject({
+          tenantId,
+          captchaProvider: "altcha",
+        });
+        const challenge = await api.fetch(
+          new Request(
+            "https://native.savia-native.test/v1/public/registration/challenge",
+          ),
+        );
         expect(challenge.status).toBe(200);
-        expect(await challenge.json()).toMatchObject({parameters:{data:{action:"tenant_signup",tenantId:String(tenantId)}}});
+        expect(await challenge.json()).toMatchObject({
+          parameters: {
+            data: { action: "tenant_signup", tenantId: String(tenantId) },
+          },
+        });
         const email = "new-native@example.test";
         const body = {
           attemptId: crypto.randomUUID(),
