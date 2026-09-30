@@ -129,7 +129,7 @@ describe("SaviaRequestWorkspace tenant reset", () => {
 
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith(
-        expect.stringContaining("/api/flows/autos/reset?tenant=agency%3A101"),
+        expect.stringContaining("/api/flows/autos/reset?tenant=tenant%3A101"),
       ),
     );
     expect(
@@ -150,7 +150,7 @@ describe("SaviaRequestWorkspace tenant reset", () => {
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(
         expect.stringContaining(
-          "/api/flows/autos/variables/endpoint?tenant=agency%3A101",
+          "/api/flows/autos/variables/endpoint?tenant=tenant%3A101",
         ),
         expect.objectContaining({ method: "DELETE" }),
       ),

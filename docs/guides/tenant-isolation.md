@@ -9,6 +9,11 @@ helper text. Explicit unauthorized Studio URLs still require recovery to the
 authorized workspace; hiding the selector does not grant access. Savia Request
 platform administrators retain the shared-catalog choice alongside tenant scopes.
 
+Savia Request sends canonical `tenant:<id>` scopes for every operation, including
+bulk secret export and import. Older UI selections using `agency:<id>` are read
+as the same tenant and rechecked against the user's memberships; they are never
+sent to the API. Empty scope remains the platform-only shared catalog.
+
 Studio routes use `/v1/studio/<tenantId>/api/*`; navigation uses `tenantId`.
 
 The reserved platform workspace is tenant `0`. Only platform administrators can

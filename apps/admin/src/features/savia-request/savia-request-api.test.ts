@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiClient } from "@/api/api-client";
+import { scopeForTenantId } from "./savia-request-scope";
 import { createSaviaRequestApi } from "./savia-request-api";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -140,15 +141,19 @@ describe("createSaviaRequestApi", () => {
       .fn<typeof fetch>()
       .mockImplementation(async () => jsonResponse([]));
     const api = createSaviaRequestApi(createClient(fetcher), {
-      tenant: "agency:101",
+      tenant: scopeForTenantId(101),
     });
 
     await api.listFlows();
     await api.readFlow("autos");
+    await api.exportSecrets();
+    await api.importSecrets({ version: 1, exportedAt: "test", flows: [] });
 
     expect(fetcher.mock.calls.map(([url]) => url.toString())).toEqual([
-      "https://admin.test/v1/savia-request/api/flows?tenant=agency%3A101",
-      "https://admin.test/v1/savia-request/api/flows/autos?tenant=agency%3A101",
+      "https://admin.test/v1/savia-request/api/flows?tenant=tenant%3A101",
+      "https://admin.test/v1/savia-request/api/flows/autos?tenant=tenant%3A101",
+      "https://admin.test/v1/savia-request/api/variables/export?tenant=tenant%3A101",
+      "https://admin.test/v1/savia-request/api/variables/import?tenant=tenant%3A101",
     ]);
   });
 
@@ -157,7 +162,7 @@ describe("createSaviaRequestApi", () => {
       .fn<typeof fetch>()
       .mockImplementation(async () => jsonResponse({ ok: true }));
     const api = createSaviaRequestApi(createClient(fetcher), {
-      tenant: "agency:101",
+      tenant: scopeForTenantId(101),
     });
 
     await api.bundleStatus();
@@ -171,12 +176,12 @@ describe("createSaviaRequestApi", () => {
       ]),
     ).toEqual([
       [
-        "https://admin.test/v1/savia-request/api/bundles/insurance-auto-light/status?tenant=agency%3A101",
+        "https://admin.test/v1/savia-request/api/bundles/insurance-auto-light/status?tenant=tenant%3A101",
         "GET",
         undefined,
       ],
       [
-        "https://admin.test/v1/savia-request/api/bundles/insurance-auto-light/sync?tenant=agency%3A101",
+        "https://admin.test/v1/savia-request/api/bundles/insurance-auto-light/sync?tenant=tenant%3A101",
         "POST",
         '{"force":true}',
       ],
