@@ -1,6 +1,6 @@
 # Tenant federated self-registration
 
-Status: proposed for review. This document does not enable registration.
+Status: approved by the user on 2026-09-30. This document does not enable registration.
 
 ## Outcome
 
