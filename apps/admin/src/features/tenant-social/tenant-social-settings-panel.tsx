@@ -12,6 +12,7 @@ type Settings = {
   googleEnabled: boolean;
   microsoftEnabled: boolean;
   allowRegistration: boolean;
+  allowMicrosoftPersonalAccounts: boolean;
   microsoftTenantId: string;
   googleAvailable: boolean;
   microsoftAvailable: boolean;
@@ -24,6 +25,7 @@ const emptySettings: Settings = {
   googleEnabled: false,
   microsoftEnabled: false,
   allowRegistration: false,
+  allowMicrosoftPersonalAccounts: false,
   microsoftTenantId: "",
   googleAvailable: false,
   microsoftAvailable: false,
@@ -43,6 +45,8 @@ export function TenantSocialSettingsPanel({
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
   const [allowRegistration, setAllowRegistration] = useState(false);
+  const [allowMicrosoftPersonalAccounts, setAllowMicrosoftPersonalAccounts] =
+    useState(false);
   const [microsoftTenantId, setMicrosoftTenantId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -59,6 +63,7 @@ export function TenantSocialSettingsPanel({
     setGoogleEnabled(false);
     setMicrosoftEnabled(false);
     setAllowRegistration(false);
+    setAllowMicrosoftPersonalAccounts(false);
     setMicrosoftTenantId("");
     void services.apiClient
       .get<Settings>(`/v1/tenants/${tenantId}/social-settings`)
@@ -68,6 +73,9 @@ export function TenantSocialSettingsPanel({
         setGoogleEnabled(response.googleEnabled);
         setMicrosoftEnabled(response.microsoftEnabled);
         setAllowRegistration(response.allowRegistration ?? false);
+        setAllowMicrosoftPersonalAccounts(
+          response.allowMicrosoftPersonalAccounts ?? false,
+        );
         setMicrosoftTenantId(response.microsoftTenantId);
       })
       .catch(() => {
@@ -99,12 +107,16 @@ export function TenantSocialSettingsPanel({
           microsoftEnabled,
           microsoftTenantId: microsoftTenantId.trim(),
           allowRegistration,
+          allowMicrosoftPersonalAccounts,
         },
       );
       setSettings(saved);
       setGoogleEnabled(saved.googleEnabled);
       setMicrosoftEnabled(saved.microsoftEnabled);
       setAllowRegistration(saved.allowRegistration ?? false);
+      setAllowMicrosoftPersonalAccounts(
+        saved.allowMicrosoftPersonalAccounts ?? false,
+      );
       setMicrosoftTenantId(saved.microsoftTenantId);
       setNotice(t("Social sign-in settings saved."));
     } catch (caught) {
@@ -135,12 +147,14 @@ export function TenantSocialSettingsPanel({
         googleEnabled: false,
         microsoftEnabled: false,
         allowRegistration: false,
+        allowMicrosoftPersonalAccounts: false,
         microsoftTenantId: "",
       };
       setSettings(result);
       setGoogleEnabled(false);
       setMicrosoftEnabled(false);
       setAllowRegistration(false);
+      setAllowMicrosoftPersonalAccounts(false);
       setMicrosoftTenantId("");
       setNotice(t("Social sign-in settings removed."));
     } catch {
@@ -254,6 +268,27 @@ export function TenantSocialSettingsPanel({
                         "Microsoft credentials are not available in this deployment.",
                       )}
                 </p>
+                <div className="grid gap-1.5 pl-6">
+                  <label className="flex items-start gap-3 text-sm">
+                    <Switch
+                      checked={allowMicrosoftPersonalAccounts}
+                      onCheckedChange={setAllowMicrosoftPersonalAccounts}
+                      disabled={
+                        busy || !current.microsoftAvailable || !microsoftEnabled
+                      }
+                      aria-describedby="tenant-social-microsoft-personal-help"
+                    />
+                    <span>{t("Allow personal Microsoft accounts")}</span>
+                  </label>
+                  <p
+                    id="tenant-social-microsoft-personal-help"
+                    className="text-xs leading-relaxed text-muted-foreground"
+                  >
+                    {t(
+                      "When enabled, personal Microsoft accounts can sign in alongside accounts from the configured organization directory.",
+                    )}
+                  </p>
+                </div>
               </div>
               <label className="grid max-w-xl gap-1.5 text-sm">
                 {t("Microsoft Entra tenant ID")}
@@ -275,7 +310,7 @@ export function TenantSocialSettingsPanel({
                   className="text-xs leading-relaxed text-muted-foreground"
                 >
                   {t(
-                    "Enter the UUID of your Microsoft Entra directory. Personal Microsoft accounts are not supported.",
+                    "Enter your organization's Microsoft Entra directory UUID. Personal accounts can be enabled separately.",
                   )}
                 </span>
               </label>

@@ -18,7 +18,7 @@ describe("social sign-in configuration", () => {
       parseSocialSettings({ ...base, allowRegistration: "true" }),
     ).toThrow();
   });
-  it("enables only complete deployment credentials and uses organization-only Microsoft", () => {
+  it("enables only complete deployment credentials and supports both Microsoft account classes behind tenant policy", () => {
     expect(socialProviders({})).toEqual({});
     expect(() => socialProviders({ SAVIA_GOOGLE_CLIENT_ID: "id" })).toThrow();
     const providers = socialProviders({
@@ -30,11 +30,33 @@ describe("social sign-in configuration", () => {
     // Savia's callback proof gates registration; provider signup must reach it.
     expect(providers.google).toMatchObject({ disableSignUp: false });
     expect(providers.microsoft).toMatchObject({
-      tenantId: "organizations",
+      tenantId: "common",
       disableSignUp: false,
       disableDefaultScope: true,
       scope: ["openid", "profile", "email"],
     });
+  });
+  it("defaults personal Microsoft accounts to off and validates the opt-in", () => {
+    const settings = {
+      googleEnabled: false,
+      microsoftEnabled: true,
+      microsoftTenantId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    };
+    expect(parseSocialSettings(settings)).toMatchObject({
+      allowMicrosoftPersonalAccounts: false,
+    });
+    expect(
+      parseSocialSettings({
+        ...settings,
+        allowMicrosoftPersonalAccounts: true,
+      }),
+    ).toMatchObject({ allowMicrosoftPersonalAccounts: true });
+    expect(() =>
+      parseSocialSettings({
+        ...settings,
+        allowMicrosoftPersonalAccounts: "true",
+      }),
+    ).toThrow();
   });
   it("requires an explicit enterprise directory and rejects malformed settings", () => {
     expect(
@@ -173,6 +195,62 @@ it("enforces tenant social policies, callback identity, MFA binding and lifecycl
   expect(
     await validateSocialIdentity(
       identity("google", { email: "unknown@example.test" }),
+      endpoint,
+    ),
+  ).toMatchObject({ error: "social_sign_in_denied" });
+  expect(
+    await validateSocialIdentity(
+      identity(
+        "microsoft",
+        {},
+        { tid: "11111111-2222-3333-4444-555555555555" },
+      ),
+      endpoint,
+    ),
+  ).toMatchObject({ error: "social_sign_in_denied" });
+  expect(
+    await validateSocialIdentity(
+      identity("microsoft", {}, { tid: directory }),
+      endpoint,
+    ),
+  ).toBeUndefined();
+  const consumer = "9188040d-6c67-4c5b-b112-36a304b66dad";
+  expect(
+    await validateSocialIdentity(
+      identity("microsoft", {}, { tid: consumer }),
+      endpoint,
+    ),
+  ).toMatchObject({ error: "social_sign_in_denied" });
+  const personalSaved = await call(path, "PUT", {
+    googleEnabled: true,
+    microsoftEnabled: true,
+    microsoftTenantId: directory,
+    allowMicrosoftPersonalAccounts: true,
+  });
+  expect(personalSaved.status).toBe(200);
+  expect(await personalSaved.json()).toMatchObject({
+    allowMicrosoftPersonalAccounts: true,
+    allowRegistration: false,
+  });
+  expect(
+    await validateSocialIdentity(
+      identity("microsoft", {}, { tid: consumer }),
+      endpoint,
+    ),
+  ).toBeUndefined();
+  expect(
+    await validateSocialIdentity(
+      identity("microsoft", { emailVerified: false }, { tid: consumer }),
+      endpoint,
+    ),
+  ).toMatchObject({ error: "social_sign_in_denied" });
+  expect(
+    await validateSocialIdentity(
+      identity(
+        "microsoft",
+        { email: "uncreated@example.test" },
+        { tid: consumer },
+      ),
       endpoint,
     ),
   ).toMatchObject({ error: "social_sign_in_denied" });

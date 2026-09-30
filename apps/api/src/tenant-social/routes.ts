@@ -8,17 +8,25 @@ const tenantIdParam = z.object({
   tenantId: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 });
 const uuid = z.string().uuid();
+const microsoftConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const settingsInput = z
   .object({
     googleEnabled: z.boolean(),
     microsoftEnabled: z.boolean(),
     allowRegistration: z.boolean().default(false),
+    allowMicrosoftPersonalAccounts: z.boolean().default(false),
     microsoftTenantId: z
       .string()
       .trim()
-      .refine((value) => value === "" || uuid.safeParse(value).success, {
-        message: "Enter a Microsoft Entra tenant UUID.",
-      }),
+      .refine(
+        (value) =>
+          value === "" ||
+          (uuid.safeParse(value).success &&
+            value.toLowerCase() !== microsoftConsumerTenantId),
+        {
+          message: "Enter a Microsoft Entra organization directory UUID.",
+        },
+      ),
   })
   .strict()
   .refine(
@@ -27,7 +35,7 @@ const settingsInput = z
       uuid.safeParse(value.microsoftTenantId).success,
     {
       message:
-        "A Microsoft Entra tenant UUID is required when Microsoft sign-in is enabled.",
+        "A Microsoft Entra organization directory UUID is required when Microsoft sign-in is enabled.",
     },
   );
 const settingsResponse = z.object({
@@ -35,6 +43,7 @@ const settingsResponse = z.object({
   googleEnabled: z.boolean(),
   microsoftEnabled: z.boolean(),
   allowRegistration: z.boolean().default(false),
+  allowMicrosoftPersonalAccounts: z.boolean().default(false),
   microsoftTenantId: z.string(),
   googleAvailable: z.boolean(),
   microsoftAvailable: z.boolean(),

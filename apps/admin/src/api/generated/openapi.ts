@@ -701,6 +701,8 @@ export interface paths {
               microsoftEnabled: boolean;
               /** @default false */
               allowRegistration: boolean;
+              /** @default false */
+              allowMicrosoftPersonalAccounts: boolean;
               microsoftTenantId: string;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
@@ -727,6 +729,8 @@ export interface paths {
             microsoftEnabled: boolean;
             /** @default false */
             allowRegistration?: boolean;
+            /** @default false */
+            allowMicrosoftPersonalAccounts?: boolean;
             microsoftTenantId: string;
           };
         };
@@ -744,6 +748,8 @@ export interface paths {
               microsoftEnabled: boolean;
               /** @default false */
               allowRegistration: boolean;
+              /** @default false */
+              allowMicrosoftPersonalAccounts: boolean;
               microsoftTenantId: string;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
@@ -778,6 +784,8 @@ export interface paths {
               microsoftEnabled: boolean;
               /** @default false */
               allowRegistration: boolean;
+              /** @default false */
+              allowMicrosoftPersonalAccounts: boolean;
               microsoftTenantId: string;
               googleAvailable: boolean;
               microsoftAvailable: boolean;

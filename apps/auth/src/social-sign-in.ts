@@ -30,6 +30,7 @@ type Settings = {
   microsoftEnabled: boolean;
   microsoftTenantId: string;
   allowRegistration: boolean;
+  allowMicrosoftPersonalAccounts: boolean;
   active: boolean;
   revision: string;
 };
@@ -54,6 +55,7 @@ type Proof = {
   issued?: boolean;
   displayName?: string;
 };
+const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const proofs = new WeakMap<object, Proof>();
 export const SOCIAL_MFA_PREFIX = "savia-social-mfa:";
 const isProvider = (id: unknown): id is Provider =>
@@ -95,7 +97,7 @@ export function socialProviders(
       clientId: microsoftId,
       clientSecret: microsoftSecret,
       disableSignUp: false,
-      tenantId: "organizations",
+      tenantId: "common",
       prompt: "select_account",
       disableDefaultScope: true,
       disableProfilePhoto: true,
@@ -111,6 +113,8 @@ export function parseSocialSettings(value: unknown) {
     typeof input.googleEnabled !== "boolean" ||
     typeof input.microsoftEnabled !== "boolean" ||
     typeof input.microsoftTenantId !== "string" ||
+    (input.allowMicrosoftPersonalAccounts !== undefined &&
+      typeof input.allowMicrosoftPersonalAccounts !== "boolean") ||
     (input.allowRegistration !== undefined &&
       typeof input.allowRegistration !== "boolean")
   )
@@ -132,6 +136,8 @@ export function parseSocialSettings(value: unknown) {
     microsoftEnabled: input.microsoftEnabled,
     microsoftTenantId,
     allowRegistration: input.allowRegistration === true,
+    allowMicrosoftPersonalAccounts:
+      input.allowMicrosoftPersonalAccounts === true,
   };
 }
 
@@ -161,6 +167,12 @@ export const tenantSocialPlugin = () =>
           googleEnabled: { type: "boolean", required: true, input: false },
           microsoftEnabled: { type: "boolean", required: true, input: false },
           microsoftTenantId: { type: "string", required: true, input: false },
+          allowMicrosoftPersonalAccounts: {
+            type: "boolean",
+            required: true,
+            defaultValue: false,
+            input: false,
+          },
           allowRegistration: {
             type: "boolean",
             required: true,
@@ -245,8 +257,13 @@ export async function validateSocialIdentity(
     if (!settings) throw deny();
     if (
       provider === "microsoft" &&
-      String(source.oauth?.profile?.tid ?? "").toLowerCase() !==
-        settings.microsoftTenantId
+      !(
+        String(source.oauth?.profile?.tid ?? "").toLowerCase() ===
+          settings.microsoftTenantId ||
+        (settings.allowMicrosoftPersonalAccounts === true &&
+          String(source.oauth?.profile?.tid ?? "").toLowerCase() ===
+            MICROSOFT_CONSUMER_TENANT_ID)
+      )
     )
       throw deny();
     if (registration) {
@@ -616,6 +633,8 @@ export async function tenantSocialResponse(
     microsoftEnabled: existing?.microsoftEnabled ?? false,
     microsoftTenantId: existing?.microsoftTenantId ?? "",
     allowRegistration: existing?.allowRegistration === true,
+    allowMicrosoftPersonalAccounts:
+      existing?.allowMicrosoftPersonalAccounts === true,
     active: existing?.active ?? false,
     revision: existing?.revision ?? "",
     googleAvailable: !!providers.google,

@@ -26,6 +26,7 @@ const defaults = {
   configured: false,
   googleEnabled: false,
   microsoftEnabled: false,
+  allowMicrosoftPersonalAccounts: false,
   microsoftTenantId: "",
   googleAvailable: true,
   microsoftAvailable: false,
@@ -67,6 +68,11 @@ it("loads availability, saves enabled providers and removes saved settings", asy
     }),
   ).not.toBeChecked();
   expect(
+    screen.getByRole("switch", {
+      name: "Allow personal Microsoft accounts",
+    }),
+  ).not.toBeChecked();
+  expect(
     screen.getByText("Initial access: Viewer", { selector: "strong" }),
   ).toBeTruthy();
   expect(
@@ -87,6 +93,7 @@ it("loads availability, saves enabled providers and removes saved settings", asy
     microsoftEnabled: false,
     microsoftTenantId: "",
     allowRegistration: false,
+    allowMicrosoftPersonalAccounts: false,
   });
   fireEvent.click(
     screen.getByRole("button", { name: "Remove social sign-in settings" }),
@@ -164,6 +171,7 @@ it("requires a directory UUID when Microsoft sign-in is enabled", async () => {
     microsoftEnabled: true,
     microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
     allowRegistration: false,
+    allowMicrosoftPersonalAccounts: false,
   });
 });
 
@@ -192,6 +200,7 @@ it("saves federated registration as enabled for verified users", async () => {
     microsoftEnabled: false,
     microsoftTenantId: "",
     allowRegistration: true,
+    allowMicrosoftPersonalAccounts: false,
   });
   fireEvent.click(
     screen.getByRole("button", { name: "Remove social sign-in settings" }),
@@ -219,4 +228,45 @@ it("shows the Spanish registration label and keeps legacy settings disabled", as
   expect(
     screen.getByText("Acceso inicial: Viewer", { selector: "strong" }),
   ).toBeTruthy();
+  expect(
+    screen.getByRole("switch", {
+      name: "Permitir cuentas personales de Microsoft",
+    }),
+  ).not.toBeChecked();
+});
+
+it("loads and saves the Microsoft personal account option independently", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      ...defaults,
+      microsoftAvailable: true,
+      microsoftEnabled: true,
+      microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
+      allowMicrosoftPersonalAccounts: true,
+    }),
+    put: vi.fn().mockResolvedValue({
+      ...defaults,
+      microsoftAvailable: true,
+      microsoftEnabled: true,
+      microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
+      allowMicrosoftPersonalAccounts: true,
+    }),
+    delete: vi.fn(),
+  };
+  renderPanel(apiClient);
+  const personalAccounts = await screen.findByRole("switch", {
+    name: "Allow personal Microsoft accounts",
+  });
+  expect(personalAccounts).toBeChecked();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save social sign-in settings" }),
+  );
+  await screen.findByText("Social sign-in settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith("/v1/tenants/42/social-settings", {
+    googleEnabled: false,
+    microsoftEnabled: true,
+    microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
+    allowRegistration: false,
+    allowMicrosoftPersonalAccounts: true,
+  });
 });

@@ -123,6 +123,7 @@ const unavailableSettings = {
   googleEnabled: false,
   microsoftEnabled: false,
   allowRegistration: false,
+  allowMicrosoftPersonalAccounts: false,
   microsoftTenantId: "",
   googleAvailable: false,
   microsoftAvailable: false,
@@ -187,6 +188,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
         googleEnabled: true,
         microsoftEnabled: true,
         allowRegistration: true,
+        allowMicrosoftPersonalAccounts: true,
         microsoftTenantId: validInput.microsoftTenantId,
         googleAvailable: true,
         microsoftAvailable: true,
@@ -203,7 +205,11 @@ it("proxies safe settings without caching and synchronizes active tenant members
   const save = await app.request(path, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...validInput, allowRegistration: true }),
+    body: JSON.stringify({
+      ...validInput,
+      allowRegistration: true,
+      allowMicrosoftPersonalAccounts: true,
+    }),
   });
   expect(save.status).toBe(200);
   expect(save.headers.get("cache-control")).toBe("no-store");
@@ -212,6 +218,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
     googleEnabled: true,
     microsoftEnabled: true,
     allowRegistration: true,
+    allowMicrosoftPersonalAccounts: true,
   });
   const saved = calls.find(
     ({ path: target, method }) =>
@@ -222,6 +229,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
     body: {
       ...validInput,
       allowRegistration: true,
+      allowMicrosoftPersonalAccounts: true,
       actorSubject: expect.any(String),
     },
   });
@@ -252,13 +260,17 @@ it("defaults registration off for legacy inputs and auth responses", async () =>
       return Response.json({ ok: true });
     const legacy = { ...unavailableSettings } as Record<string, unknown>;
     delete legacy.allowRegistration;
+    delete legacy.allowMicrosoftPersonalAccounts;
     return Response.json(legacy);
   });
   const path = `https://api.test/v1/tenants/${tenant.id}/social-settings`;
 
   const loaded = await app.request(path);
   expect(loaded.status).toBe(200);
-  expect(await loaded.json()).toMatchObject({ allowRegistration: false });
+  expect(await loaded.json()).toMatchObject({
+    allowRegistration: false,
+    allowMicrosoftPersonalAccounts: false,
+  });
 
   const saved = await app.request(path, {
     method: "PUT",
@@ -266,13 +278,19 @@ it("defaults registration off for legacy inputs and auth responses", async () =>
     body: JSON.stringify(validInput),
   });
   expect(saved.status).toBe(200);
-  expect(await saved.json()).toMatchObject({ allowRegistration: false });
+  expect(await saved.json()).toMatchObject({
+    allowRegistration: false,
+    allowMicrosoftPersonalAccounts: false,
+  });
   expect(
     calls.find(
       ({ method, path: target }) =>
         method === "PUT" && target === `/_internal/tenant-social/${tenant.id}`,
     )?.body,
-  ).toMatchObject({ allowRegistration: false });
+  ).toMatchObject({
+    allowRegistration: false,
+    allowMicrosoftPersonalAccounts: false,
+  });
 });
 
 it("rejects cross-tenant and non-admin access before contacting auth", async () => {
@@ -305,6 +323,10 @@ it("validates provider settings and returns provider-unavailable errors from aut
   for (const body of [
     { ...validInput, microsoftTenantId: "" },
     { ...validInput, microsoftTenantId: "not-a-guid" },
+    {
+      ...validInput,
+      microsoftTenantId: "9188040d-6c67-4c5b-b112-36a304b66dad",
+    },
     { ...validInput, extra: true },
   ]) {
     const response = await app.request(path, {
