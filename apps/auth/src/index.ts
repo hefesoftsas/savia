@@ -5,7 +5,10 @@ import {
   emailRegistrationHooks,
   registrationPasswordAllowed,
 } from "./email-registration";
-import { microsoftEmailVerificationPlugin } from "./microsoft-email-verification";
+import {
+  microsoftEmailVerificationPlugin,
+  assertMicrosoftRegistrationCompleted,
+} from "./microsoft-email-verification";
 import {
   tenantRegistrationSettingsResponse,
   readTenantRegistrationSettings,
@@ -258,6 +261,10 @@ export function createBetterAuth(
       session: {
         create: {
           before: async (session, ctx) => {
+            await assertMicrosoftRegistrationCompleted(
+              environment,
+              session.userId,
+            );
             await emailRegistrationHooks(environment).session?.create?.before?.(
               session,
               ctx,

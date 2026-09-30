@@ -578,6 +578,20 @@ it("recovers an owned unbound account without deleting concurrent administrator 
       where: [{ field: "email", value: email }],
     }),
   ).toBeTruthy();
+  // Native password recovery must not turn an unbound orphan into a session.
+  const context = await auth.$context;
+  await context.internalAdapter.createAccount({
+    userId: `ms-${first.id}`,
+    accountId: `ms-${first.id}`,
+    providerId: "credential",
+    password: await context.password.hash("Pending-account-password-123"),
+  });
+  const pendingSignIn = await auth.api.signInEmail({
+    body: { email, password: "Pending-account-password-123" },
+    asResponse: true,
+  });
+  expect(pendingSignIn.status).toBe(403);
+  expect(pendingSignIn.headers.get("set-cookie")).toBeNull();
   const second = await proof();
   const paths: string[] = [];
   await completeMicrosoftVerification(
@@ -613,6 +627,12 @@ it("recovers an owned unbound account without deleting concurrent administrator 
     }),
   ).toMatchObject({ id: `ms-${first.id}`, name: "Administrator renamed user" });
   expect(paths).not.toContain("/_internal/social-registration/eligible");
+  const completedSignIn = await auth.api.signInEmail({
+    body: { email, password: "Pending-account-password-123" },
+    asResponse: true,
+  });
+  expect(completedSignIn.status).toBe(200);
+  expect(completedSignIn.headers.get("set-cookie")).toContain("session_token");
   expect(
     await provenMicrosoftIdentity(
       { ...consumer, oid: subject, email },
