@@ -84,8 +84,29 @@ export function captchaConfiguration(options: CaptchaOptions) {
   };
 }
 
+export type CaptchaBinding = {
+  purpose: "public_submit" | "tenant_signup";
+  subject: string;
+  origin: string;
+};
 const hex = (length: number) =>
   z.string().regex(new RegExp(`^[a-f0-9]{${length}}$`));
+const dataSchema = z.union([
+  z
+    .object({
+      formId: z.string().uuid(),
+      origin: z.string().url(),
+      action: z.literal("public_submit"),
+    })
+    .strict(),
+  z
+    .object({
+      tenantId: z.string().regex(/^[1-9]\d*$/),
+      origin: z.string().url(),
+      action: z.literal("tenant_signup"),
+    })
+    .strict(),
+]);
 const proofSchema = z
   .object({
     challenge: z
@@ -99,13 +120,7 @@ const proofSchema = z
             keyLength: z.literal(32),
             keyPrefix: hex(32),
             expiresAt: z.number().int().positive(),
-            data: z
-              .object({
-                formId: z.string().uuid(),
-                origin: z.string().url(),
-                action: z.literal("public_submit"),
-              })
-              .strict(),
+            data: dataSchema,
           })
           .strict(),
         signature: hex(64),
@@ -127,11 +142,37 @@ function decodeProof(token: string) {
     throw invalid();
   }
 }
-export async function publicFormChallenge(
+function boundConfiguration(options: CaptchaOptions, binding: CaptchaBinding) {
+  if (
+    binding.origin !==
+    new URL(options.publicOrigin ?? "https://invalid.test").origin
+  )
+    throw invalid();
+  if (
+    binding.purpose === "tenant_signup" &&
+    !/^[1-9]\d*$/.test(binding.subject)
+  )
+    throw invalid();
+  return captchaConfiguration({
+    ...options,
+    ...(binding.purpose === "tenant_signup" ? { disableCaptcha: false } : {}),
+  });
+}
+async function boundSecret(secret: string, purpose: CaptchaBinding["purpose"]) {
+  if (purpose === "public_submit") return secret;
+  const digest = new Uint8Array(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`savia:tenant-signup-captcha:v1:${secret}`),
+    ),
+  );
+  return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+export async function createBoundCaptchaChallenge(
   options: CaptchaOptions,
-  formId: string,
+  binding: CaptchaBinding,
 ) {
-  const config = captchaConfiguration(options);
+  const config = boundConfiguration(options, binding);
   if (config.provider !== "altcha")
     throw new HTTPException(404, { message: "Not found." });
   return createChallenge({
@@ -139,19 +180,45 @@ export async function publicFormChallenge(
     cost: 1000,
     counter: randomInt(5000, 1000),
     deriveKey,
-    hmacSignatureSecret: config.secretKey,
+    hmacSignatureSecret: await boundSecret(config.secretKey, binding.purpose),
     expiresAt: new Date(Date.now() + 300_000),
-    data: { formId, origin: config.origin, action: "public_submit" },
+    data:
+      binding.purpose === "public_submit"
+        ? {
+            formId: binding.subject,
+            origin: config.origin,
+            action: "public_submit",
+          }
+        : {
+            tenantId: binding.subject,
+            origin: config.origin,
+            action: "tenant_signup",
+          },
   });
 }
-/** Unique proof identity is independent of JSON/base64 encoding and solver timing. */
-export function captchaIdentity(options: CaptchaOptions, token: string) {
-  const provider = captchaConfiguration(options).provider;
+export async function publicFormChallenge(
+  options: CaptchaOptions,
+  formId: string,
+) {
+  return createBoundCaptchaChallenge(options, {
+    purpose: "public_submit",
+    subject: formId,
+    origin: new URL(options.publicOrigin ?? "https://invalid.test").origin,
+  });
+}
+export function boundCaptchaIdentity(
+  options: CaptchaOptions,
+  token: string,
+  purpose?: CaptchaBinding["purpose"],
+) {
+  const provider = captchaConfiguration({
+    ...options,
+    ...(purpose === "tenant_signup" ? { disableCaptcha: false } : {}),
+  }).provider;
   if (provider === "turnstile" || provider === "disabled")
     return { key: token, proof: undefined };
   const { challenge, solution } = decodeProof(token);
-  // zod emits keys in schema order. Include the complete proof in the request
-  // fingerprint so an unsolved challenge cannot retrieve an accepted receipt.
+  if (purpose && challenge.parameters.data.action !== purpose) throw invalid();
   return {
     key: `altcha:${challenge.signature}`,
     proof: JSON.stringify({
@@ -160,17 +227,33 @@ export function captchaIdentity(options: CaptchaOptions, token: string) {
     }),
   };
 }
-export async function verifyCaptcha(
+export function captchaIdentity(options: CaptchaOptions, token: string) {
+  return boundCaptchaIdentity(options, token, "public_submit");
+}
+export async function verifyBoundCaptcha(
   options: CaptchaOptions,
-  input: { token: string; submissionId: string; formId: string; ip: string },
+  input: {
+    token: string;
+    submissionId: string;
+    ip: string;
+    binding: CaptchaBinding;
+  },
 ) {
-  const config = captchaConfiguration(options);
+  const config = boundConfiguration(options, input.binding);
   if (config.provider === "disabled") return;
-  if (config.provider === "turnstile") return verifyTurnstile(options, input);
-  const { challenge, solution } = decodeProof(input.token);
+  if (config.provider === "turnstile")
+    return verifyTurnstile(
+      options,
+      { ...input, formId: input.binding.subject },
+      { action: input.binding.purpose, cdata: input.binding.subject },
+    );
+  const { challenge, solution } = decodeProof(input.token),
+    data = challenge.parameters.data;
+  const subject = data.action === "public_submit" ? data.formId : data.tenantId;
   if (
-    challenge.parameters.data.formId !== input.formId ||
-    challenge.parameters.data.origin !== config.origin ||
+    data.action !== input.binding.purpose ||
+    subject !== input.binding.subject ||
+    data.origin !== config.origin ||
     challenge.parameters.expiresAt <= Date.now() / 1000
   )
     throw invalid();
@@ -181,7 +264,10 @@ export async function verifyCaptcha(
           challenge,
           solution,
           deriveKey,
-          hmacSignatureSecret: config.secretKey,
+          hmacSignatureSecret: await boundSecret(
+            config.secretKey,
+            input.binding.purpose,
+          ),
         })
       ).verified
     )
@@ -189,4 +275,17 @@ export async function verifyCaptcha(
   } catch {
     throw invalid();
   }
+}
+export async function verifyCaptcha(
+  options: CaptchaOptions,
+  input: { token: string; submissionId: string; formId: string; ip: string },
+) {
+  return verifyBoundCaptcha(options, {
+    ...input,
+    binding: {
+      purpose: "public_submit",
+      subject: input.formId,
+      origin: new URL(options.publicOrigin ?? "https://invalid.test").origin,
+    },
+  });
 }
