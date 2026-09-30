@@ -89,11 +89,15 @@ function loginPage(
   );
 }
 
-function mfaEnrollmentPage(branding?: TenantBranding): Response {
+function mfaEnrollmentPage(
+  branding?: TenantBranding,
+  restartUrl?: string,
+): Response {
   return htmlResponse(
     page(
       `Configura MFA | ${branding?.displayName ?? "Savia"}`,
       renderOAuthSurface("enroll", { branding }),
+      restartUrl,
     ),
   );
 }
@@ -200,7 +204,7 @@ export function oauthPageResponse(
         options?.emailAvailable,
       );
     case "/api/auth/mfa-enroll":
-      return mfaEnrollmentPage(branding);
+      return mfaEnrollmentPage(branding, options?.restartUrl);
     case "/api/auth/consent":
       return consentPage(branding);
     case "/api/auth/email-verified":
@@ -421,6 +425,15 @@ const oauthUiScript = String.raw`(() => {
   }
 
   async function continueAfterEnrollment() {
+    if (!oauthQuery) {
+      const restartUrl = document.body && document.body.dataset && document.body.dataset.oauthRestartUrl;
+      if (typeof restartUrl !== "string" || !restartUrl) {
+        throw new Error("Abre Savia para iniciar una nueva solicitud de acceso.");
+      }
+      redirecting = true;
+      window.location.replace(restartUrl);
+      return;
+    }
     const result = await request("oauth2/continue", { postLogin: true });
     if (!redirectFromServer(result)) {
       throw new Error("La autorización no devolvió un destino de continuación.");
