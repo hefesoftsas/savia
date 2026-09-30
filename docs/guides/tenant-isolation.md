@@ -3,6 +3,12 @@
 Studio uses `tenants.id` as its sole data-isolation identity. The authorized
 workspace catalog is `GET /v1/tenant-workspaces`. Each entry contains a numeric
 `tenantId`, an `id` of `tenant:<id>`, a label, a kind, and an API base path.
+Tenant selectors are omitted when there is exactly one authorized choice.
+With one tenant, screens use it automatically and omit the selector and its
+helper text. Explicit unauthorized Studio URLs still require recovery to the
+authorized workspace; hiding the selector does not grant access. Savia Request
+platform administrators retain the shared-catalog choice alongside tenant scopes.
+
 Studio routes use `/v1/studio/<tenantId>/api/*`; navigation uses `tenantId`.
 
 The reserved platform workspace is tenant `0`. Only platform administrators can

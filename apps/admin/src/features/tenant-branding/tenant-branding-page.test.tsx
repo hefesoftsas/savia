@@ -272,8 +272,12 @@ it("offers only active commercial tenants", async () => {
     .mockResolvedValueOnce({ data: branding, canManage: true });
   render(<TenantBrandingPage services={service(get)} />);
   await screen.findByLabelText("Nombre visible");
-  expect(screen.getAllByRole("option")).toHaveLength(1);
-  expect(screen.getByRole("option")).toHaveTextContent("Agencia Uno");
+  expect(screen.queryByLabelText("Organización")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Cambiar de organización descarta los cambios que no hayas guardado.",
+    ),
+  ).not.toBeInTheDocument();
   expect(get).toHaveBeenLastCalledWith(
     "/v1/tenants/1/branding",
     expect.anything(),

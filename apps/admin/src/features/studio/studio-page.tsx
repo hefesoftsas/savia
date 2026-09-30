@@ -132,25 +132,26 @@ export function StudioPage({ services }: { services: AppServices }) {
     typeof document === "undefined"
       ? null
       : document.getElementById("header-actions");
-  const tenantContext = selected ? (
-    <label className="flex items-center gap-2">
-      <span className="sr-only">{t("Tenant")}</span>
-      <select
-        aria-label={t("Tenant")}
-        className="h-8 max-w-64 rounded-md border bg-background px-2 text-sm"
-        value={String(selected.tenantId)}
-        onChange={(event) =>
-          setParams(studioTenantSearch(params, Number(event.target.value)))
-        }
-      >
-        {tenants.map((tenant) => (
-          <option key={tenant.id} value={tenant.tenantId}>
-            {tenant.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  ) : null;
+  const tenantContext =
+    selected && tenants.length > 1 ? (
+      <label className="flex items-center gap-2">
+        <span className="sr-only">{t("Tenant")}</span>
+        <select
+          aria-label={t("Tenant")}
+          className="h-8 max-w-64 rounded-md border bg-background px-2 text-sm"
+          value={String(selected.tenantId)}
+          onChange={(event) =>
+            setParams(studioTenantSearch(params, Number(event.target.value)))
+          }
+        >
+          {tenants.map((tenant) => (
+            <option key={tenant.id} value={tenant.tenantId}>
+              {tenant.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
 
   return (
     <section className="@container min-w-0 w-full">
@@ -160,23 +161,40 @@ export function StudioPage({ services }: { services: AppServices }) {
       {!selected && (
         <header className="mb-2 grid max-w-md gap-1.5">
           <h1 className="sr-only">{t("Studio")}</h1>
-          <Label htmlFor="studio-tenant">{t("Tenant")}</Label>
-          <select
-            id="studio-tenant"
-            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            value=""
-            disabled={loading || !tenants.length}
-            onChange={(event) =>
-              setParams(studioTenantSearch(params, Number(event.target.value)))
-            }
-          >
-            <option value="">{t("Selecciona un tenant")}</option>
-            {tenants.map((tenant) => (
-              <option value={tenant.tenantId} key={tenant.id}>
-                {tenant.label}
-              </option>
-            ))}
-          </select>
+          {tenants.length > 1 && (
+            <>
+              <Label htmlFor="studio-tenant">{t("Tenant")}</Label>
+              <select
+                id="studio-tenant"
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                value=""
+                disabled={loading || !tenants.length}
+                onChange={(event) =>
+                  setParams(
+                    studioTenantSearch(params, Number(event.target.value)),
+                  )
+                }
+              >
+                <option value="">{t("Selecciona un tenant")}</option>
+                {tenants.map((tenant) => (
+                  <option value={tenant.tenantId} key={tenant.id}>
+                    {tenant.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          {tenants.length === 1 && (
+            <button
+              type="button"
+              className="text-left text-sm text-primary underline"
+              onClick={() =>
+                setParams(studioTenantSearch(params, tenants[0].tenantId))
+              }
+            >
+              {tenants[0].label}
+            </button>
+          )}
           {!loading && !tenants.length && (
             <p className="text-sm text-muted-foreground">
               {t(

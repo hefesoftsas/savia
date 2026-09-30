@@ -101,12 +101,17 @@ describe("Studio tenant integration", () => {
       (await screen.findAllByText(/Selecciona un tenant para administrar/))[0],
     ).toBeVisible();
     expect(screen.queryByText(/Espacio CRM/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Tenant")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Norte" }));
+    expect(await screen.findByText(/Espacio CRM/)).toBeVisible();
+    expect(getStudioRuntime().tenantId).toBe(101);
   });
 
   it("opens a single authorized tenant without requiring a query parameter", async () => {
     mount(servicesFor([tenant]));
     expect(await screen.findByText(/Espacio CRM/)).toBeVisible();
     expect(getStudioRuntime().tenantId).toBe(101);
+    expect(screen.queryByLabelText("Tenant")).not.toBeInTheDocument();
   });
 
   it("closes the local workspace when leaving Studio", async () => {
