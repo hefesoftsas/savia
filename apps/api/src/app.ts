@@ -1,3 +1,4 @@
+import { registerEmailRegistrationRoutes } from "./tenant-registration/provisioning";
 import {
   registerTenantRegistrationSettingsRoutes,
   deleteTenantRegistrationSettings,
@@ -137,6 +138,12 @@ export function createApp(
     resolvedAuthService,
     identityBridgeKey,
     publicForms,
+  );
+  registerEmailRegistrationRoutes(
+    app,
+    db,
+    resolvedAuthService,
+    identityBridgeKey,
   );
   registerSocialRegistrationRoutes(
     app,

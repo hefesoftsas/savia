@@ -137,3 +137,30 @@ describe("tenant registration settings", () => {
     });
   });
 });
+
+it("preserves accepted registration policy during CAPTCHA secret rotation", async () => {
+  const first = await handler.fetch(
+    request("PUT", {
+      ...base,
+      allowEmailRegistration: true,
+      captchaReady: true,
+    }),
+  );
+  const before = (await first.json()) as { revision: string };
+  const second = await handler.fetch(
+    request("PUT", {
+      ...base,
+      secretKey: "rotated-captcha-secret",
+      allowEmailRegistration: true,
+      captchaReady: true,
+    }),
+  );
+  const after = (await second.json()) as { revision: string };
+  expect(after.revision).toBe(before.revision);
+  const disabled = await handler.fetch(
+    request("PUT", { ...base, allowEmailRegistration: false }),
+  );
+  expect(((await disabled.json()) as { revision: string }).revision).not.toBe(
+    before.revision,
+  );
+});

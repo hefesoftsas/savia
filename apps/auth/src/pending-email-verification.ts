@@ -32,7 +32,7 @@ type Row = {
   consumed_at: number | null;
 };
 const TABLE =
-  "CREATE TABLE IF NOT EXISTS pending_email_verification (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires_at INTEGER NOT NULL, token_hash TEXT, token_expires_at INTEGER, sent_at INTEGER, sends INTEGER NOT NULL DEFAULT 0, consumed_at INTEGER)";
+  "CREATE TABLE IF NOT EXISTS pending_email_verification (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires_at BIGINT NOT NULL, token_hash TEXT, token_expires_at BIGINT, sent_at BIGINT, sends INTEGER NOT NULL DEFAULT 0, consumed_at BIGINT)";
 const invalid = () =>
   new Error(
     "Email verification expired or invalid. Return to the original browser and try again.",
@@ -213,7 +213,7 @@ export async function limitVerificationMail(
   input: { tenantId: number; email: string; ip: string },
 ): Promise<void> {
   await env.AUTH_DB.exec(
-    "CREATE TABLE IF NOT EXISTS verification_mail_budget (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS verification_mail_budget (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at BIGINT NOT NULL)",
   );
   const window = Math.floor(Date.now() / 3_600_000),
     now = Date.now();

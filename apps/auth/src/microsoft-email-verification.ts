@@ -36,7 +36,7 @@ import type { AuthWorkerEnvironment } from "./index";
 export const MICROSOFT_CONSUMER_DIRECTORY =
   "9188040d-6c67-4c5b-b112-36a304b66dad";
 const TABLE =
-  "CREATE TABLE IF NOT EXISTS microsoft_email_binding (provider_subject TEXT PRIMARY KEY, provider_tenant_id TEXT NOT NULL, tenant_id INTEGER NOT NULL, user_id TEXT NOT NULL, verified_email TEXT NOT NULL, created_at TEXT NOT NULL)";
+  "CREATE TABLE IF NOT EXISTS microsoft_email_binding (provider_subject TEXT PRIMARY KEY, provider_tenant_id TEXT NOT NULL, tenant_id BIGINT NOT NULL, user_id TEXT NOT NULL, verified_email TEXT NOT NULL, created_at TEXT NOT NULL)";
 type Profile = {
   tid?: unknown;
   oid?: unknown;
@@ -362,7 +362,7 @@ export async function completeMicrosoftVerification(
       throw denied();
     if (!latest.emailVerified) {
       const changed = await env.AUTH_DB.prepare(
-        'UPDATE "user" SET "emailVerified"=1 WHERE id=? AND email=? AND "emailTenantId"=? AND role=\'user\' AND (banned=0 OR banned IS NULL) RETURNING id',
+        'UPDATE "user" SET "emailVerified"=TRUE WHERE id=? AND email=? AND "emailTenantId"=? AND role=\'user\' AND (banned=FALSE OR banned IS NULL) RETURNING id',
       )
         .bind(user.id, pending.email, pending.tenantId)
         .first();
@@ -401,7 +401,7 @@ export async function completeMicrosoftVerification(
       ).catch(() => null);
       if (removed?.ok)
         await env.AUTH_DB.prepare(
-          'DELETE FROM "user" WHERE id=? AND email=? AND "emailTenantId"=? AND role=\'user\' AND (banned=0 OR banned IS NULL) AND NOT EXISTS(SELECT 1 FROM microsoft_email_binding WHERE user_id=?)',
+          'DELETE FROM "user" WHERE id=? AND email=? AND "emailTenantId"=? AND role=\'user\' AND (banned=FALSE OR banned IS NULL) AND NOT EXISTS(SELECT 1 FROM microsoft_email_binding WHERE user_id=?)',
         )
           .bind(ownedId, pending.email, pending.tenantId, ownedId)
           .run();

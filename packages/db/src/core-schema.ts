@@ -491,3 +491,68 @@ export const assistantVirtualEmployeeChunks = sqliteTable(
     ),
   ],
 );
+
+export const emailRegistrationLedger = sqliteTable(
+  "email_registration_ledger",
+  {
+    attemptId: text("attempt_id").primaryKey().notNull(),
+    authSubject: text("auth_subject").notNull().unique(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    revision: text("revision").notNull(),
+    principalId: text("principal_id")
+      .notNull()
+      .unique()
+      .references(() => identityPrincipals.id, { onDelete: "cascade" }),
+    membershipId: text("membership_id")
+      .notNull()
+      .unique()
+      .references(() => identityTenantMemberships.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+);
+export const emailRegistrationAudit = sqliteTable(
+  "email_registration_audit",
+  {
+    id: text("id").primaryKey().notNull(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    attemptId: text("attempt_id").notNull(),
+    event: text("event").notNull(),
+    reason: text("reason"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("email_registration_audit_tenant_created_index").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+  ],
+);
+export const emailRegistrationCancellation = sqliteTable(
+  "email_registration_cancellation",
+  {
+    attemptId: text("attempt_id").primaryKey().notNull(),
+    cancelled: integer("cancelled").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+);
+export const registrationCaptchaConsumption = sqliteTable(
+  "registration_captcha_consumption",
+  {
+    proofHash: text("proof_hash").primaryKey().notNull(),
+    requestId: text("request_id").notNull().unique(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    fingerprint: text("fingerprint").notNull(),
+    status: text("status").notNull(),
+    expiresAt: bigint("expires_at").notNull(),
+  },
+  (table) => [
+    index("registration_captcha_consumption_expiry_index").on(table.expiresAt),
+  ],
+);

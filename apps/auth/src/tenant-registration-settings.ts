@@ -20,7 +20,7 @@ const defaults: TenantRegistrationSettings = {
   revision: "",
 };
 const table =
-  "CREATE TABLE IF NOT EXISTS tenant_registration_settings (tenant_id INTEGER PRIMARY KEY, ciphertext TEXT NOT NULL, revision TEXT NOT NULL, updated_at TEXT NOT NULL)";
+  "CREATE TABLE IF NOT EXISTS tenant_registration_settings (tenant_id BIGINT PRIMARY KEY, ciphertext TEXT NOT NULL, revision TEXT NOT NULL, updated_at TEXT NOT NULL)";
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
@@ -164,7 +164,11 @@ export async function tenantRegistrationSettingsResponse(
             : typeof body.secretKey === "string" && body.secretKey.trim()
               ? body.secretKey.trim()
               : settings.secretKey,
-        revision: crypto.randomUUID(),
+        revision:
+          settings.revision &&
+          settings.allowEmailRegistration === body.allowEmailRegistration
+            ? settings.revision
+            : crypto.randomUUID(),
       };
       if (next.siteKey.length > 2048 || next.secretKey.length > 4096)
         return json({ error: "Invalid CAPTCHA credentials" }, 400);
