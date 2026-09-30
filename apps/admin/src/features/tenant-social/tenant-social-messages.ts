@@ -16,6 +16,27 @@ export const tenantSocialMessages = {
     "Let tenant members use Google or Microsoft to sign in.",
     "Permita que os membros do tenant entrem com Google ou Microsoft.",
   ],
+  "Create new users through federated sign-in": [
+    "Crear nuevos usuarios mediante login federado",
+    "Create new users through federated sign-in",
+    "Criar novos usuários com login federado",
+  ],
+  "When disabled, an administrator must create users before they can sign in. When enabled, anyone with a provider-verified email from an enabled provider can join, subject to this tenant's user limit.":
+    [
+      "Si está desactivado, un administrador debe crear los usuarios antes de que puedan iniciar sesión. Si está activado, cualquier persona con un correo verificado por un proveedor habilitado puede unirse, sujeto al límite de usuarios de este tenant.",
+      "When disabled, an administrator must create users before they can sign in. When enabled, anyone with a provider-verified email from an enabled provider can join, subject to this tenant's user limit.",
+      "Quando desativado, um administrador precisa criar os usuários antes que possam entrar. Quando ativado, qualquer pessoa com um email verificado por um provedor ativo pode participar, sujeito ao limite de usuários deste tenant.",
+    ],
+  "Initial access: Viewer": [
+    "Acceso inicial: Viewer",
+    "Initial access: Viewer",
+    "Acesso inicial: Viewer",
+  ],
+  "the minimum role; federated sign-in cannot grant administrator access.": [
+    "el rol mínimo; el login federado no concede acceso de administrador.",
+    "the minimum role; federated sign-in cannot grant administrator access.",
+    "o nível mínimo; o login federado não concede acesso de administrador.",
+  ],
   "Provider credentials are configured by your deployment administrator. You can enable a provider when it is available.":
     [
       "El administrador del despliegue configura las credenciales del proveedor. Puedes activarlo cuando esté disponible.",

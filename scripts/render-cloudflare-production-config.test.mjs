@@ -5,6 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { renderProductionConfigs } from "./render-cloudflare-production-config.mjs";
+import { previewNames } from "./preview-environment.mjs";
+import { workerConfig } from "./preview-deploy.mjs";
 
 async function config(outputRoot, worker) {
   return JSON.parse(
@@ -34,6 +36,9 @@ test("writes only the supported production workers and retains their runtime set
 
     assert.equal(auth.name, "savia-auth");
     assert.equal(auth.d1_databases[0].database_id, "auth-d1-id");
+    assert.deepEqual(auth.services, [
+      { binding: "SAVIA_IDENTITY", service: "savia-agencies" },
+    ]);
     assert.equal(auth.vars.BETTER_AUTH_URL, "https://savia.app.hefesoft.com");
     assert.equal(
       auth.vars.BETTER_AUTH_BOOTSTRAP_EMAIL,
@@ -201,6 +206,10 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
           "https://savia-mcp-preview.internal/mcp",
         );
       }
+      if (app === "auth")
+        assert.deepEqual(conf.services, [
+          { binding: "SAVIA_IDENTITY", service: "savia-agencies-preview" },
+        ]);
       if (app === "admin") {
         assert.equal(conf.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
         assert.deepEqual(conf.routes, [
@@ -230,6 +239,23 @@ test("preview refuses production storage defaults and unknown environments", asy
   await assert.rejects(
     renderProductionConfigs({ ...base, deploymentEnvironment: "preview" }),
     /preview/,
+  );
+});
+
+test("preview auth binds registration finalization to its matching API worker", () => {
+  const names = previewNames("feature-registration");
+  const ids = { auth: "preview-auth-id", domain: "preview-domain-id" };
+  const auth = workerConfig("auth", names, ids, "https://preview.example.test");
+  const api = workerConfig("api", names, ids, "https://preview.example.test");
+
+  assert.deepEqual(auth.services, [
+    { binding: "SAVIA_IDENTITY", service: names.workers.api },
+  ]);
+  assert.ok(
+    api.services.some(
+      ({ binding, service }) =>
+        binding === "AUTH" && service === names.workers.auth,
+    ),
   );
 });
 

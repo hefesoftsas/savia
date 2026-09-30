@@ -61,6 +61,7 @@ function publicAuthHeaders(request: Request): Headers {
   const headers = new Headers(request.headers);
   headers.delete("x-savia-tenant-branding");
   headers.delete("x-savia-tenant-email-id");
+  headers.delete("x-savia-social-tenant-id");
   headers.delete("x-savia-bridge-key");
   return headers;
 }
@@ -497,6 +498,21 @@ export function createApiShell(
     if (!resolvedAuthService) return authenticationUnavailableResponse();
     // Never forward a caller-supplied identity payload to the authentication UI.
     const headers = publicAuthHeaders(context.req.raw);
+    if (
+      identityBridgeKey?.trim() &&
+      context.req.method === "POST" &&
+      context.req.path === "/api/auth/sign-in/social"
+    ) {
+      const slug = parseTenantSlugFromHostname(
+        new URL(context.req.url).hostname,
+        canonicalHost,
+      );
+      const tenant = slug ? await resolveTenantSlug(db, slug) : null;
+      if (tenant?.isActive) {
+        headers.set("x-savia-social-tenant-id", String(tenant.id));
+        headers.set("x-savia-bridge-key", identityBridgeKey);
+      }
+    }
     // This envelope is created below from the request hostname and is honored
     // by auth only when accompanied by the API's internal bridge key.
     if (

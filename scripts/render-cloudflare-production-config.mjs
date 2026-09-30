@@ -28,6 +28,7 @@ function authConfig({ authD1Id, publicOrigin }) {
     compatibility_flags: ["nodejs_compat"],
     main: "src/index.ts",
     workers_dev: false,
+    services: [{ binding: "SAVIA_IDENTITY", service: "savia-agencies" }],
     d1_databases: [
       {
         binding: "AUTH_DB",

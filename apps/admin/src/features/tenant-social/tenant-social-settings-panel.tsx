@@ -4,12 +4,14 @@ import { ApiClientError, type ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { tenantSocialMessages } from "./tenant-social-messages";
 
 type Settings = {
   configured: boolean;
   googleEnabled: boolean;
   microsoftEnabled: boolean;
+  allowRegistration: boolean;
   microsoftTenantId: string;
   googleAvailable: boolean;
   microsoftAvailable: boolean;
@@ -21,6 +23,7 @@ const emptySettings: Settings = {
   configured: false,
   googleEnabled: false,
   microsoftEnabled: false,
+  allowRegistration: false,
   microsoftTenantId: "",
   googleAvailable: false,
   microsoftAvailable: false,
@@ -39,6 +42,7 @@ export function TenantSocialSettingsPanel({
   const [settings, setSettings] = useState<Settings>();
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+  const [allowRegistration, setAllowRegistration] = useState(false);
   const [microsoftTenantId, setMicrosoftTenantId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -54,6 +58,7 @@ export function TenantSocialSettingsPanel({
     setSettings(undefined);
     setGoogleEnabled(false);
     setMicrosoftEnabled(false);
+    setAllowRegistration(false);
     setMicrosoftTenantId("");
     void services.apiClient
       .get<Settings>(`/v1/tenants/${tenantId}/social-settings`)
@@ -62,6 +67,7 @@ export function TenantSocialSettingsPanel({
         setSettings(response);
         setGoogleEnabled(response.googleEnabled);
         setMicrosoftEnabled(response.microsoftEnabled);
+        setAllowRegistration(response.allowRegistration ?? false);
         setMicrosoftTenantId(response.microsoftTenantId);
       })
       .catch(() => {
@@ -92,11 +98,13 @@ export function TenantSocialSettingsPanel({
           googleEnabled,
           microsoftEnabled,
           microsoftTenantId: microsoftTenantId.trim(),
+          allowRegistration,
         },
       );
       setSettings(saved);
       setGoogleEnabled(saved.googleEnabled);
       setMicrosoftEnabled(saved.microsoftEnabled);
+      setAllowRegistration(saved.allowRegistration ?? false);
       setMicrosoftTenantId(saved.microsoftTenantId);
       setNotice(t("Social sign-in settings saved."));
     } catch (caught) {
@@ -126,11 +134,13 @@ export function TenantSocialSettingsPanel({
         configured: false,
         googleEnabled: false,
         microsoftEnabled: false,
+        allowRegistration: false,
         microsoftTenantId: "",
       };
       setSettings(result);
       setGoogleEnabled(false);
       setMicrosoftEnabled(false);
+      setAllowRegistration(false);
       setMicrosoftTenantId("");
       setNotice(t("Social sign-in settings removed."));
     } catch {
@@ -269,6 +279,29 @@ export function TenantSocialSettingsPanel({
                   )}
                 </span>
               </label>
+              <div className="grid gap-2 border-t pt-3">
+                <label className="flex items-start gap-3 text-sm">
+                  <Switch
+                    checked={allowRegistration}
+                    onCheckedChange={setAllowRegistration}
+                    disabled={busy}
+                    aria-describedby="tenant-social-registration-help"
+                  />
+                  <span>{t("Create new users through federated sign-in")}</span>
+                </label>
+                <p
+                  id="tenant-social-registration-help"
+                  className="text-xs leading-relaxed text-muted-foreground"
+                >
+                  {t(
+                    "When disabled, an administrator must create users before they can sign in. When enabled, anyone with a provider-verified email from an enabled provider can join, subject to this tenant's user limit.",
+                  )}
+                </p>
+                <p className="text-sm">
+                  <strong>{t("Initial access: Viewer")}</strong>
+                  {` — ${t("the minimum role; federated sign-in cannot grant administrator access.")}`}
+                </p>
+              </div>
               {error ? (
                 <p role="alert" className="text-sm text-destructive">
                   {error}
@@ -285,7 +318,10 @@ export function TenantSocialSettingsPanel({
                   disabled={
                     busy ||
                     loading ||
-                    (!googleEnabled && !microsoftEnabled && !configured)
+                    (!googleEnabled &&
+                      !microsoftEnabled &&
+                      !configured &&
+                      !allowRegistration)
                   }
                 >
                   {t("Save social sign-in settings")}

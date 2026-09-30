@@ -122,6 +122,7 @@ const unavailableSettings = {
   configured: false,
   googleEnabled: false,
   microsoftEnabled: false,
+  allowRegistration: false,
   microsoftTenantId: "",
   googleAvailable: false,
   microsoftAvailable: false,
@@ -185,6 +186,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
         configured: true,
         googleEnabled: true,
         microsoftEnabled: true,
+        allowRegistration: true,
         microsoftTenantId: validInput.microsoftTenantId,
         googleAvailable: true,
         microsoftAvailable: true,
@@ -201,7 +203,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
   const save = await app.request(path, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(validInput),
+    body: JSON.stringify({ ...validInput, allowRegistration: true }),
   });
   expect(save.status).toBe(200);
   expect(save.headers.get("cache-control")).toBe("no-store");
@@ -209,6 +211,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
     configured: true,
     googleEnabled: true,
     microsoftEnabled: true,
+    allowRegistration: true,
   });
   const saved = calls.find(
     ({ path: target, method }) =>
@@ -216,7 +219,11 @@ it("proxies safe settings without caching and synchronizes active tenant members
   );
   expect(saved).toMatchObject({
     bridgeKey: "test-social-bridge-key",
-    body: { ...validInput, actorSubject: expect.any(String) },
+    body: {
+      ...validInput,
+      allowRegistration: true,
+      actorSubject: expect.any(String),
+    },
   });
   expect(saved?.body).toHaveProperty("actorSubject");
   expect(
@@ -236,6 +243,36 @@ it("proxies safe settings without caching and synchronizes active tenant members
   expect(remove.status).toBe(200);
   expect(remove.headers.get("cache-control")).toBe("no-store");
   expect(await remove.json()).toEqual(unavailableSettings);
+});
+
+it("defaults registration off for legacy inputs and auth responses", async () => {
+  const tenant = await createTenant();
+  const { app, calls } = makeApp(tenant.id, "tenant_admin", async (request) => {
+    if (new URL(request.url).pathname.startsWith("/_internal/users/"))
+      return Response.json({ ok: true });
+    const legacy = { ...unavailableSettings } as Record<string, unknown>;
+    delete legacy.allowRegistration;
+    return Response.json(legacy);
+  });
+  const path = `https://api.test/v1/tenants/${tenant.id}/social-settings`;
+
+  const loaded = await app.request(path);
+  expect(loaded.status).toBe(200);
+  expect(await loaded.json()).toMatchObject({ allowRegistration: false });
+
+  const saved = await app.request(path, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(validInput),
+  });
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toMatchObject({ allowRegistration: false });
+  expect(
+    calls.find(
+      ({ method, path: target }) =>
+        method === "PUT" && target === `/_internal/tenant-social/${tenant.id}`,
+    )?.body,
+  ).toMatchObject({ allowRegistration: false });
 });
 
 it("rejects cross-tenant and non-admin access before contacting auth", async () => {

@@ -1,5 +1,16 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  addOAuthServerContext,
+  getOAuthState,
+} from "better-auth/api";
+import {
+  beginSocialRegistration,
+  readSocialRegistration,
+  REGISTRATION_PREFIX,
+  type SocialRegistrationAttempt,
+} from "./social-registration-context";
 import { authNoticeBridgeAuthorized } from "./notification-events";
 import { assertPasswordAllowed, type TenantSSOAdapter } from "./tenant-sso";
 import type { AuthWorkerEnvironment } from "./index";
@@ -18,6 +29,7 @@ type Settings = {
   googleEnabled: boolean;
   microsoftEnabled: boolean;
   microsoftTenantId: string;
+  allowRegistration: boolean;
   active: boolean;
   revision: string;
 };
@@ -35,6 +47,12 @@ type Proof = {
   tenantId: number;
   provider: Provider;
   revision: string;
+  registration?: SocialRegistrationAttempt;
+  registrationEnvironment?: AuthWorkerEnvironment;
+  created?: boolean;
+  finalized?: boolean;
+  issued?: boolean;
+  displayName?: string;
 };
 const proofs = new WeakMap<object, Proof>();
 export const SOCIAL_MFA_PREFIX = "savia-social-mfa:";
@@ -68,7 +86,7 @@ export function socialProviders(
     providers.google = {
       clientId: googleId,
       clientSecret: googleSecret,
-      disableSignUp: true,
+      disableSignUp: false,
       prompt: "select_account",
       includeGrantedScopes: false,
     };
@@ -76,7 +94,7 @@ export function socialProviders(
     providers.microsoft = {
       clientId: microsoftId,
       clientSecret: microsoftSecret,
-      disableSignUp: true,
+      disableSignUp: false,
       tenantId: "organizations",
       prompt: "select_account",
       disableDefaultScope: true,
@@ -92,7 +110,9 @@ export function parseSocialSettings(value: unknown) {
     !input ||
     typeof input.googleEnabled !== "boolean" ||
     typeof input.microsoftEnabled !== "boolean" ||
-    typeof input.microsoftTenantId !== "string"
+    typeof input.microsoftTenantId !== "string" ||
+    (input.allowRegistration !== undefined &&
+      typeof input.allowRegistration !== "boolean")
   )
     throw new Error("Invalid social sign-in settings");
   const microsoftTenantId = input.microsoftTenantId.trim().toLowerCase();
@@ -111,6 +131,7 @@ export function parseSocialSettings(value: unknown) {
     googleEnabled: input.googleEnabled,
     microsoftEnabled: input.microsoftEnabled,
     microsoftTenantId,
+    allowRegistration: input.allowRegistration === true,
   };
 }
 
@@ -140,6 +161,12 @@ export const tenantSocialPlugin = () =>
           googleEnabled: { type: "boolean", required: true, input: false },
           microsoftEnabled: { type: "boolean", required: true, input: false },
           microsoftTenantId: { type: "string", required: true, input: false },
+          allowRegistration: {
+            type: "boolean",
+            required: true,
+            defaultValue: false,
+            input: false,
+          },
           active: { type: "boolean", required: true, input: false },
           revision: { type: "string", required: true, input: false },
         },
@@ -175,37 +202,74 @@ async function assertAllowed(
   return settings;
 }
 
-export const validateSocialIdentity: NonNullable<
+type ValidateSocialIdentity = NonNullable<
   NonNullable<BetterAuthOptions["user"]>["validateUserInfo"]
-> = async ({ user, source }, ctx) => {
+>;
+export async function validateSocialIdentity(
+  { user, source }: Parameters<ValidateSocialIdentity>[0],
+  ctx: Parameters<ValidateSocialIdentity>[1],
+  environment?: AuthWorkerEnvironment,
+) {
   if (source.method !== "oauth") return;
   proofs.delete(ctx.context);
   const provider = source.oauth?.providerId;
   if (!isProvider(provider)) return { error: "social_provider_not_allowed" };
   try {
-    if (
-      source.action === "create-user" ||
-      !user.email ||
-      user.emailVerified !== true
-    )
-      throw deny();
+    if (!user.email || user.emailVerified !== true) throw deny();
     const local = await ctx.context.adapter.findOne<User>({
       model: "user",
       where: [{ field: "email", value: String(user.email).toLowerCase() }],
     });
-    const settings = await assertAllowed(ctx.context.adapter, local, provider);
+    const oauthState = environment ? await getOAuthState() : null;
+    let registration: SocialRegistrationAttempt | null = null;
+    if (source.action === "create-user") {
+      if (local || !environment?.SAVIA_IDENTITY) throw deny();
+      registration = await readSocialRegistration(
+        ctx.context.adapter,
+        oauthState,
+        provider,
+      );
+      if (!registration) throw deny();
+    }
+    if (local && oauthState?.serverContext?.socialAttemptId) {
+      const attempt = await readSocialRegistration(
+        ctx.context.adapter,
+        oauthState,
+        provider,
+      );
+      if (!attempt || attempt.tenantId !== local.emailTenantId) throw deny();
+    }
+    const settings = registration
+      ? await byTenant(ctx.context.adapter, registration.tenantId)
+      : await assertAllowed(ctx.context.adapter, local, provider);
+    if (!settings) throw deny();
     if (
       provider === "microsoft" &&
       String(source.oauth?.profile?.tid ?? "").toLowerCase() !==
         settings.microsoftTenantId
     )
       throw deny();
+    if (registration) {
+      const claimed = await environment!.AUTH_DB.prepare(
+        'DELETE FROM "verification" WHERE identifier = ? RETURNING id',
+      )
+        .bind(REGISTRATION_PREFIX + registration.attemptId)
+        .first();
+      if (!claimed) throw deny();
+    }
     proofs.set(ctx.context, {
-      userId: local!.id,
-      email: local!.email,
+      userId: local?.id ?? "",
+      email: String(user.email).toLowerCase(),
       tenantId: settings.tenantId,
       provider,
       revision: settings.revision,
+      ...(registration
+        ? {
+            registration,
+            registrationEnvironment: environment,
+            displayName: String(user.name ?? user.email),
+          }
+        : {}),
     });
   } catch {
     return {
@@ -214,7 +278,82 @@ export const validateSocialIdentity: NonNullable<
         "This account cannot use this sign-in method. Contact your administrator.",
     };
   }
-};
+}
+
+export async function socialRegistrationBefore(
+  ctx: Parameters<ValidateSocialIdentity>[1],
+  environment: AuthWorkerEnvironment,
+) {
+  if (
+    ctx.path !== "/sign-in/social" ||
+    !isProvider(ctx.body?.provider) ||
+    !ctx.request ||
+    !environment.SAVIA_IDENTITY
+  )
+    return;
+  const attempt = await beginSocialRegistration(
+    ctx.request,
+    ctx.body.provider,
+    environment,
+    ctx.context.adapter,
+  );
+  if (attempt)
+    await addOAuthServerContext({ socialAttemptId: attempt.attemptId });
+}
+
+export const socialAfter = createAuthMiddleware(async (ctx) => {
+  const proof = proofs.get(ctx.context);
+  if (!proof?.registration || !proof.created || proof.issued) return;
+  const environment = proof.registrationEnvironment!;
+  // Compensate only the new account owned by this OAuth attempt.
+  let removed = false;
+  try {
+    const response = await environment.SAVIA_IDENTITY!.fetch(
+      new Request(
+        `https://savia-identity.internal/_internal/social-registration/${proof.registration.attemptId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "x-savia-bridge-key": environment.SAVIA_INTERNAL_BRIDGE_KEY!,
+          },
+        },
+      ),
+    );
+    if (!response.ok) throw new Error("Identity compensation rejected");
+    removed =
+      ((await response.json()) as { removed?: boolean }).removed === true;
+  } catch {
+    // A failed bridge must never leave a usable auth account or session.
+    console.error(
+      "Federated registration compensation requires retry",
+      proof.registration.attemptId,
+    );
+  }
+  await ctx.context.internalAdapter.deleteUserSessions(proof.userId);
+  if (removed) {
+    await ctx.context.internalAdapter.deleteAccounts(proof.userId);
+    await ctx.context.internalAdapter.deleteUser(proof.userId);
+  } else {
+    // Preserve the subject if identity cleanup was unavailable or an admin changed it.
+    await ctx.context.adapter.update({
+      model: "user",
+      where: [{ field: "id", value: proof.userId }],
+      update: {
+        banned: true,
+        banReason: `Federated registration needs reconciliation: ${proof.registration.attemptId}`,
+      },
+    });
+  }
+  await ctx.context.adapter.deleteMany({
+    model: "verification",
+    where: [
+      {
+        field: "identifier",
+        value: REGISTRATION_PREFIX + proof.registration.attemptId,
+      },
+    ],
+  });
+});
 
 export const socialBefore = createAuthMiddleware(async (ctx) => {
   if (ctx.path === "/sign-in/social") {
@@ -293,8 +432,29 @@ export const socialHooks: NonNullable<BetterAuthOptions["databaseHooks"]> = {
         if (
           ctx?.path?.startsWith("/callback/") ||
           ctx?.path === "/sign-in/social"
-        )
-          throw deny();
+        ) {
+          const proof = ctx && proofs.get(ctx.context);
+          if (
+            !proof?.registration ||
+            proof.created ||
+            _user.email.toLowerCase() !== proof.email
+          )
+            throw deny();
+          return {
+            data: {
+              ..._user,
+              emailVerified: true,
+              emailTenantId: proof.tenantId,
+              role: "user",
+            },
+          };
+        }
+      },
+      after: async (user, ctx) => {
+        const proof = ctx && proofs.get(ctx.context);
+        if (!proof?.registration) return;
+        proof.userId = user.id;
+        proof.created = true;
       },
     },
   },
@@ -304,6 +464,12 @@ export const socialHooks: NonNullable<BetterAuthOptions["databaseHooks"]> = {
         if (!isProvider(account.providerId)) return;
         const proof = ctx && proofs.get(ctx.context);
         if (!proof || proof.provider !== account.providerId) throw deny();
+        if (proof.registration && !proof.userId) {
+          // Better Auth can defer user.create.after until the account transaction
+          // completes. Bind the new user here before validating the account.
+          proof.userId = account.userId;
+          proof.created = true;
+        }
         await checkProof(ctx!.context.adapter, proof, account.userId);
       },
     },
@@ -342,6 +508,38 @@ export const socialHooks: NonNullable<BetterAuthOptions["databaseHooks"]> = {
             proofs.set(ctx.context, proof);
           }
         }
+        if (proof?.registration && !proof.finalized) {
+          const environment = proof.registrationEnvironment!;
+          let response: Response;
+          try {
+            response = await environment.SAVIA_IDENTITY!.fetch(
+              new Request(
+                "https://savia-identity.internal/_internal/social-registration",
+                {
+                  method: "POST",
+                  headers: {
+                    "content-type": "application/json",
+                    "x-savia-bridge-key":
+                      environment.SAVIA_INTERNAL_BRIDGE_KEY!,
+                  },
+                  body: JSON.stringify({
+                    attemptId: proof.registration.attemptId,
+                    tenantId: proof.tenantId,
+                    subject: proof.userId,
+                    email: proof.email,
+                    displayName: proof.displayName,
+                    provider: proof.provider,
+                    revision: proof.revision,
+                  }),
+                },
+              ),
+            );
+          } catch {
+            throw deny();
+          }
+          if (!response.ok) throw deny();
+          proof.finalized = true;
+        }
         if (proof) await checkProof(ctx.context.adapter, proof, session.userId);
       },
       after: async (session, ctx) => {
@@ -349,6 +547,18 @@ export const socialHooks: NonNullable<BetterAuthOptions["databaseHooks"]> = {
         if (!ctx || !proof) return;
         try {
           await checkProof(ctx.context.adapter, proof, session.userId);
+          if (proof.registration) {
+            await ctx.context.adapter.deleteMany({
+              model: "verification",
+              where: [
+                {
+                  field: "identifier",
+                  value: REGISTRATION_PREFIX + proof.registration.attemptId,
+                },
+              ],
+            });
+            proof.issued = true;
+          }
         } catch (error) {
           await ctx.context.adapter.delete({
             model: "session",
@@ -392,6 +602,9 @@ export async function tenantSocialResponse(
     googleEnabled: existing?.googleEnabled ?? false,
     microsoftEnabled: existing?.microsoftEnabled ?? false,
     microsoftTenantId: existing?.microsoftTenantId ?? "",
+    allowRegistration: existing?.allowRegistration === true,
+    active: existing?.active ?? false,
+    revision: existing?.revision ?? "",
     googleAvailable: !!providers.google,
     microsoftAvailable: !!providers.microsoft,
     googleCallbackUrl: `${new URL(environment.BETTER_AUTH_URL).origin}/api/auth/callback/google`,

@@ -131,6 +131,16 @@ export async function createApplication(
   const objects = createObjectStore(config.s3);
   const realtime = createNodeRealtimeHub();
   const outbound = createNativeCollectionFetch();
+  let apiRuntime: ReturnType<typeof createApiRuntime> | undefined;
+  const identityService = {
+    fetch: async (request: Request) =>
+      apiRuntime
+        ? apiRuntime.fetch(request)
+        : Response.json(
+            { error: "Identity service is still initializing." },
+            { status: 503 },
+          ),
+  };
   try {
     const smtpSettings: import("../../auth/src/smtp").SMTPSettings | undefined =
       env.SAVIA_SMTP_HOST
@@ -182,6 +192,7 @@ export async function createApplication(
         SAVIA_ADMIN_REDIRECT_URI: `${config.publicOrigin}/auth/callback`,
         SAVIA_SCALAR_REDIRECT_URI: `${config.publicOrigin}/docs`,
         SAVIA_INTERNAL_BRIDGE_KEY: internalBridgeKey,
+        SAVIA_IDENTITY: identityService,
       },
       {
         database: stores.authDatabase,
@@ -290,6 +301,7 @@ export async function createApplication(
         altchaSecret: config.captchaSecret,
       },
     });
+    apiRuntime = api;
     // Initialize authentication before accepting traffic, including bootstrap and OAuth clients.
     await stores.initialize(async () => {
       const startup = await auth.fetch(

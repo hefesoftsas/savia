@@ -5,6 +5,8 @@ import {
   validateSocialIdentity,
   socialBefore,
   socialHooks,
+  socialRegistrationBefore,
+  socialAfter,
   tenantSocialResponse,
   type SocialEnvironment,
 } from "./social-sign-in";
@@ -73,6 +75,7 @@ export type AuthWorkerEnvironment = SocialEnvironment & {
   SAVIA_SMTP_ALLOW_INSECURE?: string;
   SAVIA_INTERNAL_BRIDGE_KEY?: string;
   SAVIA_SSO_ALLOW_LOCAL_IDP?: string;
+  SAVIA_IDENTITY?: { fetch(request: Request): Promise<Response> };
 };
 
 export type AuthenticatedUser = {
@@ -226,8 +229,9 @@ export function createBetterAuth(
         create: {
           before: async (user, ctx) => {
             await tenantSSOHooks.user?.create?.before?.(user, ctx);
-            await socialHooks.user?.create?.before?.(user, ctx);
+            return await socialHooks.user?.create?.before?.(user, ctx);
           },
+          after: socialHooks.user?.create?.after,
         },
       },
       account: {
@@ -255,14 +259,17 @@ export function createBetterAuth(
       before: createAuthMiddleware(async (ctx) => {
         await tenantSSOBefore(ctx);
         await socialBefore(ctx);
+        await socialRegistrationBefore(ctx, environment);
       }),
+      after: socialAfter,
     },
     account: {
       encryptOAuthTokens: true,
       accountLinking: { enabled: true, requireLocalEmailVerified: true },
     },
     user: {
-      validateUserInfo: validateSocialIdentity,
+      validateUserInfo: (input, ctx) =>
+        validateSocialIdentity(input, ctx, environment),
       additionalFields: {
         emailTenantId: {
           type: "number",

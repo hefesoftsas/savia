@@ -27,7 +27,13 @@ const WORKER_APP = {
   gateway: "admin",
 };
 
-function workerConfig(kind, names, ids, origin, { assetsDir, bootstrap } = {}) {
+export function workerConfig(
+  kind,
+  names,
+  ids,
+  origin,
+  { assetsDir, bootstrap } = {},
+) {
   const base = {
     compatibility_date: kind === "request" ? "2026-09-04" : "2026-08-31",
     workers_dev: true,
@@ -38,6 +44,7 @@ function workerConfig(kind, names, ids, origin, { assetsDir, bootstrap } = {}) {
       name: names.workers.auth,
       main: resolve(workspaceRoot, "apps/auth/src/index.ts"),
       compatibility_flags: ["nodejs_compat"],
+      services: [{ binding: "SAVIA_IDENTITY", service: names.workers.api }],
       d1_databases: [
         {
           binding: "AUTH_DB",
