@@ -161,3 +161,28 @@ test("environment deployments forward the private registry tenant map", async ()
     );
   }
 });
+
+test("registry deployment accepts only the current main commit", async () => {
+  const registry = await workflow("deploy-plugin-registry.yml");
+  assert.match(
+    registry,
+    /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+  assert.match(
+    registry,
+    /uses: actions\/checkout@v4\n\s+with:\n\s+ref: \$\{\{ github\.sha \}\}/,
+  );
+  const guardStart = registry.indexOf("name: Reject superseded deployments");
+  const deployStart = registry.indexOf("name: Deploy registry");
+  assert.ok(
+    guardStart >
+      registry.indexOf("run: pnpm --filter @savia/plugin-registry typecheck"),
+  );
+  assert.ok(deployStart > guardStart);
+  const guard = registry.slice(guardStart, deployStart);
+  assert.match(guard, /git ls-remote --exit-code origin refs\/heads\/main/);
+  assert.match(
+    guard,
+    /if \[ "\$approved_sha" != "\$current_sha" \]; then[\s\S]*exit 1/,
+  );
+});

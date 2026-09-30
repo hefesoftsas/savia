@@ -12,11 +12,14 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: pnpm/action-setup@v4
         with:
           version: 11.24.0
@@ -27,6 +30,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @savia/plugin-registry test
       - run: pnpm --filter @savia/plugin-registry typecheck
+      - name: Reject superseded deployments
+        shell: bash
+        run: |
+          approved_sha="$(git rev-parse HEAD)"
+          current_sha="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$approved_sha" != "$current_sha" ]; then
+            echo "::error::This commit has been superseded on main; refusing an outdated registry deployment."
+            exit 1
+          fi
       # The persistent R2 bucket is provisioned separately and never reset here.
       - name: Deploy registry and its hashed credential configuration
         working-directory: apps/plugin-registry
