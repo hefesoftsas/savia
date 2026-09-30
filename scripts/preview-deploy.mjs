@@ -32,7 +32,7 @@ export function workerConfig(
   names,
   ids,
   origin,
-  { assetsDir, bootstrap } = {},
+  { assetsDir, bootstrap, identityReady = true } = {},
 ) {
   const base = {
     compatibility_date: kind === "request" ? "2026-09-04" : "2026-08-31",
@@ -44,7 +44,13 @@ export function workerConfig(
       name: names.workers.auth,
       main: resolve(workspaceRoot, "apps/auth/src/index.ts"),
       compatibility_flags: ["nodejs_compat"],
-      services: [{ binding: "SAVIA_IDENTITY", service: names.workers.api }],
+      ...(identityReady
+        ? {
+            services: [
+              { binding: "SAVIA_IDENTITY", service: names.workers.api },
+            ],
+          }
+        : {}),
       d1_databases: [
         {
           binding: "AUTH_DB",
@@ -249,12 +255,19 @@ async function main() {
 
   const configs = {};
   let origin = "https://preview.local";
-  const render = (kind) =>
-    workerConfig(kind, names, ids, origin, { assetsDir, bootstrap });
+  const render = (kind, identityReady = true) =>
+    workerConfig(kind, names, ids, origin, {
+      assetsDir,
+      bootstrap,
+      identityReady,
+    });
   for (const kind of kinds) {
     const file = join(configRoot, `${kind}.wrangler.preview.jsonc`);
     await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, `${JSON.stringify(render(kind), null, 2)}\n`);
+    await writeFile(
+      file,
+      `${JSON.stringify(render(kind, kind !== "auth"), null, 2)}\n`,
+    );
     configs[kind] = file;
   }
 
@@ -284,6 +297,14 @@ async function main() {
 
   for (const kind of ["auth", "request", "mcp", "api"]) {
     if (kinds.includes(kind)) results.push(await deploy(kind));
+  }
+  const apiDeployment = results.find((result) => result.kind === "api");
+  if (apiDeployment?.ok) {
+    await writeFile(
+      configs.auth,
+      `${JSON.stringify(render("auth"), null, 2)}\n`,
+    );
+    results.push(await deploy("auth"));
   }
   if (kinds.includes("gateway")) {
     if (!dryRun) {

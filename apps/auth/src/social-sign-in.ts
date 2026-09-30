@@ -305,6 +305,19 @@ export const socialAfter = createAuthMiddleware(async (ctx) => {
   const proof = proofs.get(ctx.context);
   if (!proof?.registration || !proof.created || proof.issued) return;
   const environment = proof.registrationEnvironment!;
+  const currentUser = await ctx.context.adapter.findOne<User>({
+    model: "user",
+    where: [{ field: "id", value: proof.userId }],
+  });
+  await ctx.context.internalAdapter.deleteUserSessions(proof.userId);
+  // An administrator may have changed this new account while the callback ran.
+  if (
+    !currentUser ||
+    currentUser.email !== proof.email ||
+    currentUser.emailTenantId !== proof.tenantId ||
+    currentUser.role !== "user"
+  )
+    return;
   // Compensate only the new account owned by this OAuth attempt.
   let removed = false;
   try {

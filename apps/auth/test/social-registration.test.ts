@@ -5,7 +5,7 @@ import { createAuthHandler, createBetterAuth } from "../src/index";
 describe("federated first login", () => {
   async function fixture(
     allowRegistration: boolean,
-    apiFails: boolean | "throw" = false,
+    apiFails: boolean | "throw" | "upgraded" = false,
     verified = true,
     trusted = true,
     stale = false,
@@ -14,6 +14,13 @@ describe("federated first login", () => {
     const tenantId = 700000 + Math.floor(Math.random() * 100000);
     const finalize = vi.fn(async (request: Request) => {
       if (apiFails === "throw") throw new Error("Identity bridge unavailable");
+      if (apiFails === "upgraded" && request.method === "POST") {
+        await context.adapter.update({
+          model: "user",
+          where: [{ field: "email", value: email }],
+          update: { role: "admin" },
+        });
+      }
       return request.method === "DELETE"
         ? Response.json({ removed: true })
         : new Response(null, { status: apiFails ? 503 : 201 });
@@ -153,6 +160,14 @@ describe("federated first login", () => {
     const f = await fixture(true, "throw");
     expect(f.user).toMatchObject({ banned: true });
     expect(f.sessions).toHaveLength(0);
+  });
+  it("preserves an auth account changed by an administrator during finalization", async () => {
+    const f = await fixture(true, "upgraded");
+    expect(f.user).toMatchObject({ role: "admin", banned: false });
+    expect(f.sessions).toHaveLength(0);
+    expect(f.finalize.mock.calls.some(([r]) => r.method === "DELETE")).toBe(
+      false,
+    );
   });
   it.each([
     ["unverified provider email", false, true, false],

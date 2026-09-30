@@ -245,9 +245,17 @@ test("preview refuses production storage defaults and unknown environments", asy
 test("preview auth binds registration finalization to its matching API worker", () => {
   const names = previewNames("feature-registration");
   const ids = { auth: "preview-auth-id", domain: "preview-domain-id" };
+  const bootstrapAuth = workerConfig(
+    "auth",
+    names,
+    ids,
+    "https://preview.example.test",
+    { identityReady: false },
+  );
   const auth = workerConfig("auth", names, ids, "https://preview.example.test");
   const api = workerConfig("api", names, ids, "https://preview.example.test");
 
+  assert.equal("services" in bootstrapAuth, false);
   assert.deepEqual(auth.services, [
     { binding: "SAVIA_IDENTITY", service: names.workers.api },
   ]);

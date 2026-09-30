@@ -20,7 +20,7 @@
     },
     {
       "filename": "0005_social_registration.sql",
-      "sha256": "87e6653e54e028fc6a56ee1e0ffbf072b63c21d287c44c4ffe15b7ca7ce4bd39"
+      "sha256": "1ac9863f0e7fa3769aa8e2bd10d84fd61e3f10e5fb955ae5c95e52d75b31fd18"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -615,6 +615,11 @@
       "type": "table",
       "name": "social_registration_audit",
       "table": "social_registration_audit"
+    },
+    {
+      "type": "table",
+      "name": "social_registration_cancellation",
+      "table": "social_registration_cancellation"
     },
     {
       "type": "table",
@@ -4846,6 +4851,44 @@
       "uniqueKeys": [
         {
           "columns": ["id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 1
+    },
+    {
+      "name": "social_registration_cancellation",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "attempt_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "cancelled",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["attempt_id"],
           "origin": "pk"
         }
       ],

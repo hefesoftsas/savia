@@ -20,3 +20,9 @@ CREATE TABLE social_registration_audit (
 );
 
 CREATE INDEX social_registration_audit_tenant_created_index ON social_registration_audit USING btree (tenant_id, created_at);
+
+CREATE TABLE social_registration_cancellation (
+  attempt_id text PRIMARY KEY NOT NULL,
+  cancelled integer NOT NULL DEFAULT 0 CHECK (cancelled IN (0,1)),
+  created_at text NOT NULL
+);

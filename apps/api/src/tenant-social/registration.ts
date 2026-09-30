@@ -59,6 +59,19 @@ async function ledgerByAttempt(
     .first<LedgerRow>();
 }
 
+async function cancellationExists(
+  db: D1Database,
+  attemptId: string,
+): Promise<boolean> {
+  const cancellation = await db
+    .prepare(
+      "SELECT attempt_id FROM social_registration_cancellation WHERE attempt_id=? AND cancelled=1",
+    )
+    .bind(attemptId)
+    .first<{ attempt_id: string }>();
+  return !!cancellation;
+}
+
 async function finalizedRowsAreActive(
   db: D1Database,
   row: LedgerRow,
@@ -155,6 +168,8 @@ export async function finalizeSocialRegistration(
   db: D1Database,
   input: RegistrationInput,
 ): Promise<RegistrationResult> {
+  if (await cancellationExists(db, input.attemptId))
+    throw new Error("SOCIAL_REGISTRATION_CANCELLED");
   const previous = await ledgerByAttempt(db, input.attemptId);
   if (previous) {
     if (!sameAttempt(previous, input))
@@ -195,7 +210,12 @@ export async function finalizeSocialRegistration(
   await db.batch([
     db
       .prepare(
-        "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,'savia:better-auth',?,?,?,?,?,?)",
+        "INSERT INTO social_registration_cancellation(attempt_id,cancelled,created_at) VALUES(?,0,?) ON CONFLICT(attempt_id) DO UPDATE SET attempt_id=excluded.attempt_id",
+      )
+      .bind(input.attemptId, now),
+    db
+      .prepare(
+        "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) SELECT ?,'savia:better-auth',?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM social_registration_cancellation WHERE attempt_id=? AND cancelled=1)",
       )
       .bind(
         principalId,
@@ -205,6 +225,7 @@ export async function finalizeSocialRegistration(
         1,
         now,
         now,
+        input.attemptId,
       ),
     db
       .prepare(
@@ -275,6 +296,11 @@ export function registerSocialRegistrationRoutes(
     try {
       return c.json(await finalizeSocialRegistration(db, input), 200);
     } catch (error) {
+      if (await cancellationExists(db, input.attemptId))
+        return c.json(
+          { error: "Social registration attempt was cancelled." },
+          409,
+        );
       const replay = await ledgerByAttempt(db, input.attemptId).catch(
         () => null,
       );
@@ -351,6 +377,12 @@ export function registerSocialRegistrationRoutes(
     if (c.req.header("x-savia-bridge-key") !== bridgeKey)
       return c.json({ error: "Forbidden" }, 401);
     const attemptId = c.req.param("attemptId");
+    await db
+      .prepare(
+        "INSERT INTO social_registration_cancellation(attempt_id,cancelled,created_at) VALUES(?,1,?) ON CONFLICT(attempt_id) DO UPDATE SET cancelled=1",
+      )
+      .bind(attemptId, new Date().toISOString())
+      .run();
     const row = await ledgerByAttempt(db, attemptId);
     if (!row) return c.json({ ok: true, removed: true }, 200);
     const now = new Date().toISOString();

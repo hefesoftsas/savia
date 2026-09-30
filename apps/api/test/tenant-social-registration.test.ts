@@ -442,9 +442,10 @@ it("compensates only the rows created by a finalized attempt", async () => {
 });
 
 it("acknowledges compensation when the attempt ledger is already absent", async () => {
+  const tenantId = await createTenant();
   const { app } = createApp();
   const response = await app.request(
-    "/_internal/social-registration/attempt-never-finalized",
+    `/_internal/social-registration/${encodeURIComponent(`attempt-${tenantId}`)}`,
     {
       method: "DELETE",
       headers: { "x-savia-bridge-key": "test-bridge-key" },
@@ -453,6 +454,83 @@ it("acknowledges compensation when the attempt ledger is already absent", async 
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true, removed: true });
+
+  const attempt = await app.request("/_internal/social-registration", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-savia-bridge-key": "test-bridge-key",
+    },
+    body: JSON.stringify(payload(tenantId)),
+  });
+  expect(attempt.status).toBe(409);
+  const principal = await env.DB.prepare(
+    "SELECT id FROM identity_principal WHERE subject=?",
+  )
+    .bind(`auth-subject-${tenantId}`)
+    .first();
+  expect(principal).toBeNull();
+});
+
+it("fences a DELETE that lands after finalization preflight but before its write batch", async () => {
+  const tenantId = await createTenant();
+  let announceBatch!: () => void;
+  let releaseBatch!: () => void;
+  const batchReached = new Promise<void>((resolve) => {
+    announceBatch = resolve;
+  });
+  const batchGate = new Promise<void>((resolve) => {
+    releaseBatch = resolve;
+  });
+  const racingDb = {
+    prepare: (sql: string) => env.DB.prepare(sql),
+    batch: async (statements: D1PreparedStatement[]) => {
+      announceBatch();
+      await batchGate;
+      return env.DB.batch(statements);
+    },
+  } as unknown as D1Database;
+  const { app } = createApp(undefined, "test-bridge-key", racingDb);
+  const post = app.request("/_internal/social-registration", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-savia-bridge-key": "test-bridge-key",
+    },
+    body: JSON.stringify(payload(tenantId)),
+  });
+
+  let batchTimeout: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    batchReached,
+    new Promise<never>((_, reject) => {
+      batchTimeout = setTimeout(
+        () => reject(new Error("Finalization did not reach its write batch.")),
+        1_000,
+      );
+    }),
+  ]).finally(() => {
+    if (batchTimeout) clearTimeout(batchTimeout);
+  });
+  const deletion = await app.request(
+    `/_internal/social-registration/${encodeURIComponent(`attempt-${tenantId}`)}`,
+    {
+      method: "DELETE",
+      headers: { "x-savia-bridge-key": "test-bridge-key" },
+    },
+  );
+  expect(deletion.status).toBe(200);
+  expect(await deletion.json()).toEqual({ ok: true, removed: true });
+  releaseBatch();
+
+  const finalized = await post;
+  expect(finalized.status).toBe(409);
+  const principal = await env.DB.prepare(
+    "SELECT id FROM identity_principal WHERE subject=?",
+  )
+    .bind(`auth-subject-${tenantId}`)
+    .first();
+  expect(principal).toBeNull();
 });
 
 it("preserves a principal whose membership was elevated before compensation", async () => {

@@ -20,3 +20,9 @@ CREATE TABLE social_registration_audit (
 );
 --> statement-breakpoint
 CREATE INDEX social_registration_audit_tenant_created_index ON social_registration_audit(tenant_id,created_at);
+--> statement-breakpoint
+CREATE TABLE social_registration_cancellation (
+  attempt_id TEXT PRIMARY KEY NOT NULL,
+  cancelled INTEGER NOT NULL DEFAULT 0 CHECK(cancelled IN (0,1)),
+  created_at TEXT NOT NULL
+);
