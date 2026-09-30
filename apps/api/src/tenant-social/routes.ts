@@ -12,6 +12,7 @@ const settingsInput = z
   .object({
     googleEnabled: z.boolean(),
     microsoftEnabled: z.boolean(),
+    allowRegistration: z.boolean().default(false),
     microsoftTenantId: z
       .string()
       .trim()
@@ -33,6 +34,7 @@ const settingsResponse = z.object({
   configured: z.boolean(),
   googleEnabled: z.boolean(),
   microsoftEnabled: z.boolean(),
+  allowRegistration: z.boolean().default(false),
   microsoftTenantId: z.string(),
   googleAvailable: z.boolean(),
   microsoftAvailable: z.boolean(),

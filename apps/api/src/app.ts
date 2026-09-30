@@ -7,6 +7,7 @@ import {
   registerTenantSocialRoutes,
   deleteTenantSocialSettings,
 } from "./tenant-social/routes";
+import { registerSocialRegistrationRoutes } from "./tenant-social/registration";
 import { createCollectionGateway } from "./studio/collection-gateway";
 import { registerWorkflowWebhookRoutes } from "./workflow-webhooks";
 import { registerTenantBrandingRoutes } from "./tenant-branding/routes";
@@ -126,6 +127,12 @@ export function createApp(
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSocialRoutes(app, db, resolvedAuthService, identityBridgeKey);
+  registerSocialRegistrationRoutes(
+    app,
+    db,
+    resolvedAuthService,
+    identityBridgeKey,
+  );
   installRequestResultEnvelope(app);
   registerPublicPluginEntryRoutes(app, db, studioIntegrationKey);
   registerAccessControlRoutes(app, db, realtime);

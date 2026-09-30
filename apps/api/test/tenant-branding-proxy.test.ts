@@ -16,6 +16,41 @@ it("removes caller supplied branding before proxying authentication", async () =
   expect(fetch).toHaveBeenCalledOnce();
 });
 
+it("binds social initiation to a resolved tenant and strips spoofed canonical context", async () => {
+  const fetch = vi.fn(async (request: Request) =>
+    Response.json({
+      tenantId: request.headers.get("x-savia-social-tenant-id"),
+      key: request.headers.get("x-savia-bridge-key"),
+    }),
+  );
+  const app = createTestApp({
+    authService: { fetch },
+    identityBridgeKey: "trusted-bridge-key",
+  });
+  const init = {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-savia-social-tenant-id": "999",
+      "x-savia-bridge-key": "spoofed",
+    },
+    body: JSON.stringify({ provider: "google" }),
+  };
+  const canonical = await app.request(
+    "https://savia.app.hefesoft.com/api/auth/sign-in/social",
+    init,
+  );
+  expect(await canonical.json()).toEqual({ tenantId: null, key: null });
+  const tenant = await app.request(
+    "https://branding-preview.savia.app.hefesoft.com/api/auth/sign-in/social",
+    init,
+  );
+  expect(await tenant.json()).toEqual({
+    tenantId: "919191",
+    key: "trusted-bridge-key",
+  });
+});
+
 it("adds tenant email context only to tenant recovery HTML and strips caller bridge headers", async () => {
   const fetch = vi.fn(async (request: Request) =>
     Response.json({

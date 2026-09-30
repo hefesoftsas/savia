@@ -2,6 +2,22 @@ import { describe, it, expect } from "vitest";
 import { socialProviders, parseSocialSettings } from "../src/social-sign-in";
 
 describe("social sign-in configuration", () => {
+  it("defaults registration to off and persists an explicit opt-in", () => {
+    const base = {
+      googleEnabled: true,
+      microsoftEnabled: false,
+      microsoftTenantId: "",
+    };
+    expect(parseSocialSettings(base)).toMatchObject({
+      allowRegistration: false,
+    });
+    expect(
+      parseSocialSettings({ ...base, allowRegistration: true }),
+    ).toMatchObject({ allowRegistration: true });
+    expect(() =>
+      parseSocialSettings({ ...base, allowRegistration: "true" }),
+    ).toThrow();
+  });
   it("enables only complete deployment credentials and uses organization-only Microsoft", () => {
     expect(socialProviders({})).toEqual({});
     expect(() => socialProviders({ SAVIA_GOOGLE_CLIENT_ID: "id" })).toThrow();
@@ -11,10 +27,11 @@ describe("social sign-in configuration", () => {
       SAVIA_MICROSOFT_CLIENT_ID: "m",
       SAVIA_MICROSOFT_CLIENT_SECRET: "ms",
     });
-    expect(providers.google).toMatchObject({ disableSignUp: true });
+    // Savia's callback proof gates registration; provider signup must reach it.
+    expect(providers.google).toMatchObject({ disableSignUp: false });
     expect(providers.microsoft).toMatchObject({
       tenantId: "organizations",
-      disableSignUp: true,
+      disableSignUp: false,
       disableDefaultScope: true,
       scope: ["openid", "profile", "email"],
     });

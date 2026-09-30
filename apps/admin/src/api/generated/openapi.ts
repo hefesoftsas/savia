@@ -699,6 +699,8 @@ export interface paths {
               configured: boolean;
               googleEnabled: boolean;
               microsoftEnabled: boolean;
+              /** @default false */
+              allowRegistration: boolean;
               microsoftTenantId: string;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
@@ -723,6 +725,8 @@ export interface paths {
           "application/json": {
             googleEnabled: boolean;
             microsoftEnabled: boolean;
+            /** @default false */
+            allowRegistration?: boolean;
             microsoftTenantId: string;
           };
         };
@@ -738,6 +742,8 @@ export interface paths {
               configured: boolean;
               googleEnabled: boolean;
               microsoftEnabled: boolean;
+              /** @default false */
+              allowRegistration: boolean;
               microsoftTenantId: string;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
@@ -770,6 +776,8 @@ export interface paths {
               configured: boolean;
               googleEnabled: boolean;
               microsoftEnabled: boolean;
+              /** @default false */
+              allowRegistration: boolean;
               microsoftTenantId: string;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
