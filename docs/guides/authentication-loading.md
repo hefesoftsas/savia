@@ -17,3 +17,9 @@ loading indicator exposes an accessible status and respects reduced motion.
 The shared loading style is delivered through the existing authentication CSS
 route; it does not require a new script or animation library. It represents
 pending work and does not add a minimum display time or delay navigation.
+
+Explicit logout waits for the server sign-out and workspace cleanup before
+clearing mounted queries and redirecting to authorization. Clearing auth queries
+while asynchronous cleanup is still pending can trigger another authentication
+check and repeated logout, leaving the current tab blank. Query cleanup still
+runs if workspace cleanup fails.

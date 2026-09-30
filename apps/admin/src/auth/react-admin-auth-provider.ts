@@ -30,7 +30,9 @@ export function createReactAdminAuthProvider(
     logout: async (params?: { logoutFromProvider?: boolean }) => {
       try {
         if (params?.logoutFromProvider) {
-          return session.logout();
+          // Keep mounted auth queries intact until the server clears its cookies.
+          // Returning the promise without awaiting it runs finally too early.
+          return await session.logout();
         }
         await session.clearSession();
         return session.getAuthorizeUrl();
