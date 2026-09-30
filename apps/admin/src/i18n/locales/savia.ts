@@ -245,6 +245,9 @@ const saviaEnglish = {
     },
     users: {
       title: "Users",
+      loadingPermissions: "Loading user permissions…",
+      tenantAdminRequired:
+        "A single tenant administrator membership is required to create users.",
       capacity: {
         title: "Tenant user capacity",
         retry: "Retry",
@@ -795,6 +798,9 @@ const saviaSpanish = {
     },
     users: {
       title: "Usuarios",
+      loadingPermissions: "Cargando permisos de usuario…",
+      tenantAdminRequired:
+        "Debes ser administrador de un único tenant para crear usuarios.",
       capacity: {
         title: "Cupo de usuarios del tenant",
         retry: "Reintentar",
@@ -1343,6 +1349,9 @@ const saviaPortuguese = {
     },
     users: {
       title: "Usuários",
+      loadingPermissions: "Carregando permissões do usuário…",
+      tenantAdminRequired:
+        "É necessário ser administrador de um único tenant para criar usuários.",
       capacity: {
         title: "Capacidade de usuários do tenant",
         retry: "Tentar novamente",

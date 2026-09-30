@@ -36,7 +36,7 @@ import {
 } from "ra-core";
 import MicrosoftExcel from "@thesvg/react/microsoft-excel";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWatch } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 import {
   BooleanInput,
   Count,
@@ -504,13 +504,10 @@ export function UserCreate() {
   const { permissions, isPending } = usePermissions<AuthPermissions>();
   const scope = userCreateScope(permissions);
   const { platformCanEdit, tenantId } = scope;
-  if (isPending) return <p role="status">Loading user permissions…</p>;
+  if (isPending)
+    return <p role="status">{translate("savia.users.loadingPermissions")}</p>;
   if (!platformCanEdit && tenantId === undefined)
-    return (
-      <p role="alert">
-        A single tenant administrator membership is required to create users.
-      </p>
-    );
+    return <p role="alert">{translate("savia.users.tenantAdminRequired")}</p>;
 
   return (
     <Create title={translate("savia.users.newUser", { _: "Nuevo usuario" })}>
@@ -874,18 +871,11 @@ function UserInitialAccessFields({
             })}
             className="md:col-span-2"
           />
-          <ReferenceInput
-            source="tenantId"
-            reference="tenants"
-            perPage={100}
-            filter={{ kind: "commercial" }}
-          >
-            <SelectInput
-              label={translate("savia.users.fields.commercialTenant", {
-                _: "Tenant comercial",
-              })}
-            />
-          </ReferenceInput>
+          <CommercialTenantInput
+            label={translate("savia.users.fields.commercialTenant", {
+              _: "Tenant comercial",
+            })}
+          />
         </>
       ) : (
         <TextInput
@@ -932,18 +922,11 @@ function UserPlatformAccessFields() {
         })}
         className="md:col-span-2"
       />
-      <ReferenceInput
-        source="tenantId"
-        reference="tenants"
-        perPage={100}
-        filter={{ kind: "commercial" }}
-      >
-        <SelectInput
-          label={translate("savia.users.fields.commercialTenantRemove", {
-            _: "Tenant comercial al retirar acceso global",
-          })}
-        />
-      </ReferenceInput>
+      <CommercialTenantInput
+        label={translate("savia.users.fields.commercialTenantRemove", {
+          _: "Tenant comercial al retirar acceso global",
+        })}
+      />
       <SelectInput
         source="agencyRole"
         label={translate("savia.users.fields.tenantRoleRemove", {
@@ -952,6 +935,41 @@ function UserPlatformAccessFields() {
         choices={getTenantRoleChoices(translate)}
       />
     </UserSection>
+  );
+}
+
+function CommercialTenantInput({ label }: { label: string }) {
+  const { data: tenants = [] } = useGetList<TenantRecord>("tenants", {
+    pagination: { page: 1, perPage: 100 },
+    sort: { field: "name", order: "ASC" },
+    filter: { kind: "commercial" },
+  });
+  const { register, setValue } = useFormContext();
+
+  useEffect(() => {
+    if (tenants.length === 1) {
+      setValue("tenantId", tenants[0].id, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+  }, [setValue, tenants]);
+
+  if (tenants.length === 1) {
+    return (
+      <input type="hidden" {...register("tenantId", { valueAsNumber: true })} />
+    );
+  }
+
+  return (
+    <ReferenceInput
+      source="tenantId"
+      reference="tenants"
+      perPage={100}
+      filter={{ kind: "commercial" }}
+    >
+      <SelectInput label={label} />
+    </ReferenceInput>
   );
 }
 
@@ -980,6 +998,12 @@ function UserMembershipEditor() {
       record?.memberships[0] ? String(record.memberships[0].tenantId) : "",
     );
   }, [record?.id, record?.memberships[0]?.role]);
+
+  useEffect(() => {
+    if (tenants.length === 1 && tenantId !== String(tenants[0].id)) {
+      setTenantId(String(tenants[0].id));
+    }
+  }, [tenantId, tenants]);
 
   if (!record) return null;
 
@@ -1055,27 +1079,33 @@ function UserMembershipEditor() {
       <div className="grid gap-3 rounded-lg border p-3 md:col-span-2 md:grid-cols-[1fr_220px_auto] md:items-end">
         <label className="grid gap-2 text-sm font-medium">
           {translate("savia.users.fields.tenant", { _: "Tenant" })}
-          <Select
-            value={tenantId}
-            onValueChange={setTenantId}
-            disabled={pending}
-          >
-            <SelectTrigger>
-              <SelectValue
-                placeholder={translate(
-                  "savia.users.fields.selectTenantPlaceholder",
-                  { _: "Selecciona un tenant" },
-                )}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {tenants.map((tenant) => (
-                <SelectItem key={tenant.id} value={String(tenant.id)}>
-                  {tenant.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {tenants.length === 1 ? (
+            <span className="rounded-md border px-3 py-2 font-normal">
+              {tenants[0].name}
+            </span>
+          ) : (
+            <Select
+              value={tenantId}
+              onValueChange={setTenantId}
+              disabled={pending}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={translate(
+                    "savia.users.fields.selectTenantPlaceholder",
+                    { _: "Selecciona un tenant" },
+                  )}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {tenants.map((tenant) => (
+                  <SelectItem key={tenant.id} value={String(tenant.id)}>
+                    {tenant.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </label>
         <label className="grid gap-2 text-sm font-medium">
           {translate("savia.users.fields.role", { _: "Rol" })}
