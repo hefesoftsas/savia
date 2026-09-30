@@ -147,6 +147,7 @@ it("limits tenant-admin screen creation and metadata access to its own tenant", 
   expect(await ownList.text()).toContain(ownScreen);
 
   for (const tenantId of [102, 0]) {
+    const expectedStatus = tenantId === 0 ? 404 : 403;
     const path = `/v1/studio/${tenantId}/api`;
     const createResponse = await f.request(
       "tenant_admin",
@@ -162,14 +163,14 @@ it("limits tenant-admin screen creation and metadata access to its own tenant", 
         }),
       },
     );
-    expect(createResponse.status).toBe(403);
+    expect(createResponse.status).toBe(expectedStatus);
 
     const listResponse = await f.request(
       "tenant_admin",
       101,
       `${path}/objects`,
     );
-    expect(listResponse.status).toBe(403);
+    expect(listResponse.status).toBe(expectedStatus);
 
     const target = tenantId === 0 ? globalScreen : "acl_contacts";
     const editResponse = await f.request(
@@ -182,7 +183,7 @@ it("limits tenant-admin screen creation and metadata access to its own tenant", 
         body: JSON.stringify({ label: "Unauthorized edit" }),
       },
     );
-    expect(editResponse.status).toBe(403);
+    expect(editResponse.status).toBe(expectedStatus);
   }
 
   const [foreignObject, globalObject, forbiddenObjects] = await Promise.all([
