@@ -209,7 +209,11 @@ function originalTotpSecret(totpURI: string): string {
   return new TextDecoder().decode(Uint8Array.from(bytes));
 }
 
-async function submitOAuthLogin(script: string): Promise<{
+async function submitOAuthLogin(
+  script: string,
+  search = "?sig=signed&ba_param=client_id&client_id=scalar",
+  restartUrl?: string,
+): Promise<{
   requests: string[];
   assignedUrl: string | undefined;
 }> {
@@ -229,6 +233,7 @@ async function submitOAuthLogin(script: string): Promise<{
     },
   };
   const document = {
+    body: { dataset: { oauthRestartUrl: restartUrl } },
     querySelector: (selector: string) => {
       if (selector === "#oauth-status") return { textContent: "" };
       if (selector === '[data-oauth-form="sign-in"]') return loginForm;
@@ -252,7 +257,10 @@ async function submitOAuthLogin(script: string): Promise<{
   execute(
     {
       location: {
-        search: "?sig=signed&ba_param=client_id&client_id=scalar",
+        search,
+        replace: (url: string) => {
+          assignedUrl = url;
+        },
         assign: (url: string) => {
           assignedUrl = url;
         },
@@ -595,6 +603,32 @@ describe("Savia Better Auth worker", () => {
       requests: ["/api/auth/sign-in/email", "/api/auth/oauth2/continue"],
       assignedUrl: "http://127.0.0.1:8787/docs?code=authorized",
     });
+  });
+
+  it.each(["", "?client_id=admin", "?sig=incomplete"])(
+    "restarts admin authorization after sign-in without a signed OAuth query (%s)",
+    async (search) => {
+      const loginHtml = await (await authRequest("/api/auth/login")).text();
+      const restartUrl = loginHtml.match(
+        /data-oauth-restart-url="([^"]+)"/,
+      )?.[1];
+      const script = await (await authRequest("/api/auth/oauth-ui.js")).text();
+
+      expect(restartUrl).toBe("http://127.0.0.1:5173/#/login");
+      await expect(
+        submitOAuthLogin(script, search, restartUrl),
+      ).resolves.toEqual({
+        requests: ["/api/auth/sign-in/email"],
+        assignedUrl: restartUrl,
+      });
+    },
+  );
+
+  it("provides the admin restart route on MFA enrollment without OAuth context", async () => {
+    const html = await (await authRequest("/api/auth/mfa-enroll")).text();
+    expect(html).toContain(
+      'data-oauth-restart-url="http://127.0.0.1:5173/#/login"',
+    );
   });
 
   it("restarts configured admin access after a signed authorization expires", async () => {
