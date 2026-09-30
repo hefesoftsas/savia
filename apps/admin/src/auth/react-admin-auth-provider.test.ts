@@ -3,6 +3,35 @@ import { ApiClientError } from "@/api/api-client";
 import { createReactAdminAuthProvider } from "./react-admin-auth-provider";
 
 describe("React Admin authentication provider", () => {
+  it("waits for server sign-out before invalidating mounted auth queries", async () => {
+    let finishSignOut!: (url: string) => void;
+    const session = {
+      checkSession: vi.fn(),
+      clearSession: vi.fn(),
+      getAccessToken: vi.fn(),
+      getIdentity: vi.fn(),
+      getPermissions: vi.fn(),
+      handleCallback: vi.fn(),
+      login: vi.fn(),
+      getAuthorizeUrl: vi.fn(),
+      logout: vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            finishSignOut = resolve;
+          }),
+      ),
+    };
+    const onLogout = vi.fn();
+    const provider = createReactAdminAuthProvider(session, { onLogout });
+    const logout = provider.logout({ logoutFromProvider: true });
+    const cleanupBeforeSignOut = onLogout.mock.calls.length;
+    finishSignOut("https://savia.example/api/auth/admin/authorize");
+    await expect(logout).resolves.toBe(
+      "https://savia.example/api/auth/admin/authorize",
+    );
+    expect(cleanupBeforeSignOut).toBe(0);
+    expect(onLogout).toHaveBeenCalledOnce();
+  });
   it("keeps automatic access failures local and reserves the provider logout for an explicit sign out", async () => {
     const session = {
       checkSession: vi.fn(),

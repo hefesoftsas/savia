@@ -50,8 +50,13 @@ export function createAppServices() {
     clearStudioQueryCache();
     clearAllSaviaRequestSnapshots();
     clearCachedTenantOptions();
-    queryClient.clear();
-    await localData.clear();
+    try {
+      await localData.clear();
+    } finally {
+      // No asynchronous work after clearing mounted auth queries: the logout
+      // hook must be able to redirect before a fresh auth check logs out again.
+      queryClient.clear();
+    }
   };
 
   return {
