@@ -185,7 +185,7 @@ export function TenantBrandingPage({ services }: { services: AppServices }) {
         </div>
       ) : tenants.length ? (
         <>
-          {dedicated ? (
+          {dedicated || tenants.length === 1 ? (
             <p className="tenant-branding-agency">{tenants[0].name}</p>
           ) : (
             <div className="tenant-branding-selector">

@@ -499,22 +499,24 @@ export function StudioTenantCredentialsSection({
 
   return (
     <div className="grid gap-3">
-      <label className="grid max-w-sm gap-1.5 text-sm">
-        {t("Workspace")}
-        <select
-          className="h-9 rounded-md border bg-background px-3"
-          value={String(tenant.tenantId)}
-          onChange={(event) => {
-            setSelectedTenantId(Number(event.target.value));
-          }}
-        >
-          {tenants.map((item) => (
-            <option key={item.id} value={item.tenantId}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {tenants.length > 1 && (
+        <label className="grid max-w-sm gap-1.5 text-sm">
+          {t("Workspace")}
+          <select
+            className="h-9 rounded-md border bg-background px-3"
+            value={String(tenant.tenantId)}
+            onChange={(event) => {
+              setSelectedTenantId(Number(event.target.value));
+            }}
+          >
+            {tenants.map((item) => (
+              <option key={item.id} value={item.tenantId}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <Tabs defaultValue="global" className="credentials-tabs">
         <TabsList className="credentials-tabs-list">
           <CredentialTab

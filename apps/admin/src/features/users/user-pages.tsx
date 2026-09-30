@@ -20,6 +20,7 @@ import {
 import {
   required,
   useCanAccess,
+  useChoicesContext,
   useDataProvider,
   useDelete,
   useEditContext,
@@ -939,11 +940,21 @@ function UserPlatformAccessFields() {
 }
 
 function CommercialTenantInput({ label }: { label: string }) {
-  const { data: tenants = [] } = useGetList<TenantRecord>("tenants", {
-    pagination: { page: 1, perPage: 100 },
-    sort: { field: "name", order: "ASC" },
-    filter: { kind: "commercial" },
-  });
+  return (
+    <ReferenceInput
+      source="tenantId"
+      reference="tenants"
+      perPage={100}
+      filter={{ kind: "commercial" }}
+    >
+      <CommercialTenantChoiceInput label={label} />
+    </ReferenceInput>
+  );
+}
+
+function CommercialTenantChoiceInput({ label }: { label: string }) {
+  const { allChoices = [] } = useChoicesContext();
+  const tenants = allChoices as TenantRecord[];
   const { register, setValue } = useFormContext();
 
   useEffect(() => {
@@ -961,16 +972,7 @@ function CommercialTenantInput({ label }: { label: string }) {
     );
   }
 
-  return (
-    <ReferenceInput
-      source="tenantId"
-      reference="tenants"
-      perPage={100}
-      filter={{ kind: "commercial" }}
-    >
-      <SelectInput label={label} />
-    </ReferenceInput>
-  );
+  return <SelectInput label={label} />;
 }
 
 function UserMembershipEditor() {

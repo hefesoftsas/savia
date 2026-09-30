@@ -177,7 +177,15 @@ export function AssistantConfigurationPanel({
           )?.model ?? "",
         );
       }
-      if (
+      const soleAccessibleTenant =
+        activeTenant.tenants.length === 1 ? activeTenant.tenants[0] : undefined;
+      if (selectedTenantId === undefined && soleAccessibleTenant) {
+        const setting = nextSummary.tenants.find(
+          (entry) => entry.tenantId === soleAccessibleTenant.id,
+        );
+        setSelectedTenantId(soleAccessibleTenant.id);
+        setTenantModel(setting?.model ?? "");
+      } else if (
         selectedTenantId === undefined &&
         nextSummary.tenants[0]?.tenantId !== undefined
       ) {
@@ -669,26 +677,28 @@ export function AssistantConfigurationPanel({
                 className="mt-5 grid max-w-3xl gap-4 rounded-xl border bg-card p-5 sm:p-6"
                 onSubmit={saveTenant}
               >
-                <div className="grid gap-2">
-                  <Label htmlFor="assistant-tenant">{t("Tenant")}</Label>
-                  <select
-                    id="assistant-tenant"
-                    className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
-                    value={selectedTenantId ?? ""}
-                    onChange={(event) =>
-                      selectTenant(Number(event.target.value))
-                    }
-                  >
-                    <option value="" disabled>
-                      {t("Selecciona una organización")}
-                    </option>
-                    {tenants.map((tenant) => (
-                      <option key={tenant.id} value={tenant.id}>
-                        {tenant.name}
+                {tenants.length !== 1 ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="assistant-tenant">{t("Tenant")}</Label>
+                    <select
+                      id="assistant-tenant"
+                      className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
+                      value={selectedTenantId ?? ""}
+                      onChange={(event) =>
+                        selectTenant(Number(event.target.value))
+                      }
+                    >
+                      <option value="" disabled>
+                        {t("Selecciona una organización")}
                       </option>
-                    ))}
-                  </select>
-                </div>
+                      {tenants.map((tenant) => (
+                        <option key={tenant.id} value={tenant.id}>
+                          {tenant.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="assistant-tenant-key">
