@@ -174,13 +174,6 @@ function forwardedHeaders(request: Request): Headers {
   return headers;
 }
 
-function sessionHeaders(request: Request): Headers {
-  const headers = new Headers();
-  const cookie = request.headers.get("cookie");
-  if (cookie) headers.set("cookie", cookie);
-  return headers;
-}
-
 async function serviceJson<T>(
   service: AuthService,
   path: string,
@@ -326,15 +319,21 @@ export const rejectingAuthenticator: Authenticator = {
 
 export function betterAuthUserAdministrator(
   service?: AuthService,
+  internalBridgeKey?: string,
 ): IdentityUserAdministrator | undefined {
-  if (!service) return undefined;
+  if (!service || !internalBridgeKey) return undefined;
+  const internalHeaders = (json = false) => {
+    const headers = new Headers({ "x-savia-bridge-key": internalBridgeKey });
+    if (json) headers.set("content-type", "application/json");
+    return headers;
+  };
   return {
     issuer: ISSUER,
     async listUsers(request): Promise<ManagedIdentityUser[]> {
       const { body } = await serviceJson<AuthServiceUsers>(
         service,
         "/_internal/users",
-        { headers: sessionHeaders(request) },
+        { headers: internalHeaders() },
       );
       return body.users.map(managedUser);
     },
@@ -342,7 +341,7 @@ export function betterAuthUserAdministrator(
       const { body } = await serviceJson<AuthServiceUser>(
         service,
         `/_internal/users/${encodeURIComponent(subject)}`,
-        { headers: sessionHeaders(request) },
+        { headers: internalHeaders() },
       );
       return managedUser(body.user);
     },
@@ -352,10 +351,7 @@ export function betterAuthUserAdministrator(
         "/_internal/users",
         {
           method: "POST",
-          headers: {
-            ...Object.fromEntries(sessionHeaders(request)),
-            "content-type": "application/json",
-          },
+          headers: internalHeaders(true),
           body: JSON.stringify({
             email: input.email,
             name: `${input.firstName} ${input.lastName}`.trim(),
@@ -372,10 +368,7 @@ export function betterAuthUserAdministrator(
         `/_internal/users/${encodeURIComponent(subject)}`,
         {
           method: "PATCH",
-          headers: {
-            ...Object.fromEntries(sessionHeaders(request)),
-            "content-type": "application/json",
-          },
+          headers: internalHeaders(true),
           body: JSON.stringify({
             ...(input.displayName === undefined
               ? {}
@@ -398,7 +391,7 @@ export function betterAuthUserAdministrator(
           `https://savia-auth.internal/_internal/users/${encodeURIComponent(subject)}/ban`,
           {
             method: isActive ? "DELETE" : "POST",
-            headers: sessionHeaders(request),
+            headers: internalHeaders(),
           },
         ),
       );
@@ -415,7 +408,7 @@ export function betterAuthUserAdministrator(
       const response = await service.fetch(
         new Request(
           `https://savia-auth.internal/_internal/users/${encodeURIComponent(subject)}/sessions`,
-          { method: "POST", headers: sessionHeaders(request) },
+          { method: "POST", headers: internalHeaders() },
         ),
       );
       if (!response.ok) {
@@ -429,7 +422,7 @@ export function betterAuthUserAdministrator(
       const response = await service.fetch(
         new Request(
           `https://savia-auth.internal/_internal/users/${encodeURIComponent(subject)}/password-reset`,
-          { method: "POST", headers: sessionHeaders(request) },
+          { method: "POST", headers: internalHeaders() },
         ),
       );
       if (!response.ok) {
@@ -443,7 +436,7 @@ export function betterAuthUserAdministrator(
       const response = await service.fetch(
         new Request(
           `https://savia-auth.internal/_internal/users/${encodeURIComponent(subject)}`,
-          { method: "DELETE", headers: sessionHeaders(request) },
+          { method: "DELETE", headers: internalHeaders() },
         ),
       );
       if (!response.ok && response.status !== 404) {

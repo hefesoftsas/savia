@@ -121,6 +121,14 @@ async function applicationScenario(postgresUrl?: string) {
     await json("/api/auth/two-factor/verify-totp", 200, "POST", {
       code: totp(enrollment.totpURI),
     });
+    const users = await json("/v1/identity/users");
+    expect(users.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attributes: expect.objectContaining({ email }),
+        }),
+      ]),
+    );
     const object = "restart_contacts";
     await json(base + "/objects", 201, "POST", {
       name: object,

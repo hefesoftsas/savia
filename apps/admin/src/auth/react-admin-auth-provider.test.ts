@@ -125,6 +125,26 @@ describe("React Admin authentication provider", () => {
         action: "list",
       }),
     ).resolves.toBe(true);
+
+    session.getPermissions.mockResolvedValueOnce({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: false,
+      memberships: [{ tenantId: 101, role: "tenant_admin" }],
+    });
+    await expect(
+      provider.canAccess?.({ resource: "users", action: "list" }),
+    ).resolves.toBe(true);
+
+    session.getPermissions.mockResolvedValueOnce({
+      canReadDocuments: true,
+      canExecuteCommands: false,
+      canManageIdentity: false,
+      memberships: [{ tenantId: 101, role: "viewer" }],
+    });
+    await expect(
+      provider.canAccess?.({ resource: "users", action: "list" }),
+    ).resolves.toBe(false);
   });
 
   it("exposes private CRM connections to tenant members", async () => {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import test from "node:test";
 import { buildSecretUploads } from "./upload-cloudflare-secrets.mjs";
 const values = Object.fromEntries(
@@ -24,6 +25,14 @@ test("preview secrets always use explicit preview configuration and names", () =
     values.SAVIA_REQUEST_ENCRYPTION_KEY,
   );
   const apiSecrets = plans.find((x) => x.app === "api").secrets;
+  const expectedBridge = createHmac("sha256", values.SAVIA_MCP_SHARED_SECRET)
+    .update("savia:auth-tenant-user-administration:v1")
+    .digest("hex");
+  assert.equal(
+    plans.find((x) => x.app === "auth").secrets.SAVIA_INTERNAL_BRIDGE_KEY,
+    expectedBridge,
+  );
+  assert.equal(apiSecrets.SAVIA_INTERNAL_BRIDGE_KEY, expectedBridge);
   assert.equal(apiSecrets.STUDIO_INTEGRATION_KEY, "test-only-value");
   assert.ok(!("CRM_INTEGRATION_KEY" in apiSecrets));
   assert.throws(() => buildSecretUploads("other", values), /environment/);

@@ -1,6 +1,12 @@
 import { ResourceEditSync } from "@/realtime/resource-realtime";
 import type { ResourceProps } from "ra-core";
-import { required, useCreatePath, useTranslate } from "ra-core";
+import {
+  required,
+  useCreatePath,
+  useRecordContext,
+  useTranslate,
+} from "ra-core";
+import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
@@ -290,6 +296,16 @@ function TenantCreate() {
   );
 }
 
+function TenantCapacityEditor() {
+  const record = useRecordContext<TenantRecord>();
+  return (
+    <TenantUserCapacity
+      tenantId={record ? Number(record.id) : null}
+      platformCanEdit
+    />
+  );
+}
+
 function TenantEdit() {
   const translate = useTranslate();
   return (
@@ -303,6 +319,7 @@ function TenantEdit() {
       >
         <ResourceEditSync resource="tenants" />
         <TenantFields />
+        <TenantCapacityEditor />
       </SimpleForm>
     </Edit>
   );

@@ -9,3 +9,16 @@ SQLite migration `0078_identity_principal_email_uniqueness.sql` and PostgreSQL m
 The migrations deliberately leave historical duplicate principals intact. Their existing same-subject logins and profile updates continue to work; no privileges, memberships or audit references are merged or deleted. Resolve those duplicates only after checking the authoritative authentication account and each principal's assignments. A display name or email is not enough evidence to delete an identity.
 
 Regression coverage: `apps/api/test/identity.test.ts` and `scripts/identity-email-uniqueness.test.mjs`.
+
+Tenant administrators can list, provision, view, update, suspend, reactivate,
+reset passwords, revoke sessions, and delete users only within their active
+tenant. They cannot create platform administrators or move a user to another
+tenant. Platform administrators retain cross-tenant identity management. User
+capacity is configured and enforced as described in the
+[tenant user capacity guide](tenant-user-capacity.md).
+
+The API-to-Auth user administration bridge uses a purpose-derived key generated
+from the configured `SAVIA_MCP_SHARED_SECRET`; provisioning scripts store the
+derived value for Auth and API. Auth rejects requests to its private user
+administration endpoints without that key. Public Better Auth administrator
+permissions are unchanged.

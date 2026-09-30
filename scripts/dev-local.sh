@@ -74,6 +74,17 @@ if [ -n "${BETTER_AUTH_SECRET:-}" ]; then
   set -- "$@" --var "BETTER_AUTH_SECRET:$BETTER_AUTH_SECRET"
 fi
 
+if [ -n "${SAVIA_INTERNAL_BRIDGE_KEY:-}" ]; then
+  identity_bridge_key="$SAVIA_INTERNAL_BRIDGE_KEY"
+elif [ -n "${SAVIA_MCP_SHARED_SECRET:-}" ]; then
+  identity_bridge_key="$(node -e 'const { createHmac } = require("node:crypto"); process.stdout.write(createHmac("sha256", process.argv[1].trim()).update("savia:auth-tenant-user-administration:v1").digest("hex"))' "$SAVIA_MCP_SHARED_SECRET")"
+else
+  identity_bridge_key=""
+fi
+if [ -n "$identity_bridge_key" ]; then
+  set -- "$@" --var "SAVIA_INTERNAL_BRIDGE_KEY:$identity_bridge_key"
+fi
+
 start_process "$@"
 
 wait_for_auth
@@ -91,7 +102,7 @@ CI=1 pnpm --filter @savia/request run migrate:local
 start_process pnpm --filter @savia/request exec wrangler dev --local \
   --ip 127.0.0.1 --port 8797 --inspector-port 9232 --config wrangler.jsonc
 
-start_process env "SAVIA_PUBLIC_ORIGIN=$admin_origin" "SAVIA_DISABLE_CAPTCHA=1" "SAVIA_MOCK_QUOTES=${SAVIA_MOCK_QUOTES:-1}" pnpm exec node scripts/dev-api-runtime.mjs
+start_process env "SAVIA_PUBLIC_ORIGIN=$admin_origin" "SAVIA_INTERNAL_BRIDGE_KEY=$identity_bridge_key" "SAVIA_DISABLE_CAPTCHA=1" "SAVIA_MOCK_QUOTES=${SAVIA_MOCK_QUOTES:-1}" pnpm exec node scripts/dev-api-runtime.mjs
 start_process pnpm exec node scripts/crm-sync-local-scheduler.mjs
 start_process pnpm --filter @savia/admin exec vite --host "${SAVIA_DEV_HOST:-127.0.0.1}" \
   --port "$admin_port" --strictPort

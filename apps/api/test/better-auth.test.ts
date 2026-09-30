@@ -2,28 +2,30 @@ import { describe, expect, it } from "vitest";
 import { betterAuthUserAdministrator } from "../src/auth/better-auth";
 
 describe("Better Auth user administration", () => {
-  it("uses the session cookie without forwarding the OAuth access token", async () => {
-    const administrator = betterAuthUserAdministrator({
-      async fetch(request) {
-        expect(new URL(request.url).pathname).toBe("/_internal/users");
-        expect(request.headers.get("cookie")).toBe(
-          "savia.session_token=active-session",
-        );
-        expect(request.headers.get("authorization")).toBeNull();
-        return Response.json({
-          users: [
-            {
-              id: "better-auth-user",
-              email: "user@savia.test",
-              name: "Savia User",
-              role: "user",
-              isBanned: false,
-              twoFactorEnabled: false,
-            },
-          ],
-        });
+  it("uses the dedicated trusted bridge without forwarding user credentials", async () => {
+    const administrator = betterAuthUserAdministrator(
+      {
+        async fetch(request) {
+          expect(new URL(request.url).pathname).toBe("/_internal/users");
+          expect(request.headers.get("x-savia-bridge-key")).toBe("trusted-key");
+          expect(request.headers.get("cookie")).toBeNull();
+          expect(request.headers.get("authorization")).toBeNull();
+          return Response.json({
+            users: [
+              {
+                id: "better-auth-user",
+                email: "user@savia.test",
+                name: "Savia User",
+                role: "user",
+                isBanned: false,
+                twoFactorEnabled: false,
+              },
+            ],
+          });
+        },
       },
-    });
+      "trusted-key",
+    );
     if (!administrator) throw new Error("Expected Better Auth administrator");
 
     const users = await administrator.listUsers(
@@ -45,5 +47,15 @@ describe("Better Auth user administration", () => {
         twoFactorEnabled: false,
       },
     ]);
+  });
+
+  it("does not enable identity administration without a bridge key", () => {
+    expect(
+      betterAuthUserAdministrator({
+        async fetch() {
+          return new Response();
+        },
+      }),
+    ).toBeUndefined();
   });
 });

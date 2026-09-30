@@ -1679,7 +1679,7 @@ export interface paths {
     };
     /**
      * List Savia users
-     * @description Lists locally provisioned Better Auth users and their memberships.
+     * @description Platform administrators see all users; tenant administrators see members of their active tenant.
      */
     get: {
       parameters: {
@@ -1737,7 +1737,7 @@ export interface paths {
             };
           };
         };
-        /** @description Platform administrator role is required */
+        /** @description Platform or tenant administrator role is required */
         403: {
           headers: {
             [name: string]: unknown;
@@ -1749,7 +1749,7 @@ export interface paths {
     put?: never;
     /**
      * Provision a Better Auth user
-     * @description Creates a Better Auth user and a Savia principal in a commercial tenant, or in the internal platform tenant for a platform administrator.
+     * @description Creates a Better Auth user and Savia principal. Tenant administrators can create users only in their active tenant; platform administrators can also create platform administrators.
      */
     post: {
       parameters: {
@@ -1826,7 +1826,7 @@ export interface paths {
             };
           };
         };
-        /** @description Platform administrator role is required */
+        /** @description Platform or tenant administrator role is required */
         403: {
           headers: {
             [name: string]: unknown;
@@ -1840,7 +1840,7 @@ export interface paths {
           };
           content?: never;
         };
-        /** @description Email conflict or tenant membership invariant prevented provisioning */
+        /** @description Email conflict, tenant membership invariant, or active-user capacity prevented provisioning */
         409: {
           headers: {
             [name: string]: unknown;
@@ -1949,7 +1949,7 @@ export interface paths {
             };
           };
         };
-        /** @description Platform administrator role is required */
+        /** @description Platform or tenant administrator role is required */
         403: {
           headers: {
             [name: string]: unknown;
@@ -1963,7 +1963,7 @@ export interface paths {
           };
           content?: never;
         };
-        /** @description User already belongs to another tenant */
+        /** @description Tenant membership invariant or active-user capacity prevented assignment */
         409: {
           headers: {
             [name: string]: unknown;
@@ -2044,7 +2044,7 @@ export interface paths {
             };
           };
         };
-        /** @description Platform administrator role is required */
+        /** @description Platform or tenant administrator role is required */
         403: {
           headers: {
             [name: string]: unknown;
@@ -2084,7 +2084,7 @@ export interface paths {
           };
           content?: never;
         };
-        /** @description Platform administrator role is required */
+        /** @description Platform or tenant administrator role is required */
         403: {
           headers: {
             [name: string]: unknown;
@@ -2182,7 +2182,7 @@ export interface paths {
           };
           content?: never;
         };
-        /** @description Platform administrator role is required */
+        /** @description Platform or tenant administrator role is required */
         403: {
           headers: {
             [name: string]: unknown;
@@ -2191,6 +2191,13 @@ export interface paths {
         };
         /** @description Identity principal was not found */
         404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Tenant membership invariant or active-user capacity prevented the update */
+        409: {
           headers: {
             [name: string]: unknown;
           };
@@ -2265,6 +2272,27 @@ export interface paths {
           };
           content?: never;
         };
+        /** @description Platform or tenant administrator role is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity principal was not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity or tenant capacity constraints prevented the operation */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
       };
     };
     /** Reactivate a Savia user */
@@ -2281,6 +2309,27 @@ export interface paths {
       responses: {
         /** @description Account reactivated */
         204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Platform or tenant administrator role is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity principal was not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity or tenant capacity constraints prevented the operation */
+        409: {
           headers: {
             [name: string]: unknown;
           };
@@ -2321,6 +2370,27 @@ export interface paths {
           };
           content?: never;
         };
+        /** @description Platform or tenant administrator role is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity principal was not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity or tenant capacity constraints prevented the operation */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
       };
     };
     delete?: never;
@@ -2352,6 +2422,27 @@ export interface paths {
       responses: {
         /** @description Password reset link accepted for delivery */
         204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Platform or tenant administrator role is required */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity principal was not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Identity or tenant capacity constraints prevented the operation */
+        409: {
           headers: {
             [name: string]: unknown;
           };
@@ -4581,6 +4672,112 @@ export interface paths {
       };
     };
     put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/user-capacity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read tenant active-user capacity */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant active-user capacity */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                maxActiveUsers: number | null;
+                activeUsers: number;
+              };
+            };
+          };
+        };
+        /** @description Tenant administration is required; only platform administrators may change capacity */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Commercial tenant not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    /** Set tenant active-user capacity */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            maxActiveUsers: number | null;
+          };
+        };
+      };
+      responses: {
+        /** @description Tenant active-user capacity */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                tenantId: number;
+                maxActiveUsers: number | null;
+                activeUsers: number;
+              };
+            };
+          };
+        };
+        /** @description Tenant administration is required; only platform administrators may change capacity */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Commercial tenant not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
     post?: never;
     delete?: never;
     options?: never;

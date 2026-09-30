@@ -16,6 +16,7 @@ import { createPublicQuoteAdapter } from "./public-forms/quote-adapter";
 import { registerRequestPageRoutes } from "./request-pages/routes";
 import { registerStudioRoutes } from "./routes/studio";
 import { registerTenantWorkspaceRoutes } from "./routes/tenant-workspaces";
+import { registerTenantUserCapacityRoutes } from "./routes/tenant-user-capacity";
 import { registerPublicPluginEntryRoutes } from "./routes/public-plugin-entry";
 import { registerTenantRoutes } from "./routes/tenants";
 
@@ -162,6 +163,7 @@ export function createApp(
     personalIntegrations,
   );
   registerTenantWorkspaceRoutes(app, db);
+  registerTenantUserCapacityRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
   registerUserPreferenceRoutes(app, db);
   const notificationAuth = authenticationMiddleware(
