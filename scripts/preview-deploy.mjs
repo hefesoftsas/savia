@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -123,13 +124,14 @@ function workerConfig(kind, names, ids, origin, { assetsDir, bootstrap } = {}) {
 }
 
 const WORKER_SECRETS = {
-  auth: ["BETTER_AUTH_SECRET"],
+  auth: ["BETTER_AUTH_SECRET", "SAVIA_INTERNAL_BRIDGE_KEY"],
   request: ["ENCRYPTION_KEY"],
   mcp: ["SAVIA_MCP_SHARED_SECRET"],
   api: [
     "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
     "STUDIO_INTEGRATION_KEY",
     "SAVIA_MCP_SHARED_SECRET",
+    "SAVIA_INTERNAL_BRIDGE_KEY",
   ],
   gateway: [],
 };
@@ -230,6 +232,12 @@ async function main() {
     STUDIO_INTEGRATION_KEY: ephemeralSecret(),
     SAVIA_MCP_SHARED_SECRET: ephemeralSecret(),
   };
+  secrets.SAVIA_INTERNAL_BRIDGE_KEY = createHmac(
+    "sha256",
+    secrets.SAVIA_MCP_SHARED_SECRET,
+  )
+    .update("savia:auth-tenant-user-administration:v1")
+    .digest("hex");
   const bootstrap = { password: ephemeralSecret() };
 
   const configs = {};

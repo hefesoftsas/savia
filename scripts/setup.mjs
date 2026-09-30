@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { resolve } from "node:path";
@@ -162,6 +162,12 @@ async function main() {
       STUDIO_INTEGRATION_KEY: randomBytes(32).toString("base64"),
       SAVIA_MCP_SHARED_SECRET: randomBytes(32).toString("base64"),
     };
+    const internalBridgeKey = createHmac(
+      "sha256",
+      secrets.SAVIA_MCP_SHARED_SECRET,
+    )
+      .update("savia:auth-tenant-user-administration:v1")
+      .digest("hex");
     const bootstrapPassword = randomBytes(24).toString("base64");
 
     console.log("\nPlan:");
@@ -211,6 +217,7 @@ async function main() {
 
     console.log("[4/8] Storing secrets…");
     await putSecret("auth", "BETTER_AUTH_SECRET", secrets.BETTER_AUTH_SECRET);
+    await putSecret("auth", "SAVIA_INTERNAL_BRIDGE_KEY", internalBridgeKey);
     await putSecret(
       "mcp",
       "SAVIA_MCP_SHARED_SECRET",
@@ -224,6 +231,7 @@ async function main() {
     ]) {
       await putSecret("api", key, secrets[key]);
     }
+    await putSecret("api", "SAVIA_INTERNAL_BRIDGE_KEY", internalBridgeKey);
     if (nangoKey) await putSecret("api", "NANGO_API_KEY", nangoKey);
 
     console.log("[5/8] Applying domain migrations…");

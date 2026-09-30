@@ -13,7 +13,7 @@ function hasAnyRole(
         : [r],
     ),
   );
-  return permissions.memberships.some((membership) =>
+  return (permissions.memberships ?? []).some((membership) =>
     normalizedRoles.has(membership.role),
   );
 }
@@ -79,8 +79,12 @@ export function createReactAdminAuthProvider(
           isPlatformAdmin ||
           hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
         );
-      if (resource === "users" || resource === "tenants")
-        return isPlatformAdmin;
+      if (resource === "users")
+        return (
+          isPlatformAdmin ||
+          hasAnyRole(permissions, ["tenant_admin", "agency_admin"])
+        );
+      if (resource === "tenants") return isPlatformAdmin;
       if (resource === "crm-connections") {
         return action === "list";
       }

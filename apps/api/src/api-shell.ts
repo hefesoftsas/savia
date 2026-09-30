@@ -19,6 +19,10 @@ import {
   type OAuthResourceAuthenticator,
 } from "./auth/oauth-resource";
 import { AuthenticationError, type Authenticator } from "./auth/types";
+import {
+  isTenantUserCapacityError,
+  TenantUserCapacityError,
+} from "./auth/tenant-user-capacity";
 import { AccessControlError } from "./auth/access-registry";
 import { publicAuthUrls, type PublicAuthUrls } from "./public-origin";
 
@@ -362,6 +366,13 @@ export function createApiShell(
   });
 
   app.onError((exception, context) => {
+    if (isTenantUserCapacityError(exception)) {
+      const error = new TenantUserCapacityError();
+      return context.json(
+        { error: { code: error.code, message: error.message } },
+        409,
+      );
+    }
     if (databaseConflict(exception))
       return context.json(
         {

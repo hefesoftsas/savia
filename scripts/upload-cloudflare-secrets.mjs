@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,8 +24,20 @@ export function buildSecretUploads(environment, values) {
         "SQL_BRIDGE_URL must be an HTTPS URL without credentials, query, or fragment",
       );
   }
+  const internalBridgeKey = values.SAVIA_MCP_SHARED_SECRET?.trim()
+    ? createHmac("sha256", values.SAVIA_MCP_SHARED_SECRET.trim())
+        .update("savia:auth-tenant-user-administration:v1")
+        .digest("hex")
+    : undefined;
   const definitions = [
-    ["auth", "savia-auth", { BETTER_AUTH_SECRET: "BETTER_AUTH_SECRET" }],
+    [
+      "auth",
+      "savia-auth",
+      {
+        BETTER_AUTH_SECRET: "BETTER_AUTH_SECRET",
+        SAVIA_INTERNAL_BRIDGE_KEY: "SAVIA_INTERNAL_BRIDGE_KEY",
+      },
+    ],
     [
       "mcp",
       "savia-mcp",
@@ -53,6 +66,7 @@ export function buildSecretUploads(environment, values) {
           "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
         NANGO_API_KEY: "NANGO_API_KEY",
         SAVIA_MCP_SHARED_SECRET: "SAVIA_MCP_SHARED_SECRET",
+        SAVIA_INTERNAL_BRIDGE_KEY: "SAVIA_INTERNAL_BRIDGE_KEY",
       },
     ],
   ];
@@ -60,6 +74,7 @@ export function buildSecretUploads(environment, values) {
   // CRM_INTEGRATION_KEY value is accepted as the rotation source.
   const resolved = {
     ...values,
+    SAVIA_INTERNAL_BRIDGE_KEY: internalBridgeKey,
     STUDIO_INTEGRATION_KEY:
       values.STUDIO_INTEGRATION_KEY ?? values.CRM_INTEGRATION_KEY,
   };

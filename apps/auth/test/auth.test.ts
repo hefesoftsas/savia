@@ -106,6 +106,88 @@ async function internalAuthRequest(
   );
 }
 
+it("requires the API bridge key on internal user administration routes", async () => {
+  const environment = {
+    ...env,
+    SAVIA_INTERNAL_BRIDGE_KEY: "test-only-identity-admin-bridge",
+  };
+  const missing = await createAuthHandler({
+    ...environment,
+    SAVIA_INTERNAL_BRIDGE_KEY: undefined,
+  }).fetch(new Request(`${origin}/_internal/users`));
+  const wrong = await createAuthHandler(environment).fetch(
+    new Request(`${origin}/_internal/users`, {
+      headers: { "x-savia-bridge-key": "wrong-key" },
+    }),
+  );
+  const valid = await createAuthHandler(environment).fetch(
+    new Request(`${origin}/_internal/users`, {
+      headers: { "x-savia-bridge-key": "test-only-identity-admin-bridge" },
+    }),
+  );
+
+  expect(missing.status).toBe(403);
+  expect(wrong.status).toBe(403);
+  expect(valid.status).toBe(200);
+});
+
+it("bridge suspension revokes existing Better Auth sessions", async () => {
+  const bridgeKey = "test-only-identity-ban-bridge";
+  const handler = createAuthHandler({
+    ...env,
+    SAVIA_INTERNAL_BRIDGE_KEY: bridgeKey,
+  });
+  const email = `bridge-ban-${crypto.randomUUID()}@savia.test`;
+  const password = "Bridge-Ban-Password-123!";
+  const createdResponse = await handler.fetch(
+    new Request(`${origin}/_internal/users`, {
+      method: "POST",
+      headers: {
+        "x-savia-bridge-key": bridgeKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        name: "Bridge Ban",
+        password,
+        role: "user",
+      }),
+    }),
+  );
+  const created = (await createdResponse.json()) as { user: { id: string } };
+  const signIn = await handler.fetch(
+    new Request(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }),
+  );
+  const cookie = signIn.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
+  const activeSession = await handler.fetch(
+    new Request(`${origin}/_internal/session`, { headers: { cookie } }),
+  );
+  const banned = await handler.fetch(
+    new Request(`${origin}/_internal/users/${created.user.id}/ban`, {
+      method: "POST",
+      headers: { "x-savia-bridge-key": bridgeKey },
+    }),
+  );
+  const revokedSession = await handler.fetch(
+    new Request(`${origin}/_internal/session`, { headers: { cookie } }),
+  );
+
+  expect(createdResponse.status).toBe(201);
+  expect(signIn.status).toBe(200);
+  expect(activeSession.status).toBe(200);
+  expect((await activeSession.json()).user).not.toBeNull();
+  expect(banned.status).toBe(200);
+  expect(revokedSession.status).toBe(200);
+  expect((await revokedSession.json()).user).toBeNull();
+});
+
 function originalTotpSecret(totpURI: string): string {
   const encoded = new URL(totpURI).searchParams.get("secret");
   if (!encoded) throw new Error("TOTP URI does not contain a secret");

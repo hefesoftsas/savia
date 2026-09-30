@@ -401,7 +401,6 @@ async function createUser(
       password: input.password,
       role: input.role ?? "user",
     },
-    headers: request.headers,
   });
   return Response.json({ user: userDocument(created) }, { status: 201 });
 }
@@ -414,37 +413,28 @@ async function listUsers(
   const searchValue = url.searchParams.get("q")?.trim() || undefined;
   const limit = Number(url.searchParams.get("limit") ?? "100");
   const offset = Number(url.searchParams.get("offset") ?? "0");
-  const users = await auth.api.listUsers({
-    query: {
-      ...(searchValue
-        ? {
-            searchValue,
-            searchField: "email" as const,
-            searchOperator: "contains" as const,
-          }
-        : {}),
-      limit: Number.isInteger(limit) && limit > 0 ? limit : 100,
-      offset: Number.isInteger(offset) && offset >= 0 ? offset : 0,
-      sortBy: "name",
-      sortDirection: "asc",
-    },
-    headers: request.headers,
-  });
+  const context = await auth.$context;
+  const users = await context.internalAdapter.listUsers(
+    Number.isInteger(limit) && limit > 0 ? limit : 100,
+    Number.isInteger(offset) && offset >= 0 ? offset : 0,
+    { field: "name", direction: "asc" },
+    searchValue
+      ? [{ field: "email", value: searchValue, operator: "contains" }]
+      : undefined,
+  );
   return Response.json({
-    users: users.users.map(userDocument),
-    total: users.total,
+    users: users.map(userDocument),
+    total: await context.internalAdapter.countTotalUsers(),
   });
 }
 
 async function getUser(
   auth: ReturnType<typeof createBetterAuth>,
-  request: Request,
+  _request: Request,
   userId: string,
 ): Promise<Response> {
-  const user = await auth.api.getUser({
-    query: { id: userId },
-    headers: request.headers,
-  });
+  const user = await (await auth.$context).internalAdapter.findUserById(userId);
+  if (!user) return Response.json({ error: "User not found" }, { status: 404 });
   return Response.json({ user: userDocument(user) });
 }
 
@@ -466,64 +456,64 @@ async function updateUser(
       { status: 400 },
     );
   }
-  if (typeof input.name === "string") {
-    await auth.api.adminUpdateUser({
-      body: { userId, data: { name: input.name } },
-      headers: request.headers,
-    });
-  }
-  if (input.role === "admin" || input.role === "user") {
-    await auth.api.setRole({
-      body: { userId, role: input.role },
-      headers: request.headers,
-    });
-  }
-  return getUser(auth, request, userId);
+  const context = await auth.$context;
+  const changes: Record<string, unknown> = {};
+  if (typeof input.name === "string") changes.name = input.name;
+  if (input.role === "admin" || input.role === "user")
+    changes.role = input.role;
+  const user = await context.internalAdapter.updateUser(userId, changes);
+  return Response.json({ user: userDocument(user) });
 }
 
 async function banUser(
   auth: ReturnType<typeof createBetterAuth>,
-  request: Request,
+  _request: Request,
   userId: string,
 ): Promise<Response> {
-  await auth.api.banUser({
-    body: { userId, banReason: "Disabled by Savia platform administrator" },
-    headers: request.headers,
+  const context = await auth.$context;
+  const user = await context.internalAdapter.updateUser(userId, {
+    banned: true,
+    banReason: "Disabled by Savia identity administrator",
+    banExpires: null,
+    updatedAt: new Date(),
   });
-  return getUser(auth, request, userId);
+  await context.internalAdapter.deleteUserSessions(userId);
+  return Response.json({ user: userDocument(user) });
 }
 
 async function unbanUser(
   auth: ReturnType<typeof createBetterAuth>,
-  request: Request,
+  _request: Request,
   userId: string,
 ): Promise<Response> {
-  await auth.api.unbanUser({ body: { userId }, headers: request.headers });
-  return getUser(auth, request, userId);
+  const user = await (
+    await auth.$context
+  ).internalAdapter.updateUser(userId, {
+    banned: false,
+    banReason: null,
+    banExpires: null,
+    updatedAt: new Date(),
+  });
+  return Response.json({ user: userDocument(user) });
 }
 
 async function revokeUserSessions(
   auth: ReturnType<typeof createBetterAuth>,
-  request: Request,
+  _request: Request,
   userId: string,
 ): Promise<Response> {
-  await auth.api.revokeUserSessions({
-    body: { userId },
-    headers: request.headers,
-  });
+  await (await auth.$context).internalAdapter.deleteUserSessions(userId);
   return new Response(null, { status: 204 });
 }
 
 async function sendPasswordReset(
   auth: ReturnType<typeof createBetterAuth>,
   environment: AuthWorkerEnvironment,
-  request: Request,
+  _request: Request,
   userId: string,
 ): Promise<Response> {
-  const user = await auth.api.getUser({
-    query: { id: userId },
-    headers: request.headers,
-  });
+  const user = await (await auth.$context).internalAdapter.findUserById(userId);
+  if (!user) return Response.json({ error: "User not found" }, { status: 404 });
   const account = userDocument(user);
   const redirectTo = new URL(
     "/auth/reset-password",
@@ -531,7 +521,6 @@ async function sendPasswordReset(
   ).toString();
   await auth.api.requestPasswordReset({
     body: { email: account.email, redirectTo },
-    headers: request.headers,
   });
   return new Response(null, { status: 204 });
 }
@@ -574,13 +563,13 @@ async function totpEnrollment(
 
 async function removeUser(
   auth: ReturnType<typeof createBetterAuth>,
-  request: Request,
+  _request: Request,
   userId: string,
 ): Promise<Response> {
-  await auth.api.removeUser({
-    body: { userId },
-    headers: request.headers,
-  });
+  const adapter = (await auth.$context).internalAdapter;
+  await adapter.deleteUserSessions(userId);
+  await adapter.deleteAccounts(userId);
+  await adapter.deleteUser(userId);
   return new Response(null, { status: 204 });
 }
 
@@ -687,6 +676,23 @@ export function createAuthHandler(
             Array.isArray(body.ids) ? body.ids : [],
           ),
         });
+      }
+      if (
+        pathname === "/_internal/users" ||
+        /^\/_internal\/users\/[^/]+(?:\/(?:ban|sessions|password-reset))?$/.test(
+          pathname,
+        )
+      ) {
+        if (
+          !authNoticeBridgeAuthorized(
+            environment.SAVIA_INTERNAL_BRIDGE_KEY,
+            request,
+          )
+        )
+          return Response.json(
+            { error: "Forbidden bridge access." },
+            { status: 403 },
+          );
       }
       if (request.method === "GET" && pathname === "/_internal/users")
         return listUsers(auth, request);

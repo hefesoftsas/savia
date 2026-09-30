@@ -15,6 +15,7 @@ import {
 } from "../src/auth/oauth-resource";
 import {
   agencyMemberAuthenticator,
+  agencyAdministratorAuthenticator,
   platformAdministratorAuthenticator,
 } from "./auth-fixtures";
 
@@ -217,6 +218,14 @@ function identityUserAdministrator(
         twoFactorEnabled: boolean;
       }>
     >;
+    getUser(subject: string): Promise<{
+      subject: string;
+      email: string;
+      displayName: string;
+      role: "admin" | "user";
+      isBanned: boolean;
+      twoFactorEnabled: boolean;
+    }>;
     sendPasswordReset(subject: string): Promise<void>;
   }> = {},
 ) {
@@ -296,6 +305,9 @@ function identityUserAdministrator(
 describe("Identity and access", () => {
   beforeAll(applyMigrations);
   beforeEach(async () => {
+    await env.DB.prepare(
+      "DROP TRIGGER IF EXISTS test_identity_capacity_race",
+    ).run();
     await env.DB.exec("DELETE FROM identity_tenant_membership");
     await env.DB.exec("DELETE FROM identity_global_role");
     await env.DB.exec("DELETE FROM identity_principal");
@@ -1213,9 +1225,194 @@ describe("Identity and access", () => {
     expect(await memberResponse.json()).toEqual({
       error: {
         code: "AUTHORIZATION_FORBIDDEN",
-        message: "A platform administrator role is required",
+        message: "A tenant administrator role is required",
       },
     });
+  });
+
+  it("lets a tenant administrator manage users only inside the active tenant", async () => {
+    await seedAgency(101);
+    await seedAgency(202);
+    const foreign = await upsertPrincipal(env.DB, {
+      issuer: "savia:better-auth",
+      subject: "foreign-tenant-user",
+      email: "foreign@savia.test",
+      displayName: "Foreign User",
+    });
+    await (
+      await import("../src/auth/identity-repository")
+    ).grantMembership(env.DB, foreign.id, 202, "operator");
+    const administrator = identityUserAdministrator({
+      async listUsers() {
+        return [
+          {
+            subject: "foreign-tenant-user",
+            email: "foreign@savia.test",
+            displayName: "Foreign User",
+            role: "user",
+            isBanned: false,
+            twoFactorEnabled: false,
+          },
+        ];
+      },
+      async getUser(subject) {
+        return {
+          subject,
+          email: "own-tenant@savia.test",
+          displayName: "Own Tenant",
+          role: "user",
+          isBanned: false,
+          twoFactorEnabled: false,
+        };
+      },
+    });
+    const createUser = vi.spyOn(administrator, "createUser");
+    const updateUser = vi.spyOn(administrator, "updateUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      agencyAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const list = await app.request("/v1/identity/users");
+    const rejectedCrossTenantCreate = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "cross-tenant@savia.test",
+        firstName: "Cross",
+        lastName: "Tenant",
+        platformAdmin: false,
+        membership: { tenantId: 202, role: "operator" },
+      }),
+    });
+    const rejectedPlatformAdminCreate = await app.request(
+      "/v1/identity/users",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "platform@savia.test",
+          firstName: "Platform",
+          lastName: "Admin",
+          platformAdmin: true,
+        }),
+      },
+    );
+    const foreignDetail = await app.request(`/v1/identity/users/${foreign.id}`);
+    const foreignUpdate = await app.request(
+      `/v1/identity/users/${foreign.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ firstName: "Changed" }),
+      },
+    );
+    const ownTenantCreate = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "own-tenant@savia.test",
+        firstName: "Own",
+        lastName: "Tenant",
+        membership: { role: "operator", tenantId: 101 },
+      }),
+    });
+    const ownTenantList = await app.request("/v1/identity/users");
+
+    expect(list.status).toBe(200);
+    expect(await list.json()).toEqual({ data: [] });
+    expect(rejectedCrossTenantCreate.status).toBe(404);
+    expect(rejectedPlatformAdminCreate.status).toBe(404);
+    expect(foreignDetail.status).toBe(404);
+    expect(foreignUpdate.status).toBe(404);
+    expect(ownTenantCreate.status).toBe(201);
+    expect(createUser).toHaveBeenCalledOnce();
+    expect(ownTenantList.status).toBe(200);
+    expect(await ownTenantList.json()).toEqual({
+      data: [
+        expect.objectContaining({
+          attributes: expect.objectContaining({
+            email: "own-tenant@savia.test",
+          }),
+        }),
+      ],
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("checks tenant active-user capacity before creating the auth account", async () => {
+    await seedAgency(101);
+    await env.DB.prepare(
+      "INSERT INTO tenant_user_limits(tenant_id,max_active_users) VALUES(101,0)",
+    ).run();
+    const administrator = identityUserAdministrator();
+    const createUser = vi.spyOn(administrator, "createUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      agencyAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const response = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "at-capacity@savia.test",
+        firstName: "At",
+        lastName: "Capacity",
+        membership: { role: "operator", tenantId: 101 },
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the auth account if the final membership capacity guard rejects creation", async () => {
+    await seedAgency(101);
+    await env.DB.prepare(
+      `CREATE TRIGGER test_identity_capacity_race
+      BEFORE INSERT ON identity_tenant_membership WHEN NEW.tenant_id=101
+      BEGIN SELECT RAISE(ABORT, 'TENANT_ACTIVE_USER_LIMIT_REACHED'); END`,
+    ).run();
+    const administrator = identityUserAdministrator();
+    const createUser = vi.spyOn(administrator, "createUser");
+    const deleteUser = vi.spyOn(administrator, "deleteUser");
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      agencyAdministratorAuthenticator(),
+      administrator,
+    );
+
+    const response = await app.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "capacity-race@savia.test",
+        firstName: "Capacity",
+        lastName: "Race",
+        membership: { role: "operator", tenantId: 101 },
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(createUser).toHaveBeenCalledOnce();
+    expect(deleteUser).toHaveBeenCalledOnce();
+    expect(
+      await findPrincipalBySubject(
+        env.DB,
+        "savia:better-auth",
+        "better-auth-new-user",
+      ),
+    ).toBeFalsy();
+    await env.DB.prepare("DROP TRIGGER test_identity_capacity_race").run();
   });
 
   it("provisions a Better Auth user and stores only its identity and membership", async () => {

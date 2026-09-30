@@ -26,6 +26,7 @@ import {
   useGetList,
   useListContext,
   useNotify,
+  usePermissions,
   useRecordContext,
   useRedirect,
   useRefresh,
@@ -35,6 +36,7 @@ import {
 } from "ra-core";
 import MicrosoftExcel from "@thesvg/react/microsoft-excel";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWatch } from "react-hook-form";
 import {
   BooleanInput,
   Count,
@@ -62,6 +64,13 @@ import type {
   UserRecord,
 } from "@/api/identity-user-data-provider";
 import type { AgencyAccessRole } from "@/api/identity-client";
+import type { AuthPermissions } from "@/auth/auth-session";
+import { TenantUserCapacity } from "./tenant-user-capacity";
+import {
+  tenantAdminTenantId,
+  tenantAdminUserUpdateData,
+  userCreateScope,
+} from "./tenant-user-scope";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconButtonWithTooltip } from "@/components/admin/icon-button-with-tooltip";
@@ -193,6 +202,7 @@ function UserDeleteButton({
   const notify = useNotify();
   const refresh = useRefresh();
   const redirect = useRedirect();
+  const queryClient = useQueryClient();
   const [deleteOne, { isPending }] = useDelete();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -205,6 +215,9 @@ function UserDeleteButton({
       {
         onSuccess: () => {
           setConfirmOpen(false);
+          void queryClient.invalidateQueries({
+            queryKey: ["tenant-user-capacity"],
+          });
           notify(
             translate("savia.users.notifications.userDeleted", {
               _: "Usuario eliminado.",
@@ -283,10 +296,18 @@ export function UserList() {
 function TenantUserScope() {
   const t = useMessages(settingsMessages);
   const translate = useTranslate();
+  const { permissions } = usePermissions<AuthPermissions>();
   const { filterValues, setFilters, displayedFilters } =
     useListContext<UserRecord>();
-  const tenantId = Number(filterValues.tenantId);
-  if (!Number.isSafeInteger(tenantId) || tenantId < 0) return null;
+  const isPlatformAdmin = Boolean(permissions?.canManageIdentity);
+  const tenantAdminId = tenantAdminTenantId(permissions?.memberships);
+  const selectedTenantId = Number(filterValues.tenantId);
+  const tenantId = isPlatformAdmin
+    ? Number.isSafeInteger(selectedTenantId) && selectedTenantId >= 0
+      ? selectedTenantId
+      : undefined
+    : tenantAdminId;
+  if (tenantId === undefined) return null;
 
   const clearTenantScope = () => {
     const { tenantId: _tenantId, ...filters } = filterValues;
@@ -294,27 +315,37 @@ function TenantUserScope() {
   };
 
   return (
-    <section className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-      <div>
-        <p className="flex flex-wrap items-center gap-2 font-medium">
-          {translate("savia.users.tenantUsers", {
-            id: tenantId,
-            _: `Usuarios del tenant #${tenantId}`,
-          })}
-          <IconButtonWithTooltip
-            label={t(
-              "Este listado muestra únicamente las personas asignadas a este tenant.",
-            )}
-            className="size-5 p-0"
-          >
-            <Info className="size-3.5" aria-hidden="true" />
-          </IconButtonWithTooltip>
-        </p>
-      </div>
-      <Button type="button" variant="outline" onClick={clearTenantScope}>
-        {translate("savia.users.viewAllUsers", { _: "Ver todos los usuarios" })}
-      </Button>
-    </section>
+    <>
+      <TenantUserCapacity
+        tenantId={tenantId}
+        platformCanEdit={isPlatformAdmin}
+      />
+      <section className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <div>
+          <p className="flex flex-wrap items-center gap-2 font-medium">
+            {translate("savia.users.tenantUsers", {
+              id: tenantId,
+              _: `Usuarios del tenant #${tenantId}`,
+            })}
+            <IconButtonWithTooltip
+              label={t(
+                "Este listado muestra únicamente las personas asignadas a este tenant.",
+              )}
+              className="size-5 p-0"
+            >
+              <Info className="size-3.5" aria-hidden="true" />
+            </IconButtonWithTooltip>
+          </p>
+        </div>
+        {isPlatformAdmin && (
+          <Button type="button" variant="outline" onClick={clearTenantScope}>
+            {translate("savia.users.viewAllUsers", {
+              _: "Ver todos los usuarios",
+            })}
+          </Button>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -325,9 +356,15 @@ function UserListActions() {
     topics: ["users"],
     onConnected: () => {
       void queryClient.invalidateQueries({ queryKey: ["users"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["tenant-user-capacity"],
+      });
     },
     onEvent: (event) => {
       applyRealtimeListEvent(queryClient, "users", event);
+      void queryClient.invalidateQueries({
+        queryKey: ["tenant-user-capacity"],
+      });
     },
   });
   return (
@@ -464,26 +501,70 @@ function UserTable({ storeKey }: { storeKey: string }) {
 
 export function UserCreate() {
   const translate = useTranslate();
+  const { permissions, isPending } = usePermissions<AuthPermissions>();
+  const scope = userCreateScope(permissions);
+  const { platformCanEdit, tenantId } = scope;
+  if (isPending) return <p role="status">Loading user permissions…</p>;
+  if (!platformCanEdit && tenantId === undefined)
+    return (
+      <p role="alert">
+        A single tenant administrator membership is required to create users.
+      </p>
+    );
+
   return (
     <Create title={translate("savia.users.newUser", { _: "Nuevo usuario" })}>
       <SimpleForm
         className="max-w-5xl gap-8"
-        defaultValues={{ platformAdmin: false, agencyRole: "viewer" }}
+        defaultValues={scope.defaultValues}
       >
         <UserIdentityFields />
-        <UserInitialAccessFields />
+        <UserInitialAccessFields
+          tenantAdminTenantId={tenantId}
+          platformCanEdit={platformCanEdit}
+        />
+        <UserCreateCapacity
+          tenantAdminTenantId={tenantId}
+          platformCanEdit={platformCanEdit}
+        />
       </SimpleForm>
     </Create>
   );
 }
 
+function UserCreateCapacity({
+  tenantAdminTenantId: ownTenantId,
+  platformCanEdit,
+}: {
+  tenantAdminTenantId?: number;
+  platformCanEdit: boolean;
+}) {
+  const formTenantId = useWatch({ name: "tenantId" });
+  const parsedTenantId = Number(formTenantId);
+  return (
+    <TenantUserCapacity
+      tenantId={
+        platformCanEdit
+          ? Number.isSafeInteger(parsedTenantId) && parsedTenantId > 0
+            ? parsedTenantId
+            : undefined
+          : ownTenantId
+      }
+      platformCanEdit={platformCanEdit}
+    />
+  );
+}
+
 export function UserEdit() {
   const translate = useTranslate();
+  const { permissions } = usePermissions<AuthPermissions>();
+  const platformCanEdit = Boolean(permissions?.canManageIdentity);
   return (
     <Edit
       title={<UserEditTitle />}
       actions={<UserEditActions />}
       mutationMode="optimistic"
+      transform={platformCanEdit ? undefined : tenantAdminUserUpdateData}
     >
       <SimpleForm
         className="max-w-5xl gap-6"
@@ -500,14 +581,20 @@ export function UserEdit() {
               <TabsTrigger value="identity">
                 {translate("savia.users.tabs.identity", { _: "Identidad" })}
               </TabsTrigger>
-              <TabsTrigger value="access">
-                {translate("savia.users.tabs.access", {
-                  _: "Acceso de plataforma",
-                })}
-              </TabsTrigger>
-              <TabsTrigger value="tenant">
-                {translate("savia.users.tabs.tenant", { _: "Tenant asignado" })}
-              </TabsTrigger>
+              {platformCanEdit && (
+                <>
+                  <TabsTrigger value="access">
+                    {translate("savia.users.tabs.access", {
+                      _: "Acceso de plataforma",
+                    })}
+                  </TabsTrigger>
+                  <TabsTrigger value="tenant">
+                    {translate("savia.users.tabs.tenant", {
+                      _: "Tenant asignado",
+                    })}
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
           </div>
           <TabsContent
@@ -517,20 +604,24 @@ export function UserEdit() {
           >
             <UserIdentityFields edit />
           </TabsContent>
-          <TabsContent
-            value="access"
-            forceMount
-            className="data-[state=inactive]:hidden"
-          >
-            <UserPlatformAccessFields />
-          </TabsContent>
-          <TabsContent
-            value="tenant"
-            forceMount
-            className="data-[state=inactive]:hidden"
-          >
-            <UserMembershipEditor />
-          </TabsContent>
+          {platformCanEdit && (
+            <>
+              <TabsContent
+                value="access"
+                forceMount
+                className="data-[state=inactive]:hidden"
+              >
+                <UserPlatformAccessFields />
+              </TabsContent>
+              <TabsContent
+                value="tenant"
+                forceMount
+                className="data-[state=inactive]:hidden"
+              >
+                <UserMembershipEditor />
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </SimpleForm>
     </Edit>
@@ -736,16 +827,28 @@ function UserIdentityFields({ edit = false }: { edit?: boolean }) {
   );
 }
 
-function UserInitialAccessFields() {
+function UserInitialAccessFields({
+  tenantAdminTenantId: ownTenantId,
+  platformCanEdit,
+}: {
+  tenantAdminTenantId?: number;
+  platformCanEdit: boolean;
+}) {
   const translate = useTranslate();
   return (
     <UserSection
       title={translate("savia.users.sections.initialAccess", {
         _: "Acceso inicial",
       })}
-      description={translate("savia.users.sections.initialAccessDesc", {
-        _: "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma.",
-      })}
+      description={
+        platformCanEdit
+          ? translate("savia.users.sections.initialAccessDesc", {
+              _: "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma.",
+            })
+          : translate("savia.users.sections.tenantInitialAccessDesc", {
+              _: "El usuario se creará en tu tenant. Puedes elegir su rol dentro del tenant.",
+            })
+      }
     >
       <TextInput
         source="temporaryPassword"
@@ -759,28 +862,43 @@ function UserInitialAccessFields() {
         })}
         className="md:col-span-2"
       />
-      <BooleanInput
-        source="platformAdmin"
-        label={translate("savia.users.fields.platformAdmin", {
-          _: "Administrador de plataforma",
-        })}
-        helperText={translate("savia.users.fields.platformAdminHelper", {
-          _: "Puede administrar usuarios, roles y toda la operación.",
-        })}
-        className="md:col-span-2"
-      />
-      <ReferenceInput
-        source="tenantId"
-        reference="tenants"
-        perPage={100}
-        filter={{ kind: "commercial" }}
-      >
-        <SelectInput
-          label={translate("savia.users.fields.commercialTenant", {
-            _: "Tenant comercial",
+      {platformCanEdit ? (
+        <>
+          <BooleanInput
+            source="platformAdmin"
+            label={translate("savia.users.fields.platformAdmin", {
+              _: "Administrador de plataforma",
+            })}
+            helperText={translate("savia.users.fields.platformAdminHelper", {
+              _: "Puede administrar usuarios, roles y toda la operación.",
+            })}
+            className="md:col-span-2"
+          />
+          <ReferenceInput
+            source="tenantId"
+            reference="tenants"
+            perPage={100}
+            filter={{ kind: "commercial" }}
+          >
+            <SelectInput
+              label={translate("savia.users.fields.commercialTenant", {
+                _: "Tenant comercial",
+              })}
+            />
+          </ReferenceInput>
+        </>
+      ) : (
+        <TextInput
+          source="tenantId"
+          type="number"
+          readOnly
+          label={translate("savia.users.fields.tenant", { _: "Tenant" })}
+          helperText={translate("savia.users.fields.fixedTenantHelper", {
+            id: ownTenantId,
+            _: `This user will be assigned to tenant #${ownTenantId}.`,
           })}
         />
-      </ReferenceInput>
+      )}
       <SelectInput
         source="agencyRole"
         label={translate("savia.users.fields.tenantRole", {
@@ -1005,6 +1123,7 @@ function UserAccountActions({ record }: { record: UserRecord }) {
   const dataProvider = useDataProvider() as IdentityUserDataProvider;
   const notify = useNotify();
   const refresh = useRefresh();
+  const queryClient = useQueryClient();
   const translate = useTranslate();
   const [pending, setPending] = useState<string | null>(null);
 
@@ -1016,6 +1135,11 @@ function UserAccountActions({ record }: { record: UserRecord }) {
     setPending(key);
     try {
       await action();
+      if (key === "status") {
+        void queryClient.invalidateQueries({
+          queryKey: ["tenant-user-capacity"],
+        });
+      }
       notify(message, { type: "success" });
       refresh();
     } catch (error) {

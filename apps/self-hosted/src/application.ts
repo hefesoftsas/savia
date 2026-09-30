@@ -1,7 +1,7 @@
 import { createCollectionGateway } from "../../api/src/studio/collection-gateway";
 import { createNativeCollectionFetch } from "./outbound-fetch";
 import { mkdirSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
@@ -48,6 +48,16 @@ export async function createApplication(
             : undefined,
         })
       : undefined;
+    const internalBridgeKey =
+      env.SAVIA_INTERNAL_BRIDGE_KEY?.trim() ||
+      createHmac(
+        "sha256",
+        env.SAVIA_MCP_SHARED_SECRET?.trim() ||
+          config.authSecret ||
+          config.encryptionKey,
+      )
+        .update("savia:auth-tenant-user-administration:v1")
+        .digest("hex");
     if (smtp && !env.SAVIA_SMTP_FROM)
       throw new Error("SAVIA_SMTP_FROM is required with SMTP");
     const auth = createAuthHandler(
@@ -60,6 +70,7 @@ export async function createApplication(
         SAVIA_API_RESOURCE: config.publicOrigin,
         SAVIA_ADMIN_REDIRECT_URI: `${config.publicOrigin}/auth/callback`,
         SAVIA_SCALAR_REDIRECT_URI: `${config.publicOrigin}/docs`,
+        SAVIA_INTERNAL_BRIDGE_KEY: internalBridgeKey,
       },
       {
         database: stores.authDatabase,
@@ -95,6 +106,7 @@ export async function createApplication(
       [
         "SAVIA_MCP_URL",
         "SAVIA_MCP_SHARED_SECRET",
+        "SAVIA_INTERNAL_BRIDGE_KEY",
         "OPENROUTER_API_KEY",
         "OPENROUTER_MODEL",
         "NANGO_API_KEY",
@@ -111,6 +123,8 @@ export async function createApplication(
         "SQL_BRIDGE_SECRET",
       ].flatMap((key) => (env[key] ? [[key, env[key]]] : [])),
     );
+    if (internalBridgeKey)
+      optional.SAVIA_INTERNAL_BRIDGE_KEY = internalBridgeKey;
     const environment: RuntimeEnvironment = {
       ...optional,
       DB: database,

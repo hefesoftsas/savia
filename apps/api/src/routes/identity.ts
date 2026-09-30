@@ -36,6 +36,7 @@ import { PLATFORM_ROOM, tenantRoom } from "../realtime/protocol";
 import { replaceAccessAssignments } from "../auth/access-repository";
 import type { AccessScope } from "@savia/studio-shared/access-control";
 import { AccessControlError } from "../auth/access-registry";
+import { assertTenantUserCapacity } from "../auth/tenant-user-capacity";
 
 const membershipSchema = z.object({
   id: z.string(),
@@ -94,7 +95,7 @@ const identityUsersRoute = createRoute({
   tags: ["Identity & access"],
   summary: "List Savia users",
   description:
-    "Lists locally provisioned Better Auth users and their memberships.",
+    "Platform administrators see all users; tenant administrators see members of their active tenant.",
   security: [{ oauth2: ["savia.api.read"] }],
   responses: {
     200: {
@@ -105,7 +106,7 @@ const identityUsersRoute = createRoute({
       },
       description: "Provisioned users",
     },
-    403: { description: "Platform administrator role is required" },
+    403: { description: "Platform or tenant administrator role is required" },
   },
 });
 
@@ -157,7 +158,7 @@ const provisionIdentityRoute = createRoute({
   tags: ["Identity & access"],
   summary: "Provision a Better Auth user",
   description:
-    "Creates a Better Auth user and a Savia principal in a commercial tenant, or in the internal platform tenant for a platform administrator.",
+    "Creates a Better Auth user and Savia principal. Tenant administrators can create users only in their active tenant; platform administrators can also create platform administrators.",
   security: [{ oauth2: ["savia.api.write"] }],
   request: {
     body: {
@@ -172,11 +173,11 @@ const provisionIdentityRoute = createRoute({
       },
       description: "Provisioned user without password data",
     },
-    403: { description: "Platform administrator role is required" },
+    403: { description: "Platform or tenant administrator role is required" },
     404: { description: "Tenant was not found" },
     409: {
       description:
-        "Email conflict or tenant membership invariant prevented provisioning",
+        "Email conflict, tenant membership invariant, or active-user capacity prevented provisioning",
     },
     422: {
       description:
@@ -209,9 +210,12 @@ const grantMembershipRoute = createRoute({
       },
       description: "User with updated tenant assignment",
     },
-    403: { description: "Platform administrator role is required" },
+    403: { description: "Platform or tenant administrator role is required" },
     404: { description: "Identity principal or tenant was not found" },
-    409: { description: "User already belongs to another tenant" },
+    409: {
+      description:
+        "Tenant membership invariant or active-user capacity prevented assignment",
+    },
   },
 });
 
@@ -246,7 +250,7 @@ const identityUserRoute = createRoute({
       },
       description: "User with account and access state",
     },
-    403: { description: "Platform administrator role is required" },
+    403: { description: "Platform or tenant administrator role is required" },
     404: { description: "Identity principal was not found" },
   },
 });
@@ -275,8 +279,12 @@ const updateIdentityUserRoute = createRoute({
       description:
         "The update is invalid or would remove the final administrator",
     },
-    403: { description: "Platform administrator role is required" },
+    403: { description: "Platform or tenant administrator role is required" },
     404: { description: "Identity principal was not found" },
+    409: {
+      description:
+        "Tenant membership invariant or active-user capacity prevented the update",
+    },
   },
 });
 
@@ -309,7 +317,15 @@ function accountActionRoute(
     summary,
     security: [{ oauth2: ["savia.api.write"] }],
     request: { params: accountActionParamsSchema },
-    responses: { 204: { description } },
+    responses: {
+      204: { description },
+      403: { description: "Platform or tenant administrator role is required" },
+      404: { description: "Identity principal was not found" },
+      409: {
+        description:
+          "Identity or tenant capacity constraints prevented the operation",
+      },
+    },
   });
 }
 
@@ -349,7 +365,7 @@ const deleteIdentityRoute = createRoute({
   request: { params: membershipParamsSchema },
   responses: {
     204: { description: "User removed from Better Auth and Savia" },
-    403: { description: "Platform administrator role is required" },
+    403: { description: "Platform or tenant administrator role is required" },
     404: { description: "Identity principal was not found" },
   },
 });
@@ -596,12 +612,64 @@ function notifyUsers(
   type: "created" | "updated" | "deleted",
   id: string,
 ): void {
-  publishRealtime(realtime, PLATFORM_ROOM, {
-    topic: "users",
-    type,
-    id,
-    actor: actorFromContext(context).principal.id,
-  });
+  const actor = actorFromContext(context);
+  const tenantId = tenantIdentityAdminScope(actor);
+  publishRealtime(
+    realtime,
+    tenantId === undefined ? PLATFORM_ROOM : tenantRoom(tenantId),
+    {
+      topic: "users",
+      type,
+      id,
+      actor: actor.principal.id,
+    },
+  );
+}
+
+function tenantIdentityAdminScope(actor: AppActor): number | undefined {
+  if (actor.globalRoles.includes("platform_admin")) return undefined;
+  const memberships = actor.memberships.filter(
+    (membership) =>
+      membership.isActive &&
+      (membership.role === "tenant_admin" ||
+        membership.role === "agency_admin"),
+  );
+  if (memberships.length !== 1) {
+    throw new AuthenticationError(
+      "AUTHORIZATION_FORBIDDEN",
+      "A tenant administrator role is required",
+    );
+  }
+  const tenantId = memberships[0].tenantId ?? memberships[0].agencyId;
+  if (tenantId <= 0) {
+    throw new AuthenticationError(
+      "AUTHORIZATION_FORBIDDEN",
+      "A tenant administrator role is required",
+    );
+  }
+  return tenantId;
+}
+
+function requireIdentityAdministrator(actor: AppActor): number | undefined {
+  return tenantIdentityAdminScope(actor);
+}
+
+function targetBelongsToScope(
+  target: AppActor,
+  tenantId: number | undefined,
+): boolean {
+  if (tenantId === undefined) return true;
+  if (target.globalRoles.includes("platform_admin")) return false;
+  return target.memberships.some(
+    (membership) => (membership.tenantId ?? membership.agencyId) === tenantId,
+  );
+}
+
+function notFound(context: { json: (body: unknown, status: 404) => Response }) {
+  return context.json(
+    { error: { code: "NOT_FOUND", message: "Identity principal not found" } },
+    404,
+  );
 }
 
 export function registerIdentityRoutes(
@@ -615,46 +683,96 @@ export function registerIdentityRoutes(
     context.json({ data: actorDocument(actorFromContext(context)) }, 200),
   );
   app.openapi(identityUsersRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const tenantId = requireIdentityAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();
-    const documents = await Promise.all(
-      (await userAdministrator.listUsers(context.req.raw)).map(
-        async (account) => {
-          let principal = await findPrincipalBySubject(
-            d1,
-            userAdministrator.issuer,
-            account.subject,
+    const accounts =
+      tenantId === undefined
+        ? await userAdministrator.listUsers(context.req.raw)
+        : await Promise.all(
+            (
+              await d1
+                .prepare(
+                  `SELECT p.subject FROM identity_principal p
+                   JOIN identity_tenant_membership m ON m.principal_id=p.id
+                   WHERE p.issuer=? AND m.tenant_id=?
+                     AND NOT EXISTS (SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id)
+                   ORDER BY p.display_name,p.id`,
+                )
+                .bind(userAdministrator.issuer, tenantId)
+                .all<{ subject: string }>()
+            ).results.map((principal) =>
+              userAdministrator.getUser(principal.subject, context.req.raw),
+            ),
           );
-          if (
-            !principal ||
-            principal.email !== account.email ||
-            principal.displayName !== account.displayName
-          ) {
-            principal = await upsertPrincipal(d1, {
-              issuer: userAdministrator.issuer,
-              subject: account.subject,
-              email: account.email,
-              displayName: account.displayName,
-            });
-          }
-          const actor = await loadActor(d1, principal);
-          if (
-            account.role === "admin" &&
-            !actor.globalRoles.includes("platform_admin")
-          ) {
-            await setPlatformAdministrator(d1, principal.id, true);
-            actor.globalRoles = ["platform_admin"];
-          }
-          return managedActorDocument(actor, account);
-        },
-      ),
+    const documents = await Promise.all(
+      accounts.map(async (account) => {
+        let principal = await findPrincipalBySubject(
+          d1,
+          userAdministrator.issuer,
+          account.subject,
+        );
+        if (
+          !principal ||
+          principal.email !== account.email ||
+          principal.displayName !== account.displayName
+        ) {
+          principal = await upsertPrincipal(d1, {
+            issuer: userAdministrator.issuer,
+            subject: account.subject,
+            email: account.email,
+            displayName: account.displayName,
+          });
+        }
+        const actor = await loadActor(d1, principal);
+        if (
+          account.role === "admin" &&
+          !actor.globalRoles.includes("platform_admin")
+        ) {
+          if (tenantId !== undefined) return undefined;
+          await setPlatformAdministrator(d1, principal.id, true);
+          actor.globalRoles = ["platform_admin"];
+        }
+        if (
+          tenantId !== undefined &&
+          actor.globalRoles.includes("platform_admin")
+        )
+          return undefined;
+        return managedActorDocument(actor, account);
+      }),
     );
-    return context.json({ data: documents }, 200);
+    return context.json(
+      { data: documents.filter((document) => document !== undefined) },
+      200,
+    );
   });
   app.openapi(provisionIdentityRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const actor = actorFromContext(context);
+    const tenantId = requireIdentityAdministrator(actor);
     if (!userAdministrator) unavailableUserAdministration();
     const input = context.req.valid("json");
+    if (tenantId !== undefined) {
+      const requestedTenant =
+        input.membership?.tenantId ?? input.membership?.agencyId;
+      if (
+        input.platformAdmin ||
+        (requestedTenant !== undefined && requestedTenant !== tenantId)
+      ) {
+        return notFound(context);
+      }
+      if (!input.membership) {
+        return context.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "A tenant membership is required",
+            },
+          },
+          400,
+        );
+      }
+      input.membership.tenantId = tenantId;
+      input.membership.agencyId = tenantId;
+    }
     const accessRoleIds = [...new Set(input.accessRoleIds ?? [])];
     const accessScope =
       `tenant:${input.platformAdmin ? 0 : (input.membership?.tenantId ?? input.membership?.agencyId)}` as AccessScope;
@@ -679,6 +797,7 @@ export function registerIdentityRoutes(
       }
     }
     await assertIdentityEmailAvailable(d1, input.email);
+    if (tenantId !== undefined) await assertTenantUserCapacity(d1, tenantId);
     const authenticatedUser = await userAdministrator.createUser(
       {
         email: input.email.trim().toLowerCase(),
@@ -763,7 +882,7 @@ export function registerIdentityRoutes(
     }
   });
   app.openapi(grantMembershipRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const tenantId = requireIdentityAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     const principal = await findPrincipal(d1, principalId);
@@ -776,6 +895,13 @@ export function registerIdentityRoutes(
       );
     }
     const input = context.req.valid("json");
+    const requestedTenant = input.tenantId ?? input.agencyId!;
+    const targetActor = await loadActor(d1, principal);
+    if (
+      !targetBelongsToScope(targetActor, tenantId) ||
+      (tenantId !== undefined && requestedTenant !== tenantId)
+    )
+      return notFound(context);
     try {
       await grantMembership(
         d1,
@@ -808,9 +934,13 @@ export function registerIdentityRoutes(
     );
   });
   app.openapi(identityUserRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const tenantId = requireIdentityAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
+    const target = await findPrincipal(d1, principalId);
+    if (!target) return notFound(context);
+    if (!targetBelongsToScope(await loadActor(d1, target), tenantId))
+      return notFound(context);
     const document = await managedActor(
       d1,
       principalId,
@@ -829,7 +959,7 @@ export function registerIdentityRoutes(
   });
   app.openapi(updateIdentityUserRoute, async (context) => {
     const actor = actorFromContext(context);
-    requirePlatformAdministrator(actor);
+    const tenantId = requireIdentityAdministrator(actor);
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     const target = await findPrincipal(d1, principalId);
@@ -843,6 +973,22 @@ export function registerIdentityRoutes(
     }
     const input = context.req.valid("json");
     const targetActor = await loadActor(d1, target);
+    if (!targetBelongsToScope(targetActor, tenantId)) return notFound(context);
+    if (
+      tenantId !== undefined &&
+      (input.platformAdmin !== undefined ||
+        (input.membership !== undefined &&
+          (input.membership.tenantId ?? input.membership.agencyId) !==
+            tenantId))
+    )
+      return notFound(context);
+    const demotionTenantId =
+      input.platformAdmin === false &&
+      targetActor.globalRoles.includes("platform_admin")
+        ? (input.membership?.tenantId ?? input.membership?.agencyId)
+        : undefined;
+    if (demotionTenantId !== undefined)
+      await assertTenantUserCapacity(d1, demotionTenantId, target.id);
     try {
       if (input.platformAdmin === true) {
         await assertPrincipalCanLoseActiveMembership(d1, target.id);
@@ -907,6 +1053,16 @@ export function registerIdentityRoutes(
           input.membership?.role,
         );
       } catch (error) {
+        if (
+          input.platformAdmin === false &&
+          targetActor.globalRoles.includes("platform_admin")
+        ) {
+          await userAdministrator.updateUser(
+            target.subject,
+            { platformAdmin: true },
+            context.req.raw,
+          );
+        }
         if (error instanceof TenantMembershipInvariantError) {
           return membershipInvariantResponse(context, error);
         }
@@ -962,7 +1118,7 @@ export function registerIdentityRoutes(
     );
   });
   app.openapi(deleteMembershipRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const tenantId = requireIdentityAdministrator(actorFromContext(context));
     const { principalId, agencyId } = context.req.valid("param");
     const target = await findPrincipal(d1, principalId);
     if (!target) {
@@ -973,6 +1129,11 @@ export function registerIdentityRoutes(
         404,
       );
     }
+    if (
+      !targetBelongsToScope(await loadActor(d1, target), tenantId) ||
+      (tenantId !== undefined && Number(agencyId) !== tenantId)
+    )
+      return notFound(context);
     try {
       await removeMembership(d1, principalId, agencyId);
     } catch (error) {
@@ -993,7 +1154,7 @@ export function registerIdentityRoutes(
   });
   app.openapi(suspendIdentityUserRoute, async (context) => {
     const actor = actorFromContext(context);
-    requirePlatformAdministrator(actor);
+    const tenantId = requireIdentityAdministrator(actor);
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     preventSelfAdministration(actor, principalId);
@@ -1007,6 +1168,7 @@ export function registerIdentityRoutes(
       );
     }
     const targetActor = await loadActor(d1, target);
+    if (!targetBelongsToScope(targetActor, tenantId)) return notFound(context);
     const blocked = await preventRemovingFinalAdministrator(d1, targetActor);
     if (blocked) return blocked;
     try {
@@ -1016,7 +1178,16 @@ export function registerIdentityRoutes(
         false,
         context.req.raw,
       );
-      await setPrincipalActive(d1, target.id, false);
+      try {
+        await setPrincipalActive(d1, target.id, false);
+      } catch (error) {
+        await userAdministrator.setAccountActive(
+          target.subject,
+          true,
+          context.req.raw,
+        );
+        throw error;
+      }
     } catch (error) {
       if (error instanceof TenantMembershipInvariantError) {
         return membershipInvariantResponse(context, error);
@@ -1027,7 +1198,7 @@ export function registerIdentityRoutes(
     return context.body(null, 204);
   });
   app.openapi(reactivateIdentityUserRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const tenantId = requireIdentityAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     const target = await findPrincipal(d1, principalId);
@@ -1039,6 +1210,15 @@ export function registerIdentityRoutes(
         404,
       );
     }
+    const targetActor = await loadActor(d1, target);
+    if (!targetBelongsToScope(targetActor, tenantId)) return notFound(context);
+    const reactivationTenantId =
+      tenantId ??
+      targetActor.memberships
+        .map((membership) => membership.tenantId ?? membership.agencyId)
+        .find((id) => id > 0);
+    if (reactivationTenantId !== undefined)
+      await assertTenantUserCapacity(d1, reactivationTenantId, target.id);
     if (!target.isActive)
       await assertIdentityEmailAvailable(d1, target.email, target.id);
     await userAdministrator.setAccountActive(
@@ -1049,17 +1229,15 @@ export function registerIdentityRoutes(
     try {
       await setPrincipalActive(d1, target.id, true);
     } catch (error) {
-      if (
-        !target.isActive &&
-        error instanceof AuthenticationError &&
-        error.code === "IDENTITY_EMAIL_CONFLICT"
-      ) {
+      if (!target.isActive) {
         await userAdministrator.setAccountActive(
           target.subject,
           false,
           context.req.raw,
         );
       }
+      if (error instanceof TenantMembershipInvariantError)
+        return membershipInvariantResponse(context, error);
       throw error;
     }
     notifyUsers(realtime, context, "updated", target.id);
@@ -1067,7 +1245,7 @@ export function registerIdentityRoutes(
   });
   app.openapi(revokeIdentityUserSessionsRoute, async (context) => {
     const actor = actorFromContext(context);
-    requirePlatformAdministrator(actor);
+    const tenantId = requireIdentityAdministrator(actor);
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     preventSelfAdministration(actor, principalId);
@@ -1080,11 +1258,13 @@ export function registerIdentityRoutes(
         404,
       );
     }
+    if (!targetBelongsToScope(await loadActor(d1, target), tenantId))
+      return notFound(context);
     await userAdministrator.revokeSessions(target.subject, context.req.raw);
     return context.body(null, 204);
   });
   app.openapi(passwordResetIdentityUserRoute, async (context) => {
-    requirePlatformAdministrator(actorFromContext(context));
+    const tenantId = requireIdentityAdministrator(actorFromContext(context));
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     const target = await findPrincipal(d1, principalId);
@@ -1096,12 +1276,14 @@ export function registerIdentityRoutes(
         404,
       );
     }
+    if (!targetBelongsToScope(await loadActor(d1, target), tenantId))
+      return notFound(context);
     await userAdministrator.sendPasswordReset(target.subject, context.req.raw);
     return context.body(null, 204);
   });
   app.openapi(deleteIdentityRoute, async (context) => {
     const actor = actorFromContext(context);
-    requirePlatformAdministrator(actor);
+    const tenantId = requireIdentityAdministrator(actor);
     if (!userAdministrator) unavailableUserAdministration();
     const { principalId } = context.req.valid("param");
     const principal = await findPrincipal(d1, principalId);
@@ -1115,6 +1297,7 @@ export function registerIdentityRoutes(
     }
     preventSelfAdministration(actor, principal.id);
     const targetActor = await loadActor(d1, principal);
+    if (!targetBelongsToScope(targetActor, tenantId)) return notFound(context);
     const blocked = await preventRemovingFinalAdministrator(d1, targetActor);
     if (blocked) return blocked;
     try {

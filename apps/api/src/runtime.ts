@@ -36,6 +36,7 @@ import { createShlinkShortener } from "./public-forms/shortener";
 import type { PersonalIntegrationRouteDependencies } from "./routes/personal-integrations";
 import { publishRealtime } from "./realtime/hub-client";
 import { tenantRoom } from "./realtime/protocol";
+import { betterAuthUserAdministrator } from "./auth/better-auth";
 export { oauthResourceAuthenticator } from "./auth/runtime";
 export {
   crmClientFromEnvironment,
@@ -63,6 +64,7 @@ type AssistantSecrets = {
   ASSISTANT_SETTINGS_ENCRYPTION_KEY?: string;
   SAVIA_MCP_URL?: string;
   SAVIA_MCP_SHARED_SECRET?: string;
+  SAVIA_INTERNAL_BRIDGE_KEY?: string;
   MCP?: { fetch: typeof fetch };
   OPENROUTER_API_KEY?: string;
   OPENROUTER_MODEL?: string;
@@ -114,6 +116,31 @@ export function personalIntegrationRoutesFromEnvironment(
         }
       : {}),
   };
+}
+
+async function identityAdministrationBridgeKey(
+  configuredKey: string | undefined,
+  secret: string | undefined,
+): Promise<string | undefined> {
+  if (configuredKey?.trim()) return configuredKey.trim();
+  if (!secret?.trim()) return undefined;
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret.trim()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      material,
+      new TextEncoder().encode("savia:auth-tenant-user-administration:v1"),
+    ),
+  );
+  return Array.from(signature, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 function signingCredentials(
@@ -250,12 +277,16 @@ const runtime = {
     const mcp = await remoteMcpResponse(request, environment);
     if (mcp) return mcp;
     const assistant = assistantRuntimeFromEnvironment(environment);
+    const identityBridgeKey = await identityAdministrationBridgeKey(
+      environment.SAVIA_INTERNAL_BRIDGE_KEY,
+      environment.SAVIA_MCP_SHARED_SECRET,
+    );
     const response = await createApp(
       environment.DB,
       environment.DOCUMENTS,
       overrides.signing ?? signingCredentials(environment),
       undefined,
-      undefined,
+      betterAuthUserAdministrator(environment.AUTH, identityBridgeKey),
       undefined,
       environment.AUTH,
       oauthResourceAuthenticator(environment),

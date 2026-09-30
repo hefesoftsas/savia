@@ -78,6 +78,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Automatic refresh coverage and remaining gaps](guides/realtime-coverage.md)
 - [Identity email uniqueness](guides/identity-email-uniqueness.md)
+- [Tenant user capacity](guides/tenant-user-capacity.md)
 
 - [Documents and deliveries](guides/document-delivery.md): saved attachments, OneDrive copies and confirmed Outlook sends.
 

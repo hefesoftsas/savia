@@ -245,6 +245,23 @@ const saviaEnglish = {
     },
     users: {
       title: "Users",
+      capacity: {
+        title: "Tenant user capacity",
+        retry: "Retry",
+        loading: "Loading active-user count…",
+        loadError: "Unable to load tenant user capacity.",
+        unlimitedCount: "%{activeUsers} active users · Unlimited",
+        limitedCount: "%{activeUsers} / %{maxActiveUsers} active users",
+        limitLabel: "Maximum active users",
+        unlimitedHelp:
+          "Leave blank for no limit. The count includes tenant administrators.",
+        invalidLimit:
+          "Enter a non-negative whole number or leave the limit blank.",
+        saveError: "Unable to save the user limit.",
+        saved: "User limit saved.",
+        saving: "Saving…",
+        save: "Save limit",
+      },
       newUser: "New user",
       editUser: "Edit user",
       userDetails: "User details",
@@ -286,6 +303,7 @@ const saviaEnglish = {
         platformAdminRemoveHelper:
           "When removing, select the commercial tenant and role below.",
         commercialTenant: "Commercial tenant",
+        fixedTenantHelper: "This user will be assigned to tenant #%{id}.",
         commercialTenantRemove:
           "Commercial tenant after removing global access",
         tenantRole: "Base role in tenant",
@@ -306,6 +324,8 @@ const saviaEnglish = {
         initialAccess: "Initial access",
         initialAccessDesc:
           "Assign the user's commercial tenant or make them a platform administrator.",
+        tenantInitialAccessDesc:
+          "The user will be created in your tenant. Choose their tenant role.",
         platformAccess: "Platform access",
         platformAccessDesc:
           "Platform administrators can manage all Savia workspaces.",
@@ -775,6 +795,23 @@ const saviaSpanish = {
     },
     users: {
       title: "Usuarios",
+      capacity: {
+        title: "Cupo de usuarios del tenant",
+        retry: "Reintentar",
+        loading: "Cargando usuarios activos…",
+        loadError: "No se pudo cargar el cupo de usuarios.",
+        unlimitedCount: "%{activeUsers} usuarios activos · Sin límite",
+        limitedCount: "%{activeUsers} / %{maxActiveUsers} usuarios activos",
+        limitLabel: "Máximo de usuarios activos",
+        unlimitedHelp:
+          "Déjalo vacío para no establecer un límite. El conteo incluye los administradores del tenant.",
+        invalidLimit:
+          "Introduce un número entero no negativo o deja el límite vacío.",
+        saveError: "No se pudo guardar el límite de usuarios.",
+        saved: "Límite de usuarios guardado.",
+        saving: "Guardando…",
+        save: "Guardar límite",
+      },
       newUser: "Nuevo usuario",
       editUser: "Editar usuario",
       userDetails: "Detalles del usuario",
@@ -816,6 +853,7 @@ const saviaSpanish = {
         platformAdminRemoveHelper:
           "Al retirarlo, selecciona abajo el tenant comercial y el rol que conservará el usuario.",
         commercialTenant: "Tenant comercial",
+        fixedTenantHelper: "Este usuario quedará asignado al tenant #%{id}.",
         commercialTenantRemove: "Tenant comercial al retirar acceso global",
         tenantRole: "Rol base en el tenant",
         tenantRoleRemove: "Rol al retirar acceso global",
@@ -835,6 +873,8 @@ const saviaSpanish = {
         initialAccess: "Acceso inicial",
         initialAccessDesc:
           "Asigna el tenant comercial del usuario o conviértelo en administrador de plataforma.",
+        tenantInitialAccessDesc:
+          "El usuario se creará en tu tenant. Puedes elegir su rol dentro del tenant.",
         platformAccess: "Acceso de plataforma",
         platformAccessDesc:
           "Los administradores de plataforma pueden gestionar toda Savia.",
@@ -1303,6 +1343,23 @@ const saviaPortuguese = {
     },
     users: {
       title: "Usuários",
+      capacity: {
+        title: "Capacidade de usuários do tenant",
+        retry: "Tentar novamente",
+        loading: "Carregando usuários ativos…",
+        loadError: "Não foi possível carregar a capacidade de usuários.",
+        unlimitedCount: "%{activeUsers} usuários ativos · Sem limite",
+        limitedCount: "%{activeUsers} / %{maxActiveUsers} usuários ativos",
+        limitLabel: "Máximo de usuários ativos",
+        unlimitedHelp:
+          "Deixe em branco para não definir um limite. A contagem inclui os administradores do tenant.",
+        invalidLimit:
+          "Informe um número inteiro não negativo ou deixe o limite em branco.",
+        saveError: "Não foi possível salvar o limite de usuários.",
+        saved: "Limite de usuários salvo.",
+        saving: "Salvando…",
+        save: "Salvar limite",
+      },
       newUser: "Novo usuário",
       editUser: "Editar usuário",
       userDetails: "Detalhes do usuário",
@@ -1345,6 +1402,7 @@ const saviaPortuguese = {
         platformAdminRemoveHelper:
           "Ao remover, selecione abaixo o tenant comercial e a função que o usuário manterá.",
         commercialTenant: "Tenant comercial",
+        fixedTenantHelper: "Este usuário será atribuído ao tenant #%{id}.",
         commercialTenantRemove: "Tenant comercial ao remover acesso global",
         tenantRole: "Papel base no tenant",
         tenantRoleRemove: "Função ao remover acesso global",
@@ -1364,6 +1422,8 @@ const saviaPortuguese = {
         initialAccess: "Acesso inicial",
         initialAccessDesc:
           "Atribua o tenant comercial do usuário ou transforme-o em administrador da plataforma.",
+        tenantInitialAccessDesc:
+          "O usuário será criado no seu tenant. Escolha sua função no tenant.",
         platformAccess: "Acesso da plataforma",
         platformAccessDesc:
           "Administradores da plataforma podem gerenciar toda a Savia.",

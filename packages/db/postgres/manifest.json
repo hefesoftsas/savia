@@ -13,6 +13,10 @@
     {
       "filename": "0003_tenant_slug_aliases.sql",
       "sha256": "817cbc6b16d21d3923ab013f403d4f8880267e86c0dcaac7b36472e249cd8aa1"
+    },
+    {
+      "filename": "0004_tenant_user_limits.sql",
+      "sha256": "80a09e3b4729022959cc743ab17807af4f1e1070ab42c78a348beb29174b1191"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -820,6 +824,11 @@
     },
     {
       "type": "table",
+      "name": "tenant_user_limits",
+      "table": "tenant_user_limits"
+    },
+    {
+      "type": "table",
       "name": "tenants",
       "table": "tenants"
     },
@@ -1097,6 +1106,21 @@
       "type": "trigger",
       "name": "studio_relation_definition_update",
       "table": "studio_collection_relations"
+    },
+    {
+      "type": "trigger",
+      "name": "tenant_user_limit_membership_insert",
+      "table": "identity_tenant_membership"
+    },
+    {
+      "type": "trigger",
+      "name": "tenant_user_limit_membership_update",
+      "table": "identity_tenant_membership"
+    },
+    {
+      "type": "trigger",
+      "name": "tenant_user_limit_principal_reactivate",
+      "table": "identity_principal"
     },
     {
       "type": "trigger",
@@ -8010,6 +8034,45 @@
         }
       ],
       "checkCount": 0
+    },
+    {
+      "name": "tenant_user_limits",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "max_active_users",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "table": "tenants",
+          "from": "tenant_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": ["tenant_id"],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
     },
     {
       "name": "tenants",
