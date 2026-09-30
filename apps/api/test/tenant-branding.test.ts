@@ -604,3 +604,29 @@ it("deletes an eligible tenant and its published image through the API", async (
   ).toBe(null);
   expect(await env.DOCUMENTS.get(key!)).toBe(null);
 });
+
+it("serves the same public branding through a legacy alias and stops serving inactive tenants", async () => {
+  const row = await tenant();
+  const alias = `old-${row.slug}`;
+  await env.DB.prepare(
+    "INSERT INTO tenant_slug_aliases(slug,tenant_id) VALUES(?,?)",
+  )
+    .bind(alias, row.id)
+    .run();
+  const instance = app();
+  const canonical = await instance.request(
+    `https://${row.slug}.savia.test/api/public/tenant-branding`,
+  );
+  const legacy = await instance.request(
+    `https://${alias}.savia.test/api/public/tenant-branding`,
+  );
+  expect(legacy.status).toBe(200);
+  expect(await legacy.json()).toEqual(await canonical.json());
+  await env.DB.prepare("UPDATE tenants SET is_active=0 WHERE id=?")
+    .bind(row.id)
+    .run();
+  const inactive = await instance.request(
+    `https://${alias}.savia.test/api/public/tenant-branding`,
+  );
+  expect((await inactive.json()) as any).toEqual({ data: null });
+});

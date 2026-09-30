@@ -78,6 +78,21 @@ export function isReservedTenantSlug(value: unknown): boolean {
   return RESERVED_TENANT_SLUGS.has(value.trim().toLowerCase());
 }
 
+/** Derives a stable DNS label from a tenant name. Allocation handles collisions separately. */
+export function tenantSlugFromName(name: string): string {
+  const slug = name
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63)
+    .replace(/-+$/g, "");
+  const candidate = slug || "tenant";
+  if (!RESERVED_TENANT_SLUGS.has(candidate)) return candidate;
+  return `${candidate.slice(0, 58).replace(/-+$/g, "")}-team`;
+}
+
 function hostnameWithoutPort(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "");
 }

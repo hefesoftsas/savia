@@ -102,6 +102,17 @@ export const tenants = sqliteTable("tenants", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const tenantSlugAliases = sqliteTable(
+  "tenant_slug_aliases",
+  {
+    slug: text("slug").primaryKey().notNull(),
+    tenantId: bigint("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("tenant_slug_aliases_tenant_id").on(table.tenantId)],
+);
+
 export const identityPrincipals = sqliteTable(
   "identity_principal",
   {

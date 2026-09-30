@@ -248,6 +248,12 @@ describe("generic tenant pages", () => {
       'input[name="name"]',
     ) as HTMLInputElement;
     expect(nameInput).not.toBe(null);
+    expect(document.querySelector('input[name="idSlug"]')).toBe(null);
+    expect(
+      screen.getByText(
+        "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
+      ),
+    ).toBeVisible();
     await user.type(nameInput, "Nueva comunidad");
     await user.click(
       await screen.findByRole("radio", {
@@ -290,6 +296,12 @@ describe("generic tenant pages", () => {
       user = userEvent.setup();
     await renderApp(appServices);
     const name = await screen.findByDisplayValue("Comunidad");
+    expect(document.querySelector('input[name="idSlug"]')).toBe(null);
+    expect(
+      screen.getByText(
+        "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
+      ),
+    ).toBeVisible();
     await user.clear(name);
     await user.type(name, "Comunidad renovada");
     expect(

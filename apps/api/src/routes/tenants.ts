@@ -1,3 +1,9 @@
+import { resolveTenantSlug, tenantSlugExists } from "../tenant-slugs";
+import {
+  TenantSlugConflictError,
+  tenantSlugCandidate,
+  tenantSlugChangeStatements,
+} from "../tenant-slug-assignment";
 import { dialectFor } from "@savia/db/dialect";
 import { tableNames, foreignKeys } from "../lib/database-schema";
 import { deleteTenantBrandingAssets } from "../tenant-branding/service";
@@ -299,20 +305,40 @@ async function insertTenant(
     )
     .first<{ id: number }>();
   if (!allocation) throw new Error("Unable to allocate tenant ID");
-  await db
-    .prepare(
-      "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,?,?,?, 'commercial')",
-    )
-    .bind(
-      allocation.id,
-      input.idSlug ?? crypto.randomUUID(),
-      input.name,
-      input.isActive === false ? 0 : 1,
-      now,
-      now,
-    )
-    .run();
-  return allocation.id;
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const slug = input.idSlug ?? tenantSlugCandidate(input.name, attempt);
+    if (await tenantSlugExists(db, slug)) {
+      if (input.idSlug)
+        throw new TenantSlugConflictError("Tenant URL is already reserved");
+      continue;
+    }
+    try {
+      await db.batch([
+        db
+          .prepare(
+            "INSERT INTO tenants(id,id_slug,name,is_active,created_at,updated_at,kind) VALUES(?,?,?,?,?,?, 'commercial')",
+          )
+          .bind(
+            allocation.id,
+            slug,
+            input.name,
+            input.isActive === false ? 0 : 1,
+            now,
+            now,
+          ),
+        db
+          .prepare(
+            "INSERT INTO tenant_slug_aliases(slug,tenant_id) VALUES(?,?)",
+          )
+          .bind(slug, allocation.id),
+      ]);
+      return allocation.id;
+    } catch (error) {
+      // The unique registry claim also handles simultaneous creations of the same name.
+      if (input.idSlug || !isUniqueConstraint(error)) throw error;
+    }
+  }
+  throw new TenantSlugConflictError("No available tenant URL");
 }
 
 /**
@@ -361,7 +387,8 @@ async function createTenantWithExistingMember(
         ),
         409,
       );
-    if (isUniqueConstraint(error)) return c.json(conflict, 409);
+    if (isUniqueConstraint(error) || error instanceof TenantSlugConflictError)
+      return c.json(conflict, 409);
     throw error;
   }
   const row = await db
@@ -437,18 +464,7 @@ export function registerTenantRoutes(
         200,
       );
     }
-    const row = await db
-      .prepare(
-        'SELECT id, id_slug AS "idSlug", name, kind, is_active AS "isActive" FROM tenants WHERE id_slug=? AND is_active=1',
-      )
-      .bind(slug)
-      .first<{
-        id: number;
-        idSlug: string;
-        name: string;
-        kind: "commercial" | "platform";
-        isActive: number;
-      }>();
+    const row = await resolveTenantSlug(db, slug);
     if (!row) return c.json(missing, 404);
     return c.json(
       {
@@ -456,7 +472,7 @@ export function registerTenantRoutes(
           isDedicated: true,
           slug: row.idSlug,
           name: row.name,
-          kind: row.kind,
+          kind: row.kind as "commercial",
           id: row.id,
         },
       },
@@ -554,7 +570,8 @@ export function registerTenantRoutes(
           c.req.raw,
         );
       }
-      if (isUniqueConstraint(error)) return c.json(conflict, 409);
+      if (isUniqueConstraint(error) || error instanceof TenantSlugConflictError)
+        return c.json(conflict, 409);
       throw error;
     }
     const row = await db
@@ -576,22 +593,29 @@ export function registerTenantRoutes(
       .first<TenantRow>();
     if (!current) return c.json(missing, 404);
     try {
-      await db
-        .prepare(
-          "UPDATE tenants SET name=?,id_slug=?,is_active=?,updated_at=? WHERE id=? AND kind='commercial'",
-        )
-        .bind(
-          input.name ?? current.name,
-          input.idSlug ?? current.idSlug,
-          input.isActive === undefined
-            ? current.isActive
-            : Number(input.isActive),
-          new Date().toISOString(),
-          id,
-        )
-        .run();
+      const slugStatements = await tenantSlugChangeStatements(
+        db,
+        id,
+        current.idSlug,
+        input.idSlug ?? current.idSlug,
+      );
+      await db.batch([
+        ...slugStatements,
+        db
+          .prepare(
+            "UPDATE tenants SET name=COALESCE(?,name),id_slug=COALESCE(?,id_slug),is_active=COALESCE(?,is_active),updated_at=? WHERE id=? AND kind='commercial'",
+          )
+          .bind(
+            input.name ?? null,
+            input.idSlug ?? null,
+            input.isActive === undefined ? null : Number(input.isActive),
+            new Date().toISOString(),
+            id,
+          ),
+      ]);
     } catch (error) {
-      if (isUniqueConstraint(error)) return c.json(conflict, 409);
+      if (isUniqueConstraint(error) || error instanceof TenantSlugConflictError)
+        return c.json(conflict, 409);
       throw error;
     }
     const row = await db

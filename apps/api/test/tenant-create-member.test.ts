@@ -1,6 +1,6 @@
 import { createTestApp } from "./test-app";
 import { env } from "cloudflare:workers";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
 import {
   ensureBootstrapAdministrator,
@@ -199,4 +199,133 @@ it("requires exactly one member source", async () => {
   expect(both.status).toBe(400);
   expect(await tenantByName("Neither agency")).toBe(null);
   expect(await tenantByName("Both agency")).toBe(null);
+});
+
+it("assigns a readable slug, resolves collisions and keeps it stable on rename", async () => {
+  const source = await tenant("Slug source");
+  await member("slug-staying@example.test", source.id, "tenant_admin");
+  const first = await member("slug-first@example.test", source.id);
+  const second = await member("slug-second@example.test", source.id);
+  const create = (principalId: string) =>
+    app().request(
+      "/v1/tenants",
+      post({
+        name: "Águila & Compañía",
+        existingMember: { principalId, role: "tenant_admin" },
+      }),
+    );
+  const firstResponse = await create(first.id);
+  expect(firstResponse.status).toBe(201);
+  const a = ((await firstResponse.json()) as any).data;
+  expect(a.idSlug).toBe("aguila-compania");
+  const secondResponse = await create(second.id);
+  expect(secondResponse.status).toBe(201);
+  expect(((await secondResponse.json()) as any).data.idSlug).toBe(
+    "aguila-compania-2",
+  );
+  const renamed = await app().request(`/v1/tenants/${a.id}`, {
+    ...post({ name: "New business name" }),
+    method: "PATCH",
+  });
+  expect(renamed.status).toBe(200);
+  expect(((await renamed.json()) as any).data.idSlug).toBe("aguila-compania");
+});
+
+it("keeps old tenant slugs reserved and resolves them after a controlled URL change", async () => {
+  const source = await tenant("Legacy slug source");
+  const response = await app().request(`/v1/tenants/${source.id}`, {
+    ...post({ idSlug: "friendly-legacy-source" }),
+    method: "PATCH",
+  });
+  expect(response.status).toBe(200);
+  const current = await app().request(
+    `https://${source.slug}.savia-preview.hefesoft.com/v1/tenants/current`,
+  );
+  expect(current.status).toBe(200);
+  expect(((await current.json()) as any).data.slug).toBe(
+    "friendly-legacy-source",
+  );
+  const other = await tenant("Other slug source");
+  const conflict = await app().request(`/v1/tenants/${other.id}`, {
+    ...post({ idSlug: source.slug }),
+    method: "PATCH",
+  });
+  expect(conflict.status).toBe(409);
+});
+
+it("reserves different readable URLs for simultaneous tenant creations", async () => {
+  const source = await tenant("Concurrent source");
+  await member("parallel-staying@example.test", source.id, "tenant_admin");
+  const first = await member("parallel-one@example.test", source.id);
+  const second = await member("parallel-two@example.test", source.id);
+  const responses = await Promise.all(
+    [first, second].map((principal) =>
+      app().request(
+        "/v1/tenants",
+        post({
+          name: "Concurrent Team",
+          existingMember: { principalId: principal.id, role: "tenant_admin" },
+        }),
+      ),
+    ),
+  );
+  expect(responses.map((r) => r.status)).toEqual([201, 201]);
+  const slugs = await Promise.all(
+    responses.map(
+      async (response) => ((await response.json()) as any).data.idSlug,
+    ),
+  );
+  expect(slugs.sort()).toEqual(["concurrent-team", "concurrent-team-2"]);
+});
+
+it("does not restore a stale URL when a name-only edit races with a URL migration", async () => {
+  const source = await tenant("Concurrent rename source");
+  let release!: () => void;
+  let captured!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const read = new Promise<void>((resolve) => {
+    captured = resolve;
+  });
+  const prepare = env.DB.prepare.bind(env.DB);
+  let intercept = true;
+  const spy = vi.spyOn(env.DB, "prepare").mockImplementation((sql) => {
+    const statement = prepare(sql);
+    if (intercept && sql.includes("WHERE t.id=? AND t.kind='commercial'")) {
+      intercept = false;
+      return {
+        bind: (...args: unknown[]) => ({
+          first: async () => {
+            const row = await statement.bind(...args).first();
+            captured();
+            await blocked;
+            return row;
+          },
+        }),
+      } as unknown as D1PreparedStatement;
+    }
+    return statement;
+  });
+  try {
+    const nameUpdate = app().request(`/v1/tenants/${source.id}`, {
+      ...post({ name: "Renamed concurrently" }),
+      method: "PATCH",
+    });
+    await read;
+    const urlUpdate = await app().request(`/v1/tenants/${source.id}`, {
+      ...post({ idSlug: "stable-concurrent-url" }),
+      method: "PATCH",
+    });
+    expect(urlUpdate.status).toBe(200);
+    release();
+    expect((await nameUpdate).status).toBe(200);
+    const row = await prepare("SELECT id_slug AS slug FROM tenants WHERE id=?")
+      .bind(source.id)
+      .first<{ slug: string }>();
+    expect(row?.slug).toBe("stable-concurrent-url");
+  } finally {
+    release();
+    spy.mockRestore();
+  }
 });

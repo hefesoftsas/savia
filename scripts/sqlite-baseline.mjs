@@ -43,9 +43,31 @@ export function sqliteBaseline(database) {
     .all()
     .filter((row) => !excluded.has(row.name) && !excluded.has(row.tbl_name));
   const seeds = [];
-  for (const table of objects.filter(
+  const tablesToSeed = objects.filter(
     (o) => o.type === "table" && !o.sql.startsWith("CREATE VIRTUAL"),
-  )) {
+  );
+  const tablesByName = new Map(
+    tablesToSeed.map((table) => [table.name, table]),
+  );
+  const seedOrder = [];
+  const seeded = new Set();
+  const visiting = new Set();
+  const visit = (table) => {
+    if (seeded.has(table.name) || visiting.has(table.name)) return;
+    visiting.add(table.name);
+    for (const foreignKey of database
+      .prepare(`PRAGMA foreign_key_list(${quote(table.name)})`)
+      .all()) {
+      const parent = tablesByName.get(foreignKey.table);
+      if (parent) visit(parent);
+    }
+    visiting.delete(table.name);
+    seeded.add(table.name);
+    seedOrder.push(table);
+  };
+  for (const table of tablesToSeed) visit(table);
+
+  for (const table of seedOrder) {
     const columns = database
       .prepare(`PRAGMA table_xinfo(${quote(table.name)})`)
       .all()

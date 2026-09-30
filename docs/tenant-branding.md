@@ -20,6 +20,15 @@ change the tenant slug. Switching organizations updates the URL and clears feedb
 Preview and production use their respective canonical hosts. If the saved slug or
 a recognized Savia hostname is unavailable, no URL is fabricated.
 
+New tenant URLs are generated from the tenant name: accents are removed, letters
+are lowercased, and runs of characters outside `a-z` and `0-9` become hyphens.
+The result is limited to one 63-character DNS label; reserved platform names gain
+the `-team` suffix. If a generated name is already allocated, the next available
+slug uses a numeric suffix such as `-2`. The assigned identifier is canonical and
+stays unchanged when the tenant is renamed. Previous UUID-based tenant URLs remain
+available as aliases, while Savia displays and shares the canonical URL even when
+the user opened the page through an alias hostname.
+
 The guided editor supports a display name, logo, login cover image, login Lottie
 animation, welcome title, welcome text, primary color, and accent color. Preview
 changes before saving. The
@@ -101,3 +110,16 @@ Tests cover tenant ownership, active memberships, upload validation and ownershi
 public projection, optimistic concurrency, forged proxy headers, SSR escaping,
 contrast, provider cleanup, explicit saves and conflict handling. Verification must
 not alter real customer branding or publish customer images without a specific request.
+
+## Existing UUID URLs
+
+After deploying the alias registry migration and API alias support, run
+`node scripts/migrate-tenant-slugs.mjs` with `CLOUDFLARE_ACCOUNT_ID`,
+`CLOUDFLARE_DATABASE_ID`, and `CLOUDFLARE_API_TOKEN` to review a read-only plan.
+The command accepts only the `savia-agencies-preview` database. Add `--apply`
+to assign readable URLs to commercial tenants whose current slug is a UUID.
+Existing readable slugs are unchanged. Each change reserves both the old and
+new slug and updates the tenant in one transaction. Rerunning after completion
+produces an empty plan. Alias hostnames continue serving the same tenant and
+remain subject to active-membership and tenant-active checks; the branding page
+shows the canonical readable URL even when opened through the old hostname.
