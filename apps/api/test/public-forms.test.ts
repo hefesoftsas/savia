@@ -8,6 +8,7 @@ import {
   platformAdministratorAuthenticator,
   agencyMemberAuthenticator,
 } from "./auth-fixtures";
+import type { AppActor, Authenticator } from "../src/auth/types";
 import {
   registerPublicFormRoutes,
   type PublicFormsOptions,
@@ -43,15 +44,20 @@ const verify = vi.fn(async (_url: unknown, init?: RequestInit) =>
     cdata: captchaLink,
   }),
 );
-function app(options: Partial<PublicFormsOptions> = {}, admin = true) {
+function app(
+  options: Partial<PublicFormsOptions> = {},
+  admin = true,
+  explicitAuthenticator?: Authenticator,
+) {
   const app = new OpenAPIHono();
   app.use(
     "/v1/*",
     authenticationMiddleware(
       env.DB,
-      admin
-        ? platformAdministratorAuthenticator()
-        : agencyMemberAuthenticator(),
+      explicitAuthenticator ??
+        (admin
+          ? platformAdministratorAuthenticator()
+          : agencyMemberAuthenticator()),
     ),
   );
   registerPublicFormRoutes(app, env.DB, {
@@ -93,6 +99,43 @@ async function object(
     )
     .run();
   return name;
+}
+function tenantActor(
+  tenantId: number,
+  role = "tenant_admin",
+  options: { principalActive?: boolean; membershipActive?: boolean } = {},
+): Authenticator {
+  const id = `public-form-actor-${tenantId}-${role}`;
+  const actor: AppActor = {
+    principal: {
+      id,
+      issuer: "savia:better-auth",
+      subject: id,
+      email: `${id}@savia.test`,
+      displayName: "Public form tenant actor",
+      isActive: options.principalActive ?? true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    globalRoles: [],
+    memberships: [
+      {
+        id: `${id}-membership`,
+        principalId: id,
+        agencyId: tenantId,
+        tenantId,
+        role,
+        isActive: options.membershipActive ?? true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  };
+  return {
+    async authenticate() {
+      return actor;
+    },
+  };
 }
 async function publish(
   instance: ReturnType<typeof app>,
@@ -256,6 +299,175 @@ it("requires administrator management and blocks anonymous methods, expired link
     ).status,
   ).toBe(200);
   expect((await submit(instance, link, { name: "Visitor" })).status).toBe(404);
+});
+it("lets an active tenant administrator manage public links in their own tenant", async () => {
+  const shorten = vi.fn(async () => "https://go.cloud.hefesoft.com/tenant-own");
+  const instance = app({ shortener: { shorten } }, false, tenantActor(880011));
+  const name = await object();
+  const link = await publish(instance, name);
+
+  const listing = await instance.request(
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
+  );
+  expect(listing.status).toBe(200);
+  expect((await listing.json()).data).toEqual([
+    expect.objectContaining({ id: link.id }),
+  ]);
+
+  const shortened = await instance.request(
+    `https://api.test/v1/public-forms/${link.id}/short-url`,
+    { method: "POST" },
+  );
+  expect(shortened.status).toBe(200);
+  expect(shorten).toHaveBeenCalledWith(link.url);
+
+  expect(
+    (
+      await instance.request(`https://api.test/v1/public-forms/${link.id}`, {
+        method: "DELETE",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await instance.request(
+        `https://api.test/v1/public-forms/${link.id}?hard=true`,
+        { method: "DELETE" },
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    await env.DB.prepare("SELECT count(*) n FROM public_forms WHERE id=?")
+      .bind(link.id)
+      .first("n"),
+  ).toBe(0);
+});
+it("lets an active agency administrator manage links for their tenant", async () => {
+  const instance = app({}, false, tenantActor(880011, "agency_admin"));
+  const name = await object();
+  const link = await publish(instance, name);
+  const listing = await instance.request(
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
+  );
+  expect(listing.status).toBe(200);
+  expect((await listing.json()).data).toEqual([
+    expect.objectContaining({ id: link.id }),
+  ]);
+});
+it("denies tenant administrators cross-tenant link operations without side effects", async () => {
+  const shorten = vi.fn(
+    async () => "https://go.cloud.hefesoft.com/should-not-run",
+  );
+  const tenantAdmin = app(
+    { shortener: { shorten } },
+    false,
+    tenantActor(880011),
+  );
+  const platformAdmin = app();
+  const foreignObject = await object(undefined, 880013);
+  const foreignLink = await publish(platformAdmin, foreignObject, {
+    tenantId: 880013,
+  });
+
+  const createForeign = await tenantAdmin.request(
+    "https://api.test/v1/public-forms",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tenantId: 880013,
+        objectName: foreignObject,
+        kind: "record",
+      }),
+    },
+  );
+  expect(createForeign.status).toBe(403);
+
+  const listForeign = await tenantAdmin.request(
+    `https://api.test/v1/public-forms?tenantId=880013&objectName=${foreignObject}`,
+  );
+  expect(listForeign.status).toBe(403);
+
+  const shortenForeign = await tenantAdmin.request(
+    `https://api.test/v1/public-forms/${foreignLink.id}/short-url`,
+    { method: "POST" },
+  );
+  expect([403, 404]).toContain(shortenForeign.status);
+  expect(shorten).not.toHaveBeenCalled();
+
+  const revokeForeign = await tenantAdmin.request(
+    `https://api.test/v1/public-forms/${foreignLink.id}`,
+    { method: "DELETE" },
+  );
+  expect([403, 404]).toContain(revokeForeign.status);
+  const hardDeleteForeign = await tenantAdmin.request(
+    `https://api.test/v1/public-forms/${foreignLink.id}?hard=true`,
+    { method: "DELETE" },
+  );
+  expect([403, 404]).toContain(hardDeleteForeign.status);
+
+  const stored = await env.DB.prepare(
+    "SELECT revoked_at FROM public_forms WHERE id=?",
+  )
+    .bind(foreignLink.id)
+    .first<{ revoked_at: string | null }>();
+  expect(stored).toEqual({ revoked_at: null });
+  expect(
+    await env.DB.prepare("SELECT count(*) n FROM public_forms WHERE id=?")
+      .bind(foreignLink.id)
+      .first("n"),
+  ).toBe(1);
+});
+it("denies operator, viewer, inactive membership and inactive principals", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  const deniedActors = [
+    tenantActor(880011, "operator"),
+    tenantActor(880011, "viewer"),
+    tenantActor(880011, "tenant_admin", { membershipActive: false }),
+    tenantActor(880011, "tenant_admin", { principalActive: false }),
+  ];
+  for (const authenticator of deniedActors) {
+    const response = await app({}, false, authenticator).request(
+      `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
+    );
+    expect(response.status).toBe(403);
+  }
+  expect(
+    await env.DB.prepare("SELECT count(*) n FROM public_forms WHERE id=?")
+      .bind(link.id)
+      .first("n"),
+  ).toBe(1);
+});
+it("denies management for inactive and system tenants", async () => {
+  const name = await object();
+  const link = await publish(app(), name);
+  await env.DB.prepare("UPDATE tenants SET is_active=0 WHERE id=880011").run();
+  const inactiveTenantList = await app({}, false, tenantActor(880011)).request(
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
+  );
+  expect(inactiveTenantList.status).toBe(403);
+  await env.DB.prepare("UPDATE tenants SET is_active=1 WHERE id=880011").run();
+
+  const systemTenantActor = app({}, false, tenantActor(0));
+  const systemCreate = await systemTenantActor.request(
+    "https://api.test/v1/public-forms",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tenantId: 0,
+        objectName: name,
+        kind: "record",
+      }),
+    },
+  );
+  expect(systemCreate.status).toBe(403);
+  expect(
+    await env.DB.prepare("SELECT count(*) n FROM public_forms WHERE id=?")
+      .bind(link.id)
+      .first("n"),
+  ).toBe(1);
 });
 it("creates a stable Savia short URL that redirects only while the form is active", async () => {
   const instance = app();
