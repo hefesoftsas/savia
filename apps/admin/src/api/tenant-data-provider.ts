@@ -18,6 +18,7 @@ type InitialUser = {
   lastName: string;
   role: "tenant_admin";
   temporaryPassword?: string;
+  emailVerified?: boolean;
 };
 
 type ExistingMember = {

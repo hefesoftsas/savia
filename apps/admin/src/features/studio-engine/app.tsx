@@ -370,8 +370,8 @@ function App({
       };
       try {
         await bootstrap("/bootstrap");
-        if (active && embedded && runtime.businessSetupEnabled !== false)
-          await bootstrap("/business/setup");
+        // Optional business packages must never gate tenant screen authoring.
+        // Install them through their explicit setup flow instead.
         if (tenantId !== undefined && owner)
           markStudioBootstrapped(`tenant:${tenantId}`, owner);
         if (active) setReady(true);

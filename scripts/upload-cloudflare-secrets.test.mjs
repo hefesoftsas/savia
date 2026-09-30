@@ -57,6 +57,36 @@ test("studio integration key prefers the canonical name over the legacy alias", 
   assert.equal(canonical.STUDIO_INTEGRATION_KEY, "canonical-value");
 });
 
+test("OAuth credentials are optional complete pairs for the auth Worker", () => {
+  const authSecrets = buildSecretUploads("preview", values).find(
+    (plan) => plan.app === "auth",
+  ).secrets;
+  assert.equal("SAVIA_GOOGLE_CLIENT_ID" in authSecrets, false);
+  assert.equal("SAVIA_GOOGLE_CLIENT_SECRET" in authSecrets, false);
+  assert.equal("SAVIA_MICROSOFT_CLIENT_ID" in authSecrets, false);
+  assert.equal("SAVIA_MICROSOFT_CLIENT_SECRET" in authSecrets, false);
+
+  const oauth = {
+    SAVIA_GOOGLE_CLIENT_ID: "google-client-id",
+    SAVIA_GOOGLE_CLIENT_SECRET: "google-client-secret",
+    SAVIA_MICROSOFT_CLIENT_ID: "microsoft-client-id",
+    SAVIA_MICROSOFT_CLIENT_SECRET: "microsoft-client-secret",
+  };
+  const enabledAuthSecrets = buildSecretUploads("production", {
+    ...values,
+    ...oauth,
+  }).find((plan) => plan.app === "auth").secrets;
+  for (const [key, value] of Object.entries(oauth))
+    assert.equal(enabledAuthSecrets[key], value);
+
+  for (const key of Object.keys(oauth)) {
+    assert.throws(
+      () => buildSecretUploads("preview", { ...values, [key]: oauth[key] }),
+      /SAVIA_(GOOGLE|MICROSOFT)_CLIENT_(ID|SECRET).*configured together/,
+    );
+  }
+});
+
 test("database bridge requires a complete HTTPS configuration", () => {
   for (const environment of ["preview", "production"]) {
     const bridge = {

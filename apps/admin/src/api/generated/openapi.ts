@@ -403,6 +403,388 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/tenants/{tenantId}/email-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Redacted tenant SMTP settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              host?: string;
+              port?: number;
+              username?: string;
+              from?: string;
+              /** @enum {string} */
+              security?: "tls" | "starttls";
+              passwordConfigured?: boolean;
+            };
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            host: string;
+            port: number;
+            /** @default  */
+            username?: string;
+            password?: string | null;
+            /** Format: email */
+            from: string;
+            /** @enum {string} */
+            security: "tls" | "starttls";
+          };
+        };
+      };
+      responses: {
+        /** @description Saved tenant SMTP settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              host?: string;
+              port?: number;
+              username?: string;
+              from?: string;
+              /** @enum {string} */
+              security?: "tls" | "starttls";
+              passwordConfigured?: boolean;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Removed tenant SMTP settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** @enum {boolean} */
+              configured: false;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/email-settings/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Test email sent to the authenticated actor */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** @enum {boolean} */
+              sent: true;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/sso-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Redacted tenant SAML SSO settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              displayName?: string;
+              domain?: string;
+              idpMetadata?: string;
+              enabled?: boolean;
+              ssoOnly?: boolean;
+              providerId?: string;
+              entityId?: string;
+              acsUrl?: string;
+              metadataUrl?: string;
+            };
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            displayName: string;
+            domain: string;
+            idpMetadata: string;
+            enabled: boolean;
+            ssoOnly: boolean;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved tenant SAML SSO settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              displayName?: string;
+              domain?: string;
+              idpMetadata?: string;
+              enabled?: boolean;
+              ssoOnly?: boolean;
+              providerId?: string;
+              entityId?: string;
+              acsUrl?: string;
+              metadataUrl?: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Removed tenant SAML SSO settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** @enum {boolean} */
+              configured: false;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tenants/{tenantId}/social-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tenant Google and Microsoft sign-in settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              googleEnabled: boolean;
+              microsoftEnabled: boolean;
+              microsoftTenantId: string;
+              googleAvailable: boolean;
+              microsoftAvailable: boolean;
+              googleCallbackUrl: string;
+              microsoftCallbackUrl: string;
+            };
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            googleEnabled: boolean;
+            microsoftEnabled: boolean;
+            microsoftTenantId: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved tenant Google and Microsoft sign-in settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              googleEnabled: boolean;
+              microsoftEnabled: boolean;
+              microsoftTenantId: string;
+              googleAvailable: boolean;
+              microsoftAvailable: boolean;
+              googleCallbackUrl: string;
+              microsoftCallbackUrl: string;
+            };
+          };
+        };
+      };
+    };
+    post?: never;
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          tenantId: number;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Removed tenant social login settings */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              configured: boolean;
+              googleEnabled: boolean;
+              microsoftEnabled: boolean;
+              microsoftTenantId: string;
+              googleAvailable: boolean;
+              microsoftAvailable: boolean;
+              googleCallbackUrl: string;
+              microsoftCallbackUrl: string;
+            };
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/access-control/audit": {
     parameters: {
       query?: never;
@@ -1712,6 +2094,7 @@ export interface paths {
                     role: "admin" | "user";
                     isBanned: boolean;
                     twoFactorEnabled: boolean;
+                    emailVerified?: boolean;
                   };
                 };
                 relationships: {
@@ -1767,6 +2150,8 @@ export interface paths {
             lastName: string;
             /** @default false */
             platformAdmin?: boolean;
+            /** @default false */
+            emailVerified?: boolean;
             temporaryPassword?: string;
             membership?: {
               tenantId?: number;
@@ -1801,6 +2186,7 @@ export interface paths {
                     role: "admin" | "user";
                     isBanned: boolean;
                     twoFactorEnabled: boolean;
+                    emailVerified?: boolean;
                   };
                 };
                 relationships: {
@@ -1924,6 +2310,7 @@ export interface paths {
                     role: "admin" | "user";
                     isBanned: boolean;
                     twoFactorEnabled: boolean;
+                    emailVerified?: boolean;
                   };
                 };
                 relationships: {
@@ -2019,6 +2406,7 @@ export interface paths {
                     role: "admin" | "user";
                     isBanned: boolean;
                     twoFactorEnabled: boolean;
+                    emailVerified?: boolean;
                   };
                 };
                 relationships: {
@@ -2118,6 +2506,7 @@ export interface paths {
             firstName?: string;
             lastName?: string;
             platformAdmin?: boolean;
+            emailVerified?: boolean;
             membership?: {
               tenantId?: number;
               agencyId?: number;
@@ -2150,6 +2539,7 @@ export interface paths {
                     role: "admin" | "user";
                     isBanned: boolean;
                     twoFactorEnabled: boolean;
+                    emailVerified?: boolean;
                   };
                 };
                 relationships: {
@@ -3085,6 +3475,17 @@ export interface paths {
       responses: {
         /** @description Public form response */
         200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Public form response */
+        404: {
           headers: {
             [name: string]: unknown;
           };
@@ -6198,6 +6599,7 @@ export interface paths {
               /** @enum {string} */
               role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
               temporaryPassword?: string;
+              emailVerified?: boolean;
             };
             existingMember?: {
               principalId: string;
@@ -6608,6 +7010,7 @@ export interface paths {
               /** @enum {string} */
               role: "tenant_admin" | "agency_admin" | "operator" | "viewer";
               temporaryPassword?: string;
+              emailVerified?: boolean;
             };
             existingMember?: {
               principalId: string;

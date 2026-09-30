@@ -2,6 +2,7 @@ import { createTestApp } from "./test-app";
 import { env } from "cloudflare:workers";
 import { beforeAll, expect, it, vi } from "vitest";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
+import type { IdentityUserAdministrator } from "../src/auth/better-auth";
 import {
   ensureBootstrapAdministrator,
   grantMembership,
@@ -31,6 +32,45 @@ beforeAll(async () => {
       await env.DB.exec(statement);
 });
 let counter = 980000;
+
+it("binds a new tenant account to its email settings and sends a password setup link", async () => {
+  const subject = "mail-initial-" + crypto.randomUUID();
+  const createUser = vi.fn().mockResolvedValue({ subject });
+  const sendPasswordReset = vi.fn().mockResolvedValue(undefined);
+  const userAdministrator = {
+    issuer: "savia:better-auth",
+    createUser,
+    sendPasswordReset,
+    deleteUser: vi.fn(),
+  } as unknown as IdentityUserAdministrator;
+  const response = await createTestApp({
+    auth: platformAdministratorAuthenticator(),
+    userAdministrator,
+  }).request(
+    "/v1/tenants",
+    post({
+      name: "Email setup fixture",
+      idSlug: "email-setup-fixture",
+      initialUser: {
+        email: "initial-email@example.test",
+        firstName: "Initial",
+        lastName: "User",
+        role: "tenant_admin",
+        emailVerified: true,
+      },
+    }),
+  );
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as { data: { id: number } };
+  expect(createUser).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tenantId: Number(body.data.id),
+      emailVerified: true,
+    }),
+    expect.any(Request),
+  );
+  expect(sendPasswordReset).toHaveBeenCalledWith(subject, expect.any(Request));
+});
 async function tenant(name = "Source agency") {
   // Wide spacing: tenant creation allocates MAX(id)+2, so sequential IDs
   // would collide with tenants created by the API under test.
@@ -81,6 +121,64 @@ async function membershipOf(principalId: string) {
     .bind(principalId)
     .first<{ tenant_id: number; role: string }>();
 }
+it("updates the email tenant when transferring an existing account", async () => {
+  const source = await tenant();
+  await member("smtp-stays@example.test", source.id, "tenant_admin");
+  const moving = await member("smtp-moves@example.test", source.id);
+  const updateUser = vi.fn().mockResolvedValue({});
+  const userAdministrator = {
+    issuer: "savia:better-auth",
+    updateUser,
+  } as unknown as IdentityUserAdministrator;
+  const response = await createTestApp({
+    auth: platformAdministratorAuthenticator(),
+    userAdministrator,
+  }).request(
+    "/v1/tenants",
+    post({
+      name: "SMTP transfer",
+      existingMember: { principalId: moving.id, role: "tenant_admin" },
+    }),
+  );
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as { data: { id: number } };
+  expect(updateUser).toHaveBeenCalledWith(
+    moving.subject,
+    { tenantId: Number(body.data.id) },
+    expect.any(Request),
+  );
+});
+it("restores the email tenant when a transfer is rejected", async () => {
+  const source = await tenant();
+  const moving = await member(
+    "smtp-final-member@example.test",
+    source.id,
+    "tenant_admin",
+  );
+  const updateUser = vi.fn().mockResolvedValue({});
+  const userAdministrator = {
+    issuer: "savia:better-auth",
+    updateUser,
+  } as unknown as IdentityUserAdministrator;
+  const response = await createTestApp({
+    auth: platformAdministratorAuthenticator(),
+    userAdministrator,
+  }).request(
+    "/v1/tenants",
+    post({
+      name: "Rejected SMTP transfer",
+      existingMember: { principalId: moving.id, role: "tenant_admin" },
+    }),
+  );
+  expect(response.status).toBe(409);
+  expect(updateUser).toHaveBeenLastCalledWith(
+    moving.subject,
+    { tenantId: source.id },
+    expect.any(Request),
+  );
+  expect(await membershipOf(moving.id)).toMatchObject({ tenant_id: source.id });
+  expect(await tenantByName("Rejected SMTP transfer")).toBeNull();
+});
 it("transfers an existing user as first member and keeps the source tenant", async () => {
   const source = await tenant(),
     staying = await member("stays@example.test", source.id, "tenant_admin"),

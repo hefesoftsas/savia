@@ -161,6 +161,14 @@ not automatically shared with commercial tenants. Unknown, inactive or
 inaccessible IDs fail rather than substituting a different employee. Discovery
 does not return system prompts, model credentials or raw knowledge files.
 
+Studio-backed MCP operations, including insurance quote tools, resolve the
+caller's active tenant for each tool operation and keep that tenant for all
+reads, writes, provider actions and returned record links within the operation.
+If no active tenant is selected, they use the platform tenant path; the Studio
+API still permits that path only to platform administrators. A failure while
+resolving the active tenant stops the operation without attempting a platform
+tenant request.
+
 Invocation accepts `employeeId`, `message` (up to 12,000 characters), and optional
 `history` (up to 20 user/assistant messages). It returns text and pending proposals;
 it does not persist a new conversation. Instructions and knowledge remain in Savia,

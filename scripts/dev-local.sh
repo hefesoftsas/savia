@@ -85,6 +85,29 @@ if [ -n "$identity_bridge_key" ]; then
   set -- "$@" --var "SAVIA_INTERNAL_BRIDGE_KEY:$identity_bridge_key"
 fi
 
+# Local defaults deliver into Mailpit. Explicit SMTP values in auth.dev.env
+# override these; credentials remain in the backend process.
+smtp_default_port=465
+smtp_default_security=tls
+smtp_default_insecure=false
+if [ -z "${SAVIA_SMTP_HOST:-}" ]; then
+  smtp_default_port=1025
+  smtp_default_security=plain
+  smtp_default_insecure=true
+fi
+set -- "$@" \
+  --var "SAVIA_SMTP_HOST:${SAVIA_SMTP_HOST:-127.0.0.1}" \
+  --var "SAVIA_SMTP_PORT:${SAVIA_SMTP_PORT:-$smtp_default_port}" \
+  --var "SAVIA_SMTP_FROM:${SAVIA_SMTP_FROM:-no-reply@savia.test}" \
+  --var "SAVIA_SMTP_SECURITY:${SAVIA_SMTP_SECURITY:-$smtp_default_security}" \
+  --var "SAVIA_SMTP_ALLOW_INSECURE:${SAVIA_SMTP_ALLOW_INSECURE:-$smtp_default_insecure}"
+if [ -n "${SAVIA_SMTP_USERNAME:-}" ]; then
+  set -- "$@" --var "SAVIA_SMTP_USERNAME:$SAVIA_SMTP_USERNAME"
+fi
+if [ -n "${SAVIA_SMTP_PASSWORD:-}" ]; then
+  set -- "$@" --var "SAVIA_SMTP_PASSWORD:$SAVIA_SMTP_PASSWORD"
+fi
+
 start_process "$@"
 
 wait_for_auth

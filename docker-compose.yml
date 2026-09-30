@@ -7,6 +7,10 @@ services:
     environment:
       SAVIA_DEV_HOST: 0.0.0.0
       SAVIA_ADMIN_PORT: "5173"
+      SAVIA_GOOGLE_CLIENT_ID: ${SAVIA_GOOGLE_CLIENT_ID:-}
+      SAVIA_GOOGLE_CLIENT_SECRET: ${SAVIA_GOOGLE_CLIENT_SECRET:-}
+      SAVIA_MICROSOFT_CLIENT_ID: ${SAVIA_MICROSOFT_CLIENT_ID:-}
+      SAVIA_MICROSOFT_CLIENT_SECRET: ${SAVIA_MICROSOFT_CLIENT_SECRET:-}
       WRANGLER_SEND_METRICS: "false"
     ports:
       - "127.0.0.1:5173:5173"
@@ -68,6 +72,18 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10m
+
+  mailpit:
+    image: axllent/mailpit:v1.29
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
 volumes:
   postgres_data:

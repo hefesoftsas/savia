@@ -32,6 +32,7 @@ export type UserRecord = {
   isActive: boolean;
   isBanned: boolean;
   twoFactorEnabled: boolean;
+  emailVerified?: boolean;
   memberships: UserMembership[];
 };
 
@@ -42,6 +43,7 @@ export type UserFormData = {
   temporaryPassword?: string;
   accessRoleIds?: string[];
   platformAdmin?: boolean;
+  emailVerified?: boolean;
   tenantId?: number | string;
   agencyId?: number | string;
   agencyRole?: AgencyAccessRole;
@@ -76,6 +78,7 @@ export function toUserRecord(user: ManagedIdentityUser): UserRecord {
     isActive: user.attributes.isActive,
     isBanned: user.attributes.account.isBanned,
     twoFactorEnabled: user.attributes.account.twoFactorEnabled,
+    emailVerified: user.attributes.account.emailVerified === true,
     memberships: user.relationships.memberships.map((membership) => ({
       id: membership.id,
       tenantId: Number(
@@ -193,6 +196,9 @@ export function createIdentityUserDataProvider(
         firstName: data.firstName ?? "",
         lastName: data.lastName ?? "",
         platformAdmin: Boolean(data.platformAdmin),
+        ...(data.emailVerified === undefined
+          ? {}
+          : { emailVerified: data.emailVerified }),
         ...(data.temporaryPassword
           ? { temporaryPassword: data.temporaryPassword }
           : {}),
@@ -210,6 +216,9 @@ export function createIdentityUserDataProvider(
         firstName: data.firstName,
         lastName: data.lastName,
         platformAdmin: data.platformAdmin,
+        ...(data.emailVerified === undefined
+          ? {}
+          : { emailVerified: data.emailVerified }),
         membership: membershipFrom(data),
       });
       return { data: toUserRecord(user) };

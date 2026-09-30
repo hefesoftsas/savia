@@ -106,6 +106,55 @@ async function startOAuthAnimation(reducedMotion = false) {
 }
 
 describe("tenant identity on OAuth surfaces", () => {
+  it.each(["login", "login?mode=forgot", "forgot-password"])(
+    "omits recovery without email delivery on %s",
+    async (path) => {
+      const html = await oauthPageResponse(request(path), {
+        emailAvailable: false,
+      })!.text();
+      expect(html).not.toContain('data-oauth-show="forgot"');
+      expect(html).not.toContain('data-oauth-form="request-password-reset"');
+      expect(html).not.toContain('data-oauth-form="sign-in" hidden');
+    },
+  );
+  it.each(["login", "forgot-password"])(
+    "offers recovery with email delivery on %s",
+    async (path) => {
+      const html = await oauthPageResponse(request(path), {
+        emailAvailable: true,
+      })!.text();
+      expect(html).toContain('data-oauth-show="forgot"');
+      expect(html).toContain('data-oauth-form="request-password-reset"');
+    },
+  );
+
+  it.each([
+    "localhost:8080",
+    "savia.app.hefesoft.com",
+    "savia-preview.hefesoft.com",
+  ])("keeps platform login local on %s", async (host) => {
+    const html = await oauthPageResponse(
+      new Request(`http://${host}/api/auth/login`),
+    )!.text();
+    expect(html).toContain('data-oauth-form="sign-in"');
+    expect(html).not.toContain('data-oauth-show="forgot"');
+    expect(html).not.toContain("data-social-login");
+    expect(html).not.toContain('data-oauth-show="sso"');
+    expect(html).not.toContain('data-oauth-form="sso-discover"');
+  });
+
+  it.each(["acme.savia.app.hefesoft.com", "acme.savia-preview.hefesoft.com"])(
+    "retains optional federated access on tenant host %s",
+    async (host) => {
+      const html = await oauthPageResponse(
+        new Request(`https://${host}/api/auth/login`),
+      )!.text();
+      expect(html).toContain("data-social-login");
+      expect(html).toContain('data-oauth-show="sso"');
+      expect(html).toContain('data-oauth-form="sso-discover"');
+    },
+  );
+
   it("renders the supplied Savia logo Lottie without the old video card", async () => {
     const html = await oauthPageResponse(request("login"))!.text();
     const css = await oauthPageResponse(request("oauth-ui.css"))!.text();

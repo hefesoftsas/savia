@@ -444,7 +444,7 @@ const saviaEnglish = {
       backToLogin: "Back to sign in",
       errors: {
         invalidToken: "The reset link is not valid.",
-        minLength: "Password must have at least 8 characters.",
+        minLength: "Password must have at least 12 characters.",
         mismatch: "Passwords do not match.",
         failed: "The link expired or could not update password.",
         generic: "Could not update password.",
@@ -995,7 +995,7 @@ const saviaSpanish = {
       backToLogin: "Volver a iniciar sesión",
       errors: {
         invalidToken: "El enlace de restablecimiento no es válido.",
-        minLength: "La contraseña debe tener al menos 8 caracteres.",
+        minLength: "La contraseña debe tener al menos 12 caracteres.",
         mismatch: "Las contraseñas no coinciden.",
         failed: "El enlace expiró o no fue posible actualizar la contraseña.",
         generic: "No fue posible actualizar la contraseña.",
@@ -1549,7 +1549,7 @@ const saviaPortuguese = {
       backToLogin: "Voltar ao login",
       errors: {
         invalidToken: "O link de redefinição não é válido.",
-        minLength: "A senha deve ter pelo menos 8 caracteres.",
+        minLength: "A senha deve ter pelo menos 12 caracteres.",
         mismatch: "As senhas não coincidem.",
         failed: "O link expirou ou não foi possível atualizar a senha.",
         generic: "Não foi possível atualizar a senha.",

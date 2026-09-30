@@ -5,9 +5,11 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "test": "vitest run --maxWorkers=1",
+    "test:email": "tsx scripts/account-email-smoke.ts",
     "typecheck": "tsc --noEmit",
     "import:sqlite": "tsx src/postgres/import-cli.ts",
-    "test:postgres": "SAVIA_POSTGRES_TEST_REQUIRED=1 vitest run --maxWorkers=1"
+    "test:postgres": "SAVIA_POSTGRES_TEST_REQUIRED=1 vitest run --maxWorkers=1",
+    "test:sso": "tsx scripts/saml-keycloak-smoke.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

@@ -29,6 +29,12 @@ import {
   type StudioTenant,
 } from "@/features/studio/studio-tenants";
 import { GeocodingSettingsPanel } from "@/features/studio-engine/geocoding-settings-panel";
+import { TenantEmailSettingsPanel } from "@/features/tenant-email/tenant-email-settings-panel";
+import { tenantEmailMessages } from "@/features/tenant-email/tenant-email-messages";
+import { TenantSSOSettingsPanel } from "@/features/tenant-sso/tenant-sso-settings-panel";
+import { tenantSSOMessages } from "@/features/tenant-sso/tenant-sso-messages";
+import { TenantSocialSettingsPanel } from "@/features/tenant-social/tenant-social-settings-panel";
+import { tenantSocialMessages } from "@/features/tenant-social/tenant-social-messages";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
 import { api } from "@/features/studio-engine/api";
 import {
@@ -164,6 +170,9 @@ export function StudioTenantCredentialsSection({
   globalCredentials?: ReactNode;
 }) {
   const t = useMessages(settingsMessages);
+  const emailT = useMessages(tenantEmailMessages);
+  const ssoT = useMessages(tenantSSOMessages);
+  const socialT = useMessages(tenantSocialMessages);
   const locale = intlLocale(useAppLocale());
   const navigate = useNavigate();
   const cache = useQueryClient();
@@ -255,6 +264,23 @@ export function StudioTenantCredentialsSection({
           <CredentialTab value="integrations" tooltip="" disabled>
             {t("Integraciones")}
           </CredentialTab>
+          <CredentialTab
+            value="email"
+            tooltip={emailT("Tenant email delivery")}
+            disabled
+          >
+            {emailT("Tenant email delivery")}
+          </CredentialTab>
+          <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")} disabled>
+            {ssoT("Tenant SAML SSO")}
+          </CredentialTab>
+          <CredentialTab
+            value="social"
+            tooltip={socialT("Google / Microsoft")}
+            disabled
+          >
+            {socialT("Google / Microsoft")}
+          </CredentialTab>
         </TabsList>
         <TabsContent value="global" className="credentials-tabs-panel">
           <GlobalCredentialsPanel
@@ -294,6 +320,23 @@ export function StudioTenantCredentialsSection({
           <CredentialTab value="integrations" tooltip="" disabled>
             {t("Integraciones")}
           </CredentialTab>
+          <CredentialTab
+            value="email"
+            tooltip={emailT("Tenant email delivery")}
+            disabled
+          >
+            {emailT("Tenant email delivery")}
+          </CredentialTab>
+          <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")} disabled>
+            {ssoT("Tenant SAML SSO")}
+          </CredentialTab>
+          <CredentialTab
+            value="social"
+            tooltip={socialT("Google / Microsoft")}
+            disabled
+          >
+            {socialT("Google / Microsoft")}
+          </CredentialTab>
         </TabsList>
         <TabsContent value="global" className="credentials-tabs-panel">
           <GlobalCredentialsPanel
@@ -326,6 +369,7 @@ export function StudioTenantCredentialsSection({
         !item.hasSecret,
     ) ?? [];
   const tenantTools = true;
+  const isPlatformWorkspace = tenant.tenantId === 0;
   const geoapifyConfigured =
     geocoding.data?.geoapifyStored || geocoding.data?.geoapifyConfigured;
 
@@ -552,6 +596,25 @@ export function StudioTenantCredentialsSection({
               {t("Fuentes")}
             </CredentialTab>
           ) : null}
+          <CredentialTab
+            value="email"
+            tooltip={emailT("Tenant email delivery")}
+          >
+            {emailT("Tenant email delivery")}
+          </CredentialTab>
+          {!isPlatformWorkspace ? (
+            <>
+              <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")}>
+                {ssoT("Tenant SAML SSO")}
+              </CredentialTab>
+              <CredentialTab
+                value="social"
+                tooltip={socialT("Google / Microsoft")}
+              >
+                {socialT("Google / Microsoft")}
+              </CredentialTab>
+            </>
+          ) : null}
         </TabsList>
 
         <TabsContent value="global" className="credentials-tabs-panel">
@@ -570,6 +633,31 @@ export function StudioTenantCredentialsSection({
           <TabsContent value="sources" className="credentials-tabs-panel">
             {sourcesPanel}
           </TabsContent>
+        ) : null}
+        <TabsContent value="email" className="credentials-tabs-panel">
+          <TenantEmailSettingsPanel
+            key={tenant.tenantId}
+            tenantId={tenant.tenantId}
+            services={services}
+          />
+        </TabsContent>
+        {!isPlatformWorkspace ? (
+          <>
+            <TabsContent value="sso" className="credentials-tabs-panel">
+              <TenantSSOSettingsPanel
+                key={tenant.tenantId}
+                tenantId={tenant.tenantId}
+                services={services}
+              />
+            </TabsContent>
+            <TabsContent value="social" className="credentials-tabs-panel">
+              <TenantSocialSettingsPanel
+                key={tenant.tenantId}
+                tenantId={tenant.tenantId}
+                services={services}
+              />
+            </TabsContent>
+          </>
         ) : null}
       </Tabs>
     </div>

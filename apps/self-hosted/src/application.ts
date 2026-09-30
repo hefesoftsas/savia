@@ -5,6 +5,8 @@ import { createHash, createHmac } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import {
   createApiRuntime,
   type RuntimeEnvironment,
@@ -23,6 +25,98 @@ const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
+
+function isNonPublicAddress(address: string): boolean {
+  const value = address.toLowerCase().split("%")[0];
+  if (isIP(value) === 4) {
+    const [a, b] = value.split(".").map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
+  }
+  if (isIP(value) === 6) {
+    if (
+      value === "::" ||
+      value === "::1" ||
+      value.startsWith("fc") ||
+      value.startsWith("fd") ||
+      value.startsWith("fe80:")
+    )
+      return true;
+    if (value.startsWith("::ffff:")) return isNonPublicAddress(value.slice(7));
+    return false;
+  }
+  return true;
+}
+
+function localSmtpHost(host: string): boolean {
+  return ["localhost", "mailpit", "127.0.0.1", "::1"].includes(
+    host.trim().toLowerCase(),
+  );
+}
+
+async function resolveSmtpTarget(
+  settings: import("../../auth/src/smtp").SMTPSettings,
+): Promise<{ host: string; servername?: string; localDevelopment: boolean }> {
+  const host = settings.host.trim().toLowerCase();
+  const localDevelopment = settings.allowInsecure === true;
+  if (localDevelopment && localSmtpHost(host))
+    return { host, localDevelopment: true };
+  if (
+    !host ||
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    (!isIP(host) && !host.includes("."))
+  )
+    throw new Error("SMTP host must resolve to a public address");
+  const addresses = isIP(host)
+    ? [{ address: host }]
+    : await lookup(host, { all: true, verbatim: true });
+  if (
+    !addresses.length ||
+    addresses.some(({ address }) => isNonPublicAddress(address))
+  )
+    throw new Error("SMTP host must resolve only to public addresses");
+  return {
+    host: addresses[0].address,
+    ...(isIP(host) ? {} : { servername: host }),
+    localDevelopment: false,
+  };
+}
+
+function makeSmtpTransport(
+  settings: import("../../auth/src/smtp").SMTPSettings,
+  target: { host: string; servername?: string; localDevelopment: boolean },
+) {
+  if (settings.security === "plain" && !target.localDevelopment)
+    throw new Error("Unencrypted SMTP is only allowed for local development");
+  if (Boolean(settings.username) !== Boolean(settings.password))
+    throw new Error("SMTP username and password must be set together");
+  return nodemailer.createTransport({
+    host: target.host,
+    port: settings.port,
+    secure: settings.security === "tls",
+    requireTLS: settings.security === "starttls",
+    connectionTimeout: settings.timeoutMs ?? 15_000,
+    socketTimeout: settings.timeoutMs ?? 15_000,
+    ...(target.servername ? { tls: { servername: target.servername } } : {}),
+    ...(settings.username
+      ? { auth: { user: settings.username, pass: settings.password } }
+      : {}),
+  });
+}
+
 export async function createApplication(
   config: Configuration,
   env: Record<string, string | undefined> = process.env,
@@ -38,16 +132,20 @@ export async function createApplication(
   const realtime = createNodeRealtimeHub();
   const outbound = createNativeCollectionFetch();
   try {
-    const smtp = env.SAVIA_SMTP_HOST
-      ? nodemailer.createTransport({
-          host: env.SAVIA_SMTP_HOST,
-          port: Number(env.SAVIA_SMTP_PORT ?? 465),
-          secure: Number(env.SAVIA_SMTP_PORT ?? 465) === 465,
-          auth: env.SAVIA_SMTP_USERNAME
-            ? { user: env.SAVIA_SMTP_USERNAME, pass: env.SAVIA_SMTP_PASSWORD }
-            : undefined,
-        })
-      : undefined;
+    const smtpSettings: import("../../auth/src/smtp").SMTPSettings | undefined =
+      env.SAVIA_SMTP_HOST
+        ? {
+            host: env.SAVIA_SMTP_HOST,
+            port: Number(env.SAVIA_SMTP_PORT ?? 465),
+            security: (env.SAVIA_SMTP_SECURITY ??
+              "tls") as import("../../auth/src/smtp").SMTPSettings["security"],
+            username: env.SAVIA_SMTP_USERNAME ?? "",
+            password: env.SAVIA_SMTP_PASSWORD ?? "",
+            from: env.SAVIA_SMTP_FROM ?? "",
+            allowInsecure: env.SAVIA_SMTP_ALLOW_INSECURE === "true",
+            timeoutMs: 15_000,
+          }
+        : undefined;
     const internalBridgeKey =
       env.SAVIA_INTERNAL_BRIDGE_KEY?.trim() ||
       createHmac(
@@ -58,13 +156,26 @@ export async function createApplication(
       )
         .update("savia:auth-tenant-user-administration:v1")
         .digest("hex");
-    if (smtp && !env.SAVIA_SMTP_FROM)
+    if (smtpSettings && !env.SAVIA_SMTP_FROM)
       throw new Error("SAVIA_SMTP_FROM is required with SMTP");
     const auth = createAuthHandler(
       {
         AUTH_DB: authDatabase,
         BETTER_AUTH_URL: config.publicOrigin,
         BETTER_AUTH_SECRET: config.authSecret,
+        SAVIA_SMTP_HOST: env.SAVIA_SMTP_HOST,
+        SAVIA_SMTP_PORT: env.SAVIA_SMTP_PORT,
+        SAVIA_SMTP_USERNAME: env.SAVIA_SMTP_USERNAME,
+        SAVIA_SMTP_PASSWORD: env.SAVIA_SMTP_PASSWORD,
+        SAVIA_SMTP_FROM: env.SAVIA_SMTP_FROM,
+        SAVIA_SMTP_SECURITY: env.SAVIA_SMTP_SECURITY as
+          "tls" | "starttls" | "plain" | undefined,
+        SAVIA_SMTP_ALLOW_INSECURE: env.SAVIA_SMTP_ALLOW_INSECURE,
+        SAVIA_SSO_ALLOW_LOCAL_IDP: env.SAVIA_SSO_ALLOW_LOCAL_IDP,
+        SAVIA_GOOGLE_CLIENT_ID: env.SAVIA_GOOGLE_CLIENT_ID,
+        SAVIA_GOOGLE_CLIENT_SECRET: env.SAVIA_GOOGLE_CLIENT_SECRET,
+        SAVIA_MICROSOFT_CLIENT_ID: env.SAVIA_MICROSOFT_CLIENT_ID,
+        SAVIA_MICROSOFT_CLIENT_SECRET: env.SAVIA_MICROSOFT_CLIENT_SECRET,
         BETTER_AUTH_BOOTSTRAP_EMAIL: config.bootstrapEmail,
         BETTER_AUTH_BOOTSTRAP_PASSWORD: config.bootstrapPassword,
         SAVIA_API_RESOURCE: config.publicOrigin,
@@ -74,12 +185,33 @@ export async function createApplication(
       },
       {
         database: stores.authDatabase,
-        ...(smtp
+        deliverEmail: async (
+          settings: import("../../auth/src/smtp").SMTPSettings,
+          email: import("../../auth/src/smtp").SMTPEmail,
+        ) => {
+          const target = await resolveSmtpTarget(settings);
+          const transport = makeSmtpTransport(settings, target);
+          try {
+            await transport.sendMail({ ...email, from: settings.from });
+          } finally {
+            transport.close();
+          }
+        },
+        ...(smtpSettings
           ? {
               sendTransactionalEmail: async (
                 email: import("../../auth/src/smtp").SMTPEmail,
               ) => {
-                await smtp.sendMail({ ...email, from: env.SAVIA_SMTP_FROM });
+                const target = await resolveSmtpTarget(smtpSettings);
+                const transport = makeSmtpTransport(smtpSettings, target);
+                try {
+                  await transport.sendMail({
+                    ...email,
+                    from: env.SAVIA_SMTP_FROM,
+                  });
+                } finally {
+                  transport.close();
+                }
               },
             }
           : {}),
@@ -183,7 +315,6 @@ export async function createApplication(
         realtime.close();
         await outbound.close();
         objects.close();
-        smtp?.close();
         await stores.close();
       },
     };

@@ -6,7 +6,7 @@ import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 
-type Screen = "login" | "enroll" | "consent";
+type Screen = "login" | "enroll" | "consent" | "verified";
 
 function SaviaMark({ branding }: { branding?: TenantBranding }) {
   return (
@@ -34,7 +34,9 @@ function Shell({
       ? "Autorización de aplicación"
       : screen === "enroll"
         ? "Protección de cuenta"
-        : "Acceso seguro";
+        : screen === "verified"
+          ? "Cuenta verificada"
+          : "Acceso seguro";
   // A tenant's custom login animation takes precedence over its cover image.
   const customLoginAnimation = branding?.loginAnimationUrl ?? null;
   const showLoginAnimation =
@@ -212,14 +214,27 @@ function Shell({
   );
 }
 
-function Status() {
-  return <p id="oauth-status" role="status" aria-live="polite" />;
+function Status({ initialNotice }: { initialNotice?: string } = {}) {
+  return (
+    <p id="oauth-status" role="status" aria-live="polite">
+      {initialNotice}
+    </p>
+  );
 }
 
 function LoginContent({
   tenantSlug,
   branding,
-}: { tenantSlug?: string | null; branding?: TenantBranding } = {}) {
+  initialPanel,
+  initialNotice,
+  emailAvailable = false,
+}: {
+  tenantSlug?: string | null;
+  branding?: TenantBranding;
+  initialPanel?: "forgot" | "verify";
+  initialNotice?: string;
+  emailAvailable?: boolean;
+} = {}) {
   const workspaceKicker = tenantSlug
     ? `Espacio de trabajo · ${tenantSlug}`
     : "Acceso a Savia";
@@ -241,6 +256,7 @@ function LoginContent({
         action="sign-in"
         method="post"
         data-oauth-form="sign-in"
+        hidden={!!initialPanel}
       >
         <div className="oauth-field">
           <Label htmlFor="email">Correo electrónico</Label>
@@ -299,7 +315,247 @@ function LoginContent({
         <Button className="oauth-submit" type="submit" size="lg">
           Continuar
         </Button>
+        {emailAvailable ? (
+          <button
+            className="oauth-forgot-link"
+            type="button"
+            data-oauth-show="forgot"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        ) : null}
       </form>
+      {tenantSlug ? (
+        <>
+          <div className="oauth-federated" data-social-login hidden>
+            <div className="oauth-login-divider">
+              <span>o continúa con</span>
+            </div>
+            <div
+              className="oauth-provider-list"
+              role="group"
+              aria-label="Ingresar con una cuenta vinculada"
+            >
+              <Button
+                className="oauth-provider"
+                type="button"
+                variant="outline"
+                size="lg"
+                aria-label="Continuar con Google"
+                data-social-provider="google"
+                hidden
+              >
+                <svg
+                  className="oauth-provider-logo"
+                  viewBox="0 0 48 48"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    fill="#ea4335"
+                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"
+                  />
+                  <path
+                    fill="#4285f4"
+                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65Z"
+                  />
+                  <path
+                    fill="#fbbc05"
+                    d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.78-4.59l-7.98-6.19A23.87 23.87 0 0 0 0 24c0 3.87.93 7.53 2.56 10.78l7.97-6.19Z"
+                  />
+                  <path
+                    fill="#34a853"
+                    d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.15 1.45-4.92 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"
+                  />
+                </svg>
+                <span>Google</span>
+              </Button>
+              <Button
+                className="oauth-provider"
+                type="button"
+                variant="outline"
+                size="lg"
+                aria-label="Continuar con Microsoft"
+                data-social-provider="microsoft"
+                hidden
+              >
+                <svg
+                  className="oauth-provider-logo"
+                  viewBox="0 0 21 21"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path fill="#f25022" d="M0 0h10v10H0z" />
+                  <path fill="#7fba00" d="M11 0h10v10H11z" />
+                  <path fill="#00a4ef" d="M0 11h10v10H0z" />
+                  <path fill="#ffb900" d="M11 11h10v10H11z" />
+                </svg>
+                <span>Microsoft</span>
+              </Button>
+            </div>
+          </div>
+          <section
+            className="oauth-account-panel"
+            data-oauth-panel="sso"
+            hidden
+          >
+            <div className="oauth-heading oauth-heading-compact">
+              <h2>Acceso de tu organización</h2>
+              <p>
+                Ingresa tu correo de trabajo para encontrar la conexión de tu
+                organización.
+              </p>
+            </div>
+            <form
+              className="oauth-form"
+              method="post"
+              data-oauth-form="sso-discover"
+            >
+              <div className="oauth-field">
+                <Label htmlFor="sso-email">Correo de trabajo</Label>
+                <Input
+                  id="sso-email"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  required
+                />
+              </div>
+              <Button className="oauth-submit" type="submit" size="lg">
+                Continuar con SSO
+              </Button>
+            </form>
+            <div className="oauth-account-actions" data-sso-connections />
+            <p className="oauth-account-actions">
+              <button type="button" data-oauth-show="login">
+                Volver al inicio de sesión
+              </button>
+            </p>
+          </section>
+          <p
+            className="oauth-account-actions"
+            data-oauth-account-actions
+            hidden={!!initialPanel}
+          >
+            <button
+              className="oauth-enterprise-login"
+              type="button"
+              data-oauth-show="sso"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M4 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M2 21h20M9 21v-4h4v4M8 7h.01M14 7h.01M8 11h.01M14 11h.01" />
+              </svg>
+              <span>Ingresar con SSO</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </button>
+          </p>
+        </>
+      ) : null}
+      {emailAvailable ? (
+        <section
+          className="oauth-account-panel"
+          data-oauth-panel="forgot"
+          hidden={initialPanel !== "forgot"}
+        >
+          <div className="oauth-heading oauth-heading-compact">
+            <h2>Recupera tu contraseña</h2>
+            <p>
+              Te enviaremos un enlace si el correo pertenece a una cuenta de
+              Savia.
+            </p>
+          </div>
+          <form
+            className="oauth-form"
+            action="request-password-reset"
+            method="post"
+            data-oauth-form="request-password-reset"
+          >
+            <div className="oauth-field">
+              <Label htmlFor="recovery-email">Correo electrónico</Label>
+              <Input
+                id="recovery-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="nombre@empresa.com"
+                required
+              />
+            </div>
+            <Button className="oauth-submit" type="submit" size="lg">
+              Enviar enlace de recuperación
+            </Button>
+          </form>
+          <p className="oauth-account-actions">
+            <button type="button" data-oauth-show="login">
+              Volver al inicio de sesión
+            </button>
+          </p>
+        </section>
+      ) : null}
+      <section
+        className="oauth-account-panel"
+        data-oauth-panel="verify"
+        hidden={initialPanel !== "verify"}
+      >
+        <div className="oauth-heading oauth-heading-compact">
+          <h2>Verifica tu correo</h2>
+          <p>Confirma tu dirección para activar el acceso a tu cuenta.</p>
+        </div>
+        <form
+          className="oauth-form"
+          action="send-verification-email"
+          method="post"
+          data-oauth-form="send-verification-email"
+        >
+          <div className="oauth-field">
+            <Label htmlFor="verification-email">Correo electrónico</Label>
+            <Input
+              id="verification-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="nombre@empresa.com"
+              required
+            />
+          </div>
+          <Button className="oauth-submit" type="submit" size="lg">
+            Reenviar enlace de verificación
+          </Button>
+        </form>
+        <p className="oauth-account-actions">
+          <button type="button" data-oauth-show="login">
+            Volver al inicio de sesión
+          </button>
+        </p>
+      </section>
       <section className="oauth-two-factor" data-oauth-two-factor hidden>
         <div className="oauth-heading oauth-heading-compact">
           <h2>Verificación en dos pasos</h2>
@@ -349,7 +605,7 @@ function LoginContent({
           </form>
         </details>
       </section>
-      <Status />
+      <Status initialNotice={initialNotice} />
     </Shell>
   );
 }
@@ -453,20 +709,46 @@ function ConsentContent({ branding }: { branding?: TenantBranding }) {
   );
 }
 
+function VerifiedContent({ branding }: { branding?: TenantBranding }) {
+  return (
+    <Shell screen="verified" branding={branding}>
+      <div className="oauth-heading">
+        <p className="oauth-kicker">Cuenta activada</p>
+        <h1>Correo verificado</h1>
+        <p>Tu correo está confirmado. Ya puedes iniciar sesión en Savia.</p>
+      </div>
+      <a className="oauth-action-link" href="/api/auth/login">
+        Ir al inicio de sesión
+      </a>
+    </Shell>
+  );
+}
+
 export function renderOAuthSurface(
   screen: Screen,
-  options?: { tenantSlug?: string | null; branding?: TenantBranding },
+  options?: {
+    tenantSlug?: string | null;
+    branding?: TenantBranding;
+    initialPanel?: "forgot" | "verify";
+    initialNotice?: string;
+    emailAvailable?: boolean;
+  },
 ): string {
   const content =
     screen === "login" ? (
       <LoginContent
         tenantSlug={options?.tenantSlug}
         branding={options?.branding}
+        initialPanel={options?.initialPanel}
+        initialNotice={options?.initialNotice}
+        emailAvailable={options?.emailAvailable}
       />
     ) : screen === "enroll" ? (
       <EnrollmentContent branding={options?.branding} />
-    ) : (
+    ) : screen === "consent" ? (
       <ConsentContent branding={options?.branding} />
+    ) : (
+      <VerifiedContent branding={options?.branding} />
     );
   return renderToStaticMarkup(content);
 }

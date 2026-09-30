@@ -16,6 +16,47 @@ it("removes caller supplied branding before proxying authentication", async () =
   expect(fetch).toHaveBeenCalledOnce();
 });
 
+it("adds tenant email context only to tenant recovery HTML and strips caller bridge headers", async () => {
+  const fetch = vi.fn(async (request: Request) =>
+    Response.json({
+      bridgeKey: request.headers.get("x-savia-bridge-key"),
+      tenantId: request.headers.get("x-savia-tenant-email-id"),
+    }),
+  );
+  const app = createTestApp({
+    authService: { fetch },
+    identityBridgeKey: "trusted-bridge-key",
+  });
+  const recovery = await app.request(
+    "https://branding-preview.savia.app.hefesoft.com/api/auth/forgot-password",
+    {
+      headers: {
+        "x-savia-bridge-key": "caller-key",
+        "x-savia-tenant-email-id": "999999",
+      },
+    },
+  );
+  expect(await recovery.json()).toEqual({
+    bridgeKey: "trusted-bridge-key",
+    tenantId: "919191",
+  });
+
+  const apiCall = await app.request(
+    "https://branding-preview.savia.app.hefesoft.com/api/auth/sign-in/email",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-savia-bridge-key": "caller-key",
+        "x-savia-tenant-email-id": "919191",
+      },
+      body: JSON.stringify({ email: "user@example.test", password: "pw" }),
+    },
+  );
+  expect(apiCall.status).toBe(200);
+  expect(await apiCall.json()).toEqual({ bridgeKey: null, tenantId: null });
+});
+
 beforeAll(async () => {
   const migrations = Object.entries(
     import.meta.glob<string>("../../../packages/db/migrations/*.sql", {

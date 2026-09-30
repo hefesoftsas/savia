@@ -1,8 +1,27 @@
 import { exchangeMcpToken } from "./mcp-exchange";
+import {
+  socialProviders,
+  tenantSocialPlugin,
+  validateSocialIdentity,
+  socialBefore,
+  socialHooks,
+  tenantSocialResponse,
+  type SocialEnvironment,
+} from "./social-sign-in";
+import { createAuthMiddleware } from "better-auth/api";
+import {
+  tenantSSOPlugin,
+  tenantSSOHooks,
+  tenantSSOBefore,
+  tenantSSOResponse,
+  disabledSSOPaths,
+} from "./tenant-sso";
 import { oauthRuntime } from "./oauth";
 import { betterAuth } from "better-auth";
+import { isAPIError } from "better-auth/api";
 import { getMigrations } from "better-auth/db/migration";
-import { admin, bearer, jwt, twoFactor } from "better-auth/plugins";
+import { admin, bearer, jwt } from "better-auth/plugins";
+import { samlAwareTwoFactor, samlMFAResponse } from "./saml-two-factor";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import {
   cookieDomainForHost,
@@ -20,7 +39,14 @@ import {
   type ScalarOAuthClient,
 } from "./oauth";
 import { oauthPageResponse, tenantBrandingFromHeader } from "./oauth-pages";
-import { deliverSmtpEmail, type SMTPEmail, type SMTPSettings } from "./smtp";
+import type { SMTPEmail } from "./smtp";
+import {
+  accountEmailAvailable,
+  accountEmailSettingsResponse,
+  sendAccountEmail,
+  trustedAccountEmailTenantId,
+  type AccountEmailDependencies,
+} from "./account-email";
 import {
   ackAuthNoticeEvents,
   authNoticeBridgeAuthorized,
@@ -28,7 +54,7 @@ import {
   readAuthNoticeEvents,
 } from "./notification-events";
 
-export type AuthWorkerEnvironment = {
+export type AuthWorkerEnvironment = SocialEnvironment & {
   AUTH_DB: D1Database;
   BETTER_AUTH_URL: string;
   BETTER_AUTH_SECRET: string;
@@ -43,7 +69,10 @@ export type AuthWorkerEnvironment = {
   SAVIA_SMTP_USERNAME?: string;
   SAVIA_SMTP_PASSWORD?: string;
   SAVIA_SMTP_FROM?: string;
+  SAVIA_SMTP_SECURITY?: "tls" | "starttls" | "plain";
+  SAVIA_SMTP_ALLOW_INSECURE?: string;
   SAVIA_INTERNAL_BRIDGE_KEY?: string;
+  SAVIA_SSO_ALLOW_LOCAL_IDP?: string;
 };
 
 export type AuthenticatedUser = {
@@ -54,13 +83,13 @@ export type AuthenticatedUser = {
   role: string | null;
   isBanned: boolean;
   twoFactorEnabled: boolean;
+  emailVerified?: boolean;
 };
 
 export type TransactionalEmailSender = (email: SMTPEmail) => Promise<void>;
 
-export type AuthDependencies = {
+export type AuthDependencies = AccountEmailDependencies & {
   database?: import("better-auth").BetterAuthOptions["database"];
-  sendTransactionalEmail?: TransactionalEmailSender;
 };
 
 const schemaInitializations = new WeakMap<object, Promise<void>>();
@@ -79,30 +108,6 @@ function requiredValue(value: string | undefined, name: string): string {
   throw new Error(`${name} is required`);
 }
 
-function smtpSettings(
-  environment: AuthWorkerEnvironment,
-): SMTPSettings | undefined {
-  const values = {
-    host: environment.SAVIA_SMTP_HOST,
-    username: environment.SAVIA_SMTP_USERNAME,
-    password: environment.SAVIA_SMTP_PASSWORD,
-    from: environment.SAVIA_SMTP_FROM,
-  };
-  if (Object.values(values).every((value) => !value)) return undefined;
-  if (Object.values(values).some((value) => !value))
-    throw new Error("SAVIA_SMTP configuration is incomplete");
-  const port = Number(environment.SAVIA_SMTP_PORT ?? "465");
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error("SAVIA_SMTP_PORT must be a valid TCP port");
-  return {
-    host: requiredValue(values.host, "SAVIA_SMTP_HOST"),
-    port,
-    username: requiredValue(values.username, "SAVIA_SMTP_USERNAME"),
-    password: requiredValue(values.password, "SAVIA_SMTP_PASSWORD"),
-    from: requiredValue(values.from, "SAVIA_SMTP_FROM"),
-  };
-}
-
 function adminLoginUrl(environment: AuthWorkerEnvironment): string {
   const url = new URL(
     environment.SAVIA_ADMIN_REDIRECT_URI ??
@@ -112,6 +117,30 @@ function adminLoginUrl(environment: AuthWorkerEnvironment): string {
   url.search = "";
   url.hash = "/login";
   return url.toString();
+}
+
+function authAccountEmailUrl(
+  environment: AuthWorkerEnvironment,
+  path: string,
+): string {
+  const target = new URL(environment.BETTER_AUTH_URL);
+  target.pathname = path;
+  target.search = "";
+  target.hash = "";
+  return target.toString();
+}
+
+function adminAccountEmailUrl(
+  environment: AuthWorkerEnvironment,
+  path: string,
+): string {
+  const target = new URL(
+    environment.SAVIA_ADMIN_REDIRECT_URI ?? environment.BETTER_AUTH_URL,
+  );
+  target.pathname = path;
+  target.search = "";
+  target.hash = "";
+  return target.toString();
 }
 
 function passwordResetEmail(url: string, email: string): SMTPEmail {
@@ -125,6 +154,20 @@ function passwordResetEmail(url: string, email: string): SMTPEmail {
       url,
       "",
       "El enlace caduca en 15 minutos. Si no solicitaste este cambio, ignora este correo.",
+    ].join("\n"),
+  };
+}
+
+function verificationEmail(url: string, email: string): SMTPEmail {
+  return {
+    to: email,
+    subject: "Verifica tu correo de Savia",
+    text: [
+      "Tu cuenta de Savia está lista. Verifica tu dirección de correo para ingresar:",
+      "",
+      url,
+      "",
+      "Si no solicitaste esta cuenta, ignora este correo.",
     ].join("\n"),
   };
 }
@@ -152,6 +195,7 @@ function userDocument(value: unknown): AuthenticatedUser {
     role: typeof user.role === "string" ? user.role : null,
     isBanned: user.banned === true,
     twoFactorEnabled: user.twoFactorEnabled === true,
+    emailVerified: user.emailVerified === true,
   };
 }
 
@@ -159,14 +203,8 @@ export function createBetterAuth(
   environment: AuthWorkerEnvironment,
   dependencies: AuthDependencies = {},
 ) {
-  const sendTransactionalEmail =
-    dependencies.sendTransactionalEmail ??
-    (() => {
-      const settings = smtpSettings(environment);
-      return settings
-        ? (email: SMTPEmail) => deliverSmtpEmail(settings, email)
-        : undefined;
-    })();
+  const deliverAccountEmail = (email: SMTPEmail, tenantId?: number) =>
+    sendAccountEmail(environment, dependencies, email, tenantId);
   return betterAuth({
     basePath: "/api/auth",
     baseURL: requiredValue(environment.BETTER_AUTH_URL, "BETTER_AUTH_URL"),
@@ -181,29 +219,90 @@ export function createBetterAuth(
       return [defaultOrigin, wildcard];
     },
     database: dependencies.database ?? environment.AUTH_DB,
+    disabledPaths: disabledSSOPaths,
+    socialProviders: socialProviders(environment),
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user, ctx) => {
+            await tenantSSOHooks.user?.create?.before?.(user, ctx);
+            await socialHooks.user?.create?.before?.(user, ctx);
+          },
+        },
+      },
+      account: {
+        create: {
+          before: async (account, ctx) => {
+            await tenantSSOHooks.account?.create?.before?.(account, ctx);
+            await socialHooks.account?.create?.before?.(account, ctx);
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session, ctx) => {
+            await tenantSSOHooks.session?.create?.before?.(session, ctx);
+            await socialHooks.session?.create?.before?.(session, ctx);
+          },
+          after: async (session, ctx) => {
+            await tenantSSOHooks.session?.create?.after?.(session, ctx);
+            await socialHooks.session?.create?.after?.(session, ctx);
+          },
+        },
+      },
+    },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        await tenantSSOBefore(ctx);
+        await socialBefore(ctx);
+      }),
+    },
+    account: {
+      encryptOAuthTokens: true,
+      accountLinking: { enabled: true, requireLocalEmailVerified: true },
+    },
+    user: {
+      validateUserInfo: validateSocialIdentity,
+      additionalFields: {
+        emailTenantId: {
+          type: "number",
+          required: false,
+          input: false,
+        },
+      },
+    },
+    emailVerification: {
+      sendVerificationEmail: async ({ user, url }) => {
+        await deliverAccountEmail(
+          verificationEmail(url, user.email),
+          typeof (user as typeof user & { emailTenantId?: number })
+            .emailTenantId === "number"
+            ? (user as typeof user & { emailTenantId?: number }).emailTenantId
+            : undefined,
+        );
+      },
+    },
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
       minPasswordLength: 12,
+      requireEmailVerification: true,
       resetPasswordTokenExpiresIn: 900,
       revokeSessionsOnPasswordReset: true,
-      ...(sendTransactionalEmail
-        ? {
-            sendResetPassword: async ({ user, url }) =>
-              sendTransactionalEmail(passwordResetEmail(url, user.email)),
-          }
-        : {}),
+      sendResetPassword: async ({ user, url }) =>
+        deliverAccountEmail(
+          passwordResetEmail(url, user.email),
+          typeof (user as typeof user & { emailTenantId?: number })
+            .emailTenantId === "number"
+            ? (user as typeof user & { emailTenantId?: number }).emailTenantId
+            : undefined,
+        ),
     },
     plugins: [
+      tenantSSOPlugin(),
+      tenantSocialPlugin(),
       admin(),
-      twoFactor({
-        issuer: "Savia",
-        twoFactorCookieMaxAge: 300,
-        accountLockout: {
-          maxFailedAttempts: 5,
-          durationSeconds: 900,
-        },
-      }),
+      samlAwareTwoFactor(),
       bearer({ requireSignature: true }),
       jwt(),
       oauthProvider(oauthProviderOptions(environment)),
@@ -269,7 +368,16 @@ async function ensureLocalSeedUser(
   )
     .bind(account.email)
     .first<{ id: string }>();
-  if (existing) return;
+  if (existing) {
+    if (account.role === "admin") {
+      await environment.AUTH_DB.prepare(
+        'UPDATE "user" SET "emailVerified" = true WHERE id = ?',
+      )
+        .bind(existing.id)
+        .run();
+    }
+    return;
+  }
   try {
     await auth.api.createUser({
       body: {
@@ -277,6 +385,7 @@ async function ensureLocalSeedUser(
         name: account.name,
         password: account.password,
         role: account.role,
+        data: { emailVerified: true },
       },
     });
   } catch (exception) {
@@ -373,6 +482,7 @@ async function adminOAuthClient(client: AdminOAuthClient): Promise<Response> {
 
 async function createUser(
   auth: ReturnType<typeof createBetterAuth>,
+  environment: AuthWorkerEnvironment,
   request: Request,
 ): Promise<Response> {
   const input = (await request.json()) as {
@@ -380,6 +490,8 @@ async function createUser(
     name?: unknown;
     password?: unknown;
     role?: unknown;
+    emailVerified?: unknown;
+    tenantId?: unknown;
   };
   if (
     typeof input.email !== "string" ||
@@ -387,7 +499,11 @@ async function createUser(
     typeof input.password !== "string" ||
     (input.role !== undefined &&
       input.role !== "admin" &&
-      input.role !== "user")
+      input.role !== "user") ||
+    (input.emailVerified !== undefined &&
+      typeof input.emailVerified !== "boolean") ||
+    (input.tenantId !== undefined &&
+      (!Number.isSafeInteger(input.tenantId) || (input.tenantId as number) < 1))
   ) {
     return Response.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid user input" } },
@@ -400,8 +516,33 @@ async function createUser(
       name: input.name,
       password: input.password,
       role: input.role ?? "user",
+      data: {
+        emailVerified: input.emailVerified === true,
+        ...(typeof input.tenantId === "number"
+          ? { emailTenantId: input.tenantId }
+          : {}),
+      },
     },
   });
+  if (input.emailVerified !== true) {
+    try {
+      await auth.api.sendVerificationEmail({
+        body: {
+          email: input.email,
+          callbackURL: authAccountEmailUrl(
+            environment,
+            "/api/auth/email-verified",
+          ),
+        },
+      });
+    } catch (error) {
+      const adapter = (await auth.$context).internalAdapter;
+      await adapter.deleteUserSessions(userDocument(created).id);
+      await adapter.deleteAccounts(userDocument(created).id);
+      await adapter.deleteUser(userDocument(created).id);
+      throw error;
+    }
+  }
   return Response.json({ user: userDocument(created) }, { status: 201 });
 }
 
@@ -443,13 +584,27 @@ async function updateUser(
   request: Request,
   userId: string,
 ): Promise<Response> {
-  const input = (await request.json()) as { name?: unknown; role?: unknown };
+  const input = (await request.json()) as {
+    name?: unknown;
+    role?: unknown;
+    emailVerified?: unknown;
+    tenantId?: unknown;
+  };
   if (
     (input.name !== undefined && typeof input.name !== "string") ||
     (input.role !== undefined &&
       input.role !== "admin" &&
       input.role !== "user") ||
-    (input.name === undefined && input.role === undefined)
+    (input.emailVerified !== undefined &&
+      typeof input.emailVerified !== "boolean") ||
+    (input.tenantId !== undefined &&
+      input.tenantId !== null &&
+      (!Number.isSafeInteger(input.tenantId) ||
+        (input.tenantId as number) < 1)) ||
+    (input.name === undefined &&
+      input.role === undefined &&
+      input.emailVerified === undefined &&
+      input.tenantId === undefined)
   ) {
     return Response.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid user update" } },
@@ -461,7 +616,21 @@ async function updateUser(
   if (typeof input.name === "string") changes.name = input.name;
   if (input.role === "admin" || input.role === "user")
     changes.role = input.role;
+  if (typeof input.emailVerified === "boolean")
+    changes.emailVerified = input.emailVerified;
+  if (typeof input.tenantId === "number" || input.tenantId === null)
+    changes.emailTenantId = input.tenantId;
+  const previousUser = await context.adapter.findOne<{
+    emailTenantId?: number | null;
+  }>({ model: "user", where: [{ field: "id", value: userId }] });
   const user = await context.internalAdapter.updateUser(userId, changes);
+  if (
+    input.emailVerified === false ||
+    (input.tenantId !== undefined &&
+      previousUser?.emailTenantId !== input.tenantId)
+  ) {
+    await context.internalAdapter.deleteUserSessions(userId);
+  }
   return Response.json({ user: userDocument(user) });
 }
 
@@ -519,10 +688,18 @@ async function sendPasswordReset(
     "/auth/reset-password",
     environment.SAVIA_ADMIN_REDIRECT_URI ?? environment.BETTER_AUTH_URL,
   ).toString();
-  await auth.api.requestPasswordReset({
-    body: { email: account.email, redirectTo },
-  });
-  return new Response(null, { status: 204 });
+  try {
+    const response = await auth.api.requestPasswordReset({
+      body: { email: account.email, redirectTo },
+      asResponse: true,
+    });
+    if (!response.ok) return response;
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    if (isAPIError(error))
+      return Response.json(error.body, { status: error.statusCode });
+    throw error;
+  }
 }
 
 async function totpEnrollment(
@@ -578,8 +755,56 @@ export function createAuthHandler(
   dependencies: AuthDependencies = {},
 ) {
   let instance: ReturnType<typeof createBetterAuth> | undefined;
+  async function publicAccountEmailRequest(
+    auth: ReturnType<typeof createBetterAuth>,
+    request: Request,
+    executionContext?: ExecutionContext,
+  ): Promise<Response> {
+    const pathname = new URL(request.url).pathname;
+    const verification = pathname.endsWith("/send-verification-email");
+    const fallbackMessage = verification
+      ? "If this email requires verification, check your email for the verification link"
+      : "If this email exists in our system, check your email for the reset link";
+    const body = (await request
+      .clone()
+      .json()
+      .catch(() => ({}))) as Record<string, unknown>;
+    const messageBody = {
+      ...body,
+      ...(verification
+        ? {
+            callbackURL: authAccountEmailUrl(
+              environment,
+              "/api/auth/email-verified",
+            ),
+          }
+        : {
+            redirectTo: adminAccountEmailUrl(
+              environment,
+              "/auth/reset-password",
+            ),
+          }),
+    };
+    const forwarded = new Request(request, {
+      body: JSON.stringify(messageBody),
+      headers: new Headers(request.headers),
+    });
+    const completion = auth
+      .handler(forwarded)
+      .then((response) => {
+        if (response.status === 429) {
+          console.warn("Savia account email request was rate limited");
+        }
+      })
+      .catch(() => {
+        console.error("Savia account email delivery failed");
+      });
+    if (executionContext) executionContext.waitUntil(completion);
+    else void completion;
+    return Response.json({ status: true, message: fallbackMessage });
+  }
   return {
-    async fetch(request: Request) {
+    async fetch(request: Request, executionContext?: ExecutionContext) {
       // Native startup verifies the database under its deployment lock first.
       const auth = (instance ??= createBetterAuth(environment, dependencies));
       await ensureSchema(auth, environment.AUTH_DB);
@@ -590,13 +815,43 @@ export function createAuthHandler(
         pathname === "/_internal/oauth/mcp-exchange"
       )
         return exchangeMcpToken(request, oauthRuntime(environment), auth);
+      const tenantSSO = await tenantSSOResponse(
+        request,
+        environment,
+        (await auth.$context).adapter,
+      );
+      if (tenantSSO) return tenantSSO;
+      const social = await tenantSocialResponse(
+        request,
+        environment,
+        (await auth.$context).adapter,
+      );
+      if (social) return social;
+      const loginUiRequest =
+        request.method === "GET" &&
+        ["/api/auth/login", "/api/auth/forgot-password"].includes(pathname);
       const oauthPage = oauthPageResponse(request, {
         restartUrl: adminLoginUrl(environment),
         branding: tenantBrandingFromHeader(
           request.headers.get("x-savia-tenant-branding"),
         ),
+        ...(loginUiRequest
+          ? {
+              emailAvailable: await accountEmailAvailable(
+                environment,
+                dependencies,
+                trustedAccountEmailTenantId(request, environment),
+              ).catch(() => false),
+            }
+          : {}),
       });
       if (oauthPage) return oauthPage;
+      const accountEmailSettings = await accountEmailSettingsResponse(
+        request,
+        environment,
+        dependencies,
+      );
+      if (accountEmailSettings) return accountEmailSettings;
       if (
         pathname === "/.well-known/openid-configuration" ||
         pathname === "/.well-known/oauth-authorization-server/api/auth"
@@ -627,7 +882,16 @@ export function createAuthHandler(
       ) {
         return totpEnrollment(auth, request);
       }
-      if (pathname.startsWith("/api/auth/")) return auth.handler(request);
+      if (
+        request.method === "POST" &&
+        (pathname === "/api/auth/request-password-reset" ||
+          pathname === "/api/auth/send-verification-email")
+      ) {
+        return publicAccountEmailRequest(auth, request, executionContext);
+      }
+      if (pathname.startsWith("/api/auth/")) {
+        return samlMFAResponse(request, await auth.handler(request));
+      }
       if (request.method === "GET" && pathname === "/_internal/session")
         return internalSession(auth, request);
       if (
@@ -697,7 +961,7 @@ export function createAuthHandler(
       if (request.method === "GET" && pathname === "/_internal/users")
         return listUsers(auth, request);
       if (request.method === "POST" && pathname === "/_internal/users")
-        return createUser(auth, request);
+        return createUser(auth, environment, request);
       const userAction = pathname.match(
         /^\/_internal\/users\/([^/]+)\/(ban|sessions|password-reset)$/,
       );
@@ -730,7 +994,11 @@ export function createAuthHandler(
   };
 }
 export default {
-  fetch(request: Request, environment: AuthWorkerEnvironment) {
-    return createAuthHandler(environment).fetch(request);
+  fetch(
+    request: Request,
+    environment: AuthWorkerEnvironment,
+    executionContext: ExecutionContext,
+  ) {
+    return createAuthHandler(environment).fetch(request, executionContext);
   },
 } satisfies ExportedHandler<AuthWorkerEnvironment>;

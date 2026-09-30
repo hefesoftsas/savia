@@ -207,8 +207,9 @@ export class SaviaApiClient {
   }
 
   async extensionStatus(id: string): Promise<SaviaExtensionStatus> {
+    const tenantId = await this.resolveStudioTenantId();
     const response = await this.request<{ data: SaviaExtensionStatus[] }>(
-      "/v1/studio/0/api/extensions",
+      this.studioPath(tenantId, "extensions"),
     );
     const extension = response.data.find(
       (candidate) => candidate.manifest.id === id,
@@ -220,8 +221,9 @@ export class SaviaApiClient {
   }
 
   async getExtensionSummary<T = unknown>(id: string): Promise<T> {
+    const tenantId = await this.resolveStudioTenantId();
     const response = await this.request<{ data: T }>(
-      `/v1/studio/0/api/extensions/${encode(id)}/summary`,
+      this.studioPath(tenantId, `extensions/${encode(id)}/summary`),
     );
     return response.data;
   }
@@ -239,7 +241,8 @@ export class SaviaApiClient {
       }>;
     }>;
   }> {
-    return this.request("/v1/studio/0/api/plugin-store/mcp-catalog");
+    const tenantId = await this.resolveStudioTenantId();
+    return this.request(this.studioPath(tenantId, "plugin-store/mcp-catalog"));
   }
 
   async executeStoreAction(
@@ -247,8 +250,12 @@ export class SaviaApiClient {
     actionId: string,
     input: Record<string, unknown>,
   ): Promise<unknown> {
+    const tenantId = await this.resolveStudioTenantId();
     const response = await this.request<{ data: { output: unknown } }>(
-      `/v1/studio/0/api/extensions/${encode(pluginId)}/actions/${encode(actionId)}`,
+      this.studioPath(
+        tenantId,
+        `extensions/${encode(pluginId)}/actions/${encode(actionId)}`,
+      ),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -261,6 +268,14 @@ export class SaviaApiClient {
   async listStudioCollections(options?: { all?: boolean } | boolean): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
+    const tenantId = await this.resolveStudioTenantId();
+    return this.listStudioCollectionsForTenant(tenantId, options);
+  }
+
+  private async listStudioCollectionsForTenant(
+    tenantId: number,
+    options?: { all?: boolean } | boolean,
+  ): Promise<{ data: Array<Record<string, unknown>> }> {
     const all = typeof options === "boolean" ? options : Boolean(options?.all);
     const result = await this.request<{
       data: Array<
@@ -279,7 +294,7 @@ export class SaviaApiClient {
           };
         }
       >;
-    }>("/v1/studio/0/api/objects");
+    }>(this.studioPath(tenantId, "objects"));
     if (!all) {
       return {
         data: result.data.filter(
@@ -347,6 +362,7 @@ export class SaviaApiClient {
   }
 
   private async crmPath(
+    tenantId: number,
     object: string,
     resource = "records",
     id?: string,
@@ -354,13 +370,18 @@ export class SaviaApiClient {
   ): Promise<string> {
     if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(object))
       throw new Error("Invalid Studio collection key");
-    const collections = await this.listStudioCollections({ all: allowAny });
+    const collections = await this.listStudioCollectionsForTenant(tenantId, {
+      all: allowAny,
+    });
     if (!collections.data.some((collection) => collection.name === object)) {
       throw new Error("Collection is not an installed Studio collection");
     }
     if (id !== undefined && (!id.trim() || id === "." || id === ".."))
       throw new Error("Invalid Studio record identifier");
-    return `/v1/studio/0/api/${resource}/${encode(object)}${id === undefined ? "" : `/${encode(id)}`}`;
+    return this.studioPath(
+      tenantId,
+      `${resource}/${encode(object)}${id === undefined ? "" : `/${encode(id)}`}`,
+    );
   }
 
   async listStudioRecords(
@@ -379,10 +400,17 @@ export class SaviaApiClient {
     perPage = 25,
     query?: string,
   ): Promise<unknown> {
+    const tenantId = await this.resolveStudioTenantId();
     const isOptionsObject =
       typeof pageOrOptions === "object" && pageOrOptions !== null;
     const allowAny = isOptionsObject ? (pageOrOptions.allowAny ?? true) : false;
-    const path = await this.crmPath(object, "records", undefined, allowAny);
+    const path = await this.crmPath(
+      tenantId,
+      object,
+      "records",
+      undefined,
+      allowAny,
+    );
     let page = 1;
     let actualPerPage = perPage;
     let actualQuery = query;
@@ -433,9 +461,10 @@ export class SaviaApiClient {
     const normalized = plate.trim().toUpperCase();
     if (!/^[A-Z0-9]{5,8}$/.test(normalized))
       throw new Error("Indica una placa válida.");
+    const tenantId = await this.resolveStudioTenantId();
     const settings = await this.request<{
       data: { value: { vehicleLookup: { enabled: boolean; flowId: string } } };
-    }>("/v1/studio/0/api/extensions/insurance.quotes/settings");
+    }>(this.studioPath(tenantId, "extensions/insurance.quotes/settings"));
     const lookup = settings.data.value.vehicleLookup;
     if (!lookup?.enabled)
       throw new Error("La consulta de placa no está habilitada.");
@@ -445,7 +474,7 @@ export class SaviaApiClient {
       );
     const response = await this.request<{
       data: { output: { data?: { vehicle?: Record<string, unknown> } } };
-    }>("/v1/studio/0/api/extensions/insurance.quotes/actions/quote", {
+    }>(this.studioPath(tenantId, "extensions/insurance.quotes/actions/quote"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -476,13 +505,18 @@ export class SaviaApiClient {
   }
 
   async getInsuranceQuoteForm() {
+    const tenantId = await this.resolveStudioTenantId();
+    return this.getInsuranceQuoteFormForTenant(tenantId);
+  }
+
+  private async getInsuranceQuoteFormForTenant(tenantId: number) {
     const settings = await this.request<{
       data: {
         value: {
           products: Array<{ id: string; label: string; enabled: boolean }>;
         };
       };
-    }>("/v1/studio/0/api/extensions/insurance.quotes/settings");
+    }>(this.studioPath(tenantId, "extensions/insurance.quotes/settings"));
     return {
       ...assistantQuoteForm,
       products: settings.data.value.products
@@ -493,18 +527,21 @@ export class SaviaApiClient {
 
   async createInsuranceQuote(rawInput: unknown) {
     const input = assistantQuoteInputSchema.parse(rawInput);
-    const collections = await this.listStudioCollections({ all: true });
+    const tenantId = await this.resolveStudioTenantId();
+    const collections = await this.listStudioCollectionsForTenant(tenantId, {
+      all: true,
+    });
     if (
       !["cotizaciones", "cotizaciones_detalle"].every((name) =>
         collections.data.some((c) => c.name === name),
       )
     )
       throw new Error("Quote collections are not installed or authorized");
-    const form = await this.getInsuranceQuoteForm();
+    const form = await this.getInsuranceQuoteFormForTenant(tenantId);
     if (!form.products.length)
       throw new Error("No hay productos habilitados en el cotizador.");
     const reference = `COT-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 8)}`;
-    const base = "/v1/studio/0/api/records/";
+    const base = this.studioPath(tenantId, "records/");
     const write = <T>(path: string, method: string, body: unknown) =>
       this.request<T>(path, {
         method,
@@ -522,7 +559,7 @@ export class SaviaApiClient {
         estado: "Solicitada",
       },
     );
-    const url = `/#/crm?domain=platform&object=cotizador_por_pasos&quote=${encode(master.data.id)}`;
+    const url = `/#/crm?tenantId=${tenantId}&object=cotizador_por_pasos&quote=${encode(master.data.id)}`;
     const outcomes: Array<{
       provider: string;
       product: string;
@@ -562,7 +599,10 @@ export class SaviaApiClient {
                 output: { data?: Record<string, any> };
               };
             }>(
-              "/v1/studio/0/api/extensions/insurance.quotes/actions/quote",
+              this.studioPath(
+                tenantId,
+                "extensions/insurance.quotes/actions/quote",
+              ),
               "POST",
               {
                 input: { mode: "live", flowId: product.id, quoteInput: input },
@@ -659,7 +699,10 @@ export class SaviaApiClient {
   }
 
   async getQuoteSummary(reference?: string) {
-    const collections = await this.listStudioCollections({ all: true });
+    const tenantId = await this.resolveStudioTenantId();
+    const collections = await this.listStudioCollectionsForTenant(tenantId, {
+      all: true,
+    });
     if (
       !["cotizaciones", "cotizaciones_detalle"].every((name) =>
         collections.data.some((c) => c.name === name),
@@ -679,7 +722,7 @@ export class SaviaApiClient {
     const masters = await this.request<{
       data: Array<Record<string, unknown>>;
       total: number;
-    }>(`/v1/studio/0/api/records/cotizaciones?${params}`);
+    }>(`${this.studioPath(tenantId, "records/cotizaciones")}?${params}`);
     const totalQuotes =
       collections.data.find((c) => c.name === "cotizaciones")?.recordCount ??
       masters.total;
@@ -699,7 +742,9 @@ export class SaviaApiClient {
     const details = await this.request<{
       data: Array<Record<string, unknown>>;
       total: number;
-    }>(`/v1/studio/0/api/records/cotizaciones_detalle?${detailParams}`);
+    }>(
+      `${this.studioPath(tenantId, "records/cotizaciones_detalle")}?${detailParams}`,
+    );
     const received = details.data.filter((d) => d.estado === "Recibida");
     const priced = received
       .flatMap((d) => {
@@ -753,7 +798,14 @@ export class SaviaApiClient {
       filters?: unknown;
     } = {},
   ): Promise<unknown> {
-    const path = await this.crmPath(object, "records", undefined, true);
+    const tenantId = await this.resolveStudioTenantId();
+    const path = await this.crmPath(
+      tenantId,
+      object,
+      "records",
+      undefined,
+      true,
+    );
     if (!options.groupBy) {
       const params = new URLSearchParams({ page: "1", perPage: "1" });
       if (options.filters !== undefined) {
@@ -789,7 +841,10 @@ export class SaviaApiClient {
     id: string,
     allowAny = false,
   ): Promise<unknown> {
-    return this.request(await this.crmPath(object, "records", id, allowAny));
+    const tenantId = await this.resolveStudioTenantId();
+    return this.request(
+      await this.crmPath(tenantId, object, "records", id, allowAny),
+    );
   }
 
   async createStudioRecord(
@@ -797,8 +852,9 @@ export class SaviaApiClient {
     data: Record<string, unknown>,
     allowAny = false,
   ): Promise<unknown> {
+    const tenantId = await this.resolveStudioTenantId();
     return this.request(
-      await this.crmPath(object, "records", undefined, allowAny),
+      await this.crmPath(tenantId, object, "records", undefined, allowAny),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -813,6 +869,7 @@ export class SaviaApiClient {
     data: Record<string, unknown>,
     allowAny = false,
   ): Promise<unknown> {
+    const tenantId = await this.resolveStudioTenantId();
     const payload = { ...data };
     if (
       payload._version === undefined ||
@@ -820,7 +877,9 @@ export class SaviaApiClient {
       Number(payload._version) < 1
     ) {
       try {
-        const existing = (await this.getStudioRecord(object, id, allowAny)) as {
+        const existing = (await this.request(
+          await this.crmPath(tenantId, object, "records", id, allowAny),
+        )) as {
           data?: { _version?: number };
           _version?: number;
         };
@@ -829,11 +888,14 @@ export class SaviaApiClient {
         payload._version = 1;
       }
     }
-    return this.request(await this.crmPath(object, "records", id, allowAny), {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    return this.request(
+      await this.crmPath(tenantId, object, "records", id, allowAny),
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
   }
 
   async deleteStudioRecord(
@@ -842,6 +904,7 @@ export class SaviaApiClient {
     version?: number,
     allowAny = false,
   ): Promise<unknown> {
+    const tenantId = await this.resolveStudioTenantId();
     let resolvedVersion = version;
     if (
       resolvedVersion === undefined ||
@@ -849,7 +912,9 @@ export class SaviaApiClient {
       resolvedVersion < 1
     ) {
       try {
-        const existing = (await this.getStudioRecord(object, id, allowAny)) as {
+        const existing = (await this.request(
+          await this.crmPath(tenantId, object, "records", id, allowAny),
+        )) as {
           data?: { _version?: number };
           _version?: number;
         };
@@ -860,7 +925,7 @@ export class SaviaApiClient {
     }
     const query = `?version=${encodeURIComponent(resolvedVersion)}`;
     return this.request(
-      (await this.crmPath(object, "records", id, allowAny)) + query,
+      (await this.crmPath(tenantId, object, "records", id, allowAny)) + query,
       {
         method: "DELETE",
       },
@@ -872,8 +937,9 @@ export class SaviaApiClient {
     id: string,
     allowAny = true,
   ): Promise<unknown> {
+    const tenantId = await this.resolveStudioTenantId();
     return this.request(
-      await this.crmPath(object, "record-links", id, allowAny),
+      await this.crmPath(tenantId, object, "record-links", id, allowAny),
     );
   }
 
@@ -892,5 +958,23 @@ export class SaviaApiClient {
     const code = error.error?.code ?? "API_ERROR";
     const message = error.error?.message ?? "Domain API request failed";
     throw new Error(`${response.status} ${code}: ${message}`);
+  }
+
+  private async resolveStudioTenantId(): Promise<number> {
+    const active = await this.request<{
+      activeTenantId?: number;
+      tenants: Array<{ id: number; name: string }>;
+    }>("/v1/assistant/active-tenant");
+    if (active.activeTenantId === undefined) return 0;
+    if (
+      !Number.isSafeInteger(active.activeTenantId) ||
+      active.activeTenantId < 0
+    )
+      throw new Error("Active tenant resolution returned an invalid tenant id");
+    return active.activeTenantId;
+  }
+
+  private studioPath(tenantId: number, path: string): string {
+    return `/v1/studio/${tenantId}/api/${path}`;
   }
 }

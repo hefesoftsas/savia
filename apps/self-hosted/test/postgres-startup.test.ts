@@ -6,6 +6,7 @@ import { migratePostgres } from "../src/postgres/migrations";
 import { createApplication } from "../src/application";
 import { loadConfiguration } from "../src/config";
 import { PostgresDatabase } from "../src/postgres/database";
+import { openDatabases } from "../src/databases";
 import { postgresTestUrl, withPostgresFixture } from "./postgres-fixture";
 
 function configuration(url: string, directory: string) {
@@ -25,6 +26,51 @@ function configuration(url: string, directory: string) {
     S3_SECRET_ACCESS_KEY: "native-startup-storage-secret",
   });
 }
+
+it.skipIf(!postgresTestUrl)(
+  "relaxes a legacy PostgreSQL auth account issuer under the startup lock",
+  async () => {
+    await withPostgresFixture(async (core, url) => {
+      const directory = mkdtempSync(join(tmpdir(), "savia-auth-issuer-"));
+      const databases = openDatabases(
+        configuration(url, directory),
+        resolve(process.cwd(), "../.."),
+      );
+      try {
+        await core
+          .prepare(
+            "CREATE TABLE savia_auth.account (id TEXT PRIMARY KEY, issuer TEXT NOT NULL)",
+          )
+          .run();
+        await core
+          .prepare(
+            "INSERT INTO savia_auth.account(id, issuer) VALUES('legacy-account', 'https://issuer.example.test')",
+          )
+          .run();
+        await databases.initialize(async () => {});
+        await databases.initialize(async () => {});
+        const column = await core
+          .prepare(
+            `SELECT is_nullable FROM information_schema.columns
+             WHERE table_schema = 'savia_auth' AND table_name = 'account' AND column_name = 'issuer'`,
+          )
+          .first<{ is_nullable: string }>();
+        expect(column?.is_nullable).toBe("YES");
+        const account = await core
+          .prepare(
+            "SELECT issuer FROM savia_auth.account WHERE id = 'legacy-account'",
+          )
+          .first<{ issuer: string }>();
+        expect(account?.issuer).toBe("https://issuer.example.test");
+      } finally {
+        await databases.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  },
+  180_000,
+);
+
 it.skipIf(!postgresTestUrl)(
   "serializes simultaneous native application initialization and bootstraps once",
   async () => {
