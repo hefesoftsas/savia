@@ -1,4 +1,7 @@
-import { EmailVerificationField, EmailVerificationStatus } from "./email-verification-field";
+import {
+  EmailVerificationField,
+  EmailVerificationStatus,
+} from "./email-verification-field";
 import {
   ResourceEditSync,
   ResourceReadSync,
@@ -50,6 +53,7 @@ import {
   EditButton,
   ExportButton,
   List,
+  ListPagination,
   ReferenceInput,
   SelectInput,
   Show,
@@ -69,6 +73,7 @@ import type {
 import type { AgencyAccessRole } from "@/api/identity-client";
 import type { AuthPermissions } from "@/auth/auth-session";
 import { TenantUserCapacity } from "./tenant-user-capacity";
+import { TenantSignInSettingsLink } from "@/features/tenant-sso/tenant-sign-in-links";
 import {
   tenantAdminTenantId,
   tenantAdminUserUpdateData,
@@ -288,6 +293,7 @@ export function UserList() {
       filterDefaultValues={{ isActive: true }}
       filters={userFilters(t)}
       perPage={20}
+      pagination={<ListPagination rowsPerPageOptions={[10, 20, 50, 100]} />}
       actions={<UserListActions />}
     >
       <TenantUserScope />
@@ -340,13 +346,16 @@ function TenantUserScope() {
             </IconButtonWithTooltip>
           </p>
         </div>
-        {isPlatformAdmin && (
-          <Button type="button" variant="outline" onClick={clearTenantScope}>
-            {translate("savia.users.viewAllUsers", {
-              _: "Ver todos los usuarios",
-            })}
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {tenantId > 0 && <TenantSignInSettingsLink tenantId={tenantId} />}
+          {isPlatformAdmin && (
+            <Button type="button" variant="outline" onClick={clearTenantScope}>
+              {translate("savia.users.viewAllUsers", {
+                _: "Ver todos los usuarios",
+              })}
+            </Button>
+          )}
+        </div>
       </section>
     </>
   );
@@ -409,7 +418,7 @@ function UserTabbedTable() {
       onValueChange={(value) => setStatus(value as UserStatusView)}
       className="mb-4 gap-2"
     >
-      <TabsList className="w-full justify-start overflow-x-auto">
+      <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto min-h-9 w-full flex-wrap justify-start overflow-visible [&>[role=tab]]:min-h-8">
         <TabsTrigger value="active">
           {translate("savia.users.tabs.active", { _: "Activos" })}
           <Badge variant="outline" className="hidden md:inline-flex">
@@ -719,7 +728,14 @@ function UserShowContent() {
         />
         <UserReadOnlyField
           label={translate("savia.users.fields.email", { _: "Correo" })}
-          value={<span className="grid gap-1">{record.email}<span className="text-sm text-muted-foreground"><EmailVerificationStatus verified={record.emailVerified} /></span></span>}
+          value={
+            <span className="grid gap-1">
+              {record.email}
+              <span className="text-sm text-muted-foreground">
+                <EmailVerificationStatus verified={record.emailVerified} />
+              </span>
+            </span>
+          }
         />
         <UserReadOnlyField
           label={translate("savia.users.fields.platformRole", {

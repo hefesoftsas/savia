@@ -172,6 +172,9 @@ describe("generic tenant pages", () => {
       expect(new URLSearchParams(query).get("filter")).toBe('{"tenantId":101}');
     });
     expect(await screen.findByText("Usuarios de Comunidad")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Configurar acceso" }),
+    ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=sso");
 
     await user.click(
       screen.getByRole("button", { name: "Ver todos los usuarios" }),
@@ -322,6 +325,12 @@ describe("generic tenant pages", () => {
       user = userEvent.setup();
     await renderApp(appServices);
     const name = await screen.findByDisplayValue("Comunidad");
+    expect(
+      screen.getByRole("link", { name: "Configurar SSO" }),
+    ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=sso");
+    expect(
+      screen.getByRole("link", { name: "Configurar Google / Microsoft" }),
+    ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=social");
     expect(document.querySelector('input[name="idSlug"]')).toBe(null);
     expect(
       screen.getByText(

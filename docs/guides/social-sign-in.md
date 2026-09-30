@@ -42,6 +42,8 @@ Restart or redeploy the auth service after changing deployment credentials. The 
 
 Open **Settings → Service credentials → Google / Microsoft** for the tenant. Select Google, Microsoft, or both, then save. A Microsoft connection also requires the tenant's Microsoft Entra directory tenant ID as a UUID. The ID is the `tid` value for the organization's directory; it is not the application/client ID.
 
+Platform administrators can use **Tenants → Edit tenant → Sign-in methods → Configure Google / Microsoft** to open this tab with the tenant already selected. The tenant-scoped **Users** list also provides **Sign-in settings**, from which the Google / Microsoft tab is available. If the credentials page currently shows the platform workspace, select a tenant in **Workspace** to reveal the tenant sign-in tabs. These controls configure provider opt-in; deployment credentials are still required before a provider becomes available.
+
 Provider availability and tenant opt-in are separate settings. Configuring credentials makes a provider available to Savia, but does not enable it for every tenant. Saving a change invalidates that tenant's existing sessions so the new policy applies on the next request. Public provider discovery currently reflects deployment credentials because it has no trusted tenant context; it does not reveal tenant settings or identify whether an account exists. The callback checks the matched user's actual tenant policy and rejects sign-in when the provider is disabled, the tenant is inactive, or SSO-only mode is enabled. Tenant-specific provider discovery requires the trusted host-routing layer to pass a resolved tenant context to auth.
 
 ## Account and security policy

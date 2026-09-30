@@ -9,6 +9,12 @@ or clear the limit from the tenant edit page. A blank value means unlimited;
 zero prevents additional activations. The users page displays current usage
 to tenant administrators without allowing them to change the limit.
 
+The usage summary sits above the limit editor on both tenant edit and scoped
+users pages. Platform administrators can also save a limit from the scoped
+users list. The editor stays compact on wide screens and stacks its input and
+save action when the available space is narrow. **Save limit** persists the
+capacity independently of the tenant form's **Save** action.
+
 An active user has both an active identity principal and an active membership
 in the tenant. Tenant administrators count toward the limit. Suspended users
 do not count. Creating, transferring, or reactivating a user must leave the

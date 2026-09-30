@@ -10,6 +10,7 @@ import {
   useTranslate,
 } from "ra-core";
 import { TenantUserCapacity } from "@/features/users/tenant-user-capacity";
+import { TenantSignInLinks } from "@/features/tenant-sso/tenant-sign-in-links";
 import { useWatch } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
@@ -322,6 +323,12 @@ function TenantCapacityEditor() {
   );
 }
 
+function TenantAuthenticationLinks() {
+  const record = useRecordContext<TenantRecord>();
+  if (record?.kind !== "commercial" || !record.isActive) return null;
+  return <TenantSignInLinks tenantId={Number(record.id)} />;
+}
+
 function TenantEdit() {
   const translate = useTranslate();
   return (
@@ -337,6 +344,7 @@ function TenantEdit() {
         <SavedTenantAccessUrl />
         <TenantFields />
         <TenantCapacityEditor />
+        <TenantAuthenticationLinks />
       </SimpleForm>
     </Edit>
   );
