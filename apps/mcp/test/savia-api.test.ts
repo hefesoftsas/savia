@@ -197,7 +197,9 @@ describe("installed CRM collections", () => {
     });
     await client.getStudioRecordLinks("provider_contacts", "42");
     await client.deleteStudioRecord("provider_contacts", "42", 2);
-    const operations = calls.filter((c) => !c.path.endsWith("/objects"));
+    const operations = calls.filter(
+      (c) => c.path.startsWith("/v1/studio/") && !c.path.endsWith("/objects"),
+    );
     expect(operations.map((c) => [c.path, c.method, c.body])).toEqual([
       [
         "/v1/studio/0/api/records/provider_contacts?page=2&perPage=10&q=a%2Bb",
@@ -224,9 +226,11 @@ describe("installed CRM collections", () => {
       await expect(client.createStudioRecord(object, {})).rejects.toThrow();
       await expect(client.getStudioRecord(object, "42")).rejects.toThrow();
     }
-    expect(calls.filter((c) => !c.path.endsWith("/objects"))).toHaveLength(
-      before,
-    );
+    expect(
+      calls.filter(
+        (c) => c.path.startsWith("/v1/studio/") && !c.path.endsWith("/objects"),
+      ),
+    ).toHaveLength(before);
   });
 });
 
@@ -311,7 +315,9 @@ it("summarizes a quote in three authorized reads without inventing a winner for 
     },
   );
   const result = await client.getQuoteSummary("COT-1");
-  expect(paths).toHaveLength(3);
+  expect(paths.filter((path) => path.startsWith("/v1/studio/"))).toHaveLength(
+    3,
+  );
   expect(result).toMatchObject({
     totalQuotes: 7,
     quote: { reference: "COT-1" },

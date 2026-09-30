@@ -61,7 +61,9 @@ async function startApi(): Promise<{
       const body = await readBody(request);
       requests.push(`${request.method} ${request.url}`);
       let payload: unknown = { data: [] };
-      if (request.url === "/v1/studio/0/api/plugin-store/mcp-catalog") {
+      if (request.url === "/v1/assistant/active-tenant") {
+        payload = { tenants: [] };
+      } else if (request.url === "/v1/studio/0/api/plugin-store/mcp-catalog") {
         payload = catalog;
       } else if (
         request.url === "/v1/studio/0/api/extensions/custom.demo/actions/eco"
@@ -105,6 +107,7 @@ describe("store assistant tools", () => {
         input: { mensaje: "hola" },
       });
       expect(result.structuredContent).toEqual({ eco: 1 });
+      expect(requests).toContain("GET /v1/assistant/active-tenant");
       expect(requests).toContain(
         "POST /v1/studio/0/api/extensions/custom.demo/actions/eco",
       );
