@@ -65,6 +65,15 @@ vi.mock("@/features/tenant-email/tenant-email-settings-panel", () => ({
   TenantEmailSettingsPanel: () => <div>Tenant email settings</div>,
 }));
 
+vi.mock(
+  "@/features/tenant-registration/tenant-registration-settings-panel",
+  () => ({
+    TenantRegistrationSettingsPanel: ({ tenantId }: { tenantId: number }) => (
+      <div>Registration settings for tenant {tenantId}</div>
+    ),
+  }),
+);
+
 afterEach(cleanup);
 
 const services = { apiClient: { get: vi.fn() } } as unknown as AppServices;
@@ -120,6 +129,31 @@ describe("StudioTenantCredentialsSection identity providers", () => {
     expect(
       screen.getByRole("tab", { name: "Google / Microsoft" }),
     ).toBeVisible();
+  });
+
+  it("opens registration from its tenant-scoped deep link and follows tenant switches", async () => {
+    testState.workspaces = [workspace(101), workspace(102)];
+    renderCredentials("/service-credentials?tenantId=101&tab=registration");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: "Registro de usuarios" }),
+      ).toHaveAttribute("aria-selected", "true"),
+    );
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(
+      "Registration settings for tenant 101",
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Espacio de trabajo" }),
+      {
+        target: { value: "102" },
+      },
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("tabpanel")).toHaveTextContent(
+        "Registration settings for tenant 102",
+      ),
+    );
   });
 
   it("opens the requested tenant's SSO tab from a direct link", async () => {

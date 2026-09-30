@@ -58,6 +58,17 @@ export const tenantSocialMessages = {
     "Allow personal Microsoft accounts",
     "Permitir contas pessoais da Microsoft",
   ],
+  "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.":
+    [
+      "El primer inicio de sesión con una cuenta personal de Microsoft requiere la verificación de correo de Savia. Las cuentas de Microsoft ya verificadas pueden seguir iniciando sesión.",
+      "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.",
+      "O primeiro acesso com uma conta pessoal da Microsoft exige a verificação de e-mail do Savia. Contas Microsoft já verificadas podem continuar entrando.",
+    ],
+  "Configure email delivery": [
+    "Configurar entrega de correo",
+    "Configure email delivery",
+    "Configurar entrega de e-mail",
+  ],
   "When enabled, personal Microsoft accounts can sign in alongside accounts from the configured organization directory.":
     [
       "Al activarlo, las cuentas personales de Microsoft también podrán iniciar sesión junto con las cuentas del directorio organizacional configurado.",

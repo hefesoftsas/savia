@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useMessages } from "@/i18n/core";
 import { ApiClientError, type ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ type Settings = {
   microsoftAvailable: boolean;
   googleCallbackUrl: string;
   microsoftCallbackUrl: string;
+  emailReady?: boolean;
 };
 
 const emptySettings: Settings = {
@@ -288,6 +290,22 @@ export function TenantSocialSettingsPanel({
                       "When enabled, personal Microsoft accounts can sign in alongside accounts from the configured organization directory.",
                     )}
                   </p>
+                  {allowMicrosoftPersonalAccounts &&
+                  settings?.emailReady === false ? (
+                    <div className="grid gap-1 rounded-md bg-muted/50 p-2 text-xs leading-relaxed">
+                      <p role="note">
+                        {t(
+                          "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.",
+                        )}
+                      </p>
+                      <Link
+                        className="w-fit text-primary underline-offset-4 hover:underline"
+                        to={`/service-credentials?tenantId=${tenantId}&tab=email`}
+                      >
+                        {t("Configure email delivery")}
+                      </Link>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <label className="grid max-w-xl gap-1.5 text-sm">

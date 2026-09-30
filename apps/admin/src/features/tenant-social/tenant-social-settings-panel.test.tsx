@@ -1,6 +1,7 @@
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoreContextProvider, memoryStore } from "ra-core";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { TenantSocialSettingsPanel } from "./tenant-social-settings-panel";
 
@@ -13,10 +14,12 @@ function renderPanel(
   render(
     <StoreContextProvider value={memoryStore({ locale })}>
       <AppLocaleProvider>
-        <TenantSocialSettingsPanel
-          services={{ apiClient } as never}
-          tenantId={42}
-        />
+        <MemoryRouter>
+          <TenantSocialSettingsPanel
+            services={{ apiClient } as never}
+            tenantId={42}
+          />
+        </MemoryRouter>
       </AppLocaleProvider>
     </StoreContextProvider>,
   );
@@ -243,6 +246,7 @@ it("loads and saves the Microsoft personal account option independently", async 
       microsoftEnabled: true,
       microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
       allowMicrosoftPersonalAccounts: true,
+      emailReady: false,
     }),
     put: vi.fn().mockResolvedValue({
       ...defaults,
@@ -250,6 +254,7 @@ it("loads and saves the Microsoft personal account option independently", async 
       microsoftEnabled: true,
       microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
       allowMicrosoftPersonalAccounts: true,
+      emailReady: false,
     }),
     delete: vi.fn(),
   };
@@ -258,6 +263,15 @@ it("loads and saves the Microsoft personal account option independently", async 
     name: "Allow personal Microsoft accounts",
   });
   expect(personalAccounts).toBeChecked();
+  expect(personalAccounts).toBeEnabled();
+  expect(
+    await screen.findByText(
+      "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: "Configure email delivery" }),
+  ).toHaveAttribute("href", "/service-credentials?tenantId=42&tab=email");
   fireEvent.click(
     screen.getByRole("button", { name: "Save social sign-in settings" }),
   );
@@ -269,4 +283,54 @@ it("loads and saves the Microsoft personal account option independently", async 
     allowRegistration: false,
     allowMicrosoftPersonalAccounts: true,
   });
+});
+
+it("localizes the first personal Microsoft verification notice", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      ...defaults,
+      microsoftAvailable: true,
+      microsoftEnabled: true,
+      microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
+      allowMicrosoftPersonalAccounts: true,
+      emailReady: false,
+    }),
+    put: vi.fn(),
+    delete: vi.fn(),
+  };
+  renderPanel(apiClient, "es");
+  expect(
+    await screen.findByText(
+      "El primer inicio de sesión con una cuenta personal de Microsoft requiere la verificación de correo de Savia. Las cuentas de Microsoft ya verificadas pueden seguir iniciando sesión.",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: "Configurar entrega de correo" }),
+  ).toHaveAttribute("href", "/service-credentials?tenantId=42&tab=email");
+});
+
+it("omits the email prerequisite notice when email delivery is ready", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      ...defaults,
+      microsoftAvailable: true,
+      microsoftEnabled: true,
+      microsoftTenantId: "123e4567-e89b-12d3-a456-426614174000",
+      allowMicrosoftPersonalAccounts: true,
+      emailReady: true,
+    }),
+    put: vi.fn(),
+    delete: vi.fn(),
+  };
+  renderPanel(apiClient);
+  const personalAccounts = await screen.findByRole("switch", {
+    name: "Allow personal Microsoft accounts",
+  });
+  expect(personalAccounts).toBeChecked();
+  expect(personalAccounts).toBeEnabled();
+  expect(
+    screen.queryByText(
+      "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.",
+    ),
+  ).toBeNull();
 });
