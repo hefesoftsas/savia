@@ -353,32 +353,34 @@ export function AddWidgetDialog({
             </div>
           ) : (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="widget-tenant">Tenant</Label>
-                <Select
-                  value={tenantApiBasePath}
-                  onValueChange={setTenantApiBasePath}
-                  disabled={loading || tenants.length === 0}
-                >
-                  <SelectTrigger id="widget-tenant" className="w-full">
-                    <SelectValue placeholder="Elige un tenant" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tenants.map((entry) => (
-                      <SelectItem
-                        key={entry.apiBasePath}
-                        value={entry.apiBasePath}
-                      >
-                        {entry.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  El tenant es el espacio de datos de origen. Solo verás
-                  colecciones autorizadas para tu usuario.
-                </p>
-              </div>
+              {tenants.length !== 1 ? (
+                <div className="space-y-2">
+                  <Label htmlFor="widget-tenant">Tenant</Label>
+                  <Select
+                    value={tenantApiBasePath}
+                    onValueChange={setTenantApiBasePath}
+                    disabled={loading || tenants.length === 0}
+                  >
+                    <SelectTrigger id="widget-tenant" className="w-full">
+                      <SelectValue placeholder="Elige un tenant" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenants.map((entry) => (
+                        <SelectItem
+                          key={entry.apiBasePath}
+                          value={entry.apiBasePath}
+                        >
+                          {entry.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    El tenant es el espacio de datos de origen. Solo verás
+                    colecciones autorizadas para tu usuario.
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="widget-collection">Colección</Label>
                 <Select
