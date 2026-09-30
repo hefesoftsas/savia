@@ -16,6 +16,11 @@ open it. Other workspaces require an active tenant and authorized membership or
 platform administration. Custom access policies remain tenant-scoped. Global
 `platform` administration is a privilege scope, not a separate data workspace.
 
+The users list resolves tenant names through the authorized tenant data provider.
+Its scope heading and access column show the tenant name, never an internal ID.
+If the name is unavailable, the heading stays generic and the access cell uses
+an empty-value marker; platform and no-access badges keep their existing meaning.
+
 The data-domain catalog, creation operation, runtime routes, and `domain:<slug>`
 ACL scopes have been removed. Create workspaces through tenant management.
 Business-domain modules (for example the `/v1/domains` capability catalog), DNS
@@ -53,6 +58,14 @@ R2 bucket before a deployment migration.
 Stored file keys are opaque references. The migration changes ownership columns
 while retaining those keys, so existing R2 objects and file revisions stay
 readable without renaming blobs. Authorization uses the canonical tenant row.
+
+The admin **Keys and services → Services** tab separates platform credentials
+from workspace credentials. Platform credentials are mounted and requested only
+after platform-administrator permissions are confirmed; tenant administrators
+see workspace services without a platform access-denied banner. Geoapify keeps
+its tenant-scoped override: a saved workspace key takes precedence over
+`GEOAPIFY_API_KEY`, and removing the override restores the server fallback.
+Assistant configuration and its tenant overrides remain platform-admin-only.
 
 Encrypted integration, collection-source, geocoding, webhook, and extension credentials
 retain their original authenticated encryption context in a versioned ciphertext

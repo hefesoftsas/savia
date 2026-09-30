@@ -12,7 +12,8 @@ creation from this page; other users are directed to request access from a platf
 administrator.
 
 The page shows the selected organization's assigned Savia URL in a selectable,
-read-only field above the editor. **Copy link** copies the URL with confirmation;
+read-only field above the editor. **Open in new window** opens the assigned URL
+in a separate browsing context without replacing the admin page. **Copy link** copies the URL with confirmation;
 **Share link** uses the device's native share sheet, falling back to copying when
 native sharing is unavailable. Clipboard failures explain how to copy manually.
 These actions are also available to read-only members and never save branding or
@@ -28,6 +29,11 @@ slug uses a numeric suffix such as `-2`. The assigned identifier is canonical an
 stays unchanged when the tenant is renamed. Previous UUID-based tenant URLs remain
 available as aliases, while Savia displays and shares the canonical URL even when
 the user opened the page through an alias hostname.
+
+After creating a commercial tenant, Savia opens its edit page and displays the
+server-assigned URL with the same copy and share controls. The URL remains
+available on later edits. It uses the saved canonical slug, including any
+collision suffix, rather than deriving a preview from the form's name.
 
 The guided editor supports a display name, logo, login cover image, login Lottie
 animation, welcome title, welcome text, primary color, and accent color. Preview

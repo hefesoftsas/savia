@@ -1,10 +1,12 @@
 # Authentication loading
 
-The application boot splash, login redirect and OAuth form submission share the
-logo, ring animation, dimensions, colors and message defined in
-`packages/tenant-host/src/loading.ts`. The admin's `PwaSplash` renders the same
-presentation used by the authentication worker's server-rendered loading state.
-The static first-paint splash in `apps/admin/index.html` mirrors this appearance.
+The application boot splash, login redirect, OAuth callback and OAuth form
+submission share the logo, ring animation, dimensions, colors and message
+defined in `packages/tenant-host/src/loading.ts`. The admin's `PwaSplash` renders
+the same presentation used by the authentication worker's server-rendered
+loading state. The static first-paint splash in `apps/admin/index.html` mirrors
+this appearance. If the OAuth callback fails, the admin keeps its error message
+and return-home action.
 
 OAuth keeps its form mounted while a request is pending. It shows the loading
 state until navigation begins, or restores the form when credentials fail,

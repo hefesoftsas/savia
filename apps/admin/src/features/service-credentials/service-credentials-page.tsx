@@ -1,9 +1,12 @@
 import { KeyRound } from "lucide-react";
-import { useTranslate } from "ra-core";
+import { usePermissions, useTranslate } from "ra-core";
+import type { AuthPermissions } from "@/auth/auth-session";
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
 import type { AppServices } from "@/app-services";
 import { AssistantConfigurationPanel } from "@/features/assistant-configuration/assistant-configuration-page";
 import { StudioTenantCredentialsSection } from "./studio-tenant-credentials-section";
-import { CredentialsHelpTooltip } from "./credential-registry";
+import { CredentialGroup, CredentialsHelpTooltip } from "./credential-registry";
 import "./service-credentials.css";
 
 export function ServiceCredentialsPage({
@@ -12,6 +15,8 @@ export function ServiceCredentialsPage({
   services: AppServices;
 }) {
   const translate = useTranslate();
+  const t = useMessages(settingsMessages);
+  const { permissions, isPending } = usePermissions<AuthPermissions>();
   return (
     <main className="mx-auto w-full max-w-6xl pb-12">
       <header className="py-6">
@@ -29,7 +34,7 @@ export function ServiceCredentialsPage({
           </h1>
           <CredentialsHelpTooltip
             description={translate("savia.serviceCredentials.description", {
-              _: "Administra las credenciales del espacio. Se cifran en el servidor y no se devuelven al navegador.",
+              _: "Administra las credenciales de los servicios. Se cifran en el servidor y no se devuelven al navegador.",
             })}
           />
         </div>
@@ -38,11 +43,20 @@ export function ServiceCredentialsPage({
       <StudioTenantCredentialsSection
         services={services}
         globalCredentials={
-          <AssistantConfigurationPanel
-            services={services}
-            embedded
-            globalOnly
-          />
+          !isPending && permissions?.canManageIdentity ? (
+            <CredentialGroup
+              title={t("Platform credentials")}
+              description={t(
+                "Shared platform configuration. Only platform administrators can manage it.",
+              )}
+            >
+              <AssistantConfigurationPanel
+                services={services}
+                embedded
+                globalOnly
+              />
+            </CredentialGroup>
+          ) : null
         }
       />
     </main>

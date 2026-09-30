@@ -20,7 +20,9 @@ const tenantAdminPermissions = {
 function services() {
   const dataProvider = {
     getList: vi.fn().mockResolvedValue({ data: [], total: 0 }),
-    getOne: vi.fn(),
+    getOne: vi
+      .fn()
+      .mockResolvedValue({ data: { id: 101, name: "North workspace" } }),
     getMany: vi.fn().mockResolvedValue({ data: [] }),
     getManyReference: vi.fn(),
     create: vi.fn().mockResolvedValue({ data: { id: "new-user" } }),
@@ -131,12 +133,64 @@ describe("tenant-admin user pages", () => {
     );
   });
 
+  it.each(["North workspace", ""])(
+    "uses the tenant name without exposing IDs when the name is %s",
+    async (name) => {
+      open("/users");
+      const appServices = services();
+      vi.mocked(appServices.dataProvider.getOne).mockResolvedValue({
+        data: { id: 101, name },
+      });
+      vi.mocked(appServices.dataProvider.getList).mockImplementation(
+        async (resource) =>
+          resource === "users"
+            ? {
+                data: [
+                  {
+                    id: "user-1",
+                    displayName: "Ari Rios",
+                    email: "ari@example.test",
+                    platformAdmin: false,
+                    isActive: true,
+                    twoFactorEnabled: false,
+                    memberships: [
+                      {
+                        tenantId: 101,
+                        agencyId: 101,
+                        role: "viewer",
+                        isActive: true,
+                      },
+                    ],
+                  },
+                ],
+                total: 1,
+              }
+            : { data: [], total: 0 },
+      );
+      await renderApp(appServices);
+      expect(await screen.findByText("ari@example.test")).toBeVisible();
+      if (name) {
+        expect(
+          await screen.findByText("Usuarios de North workspace"),
+        ).toBeVisible();
+        expect(
+          await screen.findByText("North workspace", { selector: "td span" }),
+        ).toBeVisible();
+      } else {
+        expect(await screen.findByText("Usuarios del tenant")).toBeVisible();
+      }
+      expect(screen.queryByText(/#101/)).not.toBeInTheDocument();
+    },
+  );
+
   it("does not expose tenant selection from the tenant-admin user list", async () => {
     open("/users");
     const appServices = services();
     await renderApp(appServices);
 
-    expect(await screen.findByText("Usuarios del tenant #101")).toBeVisible();
+    expect(
+      await screen.findByText("Usuarios de North workspace"),
+    ).toBeVisible();
     expect(screen.queryByLabelText("Tenant comercial")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Ver todos los usuarios" }),

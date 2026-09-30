@@ -25,6 +25,7 @@ import {
   useDelete,
   useEditContext,
   useGetList,
+  useGetOne,
   useListContext,
   useNotify,
   usePermissions,
@@ -308,6 +309,7 @@ function TenantUserScope() {
       ? selectedTenantId
       : undefined
     : tenantAdminId;
+  const tenantName = useTenantName(tenantId);
   if (tenantId === undefined) return null;
 
   const clearTenantScope = () => {
@@ -324,10 +326,9 @@ function TenantUserScope() {
       <section className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
         <div>
           <p className="flex flex-wrap items-center gap-2 font-medium">
-            {translate("savia.users.tenantUsers", {
-              id: tenantId,
-              _: `Usuarios del tenant #${tenantId}`,
-            })}
+            {tenantName
+              ? t("Users in %{name}", { name: tenantName })
+              : t("Tenant users")}
             <IconButtonWithTooltip
               label={t(
                 "Este listado muestra únicamente las personas asignadas a este tenant.",
@@ -1311,9 +1312,20 @@ function UserReadOnlyField({
   );
 }
 
+function useTenantName(tenantId: number | undefined) {
+  const { data } = useGetOne<TenantRecord>(
+    "tenants",
+    { id: tenantId },
+    { enabled: tenantId !== undefined },
+  );
+  return data && data.id === tenantId ? data.name?.trim() : undefined;
+}
+
 function UserAccessSummary({ record }: { record: UserRecord }) {
-  const t = useMessages(settingsMessages);
   const translate = useTranslate();
+  const tenantName = useTenantName(
+    record.platformAdmin ? undefined : record.memberships[0]?.tenantId,
+  );
   if (record.platformAdmin)
     return (
       <Badge>
@@ -1326,11 +1338,7 @@ function UserAccessSummary({ record }: { record: UserRecord }) {
         {translate("savia.users.badges.noAccess", { _: "Sin acceso" })}
       </span>
     );
-  return (
-    <span>
-      {t("Tenant #%{value}", { value: record.memberships[0]!.tenantId })}
-    </span>
-  );
+  return <span>{tenantName || "—"}</span>;
 }
 
 function UserStatus({ active }: { active: boolean }) {

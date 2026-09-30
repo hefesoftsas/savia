@@ -408,7 +408,7 @@ const saviaEnglish = {
       title: "Keys and services",
       category: "Administration",
       description:
-        "Manage workspace credentials. They are encrypted on the server and never returned to the browser.",
+        "Manage service credentials. They are encrypted on the server and never returned to the browser.",
       badges: {
         required: "Key required",
         optional: "Optional",
@@ -419,7 +419,7 @@ const saviaEnglish = {
       },
       helpTooltipAria: "Help with credentials",
       helpTooltipContent:
-        "Each service shows whether it requires a key, where it is stored, and whether it is already configured. Global: one key per workspace. Integrations: credential per OpenAPI. Sources: token per JSON:API source. Keyless: Photon and Nominatim.",
+        "Each service shows whether it requires a key, where it is stored, and whether it is already configured. Services: platform or workspace credentials. Integrations: credential per OpenAPI. Sources: token per JSON:API source. Keyless: Photon and Nominatim.",
       actions: {
         configure: "Configure",
         edit: "Edit",
@@ -960,7 +960,7 @@ const saviaSpanish = {
       title: "Claves y servicios",
       category: "Administración",
       description:
-        "Administra las credenciales del espacio. Se cifran en el servidor y no se devuelven al navegador.",
+        "Administra las credenciales de los servicios. Se cifran en el servidor y no se devuelven al navegador.",
       badges: {
         required: "Requiere clave",
         optional: "Opcional",
@@ -971,7 +971,7 @@ const saviaSpanish = {
       },
       helpTooltipAria: "Ayuda sobre credenciales",
       helpTooltipContent:
-        "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Globales: una clave por espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
+        "Cada servicio indica si necesita clave, dónde se guarda y si ya está configurado. Servicios: credenciales de plataforma o del espacio. Integraciones: credencial por OpenAPI. Fuentes: token por fuente JSON:API. Sin clave: Photon y Nominatim.",
       actions: {
         configure: "Configurar",
         edit: "Editar",
@@ -1513,7 +1513,7 @@ const saviaPortuguese = {
       title: "Chaves e serviços",
       category: "Administração",
       description:
-        "Gerencie as credenciais do espaço. Elas são criptografadas no servidor e nunca retornadas ao navegador.",
+        "Gerencie as credenciais dos serviços. Elas são criptografadas no servidor e nunca retornadas ao navegador.",
       badges: {
         required: "Requer chave",
         optional: "Opcional",
@@ -1524,7 +1524,7 @@ const saviaPortuguese = {
       },
       helpTooltipAria: "Ajuda sobre credenciais",
       helpTooltipContent:
-        "Cada serviço indica se necessita de chave, onde é armazenada e se já está configurada. Globais: uma chave por espaço. Integrações: credencial por OpenAPI. Fontes: token por fonte JSON:API. Sem chave: Photon e Nominatim.",
+        "Cada serviço indica se necessita de chave, onde é armazenada e se já está configurada. Serviços: credenciais da plataforma ou do espaço. Integrações: credencial por OpenAPI. Fontes: token por fonte JSON:API. Sem chave: Photon e Nominatim.",
       actions: {
         configure: "Configurar",
         edit: "Editar",

@@ -1,3 +1,5 @@
+import { TenantAccessUrl } from "@/features/tenant-branding/tenant-access-url";
+import "@/features/tenant-branding/tenant-branding.css";
 import { ResourceEditSync } from "@/realtime/resource-realtime";
 import type { ResourceProps } from "ra-core";
 import {
@@ -276,7 +278,10 @@ function TenantList() {
 function TenantCreate() {
   const translate = useTranslate();
   return (
-    <Create title={translate("savia.tenants.newTenant", { _: "Nuevo tenant" })}>
+    <Create
+      title={translate("savia.tenants.newTenant", { _: "Nuevo tenant" })}
+      redirect="edit"
+    >
       <SimpleForm
         className="max-w-2xl"
         defaultValues={{
@@ -289,6 +294,19 @@ function TenantCreate() {
         <InitialTenantUserFields />
       </SimpleForm>
     </Create>
+  );
+}
+
+function SavedTenantAccessUrl() {
+  const record = useRecordContext<TenantRecord>();
+  if (record?.kind !== "commercial") return null;
+  return (
+    <div className="md:col-span-2">
+      <TenantAccessUrl
+        key={`${record.id}:${record.idSlug}`}
+        slug={record.idSlug}
+      />
+    </div>
   );
 }
 
@@ -314,6 +332,7 @@ function TenantEdit() {
         resetOptions={{ keepDirtyValues: true }}
       >
         <ResourceEditSync resource="tenants" />
+        <SavedTenantAccessUrl />
         <TenantFields />
         <TenantCapacityEditor />
       </SimpleForm>
