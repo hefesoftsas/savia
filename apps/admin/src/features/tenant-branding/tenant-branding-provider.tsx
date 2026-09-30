@@ -64,7 +64,7 @@ export function TenantBrandingProvider({
   }, [refetch]);
   useEffect(() => {
     if (!branding) return;
-    const style = document.documentElement.style;
+    const style = document.createElement("style");
     const foreground = brandingForeground(branding.primaryColor);
     const values: Record<string, string> = {
       "--primary": branding.primaryColor,
@@ -76,19 +76,15 @@ export function TenantBrandingProvider({
       "--accent": branding.accentColor,
       "--accent-foreground": brandingForeground(branding.accentColor),
     };
-    const previous = Object.keys(values).map((name) => [
-      name,
-      style.getPropertyValue(name),
-      style.getPropertyPriority(name),
-    ]);
-    for (const [name, value] of Object.entries(values))
-      style.setProperty(name, value);
-    return () => {
-      for (const [name, value, priority] of previous) {
-        if (value) style.setProperty(name, value, priority);
-        else style.removeProperty(name);
-      }
-    };
+    // Corporate colors are a fallback. The personal palette owns these tokens
+    // whenever ThemeProvider (or the initial appearance bootstrap) selects one.
+    // A selector handles initial load, palette changes and branding refetches
+    // without competing inline styles or browser-specific detection.
+    style.textContent = `:root:not([data-color-theme]) {${Object.entries(values)
+      .map(([name, value]) => `${name}: ${value};`)
+      .join("\n")}}`;
+    document.head.append(style);
+    return () => style.remove();
   }, [branding]);
   return (
     <Context.Provider value={{ branding, refetch }}>

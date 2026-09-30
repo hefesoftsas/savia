@@ -74,10 +74,15 @@ animation of Savia's robot greeting the visitor. Leaving before the delay cancel
 greeting. Touch and reduced-motion visitors do not trigger the hover animations.
 
 Inside the application, a shared provider reads the public identity for the current
-host and applies its display name, logo and primary colors. Theme mode remains a
-personal preference. The personal palette selector is hidden when the tenant controls
-the colors. Foreground colors are computed for contrast, and tenant styles are removed
-when the provider changes host or unmounts. Branding adds no persistent browser cache.
+host and applies its display name and logo. The account menu always offers personal
+palettes, including on branded workspaces. The active personal palette takes priority
+over corporate primary, accent and focus colors; light/dark mode remains personal too.
+Both preferences use the existing account preference synchronization. Choosing a palette
+does not modify the organization's saved branding or another user's preferences.
+Corporate colors remain the fallback on surfaces without an active personal palette,
+and server-rendered authentication pages retain their tenant identity. Foreground colors
+are computed for contrast, and tenant styles are removed when the provider changes host
+or unmounts. Branding adds no persistent browser cache.
 
 ## Images and public boundary
 

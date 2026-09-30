@@ -22,9 +22,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   document.documentElement.removeAttribute("style");
+  delete document.documentElement.dataset.colorTheme;
 });
 it("loads only public host branding and restores its variables on unmount", async () => {
-  document.documentElement.style.setProperty("--primary", "original");
   document.documentElement.style.setProperty("--background", "untouched");
   const fetcher = vi
     .fn()
@@ -37,9 +37,9 @@ it("loads only public host branding and restores its variables on unmount", asyn
   );
   await screen.findByText("Agencia Uno");
   await waitFor(() =>
-    expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
-      "#125633",
-    ),
+    expect(
+      getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+    ).toBe("#125633"),
   );
   expect(document.documentElement.style.getPropertyValue("--background")).toBe(
     "untouched",
@@ -48,9 +48,9 @@ it("loads only public host branding and restores its variables on unmount", asyn
   expect(fetcher.mock.calls[0][1].credentials).toBe("omit");
   expect(fetcher.mock.calls[0][1].cache).toBe("default");
   view.unmount();
-  expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
-    "original",
-  );
+  expect(
+    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+  ).toBe("");
 });
 it("clears old branding when the host changes and ignores its stale response", async () => {
   let resolveOld!: (value: Response) => void;
@@ -79,14 +79,15 @@ it("clears old branding when the host changes and ignores its stale response", a
     resolveOld(new Response(JSON.stringify({ data: branding }))),
   );
   expect(screen.getByText("Sin marca")).toBeInTheDocument();
-  expect(document.documentElement.style.getPropertyValue("--primary")).toBe("");
+  expect(
+    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+  ).toBe("");
 });
 it("has a safe fallback outside a provider", () => {
   render(<Name />);
   expect(screen.getByText("Sin marca")).toBeInTheDocument();
 });
 it("removes applied colors immediately on host change and null branding", async () => {
-  document.documentElement.style.setProperty("--primary", "original");
   let resolveNext!: (value: Response) => void;
   const fetcher = vi
     .fn()
@@ -104,24 +105,24 @@ it("removes applied colors immediately on host change and null branding", async 
     </TenantBrandingProvider>,
   );
   await screen.findByText("Agencia Uno");
-  expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
-    "#125633",
-  );
+  expect(
+    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+  ).toBe("#125633");
   view.rerender(
     <TenantBrandingProvider hostname="second.savia.app.hefesoft.com">
       <Name />
     </TenantBrandingProvider>,
   );
   expect(screen.getByText("Sin marca")).toBeInTheDocument();
-  expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
-    "original",
-  );
+  expect(
+    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+  ).toBe("");
   await act(async () =>
     resolveNext(new Response(JSON.stringify({ data: null }))),
   );
-  expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
-    "original",
-  );
+  expect(
+    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+  ).toBe("");
 });
 it("ignores unsafe public image configuration without applying its colors", async () => {
   vi.stubGlobal(
@@ -141,7 +142,9 @@ it("ignores unsafe public image configuration without applying its colors", asyn
   );
   await act(async () => undefined);
   expect(screen.getByText("Sin marca")).toBeInTheDocument();
-  expect(document.documentElement.style.getPropertyValue("--primary")).toBe("");
+  expect(
+    getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+  ).toBe("");
 });
 
 it("passes reload cache mode when refetch is called with reload option", async () => {
@@ -171,3 +174,54 @@ it("passes reload cache mode when refetch is called with reload option", async (
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   expect(fetcher.mock.calls[1][1].cache).toBe("reload");
 });
+
+it.each([false, true])(
+  "keeps personal colors across branding refreshes (palette present on load: %s)",
+  async (savedPalette) => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(
+          async () => new Response(JSON.stringify({ data: branding })),
+        ),
+    );
+    const palette = document.createElement("style");
+    palette.textContent =
+      ':root[data-color-theme="blue"] { --primary: blue; --accent: lightblue; }';
+    document.head.append(palette);
+    function Refresh() {
+      const { refetch } = useTenantBranding();
+      return <button onClick={() => void refetch()}>Refresh</button>;
+    }
+    try {
+      if (savedPalette) document.documentElement.dataset.colorTheme = "blue";
+      render(
+        <TenantBrandingProvider>
+          <Name />
+          <Refresh />
+        </TenantBrandingProvider>,
+      );
+      await screen.findByText("Agencia Uno");
+      const root = document.documentElement;
+      expect(getComputedStyle(root).getPropertyValue("--primary")).toBe(
+        savedPalette ? "blue" : "#125633",
+      );
+      root.dataset.colorTheme = "blue";
+      expect(getComputedStyle(root).getPropertyValue("--primary")).toBe("blue");
+      expect(getComputedStyle(root).getPropertyValue("--accent")).toBe(
+        "lightblue",
+      );
+      await act(async () =>
+        screen.getByRole("button", { name: "Refresh" }).click(),
+      );
+      expect(getComputedStyle(root).getPropertyValue("--primary")).toBe("blue");
+      delete root.dataset.colorTheme;
+      expect(getComputedStyle(root).getPropertyValue("--primary")).toBe(
+        "#125633",
+      );
+    } finally {
+      palette.remove();
+    }
+  },
+);
