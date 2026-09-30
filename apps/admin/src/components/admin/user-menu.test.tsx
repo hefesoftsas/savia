@@ -183,9 +183,9 @@ describe("UserMenu", () => {
     expect(setColorTheme).toHaveBeenCalledWith("blue");
   });
 
-  it("respects tenant branding by hiding personal palette choices", async () => {
+  it("allows personal palette choices with tenant branding", async () => {
     mockBranding = { name: "Tenant" };
-    const { getByRole, findByRole, queryByRole } = renderMenu();
+    const { getByRole, findByRole } = renderMenu();
     const trigger = getByRole("button", { name: /Abrir menú de cuenta/i });
     fireEvent.pointerDown(trigger);
     fireEvent.click(trigger);
@@ -195,8 +195,7 @@ describe("UserMenu", () => {
     expect(
       await findByRole("menuitemradio", { name: "savia.appearance.darkMode" }),
     ).toBeVisible();
-    expect(
-      queryByRole("menuitemradio", { name: "Blue" }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(await findByRole("menuitemradio", { name: "Blue" }));
+    expect(setColorTheme).toHaveBeenCalledWith("blue");
   });
 });

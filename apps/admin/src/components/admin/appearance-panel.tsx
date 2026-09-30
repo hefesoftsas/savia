@@ -8,7 +8,6 @@ import {
   type ColorTheme,
 } from "@/color-theme";
 import { useTheme } from "@/components/admin/use-theme";
-import { useTenantBranding } from "@/features/tenant-branding/tenant-branding-provider";
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -32,7 +31,6 @@ const hideIndicatorClassName = "[&>span:first-child]:hidden";
  * click (no hover needed) and scrolls with the single parent container.
  */
 export function AppearancePanel() {
-  const { branding } = useTenantBranding();
   const { theme, setTheme, colorTheme, setColorTheme } = useTheme();
   const translate = useTranslate();
   const [open, setOpen] = useState(false);
@@ -93,36 +91,32 @@ export function AppearancePanel() {
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </div>
-          {!branding && (
-            <>
-              <DropdownMenuLabel className="flex items-baseline justify-between gap-2">
-                <span>{translate("savia.appearance.palette")}</span>
-                <span className="truncate text-xs font-normal text-muted-foreground">
-                  {colorThemeLabel(colorTheme)}
-                </span>
-              </DropdownMenuLabel>
-              <div className="px-1 pb-1">
-                <DropdownMenuRadioGroup
-                  value={colorTheme}
-                  onValueChange={(value) => setColorTheme(value as ColorTheme)}
-                  className="grid grid-cols-4 gap-1"
+          <DropdownMenuLabel className="flex items-baseline justify-between gap-2">
+            <span>{translate("savia.appearance.palette")}</span>
+            <span className="truncate text-xs font-normal text-muted-foreground">
+              {colorThemeLabel(colorTheme)}
+            </span>
+          </DropdownMenuLabel>
+          <div className="px-1 pb-1">
+            <DropdownMenuRadioGroup
+              value={colorTheme}
+              onValueChange={(value) => setColorTheme(value as ColorTheme)}
+              className="grid grid-cols-4 gap-1"
+            >
+              {colorThemes.map((option) => (
+                <DropdownMenuRadioItem
+                  key={option.id}
+                  value={option.id}
+                  title={option.label}
+                  aria-label={option.label}
+                  className={`size-11 min-h-11 justify-center rounded-lg p-0 ${checkedButtonClassName} ${hideIndicatorClassName}`}
                 >
-                  {colorThemes.map((option) => (
-                    <DropdownMenuRadioItem
-                      key={option.id}
-                      value={option.id}
-                      title={option.label}
-                      aria-label={option.label}
-                      className={`size-11 min-h-11 justify-center rounded-lg p-0 ${checkedButtonClassName} ${hideIndicatorClassName}`}
-                    >
-                      <PalettePreview theme={option.id} />
-                      <span className="sr-only">{option.label}</span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </div>
-            </>
-          )}
+                  <PalettePreview theme={option.id} />
+                  <span className="sr-only">{option.label}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </div>
         </>
       ) : null}
     </>
