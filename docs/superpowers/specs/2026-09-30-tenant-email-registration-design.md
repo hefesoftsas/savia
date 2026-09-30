@@ -1,6 +1,6 @@
 # Tenant registration and verified Microsoft personal sign-in
 
-Status: Updated draft for review after a live Microsoft personal-account probe.
+Status: Approved by the user on September 30, 2026; implementation-plan review pending.
 
 ## Intent and accepted requirements
 
