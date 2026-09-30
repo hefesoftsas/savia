@@ -2,6 +2,10 @@
 
 Tenant administrators can connect a SAML 2.0 identity provider from **Settings → Service credentials → Tenant SAML SSO**. The configuration belongs to the selected tenant. Platform administrators can manage any active tenant.
 
+Platform administrators can also open **Tenants → Edit tenant → Sign-in methods → Configure SSO**. On a tenant-scoped **Users** list, **Sign-in settings** opens the same configuration. These links select the tenant and SAML tab automatically. Credentials URLs retain `tenantId` and `tab` so reloading or using browser history preserves the selected configuration. If the linked tenant is unavailable, select another workspace; Savia does not silently substitute another tenant.
+
+On the service credentials page, select the tenant in **Workspace**. The platform workspace shows an explanation instead of tenant sign-in tabs: platform accounts use local sign-in. SAML and Google / Microsoft tabs appear for tenant workspaces.
+
 ## Configure a provider
 
 In the tenant's identity provider, create a SAML application for Savia and collect its SAML metadata XML. In Savia, enter a display name and the lowercase email domain that the provider will serve, then paste the XML. The metadata must be no larger than 100 KiB. SAML metadata contains public endpoints and certificates; tenant administrators can read it back to edit their configuration.

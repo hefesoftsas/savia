@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppServices } from "@/features/assistant/assistant-context";
+import "./tenant-user-capacity.css";
 
 export function TenantUserCapacity({
   tenantId,
@@ -48,6 +49,11 @@ export function TenantUserCapacity({
 
   if (!validTenantId) return null;
 
+  const titleId = `tenant-user-capacity-title-${tenantId}`;
+  const inputId = `tenant-user-capacity-${tenantId}`;
+  const helpId = `tenant-user-capacity-help-${tenantId}`;
+  const errorId = `tenant-user-capacity-error-${tenantId}`;
+
   const submit = () => {
     const limit = draft.trim() === "" ? null : Number(draft);
     if (
@@ -71,11 +77,11 @@ export function TenantUserCapacity({
 
   return (
     <section
-      aria-labelledby="tenant-user-capacity-title"
-      className="mb-4 grid gap-3 border-b pb-4 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,auto)] sm:items-end"
+      aria-labelledby={titleId}
+      className="mb-4 grid w-full min-w-0 gap-3 border-b pb-4"
     >
-      <div className="space-y-1">
-        <h2 id="tenant-user-capacity-title" className="text-sm font-medium">
+      <div className="min-w-0 space-y-1">
+        <h2 id={titleId} className="text-sm font-medium">
           {t("savia.users.capacity.title", "Tenant user capacity")}
         </h2>
         {capacity.isPending ? (
@@ -116,74 +122,65 @@ export function TenantUserCapacity({
       </div>
 
       {platformCanEdit && !capacity.error && !capacity.isPending && (
-        <div className="grid gap-2 sm:grid-cols-[minmax(9rem,1fr)_auto] sm:items-end">
-          <div className="grid gap-1.5">
-            <Label htmlFor={`tenant-user-capacity-${tenantId}`}>
-              {t("savia.users.capacity.limitLabel", "Maximum active users")}
-            </Label>
-            <Input
-              id={`tenant-user-capacity-${tenantId}`}
-              type="number"
-              min={0}
-              max={MAX_ACTIVE_USER_LIMIT}
-              step={1}
-              inputMode="numeric"
-              value={draft}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                setValidationError("");
-              }}
-              aria-invalid={Boolean(validationError)}
-              aria-describedby={
-                validationError
-                  ? `tenant-user-capacity-error-${tenantId}`
-                  : `tenant-user-capacity-help-${tenantId}`
+        <div className="tenant-user-capacity-editor grid w-full min-w-0 max-w-xl gap-2">
+          <div className="tenant-user-capacity-controls grid min-w-0 gap-2">
+            <div className="grid min-w-0 gap-1.5">
+              <Label htmlFor={inputId}>
+                {t("savia.users.capacity.limitLabel", "Maximum active users")}
+              </Label>
+              <Input
+                id={inputId}
+                type="number"
+                min={0}
+                max={MAX_ACTIVE_USER_LIMIT}
+                step={1}
+                inputMode="numeric"
+                value={draft}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setValidationError("");
+                }}
+                aria-invalid={Boolean(validationError)}
+                aria-describedby={validationError ? errorId : helpId}
+                disabled={save.isPending}
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={submit}
+              disabled={
+                save.isPending || capacity.isPending || Boolean(capacity.error)
               }
-              disabled={save.isPending}
-            />
-            <p
-              id={`tenant-user-capacity-help-${tenantId}`}
-              className="text-xs text-muted-foreground"
             >
+              {save.isPending
+                ? t("savia.users.capacity.saving", "Saving…")
+                : t("savia.users.capacity.save", "Save limit")}
+            </Button>
+          </div>
+          <p id={helpId} className="text-xs text-muted-foreground">
+            {t(
+              "savia.users.capacity.unlimitedHelp",
+              "Leave blank for no limit. The count includes tenant administrators.",
+            )}
+          </p>
+          {validationError && (
+            <p id={errorId} role="alert" className="text-xs text-destructive">
+              {validationError}
+            </p>
+          )}
+          {save.error && !validationError && (
+            <p role="alert" className="text-xs text-destructive">
               {t(
-                "savia.users.capacity.unlimitedHelp",
-                "Leave blank for no limit. The count includes tenant administrators.",
+                "savia.users.capacity.saveError",
+                "Unable to save the user limit.",
               )}
             </p>
-            {validationError && (
-              <p
-                id={`tenant-user-capacity-error-${tenantId}`}
-                role="alert"
-                className="text-xs text-destructive"
-              >
-                {validationError}
-              </p>
-            )}
-            {save.error && !validationError && (
-              <p role="alert" className="text-xs text-destructive">
-                {t(
-                  "savia.users.capacity.saveError",
-                  "Unable to save the user limit.",
-                )}
-              </p>
-            )}
-            {save.isSuccess && !save.isPending && (
-              <p role="status" className="text-xs text-muted-foreground">
-                {t("savia.users.capacity.saved", "User limit saved.")}
-              </p>
-            )}
-          </div>
-          <Button
-            type="button"
-            onClick={submit}
-            disabled={
-              save.isPending || capacity.isPending || Boolean(capacity.error)
-            }
-          >
-            {save.isPending
-              ? t("savia.users.capacity.saving", "Saving…")
-              : t("savia.users.capacity.save", "Save limit")}
-          </Button>
+          )}
+          {save.isSuccess && !save.isPending && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {t("savia.users.capacity.saved", "User limit saved.")}
+            </p>
+          )}
         </div>
       )}
     </section>

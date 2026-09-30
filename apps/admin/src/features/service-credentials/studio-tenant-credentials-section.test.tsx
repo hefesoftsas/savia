@@ -1,4 +1,5 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { Link, MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@/features/studio-engine/test/locale-test-render";
 import type { TenantWorkspace } from "@/api/tenant-workspaces-client";
@@ -34,7 +35,9 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 }));
 
 vi.mock("@/features/studio/studio-tenants", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/features/studio/studio-tenants")>()),
+  ...(await importOriginal<
+    typeof import("@/features/studio/studio-tenants")
+  >()),
   listStudioTenants: async () => testState.workspaces,
 }));
 
@@ -76,29 +79,108 @@ function workspace(tenantId: number): TenantWorkspace {
   };
 }
 
+function renderCredentials(path = "/service-credentials") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <StudioTenantCredentialsSection services={services} />
+      <Link to="/service-credentials?tenantId=102&tab=social">
+        Other tenant sign-in
+      </Link>
+    </MemoryRouter>,
+  );
+}
+
 describe("StudioTenantCredentialsSection identity providers", () => {
   it("hides SAML and social sign-in settings in the platform workspace", async () => {
     testState.workspaces = [workspace(0)];
-    render(<StudioTenantCredentialsSection services={services} />);
+    renderCredentials();
 
     await waitFor(() =>
       expect(
         screen.getByRole("tab", { name: "Correo del tenant" }),
       ).toBeEnabled(),
     );
-    expect(screen.queryByRole("tab", { name: "Inicio de sesión SAML" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Google / Microsoft" })).toBeNull();
+    expect(
+      screen.queryByRole("tab", { name: "Inicio de sesión SAML" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("tab", { name: "Google / Microsoft" }),
+    ).toBeNull();
   });
 
   it("keeps SAML and social sign-in settings available for tenant workspaces", async () => {
     testState.workspaces = [workspace(101)];
-    render(<StudioTenantCredentialsSection services={services} />);
+    renderCredentials();
 
     await waitFor(() =>
       expect(
         screen.getByRole("tab", { name: "Inicio de sesión SAML" }),
       ).toBeEnabled(),
     );
-    expect(screen.getByRole("tab", { name: "Google / Microsoft" })).toBeVisible();
+    expect(
+      screen.getByRole("tab", { name: "Google / Microsoft" }),
+    ).toBeVisible();
   });
+
+  it("opens the requested tenant's SSO tab from a direct link", async () => {
+    testState.workspaces = [workspace(0), workspace(101)];
+    renderCredentials("/service-credentials?tenantId=101&tab=sso");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: "Inicio de sesión SAML" }),
+      ).toHaveAttribute("aria-selected", "true"),
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Espacio de trabajo" }),
+    ).toHaveValue("101");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(
+      "Tenant SAML settings",
+    );
+  });
+
+  it("updates the tenant and sign-in tab when the route changes", async () => {
+    testState.workspaces = [workspace(0), workspace(101), workspace(102)];
+    renderCredentials("/service-credentials?tenantId=101&tab=sso");
+    await screen.findByText("Tenant SAML settings");
+
+    fireEvent.click(screen.getByRole("link", { name: "Other tenant sign-in" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: "Google / Microsoft" }),
+      ).toHaveAttribute("aria-selected", "true"),
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Espacio de trabajo" }),
+    ).toHaveValue("102");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(
+      "Google / Microsoft settings",
+    );
+  });
+
+  it.each(["999", "-1", "", "invalid"])(
+    "does not substitute another tenant for an unavailable linked ID (%s)",
+    async (tenantId) => {
+      testState.workspaces = [workspace(101)];
+      renderCredentials(`/service-credentials?tenantId=${tenantId}&tab=sso`);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "El espacio solicitado no está disponible",
+      );
+      expect(
+        screen.getByRole("tab", { name: "Inicio de sesión SAML" }),
+      ).toBeDisabled();
+      expect(screen.queryByText("Tenant SAML settings")).toBeNull();
+      expect(
+        screen.getByRole("tab", { name: "Google / Microsoft" }),
+      ).toBeDisabled();
+
+      fireEvent.change(screen.getByRole("combobox"), {
+        target: { value: "101" },
+      });
+      expect(await screen.findByText("Tenant SAML settings")).toBeVisible();
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
 });

@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AppServices } from "@/app-services";
 import { createEmbeddedTransport } from "@/api/embedded-transport";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,7 @@ import { TenantEmailSettingsPanel } from "@/features/tenant-email/tenant-email-s
 import { tenantEmailMessages } from "@/features/tenant-email/tenant-email-messages";
 import { TenantSSOSettingsPanel } from "@/features/tenant-sso/tenant-sso-settings-panel";
 import { tenantSSOMessages } from "@/features/tenant-sso/tenant-sso-messages";
+import { tenantSignInMessages } from "@/features/tenant-sso/tenant-sign-in-messages";
 import { TenantSocialSettingsPanel } from "@/features/tenant-social/tenant-social-settings-panel";
 import { tenantSocialMessages } from "@/features/tenant-social/tenant-social-messages";
 import { setStudioRuntime } from "@/features/studio-engine/runtime";
@@ -173,12 +174,28 @@ export function StudioTenantCredentialsSection({
   const emailT = useMessages(tenantEmailMessages);
   const ssoT = useMessages(tenantSSOMessages);
   const socialT = useMessages(tenantSocialMessages);
+  const signInT = useMessages(tenantSignInMessages);
   const locale = intlLocale(useAppLocale());
   const navigate = useNavigate();
   const cache = useQueryClient();
   const [tenants, setTenants] = useState<StudioTenant[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(true);
-  const [selectedTenantId, setSelectedTenantId] = useState<number>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTenantId = searchParams.get("tenantId");
+  const selectedTenantId =
+    requestedTenantId === null
+      ? undefined
+      : /^\d+$/.test(requestedTenantId) &&
+          Number.isSafeInteger(Number(requestedTenantId))
+        ? Number(requestedTenantId)
+        : NaN;
+  const setSelectedTenantId = (tenantId: number) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("tenantId", String(tenantId));
+      return next;
+    });
+  };
   const tenant = useMemo(
     () =>
       selectStudioTenant(tenants, selectedTenantId) ??
@@ -307,51 +324,85 @@ export function StudioTenantCredentialsSection({
 
   if (!tenant || !transport) {
     return (
-      <Tabs defaultValue="global" className="credentials-tabs">
-        <TabsList className="credentials-tabs-list">
-          <CredentialTab
-            value="global"
-            tooltip={t(
-              "Service credentials, grouped by platform or workspace.",
+      <div>
+        {requestedTenantId !== null && !loadingTenants ? (
+          <p role="alert" className="text-sm text-destructive">
+            {signInT(
+              "The requested workspace is unavailable. Select another workspace to continue.",
             )}
-          >
-            {t("Services")}
-          </CredentialTab>
-          <CredentialTab value="integrations" tooltip="" disabled>
-            {t("Integraciones")}
-          </CredentialTab>
-          <CredentialTab
-            value="email"
-            tooltip={emailT("Tenant email delivery")}
-            disabled
-          >
-            {emailT("Tenant email delivery")}
-          </CredentialTab>
-          <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")} disabled>
-            {ssoT("Tenant SAML SSO")}
-          </CredentialTab>
-          <CredentialTab
-            value="social"
-            tooltip={socialT("Google / Microsoft")}
-            disabled
-          >
-            {socialT("Google / Microsoft")}
-          </CredentialTab>
-        </TabsList>
-        <TabsContent value="global" className="credentials-tabs-panel">
-          <GlobalCredentialsPanel
-            globalCredentials={globalCredentials}
-            freeServicesEntry={<FreeServicesEntry />}
-            loadingMessage={
-              <p className="credentials-muted">
-                {t(
-                  "No hay tenants disponibles para Geoapify o integraciones de Studio.",
-                )}
-              </p>
-            }
-          />
-        </TabsContent>
-      </Tabs>
+          </p>
+        ) : null}
+        {tenants.length > 0 ? (
+          <label className="mt-3 grid max-w-sm gap-1.5 text-sm">
+            {t("Workspace")}
+            <select
+              className="h-9 rounded-md border bg-background px-3"
+              value=""
+              onChange={(event) =>
+                setSelectedTenantId(Number(event.target.value))
+              }
+            >
+              <option value="" disabled>
+                {t("Workspace")}
+              </option>
+              {tenants.map((item) => (
+                <option key={item.id} value={item.tenantId}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <Tabs defaultValue="global" className="credentials-tabs">
+          <TabsList className="credentials-tabs-list">
+            <CredentialTab
+              value="global"
+              tooltip={t(
+                "Service credentials, grouped by platform or workspace.",
+              )}
+            >
+              {t("Services")}
+            </CredentialTab>
+            <CredentialTab value="integrations" tooltip="" disabled>
+              {t("Integraciones")}
+            </CredentialTab>
+            <CredentialTab
+              value="email"
+              tooltip={emailT("Tenant email delivery")}
+              disabled
+            >
+              {emailT("Tenant email delivery")}
+            </CredentialTab>
+            <CredentialTab
+              value="sso"
+              tooltip={ssoT("Tenant SAML SSO")}
+              disabled
+            >
+              {ssoT("Tenant SAML SSO")}
+            </CredentialTab>
+            <CredentialTab
+              value="social"
+              tooltip={socialT("Google / Microsoft")}
+              disabled
+            >
+              {socialT("Google / Microsoft")}
+            </CredentialTab>
+          </TabsList>
+          <TabsContent value="global" className="credentials-tabs-panel">
+            <GlobalCredentialsPanel
+              globalCredentials={globalCredentials}
+              freeServicesEntry={<FreeServicesEntry />}
+              loadingMessage={
+                <p className="credentials-muted">
+                  {t(
+                    "No hay tenants disponibles para Geoapify o integraciones de Studio.",
+                  )}
+                </p>
+              }
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
     );
   }
 
@@ -370,6 +421,16 @@ export function StudioTenantCredentialsSection({
     ) ?? [];
   const tenantTools = true;
   const isPlatformWorkspace = tenant.tenantId === 0;
+  const requestedTab = searchParams.get("tab") ?? "global";
+  const activeTab = [
+    "global",
+    "integrations",
+    "sources",
+    "email",
+    ...(!isPlatformWorkspace ? ["sso", "social"] : []),
+  ].includes(requestedTab)
+    ? requestedTab
+    : "global";
   const geoapifyConfigured =
     geocoding.data?.geoapifyStored || geocoding.data?.geoapifyConfigured;
 
@@ -563,7 +624,25 @@ export function StudioTenantCredentialsSection({
           </select>
         </label>
       )}
-      <Tabs defaultValue="global" className="credentials-tabs">
+      {isPlatformWorkspace ? (
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          {signInT(
+            "SSO and Google / Microsoft are configured per tenant. Select a tenant workspace to manage its sign-in methods.",
+          )}
+        </p>
+      ) : null}
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => {
+          setSearchParams((previous) => {
+            const next = new URLSearchParams(previous);
+            next.set("tab", tab);
+            next.set("tenantId", String(tenant.tenantId));
+            return next;
+          });
+        }}
+        className="credentials-tabs"
+      >
         <TabsList className="credentials-tabs-list">
           <CredentialTab
             value="global"
