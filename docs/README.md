@@ -87,3 +87,5 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Documents and deliveries](guides/document-delivery.md): saved attachments, OneDrive copies and confirmed Outlook sends.
 
 - [Initial database baseline](guides/database-initial-baseline.md) — fresh installation and pre-production reset.
+
+- [Shared private plugin registry](guides/plugin-registry.md): publish immutable releases once and import them across environments.

@@ -496,3 +496,7 @@ new optional fields are added with a versioned schema update; existing fields,
 labels, layouts and customizations are preserved. Required and conditionally
 required fields are not added automatically because existing records may not
 satisfy them. Invalid collection declarations are rejected during ZIP upload.
+
+## Shared private registry
+
+An optional [shared private plugin registry](guides/plugin-registry.md) stores immutable ZIP releases in a dedicated R2 bucket outside environment databases. Tenant administrators can import a pinned release from **Shared catalog** into their local store. Execution, installation state, data and credentials remain local. Exact tenant mappings and server-only read credentials control access; existing uploads are not automatically published.

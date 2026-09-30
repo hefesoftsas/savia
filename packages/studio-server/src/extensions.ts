@@ -240,9 +240,16 @@ export function registerExtensions(
     db: D1Database,
     tenant: string,
     extensionId: string,
+    version?: string,
   ) {
-    if (objectRequirements.has(extensionId)) return objectRequirements;
-    const declared = await storeObjectRequirements(db, tenant, extensionId);
+    if (!version && objectRequirements.has(extensionId))
+      return objectRequirements;
+    const declared = await storeObjectRequirements(
+      db,
+      tenant,
+      extensionId,
+      version,
+    );
     if (!declared.length) return objectRequirements;
     return new Map([
       ...objectRequirements,
@@ -260,11 +267,13 @@ export function registerExtensions(
     db: D1Database,
     tenant: string,
     id: string,
+    version?: string,
   ): Promise<{ manifest: ExtensionManifest; builtIn: boolean } | null> {
     // Lo subido por el tenant prevalece sobre lo compilado: permite
     // migrar un plugin fuera del release sin cambiar su id.
-    const stored = await storePluginManifest(db, tenant, id);
+    const stored = await storePluginManifest(db, tenant, id, version);
     if (stored) return { manifest: stored, builtIn: false };
+    if (version) return null;
     const compiled = registry.get(id);
     if (compiled)
       return {
@@ -343,7 +352,38 @@ export function registerExtensions(
   app.post("/api/extensions/:id/install", async (c) => {
     const tenant = c.get("tenant");
     const id = c.req.param("id");
-    const extension = await resolveExtension(c.env.DB, tenant, id);
+    const rawText = await c.req.text();
+    let rawBody: unknown = {};
+    if (rawText.trim()) {
+      try {
+        rawBody = JSON.parse(rawText);
+      } catch {
+        return fail("Datos de instalación no válidos.", 400);
+      }
+    }
+    const body = z
+      .object({
+        version: z
+          .string()
+          .regex(
+            /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/,
+          )
+          .optional(),
+        allowDowngrade: z.boolean().optional(),
+      })
+      .strict()
+      .safeParse(rawBody);
+    if (!body.success) return fail("Datos de instalación no válidos.", 400);
+    if (body.data.allowDowngrade && !body.data.version)
+      return fail("El rollback requiere una versión explícita.", 400);
+    if (body.data.allowDowngrade && !options.canManageExtension)
+      return fail("Se requiere permiso de administración del espacio.", 403);
+    const extension = await resolveExtension(
+      c.env.DB,
+      tenant,
+      id,
+      body.data.version,
+    );
     if (!extension) return fail("La extensión no existe en este espacio.", 404);
     if (extension.builtIn)
       return c.json({
@@ -366,7 +406,7 @@ export function registerExtensions(
         extension.manifest.version,
         current.version,
       );
-      if (order < 0)
+      if (order < 0 && !body.data.allowDowngrade)
         return fail("No se puede instalar una versión anterior.", 409);
       if (
         order === 0 &&
@@ -380,7 +420,12 @@ export function registerExtensions(
         const provisioning = await prepareExtensionObjectProvisioning(
           c.env.DB,
           tenant,
-          await effectiveObjectRequirements(c.env.DB, tenant, id),
+          await effectiveObjectRequirements(
+            c.env.DB,
+            tenant,
+            id,
+            extension.manifest.version,
+          ),
           id,
         );
         if (provisioning.starts.length)
@@ -414,7 +459,12 @@ export function registerExtensions(
     const provisioning = await prepareExtensionObjectProvisioning(
       c.env.DB,
       tenant,
-      await effectiveObjectRequirements(c.env.DB, tenant, id),
+      await effectiveObjectRequirements(
+        c.env.DB,
+        tenant,
+        id,
+        extension.manifest.version,
+      ),
       id,
     );
     await transaction(c.env.DB, [

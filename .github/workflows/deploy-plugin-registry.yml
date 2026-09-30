@@ -1,0 +1,58 @@
+name: Deploy shared plugin registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savia-plugin-registry-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @savia/plugin-registry test
+      - run: pnpm --filter @savia/plugin-registry typecheck
+      - name: Reject superseded deployments
+        shell: bash
+        run: |
+          approved_sha="$(git rev-parse HEAD)"
+          current_sha="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$approved_sha" != "$current_sha" ]; then
+            echo "::error::This commit has been superseded on main; refusing an outdated registry deployment."
+            exit 1
+          fi
+      # The persistent R2 bucket is provisioned separately and never reset here.
+      - name: Deploy registry and its hashed credential configuration
+        working-directory: apps/plugin-registry
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          REGISTRY_CREDENTIALS: ${{ secrets.PLUGIN_REGISTRY_CREDENTIALS }}
+        run: |
+          node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            const value = process.env.REGISTRY_CREDENTIALS;
+            if (!value || !Array.isArray(JSON.parse(value)) || !JSON.parse(value).length) throw new Error("Missing registry credentials");
+            writeFileSync(".registry-secrets.json", JSON.stringify({REGISTRY_CREDENTIALS:value}), {mode:0o600});
+          '
+          trap 'rm -f .registry-secrets.json' EXIT
+          pnpm exec wrangler deploy
+          pnpm exec wrangler secret bulk .registry-secrets.json

@@ -2,6 +2,7 @@ import {
   PLUGIN_STORE_CONFIG_PATH,
   PLUGIN_STORE_ENTRY_PATH,
   PLUGIN_STORE_MANIFEST_PATH,
+  PLUGIN_STORE_MAX_ENTRY_BYTES,
   PLUGIN_STORE_MAX_ZIP_BYTES,
   assertStoreHttpUrl,
   pluginStoreManifestSchema,
@@ -45,10 +46,12 @@ import { z } from "zod";
 import { type Env, fail } from "./context";
 import { audit } from "./services";
 import type { Hono } from "hono";
+import { registerPluginRegistry } from "./plugin-registry";
 
 export type PluginStoreOptions = {
   apiBasePath?: string;
   entryGrantSecret?: string;
+  pluginRegistry?: { url: string; token: string };
   canManageExtension?: (input: {
     tenantId: string;
     principalId: string;
@@ -92,6 +95,13 @@ export type ParsedStoreZip = {
   sizeBytes: number;
 };
 
+export type StoreUploadResult = {
+  id: string;
+  version: string;
+  sha256: string;
+  deduped: boolean;
+};
+
 // --- Lector ZIP mínimo (stored + deflated) sobre APIs del Worker ---
 
 type ZipEntry = { name: string; method: number; data: Uint8Array };
@@ -118,13 +128,34 @@ function findCentralDirectory(bytes: Uint8Array): number {
 
 async function inflateRaw(data: Uint8Array, name: string): Promise<Uint8Array> {
   try {
-    // Copia: Blob ignora el byteOffset de algunas vistas en ciertos runtimes.
     const owned = data.slice();
     const stream = new Blob([owned as BlobPart])
       .stream()
       .pipeThrough(new DecompressionStream("deflate-raw"));
-    const buffer = await new Response(stream).arrayBuffer();
-    return new Uint8Array(buffer);
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.byteLength;
+        if (length > PLUGIN_STORE_MAX_ENTRY_BYTES) {
+          await reader.cancel();
+          throw new Error(`La entrada ${name} supera el tamaño máximo.`);
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const output = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return output;
   } catch {
     throw new Error(`No se pudo descomprimir ${name}.`);
   }
@@ -136,7 +167,11 @@ async function unzipEntries(bytes: Uint8Array): Promise<ZipEntry[]> {
   const eocd = findCentralDirectory(bytes);
   const totalEntries = view.getUint16(eocd + 10, true);
   const centralOffset = view.getUint32(eocd + 16, true);
+  if (totalEntries > 256)
+    throw new Error("El ZIP contiene demasiadas entradas.");
   const entries: ZipEntry[] = [];
+  const names = new Set<string>();
+  let expandedBytes = 0;
   let cursor = centralOffset;
   for (let i = 0; i < totalEntries; i++) {
     if (view.getUint32(cursor, true) !== 0x02014b50)
@@ -152,6 +187,8 @@ async function unzipEntries(bytes: Uint8Array): Promise<ZipEntry[]> {
 
     const name = new TextDecoder().decode(nameBytes);
     if (name.endsWith("/")) continue; // directorio
+    if (names.has(name)) throw new Error(`El ZIP repite la entrada ${name}.`);
+    names.add(name);
     if (
       name.includes("..") ||
       name.startsWith("/") ||
@@ -166,11 +203,19 @@ async function unzipEntries(bytes: Uint8Array): Promise<ZipEntry[]> {
     const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
     const dataStart =
       localHeaderOffset + 30 + localNameLength + localExtraLength;
+    if (dataStart + compressedSize > bytes.length)
+      throw new Error("El ZIP está corrupto.");
     const data = bytes.slice(dataStart, dataStart + compressedSize);
-    if (method === 0) entries.push({ name, method, data });
-    else if (method === 8)
-      entries.push({ name, method, data: await inflateRaw(data, name) });
+    let expanded: Uint8Array;
+    if (method === 0) expanded = data;
+    else if (method === 8) expanded = await inflateRaw(data, name);
     else throw new Error(`El ZIP usa un método no soportado en ${name}.`);
+    if (expanded.byteLength > PLUGIN_STORE_MAX_ENTRY_BYTES)
+      throw new Error(`La entrada ${name} supera el tamaño máximo.`);
+    expandedBytes += expanded.byteLength;
+    if (expandedBytes > PLUGIN_STORE_MAX_ZIP_BYTES)
+      throw new Error("El ZIP expandido supera el máximo permitido.");
+    entries.push({ name, method, data: expanded });
   }
   return entries;
 }
@@ -235,6 +280,112 @@ export async function parsePluginStoreZip(
   };
 }
 
+/** Persist an already validated package through the normal local upload path. */
+export async function persistParsedStoreArtifact(
+  db: D1Database,
+  tenant: string,
+  principalId: string | null,
+  parsed: ParsedStoreZip,
+): Promise<StoreUploadResult> {
+  const existing = await db
+    .prepare(
+      "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+    )
+    .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+    .first<{
+      manifest: string;
+      entry_js: string;
+      store_json?: string | null;
+    }>();
+  if (existing) {
+    if (
+      canonicalJson(JSON.parse(existing.manifest)) !==
+        canonicalJson(parsed.manifest) ||
+      existing.entry_js !== parsed.entryJs ||
+      canonicalJson(
+        existing.store_json ? JSON.parse(existing.store_json) : null,
+      ) !== canonicalJson(parsed.store ?? null)
+    )
+      fail(
+        "Esta versión ya existe con otro contenido. Publica una versión nueva.",
+        409,
+      );
+    return {
+      id: parsed.manifest.id,
+      version: parsed.manifest.version,
+      sha256: parsed.sha256,
+      deduped: true,
+    };
+  }
+
+  await assertStoreQuota(db, tenant, parsed.manifest.id, parsed.sizeBytes);
+  let hasConfigColumn = true;
+  try {
+    await db
+      .prepare("SELECT store_json FROM plugin_store_artifacts LIMIT 1")
+      .first();
+  } catch {
+    hasConfigColumn = false;
+  }
+  if (parsed.store && !hasConfigColumn)
+    fail("Este entorno aún no soporta store.json (migración pendiente).", 428);
+  if (hasConfigColumn) {
+    await db
+      .prepare(
+        `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+      .bind(
+        tenant,
+        parsed.manifest.id,
+        parsed.manifest.version,
+        canonicalJson(parsed.manifest),
+        parsed.entryJs,
+        parsed.store ? canonicalJson(parsed.store) : null,
+        parsed.sha256,
+        parsed.sizeBytes,
+        principalId,
+      )
+      .run();
+  } else {
+    await db
+      .prepare(
+        `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      )
+      .bind(
+        tenant,
+        parsed.manifest.id,
+        parsed.manifest.version,
+        canonicalJson(parsed.manifest),
+        parsed.entryJs,
+        parsed.sha256,
+        parsed.sizeBytes,
+        principalId,
+      )
+      .run();
+  }
+  await audit(
+    db,
+    tenant,
+    "plugin-store.uploaded",
+    "plugin",
+    parsed.manifest.id,
+    {
+      version: parsed.manifest.version,
+      sha256: parsed.sha256,
+    },
+  )
+    .run()
+    .catch(() => undefined);
+  return {
+    id: parsed.manifest.id,
+    version: parsed.manifest.version,
+    sha256: parsed.sha256,
+    deduped: false,
+  };
+}
+
 // --- Acceso a D1 ---
 
 export type StoreArtifactRow = {
@@ -257,8 +408,14 @@ export async function storeObjectRequirements(
   db: D1Database,
   tenant: string,
   extensionId: string,
+  version?: string,
 ): Promise<ExtensionObjectRequirement[]> {
-  const config = await storeConfigFor(db, tenant, extensionId, "latest");
+  const config = await storeConfigFor(
+    db,
+    tenant,
+    extensionId,
+    version ? { version } : "latest",
+  );
   if (!config) return [];
   const requirements: ExtensionObjectRequirement[] = [];
   for (const collection of config.collections ?? []) {
@@ -523,14 +680,22 @@ export async function storePluginManifest(
   db: D1Database,
   tenant: string,
   id: string,
+  version?: string,
 ): Promise<PluginStoreManifest | null> {
   if (!(await storeTableExists(db))) return null;
-  const row = await latestArtifactRow<{ manifest: string }>(
-    db,
-    tenant,
-    id,
-    "version,manifest",
-  );
+  const row = version
+    ? await db
+        .prepare(
+          "SELECT version,manifest FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+        )
+        .bind(tenant, id, version)
+        .first<{ version: string; manifest: string }>()
+    : await latestArtifactRow<{ manifest: string }>(
+        db,
+        tenant,
+        id,
+        "version,manifest",
+      );
   if (!row) return null;
   try {
     return pluginStoreManifestSchema.parse(JSON.parse(row.manifest));
@@ -562,7 +727,7 @@ export async function storeConfigFor(
   db: D1Database,
   tenant: string,
   id: string,
-  selection: "installed" | "latest" = "installed",
+  selection: "installed" | "latest" | { version: string } = "installed",
 ): Promise<StoreJson | null> {
   try {
     const installed =
@@ -574,19 +739,23 @@ export async function storeConfigFor(
             .bind(tenant, id)
             .first<{ version: string }>()
         : null;
-    const row = installed
+    const selectedVersion =
+      typeof selection === "object" ? selection.version : installed?.version;
+    const row = selectedVersion
       ? await db
           .prepare(
             "SELECT store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
           )
-          .bind(tenant, id, installed.version)
+          .bind(tenant, id, selectedVersion)
           .first<{ store_json: string | null }>()
-      : await latestArtifactRow<{ store_json: string | null }>(
-          db,
-          tenant,
-          id,
-          "version,store_json",
-        );
+      : selection === "latest"
+        ? await latestArtifactRow<{ store_json: string | null }>(
+            db,
+            tenant,
+            id,
+            "version,store_json",
+          )
+        : null;
     return parseStoreJson(row?.store_json);
   } catch {
     return null;
@@ -1125,6 +1294,8 @@ export function registerPluginStore(
   app: Hono<Env>,
   options: PluginStoreOptions = {},
 ) {
+  registerPluginRegistry(app, options);
+
   app.get("/api/plugin-store", async (c) => {
     const tenant = c.get("tenant");
     if (!(await storeTableExists(c.env.DB))) return c.json({ data: [] });
@@ -1199,109 +1370,13 @@ export function registerPluginStore(
       options,
       parsed.manifest.id,
     );
-    const existing = await c.env.DB.prepare(
-      "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
-    )
-      .bind(tenant, parsed.manifest.id, parsed.manifest.version)
-      .first<{
-        manifest: string;
-        entry_js: string;
-        store_json?: string | null;
-      }>();
-    if (existing) {
-      if (
-        canonicalJson(JSON.parse(existing.manifest)) !==
-          canonicalJson(parsed.manifest) ||
-        existing.entry_js !== parsed.entryJs ||
-        canonicalJson(
-          existing.store_json ? JSON.parse(existing.store_json) : null,
-        ) !== canonicalJson(parsed.store ?? null)
-      )
-        return fail(
-          "Esta versión ya existe con otro contenido. Publica una versión nueva.",
-          409,
-        );
-      return c.json({
-        data: {
-          id: parsed.manifest.id,
-          version: parsed.manifest.version,
-          sha256: parsed.sha256,
-          deduped: true,
-        },
-      });
-    }
-    const principalId = c.get("principalId") || null;
-    await assertStoreQuota(
+    const result = await persistParsedStoreArtifact(
       c.env.DB,
       tenant,
-      parsed.manifest.id,
-      parsed.sizeBytes,
+      c.get("principalId") || null,
+      parsed,
     );
-    let hasConfigColumn = true;
-    try {
-      await c.env.DB.prepare(
-        "SELECT store_json FROM plugin_store_artifacts LIMIT 1",
-      ).first();
-    } catch {
-      hasConfigColumn = false;
-    }
-    if (parsed.store && !hasConfigColumn)
-      return fail(
-        "Este entorno aún no soporta store.json (migración pendiente).",
-        428,
-      );
-    if (hasConfigColumn) {
-      await c.env.DB.prepare(
-        `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
-      )
-        .bind(
-          tenant,
-          parsed.manifest.id,
-          parsed.manifest.version,
-          canonicalJson(parsed.manifest),
-          parsed.entryJs,
-          parsed.store ? canonicalJson(parsed.store) : null,
-          parsed.sha256,
-          parsed.sizeBytes,
-          principalId,
-        )
-        .run();
-    } else {
-      await c.env.DB.prepare(
-        `INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by)
-         VALUES (?,?,?,?,?,?,?,?)`,
-      )
-        .bind(
-          tenant,
-          parsed.manifest.id,
-          parsed.manifest.version,
-          canonicalJson(parsed.manifest),
-          parsed.entryJs,
-          parsed.sha256,
-          parsed.sizeBytes,
-          principalId,
-        )
-        .run();
-    }
-    await audit(
-      c.env.DB,
-      tenant,
-      "plugin-store.uploaded",
-      "plugin",
-      parsed.manifest.id,
-      { version: parsed.manifest.version, sha256: parsed.sha256 },
-    )
-      .run()
-      .catch(() => undefined);
-    return c.json({
-      data: {
-        id: parsed.manifest.id,
-        version: parsed.manifest.version,
-        sha256: parsed.sha256,
-        deduped: false,
-      },
-    });
+    return c.json({ data: result });
   });
 
   app.get("/api/plugin-store/shell-bootstrap.js", async (c) => {

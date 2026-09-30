@@ -43,6 +43,7 @@ test("isolates core and connector configs while supplying their scoped secret va
   );
   const configs = await prepareApiRuntime(root, {
     SAVIA_PUBLIC_ORIGIN: "http://127.0.0.1:5174",
+    PLUGIN_REGISTRY_TENANTS: '{"tenant:1":{}}',
   });
   assert.equal(configs.length, 2);
   for (const path of [configs[0]]) {
@@ -54,6 +55,7 @@ test("isolates core and connector configs while supplying their scoped secret va
     assert.equal(vars.NANGO_API_KEY, "environment-key");
     assert.equal(vars.CRM_INTEGRATION_KEY, "stored-key");
     assert.equal(vars.SAVIA_PUBLIC_ORIGIN, "http://127.0.0.1:5174");
+    assert.equal(vars.PLUGIN_REGISTRY_TENANTS, '{"tenant:1":{}}');
     assert.equal((await stat(file)).mode & 0o777, 0o600);
   }
   const coreVars = parseEnv(

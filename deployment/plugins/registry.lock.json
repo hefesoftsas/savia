@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "insurance.accounting",
+      "version": "1.1.0",
+      "label": "Contabilidad",
+      "sha256": "0c0b5254edb02ae11a42d077ae54c99ff23ad94205a21f67a60ee553528e0edd",
+      "sizeBytes": 157044,
+      "createdAt": "2026-09-30T17:56:52.508Z"
+    },
+    {
+      "id": "insurance.activities",
+      "version": "1.1.0",
+      "label": "Actividades",
+      "sha256": "161d1ee7d33c84bcb6211404afcc9144aaaff6c64406e8f81b4a37340cf8b8f9",
+      "sizeBytes": 78083,
+      "createdAt": "2026-09-30T17:56:53.153Z"
+    },
+    {
+      "id": "insurance.automation",
+      "version": "1.1.0",
+      "label": "Operación conectada",
+      "sha256": "f151fafc3a60626f01a98a94238875b07080921ee41d9fe137345ecda5c3a6a4",
+      "sizeBytes": 3508,
+      "createdAt": "2026-09-30T17:56:53.517Z"
+    },
+    {
+      "id": "insurance.calendar",
+      "version": "1.1.0",
+      "label": "Calendario",
+      "sha256": "95f7d059713bdf0cfae2b578f2adc5a12de632a2734bebe2eac96385dc57f539",
+      "sizeBytes": 162638,
+      "createdAt": "2026-09-30T17:56:53.994Z"
+    },
+    {
+      "id": "insurance.campaigns",
+      "version": "1.1.0",
+      "label": "Campañas",
+      "sha256": "10376dad7030c0916b1732d800145531bf3ad132dd1ff87c2a6a714389a3fc81",
+      "sizeBytes": 161985,
+      "createdAt": "2026-09-30T17:56:54.554Z"
+    },
+    {
+      "id": "insurance.carriers",
+      "version": "1.1.0",
+      "label": "Aseguradoras",
+      "sha256": "048c486f4406871e78c4d5b802d9a04d17a2ee27e09db8b04034646b77783c86",
+      "sizeBytes": 162000,
+      "createdAt": "2026-09-30T17:56:55.504Z"
+    },
+    {
+      "id": "insurance.claims",
+      "version": "1.1.0",
+      "label": "Siniestros",
+      "sha256": "04a744a0875479122275466126c4c1c0ed090b949bb6cf2e08cd2d5091cba8d3",
+      "sizeBytes": 78217,
+      "createdAt": "2026-09-30T17:56:55.986Z"
+    },
+    {
+      "id": "insurance.collections",
+      "version": "1.1.0",
+      "label": "Cartera",
+      "sha256": "fac9500dda45894c1c6ba99096f99b8bab4516eb1b8d3e67c985e7855c5f969a",
+      "sizeBytes": 78624,
+      "createdAt": "2026-09-30T17:56:56.618Z"
+    },
+    {
+      "id": "insurance.commissions",
+      "version": "1.1.0",
+      "label": "Comisiones",
+      "sha256": "a240f76e75cac23655e1fd58619acc5d7fa46443ba41d681ccb8f5043d0d8beb",
+      "sizeBytes": 78457,
+      "createdAt": "2026-09-30T17:56:57.207Z"
+    },
+    {
+      "id": "insurance.communications",
+      "version": "1.1.0",
+      "label": "Comunicaciones",
+      "sha256": "c3f152a598537888857c4e33ded076ed42833c7b58fbdbc784b74ce612a17c7f",
+      "sizeBytes": 161973,
+      "createdAt": "2026-09-30T17:56:57.862Z"
+    },
+    {
+      "id": "insurance.compliance",
+      "version": "1.1.0",
+      "label": "Expedientes de cumplimiento",
+      "sha256": "158b45bfa8b5b762c91cd6b38594d3ffc405d9ca846f07de39be294551ccd57c",
+      "sizeBytes": 168454,
+      "createdAt": "2026-09-30T17:56:58.576Z"
+    },
+    {
+      "id": "insurance.customer-portal",
+      "version": "1.1.1",
+      "label": "Portal del cliente",
+      "sha256": "4feb2465e0ee6a8a0b1f5b1bdfd3fcc6c6761f90711b99b22c6a1c95885fe8e3",
+      "sizeBytes": 160846,
+      "createdAt": "2026-09-30T17:57:39.821Z"
+    },
+    {
+      "id": "insurance.data-quality",
+      "version": "1.1.0",
+      "label": "Importación y calidad",
+      "sha256": "77007588c6f46f2852d43a2edf0e444d63a9244fa3d95ee26115596fc94eb604",
+      "sizeBytes": 70233,
+      "createdAt": "2026-09-30T17:56:59.126Z"
+    },
+    {
+      "id": "insurance.document-generation",
+      "version": "1.1.0",
+      "label": "Documentos y firma",
+      "sha256": "98c9b32f005979ec0d7f79992c9de03985ced1c969b25b27bb045e8517cfbdb8",
+      "sizeBytes": 164846,
+      "createdAt": "2026-09-30T17:56:59.775Z"
+    },
+    {
+      "id": "insurance.documents",
+      "version": "1.1.0",
+      "label": "Requisitos documentales",
+      "sha256": "7e8f9837921954e4a275fc989edf684c001a317e5d6657f8fee5c9e7d20a89a5",
+      "sizeBytes": 79399,
+      "createdAt": "2026-09-30T17:57:00.417Z"
+    },
+    {
+      "id": "insurance.endorsements",
+      "version": "1.1.0",
+      "label": "Movimientos de póliza",
+      "sha256": "190442042f41981653df80d4ccbaaddcfad829c80bac4682bd807c29d9bdd585",
+      "sizeBytes": 78459,
+      "createdAt": "2026-09-30T17:57:01.240Z"
+    },
+    {
+      "id": "insurance.issuance",
+      "version": "1.1.0",
+      "label": "Emisiones",
+      "sha256": "a6cb75f20dece149047411b0c944f8ee068f6681d56210c8894759fa0f89ee4d",
+      "sizeBytes": 79221,
+      "createdAt": "2026-09-30T17:57:01.772Z"
+    },
+    {
+      "id": "insurance.opportunities",
+      "version": "1.1.0",
+      "label": "Oportunidades",
+      "sha256": "566ed0cd17c374009fb9bc21c3f0b223283beddaadc9f7c93833298392be7601",
+      "sizeBytes": 78453,
+      "createdAt": "2026-09-30T17:57:02.274Z"
+    },
+    {
+      "id": "insurance.payments",
+      "version": "1.1.0",
+      "label": "Conciliación bancaria",
+      "sha256": "3b630b574af4efffa3b8b45e9752312025a97abfb44e07654fcef8921a7df665",
+      "sizeBytes": 158466,
+      "createdAt": "2026-09-30T17:57:02.849Z"
+    },
+    {
+      "id": "insurance.portfolio-dashboard",
+      "version": "1.1.0",
+      "label": "Cartera de pólizas",
+      "sha256": "63a19c80fcc2e56b2b427b431cd7a25849cd2fff2e36f50da32f3033e255c9fe",
+      "sizeBytes": 75061,
+      "createdAt": "2026-09-30T17:57:03.325Z"
+    },
+    {
+      "id": "insurance.quotes",
+      "version": "2.0.7",
+      "label": "Cotizaciones de seguros",
+      "sha256": "0d6db931bbf70c119fb484ff5c2892d112e16ceb5639b0a117618264cf1f72e7",
+      "sizeBytes": 583962,
+      "createdAt": "2026-09-30T17:57:04.505Z"
+    },
+    {
+      "id": "insurance.renewals",
+      "version": "1.1.0",
+      "label": "Renovaciones",
+      "sha256": "b1c76c166ccd0aae0083111f67c261a2d630a38abbe45988965ac45826bd6a8c",
+      "sizeBytes": 80235,
+      "createdAt": "2026-09-30T17:57:05.363Z"
+    },
+    {
+      "id": "insurance.reports",
+      "version": "1.1.0",
+      "label": "Reportes y cliente 360",
+      "sha256": "3f9771b8c52ca01adbca44d83bfeb921adbb4ad21c04ba88ba313298d0baf935",
+      "sizeBytes": 70053,
+      "createdAt": "2026-09-30T17:57:05.827Z"
+    },
+    {
+      "id": "insurance.service",
+      "version": "1.1.0",
+      "label": "Solicitudes de servicio",
+      "sha256": "1f5f591d00fd53f963ad6752e672b7c9a8c2daa65da8a5e0bf40134e0752273d",
+      "sizeBytes": 80142,
+      "createdAt": "2026-09-30T17:57:06.333Z"
+    },
+    {
+      "id": "insurance.settlements",
+      "version": "1.1.0",
+      "label": "Liquidaciones",
+      "sha256": "e7ce67690498059741336700c90449a28e8183ac400262706b33caa4b648d01c",
+      "sizeBytes": 157362,
+      "createdAt": "2026-09-30T17:57:06.909Z"
+    }
+  ]
+}

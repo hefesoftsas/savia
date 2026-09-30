@@ -5,6 +5,7 @@ services:
     init: true
     working_dir: /workspace
     environment:
+      PLUGIN_REGISTRY_TENANTS: ${PLUGIN_REGISTRY_TENANTS:-}
       SAVIA_DEV_HOST: 0.0.0.0
       SAVIA_ADMIN_PORT: "5173"
       SAVIA_GOOGLE_CLIENT_ID: ${SAVIA_GOOGLE_CLIENT_ID:-}

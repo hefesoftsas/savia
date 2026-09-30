@@ -251,6 +251,7 @@ export async function createApplication(
         "NANGO_OUTLOOK_INTEGRATION_ID",
         "NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID",
         "NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID",
+        "PLUGIN_REGISTRY_TENANTS",
         "SQL_BRIDGE_URL",
         "SQL_BRIDGE_SECRET",
       ].flatMap((key) => (env[key] ? [[key, env[key]]] : [])),
