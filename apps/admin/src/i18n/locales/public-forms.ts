@@ -157,6 +157,27 @@ export const publicFormsMessages = {
       "Links cannot be published yet: security verification is not configured. Contact the administrator.",
       "Ainda não é possível publicar links: a verificação de segurança não está configurada. Entre em contato com o administrador.",
     ],
+  "Este formulario, enlace o cotizador ya no está disponible. Recarga la página e inténtalo de nuevo.":
+    [
+      "Este formulario, enlace o cotizador ya no está disponible. Recarga la página e inténtalo de nuevo.",
+      "This form, link or quote form is no longer available. Reload the page and try again.",
+      "Este formulário, link ou formulário de cotação não está mais disponível. Recarregue a página e tente novamente.",
+    ],
+  "Configura y guarda el cotizador antes de publicar el enlace.": [
+    "Configura y guarda el cotizador antes de publicar el enlace.",
+    "Configure and save the quote form before publishing its link.",
+    "Configure e salve o formulário de cotação antes de publicar o link.",
+  ],
+  "La configuración cambió. Recarga la página e inténtalo de nuevo.": [
+    "La configuración cambió. Recarga la página e inténtalo de nuevo.",
+    "The configuration changed. Reload the page and try again.",
+    "A configuração mudou. Recarregue a página e tente novamente.",
+  ],
+  "El servidor no pudo completar la operación. Inténtalo más tarde.": [
+    "El servidor no pudo completar la operación. Inténtalo más tarde.",
+    "The server could not complete the operation. Try again later.",
+    "O servidor não conseguiu concluir a operação. Tente novamente mais tarde.",
+  ],
   "No tienes permiso para administrar estos enlaces. Verifica tu sesión y tus permisos.":
     [
       "No tienes permiso para administrar estos enlaces. Verifica tu sesión y tus permisos.",

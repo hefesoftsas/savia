@@ -37,8 +37,12 @@ publication. Collection-bound screens cannot accept public submissions. A native
 submission creates a CRM record; it never executes request-page scripts, lookups,
 or arbitrary plugin actions. Existing CRM validation also applies at submission.
 
-The insurance quote screens support a dedicated public form. Configure the plugin
-and enabled products before publishing. The server freezes the allowed products
+The insurance quote screens support a dedicated public form. Open the quote screen, select **Configurar**, review the enabled products, and
+click **Guardar cambios** at least once before publishing. A newly installed plugin
+can render its default products without having a saved configuration. Publishing
+requires a saved settings version and an enabled quote screen; otherwise the API
+returns HTTP 409. The management page explains this prerequisite instead of
+reporting a connection failure. The server freezes the allowed products
 and checks the installed extension and settings version on use. For a ZIP-installed
 quote plugin, the version comes from the tenant's enabled installation rather
 than the latest ZIP upload or compiled extension registry. Changing that
