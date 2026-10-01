@@ -236,7 +236,15 @@
   "screens": [
     {
       "object": "insurance_compliance",
-      "view": "records"
+      "view": "records",
+      "lookupFields": [
+        "name",
+        "customer",
+        "owner",
+        "evidence",
+        "dossier_key",
+        "customer_id"
+      ]
     }
   ]
 }

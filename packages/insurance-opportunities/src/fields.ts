@@ -29,29 +29,29 @@ export const closedStages = ["won", "lost"];
 export const dateField = "target_date";
 export const fields = [
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Oportunidad",
     maxLength: 120,
     required: true,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente o prospecto",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza relacionada",
     maxLength: 120,
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     maxLength: 120,
     required: true,
   },
   {
-    key: "product",
+    key: "product", lookup: true,
     label: "Ramo o producto",
   },
   {
@@ -104,7 +104,7 @@ export const fields = [
     type: "date",
   },
   {
-    key: "outcome",
+    key: "outcome", lookup: true,
     label: "Póliza ganada o motivo de pérdida",
     requiredStages: ["won", "lost"],
     maxLength: 500,

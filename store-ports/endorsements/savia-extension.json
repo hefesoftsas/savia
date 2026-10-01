@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.endorsements",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "label": "Movimientos de póliza",
   "description": "Solicitudes de modificación, anexos y novedades de pólizas.",
   "labels": {

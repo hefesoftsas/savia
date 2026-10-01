@@ -61,6 +61,7 @@ export type PluginCollectionListOptions = {
   order?: "ASC" | "DESC";
   filters?: PluginQueryFilters;
   q?: string;
+  searchFields?: string[];
 };
 
 export type PluginRecordVersion = { version?: number };
@@ -222,6 +223,9 @@ export function createPluginApi({
           }
           if (options.q) {
             parameters.set("q", options.q);
+          }
+          if (options.searchFields?.length) {
+            parameters.set("searchFields", options.searchFields.join(","));
           }
           return request<PluginRecordPage<TRecord>>(
             `/records/${resource}?${parameters}`,

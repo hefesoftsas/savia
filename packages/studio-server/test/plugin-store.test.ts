@@ -249,6 +249,12 @@ describe("plugin store por tenant", () => {
     expect((failure as Error).constructor.name).not.toBe("SyntaxError");
   });
 
+  it("serializes configured search fields in sandbox collection queries", () => {
+    expect(shellBootstrapJs()).toContain(
+      'params.set("searchFields", options.searchFields.join(","))',
+    );
+  });
+
   it("elige render para pantallas y el handler declarado para widgets", () => {
     const source = shellBootstrapJs().match(
       /function selectRender\(module, widgetId\) \{[\s\S]*?\n\}/,

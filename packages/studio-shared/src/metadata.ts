@@ -21,6 +21,7 @@ import {
   resolveFieldLabel,
   type FieldLabelLocale,
 } from "./field-labels";
+import { pluginLookupSchema } from "./plugin-field-lookups";
 import {
   evaluateCondition,
   isSectionVisible,
@@ -273,6 +274,7 @@ export const fieldSchema = z
         ratingStyle: z.enum(["stars", "number"]).optional(),
         dateTime: z.boolean().optional(),
         collectionOptions: collectionOptionsSchema.optional(),
+        pluginLookup: pluginLookupSchema.optional(),
         relation: identifier.optional(),
         collectionRelation: z.string().min(1).max(120).optional(),
         relationPresentation: z
@@ -407,6 +409,39 @@ export const configSchema = z
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
     const names = Object.keys(config.fields);
+    const usedLookupIdFields = new Set<string>();
+    for (const [name, field] of Object.entries(config.fields)) {
+      const lookup = field.config?.pluginLookup;
+      if (!lookup) continue;
+      if (
+        field.type !== "Textbox" ||
+        field.hidden ||
+        field.readOnly ||
+        field.computedValue ||
+        field.config?.formula
+      )
+        issue(
+          `${field.label}: lookup source must be a visible editable Textbox.`,
+        );
+      const companion = config.fields[lookup.idField];
+      if (
+        lookup.idField === name ||
+        !companion ||
+        companion.type !== "Textbox" ||
+        companion.required ||
+        companion.readOnly ||
+        companion.computedValue ||
+        companion.config?.pluginLookup
+      )
+        issue(
+          `${field.label}: lookup ID must use a distinct optional Textbox without another lookup.`,
+        );
+      if (usedLookupIdFields.has(lookup.idField))
+        issue(
+          `${field.label}: lookup ID field is already used by another lookup.`,
+        );
+      usedLookupIdFields.add(lookup.idField);
+    }
     if (config.performance) {
       const scalar = (name: string) =>
         config.fields[name] &&

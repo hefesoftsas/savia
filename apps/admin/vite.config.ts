@@ -1,3 +1,4 @@
+import { pluginDevelopmentReload } from "./build/plugin-development";
 import { officePlugin } from "./build/office-plugin";
 import { collectOfflineShellAssets } from "./build/offline-shell-assets";
 import { reactSandboxPlugin } from "./build/react-sandbox-plugin";
@@ -74,6 +75,7 @@ function offlineShellPlugin(): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    pluginDevelopmentReload(),
     officePlugin(),
     tailwindcss(),
     reactSandboxPlugin(),

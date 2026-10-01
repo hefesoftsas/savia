@@ -69,6 +69,7 @@ import { collectionCapabilities } from "./collection-capabilities";
 import CollectionOperationsPanel from "./collection-operations-panel";
 import { sortScreens } from "./screen-metadata";
 import {
+  pluginLookupFields,
   isPluginScreen,
   isStorePluginScreen,
   type StoreScreenInstallation,
@@ -664,6 +665,21 @@ export default function ScreenAdministration({
       usesSourceFormSettings =
         !capabilities.schema && !capabilities.customFields;
     const options = [
+      ...(tenantTools &&
+      capabilities.schema &&
+      pluginLookupFields(screen.name, extensions).length
+        ? [
+            {
+              group: "data",
+              icon: Search,
+              view: "screen-lookups",
+              label: t("Campos conectados"),
+              description: t(
+                "Busca registros de otras colecciones desde los campos del plugin.",
+              ),
+            },
+          ]
+        : []),
       {
         group: "experience",
         icon: Eye,

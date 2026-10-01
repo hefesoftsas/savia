@@ -10,35 +10,35 @@ export const closedStages = ["delivered", "cancelled"];
 export const dateField = "due_date";
 export const fields = [
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Referencia",
     required: true,
     maxLength: 120,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza expedida",
     maxLength: 120,
     requiredStages: ["issued", "delivered"],
     help: "Referencia asignada por la aseguradora al expedir la póliza.",
   },
   {
-    key: "insurer",
+    key: "insurer", lookup: true,
     label: "Aseguradora",
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     required: true,
     maxLength: 120,
   },
   {
-    key: "product",
+    key: "product", lookup: true,
     label: "Producto",
     maxLength: 120,
   },
@@ -87,7 +87,7 @@ export const fields = [
     requiredStages: ["delivered"],
   },
   {
-    key: "outcome",
+    key: "outcome", lookup: true,
     label: "Motivo de cancelación",
     requiredStages: ["cancelled"],
     maxLength: 500,

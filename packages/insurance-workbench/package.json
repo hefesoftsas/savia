@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./editor": "./src/editor.tsx",
     "./data": "./src/data.ts",
     "./schema": "./src/schema.ts",
     "./financial": "./src/financial.ts",
@@ -19,6 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@savia/plugin-ui": "workspace:*",
     "@savia/studio-shared": "workspace:*",
     "react": "^19.2.8"
   },

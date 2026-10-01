@@ -1,3 +1,4 @@
+import { PwaSplash } from "@/pwa/pwa-splash";
 import type {
   PluginPanelContext,
   PluginPanelResult,
@@ -605,11 +606,8 @@ export function CustomPluginFrame({
             </Button>
           </div>
         ) : readyFrame !== frameKey ? (
-          <div
-            role="status"
-            className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm text-muted-foreground"
-          >
-            {t(panelBinding ? "Cargando formulario…" : "Cargando plugins…")}
+          <div className="absolute inset-0 z-10 bg-background">
+            <PwaSplash contained message={t("Cargando…")} />
           </div>
         ) : null}
         <iframe

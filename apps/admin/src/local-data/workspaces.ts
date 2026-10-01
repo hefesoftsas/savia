@@ -8,7 +8,7 @@ import { createLocalTransport } from "./transport";
 import {
   readWorkspaceMetadata,
   writeWorkspaceMetadata,
-  removeWorkspaceMetadata,
+  removeWorkspacePluginMetadata,
 } from "./session";
 import { isOfflineError } from "@/offline/offline-error";
 
@@ -158,7 +158,7 @@ export function createWorkspaceManager(
     },
     async forgetMetadata() {
       const scope = await principalScope();
-      await removeWorkspaceMetadata(`${scope}:`);
+      await removeWorkspacePluginMetadata(scope);
     },
   };
 }

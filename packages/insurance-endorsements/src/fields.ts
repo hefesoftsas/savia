@@ -25,28 +25,28 @@ export const closedStages = ["issued", "rejected"];
 export const dateField = "effective_date";
 export const fields = [
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Referencia",
     maxLength: 120,
     required: true,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza",
     maxLength: 120,
     required: true,
   },
   {
-    key: "insurer",
+    key: "insurer", lookup: true,
     label: "Aseguradora",
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     maxLength: 120,
   },
@@ -110,7 +110,7 @@ export const fields = [
     type: "date",
   },
   {
-    key: "outcome",
+    key: "outcome", lookup: true,
     label: "Anexo expedido o motivo de rechazo",
     requiredStages: ["issued", "rejected"],
     maxLength: 500,

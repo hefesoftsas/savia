@@ -16,27 +16,27 @@ export const fields = [
     help: "Un documento aprobado vuelve a requerir atención después de esta fecha.",
   },
   {
-    key: "name",
+    key: "name", lookup: true,
     label: "Referencia",
     required: true,
     maxLength: 120,
   },
   {
-    key: "customer",
+    key: "customer", lookup: true,
     label: "Cliente",
     required: true,
   },
   {
-    key: "policy_reference",
+    key: "policy_reference", lookup: true,
     label: "Póliza o caso relacionado",
     maxLength: 120,
   },
   {
-    key: "insurer",
+    key: "insurer", lookup: true,
     label: "Aseguradora",
   },
   {
-    key: "owner",
+    key: "owner", lookup: true,
     label: "Responsable",
     required: true,
     maxLength: 120,
@@ -88,7 +88,7 @@ export const fields = [
     requiredStages: ["received", "changes", "approved"],
   },
   {
-    key: "evidence_reference",
+    key: "evidence_reference", lookup: true,
     label: "Referencia del archivo",
     requiredStages: ["received", "changes", "approved"],
     maxLength: 500,

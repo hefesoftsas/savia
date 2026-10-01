@@ -1,3 +1,4 @@
+import { PwaSplash } from "@/pwa/pwa-splash";
 import { PluginRegistry } from "./plugin-registry";
 import { resolveLocalizedContent } from "@savia/studio-shared/plugin-localization";
 import { compareSolutionVersions } from "@savia/studio-shared/solution-package";
@@ -441,21 +442,8 @@ export default function PluginStoreManager({
         ) : null}
 
         {loading ? (
-          <div className="space-y-3 px-6 py-5">
-            <p role="status" className="text-sm text-muted-foreground">
-              {t("Cargando plugins…")}
-            </p>
-            <div
-              aria-hidden="true"
-              className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-            >
-              {[0, 1, 2].map((index) => (
-                <div
-                  key={index}
-                  className="h-44 animate-pulse rounded-xl border bg-muted/40"
-                />
-              ))}
-            </div>
+          <div className="h-64">
+            <PwaSplash contained message={t("Cargando…")} />
           </div>
         ) : grouped.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
