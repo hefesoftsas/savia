@@ -116,3 +116,20 @@ keep the honest "No informado por la aseguradora" view.
   Starting a new quote or deleting the active quote is blocked while retries run.
 - Changing saved quotes resets the insurer filter. A deleted quote's deep link is
   cleared, and deleting one quote cannot clear a newer selection.
+
+## Standalone quote plugin styles
+
+Both quote store variants bundle `quote-screens.css` with their executable
+entry. The configuration screen uses its own `insurance-package-*` classes,
+rather than portfolio classes supplied by Admin. Loading messages use the
+included `insurance-sr-only` accessibility style. Both store adapters share
+`store-ports/quotes/entry.css` for their tabs, including selected and keyboard
+focus states. This keeps these screens styled inside the isolated iframe.
+
+Rebuild both artifacts after changing the shared styles:
+
+```bash
+pnpm store:pack store-ports/quotes
+pnpm store:pack store-ports/quotes-ui
+node --test scripts/store-ports.test.mjs
+```

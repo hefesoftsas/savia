@@ -1,3 +1,4 @@
+import "./policies.css";
 import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import { pluginIntlLocale, localizeExternalError } from "@savia/studio-shared/plugin-localization";
 import { useInsuranceMessages } from "../localization";

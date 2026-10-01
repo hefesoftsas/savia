@@ -175,6 +175,12 @@ servidor quedan fuera de esta versión.
 4. **Ver** renderiza el plugin en su iframe aislado.
 5. **Eliminar** exige desactivar primero; nunca borra registros.
 
+Plugin screens report their natural content height through the sandbox bridge.
+Admin resizes the iframe when content or viewport width changes, so the page
+has one vertical scroll area in the host. Widgets and frames with an explicit
+height retain their configured size. The host only accepts finite positive
+heights from the current iframe; navigating or retrying resets its height.
+
 The catalog loads artifact metadata and configuration with a constant number of
 database reads, without loading JavaScript bundles. It shows the manifest from
 the latest semantic version. For an installed plugin, screens and widgets come

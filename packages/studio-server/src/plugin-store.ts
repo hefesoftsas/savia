@@ -1063,6 +1063,27 @@ if (entryUrl.origin !== bootstrapUrl.origin ||
 const ENTRY_URL = entryUrl.href;
 const pending = new Map();
 let seq = 0;
+// Report the natural content height, not the viewport-sized document height.
+// The host can then scroll screens without a second scrollbar in the iframe.
+const root = document.getElementById("root");
+let lastHeight = 0;
+let resizeScheduled = false;
+function scheduleResize() {
+  if (resizeScheduled) return;
+  resizeScheduled = true;
+  requestAnimationFrame(() => {
+    resizeScheduled = false;
+    const height = Math.ceil(Math.max(root.scrollHeight, root.getBoundingClientRect().height));
+    if (height > 0 && height !== lastHeight) {
+      lastHeight = height;
+      parent.postMessage({ ns: "savia-plugin", type: "resize", height }, "*");
+    }
+  });
+}
+new ResizeObserver(scheduleResize).observe(root);
+addEventListener("resize", scheduleResize);
+document.fonts?.ready.then(scheduleResize);
+scheduleResize();
 function callHost(path, method, body) {
   return new Promise((resolve, reject) => {
     const id = String(++seq);
