@@ -734,3 +734,21 @@ export function microsoftVerificationPage(
     ),
   );
 }
+
+export function federatedEmailVerificationPage(
+  provider: "microsoft" | "chatgpt",
+  verification: { id: string; email: string; notice?: string },
+  branding?: TenantBranding,
+): Response {
+  return htmlResponse(
+    page(
+      "Verifica tu correo | Savia",
+      renderOAuthSurface(
+        provider === "chatgpt"
+          ? "chatgpt-verification"
+          : "microsoft-verification",
+        { verification, branding },
+      ),
+    ),
+  );
+}

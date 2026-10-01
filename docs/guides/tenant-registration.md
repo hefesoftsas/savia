@@ -31,3 +31,7 @@ Unverified pending password accounts expire after 24 hours. Bounded cleanup remo
 Personal Microsoft accounts use a separate browser-bound email-ownership proof when Microsoft does not attest a verified address. That flow requires the tenant's personal-account option and, for new users, the federated-registration option. It cannot authorize password creation or password recovery. See [social sign-in](social-sign-in.md).
 
 The public registration page is served without caching or referrer leakage and excluded from the private offline navigation fallback. Public deployment recovery never initializes the administrative service worker.
+
+The administration activation switch depends on email delivery, CAPTCHA readiness and the tenant password policy. `registrationReady` describes whether registration is currently available to visitors; it is false while registration is disabled and must not prevent administrators from enabling it.
+
+If settings cannot load, the panel distinguishes an expired session, missing tenant-administrator access and an unavailable registration service. Missing CAPTCHA credentials do not prevent loading settings; they appear as a readiness prerequisite.

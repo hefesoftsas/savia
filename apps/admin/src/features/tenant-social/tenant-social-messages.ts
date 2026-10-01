@@ -1,20 +1,21 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const tenantSocialMessages = {
-  "Google / Microsoft": [
-    "Google / Microsoft",
-    "Google / Microsoft",
-    "Google / Microsoft",
-  ],
   "Social sign-in": [
     "Inicio de sesión social",
     "Social sign-in",
     "Entrada com redes sociais",
   ],
-  "Let tenant members use Google or Microsoft to sign in.": [
-    "Permite que los miembros del tenant inicien sesión con Google o Microsoft.",
-    "Let tenant members use Google or Microsoft to sign in.",
-    "Permita que os membros do tenant entrem com Google ou Microsoft.",
+  "SSO and social sign-in are configured per tenant. Select a tenant workspace to manage its sign-in methods.":
+    [
+      "SSO y el inicio de sesión social se configuran por tenant. Selecciona un espacio de tenant para administrar sus métodos de inicio de sesión.",
+      "SSO and social sign-in are configured per tenant. Select a tenant workspace to manage its sign-in methods.",
+      "SSO e entrada social são configurados por tenant. Selecione um espaço de tenant para gerenciar seus métodos de entrada.",
+    ],
+  "Let tenant members use Google, Microsoft, or ChatGPT to sign in.": [
+    "Permite que los miembros del tenant inicien sesión con Google, Microsoft o ChatGPT.",
+    "Let tenant members use Google, Microsoft, or ChatGPT to sign in.",
+    "Permita que os membros do tenant entrem com Google, Microsoft ou ChatGPT.",
   ],
   "Create new users through federated sign-in": [
     "Crear nuevos usuarios mediante login federado",
@@ -53,6 +54,43 @@ export const tenantSocialMessages = {
     "Enable Microsoft sign-in",
     "Ativar entrada com Microsoft",
   ],
+  "Enable ChatGPT sign-in": [
+    "Activar inicio de sesión con ChatGPT",
+    "Enable ChatGPT sign-in",
+    "Ativar entrada com ChatGPT",
+  ],
+  "ChatGPT credentials are not available in this deployment.": [
+    "Las credenciales de ChatGPT no están disponibles en este despliegue.",
+    "ChatGPT credentials are not available in this deployment.",
+    "As credenciais do ChatGPT não estão disponíveis nesta implantação.",
+  ],
+  "ChatGPT sign-in requires an OpenAI-approved OAuth client, currently available through a limited commercial trial.":
+    [
+      "El inicio de sesión con ChatGPT requiere un cliente OAuth aprobado por OpenAI, disponible actualmente mediante una prueba comercial limitada.",
+      "ChatGPT sign-in requires an OpenAI-approved OAuth client, currently available through a limited commercial trial.",
+      "A entrada com ChatGPT exige um cliente OAuth aprovado pela OpenAI, disponível atualmente por meio de um teste comercial limitado.",
+    ],
+  "Request an approved OpenAI OAuth client": [
+    "Solicitar un cliente OAuth aprobado por OpenAI",
+    "Request an approved OpenAI OAuth client",
+    "Solicitar um cliente OAuth aprovado pela OpenAI",
+  ],
+  "ChatGPT callback URL": [
+    "URL de retorno de ChatGPT",
+    "ChatGPT callback URL",
+    "URL de retorno do ChatGPT",
+  ],
+  "Copy ChatGPT callback URL": [
+    "Copiar URL de retorno de ChatGPT",
+    "Copy ChatGPT callback URL",
+    "Copiar URL de retorno do ChatGPT",
+  ],
+  "First-time ChatGPT sign-in requires Savia email verification. Configure email delivery before enabling it for new accounts.":
+    [
+      "El primer inicio de sesión con ChatGPT requiere verificar el correo con Savia. Configura la entrega de correo antes de habilitarlo para cuentas nuevas.",
+      "First-time ChatGPT sign-in requires Savia email verification. Configure email delivery before enabling it for new accounts.",
+      "O primeiro acesso com ChatGPT exige a verificação de e-mail do Savia. Configure a entrega de e-mail antes de ativá-lo para novas contas.",
+    ],
   "Allow personal Microsoft accounts": [
     "Permitir cuentas personales de Microsoft",
     "Allow personal Microsoft accounts",

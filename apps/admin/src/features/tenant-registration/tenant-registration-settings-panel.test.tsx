@@ -1,3 +1,4 @@
+import { ApiClientError } from "@/api/api-client";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StoreContextProvider, memoryStore } from "ra-core";
@@ -273,3 +274,66 @@ it("reports load and readiness validation errors without enabling registration",
     }),
   ).toBeDisabled();
 });
+
+it("allows activation when prerequisites are ready but registration is still off", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      ...defaults,
+      emailReady: true,
+      captchaReady: true,
+      registrationReady: false,
+    }),
+    put: vi.fn().mockResolvedValue({
+      ...defaults,
+      allowEmailRegistration: true,
+      emailReady: true,
+      captchaReady: true,
+      registrationReady: true,
+    }),
+  };
+  renderPanel(apiClient);
+  await screen.findByText("Email delivery is ready.");
+  const activation = screen.getByRole("switch", {
+    name: "Allow registration with email and password",
+  });
+  expect(activation).toBeEnabled();
+  fireEvent.click(activation);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save registration settings" }),
+  );
+  await screen.findByText("Registration settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/registration-settings",
+    { allowEmailRegistration: true, captchaMode: "inherit" },
+  );
+});
+
+it.each([
+  [401, "Your session has expired. Sign in again to configure registration."],
+  [403, "You need tenant administrator access to configure registration."],
+  [
+    503,
+    "The registration service is unavailable. Retry or contact your administrator.",
+  ],
+])(
+  "explains registration settings load failure %s",
+  async (status, message) => {
+    const apiClient = {
+      get: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            status as number,
+            "TEST_ERROR",
+            "internal details",
+          ),
+        ),
+      put: vi.fn(),
+    };
+    renderPanel(apiClient);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      message as string,
+    );
+    expect(screen.queryByText("internal details")).toBeNull();
+  },
+);

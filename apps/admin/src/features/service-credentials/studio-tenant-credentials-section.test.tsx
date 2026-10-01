@@ -58,7 +58,7 @@ vi.mock("@/features/tenant-sso/tenant-sso-settings-panel", () => ({
 }));
 
 vi.mock("@/features/tenant-social/tenant-social-settings-panel", () => ({
-  TenantSocialSettingsPanel: () => <div>Google / Microsoft settings</div>,
+  TenantSocialSettingsPanel: () => <div>Social sign-in settings</div>,
 }));
 
 vi.mock("@/features/tenant-email/tenant-email-settings-panel", () => ({
@@ -113,7 +113,7 @@ describe("StudioTenantCredentialsSection identity providers", () => {
       screen.queryByRole("tab", { name: "Inicio de sesión SAML" }),
     ).toBeNull();
     expect(
-      screen.queryByRole("tab", { name: "Google / Microsoft" }),
+      screen.queryByRole("tab", { name: "Inicio de sesión social" }),
     ).toBeNull();
   });
 
@@ -127,7 +127,7 @@ describe("StudioTenantCredentialsSection identity providers", () => {
       ).toBeEnabled(),
     );
     expect(
-      screen.getByRole("tab", { name: "Google / Microsoft" }),
+      screen.getByRole("tab", { name: "Inicio de sesión social" }),
     ).toBeVisible();
   });
 
@@ -182,14 +182,14 @@ describe("StudioTenantCredentialsSection identity providers", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole("tab", { name: "Google / Microsoft" }),
+        screen.getByRole("tab", { name: "Inicio de sesión social" }),
       ).toHaveAttribute("aria-selected", "true"),
     );
     expect(
       screen.getByRole("combobox", { name: "Espacio de trabajo" }),
     ).toHaveValue("102");
     expect(screen.getByRole("tabpanel")).toHaveTextContent(
-      "Google / Microsoft settings",
+      "Social sign-in settings",
     );
   });
 
@@ -207,7 +207,7 @@ describe("StudioTenantCredentialsSection identity providers", () => {
       ).toBeDisabled();
       expect(screen.queryByText("Tenant SAML settings")).toBeNull();
       expect(
-        screen.getByRole("tab", { name: "Google / Microsoft" }),
+        screen.getByRole("tab", { name: "Inicio de sesión social" }),
       ).toBeDisabled();
 
       fireEvent.change(screen.getByRole("combobox"), {

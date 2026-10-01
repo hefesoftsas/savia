@@ -77,6 +77,7 @@ function createApp(
           allowRegistration: true,
           googleEnabled: true,
           microsoftEnabled: false,
+          chatgptEnabled: false,
           revision: "revision-1",
         },
       );
@@ -149,6 +150,78 @@ it("finalizes a verified social identity once with viewer membership and replays
     .bind(firstResult.principalId)
     .first<{ count: number }>();
   expect(globalRoles?.count).toBe(0);
+});
+
+it("provisions an opted-in ChatGPT registration as Viewer under the existing quota policy", async () => {
+  const tenantId = await createTenant(1);
+  const { app, auth } = createApp({
+    configured: true,
+    active: true,
+    allowRegistration: true,
+    googleEnabled: false,
+    microsoftEnabled: false,
+    chatgptEnabled: true,
+    revision: "revision-1",
+  });
+
+  const response = await app.request("/_internal/social-registration", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-savia-bridge-key": "test-bridge-key",
+    },
+    body: JSON.stringify(payload(tenantId, { provider: "chatgpt" })),
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ created: true });
+  const member = await env.DB.prepare(
+    "SELECT m.role FROM identity_tenant_membership m JOIN identity_principal p ON p.id=m.principal_id WHERE p.subject=? AND m.tenant_id=?",
+  )
+    .bind(`auth-subject-${tenantId}`, tenantId)
+    .first<{ role: string }>();
+  expect(member?.role).toBe("viewer");
+  expect(auth.fetch).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  ["ChatGPT disabled", { chatgptEnabled: false }],
+  ["provider identifier mismatch", { provider: "openai" }],
+])("rejects ChatGPT provisioning when %s", async (_case, override) => {
+  const tenantId = await createTenant();
+  const policy = {
+    configured: true,
+    active: true,
+    allowRegistration: true,
+    googleEnabled: false,
+    microsoftEnabled: false,
+    chatgptEnabled: true,
+    revision: "revision-1",
+    ...(override.provider === undefined ? override : {}),
+  };
+  const { app, auth } = createApp(policy);
+  const response = await app.request("/_internal/social-registration", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-savia-bridge-key": "test-bridge-key",
+    },
+    body: JSON.stringify(
+      payload(tenantId, {
+        provider: "chatgpt",
+        ...(override.provider === undefined ? {} : override),
+      }),
+    ),
+  });
+
+  expect(response.status).toBe(override.provider ? 400 : 409);
+  expect(auth.fetch).toHaveBeenCalledTimes(override.provider ? 0 : 1);
+  const principal = await env.DB.prepare(
+    "SELECT id FROM identity_principal WHERE subject=?",
+  )
+    .bind(`auth-subject-${tenantId}`)
+    .first();
+  expect(principal).toBeNull();
 });
 
 it.each([
@@ -565,4 +638,50 @@ it("preserves a principal whose membership was elevated before compensation", as
     .bind(result.principalId)
     .first();
   expect(principal).not.toBeNull();
+});
+
+it("links precreated ChatGPT members without permitting registration or changing their role", async () => {
+  const tenantId = await createTenant();
+  const seed = createApp();
+  const created = await seed.app.request("/_internal/social-registration", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-savia-bridge-key": "test-bridge-key",
+    },
+    body: JSON.stringify(payload(tenantId)),
+  });
+  expect(created.status).toBe(200);
+  const { app } = createApp({
+    active: true,
+    allowRegistration: false,
+    chatgptEnabled: true,
+    revision: "revision-1",
+  });
+  const eligible = await app.request(
+    "/_internal/social-registration/eligible",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-savia-bridge-key": "test-bridge-key",
+      },
+      body: JSON.stringify(payload(tenantId, { provider: "chatgpt" })),
+    },
+  );
+  expect(eligible.status).toBe(200);
+  const outsider = await app.request(
+    "/_internal/social-registration/eligible",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-savia-bridge-key": "test-bridge-key",
+      },
+      body: JSON.stringify(
+        payload(tenantId, { provider: "chatgpt", subject: "outsider" }),
+      ),
+    },
+  );
+  expect(outsider.status).toBe(403);
 });

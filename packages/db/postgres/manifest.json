@@ -25,6 +25,10 @@
     {
       "filename": "0006_email_registration.sql",
       "sha256": "1107168c2e3b7c35135df070af078425a70e8986e23192c819f9d41cf5fbf776"
+    },
+    {
+      "filename": "0007_chatgpt_social_registration.sql",
+      "sha256": "de5944e1f24cc0ca732542a0e5420e7c326dfca5b5e74ca877f4bb4a87e95bbb"
     }
   ],
   "sqliteOnlyDerivedTables": [

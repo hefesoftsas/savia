@@ -1,3 +1,4 @@
+import { chatgptOAuthPlugins } from "./chatgpt-sign-in";
 import { getIP } from "@better-auth/core/utils/ip";
 import { limitVerificationMail } from "./pending-email-verification";
 import {
@@ -7,7 +8,8 @@ import {
 } from "./email-registration";
 import {
   microsoftEmailVerificationPlugin,
-  assertMicrosoftRegistrationCompleted,
+  chatgptEmailVerificationPlugin,
+  assertFederatedRegistrationCompleted,
 } from "./microsoft-email-verification";
 import {
   tenantRegistrationSettingsResponse,
@@ -261,7 +263,7 @@ export function createBetterAuth(
       session: {
         create: {
           before: async (session, ctx) => {
-            await assertMicrosoftRegistrationCompleted(
+            await assertFederatedRegistrationCompleted(
               environment,
               session.userId,
             );
@@ -331,6 +333,8 @@ export function createBetterAuth(
         ),
     },
     plugins: [
+      ...chatgptOAuthPlugins(environment),
+      chatgptEmailVerificationPlugin(environment, dependencies),
       microsoftEmailVerificationPlugin(environment, dependencies),
       tenantSSOPlugin(),
       tenantSocialPlugin(),
