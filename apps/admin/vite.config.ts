@@ -91,6 +91,11 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       workbox: {
+        // Manual registration disables the plugin's autoUpdate defaults.
+        // Activate the replacement shell even while existing tabs are open;
+        // DeploymentUpdateNotice lets the user choose when to reload the page.
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: "index.html",
         navigateFallbackDenylist: [
           /^\/api/,
