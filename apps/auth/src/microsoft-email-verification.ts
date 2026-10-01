@@ -90,6 +90,23 @@ async function policy(
   });
   return settings;
 }
+/** Every native session path must preserve an unfinished provisioning guard. */
+export async function assertMicrosoftRegistrationCompleted(
+  env: AuthWorkerEnvironment,
+  userId: string,
+) {
+  await env.AUTH_DB.exec(RECOVERY_TABLE);
+  const pending = await env.AUTH_DB.prepare(
+    "SELECT user_id FROM microsoft_registration_recovery WHERE user_id=?",
+  )
+    .bind(userId)
+    .first();
+  if (pending)
+    throw new APIError("FORBIDDEN", {
+      message:
+        "Complete Microsoft email verification and tenant access provisioning before signing in.",
+    });
+}
 export async function beginMicrosoftVerification(
   profile: Profile,
   attempt: SocialRegistrationAttempt,

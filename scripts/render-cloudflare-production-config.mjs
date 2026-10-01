@@ -185,6 +185,7 @@ function gatewayConfig({ publicOrigin, documentsBucket }) {
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
+        "/register",
         "/public/forms",
         "/public/forms/*",
         "/office",

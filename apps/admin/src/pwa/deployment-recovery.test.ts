@@ -113,18 +113,17 @@ it("keeps update failures retryable without unregistering", async () => {
   }
 });
 
-it("does not register the private worker while recovering a public form", async () => {
-  environment({ update: vi.fn() });
-  const original = window.location.href;
-  window.history.replaceState(
-    null,
-    "",
-    "/public/forms/0123456789abcdef0123456789abcdef",
-  );
-  try {
-    await prepareAppReload();
-    expect(navigator.serviceWorker.register).not.toHaveBeenCalled();
-  } finally {
-    window.history.replaceState(null, "", original);
-  }
-});
+it.each(["/public/forms/0123456789abcdef0123456789abcdef", "/register"])(
+  "does not register the private worker while recovering %s",
+  async (path) => {
+    environment({ update: vi.fn() });
+    const original = window.location.href;
+    window.history.replaceState(null, "", path);
+    try {
+      await prepareAppReload();
+      expect(navigator.serviceWorker.register).not.toHaveBeenCalled();
+    } finally {
+      window.history.replaceState(null, "", original);
+    }
+  },
+);

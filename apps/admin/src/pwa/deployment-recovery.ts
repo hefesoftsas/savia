@@ -54,6 +54,7 @@ export async function prepareAppReload(): Promise<void> {
   const pathname = window.location.pathname;
   // Public visitors must not download or initialize the administrative offline shell.
   if (
+    pathname === "/register" ||
     pathname === "/public/forms" ||
     pathname.startsWith("/public/forms/") ||
     pathname === "/office" ||
