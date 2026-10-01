@@ -188,6 +188,11 @@ export const automationMessages = {
     "Plugin could not be loaded.",
     "Não foi possível carregar o plugin.",
   ],
+  "Editor de %{value}": [
+    "Editor de %{value}",
+    "%{value} editor",
+    "Editor de %{value}",
+  ],
   "Fuentes y colecciones": [
     "Fuentes y colecciones",
     "Sources and collections",

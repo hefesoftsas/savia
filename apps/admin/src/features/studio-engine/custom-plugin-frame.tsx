@@ -642,7 +642,9 @@ export function CustomPluginFrame({
           <CustomPluginFrame
             pluginId={pluginId}
             installationVersion={installationVersion}
-            title={panel?.request.title ?? `${title} editor`}
+            title={
+              panel?.request.title ?? t("Editor de %{value}", { value: title })
+            }
             src={src}
             screen={screen}
             heightClassName="h-full border-0 rounded-none"
