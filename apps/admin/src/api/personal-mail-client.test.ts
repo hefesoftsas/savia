@@ -2,6 +2,30 @@ import { describe, it, expect } from "vitest";
 import { ApiClient } from "./api-client";
 import { PersonalIntegrationsClient } from "./personal-integrations-client";
 describe("personal mail transport", () => {
+  it("preserves native continuation metadata and escapes cursor query values", async () => {
+    let url = "";
+    const client = new PersonalIntegrationsClient(
+      new ApiClient({
+        baseUrl: "https://savia.test",
+        tokenSource: { getAccessToken: async () => "token" },
+        fetcher: async (input) => {
+          url = String(input);
+          return Response.json({
+            data: [],
+            pagination: { nextCursor: "next-page" },
+          });
+        },
+      }),
+    );
+    expect(
+      await client.listMessagePage({
+        provider: "outlook",
+        cursor: "opaque+/=?",
+      }),
+    ).toEqual({ messages: [], nextCursor: "next-page" });
+    expect(new URL(url).searchParams.get("cursor")).toBe("opaque+/=?");
+    expect(new URL(url).searchParams.get("provider")).toBe("outlook");
+  });
   it("lists inbox without query and sends a context reference", async () => {
     const calls: { url: string; body: unknown }[] = [];
     const api = new ApiClient({

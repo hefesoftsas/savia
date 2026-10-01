@@ -1,5 +1,6 @@
 import type {
   PersonalMailMessage,
+  PersonalMailPage,
   PersonalMailProvider,
   SendPersonalMailInput,
 } from "@savia/studio-shared/mail-contracts";
@@ -214,6 +215,22 @@ export class PersonalIntegrationsClient {
         `/v1/personal-integrations/messages?${query}`,
       )
     ).data;
+  }
+
+  async listMessagePage(input: {
+    provider: PersonalMailProvider;
+    cursor?: string;
+  }): Promise<PersonalMailPage> {
+    const query = new URLSearchParams({ provider: input.provider });
+    if (input.cursor !== undefined) query.set("cursor", input.cursor);
+    const response = await this.api.get<{
+      data: PersonalMailMessage[];
+      pagination?: { nextCursor: string | null };
+    }>(`/v1/personal-integrations/messages?${query}`);
+    return {
+      messages: response.data,
+      nextCursor: response.pagination?.nextCursor ?? null,
+    };
   }
 
   async sendMail(

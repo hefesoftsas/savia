@@ -47,8 +47,20 @@ Mail uses the current user's Savia personal integration connections. It does
 not use Codex connectors or another user's mailbox. One active account per
 provider is supported. With both providers connected, messages are merged by
 received date, newest first, and can be filtered to All, Gmail, or Outlook.
-The widget shows ten messages from a bounded window of up to twenty-five per
-provider. Refresh loads a new window; this is not full mailbox synchronization.
+The widget uses shadcn tabs for account filters and pagination controls, showing
+ten messages per page. **Previous** returns to a loaded page; **Next** loads older
+messages when needed using Gmail and Outlook continuation cursors. Each provider
+request retrieves at most twenty-five messages. The merged inbox checks each
+provider's loaded boundary before showing the next page so older messages from
+one account do not hide unseen newer messages from the other. Exhausted accounts
+stop requesting pages. Errors retain the current page and allow retry.
+
+Changing the account filter starts at page one. Refresh updates the latest inbox
+and announces new messages, but keeps the currently displayed historical page
+stable. Return to page one to see the latest messages. Loaded pages and cursors
+stay in memory for the current session; account disconnection, denied access, or
+identity changes clear the relevant history. This is not full mailbox
+synchronization.
 
 While My Day is visible and online, the inbox refreshes automatically every
 sixty seconds after the previous read finishes. Returning to the tab or

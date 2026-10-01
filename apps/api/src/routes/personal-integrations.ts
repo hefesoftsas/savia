@@ -265,6 +265,7 @@ const messageListRoute = createRoute({
     query: z.object({
       provider: z.enum(["gmail", "outlook"]),
       query: z.string().trim().min(1).max(100).optional(),
+      cursor: z.string().min(1).max(2048).optional(),
     }),
   },
   responses: {
@@ -281,11 +282,13 @@ const messageListRoute = createRoute({
                 webLink: z.string().nullable(),
               }),
             ),
+            pagination: z.object({ nextCursor: z.string().nullable() }),
           }),
         },
       },
       description: "On-demand message metadata",
     },
+    400: { description: "Invalid message cursor" },
     403: { description: "Connection belongs to a different user" },
     502: { description: "Provider request failed" },
     503: { description: "Provider or connection unavailable" },
@@ -856,13 +859,16 @@ export function registerPersonalIntegrationRoutes(
       );
     try {
       const query = context.req.valid("query");
+      const page = await operations.listMessagePage({
+        principalId: actor.principal.id,
+        provider: query.provider,
+        query: query.query,
+        cursor: query.cursor,
+      });
       return context.json(
         {
-          data: await operations.listMessages({
-            principalId: actor.principal.id,
-            provider: query.provider,
-            query: query.query,
-          }),
+          data: page.messages,
+          pagination: { nextCursor: page.nextCursor },
         },
         200,
       );

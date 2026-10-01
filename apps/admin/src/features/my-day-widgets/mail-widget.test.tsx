@@ -4,9 +4,11 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
   act,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { useMyDayMail, type PersonalMailLike } from "./use-my-day-mail";
 import { MailWidgetBody } from "./mail-widget";
@@ -45,6 +47,7 @@ function Inbox({ service }: { service: PersonalMailLike }) {
   );
 }
 it("merges providers with distinct same-ID rows, missing dates last, and filters", async () => {
+  const user = userEvent.setup();
   render(<Inbox service={client()} />);
   expect(await screen.findByText("outlook message")).toHaveAttribute(
     "target",
@@ -57,7 +60,7 @@ it("merges providers with distinct same-ID rows, missing dates last, and filters
   expect(screen.getByText("gmail message")).toBeInTheDocument();
   const rows = screen.getAllByRole("listitem");
   expect(rows[0]).toHaveTextContent("outlook message");
-  fireEvent.click(screen.getByRole("button", { name: "Gmail" }));
+  await user.click(screen.getByRole("tab", { name: "Gmail" }));
   expect(screen.queryByText("outlook message")).not.toBeInTheDocument();
 });
 it("retains successful rows when one provider fails and retries", async () => {
@@ -86,7 +89,7 @@ it.each(["gmail", "outlook"])(
     render(<Inbox service={client([provider])} />);
     expect(await screen.findByText(`${provider} message`)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Todos" }),
+      screen.queryByRole("tab", { name: "Todos" }),
     ).not.toBeInTheDocument();
   },
 );
@@ -139,7 +142,11 @@ it("caps the visible inbox at ten messages and distinguishes an empty mailbox", 
   );
   render(<Inbox service={service} />);
   await screen.findByText("Message 0");
-  expect(screen.getAllByRole("listitem")).toHaveLength(10);
+  expect(
+    within(screen.getByRole("list", { name: "Correos" })).getAllByRole(
+      "listitem",
+    ),
+  ).toHaveLength(10);
   vi.mocked(service.listMessages).mockResolvedValue([]);
   fireEvent.click(screen.getByRole("button", { name: "Actualizar correos" }));
   expect(
