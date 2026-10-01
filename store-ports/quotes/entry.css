@@ -17,6 +17,7 @@
   font-size: 13px;
   font-weight: 600;
   padding: 10px 14px;
+  min-height: 44px;
 }
 
 .store-quote__tabs button[aria-pressed="true"] {
@@ -26,4 +27,9 @@
 
 .store-quote__tabs button:hover:not([aria-pressed="true"]) {
   color: var(--foreground);
+}
+
+.store-quote__tabs button:focus-visible {
+  outline: 2px solid var(--ring, var(--primary));
+  outline-offset: 2px;
 }

@@ -14,7 +14,7 @@ export function QuoteWizardSkeleton({
       role="status"
       aria-label={t("Cargando cotizador de seguros…")}
     >
-      <span className="sr-only">{t("Cargando cotizador de seguros…")}</span>
+      <span className="insurance-sr-only">{t("Cargando cotizador de seguros…")}</span>
 
       {/* Header */}
       <header className="insurance-quote__header">
@@ -198,7 +198,7 @@ export function InsuranceAdminSkeleton() {
         gap: "20px",
       }}
     >
-      <span className="sr-only">{t("Cargando configuración de seguros…")}</span>
+      <span className="insurance-sr-only">{t("Cargando configuración de seguros…")}</span>
 
       {/* Panel 1: Pantallas */}
       <section

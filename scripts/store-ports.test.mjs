@@ -173,6 +173,101 @@ describe("ports del store", () => {
     });
   }
 
+  it("includes portfolio layout styles in the executable ZIP entry", () => {
+    const temporaryRoot = mkdtempSync(
+      join(tmpdir(), "savia-portfolio-css-test-"),
+    );
+    try {
+      const output = join(temporaryRoot, "portfolio.store.zip");
+      execFileSync(
+        "node",
+        [
+          "scripts/pack-store-plugin.mjs",
+          "store-ports/portfolio",
+          "--output",
+          output,
+        ],
+        { cwd: root, stdio: "pipe", timeout: 180000 },
+      );
+      const entry = execFileSync("unzip", ["-p", output, "dist/plugin.js"], {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+      });
+      assert.ok(
+        /saviaPluginStyle\.textContent\s*=/.test(entry),
+        "the portfolio ZIP must install its own stylesheet inside the iframe",
+      );
+      for (const selector of [
+        ".extension-policy-metrics",
+        ".extension-policy-form",
+        ".extension-policy-table-wrap",
+      ]) {
+        assert.ok(
+          entry.includes(selector),
+          `missing portfolio style: ${selector}`,
+        );
+      }
+      assert.ok(entry.includes("document.head.appendChild"));
+      assert.ok(
+        entry.includes("@media"),
+        "the packaged layout must support narrow screens",
+      );
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true });
+    }
+  });
+
+  for (const port of ["quotes", "quotes-ui"]) {
+    it(`includes standalone administration and tabs styles in the ${port} ZIP`, () => {
+      const temporaryRoot = mkdtempSync(
+        join(tmpdir(), "savia-quote-admin-css-test-"),
+      );
+      try {
+        const output = join(temporaryRoot, `${port}.zip`);
+        execFileSync(
+          "node",
+          [
+            "scripts/pack-store-plugin.mjs",
+            `store-ports/${port}`,
+            "--output",
+            output,
+          ],
+          { cwd: root, stdio: "pipe", timeout: 180000 },
+        );
+        const entry = execFileSync("unzip", ["-p", output, "dist/plugin.js"], {
+          cwd: root,
+          encoding: "utf8",
+          maxBuffer: 16 * 1024 * 1024,
+        });
+        const embeddedStyles = entry.match(
+          /^saviaPluginStyle\.textContent = (.*);$/m,
+        );
+        assert.ok(embeddedStyles, "the ZIP must install its own stylesheet");
+        const css = JSON.parse(embeddedStyles[1]);
+        for (const selector of [
+          ".insurance-package-screen",
+          ".insurance-package-heading",
+          ".insurance-package-error",
+          ".insurance-sr-only",
+          ".store-quote__tabs",
+        ]) {
+          assert.ok(css.includes(selector), `${port} is missing ${selector}`);
+        }
+        assert.ok(
+          !entry.includes('className:"extension-policy-'),
+          "quotes administration must own its styling",
+        );
+        assert.ok(
+          !entry.includes('className:"sr-only"'),
+          "loading messages must use the included accessibility style",
+        );
+      } finally {
+        rmSync(temporaryRoot, { force: true, recursive: true });
+      }
+    });
+  }
+
   it("includes the quotes stylesheet in the executable ZIP entry", () => {
     const temporaryRoot = mkdtempSync(join(tmpdir(), "savia-port-css-test-"));
     try {

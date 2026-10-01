@@ -152,6 +152,12 @@ En **Administrar pantallas → Paquetes y extensiones**, el administrador puede
 ver su estado, instalarla y activarla/desactivarla. Al activarla se habilita
 **Cartera de pólizas** como una pantalla normal de Savia.
 
+The portfolio screen owns its stylesheet in
+`packages/insurance-portfolio-dashboard/src/screens/policies.css` and imports
+it directly. The store packer embeds these styles in the executable entry so
+the sandboxed iframe has the same responsive layout and themed controls as
+the release screen, without depending on Admin's global styles.
+
 La pantalla custom no construye rutas HTTP. Recibe una API `savia` del host:
 
 ```ts

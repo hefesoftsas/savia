@@ -1,3 +1,49 @@
+.insurance-package-screen {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+  max-width: 960px;
+  margin-inline: auto;
+  color: var(--foreground);
+}
+.insurance-package-screen,
+.insurance-package-screen * {
+  box-sizing: border-box;
+}
+.insurance-package-heading h1 {
+  margin: 4px 0 12px;
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+.insurance-package-eyebrow {
+  margin: 0;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.insurance-package-description {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.insurance-package-error {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--destructive);
+  border-radius: 12px;
+  color: var(--destructive);
+  background: var(--card);
+  overflow-wrap: anywhere;
+}
+.insurance-package-screen > .insurance-admin {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
 .insurance-history-actions {
   display: flex;
   flex-wrap: wrap;

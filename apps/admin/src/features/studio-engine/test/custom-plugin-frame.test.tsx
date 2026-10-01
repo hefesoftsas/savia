@@ -17,6 +17,67 @@ afterEach(() => {
   setStudioRuntime({ embedded: false });
 });
 
+it("sizes plugin screens to their content and resets on navigation", () => {
+  const { rerender } = render(
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Plugin"
+      screen={{ object: "demo", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  const resize = (
+    height: unknown,
+    source: Window | null = frame.contentWindow,
+  ) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source,
+        data: { ns: "savia-plugin", type: "resize", height },
+      }),
+    );
+  resize(1250);
+  expect(frame).toHaveStyle({ height: "1250px" });
+  resize(480);
+  expect(frame).toHaveStyle({ height: "480px" });
+  resize(1_000_000);
+  expect(frame).toHaveStyle({ height: "100000px" });
+  resize(480);
+  for (const invalid of [-1, 0, "900", Number.NaN, Number.POSITIVE_INFINITY])
+    resize(invalid);
+  resize(900, window);
+  expect(frame).toHaveStyle({ height: "480px" });
+  rerender(
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Plugin"
+      screen={{ object: "other", view: "records" }}
+    />,
+  );
+  expect(screen.getByTitle("Plugin")).toHaveStyle({ height: "512px" });
+});
+
+it("keeps widget frames at their configured height", () => {
+  render(
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Widget"
+      heightClassName="h-[320px]"
+    />,
+  );
+  const frame = screen.getByTitle("Widget") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin", type: "resize", height: 1500 },
+    }),
+  );
+  expect(frame.style.height).toBe("");
+  expect(frame.parentElement).toHaveClass("h-[320px]");
+});
+
 it("passes the selected store screen to the plugin shell", () => {
   render(
     <CustomPluginFrame
