@@ -15,6 +15,10 @@ Relaciones usa `screen-relations` y filtra conexiones y nodos por la pantalla se
 
 Las herramientas generales permanecen separadas: nueva pantalla, organización, fuentes, integraciones/API, reportes y acciones, historial del dominio. Un dominio vacío ofrece crear la primera pantalla o conectar una fuente.
 
+The form designer inherits the active workspace theme, including the unused
+space below its canvas and panels. Its container uses the shared background
+token so it remains consistent in both light and dark mode.
+
 ## Visibilidad en la barra lateral (Sidebar Visibility)
 
 No todas las pantallas necesitan mostrarse en la barra lateral izquierda del CRM. Algunas pantallas se diseñan para ser invocadas exclusivamente desde otras páginas, enlaces contextuales o flujos de trabajo (por ejemplo, pantallas de detalle, asistentes o pantallas secundarias de extensiones).
