@@ -83,9 +83,9 @@ it("renders only the editor and saves with the loaded record version", async () 
   expect(input).toHaveValue("Invoice");
   expect(a.collection.list).not.toHaveBeenCalled();
   fireEvent.change(input, { target: { value: "Updated" } });
-  fireEvent.click(
-    screen.getByRole("button", { name: /Guardar cambios|Save changes/ }),
-  );
+  const save = screen.getByRole("button", { name: /Guardar cambios|Save changes/ });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
   await waitFor(() =>
     expect(a.collection.update).toHaveBeenCalledWith(
       "r1",
