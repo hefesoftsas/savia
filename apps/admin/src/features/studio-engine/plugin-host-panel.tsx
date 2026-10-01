@@ -50,15 +50,20 @@ export function PluginHostPanel({
     if (!retained || !open) return;
     const content = contentRef.current;
     const previousFocus = document.activeElement as HTMLElement | null;
-    const siblings = Array.from(document.body.children).filter((el): el is HTMLElement =>
-      el instanceof HTMLElement && !el.contains(content) && !el.hasAttribute("data-plugin-overlay"));
-    const prior = siblings.map(el => ({ el, inert: el.inert }));
+    const siblings = Array.from(document.body.children).filter(
+      (el): el is HTMLElement =>
+        el instanceof HTMLElement &&
+        !el.contains(content) &&
+        !el.hasAttribute("data-plugin-overlay"),
+    );
+    const prior = siblings.map((el) => ({ el, inert: el.inert }));
     for (const { el } of prior) el.inert = true;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeRef.current?.focus();
     const trap = (event: FocusEvent) => {
-      if (!content?.contains(event.target as Node) && !confirmingRef.current) closeRef.current?.focus();
+      if (!content?.contains(event.target as Node) && !confirmingRef.current)
+        closeRef.current?.focus();
     };
     document.addEventListener("focusin", trap);
     return () => {
@@ -77,7 +82,19 @@ export function PluginHostPanel({
       }}
     >
       <Dialog.Portal forceMount={retained ? true : undefined}>
-        {retained ? (open && <div data-plugin-overlay className="fixed inset-0 z-[150] bg-black/40" onClick={() => { if (!confirming) onClose(); }} />) : <Dialog.Overlay className="fixed inset-0 z-[150] bg-black/40" />}
+        {retained ? (
+          open && (
+            <div
+              data-plugin-overlay
+              className="fixed inset-0 z-[150] bg-black/40"
+              onClick={() => {
+                if (!confirming) onClose();
+              }}
+            />
+          )
+        ) : (
+          <Dialog.Overlay className="fixed inset-0 z-[150] bg-black/40" />
+        )}
         <Dialog.Content
           ref={contentRef}
           forceMount={retained ? true : undefined}

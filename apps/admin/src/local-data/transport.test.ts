@@ -453,3 +453,16 @@ it("always refreshes deletion previews from the backend and never falls back on 
   expect(network).toHaveBeenCalledTimes(3);
   expect(network).toHaveBeenLastCalledWith(path, { cache: "no-store" });
 });
+it("preserves an explicit delete version for server conflict detection", async () => {
+  const local = store();
+  const transport = createLocalTransport(local as never, vi.fn(), async () => {});
+  const result = await transport('/api/records/contacts/one?version=7', { method: 'DELETE' });
+  expect(result.ok).toBe(true);
+  expect(local.mutateWithReceipt).toHaveBeenCalledWith('contacts', 'delete', 'one', undefined, 7);
+});
+it("rejects a malformed delete version without enqueueing", async () => {
+  const local = store();
+  const result = await createLocalTransport(local as never, vi.fn(), async () => {})('/api/records/contacts/one?version=bad', { method: 'DELETE' });
+  expect(result.status).toBe(422);
+  expect(local.mutateWithReceipt).not.toHaveBeenCalled();
+});

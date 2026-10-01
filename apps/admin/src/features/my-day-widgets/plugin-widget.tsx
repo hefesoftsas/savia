@@ -127,6 +127,7 @@ export function PluginWidgetBody({
     return (
       <CustomPluginFrame
         pluginId={storeWidget.extensionId}
+        installationVersion={extensions?.find(entry => entry.manifest.id === storeWidget.extensionId)?.installed?.version}
         title={storeWidget.title.es}
         src={`${widget.apiBasePath}/api/plugin-store/${encodeURIComponent(storeWidget.extensionId)}/widget?widget=${encodeURIComponent(storeWidget.id)}&collection=${encodeURIComponent(storeWidget.collection)}`}
         heightClassName="h-[320px]"

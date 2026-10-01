@@ -1,7 +1,7 @@
 # Reusable plugin editors and local-first records
 
-Status: proposed implementation design. User approved the direction and requested
-local verification before deployment on October 1, 2026.
+Status: implemented and verified locally on October 1, 2026. Preview rollout is
+pending. See the implementation plan for local acceptance evidence.
 
 ## Outcome
 

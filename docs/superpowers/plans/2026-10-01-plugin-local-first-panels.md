@@ -196,3 +196,36 @@ and `docs/onboarding/08-plugins.md`.
 - [ ] Report local acceptance evidence before any preview rollout. If proceeding
       to release, version changed immutable artifacts and update only previously
       active installations after CI; do not enable disabled/uninstalled plugins.
+
+## Local acceptance — October 1, 2026
+
+Implementation is on `codex/plugin-local-first-panels`. The local milestone covers
+all eleven Workbench ports; release packaging and preview rollout are separate.
+
+- Real sandboxed Collections bundle, host drawer and IndexedDB replica exercised
+  against a controlled localhost HTTP sync backend. Prepared reopening took
+  289 ms in one automation-inclusive sample; this is not a preview performance SLA.
+- Offline creation and editing returned durable pending receipts. A pending edit
+  survived page reload. Reconnection produced two unique mutation receipts for
+  two operations, one resulting record at version 2, and an empty pending queue.
+- Desktop and 390 × 844 layout, fixed actions, discard confirmation, fresh defaults
+  after closing and reopening, and Escape closing were checked in the browser.
+- Automated coverage includes actual `renderPanel` exports for all eleven ports,
+  stale activation requests/replies, cancellation, immediate preload retry,
+  installation version invalidation, authorization revocation, local failure,
+  delete version preservation, network payments and conflict notice reconciliation.
+- Final focused suites: 140 Admin tests, 49 Workbench tests, 252 shared tests,
+  and 43 server tests passed; one existing server case was skipped. Contract
+  checks and the full monorepo typecheck passed.
+- No production/preview data was written. No NAS persistence test, full repository
+  test run, or cold offline application installation was performed. Temporary
+  local review pages and servers were removed/stopped.
+
+Decisions made during implementation: lifecycle callbacks stay internal to the
+serialized shell; the public capability is `preparePanel`. The retained drawer
+uses permanently mounted nonmodal Radix content with explicit background inertness,
+focus confinement and scroll locking so a closed frame cannot block the app.
+Disposed sessions reject subsequent bridge requests. Reusable ports must use their
+activation-bound SDK rather than ambient `fetch`; this deliberately trades raw-fetch
+compatibility for isolation from asynchronous work belonging to a closed editor.
+Legacy nonreusable ports retain their existing API behavior.

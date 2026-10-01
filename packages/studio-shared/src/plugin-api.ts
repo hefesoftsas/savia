@@ -136,7 +136,7 @@ export type PluginFiles = {
 export type PluginApi = {
   localRecords?: {
     collection<T, I = Partial<T>>(name: string): PluginLocalCollection<T, I>;
-    subscribe?(listener: () => void): () => void;
+    subscribe?(listener: (status?: { pending: number; conflicts: number; errors: number }) => void): () => void;
   };
   ui?: PluginPanelApi;
   i18n?: {

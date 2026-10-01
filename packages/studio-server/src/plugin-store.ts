@@ -1096,7 +1096,7 @@ addEventListener("message", (event) => {
     return;
   }
   if (message?.ns === "savia-plugin" && message.type === "records-changed" && !standby) {
-    for (const listener of recordListeners) listener();
+    for (const listener of recordListeners) listener(message.status);
     return;
   }
   if (!message || message.ns !== "savia-plugin" || message.type !== "response") return;
