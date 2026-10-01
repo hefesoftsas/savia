@@ -149,9 +149,8 @@ export function registerPublicFormRoutes(
           );
           return c.json({ data: { shortUrl: persistedShortUrl } }, 200);
         } catch {
-          throw new HTTPException(503, {
-            message: "External short URL provider unavailable.",
-          });
+          // Provider failures fall through to the Savia-hosted short code,
+          // matching the documented "fallback links stay usable" behavior.
         }
       }
 
@@ -265,7 +264,7 @@ export function registerPublicFormRoutes(
       return c.json(
         {
           data: result.results.map((row) =>
-            managedForm(row, options.publicOrigin, Boolean(options.shortener)),
+            managedForm(row, options.publicOrigin),
           ),
         },
         200,

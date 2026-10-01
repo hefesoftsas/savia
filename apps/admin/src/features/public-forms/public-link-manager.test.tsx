@@ -142,6 +142,104 @@ it("explains missing captcha configuration when publishing is unavailable", asyn
     "falta configurar",
   );
 });
+it("explains that quote settings must be saved before publication", async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: "internal setting detail" }), {
+        status: 409,
+      }),
+    );
+  render(
+    <PublicLinkManager
+      tenantId={4}
+      objectName="cotizador_por_pasos"
+      kind="quote"
+      request={request}
+    />,
+  );
+  await screen.findByText(/Aún no hay enlaces/);
+  fireEvent.click(screen.getByLabelText(/versión actual/));
+  fireEvent.click(screen.getByRole("button", { name: "Publicar enlace" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Configura y guarda el cotizador antes de publicar el enlace.",
+  );
+  expect(screen.getByRole("alert")).not.toHaveTextContent(
+    "internal setting detail",
+  );
+});
+it("explains that the form is unavailable when publication returns 404", async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })))
+    .mockResolvedValueOnce(new Response("{}", { status: 404 }));
+  render(
+    <PublicLinkManager
+      tenantId={4}
+      objectName="cotizador_por_pasos"
+      kind="quote"
+      request={request}
+    />,
+  );
+  await screen.findByText(/Aún no hay enlaces/);
+  fireEvent.click(screen.getByLabelText(/versión actual/));
+  fireEvent.click(screen.getByRole("button", { name: "Publicar enlace" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Este formulario, enlace o cotizador ya no está disponible.",
+  );
+});
+it("distinguishes server failures from connection errors", async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })))
+    .mockResolvedValueOnce(new Response("{}", { status: 500 }));
+  render(
+    <PublicLinkManager
+      tenantId={4}
+      objectName="cotizador_por_pasos"
+      kind="quote"
+      request={request}
+    />,
+  );
+  await screen.findByText(/Aún no hay enlaces/);
+  fireEvent.click(screen.getByLabelText(/versión actual/));
+  fireEvent.click(screen.getByRole("button", { name: "Publicar enlace" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "El servidor no pudo completar la operación. Inténtalo más tarde.",
+  );
+});
+it("does not show quote publication guidance when revoking a quote link fails", async () => {
+  const row = {
+    id: "quote-link",
+    token: "quote-token",
+    path: "/public/forms/quote-token",
+    kind: "quote",
+    dailyLimit: 25,
+    expiresAt: null,
+    revokedAt: null,
+  };
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: [row] })))
+    .mockResolvedValueOnce(new Response("{}", { status: 409 }));
+  render(
+    <PublicLinkManager
+      tenantId={4}
+      objectName="cotizador_por_pasos"
+      kind="quote"
+      request={request}
+    />,
+  );
+  await screen.findByRole("button", { name: "Revocar enlace" });
+  fireEvent.click(screen.getByRole("button", { name: "Revocar enlace" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "La configuración cambió. Recarga la página e inténtalo de nuevo.",
+  );
+  expect(screen.getByRole("alert")).not.toHaveTextContent(
+    "Configura y guarda el cotizador",
+  );
+});
 it("toggles the QR code and downloads it as SVG", async () => {
   const row = {
     id: "link-qr",

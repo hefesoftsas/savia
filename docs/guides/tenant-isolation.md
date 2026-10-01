@@ -26,6 +26,15 @@ Its scope heading and access column show the tenant name, never an internal ID.
 If the name is unavailable, the heading stays generic and the access cell uses
 an empty-value marker; platform and no-access badges keep their existing meaning.
 
+Tenant administrators can manage users assigned to their own tenant. The user
+creation form fixes the new user's tenant to that administrator's tenant and
+does not expose platform-administrator access or cross-tenant assignment.
+Platform administrators can choose among multiple authorized tenants and set an
+optional active user limit for an authorized commercial tenant. The user-capacity view reports
+the number of active users, including tenant administrators; a blank limit is
+unlimited. The API enforces the limit when creating or reactivating users, so a
+client-side count never grants permission to exceed it.
+
 The data-domain catalog, creation operation, runtime routes, and `domain:<slug>`
 ACL scopes have been removed. Create workspaces through tenant management.
 Business-domain modules (for example the `/v1/domains` capability catalog), DNS

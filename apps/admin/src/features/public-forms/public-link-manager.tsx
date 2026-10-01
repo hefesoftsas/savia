@@ -111,13 +111,25 @@ type Props = {
   onBack?: () => void;
 };
 
-function managementError(status: number) {
+function managementError(
+  status: number,
+  kind: Props["kind"],
+  operation?: "publish",
+) {
   if (status === 503)
     return "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.";
   if (status === 401 || status === 403)
     return "No tienes permiso para administrar estos enlaces. Verifica tu sesión y tus permisos.";
+  if (status === 404)
+    return "Este formulario, enlace o cotizador ya no está disponible. Recarga la página e inténtalo de nuevo.";
+  if (status === 409 && kind === "quote" && operation === "publish")
+    return "Configura y guarda el cotizador antes de publicar el enlace.";
+  if (status === 409)
+    return "La configuración cambió. Recarga la página e inténtalo de nuevo.";
   if (status === 400 || status === 422)
     return "No se pudo publicar este formulario. Revisa sus campos, la vigencia y el límite de envíos.";
+  if (status >= 500)
+    return "El servidor no pudo completar la operación. Inténtalo más tarde.";
   return "No se pudo completar la operación. Revisa tu conexión y vuelve a intentarlo.";
 }
 
@@ -183,7 +195,8 @@ export function PublicLinkManager({
       `/v1/public-forms?${new URLSearchParams({ tenantId: String(tenantId), objectName })}`,
     )
       .then(async (response) => {
-        if (!response.ok) throw new Error(managementError(response.status));
+        if (!response.ok)
+          throw new Error(managementError(response.status, kind));
         const body = z
           .object({ data: z.array(linkSchema) })
           .parse(await response.json());
@@ -205,7 +218,7 @@ export function PublicLinkManager({
           setError(
             cause instanceof Error && !(cause instanceof z.ZodError)
               ? cause.message
-              : managementError(500),
+              : managementError(500, kind),
           );
       })
       .finally(() => {
@@ -252,7 +265,8 @@ export function PublicLinkManager({
           ...(logoImage ? { logoImage } : {}),
         }),
       });
-      if (!response.ok) throw new Error(managementError(response.status));
+      if (!response.ok)
+        throw new Error(managementError(response.status, kind, "publish"));
       const body = z.object({ data: linkSchema }).parse(await response.json());
       if (current === generation.current) {
         setLinks((previous) => [body.data, ...previous]);
@@ -287,7 +301,7 @@ export function PublicLinkManager({
         setError(
           cause instanceof Error && !(cause instanceof z.ZodError)
             ? cause.message
-            : managementError(500),
+            : managementError(500, kind),
         );
     } finally {
       busy.current = false;
@@ -307,7 +321,7 @@ export function PublicLinkManager({
         `/v1/public-forms/${encodeURIComponent(link.id)}`,
         { method: "DELETE" },
       );
-      if (!response.ok) throw new Error(managementError(response.status));
+      if (!response.ok) throw new Error(managementError(response.status, kind));
       if (current === generation.current) {
         setLinks((previous) =>
           previous.map((item) =>
@@ -325,7 +339,9 @@ export function PublicLinkManager({
       }
     } catch (cause) {
       if (current === generation.current)
-        setError(cause instanceof Error ? cause.message : managementError(500));
+        setError(
+          cause instanceof Error ? cause.message : managementError(500, kind),
+        );
     } finally {
       busy.current = false;
       if (current === generation.current) setPending(undefined);
@@ -344,7 +360,7 @@ export function PublicLinkManager({
         `/v1/public-forms/${encodeURIComponent(link.id)}?hard=true`,
         { method: "DELETE" },
       );
-      if (!response.ok) throw new Error(managementError(response.status));
+      if (!response.ok) throw new Error(managementError(response.status, kind));
       if (current === generation.current) {
         setLinks((previous) => previous.filter((item) => item.id !== link.id));
         setConfirming(null);
@@ -352,7 +368,9 @@ export function PublicLinkManager({
       }
     } catch (cause) {
       if (current === generation.current)
-        setError(cause instanceof Error ? cause.message : managementError(500));
+        setError(
+          cause instanceof Error ? cause.message : managementError(500, kind),
+        );
     } finally {
       busy.current = false;
       if (current === generation.current) setPending(undefined);
