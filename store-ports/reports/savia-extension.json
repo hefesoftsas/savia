@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.reports",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "label": "Reportes y cliente 360",
   "description": "Consulta indicadores operativos y el expediente relacionado del cliente.",
   "labels": {
