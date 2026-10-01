@@ -55,6 +55,7 @@ export function AddWidgetDialog({
   onAdd,
   saving,
   existingKinds = [],
+  mailAvailable = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -62,6 +63,7 @@ export function AddWidgetDialog({
   onAdd: (widget: MyDayWidget) => Promise<boolean>;
   saving: boolean;
   existingKinds?: string[];
+  mailAvailable?: boolean;
 }) {
   const [source, setSource] = useState<Source>("collection");
   const [tenants, setTenants] = useState<WidgetTenant[]>([]);
@@ -80,6 +82,7 @@ export function AddWidgetDialog({
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const hasMail = existingKinds.includes("mail");
   const hasAgenda = existingKinds.includes("agenda");
   const hasQuickTask = existingKinds.includes("quick_task");
 
@@ -209,7 +212,8 @@ export function AddWidgetDialog({
     if (source === "system") {
       if (
         (systemKind === "agenda" && hasAgenda) ||
-        (systemKind === "quick_task" && hasQuickTask)
+        (systemKind === "quick_task" && hasQuickTask) ||
+        (systemKind === "mail" && (hasMail || !mailAvailable))
       ) {
         setFeedback("Ese widget ya está en tu tablero.");
         return;
@@ -279,7 +283,8 @@ export function AddWidgetDialog({
 
   const canSaveSystem =
     (systemKind === "agenda" && !hasAgenda) ||
-    (systemKind === "quick_task" && !hasQuickTask);
+    (systemKind === "quick_task" && !hasQuickTask) ||
+    (systemKind === "mail" && !hasMail && mailAvailable);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -317,7 +322,7 @@ export function AddWidgetDialog({
               onClick={() => setSource("system")}
             >
               <CalendarDays className="size-4" aria-hidden="true" />
-              Agenda
+              Personal
             </Button>
           </div>
 
@@ -329,6 +334,11 @@ export function AddWidgetDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {mailAvailable ? (
+                    <SelectItem value="mail" disabled={hasMail}>
+                      Bandeja de correo{hasMail ? " (ya agregado)" : ""}
+                    </SelectItem>
+                  ) : null}
                   <SelectItem value="agenda" disabled={hasAgenda}>
                     <span className="flex items-center gap-2">
                       <CalendarDays className="size-4" aria-hidden="true" />
@@ -346,9 +356,11 @@ export function AddWidgetDialog({
                 </SelectContent>
               </Select>
               <p className="text-sm leading-6 text-muted-foreground">
-                {systemKind === "agenda"
-                  ? "Muestra tus eventos de Google Calendar y Outlook para hoy, con enlaces directos."
-                  : "Formulario compacto para bloquear tiempo en tus calendarios conectados."}
+                {systemKind === "mail"
+                  ? "Combina los correos de Gmail y Outlook y redacta con contexto de tus colecciones."
+                  : systemKind === "agenda"
+                    ? "Muestra tus eventos de Google Calendar y Outlook para hoy, con enlaces directos."
+                    : "Formulario compacto para bloquear tiempo en tus calendarios conectados."}
               </p>
             </div>
           ) : (

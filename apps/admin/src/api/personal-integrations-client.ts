@@ -1,3 +1,8 @@
+import type {
+  PersonalMailMessage,
+  PersonalMailProvider,
+  SendPersonalMailInput,
+} from "@savia/studio-shared/mail-contracts";
 import type { ApiClient } from "./api-client";
 
 export type PersonalIntegrationProviderId =
@@ -196,6 +201,29 @@ export class PersonalIntegrationsClient {
       });
     this.eventsInflight.set(path, promise);
     return promise;
+  }
+
+  async listMessages(input: {
+    provider: PersonalMailProvider;
+    query?: string;
+  }): Promise<PersonalMailMessage[]> {
+    const query = new URLSearchParams({ provider: input.provider });
+    if (input.query !== undefined) query.set("query", input.query);
+    return (
+      await this.api.get<{ data: PersonalMailMessage[] }>(
+        `/v1/personal-integrations/messages?${query}`,
+      )
+    ).data;
+  }
+
+  async sendMail(
+    input: SendPersonalMailInput,
+  ): Promise<{ provider: PersonalMailProvider; action: "send-email" }> {
+    return (
+      await this.api.post<{
+        data: { provider: PersonalMailProvider; action: "send-email" };
+      }>("/v1/personal-integrations/messages", input)
+    ).data;
   }
 
   async createCalendarEvent(input: {

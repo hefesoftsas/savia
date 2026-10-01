@@ -1,3 +1,5 @@
+import { MailWidgetBody } from "./mail-widget";
+import type { MailState } from "./use-my-day-mail";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { matchTenantApiBasePath } from "@/features/studio/studio-navigation";
 import { useEffect, useState } from "react";
@@ -544,6 +546,7 @@ const widgetKindLabels: Record<string, string> = {
   actions: "Acciones",
   agenda: "Agenda",
   quick_task: "Tarea rápida",
+  mail: "Bandeja de entrada",
 };
 
 function isBuiltInWidget(widget: MyDayWidget): boolean {
@@ -567,6 +570,8 @@ export function WidgetCard({
   collectionLabel,
   agenda,
   quickTask,
+  mail,
+  onCompose,
   onRemove,
   onMove,
   isFirst,
@@ -577,6 +582,8 @@ export function WidgetCard({
   apiClient: ApiClient | undefined;
   widget: MyDayWidget;
   collectionLabel: string;
+  mail?: MailState;
+  onCompose?: () => void;
   agenda?: React.ComponentProps<typeof AgendaWidgetBody>;
   quickTask?: React.ComponentProps<typeof QuickTaskWidgetBody>;
   onRemove: (id: string) => void;
@@ -593,7 +600,10 @@ export function WidgetCard({
       : undefined;
   const isPlugin =
     typeof widget.kind === "string" && parsePluginKind(widget.kind) !== null;
-  const isSystem = widget.kind === "agenda" || widget.kind === "quick_task";
+  const isSystem =
+    widget.kind === "agenda" ||
+    widget.kind === "quick_task" ||
+    widget.kind === "mail";
   const supported = isBuiltInWidget(widget) || isSystem || isPlugin;
 
   return (
@@ -660,6 +670,8 @@ export function WidgetCard({
             Este tipo de widget estará disponible próximamente. Mientras tanto
             puedes abrir la colección completa.
           </p>
+        ) : widget.kind === "mail" && mail ? (
+          <MailWidgetBody mail={mail} onCompose={onCompose ?? (() => {})} />
         ) : widget.kind === "agenda" ? (
           agenda ? (
             <AgendaWidgetBody agenda={agenda.agenda} />

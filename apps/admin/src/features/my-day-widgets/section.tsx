@@ -1,4 +1,11 @@
 import {
+  useMyDayMail,
+  isMailClient,
+  mailProviderLabel,
+  type PersonalMailLike,
+} from "./use-my-day-mail";
+import { MailComposer } from "./mail-composer";
+import {
   useRealtimeRefresh,
   RemoteChangesNotice,
 } from "@/realtime/use-realtime-refresh";
@@ -96,7 +103,8 @@ function useCollectionLabels(
 }
 
 function widgetSpanClass(widget: MyDayWidget): string {
-  if (widget.kind === "agenda") return "md:col-span-2 xl:col-span-2";
+  if (widget.kind === "agenda" || widget.kind === "mail")
+    return "md:col-span-2 xl:col-span-2";
   return "";
 }
 
@@ -124,7 +132,7 @@ function SortableWidgetItem({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`${widgetSpanClass(widget)} ${isDragging ? "opacity-40" : ""}`}
+      className={`min-w-0 ${widgetSpanClass(widget)} ${isDragging ? "opacity-40" : ""}`}
     >
       {children({
         attributes: attributes as unknown as Record<string, unknown>,
@@ -142,7 +150,7 @@ export function MyDayWidgetsSection({
 }: {
   apiClient?: ApiClient;
   userPreferences?: UserPreferencesClient;
-  personalIntegrations?: PersonalIntegrationsLike;
+  personalIntegrations?: PersonalIntegrationsLike & Partial<PersonalMailLike>;
   agenda?: AgendaState;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -155,11 +163,25 @@ export function MyDayWidgetsSection({
     setFeedback,
     add,
     remove,
-    move,
     reorder,
     reload,
     hasSystemWidget,
   } = useMyDayWidgets(userPreferences);
+  const mailClient = isMailClient(personalIntegrations)
+    ? personalIntegrations
+    : undefined;
+  const mail = useMyDayMail(mailClient);
+  const [composeOpen, setComposeOpen] = useState(false);
+  useEffect(() => {
+    setComposeOpen(false);
+  }, [mail.sessionRevision, mailClient]);
+  const visibleWidgets = useMemo(
+    () =>
+      widgets.filter(
+        (widget) => widget.kind !== "mail" || mail.connections.length > 0,
+      ),
+    [widgets, mail.connections.length],
+  );
   const labels = useCollectionLabels(apiClient, widgets);
   // La página ya posee una instancia (header): reutilizarla evita duplicar
   // /connections y /events x2 en el mismo ms.
@@ -188,8 +210,8 @@ export function MyDayWidgetsSection({
   );
 
   const sortableIds = useMemo(
-    () => widgets.map((widget) => widget.id),
-    [widgets],
+    () => visibleWidgets.map((widget) => widget.id),
+    [visibleWidgets],
   );
   const existingKinds = useMemo(
     () => widgets.map((widget) => widget.kind),
@@ -211,7 +233,7 @@ export function MyDayWidgetsSection({
     setActiveId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    void reorder(String(active.id), String(over.id));
+    void reorder(String(active.id), String(over.id), sortableIds);
   }
 
   function handleDragCancel() {
@@ -222,6 +244,7 @@ export function MyDayWidgetsSection({
     if (!("apiBasePath" in widget) || !("collection" in widget)) {
       if (widget.kind === "agenda") return "Agenda";
       if (widget.kind === "quick_task") return "Tarea rápida";
+      if (widget.kind === "mail") return "Correos";
       return widget.title ?? widget.kind;
     }
     return (
@@ -240,9 +263,9 @@ export function MyDayWidgetsSection({
             <LayoutGrid className="size-4 text-primary" aria-hidden="true" />
           </span>
           <h2 className="text-xl font-semibold tracking-tight">Mi tablero</h2>
-          {!loading && widgets.length > 0 ? (
+          {!loading && visibleWidgets.length > 0 ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
-              {widgets.length}
+              {visibleWidgets.length}
             </span>
           ) : null}
         </div>
@@ -252,13 +275,26 @@ export function MyDayWidgetsSection({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={saving}
+              disabled={saving || full}
               onClick={() =>
                 void add({ id: "agenda", kind: "agenda" } as MyDayWidget)
               }
             >
               <CalendarDays aria-hidden="true" />
               Mostrar agenda
+            </Button>
+          ) : null}
+          {!hasSystemWidget("mail") &&
+          mail.connections.length > 0 &&
+          !loading ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={saving || full}
+              onClick={() => void add({ id: "mail", kind: "mail" })}
+            >
+              Mostrar correos
             </Button>
           ) : null}
           <Button
@@ -268,6 +304,7 @@ export function MyDayWidgetsSection({
             disabled={loading || saving}
             onClick={() => {
               void agenda.refresh();
+              void mail.refresh();
               void reload();
             }}
           >
@@ -288,6 +325,45 @@ export function MyDayWidgetsSection({
           </Button>
         </div>
       </div>
+
+      {mailClient &&
+      (mail.reconnectRequired.length > 0 ||
+        (!mail.connections.length && mail.errors.length > 0)) ? (
+        <div className="mb-4 space-y-2" role="alert">
+          {mail.reconnectRequired.map((provider) => (
+            <p key={provider} className="text-sm">
+              Vuelve a conectar {mailProviderLabel(provider)} para ver tus
+              correos.
+            </p>
+          ))}
+          {!mail.connections.length
+            ? mail.errors.map((error) => (
+                <p key={error} className="text-sm text-destructive">
+                  {error}
+                </p>
+              ))
+            : null}
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="/my-integrations"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Revisar conexiones
+            </a>
+            {mail.errors.length ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={mail.loading}
+                onClick={() => void mail.refresh()}
+              >
+                Reintentar correos
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {agenda.feedback ? (
         <Alert className="mb-4" aria-label={agenda.feedback}>
@@ -360,7 +436,7 @@ export function MyDayWidgetsSection({
             </div>
           ))}
         </div>
-      ) : widgets.length === 0 ? (
+      ) : visibleWidgets.length === 0 ? (
         <div
           className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-gradient-to-b from-muted/60 to-muted/20 px-6 py-12 text-center shadow-sm"
           data-testid="my-day-widgets-empty"
@@ -409,7 +485,7 @@ export function MyDayWidgetsSection({
         >
           <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
             <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {widgets.map((widget, index) => (
+              {visibleWidgets.map((widget, index) => (
                 <SortableWidgetItem
                   key={widget.id}
                   widget={widget}
@@ -429,10 +505,16 @@ export function MyDayWidgetsSection({
                             }
                           : undefined
                       }
+                      mail={widget.kind === "mail" ? mail : undefined}
+                      onCompose={() => setComposeOpen(true)}
                       onRemove={(id) => void remove(id)}
-                      onMove={(id, direction) => void move(id, direction)}
+                      onMove={(id, direction) => {
+                        const target =
+                          sortableIds[sortableIds.indexOf(id) + direction];
+                        if (target) void reorder(id, target, sortableIds);
+                      }}
                       isFirst={index === 0}
-                      isLast={index === widgets.length - 1}
+                      isLast={index === visibleWidgets.length - 1}
                       disabled={saving}
                       dragHandle={
                         <button
@@ -466,13 +548,15 @@ export function MyDayWidgetsSection({
         </DndContext>
       )}
 
-      {!loading && widgets.length > 0 && !hasSystemWidget("quick_task") ? (
+      {!loading &&
+      visibleWidgets.length > 0 &&
+      !hasSystemWidget("quick_task") ? (
         <div className="mt-4 flex justify-center">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            disabled={saving}
+            disabled={saving || full}
             onClick={() =>
               void add({ id: "quick_task", kind: "quick_task" } as MyDayWidget)
             }
@@ -483,6 +567,21 @@ export function MyDayWidgetsSection({
         </div>
       ) : null}
 
+      {mailClient ? (
+        <MailComposer
+          key={mail.sessionRevision}
+          open={composeOpen}
+          onSent={() => setFeedback("Correo enviado.")}
+          onOpenChange={(open) => {
+            setComposeOpen(open);
+            if (!open && composeOpen) void mail.refresh();
+          }}
+          apiClient={apiClient}
+          personalIntegrations={mailClient}
+          connections={mail.connections}
+          sessionRevision={mail.sessionRevision}
+        />
+      ) : null}
       <AddWidgetDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -490,6 +589,7 @@ export function MyDayWidgetsSection({
         onAdd={add}
         saving={saving}
         existingKinds={existingKinds}
+        mailAvailable={mail.connections.length > 0}
       />
     </section>
   );

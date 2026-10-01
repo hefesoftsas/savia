@@ -178,3 +178,21 @@ describe("useMyDayWidgets", () => {
     ]);
   });
 });
+
+it("keeps hidden mail in its saved slot when visible cards reorder", async () => {
+  const preferences = createPreferences([
+    { id: "first", kind: "agenda" },
+    { id: "mail", kind: "mail" },
+    { id: "last", kind: "quick_task" },
+  ]);
+  const hook = renderHook(() => useMyDayWidgets(preferences as never));
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  await act(async () => {
+    await hook.result.current.reorder("first", "last", ["first", "last"]);
+  });
+  expect(hook.result.current.widgets.map((widget) => widget.id)).toEqual([
+    "last",
+    "mail",
+    "first",
+  ]);
+});
