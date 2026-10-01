@@ -272,3 +272,34 @@ it.each([
     expect(a.collection.list).not.toHaveBeenCalled();
   },
 );
+
+it("allows drafting and cancelling while links load, but gates saving without stealing focus", async () => {
+  const a = api(true);
+  a.ui.panel!.request.params = {} as { recordId: string };
+  let resolve!: (value: unknown) => void;
+  a.collection.describe.mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  render(<Workbench savia={a.savia} config={config} />);
+  const input = await screen.findByLabelText(/Reference/);
+  expect(input).toBeEnabled();
+  expect(input).toHaveFocus();
+  fireEvent.change(input, { target: { value: "Draft while loading" } });
+  const save = screen.getByRole("button", {
+    name: /Guardar cambios|Save changes/,
+  });
+  expect(save).toBeDisabled();
+  expect(a.ui.setPanelState).toHaveBeenLastCalledWith({
+    dirty: true,
+    busy: false,
+  });
+  const cancel = screen.getByRole("button", { name: /Cancelar|Cancel/ });
+  cancel.focus();
+  resolve({ name: "accounts", config: { fields: {} } });
+  await waitFor(() => expect(save).toBeEnabled());
+  expect(input).toHaveValue("Draft while loading");
+  expect(cancel).toHaveFocus();
+  expect(a.collection.create).not.toHaveBeenCalled();
+});

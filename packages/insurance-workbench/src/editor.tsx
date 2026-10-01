@@ -65,11 +65,11 @@ export function RecordEditor({
   const initialPaymentDate = useRef(paymentDate);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (embedded && !linksLoading)
+    if (embedded)
       formRef.current
         ?.querySelector<HTMLElement>("input,select,textarea")
         ?.focus();
-  }, [embedded, linksLoading]);
+  }, [embedded]);
   const dirty =
     JSON.stringify(values) !== initial.current ||
     payment !== "" ||
@@ -78,9 +78,9 @@ export function RecordEditor({
     if (embedded)
       savia.ui?.setPanelState({
         dirty,
-        busy: busy || operationBusy || linksLoading,
+        busy: busy || operationBusy,
       });
-  }, [savia, embedded, dirty, busy, operationBusy, linksLoading]);
+  }, [savia, embedded, dirty, busy, operationBusy]);
   const Frame = embedded ? EmbeddedEditor : Drawer;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -223,9 +223,7 @@ export function RecordEditor({
               {t("Cierra el panel y actualiza la lista para reintentar.")}{" "}
             </p>
           ) : null}
-          <fieldset
-            disabled={busy || operationBusy || linksLoading || !!linksError}
-          >
+          <fieldset disabled={busy || operationBusy}>
             {mode === "payment" && record && config.payment ? (
               <>
                 <div className="iw-payment-balance">

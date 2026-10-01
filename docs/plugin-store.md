@@ -520,7 +520,12 @@ sandbox and authenticated API bridge. Session changes dispose the panel.
 Editors report `{ dirty, busy }` with `setPanelState`, use `requestClose` for
 Cancel, and call `completePanel({ status: "saved" })` only after a successful
 mutation. The host owns discard confirmation, full-viewport framing and focus
-transfer; the plugin owns fields, validation and a fixed action footer. Failed
+transfer; the plugin owns fields, validation and a fixed action footer. The
+host drawer is at most 640 px wide on desktop and fills narrow screens.
+Configured fields accept input immediately while relationship options load;
+saving stays disabled until relationship validation is ready. Closing still
+checks for unsaved changes. Relationship collections load concurrently, with
+one shared request chain per collection within each editor load. Failed
 saves keep the draft in memory. No draft is persisted in browser storage.
 
 The eleven Workbench ports share this editor implementation. Release their ZIPs
