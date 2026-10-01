@@ -50,6 +50,28 @@ received date, newest first, and can be filtered to All, Gmail, or Outlook.
 The widget shows ten messages from a bounded window of up to twenty-five per
 provider. Refresh loads a new window; this is not full mailbox synchronization.
 
+While My Day is visible and online, the inbox refreshes automatically every
+sixty seconds after the previous read finishes. Returning to the tab or
+regaining connectivity triggers a fresh read. Hidden or offline pages pause
+periodic reads. Existing Savia integration events also trigger refreshes;
+direct Gmail/Outlook incoming-message push subscriptions are not configured.
+
+Manual, timed, focus, and event-triggered reads share one pending request.
+Previously loaded messages remain visible during refresh and transient failures.
+Failed providers retain their last successful rows alongside a recovery notice;
+the next successful read replaces them. Repeated failures increase the interval
+from two to four minutes, capped at five minutes, then recovery restores sixty
+seconds. A connection explicitly marked disconnected/reconnect-required removes
+that account's messages; denied access and identity changes clear cached state.
+
+The first successful read per account establishes a baseline. Later reads with
+new message IDs display **There are new emails in the inbox**, with an explicit
+dismiss action. The bounded inbox window can also discover a message newly moved
+into Inbox. Initial loading and account/session changes do not trigger this notice.
+Notifications are shown inside My Day while open; there are no operating-system
+notifications or background checks after the page closes. Automatic reads do not
+reset a composer draft or send mail.
+
 Each message shows its subject, sender, timestamp, and source account. Gmail
 metadata is loaded through bounded header-only requests. A failed provider
 shows a recovery notice while the other provider's messages remain available.

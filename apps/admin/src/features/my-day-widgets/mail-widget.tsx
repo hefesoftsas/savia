@@ -99,12 +99,29 @@ export function MailWidgetBody({
           </Button>
         </div>
       </div>
+      {Boolean(mail.newMessageCount) ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 text-sm"
+        >
+          <p>Hay nuevos correos en la bandeja.</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Descartar aviso de correos nuevos"
+            onClick={mail.dismissNewMessages}
+          >
+            Entendido
+          </Button>
+        </div>
+      ) : null}
       {mail.errors.map((error) => (
         <p key={error} role="alert" className="text-sm text-destructive">
           {error}
         </p>
       ))}
-      {mail.loading ? (
+      {mail.loading && !rows.length ? (
         <div role="status" aria-label="Cargando correos" className="space-y-3">
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
