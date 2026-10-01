@@ -107,3 +107,45 @@ it("runs its serialized shell implementation without module dependencies", async
   );
   f.send({ type: "dispose" });
 });
+
+it("keeps the serialized client self-contained after the Worker production transform", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { readFileSync, mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, resolve } = await import("node:path");
+  const { runInNewContext } = await import("node:vm");
+  const dir = mkdtempSync(join(tmpdir(), "panel-client-build-"));
+  try {
+    const output = join(dir, "client.cjs");
+    execFileSync(
+      resolve("../../apps/admin/node_modules/.bin/esbuild"),
+      [
+        "src/plugin-panels.ts",
+        "--bundle",
+        "--platform=node",
+        "--format=cjs",
+        "--keep-names",
+        "--minify",
+        `--outfile=${output}`,
+      ],
+      { stdio: "pipe" },
+    );
+    const module = {
+      exports: {} as { connectPluginPanelHost: typeof connectPluginPanelHost },
+    };
+    runInNewContext(readFileSync(output, "utf8"), {
+      module,
+      exports: module.exports,
+    });
+    const connect = new Function(
+      `return (${module.exports.connectPluginPanelHost.toString()})`,
+    )() as typeof connectPluginPanelHost;
+    const f = frame();
+    const ready = connect(f.win, false);
+    f.send({ type: "init", nonce: "nonce", panel: null });
+    expect(await ready).toBeDefined();
+    f.send({ type: "dispose" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

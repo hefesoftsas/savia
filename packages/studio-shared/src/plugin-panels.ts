@@ -67,38 +67,91 @@ export function connectPluginPanelHost(
           reject: (error: Error) => void;
         }
       | undefined;
-    const send = (type: string, data: Record<string, unknown> = {}) =>
-      win.parent.postMessage(
-        { ns: "savia-plugin-ui", version: 1, session, type, ...data },
-        "*",
-      );
-    const focusables = () =>
-      Array.from(
-        win.document.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
-        ),
-      ).filter((el) => el.getClientRects().length > 0);
-    const onKey = (event: KeyboardEvent) => {
-      if (!context) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        send("close", { panelId: context.panelId });
-      }
-      if (event.key === "Tab") {
-        const items = focusables();
-        if (
-          !items.length ||
-          (event.shiftKey
-            ? win.document.activeElement === items[0]
-            : win.document.activeElement === items.at(-1))
-        ) {
+    // Object methods keep this source self-contained under esbuild keepNames.
+    const handlers = {
+      send(type: string, data: Record<string, unknown> = {}) {
+        return win.parent.postMessage(
+          { ns: "savia-plugin-ui", version: 1, session, type, ...data },
+          "*",
+        );
+      },
+      focusables() {
+        return Array.from(
+          win.document.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
+          ),
+        ).filter((el) => el.getClientRects().length > 0);
+      },
+      onKey(event: KeyboardEvent) {
+        if (!context) return;
+        if (event.key === "Escape") {
           event.preventDefault();
-          send("focus-host", {
-            panelId: context.panelId,
-            backwards: event.shiftKey,
-          });
+          handlers.send("close", { panelId: context.panelId });
         }
-      }
+        if (event.key === "Tab") {
+          const items = handlers.focusables();
+          if (
+            !items.length ||
+            (event.shiftKey
+              ? win.document.activeElement === items[0]
+              : win.document.activeElement === items.at(-1))
+          ) {
+            event.preventDefault();
+            handlers.send("focus-host", {
+              panelId: context.panelId,
+              backwards: event.shiftKey,
+            });
+          }
+        }
+      },
+      onMessage(event: MessageEvent) {
+        if (event.source !== win.parent) return;
+        const m = event.data;
+        if (!m || m.ns !== "savia-plugin-ui" || m.version !== 1) return;
+        if (
+          !initialized &&
+          m.type === "init" &&
+          m.nonce === nonce &&
+          typeof m.session === "string" &&
+          m.session
+        ) {
+          if (panelExpected && !m.panel) return;
+          initialized = true;
+          session = m.session;
+          context = m.panel ?? null;
+          win.clearTimeout(timer);
+          resolve(api);
+          return;
+        }
+        if (!initialized || m.session !== session) return;
+        if (m.type === "result" && pending && m.id === pending.id) {
+          const slot = pending;
+          pending = undefined;
+          if (m.result?.status === "saved" || m.result?.status === "cancelled")
+            slot.resolve(m.result);
+          else slot.reject(new Error("Panel unavailable."));
+        }
+        if (m.type === "focus-editor" && context) {
+          const items = handlers.focusables();
+          (m.backwards ? items.at(-1) : items[0])?.focus();
+        }
+        if (m.type === "dispose") handlers.dispose();
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        win.clearTimeout(timer);
+        win.removeEventListener("message", handlers.onMessage);
+        win.document.removeEventListener("keydown", handlers.onKey, true);
+        pending?.reject(new Error("The plugin session ended."));
+        pending = undefined;
+        win.removeEventListener("pagehide", handlers.dispose);
+        if (!initialized) {
+          if (panelExpected)
+            reject(new Error("The editor could not connect to its host."));
+          else resolve(undefined);
+        }
+      },
     };
     const api: PluginPanelApi = {
       get panel() {
@@ -112,76 +165,30 @@ export function connectPluginPanelHost(
         return new Promise((done, fail) => {
           const id = win.crypto.randomUUID();
           pending = { id, resolve: done, reject: fail };
-          send("open", { id, request });
+          handlers.send("open", { id, request });
         });
       },
       setPanelState(state) {
-        if (context) send("state", { panelId: context.panelId, state });
+        if (context)
+          handlers.send("state", { panelId: context.panelId, state });
       },
       requestClose() {
-        if (context) send("close", { panelId: context.panelId });
+        if (context) handlers.send("close", { panelId: context.panelId });
       },
       completePanel(result) {
-        if (context) send("complete", { panelId: context.panelId, result });
+        if (context)
+          handlers.send("complete", { panelId: context.panelId, result });
       },
     };
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== win.parent) return;
-      const m = event.data;
-      if (!m || m.ns !== "savia-plugin-ui" || m.version !== 1) return;
-      if (
-        !initialized &&
-        m.type === "init" &&
-        m.nonce === nonce &&
-        typeof m.session === "string" &&
-        m.session
-      ) {
-        if (panelExpected && !m.panel) return;
-        initialized = true;
-        session = m.session;
-        context = m.panel ?? null;
-        win.clearTimeout(timer);
-        resolve(api);
-        return;
-      }
-      if (!initialized || m.session !== session) return;
-      if (m.type === "result" && pending && m.id === pending.id) {
-        const slot = pending;
-        pending = undefined;
-        if (m.result?.status === "saved" || m.result?.status === "cancelled")
-          slot.resolve(m.result);
-        else slot.reject(new Error("Panel unavailable."));
-      }
-      if (m.type === "focus-editor" && context) {
-        const items = focusables();
-        (m.backwards ? items.at(-1) : items[0])?.focus();
-      }
-      if (m.type === "dispose") dispose();
-    };
-    const dispose = () => {
-      if (disposed) return;
-      disposed = true;
-      win.clearTimeout(timer);
-      win.removeEventListener("message", onMessage);
-      win.document.removeEventListener("keydown", onKey, true);
-      pending?.reject(new Error("The plugin session ended."));
-      pending = undefined;
-      win.removeEventListener("pagehide", dispose);
-      if (!initialized) {
-        if (panelExpected)
-          reject(new Error("The editor could not connect to its host."));
-        else resolve(undefined);
-      }
-    };
     const timer = win.setTimeout(() => {
-      dispose();
+      handlers.dispose();
       if (panelExpected)
         reject(new Error("The editor could not connect to its host."));
       else resolve(undefined);
     }, 2000);
-    win.addEventListener("message", onMessage);
-    win.document.addEventListener("keydown", onKey, true);
-    win.addEventListener("pagehide", dispose, { once: true });
+    win.addEventListener("message", handlers.onMessage);
+    win.document.addEventListener("keydown", handlers.onKey, true);
+    win.addEventListener("pagehide", handlers.dispose, { once: true });
     win.parent.postMessage(
       { ns: "savia-plugin-ui", version: 1, type: "hello", nonce },
       "*",
