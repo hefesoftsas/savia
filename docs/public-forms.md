@@ -26,7 +26,9 @@ replacing it.
 
 Savia keeps an internal random short code as a fallback. When Shlink is configured,
 it also creates a short URL on the self-hosted `go.cloud.hefesoft.com` domain and
-caches it with the published form. The same short URL is returned when an
+caches it with the published form. Until an external URL is saved, the stored
+internal short URL remains visible in the management list, including after a
+reload during a provider outage. The same short URL is returned when an
 administrator requests it again. Redirects stop working when the form is revoked,
 expires, or is deleted; links are rate-limited.
 
