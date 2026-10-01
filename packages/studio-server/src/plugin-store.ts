@@ -1,3 +1,4 @@
+import { connectPluginPanelHost } from "@savia/studio-shared/plugin-panels";
 import {
   PLUGIN_STORE_CONFIG_PATH,
   PLUGIN_STORE_ENTRY_PATH,
@@ -1077,6 +1078,7 @@ function callHost(path, method, body) {
   });
 }
 addEventListener("message", (event) => {
+  if (event.source !== parent) return;
   const message = event.data;
   if (message?.ns === "savia-plugin" && message.type === "theme") {
     const allowed = ["--background", "--foreground", "--card", "--border", "--input", "--muted", "--muted-foreground", "--primary", "--primary-foreground", "--accent", "--destructive", "--ring"];
@@ -1202,6 +1204,7 @@ function selectRender(module, widgetId) {
   return module.widgets?.[widgetId] ?? module.renderWidget ?? module.render;
 }
 try {
+  savia.ui = await (${connectPluginPanelHost.toString()})(window, params.get("panel") === "1");
   const module = await import(ENTRY_URL);
   const widgetId = params.get("widget") ?? "";
   const widgetCollection = params.get("collection") ?? "";
@@ -1246,7 +1249,7 @@ function shellHtml(
 <meta http-equiv="Content-Security-Policy" content="${SHELL_CSP}">
 <link rel="modulepreload" href="${entryUrl.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}" crossorigin="anonymous">
 <title>${safeLabel}</title>
-<style>:root{${initialTheme}}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:16px}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
+<style>:root{${initialTheme}}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:${extra?.panel === "1" ? "0" : "16px"}}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
 </head>
 <body>
 <div id="root"></div>
@@ -1472,7 +1475,7 @@ export function registerPluginStore(
     );
     const screen = c.req.query("screen");
     const view = c.req.query("view");
-    const context = screen ? { screen, view: view || "records" } : undefined;
+    const context = { ...(screen ? { screen, view: view || "records" } : {}), ...(c.req.query("panel") === "1" ? { panel: "1" } : {}) };
     return new Response(
       shellHtml(
         id,

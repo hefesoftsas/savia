@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.commissions",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "label": "Comisiones",
   "description": "Comisiones esperadas, recaudo y participación del vendedor.",
   "labels": {

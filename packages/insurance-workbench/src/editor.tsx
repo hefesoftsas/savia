@@ -5,7 +5,7 @@ import { Drawer } from "./drawer";
 import { linkedFields } from "./linked-fields";
 import { validateFields } from "./schema";
 import type { Field } from "./types";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { errorMessage, money, text, today, type WorkRecord } from "./data";
 import type { WorkbenchConfig } from "./types";
@@ -16,15 +16,20 @@ export function RecordEditor({
   savia,
   onClose,
   onSaved,
+  embedded = false,
+  operationBusy = false,
 }: {
   config: WorkbenchConfig;
   record: WorkRecord | null;
   savia: PluginApi;
   onClose: () => void;
   onSaved: () => void;
+  embedded?: boolean;
+  operationBusy?: boolean;
 }) {
-const locale = usePluginLocale();
-const t = useWorkbenchMessages(config.messages);
+  const formId = useId();
+  const locale = usePluginLocale();
+  const t = useWorkbenchMessages(config.messages);
 
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     record ? { ...record } : { ...config.defaults },
@@ -49,11 +54,34 @@ const t = useWorkbenchMessages(config.messages);
     };
   }, [savia, config, record]);
   const allFields = [...config.fields, ...extraFields];
-  const [mode, setMode] = useState("details");
+  const [mode, setMode] = useState(
+    savia.ui?.panel?.request.params.mode ?? "details",
+  );
   const [payment, setPayment] = useState("");
   const [paymentDate, setPaymentDate] = useState(today);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const initial = useRef(JSON.stringify(values));
+  const initialPaymentDate = useRef(paymentDate);
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (embedded && !linksLoading)
+      formRef.current
+        ?.querySelector<HTMLElement>("input,select,textarea")
+        ?.focus();
+  }, [embedded, linksLoading]);
+  const dirty =
+    JSON.stringify(values) !== initial.current ||
+    payment !== "" ||
+    paymentDate !== initialPaymentDate.current;
+  useEffect(() => {
+    if (embedded)
+      savia.ui?.setPanelState({
+        dirty,
+        busy: busy || operationBusy || linksLoading,
+      });
+  }, [savia, embedded, dirty, busy, operationBusy, linksLoading]);
+  const Frame = embedded ? EmbeddedEditor : Drawer;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
@@ -90,7 +118,9 @@ const t = useWorkbenchMessages(config.messages);
       }
       if (record && !Number.isInteger(record._version))
         throw new Error(
-          t("Falta la versión del registro. Cierra el panel y actualiza antes de editar."),
+          t(
+            "Falta la versión del registro. Cierra el panel y actualiza antes de editar.",
+          ),
         );
       setBusy(true);
       const collection = savia.collections.collection<WorkRecord>(
@@ -103,45 +133,48 @@ const t = useWorkbenchMessages(config.messages);
     } catch (cause) {
       setError(
         errorMessage(cause) +
-          t(" Tus cambios siguen en el formulario. Si el registro cambió, ciérralo y actualiza la lista antes de reintentar."),
+          t(
+            " Tus cambios siguen en el formulario. Si el registro cambió, ciérralo y actualiza la lista antes de reintentar.",
+          ),
       );
     } finally {
       setBusy(false);
     }
   }
   return (
-    <Drawer
-      labelledBy="iw-editor-title"
-      onClose={busy ? () => {} : onClose}
-    >
-       <header className="iw-editor-heading">
-         <div>
-           <p>{record ? t("Gestión del registro") : t("Nuevo registro")}</p>
-           <h2 id="iw-editor-title" ref={heading} tabIndex={-1}>
-             {record ? text(record.name) : config.singular}
-           </h2>
-         </div>
-         <button
-          type="button"
-          aria-label={t("Cerrar panel")}
-          disabled={busy}
-          onClick={onClose}
-        >
-          {t("Cerrar")} </button>
-       </header>
-       {record && config.payment && (
+    <Frame labelledBy="iw-editor-title" onClose={busy ? () => {} : onClose}>
+      {!embedded && (
+        <header className="iw-editor-heading">
+          <div>
+            <p>{record ? t("Gestión del registro") : t("Nuevo registro")}</p>
+            <h2 id="iw-editor-title" ref={heading} tabIndex={-1}>
+              {record ? text(record.name) : config.singular}
+            </h2>
+          </div>
+          <button
+            type="button"
+            aria-label={t("Cerrar panel")}
+            disabled={busy || operationBusy}
+            onClick={onClose}
+          >
+            {t("Cerrar")}{" "}
+          </button>
+        </header>
+      )}
+      {record && config.payment && (
         <div className="iw-editor-tabs" aria-label={t("Tipo de gestión")}>
-           <button
+          <button
             type="button"
             aria-pressed={mode === "details"}
-            disabled={busy}
+            disabled={busy || operationBusy}
             onClick={() => {
               setMode("details");
               setError("");
             }}
           >
-            {t("Datos y seguimiento")} </button>
-           <button
+            {t("Datos y seguimiento")}{" "}
+          </button>
+          <button
             type="button"
             aria-pressed={mode === "payment"}
             disabled={
@@ -154,153 +187,192 @@ const t = useWorkbenchMessages(config.messages);
               setError("");
             }}
           >
-            {t("Registrar abono")} </button>
-         </div>
+            {t("Registrar abono")}{" "}
+          </button>
+        </div>
       )}
-       <form onSubmit={save}>
-         {error && (
-          <div role="alert" className="iw-error">
-             {error}
-           </div>
-        )}
-         {linksLoading ? <p role="status">{t("Cargando vínculos…")} </p> : null}
-         {linksError ? (
-          <p role="alert">
-             {linksError} {t("Cierra el panel y actualiza la lista para reintentar.")} </p>
-        ) : null}
-         <fieldset disabled={busy || linksLoading || !!linksError}>
-           {mode === "payment" && record && config.payment ? (
-            <>
-               <div className="iw-payment-balance">
-                 <span>{t("Saldo pendiente")} </span>
-                 <strong>{money(config.payment.balance(record), locale)}</strong>
-                 <p>{t("Registra un pago recibido. Esta acción no mueve dinero.")} </p>
-               </div>
-               <label htmlFor="iw-payment">
-                {t("Valor del abono (COP)")} <input
-                  id="iw-payment"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  max={config.payment.balance(record) ?? undefined}
-                  required
-                  value={payment}
-                  onChange={(event) => setPayment(event.target.value)}
-                />
-               </label>
-               <label htmlFor="iw-payment-date">
-                {t("Fecha del pago")} <input
-                  id="iw-payment-date"
-                  type="date"
-                  required
-                  value={paymentDate}
-                  onChange={(event) => setPaymentDate(event.target.value)}
-                />
-               </label>
-             </>
-          ) : (
-            allFields.map((field) => (
-              <div
-                key={field.key}
-                className={field.type === "textarea" ? "iw-wide" : undefined}
-              >
-                 <label htmlFor={`iw-field-${field.key}`}>
-                   {field.label}
-                   {(field.required ||
-                    field.requiredStages?.includes(text(values.stage))) && (
-                    <span aria-hidden="true"> *</span>
-                  )}
-                 </label>
-                 {field.type === "select" ? (
-                  <select
-                    id={`iw-field-${field.key}`}
-                    aria-describedby={
-                      field.help ? `iw-help-${field.key}` : undefined
-                    }
-                    value={String(values[field.key] ?? "")}
-                    required={
-                      field.required ||
-                      field.requiredStages?.includes(text(values.stage))
-                    }
-                    onChange={(event) => change(field.key, event.target.value)}
-                  >
-                     {!field.required && (
-                      <option value="">{t("Sin especificar")} </option>
-                    )}
-                     {field.options?.map((option) => (
-                      <option key={option.value} value={option.value}>
-                         {option.label}
-                       </option>
-                    ))}
-                   </select>
-                ) : field.type === "textarea" ? (
-                  <textarea
-                    id={`iw-field-${field.key}`}
-                    aria-describedby={
-                      field.help ? `iw-help-${field.key}` : undefined
-                    }
-                    rows={4}
-                    required={
-                      field.required ||
-                      field.requiredStages?.includes(text(values.stage))
-                    }
-                    maxLength={field.maxLength ?? 10000}
-                    value={String(values[field.key] ?? "")}
-                    onChange={(event) => change(field.key, event.target.value)}
-                  />
-                ) : (
-                  <input
-                    id={`iw-field-${field.key}`}
-                    aria-describedby={
-                      field.help ? `iw-help-${field.key}` : undefined
-                    }
-                    type={field.type ?? "text"}
-                    required={
-                      field.required ||
-                      field.requiredStages?.includes(text(values.stage))
-                    }
-                    min={field.min}
-                    max={field.max}
-                    step={field.type === "number" ? "0.01" : undefined}
-                    maxLength={field.maxLength ?? 200}
-                    value={String(values[field.key] ?? "").slice(
-                      0,
-                      field.type === "date" ? 10 : undefined,
-                    )}
-                    onChange={(event) => change(field.key, event.target.value)}
-                  />
-                )}
-                 {field.help && (
-                  <small id={`iw-help-${field.key}`}>{field.help}</small>
-                )}
-               </div>
-            ))
+      <div className="iw-editor-body">
+        <form ref={formRef} id={formId} onSubmit={save}>
+          {error && (
+            <div role="alert" className="iw-error">
+              {error}
+            </div>
           )}
-         </fieldset>
-         <footer className="iw-editor-footer">
-           <button type="button" onClick={onClose} disabled={busy}>
-            {t("Cancelar")} </button>
-           <button
-            className="iw-primary"
-            type="submit"
-            disabled={busy || linksLoading || !!linksError}
+          {linksLoading ? (
+            <p role="status">{t("Cargando vínculos…")} </p>
+          ) : null}
+          {linksError ? (
+            <p role="alert">
+              {linksError}{" "}
+              {t("Cierra el panel y actualiza la lista para reintentar.")}{" "}
+            </p>
+          ) : null}
+          <fieldset
+            disabled={busy || operationBusy || linksLoading || !!linksError}
           >
-             {busy
-              ? t("Guardando…")
-              : mode === "payment"
-                ? t("Guardar abono")
-                : t("Guardar cambios")}
-           </button>
-         </footer>
-       </form>
-       {record && config.recordActions?.({ savia, record, onSaved })}
-       {record && (
-        <Attachments
-          savia={savia}
-          object={config.object}
-          recordId={record.id}
-        />
-      )}
-    </Drawer>
+            {mode === "payment" && record && config.payment ? (
+              <>
+                <div className="iw-payment-balance">
+                  <span>{t("Saldo pendiente")} </span>
+                  <strong>
+                    {money(config.payment.balance(record), locale)}
+                  </strong>
+                  <p>
+                    {t(
+                      "Registra un pago recibido. Esta acción no mueve dinero.",
+                    )}{" "}
+                  </p>
+                </div>
+                <label htmlFor="iw-payment">
+                  {t("Valor del abono (COP)")}{" "}
+                  <input
+                    id="iw-payment"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    max={config.payment.balance(record) ?? undefined}
+                    required
+                    value={payment}
+                    onChange={(event) => setPayment(event.target.value)}
+                  />
+                </label>
+                <label htmlFor="iw-payment-date">
+                  {t("Fecha del pago")}{" "}
+                  <input
+                    id="iw-payment-date"
+                    type="date"
+                    required
+                    value={paymentDate}
+                    onChange={(event) => setPaymentDate(event.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              allFields.map((field) => (
+                <div
+                  key={field.key}
+                  className={field.type === "textarea" ? "iw-wide" : undefined}
+                >
+                  <label htmlFor={`iw-field-${field.key}`}>
+                    {field.label}
+                    {(field.required ||
+                      field.requiredStages?.includes(text(values.stage))) && (
+                      <span aria-hidden="true"> *</span>
+                    )}
+                  </label>
+                  {field.type === "select" ? (
+                    <select
+                      id={`iw-field-${field.key}`}
+                      aria-describedby={
+                        field.help ? `iw-help-${field.key}` : undefined
+                      }
+                      value={String(values[field.key] ?? "")}
+                      required={
+                        field.required ||
+                        field.requiredStages?.includes(text(values.stage))
+                      }
+                      onChange={(event) =>
+                        change(field.key, event.target.value)
+                      }
+                    >
+                      {!field.required && (
+                        <option value="">{t("Sin especificar")} </option>
+                      )}
+                      {field.options?.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : field.type === "textarea" ? (
+                    <textarea
+                      id={`iw-field-${field.key}`}
+                      aria-describedby={
+                        field.help ? `iw-help-${field.key}` : undefined
+                      }
+                      rows={4}
+                      required={
+                        field.required ||
+                        field.requiredStages?.includes(text(values.stage))
+                      }
+                      maxLength={field.maxLength ?? 10000}
+                      value={String(values[field.key] ?? "")}
+                      onChange={(event) =>
+                        change(field.key, event.target.value)
+                      }
+                    />
+                  ) : (
+                    <input
+                      id={`iw-field-${field.key}`}
+                      aria-describedby={
+                        field.help ? `iw-help-${field.key}` : undefined
+                      }
+                      type={field.type ?? "text"}
+                      required={
+                        field.required ||
+                        field.requiredStages?.includes(text(values.stage))
+                      }
+                      min={field.min}
+                      max={field.max}
+                      step={field.type === "number" ? "0.01" : undefined}
+                      maxLength={field.maxLength ?? 200}
+                      value={String(values[field.key] ?? "").slice(
+                        0,
+                        field.type === "date" ? 10 : undefined,
+                      )}
+                      onChange={(event) =>
+                        change(field.key, event.target.value)
+                      }
+                    />
+                  )}
+                  {field.help && (
+                    <small id={`iw-help-${field.key}`}>{field.help}</small>
+                  )}
+                </div>
+              ))
+            )}
+          </fieldset>
+        </form>
+        {record && config.recordActions?.({ savia, record, onSaved })}
+        {record && (
+          <Attachments
+            savia={savia}
+            object={config.object}
+            recordId={record.id}
+          />
+        )}
+      </div>
+      <footer className="iw-editor-footer">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy || operationBusy}
+        >
+          {t("Cancelar")}{" "}
+        </button>
+        <button
+          className="iw-primary"
+          type="submit"
+          form={formId}
+          disabled={busy || operationBusy || linksLoading || !!linksError}
+        >
+          {busy
+            ? t("Guardando…")
+            : mode === "payment"
+              ? t("Guardar abono")
+              : t("Guardar cambios")}
+        </button>
+      </footer>
+    </Frame>
   );
+}
+
+function EmbeddedEditor({
+  children,
+}: {
+  children: React.ReactNode;
+  labelledBy: string;
+  onClose: () => void;
+}) {
+  return <div className="iw-drawer iw-embedded-editor">{children}</div>;
 }

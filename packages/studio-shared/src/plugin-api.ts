@@ -1,3 +1,4 @@
+import type { PluginPanelApi } from "./plugin-panels";
 import {
   normalizePluginLocale,
   translatePluginMessage,
@@ -126,6 +127,7 @@ export type PluginFiles = {
   remove(id: string, version: number): Promise<void>;
 };
 export type PluginApi = {
+  ui?: PluginPanelApi;
   i18n?: {
     readonly locale: PluginLocale;
     translate<C extends PluginMessages>(

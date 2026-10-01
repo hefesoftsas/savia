@@ -321,6 +321,15 @@ describe("plugin store por tenant", () => {
     expect(wizardHtml).toContain("screen=cotizador_por_pasos");
     expect(wizardHtml).toContain("view=records");
     expect(code).toContain('params.get("screen")');
+    const panelShell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=accounts&view=records&panel=1",
+      {},
+      platform.env,
+    );
+    const panelHtml = await panelShell.text();
+    expect(panelHtml).toContain("panel=1");
+    expect(panelHtml).toContain("#root{padding:0}");
+    expect(html).toContain("#root{padding:16px}");
 
     const darkShell = await app(tenant).request(
       "http://localhost/api/plugin-store/custom.demo/shell?theme=dark",
