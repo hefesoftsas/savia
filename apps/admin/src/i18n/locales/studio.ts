@@ -1,5 +1,15 @@
 // Interface captions only. Schema identifiers and user-authored values remain unchanged.
 export const studioMessages = {
+  "Campos conectados": [
+    "Campos conectados",
+    "Connected fields",
+    "Campos conectados",
+  ],
+  "Busca registros de otras colecciones desde los campos del plugin.": [
+    "Busca registros de otras colecciones desde los campos del plugin.",
+    "Search other collections from plugin fields.",
+    "Busque outras coleções nos campos do plugin.",
+  ],
   Texto: ["Texto", "Text", "Texto"],
   "Texto corto": ["Texto corto", "Short text", "Texto curto"],
   "Texto largo": ["Texto largo", "Long text", "Texto longo"],

@@ -1150,7 +1150,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    background: white;
+    background: var(--background);
   }
   .neutral-badge {
     font-size: 10px;

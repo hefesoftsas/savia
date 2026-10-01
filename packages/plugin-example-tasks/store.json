@@ -1,0 +1,36 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "example_tasks",
+        "label": "Example Tasks",
+        "description": "",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Name",
+              "required": true
+            }
+          },
+          "fieldOrder": ["name"]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": ["Textbox"]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "example_tasks",
+      "view": "records",
+      "lookupFields": ["name"]
+    }
+  ]
+}

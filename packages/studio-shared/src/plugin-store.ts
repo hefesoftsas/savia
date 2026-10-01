@@ -399,6 +399,7 @@ export const storeConnectorSchema = z
 export const storeScreenSchema = z
   .object({
     object: identifier,
+    lookupFields: z.array(identifier).max(100).optional(),
     view: z.string().trim().min(1).max(100).default("records"),
     hidden: z.boolean().default(false),
   })

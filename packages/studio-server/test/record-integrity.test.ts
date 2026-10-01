@@ -54,6 +54,29 @@ function racing(write: () => Promise<unknown>): D1Database {
   } as D1Database;
 }
 describe("Record and metadata integrity under interleaved writes", () => {
+  it("rejects plugin lookup targets that do not exist in the tenant", async () => {
+    try {
+      await object("lookup_source", {
+        customer: {
+          type: "Textbox",
+          label: "Customer",
+          config: {
+            pluginLookup: {
+              collection: "tenant_private_clients",
+              labelField: "name",
+              searchFields: ["name"],
+              idField: "customer_id",
+            },
+          },
+        },
+        customer_id: { type: "Textbox", label: "Customer ID" },
+      } as never);
+      throw new Error("Expected missing lookup target to be rejected.");
+    } catch (error) {
+      expect(error).toMatchObject({ status: 422 });
+    }
+  });
+
   it("clears multiple incoming fields once and rebuilds their unique indexes", async () => {
     await object("clear_target");
     await object("clear_source", {

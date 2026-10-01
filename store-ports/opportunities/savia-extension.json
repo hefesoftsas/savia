@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.opportunities",
-  "version": "1.1.0",
+  "version": "1.1.4",
   "label": "Oportunidades",
   "description": "Prospectos, negociación y seguimiento comercial de seguros.",
   "labels": {

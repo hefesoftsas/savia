@@ -69,7 +69,7 @@ const config = useMemo(() => createConfig(locale), [locale]);
   const [revision, setRevision] = useState(0);
   return (
     <>
-      <Templates savia={savia} onSaved={() => setRevision(revision + 1)} />
+      {!savia.ui?.panel && <Templates savia={savia} onSaved={() => setRevision(revision + 1)} />}
       <Workbench key={revision} savia={savia} config={config} />
     </>
   );

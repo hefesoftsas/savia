@@ -17,11 +17,11 @@ it("reports natural content growth and shrinkage without a viewport feedback loo
   // Execute the real bootstrap's sizing setup without starting the API bridge
   // or loading a plugin module. DOM measurements are supplied by the browser.
   const setup = shellBootstrapJs()
-    .split("function callHost")[0]
+    .split("function requestHost")[0]
     .replaceAll(
       "import.meta.url",
       JSON.stringify(
-        "http://localhost/api/plugin-store/shell-bootstrap.js?plugin=demo&entry=/api/plugin-store/demo/entry",
+        "http://localhost/api/plugin-store/shell-bootstrap.js?plugin=demo&screen=demo&entry=/api/plugin-store/demo/entry",
       ),
     );
   runInNewContext(setup, {

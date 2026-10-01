@@ -24,7 +24,7 @@ export type ExtensionInstallation = {
     collection: string;
     title: { es: string; en?: string; pt?: string };
   }>;
-  installed: { enabled: boolean } | null;
+  installed: { enabled: boolean; version?: string } | null;
 };
 
 export type StoreWidgetContribution = {

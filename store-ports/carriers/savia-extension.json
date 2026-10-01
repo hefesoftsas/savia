@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.carriers",
-  "version": "1.1.0",
+  "version": "1.1.4",
   "label": "Aseguradoras",
   "description": "Solicitudes y consultas mediante una conexión autorizada.",
   "labels": {

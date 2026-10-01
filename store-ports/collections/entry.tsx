@@ -10,3 +10,10 @@ import type { PluginApi } from "../../packages/studio-shared/src/plugin-api";
 export function render(el: HTMLElement, savia: PluginApi) {
   createRoot(el).render(<CollectionsScreen savia={savia} />);
 }
+
+/** Mount a fresh editor for one host activation. */
+export function renderPanel(el: HTMLElement, savia: PluginApi) {
+  const root = createRoot(el);
+  root.render(<CollectionsScreen savia={savia} />);
+  return () => root.unmount();
+}

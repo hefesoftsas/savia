@@ -1,3 +1,4 @@
+import type { PluginPanelApi } from "./plugin-panels";
 import {
   normalizePluginLocale,
   translatePluginMessage,
@@ -60,6 +61,7 @@ export type PluginCollectionListOptions = {
   order?: "ASC" | "DESC";
   filters?: PluginQueryFilters;
   q?: string;
+  searchFields?: string[];
 };
 
 export type PluginRecordVersion = { version?: number };
@@ -111,6 +113,13 @@ export type PluginCollection<TRecord, TInput = Partial<TRecord>> = {
   describe(): Promise<PluginCollectionDefinition | undefined>;
 };
 
+export type PluginRecordReceipt<T> = { data: T; persistence: "local" | "server"; mutationId?: string };
+export type PluginLocalCollection<T, I = Partial<T>> = Pick<PluginCollection<T, I>, "list" | "get" | "describe"> & {
+  create(input: I): Promise<PluginRecordReceipt<T>>;
+  update(id: string, input: I, options?: PluginRecordVersion): Promise<PluginRecordReceipt<T>>;
+  remove(id: string, options?: PluginRecordVersion): Promise<PluginRecordReceipt<T>>;
+};
+
 export type PluginFile = {
   id: string;
   name: string;
@@ -126,6 +135,11 @@ export type PluginFiles = {
   remove(id: string, version: number): Promise<void>;
 };
 export type PluginApi = {
+  localRecords?: {
+    collection<T, I = Partial<T>>(name: string): PluginLocalCollection<T, I>;
+    subscribe?(listener: (status?: { pending: number; conflicts: number; errors: number }) => void): () => void;
+  };
+  ui?: PluginPanelApi;
   i18n?: {
     readonly locale: PluginLocale;
     translate<C extends PluginMessages>(
@@ -209,6 +223,9 @@ export function createPluginApi({
           }
           if (options.q) {
             parameters.set("q", options.q);
+          }
+          if (options.searchFields?.length) {
+            parameters.set("searchFields", options.searchFields.join(","));
           }
           return request<PluginRecordPage<TRecord>>(
             `/records/${resource}?${parameters}`,

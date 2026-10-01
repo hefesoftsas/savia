@@ -278,7 +278,15 @@
   "screens": [
     {
       "object": "insurance_opportunities",
-      "view": "records"
+      "view": "records",
+      "lookupFields": [
+        "name",
+        "customer",
+        "policy_reference",
+        "owner",
+        "product",
+        "outcome"
+      ]
     }
   ]
 }

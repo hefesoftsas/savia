@@ -51,13 +51,25 @@ export const PWA_SPLASH_MESSAGE = SAVIA_LOADING_MESSAGE;
  */
 export function PwaSplash({
   message = PWA_SPLASH_MESSAGE,
+  contained = false,
 }: {
   message?: string;
+  contained?: boolean;
   loadingPrimary?: string;
   loadingSecondary?: string;
 }) {
+  const Container = contained ? "div" : "main";
   return (
-    <main role="status" aria-label={message} className="savia-loading">
+    <Container
+      role="status"
+      aria-label={message}
+      className="savia-loading"
+      style={
+        contained
+          ? { minHeight: "100%", height: "100%", width: "100%" }
+          : undefined
+      }
+    >
       <style>{saviaLoadingCss}</style>
       <span className="savia-loading-mark">
         <PwaSpinner size="xl" className="savia-ring-cover" />
@@ -70,6 +82,6 @@ export function PwaSplash({
         />
       </span>
       <p>{message}</p>
-    </main>
+    </Container>
   );
 }

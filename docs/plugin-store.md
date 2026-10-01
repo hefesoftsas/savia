@@ -179,7 +179,8 @@ Plugin screens report their natural content height through the sandbox bridge.
 Admin resizes the iframe when content or viewport width changes, so the page
 has one vertical scroll area in the host. Widgets and frames with an explicit
 height retain their configured size. The host only accepts finite positive
-heights from the current iframe; navigating or retrying resets its height.
+heights from the current iframe, capped at 100,000 px to keep pathological
+content bounded; navigating or retrying resets its height.
 
 The catalog loads artifact metadata and configuration with a constant number of
 database reads, without loading JavaScript bundles. It shows the manifest from
@@ -506,3 +507,119 @@ satisfy them. Invalid collection declarations are rejected during ZIP upload.
 ## Shared private registry
 
 An optional [shared private plugin registry](guides/plugin-registry.md) stores immutable ZIP releases in a dedicated R2 bucket outside environment databases. Tenant administrators can import a pinned release from **Shared catalog** into their local store. Execution, installation state, data and credentials remain local. Exact tenant mappings and server-only read credentials control access; existing uploads are not automatically published.
+
+### Host-managed editor panels
+
+Screen shells negotiate the optional `savia.ui` capability with their parent
+before rendering. An older host falls back after two seconds; plugins must keep
+an inline editor when `savia.ui` is absent. Use
+`await savia.ui.openPanel({ view: "record-editor", title, params: { recordId } })`
+from the list, omitting `recordId` to create a record. A saved result refreshes
+the list; cancellation preserves its filters, page and scroll.
+
+The host derives a second shell from the owning plugin and selected screen, when
+available. The store viewer can open panels without a selected screen. It
+passes `savia.ui.panel` through a source-checked, nonce-correlated handshake; the
+plugin renders only its editor in that frame. Arbitrary URLs, tenant overrides,
+unknown views and nested panels are rejected. Both frames retain the existing
+sandbox and authenticated API bridge. Session changes dispose the panel.
+
+Editors report `{ dirty, busy }` with `setPanelState`, use `requestClose` for
+Cancel, and call `completePanel({ status: "saved" })` only after a successful
+mutation. The host owns discard confirmation, full-viewport framing and focus
+transfer; the plugin owns fields, validation and a fixed action footer. The
+host drawer is at most 640 px wide on desktop and fills narrow screens.
+Configured fields accept input immediately while relationship options load;
+saving stays disabled until relationship validation is ready. Closing still
+checks for unsaved changes. Relationship collections load concurrently, with
+one shared request chain per collection within each editor load. Failed
+saves keep the draft in memory. No draft is persisted in browser storage.
+
+The eleven Workbench ports share this editor implementation. Release their ZIPs
+alongside the host and shell. Catalog upload alone does not replace an installed
+version: update existing installations explicitly, preserving optional plugins
+that are uninstalled or disabled. Verify the installed version in each target
+workspace before considering the rollout complete.
+
+Shared Workbench styles also enter other ports through package exports. Version
+every rebuilt deployment artifact whose bytes change: the tenant catalog rejects
+replacing an existing plugin ID and version with different contents. Keep the
+release set in `deployment/plugins/sources.json` consistent when shared code or
+styles change.
+
+### Prepared editor lifecycle
+
+Ports can additionally export `renderPanel(element, savia)`, synchronously returning
+an unmount function. With that export, `savia.ui.preparePanel?.()` prepares one
+hidden, inert iframe after the list is ready. It imports code without rendering
+the list or running record effects. Each opening receives a fresh `ui.panel`
+activation and SDK; closing invokes cleanup and revokes that SDK. Do not use
+ambient `fetch` in reusable editors: use the activation-bound `savia` API.
+
+The iframe remains in the same mounted drawer container between openings. Loading
+can be cancelled; writes and dirty drafts retain busy/discard protection. Host
+messages and responses are checked against the source, session and activation.
+Old ports continue using a new frame per opening. Identity changes, navigation
+and workspace authorization revocation discard prepared frames. This optimization
+does not persist executable code or make an unprepared app start offline.
+
+### Opt-in local records
+
+`localRecords.collection<T>(name)` exposes `list`, `get`, `describe`, `create`,
+`update` and `remove`. Reads have the normal collection shapes. Writes return
+`{ data, persistence: "local" | "server", mutationId? }`. A local receipt follows
+an atomic record/outbox transaction; it is **not** confirmation from the backend.
+The existing workspace sync panel reports pending operations, conflicts and errors.
+
+Only record CRUD and object metadata can request this transport. Eligibility,
+hydration, schema and authorization belong to the selected workspace, not the
+plugin. Remote collections use the network. Legacy `collections` semantics stay
+network-confirmed, including business actions and payment writes. A payment reads
+a fresh backend version before computing its update. Files, settings, integrations
+and bulk operations do not gain offline persistence.
+
+`localRecords.subscribe?.(listener)` reports scoped replica changes so a list can
+refresh without remounting the editor or resetting its filters. Call its returned
+unsubscribe function when unmounting. See [local-first collections](local-first-collections.md)
+for preparation, authorization and conflict behavior.
+
+## Tenant-configured field lookups
+
+Store screens can opt compatible text fields into tenant customization with
+`lookupFields: ["customer", "owner"]` in their `store.json` screen declaration.
+The installed, enabled version controls which fields are offered in **Screens →
+Configure → Connected fields**. Workbench fields opt in with `lookup: true`.
+Custom renderers can read the same metadata through `collection.describe()`;
+declaring a field does not automatically change a custom renderer.
+
+A tenant administrator chooses a readable/listable collection, display field,
+one to five search fields, and an optional equality filter. The configuration
+lives in the source object's existing versioned schema as
+`fields.<field>.config.pluginLookup`. Saving uses the schema authorization,
+validation, version-conflict and audit path. It does not store provider
+credentials in the plugin. Connected collections use their normal adapter and
+its capabilities; unsupported searches remain explicit errors.
+
+The lookup records a label snapshot in the original text field and the selected
+record ID in a separate optional text field. This is a logical reference, not a
+database foreign key or an automatic synchronization of customer names. Writes do
+not enforce target existence; consumers must resolve stored IDs through the normal
+target collection API and its ACL, never treat an ID as authorization. Legacy
+text is preserved and never matched automatically. Changing the source collection
+allocates a new ID field, retaining previous references without interpreting them
+against a different collection. Disabling a lookup retains the fields and data.
+
+The picker searches in bounded pages rather than loading the entire collection.
+It uses the normal ACL-filtered collection API, including field and row access,
+and the existing local transport when supported. Connected sources still need
+their server connection. The plugin never acquires permissions beyond the signed-in
+user. A missing/inaccessible selection keeps its existing text snapshot; users
+can explicitly replace or clear it. Editing search text alone does not overwrite
+a saved selection. Selecting a result saves its ID and text together in the
+normal record mutation (and local outbox when supported).
+
+Plugin screens, hosted forms, and the plugin catalog reuse Savia’s branded loading
+indicator within their content area. Failed frame startup retains its retry action.
+
+For scaffolding, shared SDK/UI packages, automated local rebuilds, and test doubles,
+see [Plugin development](guides/plugin-development.md).

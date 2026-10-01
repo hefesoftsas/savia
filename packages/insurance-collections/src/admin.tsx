@@ -42,11 +42,11 @@ const config: WorkbenchConfig = {
   stages,
   defaults: { stage: "pending", paid: 0 },
   fields: [
-    { key: "name", label: t("Referencia"), required: true, maxLength: 120 },
-    { key: "customer", label: t("Cliente"), required: true },
-    { key: "policy_reference", label: t("Póliza"), maxLength: 120 },
-    { key: "insurer", label: t("Aseguradora") },
-    { key: "owner", label: t("Responsable"), maxLength: 120 },
+    { key: "name", lookup: true, label: t("Referencia"), required: true, maxLength: 120 },
+    { key: "customer", lookup: true, label: t("Cliente"), required: true },
+    { key: "policy_reference", lookup: true, label: t("Póliza"), maxLength: 120 },
+    { key: "insurer", lookup: true, label: t("Aseguradora") },
+    { key: "owner", lookup: true, label: t("Responsable"), maxLength: 120 },
     { key: "due_date", label: t("Vencimiento"), type: "date", required: true },
     {
       key: "amount",

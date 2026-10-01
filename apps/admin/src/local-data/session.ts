@@ -55,6 +55,34 @@ export async function removeWorkspaceMetadata(prefix: string) {
       /* Cleanup must not block authentication. */
     }
 }
+/** Clear this principal's cached Studio/plugin metadata, including transport scopes. */
+export async function removeWorkspacePluginMetadata(principalScope: string) {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const metadata = db().metadata;
+    const keys = (await metadata.toCollection().primaryKeys()) as string[];
+    const clear = keys.filter((key) => {
+      if (key.startsWith(`${principalScope}:`)) return true;
+      const suffix = [
+        ":metadata:/api/objects",
+        ":metadata:/api/extensions",
+        ":objects",
+      ].find((candidate) => key.endsWith(candidate));
+      if (!suffix) return false;
+      try {
+        const transportScope = JSON.parse(key.slice(0, -suffix.length));
+        return (
+          Array.isArray(transportScope) && transportScope[0] === principalScope
+        );
+      } catch {
+        return false;
+      }
+    });
+    if (clear.length) await metadata.bulkDelete(clear);
+  } catch {
+    /* Metadata cleanup is best effort and must not block navigation. */
+  }
+}
 /** Persist only an expiring offline workspace identity, never access/refresh tokens. */
 export function createLocalSession(
   remote: AuthSession,

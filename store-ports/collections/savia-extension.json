@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.collections",
-  "version": "1.1.0",
+  "version": "1.1.4",
   "label": "Cartera",
   "description": "Cobros, saldos y seguimiento de cuentas por cobrar.",
   "labels": {
