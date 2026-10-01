@@ -436,6 +436,7 @@ describe("personal integration providers", () => {
           subject: null,
           sender: null,
           receivedAt: null,
+          webLink: null,
         },
       ],
     });
@@ -712,6 +713,74 @@ describe("personal integration providers", () => {
         },
       }),
     );
+  });
+
+  it("sends composer mail only from a caller-owned connected account", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValue(Response.json({ id: "sent" }));
+    const app = configuredApp(nango);
+    const payload = {
+      provider: "outlook",
+      to: ["recipient@example.com"],
+      subject: "Update",
+      body: "Please review.",
+    };
+    const send = () =>
+      app.request("https://savia.test/v1/personal-integrations/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    expect((await send()).status).toBe(503);
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (id,principal_id,provider,nango_connection_id,nango_integration_id,status,scopes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+    )
+      .bind(
+        "composer-outlook",
+        "test-agency-member",
+        "outlook",
+        "outlook-owned",
+        "outlook-savia",
+        "connected",
+        "[]",
+        "2026-01-01",
+        "2026-01-01",
+      )
+      .run();
+    const response = await send();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: { provider: "outlook", action: "send-email" },
+    });
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/v1.0/me/sendMail",
+        connection: expect.objectContaining({
+          nangoConnectionId: "outlook-owned",
+        }),
+      }),
+    );
+    const denied = await app.request(
+      "https://savia.test/v1/personal-integrations/messages",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          context: [
+            {
+              apiBasePath: "/v1/studio/99999",
+              collection: "contacts",
+              recordId: "missing",
+              fields: ["name"],
+            },
+          ],
+        }),
+      },
+    );
+    expect(denied.status).not.toBe(200);
+    expect(nango.proxy).toHaveBeenCalledTimes(1);
   });
 
   it("executes a Gmail send only from an already-confirmed caller action", async () => {
