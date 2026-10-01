@@ -303,3 +303,11 @@ it("allows drafting and cancelling while links load, but gates saving without st
   expect(cancel).toHaveFocus();
   expect(a.collection.create).not.toHaveBeenCalled();
 });
+it("prepares the editor only after the list has loaded", async () => {
+  const a = api(false);
+  const preparePanel = vi.fn();
+  a.savia.ui!.preparePanel = preparePanel;
+  render(<Workbench savia={a.savia} config={config} />);
+  await waitFor(() => expect(preparePanel).toHaveBeenCalledTimes(1));
+  expect(a.collection.list).toHaveBeenCalled();
+});

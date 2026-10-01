@@ -62,7 +62,7 @@ function WorkbenchList({
     setAsOf(today());
     loadRecords(savia, config.object)
       .then((result) => {
-        if (active) setRecords(result);
+        if (active) { setRecords(result); savia.ui?.preparePanel?.(); }
       })
       .catch((cause) => {
         if (active) setError(errorMessage(cause));

@@ -83,7 +83,7 @@ export function HostedRecordEditor({
   }, [savia, config.object, recordId, revision]);
   useEffect(() => {
     if (loading || error)
-      savia.ui!.setPanelState({ dirty: false, busy: loading });
+      savia.ui!.setPanelState({ dirty: false, busy: false });
   }, [savia, loading, error]);
   return (
     <section
