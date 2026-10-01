@@ -50,7 +50,9 @@ received date, newest first, and can be filtered to All, Gmail, or Outlook.
 The widget uses shadcn tabs for account filters and pagination controls, showing
 ten messages per page. **Previous** returns to a loaded page; **Next** loads older
 messages when needed using Gmail and Outlook continuation cursors. Each provider
-request retrieves at most twenty-five messages. The merged inbox checks each
+request retrieves at most twenty-five messages. Outlook continuations accept
+Microsoft Graph's canonical Inbox path while retaining the fixed mailbox, host,
+and query validation. The merged inbox checks each
 provider's loaded boundary before showing the next page so older messages from
 one account do not hide unseen newer messages from the other. Exhausted accounts
 stop requesting pages. Errors retain the current page and allow retry.
