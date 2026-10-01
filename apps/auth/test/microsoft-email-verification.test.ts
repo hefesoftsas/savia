@@ -42,11 +42,28 @@ async function policy() {
     where: [{ field: "tenantId", value: 723004 }],
   });
 }
+async function chatgptPolicy() {
+  const settings = await policy();
+  await adapter.update({
+    model: "tenantSocialSettings",
+    where: [{ field: "tenantId", value: 723004 }],
+    update: { chatgptEnabled: true },
+  });
+  return { ...settings, chatgptEnabled: true };
+}
 const consumer = {
   tid: "9188040d-6c67-4c5b-b112-36a304b66dad",
   oid: "consumer-subject",
   email: "member@example.test",
   name: "Member",
+};
+const chatgptProfile = {
+  id: "a".repeat(64),
+  iss: "https://auth.openai.com",
+  clientId: "oaiapp_test",
+  email: " Member@Example.test ",
+  emailVerified: true,
+  name: "  ChatGPT Member  ",
 };
 describe("Microsoft email verification", () => {
   it("holds an unverified genuine consumer profile without creating users or sessions when registration is off", async () => {
@@ -81,7 +98,7 @@ describe("Microsoft email verification", () => {
     ).toBeNull();
   });
   it("rejects stale policy revisions, foreign organization profiles, and disabled personal accounts", async () => {
-    const settings = await policy();
+    const settings = await chatgptPolicy();
     const attempt = {
       attemptId: crypto.randomUUID(),
       tenantId: 723004,
@@ -119,6 +136,78 @@ describe("Microsoft email verification", () => {
           idToken: "forged-token",
           expectedIdTokenNonce: "nonce",
         }),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("ChatGPT email verification", () => {
+  it("creates an original-browser email proof even when OpenAI reports verified email", async () => {
+    const { beginChatgptVerification } =
+      await import("../src/microsoft-email-verification");
+    const settings = await chatgptPolicy();
+    const pending = await beginChatgptVerification(
+      chatgptProfile,
+      {
+        attemptId: crypto.randomUUID(),
+        tenantId: 723004,
+        provider: "chatgpt",
+        revision: settings.revision,
+        returnOrigin: "https://team.example.test",
+        expiresAt: Date.now() + 600000,
+      },
+      "chatgpt-browser-nonce",
+      { ...environment, SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test" },
+      adapter,
+    );
+
+    expect(pending).toMatchObject({
+      purpose: "chatgpt_link",
+      email: "member@example.test",
+      providerSubject: "a".repeat(64),
+      providerTenantId: "oaiapp_test",
+      displayName: "ChatGPT Member",
+    });
+  });
+
+  it("rejects an unpinned issuer, wrong client, or stale tenant policy", async () => {
+    const { beginChatgptVerification } =
+      await import("../src/microsoft-email-verification");
+    const settings = await chatgptPolicy();
+    const attempt = {
+      attemptId: crypto.randomUUID(),
+      tenantId: 723004,
+      provider: "chatgpt" as const,
+      revision: settings.revision,
+      returnOrigin: "https://team.example.test",
+      expiresAt: Date.now() + 600000,
+    };
+    const env = { ...environment, SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test" };
+    await expect(
+      beginChatgptVerification(
+        { ...chatgptProfile, iss: "https://attacker.example" },
+        attempt,
+        "browser",
+        env,
+        adapter,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      beginChatgptVerification(
+        { ...chatgptProfile, clientId: "oaiapp_other" },
+        attempt,
+        "browser",
+        env,
+        adapter,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      beginChatgptVerification(
+        chatgptProfile,
+        { ...attempt, revision: "stale" },
+        "browser",
+        env,
+        adapter,
       ),
     ).rejects.toThrow();
   });

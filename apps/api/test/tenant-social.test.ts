@@ -122,13 +122,16 @@ const unavailableSettings = {
   configured: false,
   googleEnabled: false,
   microsoftEnabled: false,
+  chatgptEnabled: false,
   allowRegistration: false,
   allowMicrosoftPersonalAccounts: false,
   microsoftTenantId: "",
   googleAvailable: false,
   microsoftAvailable: false,
+  chatgptAvailable: false,
   googleCallbackUrl: "https://auth.example.test/api/auth/callback/google",
   microsoftCallbackUrl: "https://auth.example.test/api/auth/callback/microsoft",
+  chatgptCallbackUrl: "https://auth.example.test/api/auth/callback/chatgpt",
 };
 
 const validInput = {
@@ -187,11 +190,13 @@ it("proxies safe settings without caching and synchronizes active tenant members
         configured: true,
         googleEnabled: true,
         microsoftEnabled: true,
+        chatgptEnabled: true,
         allowRegistration: true,
         allowMicrosoftPersonalAccounts: true,
         microsoftTenantId: validInput.microsoftTenantId,
         googleAvailable: true,
         microsoftAvailable: true,
+        chatgptAvailable: true,
       });
     if (request.method === "DELETE") return Response.json(unavailableSettings);
     return Response.json(unavailableSettings);
@@ -207,6 +212,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       ...validInput,
+      chatgptEnabled: true,
       allowRegistration: true,
       allowMicrosoftPersonalAccounts: true,
     }),
@@ -217,6 +223,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
     configured: true,
     googleEnabled: true,
     microsoftEnabled: true,
+    chatgptEnabled: true,
     allowRegistration: true,
     allowMicrosoftPersonalAccounts: true,
   });
@@ -228,6 +235,7 @@ it("proxies safe settings without caching and synchronizes active tenant members
     bridgeKey: "test-social-bridge-key",
     body: {
       ...validInput,
+      chatgptEnabled: true,
       allowRegistration: true,
       allowMicrosoftPersonalAccounts: true,
       actorSubject: expect.any(String),
@@ -270,6 +278,7 @@ it("defaults registration off for legacy inputs and auth responses", async () =>
   expect(await loaded.json()).toMatchObject({
     allowRegistration: false,
     allowMicrosoftPersonalAccounts: false,
+    chatgptEnabled: false,
   });
 
   const saved = await app.request(path, {
@@ -281,6 +290,7 @@ it("defaults registration off for legacy inputs and auth responses", async () =>
   expect(await saved.json()).toMatchObject({
     allowRegistration: false,
     allowMicrosoftPersonalAccounts: false,
+    chatgptEnabled: false,
   });
   expect(
     calls.find(
@@ -290,6 +300,37 @@ it("defaults registration off for legacy inputs and auth responses", async () =>
   ).toMatchObject({
     allowRegistration: false,
     allowMicrosoftPersonalAccounts: false,
+    chatgptEnabled: false,
+  });
+});
+
+it("fills safe ChatGPT response defaults when the auth bridge is on an older version", async () => {
+  const tenant = await createTenant();
+  const legacy = { ...unavailableSettings } as Record<string, unknown>;
+  delete legacy.chatgptEnabled;
+  delete legacy.chatgptAvailable;
+  delete legacy.chatgptCallbackUrl;
+  const { app, calls } = makeApp(tenant.id, "tenant_admin", async () =>
+    Response.json(legacy),
+  );
+  const path = `https://api.test/v1/tenants/${tenant.id}/social-settings`;
+
+  const response = await app.request(path);
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    chatgptEnabled: false,
+    chatgptAvailable: false,
+    chatgptCallbackUrl: "",
+  });
+  const save = await app.request(path, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(validInput),
+  });
+  expect(save.status).toBe(200);
+  expect(calls.find(({ method }) => method === "PUT")?.body).toMatchObject({
+    chatgptEnabled: false,
   });
 });
 

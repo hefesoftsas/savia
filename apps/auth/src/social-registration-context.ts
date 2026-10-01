@@ -6,7 +6,7 @@ import { assertTenantAuthenticationActive } from "./tenant-auth-state";
 export type SocialRegistrationAttempt = {
   attemptId: string;
   tenantId: number;
-  provider: "google" | "microsoft";
+  provider: "google" | "microsoft" | "chatgpt";
   revision: string;
   returnOrigin: string;
   expiresAt: number;
@@ -18,6 +18,7 @@ type Settings = {
   allowMicrosoftPersonalAccounts?: boolean;
   googleEnabled: boolean;
   microsoftEnabled: boolean;
+  chatgptEnabled?: boolean;
   revision: string;
 };
 const denied = () =>
@@ -37,13 +38,16 @@ async function policy(
   if (
     !settings?.active ||
     (settings.allowRegistration !== true &&
+      provider !== "chatgpt" &&
       !(
         provider === "microsoft" &&
         settings.allowMicrosoftPersonalAccounts === true
       )) ||
     !(provider === "google"
       ? settings.googleEnabled
-      : settings.microsoftEnabled)
+      : provider === "microsoft"
+        ? settings.microsoftEnabled
+        : settings.chatgptEnabled)
   )
     return null;
   await assertTenantAuthenticationActive(adapter, tenantId);

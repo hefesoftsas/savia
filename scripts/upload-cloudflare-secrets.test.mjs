@@ -125,3 +125,40 @@ test("database bridge requires a complete HTTPS configuration", () => {
     );
   }
 });
+
+test("ChatGPT website clients require the registered authentication method", () => {
+  const publicClient = buildSecretUploads("preview", {
+    ...values,
+    SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test",
+  }).find((plan) => plan.app === "auth").secrets;
+  assert.equal(publicClient.SAVIA_CHATGPT_CLIENT_ID, "oaiapp_test");
+  assert.equal(publicClient.SAVIA_CHATGPT_TOKEN_AUTH_METHOD, "none");
+  assert.throws(
+    () =>
+      buildSecretUploads("preview", {
+        ...values,
+        SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test",
+        SAVIA_CHATGPT_CLIENT_SECRET: "test-secret",
+      }),
+    /ChatGPT/,
+  );
+  assert.throws(
+    () =>
+      buildSecretUploads("preview", {
+        ...values,
+        SAVIA_CHATGPT_CLIENT_ID: "dynamic_agent_client_test",
+      }),
+    /ChatGPT/,
+  );
+  const confidential = buildSecretUploads("preview", {
+    ...values,
+    SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test",
+    SAVIA_CHATGPT_CLIENT_SECRET: "test-secret",
+    SAVIA_CHATGPT_TOKEN_AUTH_METHOD: "client_secret_basic",
+  }).find((plan) => plan.app === "auth").secrets;
+  assert.equal(confidential.SAVIA_CHATGPT_CLIENT_SECRET, "test-secret");
+  assert.equal(
+    confidential.SAVIA_CHATGPT_TOKEN_AUTH_METHOD,
+    "client_secret_basic",
+  );
+});

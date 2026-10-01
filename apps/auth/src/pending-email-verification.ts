@@ -4,7 +4,8 @@ import {
   type AccountEmailEnvironment,
 } from "./account-email";
 
-export type VerificationPurpose = "microsoft_link" | "password_registration";
+export type VerificationPurpose =
+  "microsoft_link" | "chatgpt_link" | "password_registration";
 export type PendingVerification = {
   id: string;
   purpose: VerificationPurpose;
@@ -16,6 +17,7 @@ export type PendingVerification = {
   expiresAt: number;
   providerSubject?: string;
   providerTenantId?: string;
+  displayName?: string;
 };
 export type PendingVerificationInput = Omit<
   PendingVerification,
@@ -53,7 +55,9 @@ export async function createPendingVerification(
   env: AccountEmailEnvironment,
 ): Promise<PendingVerification> {
   if (
-    !["microsoft_link", "password_registration"].includes(input.purpose) ||
+    !["microsoft_link", "chatgpt_link", "password_registration"].includes(
+      input.purpose,
+    ) ||
     !Number.isSafeInteger(input.tenantId) ||
     input.tenantId <= 0 ||
     !input.browserNonce ||
@@ -73,7 +77,7 @@ export async function createPendingVerification(
   )
     throw invalid();
   if (
-    input.purpose === "microsoft_link" &&
+    ["microsoft_link", "chatgpt_link"].includes(input.purpose) &&
     (!input.providerSubject || !input.providerTenantId)
   )
     throw invalid();
@@ -150,7 +154,9 @@ export async function sendPendingVerification(
   const path =
     pending.purpose === "microsoft_link"
       ? "/api/auth/microsoft-email-verification/verify"
-      : "/api/auth/registration-email-verification/verify";
+      : pending.purpose === "chatgpt_link"
+        ? "/api/auth/chatgpt-email-verification/verify"
+        : "/api/auth/registration-email-verification/verify";
   const link = new URL(path, pending.returnOrigin);
   link.searchParams.set("id", pending.id);
   link.searchParams.set("token", token);

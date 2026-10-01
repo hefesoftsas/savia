@@ -1,4 +1,8 @@
 import {
+  chatgptOAuthConfiguration,
+  type ChatGPTEnvironment,
+} from "./chatgpt-sign-in";
+import {
   accountEmailAvailable,
   type AccountEmailDependencies,
 } from "./account-email";
@@ -20,18 +24,19 @@ import { assertPasswordAllowed, type TenantSSOAdapter } from "./tenant-sso";
 import type { AuthWorkerEnvironment } from "./index";
 import { assertTenantAuthenticationActive } from "./tenant-auth-state";
 
-export type SocialEnvironment = {
+export type SocialEnvironment = ChatGPTEnvironment & {
   SAVIA_GOOGLE_CLIENT_ID?: string;
   SAVIA_GOOGLE_CLIENT_SECRET?: string;
   SAVIA_MICROSOFT_CLIENT_ID?: string;
   SAVIA_MICROSOFT_CLIENT_SECRET?: string;
 };
-type Provider = "google" | "microsoft";
+type Provider = "google" | "microsoft" | "chatgpt";
 type Settings = {
   id: string;
   tenantId: number;
   googleEnabled: boolean;
   microsoftEnabled: boolean;
+  chatgptEnabled: boolean;
   microsoftTenantId: string;
   allowRegistration: boolean;
   allowMicrosoftPersonalAccounts: boolean;
@@ -63,7 +68,7 @@ const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const proofs = new WeakMap<object, Proof>();
 export const SOCIAL_MFA_PREFIX = "savia-social-mfa:";
 const isProvider = (id: unknown): id is Provider =>
-  id === "google" || id === "microsoft";
+  id === "google" || id === "microsoft" || id === "chatgpt";
 const deny = () =>
   new APIError("FORBIDDEN", {
     code: "SOCIAL_SIGN_IN_DENIED",
@@ -116,6 +121,8 @@ export function parseSocialSettings(value: unknown) {
     !input ||
     typeof input.googleEnabled !== "boolean" ||
     typeof input.microsoftEnabled !== "boolean" ||
+    (input.chatgptEnabled !== undefined &&
+      typeof input.chatgptEnabled !== "boolean") ||
     typeof input.microsoftTenantId !== "string" ||
     (input.allowMicrosoftPersonalAccounts !== undefined &&
       typeof input.allowMicrosoftPersonalAccounts !== "boolean") ||
@@ -138,6 +145,7 @@ export function parseSocialSettings(value: unknown) {
   return {
     googleEnabled: input.googleEnabled,
     microsoftEnabled: input.microsoftEnabled,
+    chatgptEnabled: input.chatgptEnabled === true,
     microsoftTenantId,
     allowRegistration: input.allowRegistration === true,
     allowMicrosoftPersonalAccounts:
@@ -170,6 +178,12 @@ export const tenantSocialPlugin = () =>
           },
           googleEnabled: { type: "boolean", required: true, input: false },
           microsoftEnabled: { type: "boolean", required: true, input: false },
+          chatgptEnabled: {
+            type: "boolean",
+            required: true,
+            input: false,
+            defaultValue: false,
+          },
           microsoftTenantId: { type: "string", required: true, input: false },
           allowMicrosoftPersonalAccounts: {
             type: "boolean",
@@ -212,7 +226,9 @@ async function assertAllowed(
     !settings?.active ||
     !(provider === "google"
       ? settings.googleEnabled
-      : settings.microsoftEnabled)
+      : provider === "microsoft"
+        ? settings.microsoftEnabled
+        : settings.chatgptEnabled)
   )
     throw deny();
   return settings;
@@ -515,7 +531,7 @@ export const socialHooks: NonNullable<BetterAuthOptions["databaseHooks"]> = {
         if (!ctx) return;
         let proof = proofs.get(ctx.context);
         if (
-          /^\/callback\/(google|microsoft|:id)$/.test(ctx.path ?? "") ||
+          /^\/callback\/(google|microsoft|chatgpt|:id)$/.test(ctx.path ?? "") ||
           ctx.path === "/sign-in/social"
         ) {
           if (!proof) throw deny();
@@ -614,13 +630,19 @@ export async function tenantSocialResponse(
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const providers = socialProviders(environment);
+  const chatgptAvailable = !!chatgptOAuthConfiguration(environment);
   const json = (body: unknown, status = 200) =>
     Response.json(body, { status, headers: { "cache-control": "no-store" } });
   if (
     url.pathname === "/api/auth/savia-social/providers" &&
     request.method === "GET"
   )
-    return json({ providers: Object.keys(providers) });
+    return json({
+      providers: [
+        ...Object.keys(providers),
+        ...(chatgptAvailable ? ["chatgpt"] : []),
+      ],
+    });
   const match = url.pathname.match(
     /^\/_internal\/tenant-social\/(\d+)(\/activity)?$/,
   );
@@ -643,6 +665,7 @@ export async function tenantSocialResponse(
     configured: !!existing,
     googleEnabled: existing?.googleEnabled ?? false,
     microsoftEnabled: existing?.microsoftEnabled ?? false,
+    chatgptEnabled: existing?.chatgptEnabled ?? false,
     microsoftTenantId: existing?.microsoftTenantId ?? "",
     allowRegistration: existing?.allowRegistration === true,
     allowMicrosoftPersonalAccounts:
@@ -651,6 +674,8 @@ export async function tenantSocialResponse(
     revision: existing?.revision ?? "",
     googleAvailable: !!providers.google,
     microsoftAvailable: !!providers.microsoft,
+    chatgptAvailable,
+    chatgptCallbackUrl: `${new URL(environment.BETTER_AUTH_URL).origin}/api/auth/callback/chatgpt`,
     googleCallbackUrl: `${new URL(environment.BETTER_AUTH_URL).origin}/api/auth/callback/google`,
     microsoftCallbackUrl: `${new URL(environment.BETTER_AUTH_URL).origin}/api/auth/callback/microsoft`,
   });
@@ -702,7 +727,8 @@ export async function tenantSocialResponse(
     settings = parseSocialSettings(await request.json());
     if (
       (settings.googleEnabled && !providers.google) ||
-      (settings.microsoftEnabled && !providers.microsoft)
+      (settings.microsoftEnabled && !providers.microsoft) ||
+      (settings.chatgptEnabled && !chatgptAvailable)
     )
       throw new Error(
         "Configure the provider's client ID and secret in the deployment before enabling it",

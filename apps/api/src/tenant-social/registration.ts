@@ -7,7 +7,7 @@ type RegistrationInput = {
   subject: string;
   email: string;
   displayName: string;
-  provider: "google" | "microsoft";
+  provider: "google" | "microsoft" | "chatgpt";
   revision: string;
 };
 
@@ -29,7 +29,7 @@ const registrationInput = z
     subject: z.string().trim().min(1).max(512),
     email: z.string().trim().email().max(254),
     displayName: z.string().trim().min(1).max(200),
-    provider: z.enum(["google", "microsoft"]),
+    provider: z.enum(["google", "microsoft", "chatgpt"]),
     revision: z.string().trim().min(1).max(200),
   })
   .strict();
@@ -139,6 +139,7 @@ async function registrationPolicy(
     allowRegistration?: unknown;
     googleEnabled?: unknown;
     microsoftEnabled?: unknown;
+    chatgptEnabled?: unknown;
     revision?: unknown;
   } | null;
   if (
@@ -146,7 +147,8 @@ async function registrationPolicy(
     settings.allowRegistration !== true ||
     settings.revision !== input.revision ||
     (input.provider === "google" && settings.googleEnabled !== true) ||
-    (input.provider === "microsoft" && settings.microsoftEnabled !== true)
+    (input.provider === "microsoft" && settings.microsoftEnabled !== true) ||
+    (input.provider === "chatgpt" && settings.chatgptEnabled !== true)
   )
     return { allowed: false, reason: "policy_rejected" };
   return { allowed: true };
@@ -268,8 +270,11 @@ export function registerSocialRegistrationRoutes(
     const parsed = registrationInput.safeParse(
       await c.req.json().catch(() => null),
     );
-    if (!parsed.success || parsed.data.provider !== "microsoft")
-      return c.json({ error: "Invalid Microsoft binding" }, 400);
+    if (
+      !parsed.success ||
+      !["microsoft", "chatgpt"].includes(parsed.data.provider)
+    )
+      return c.json({ error: "Invalid federated binding" }, 400);
     const input = parsed.data;
     if (!authService)
       return c.json({ error: "Authentication unavailable" }, 503);
@@ -285,17 +290,19 @@ export function registerSocialRegistrationRoutes(
       ? ((await response.json().catch(() => null)) as {
           active?: boolean;
           microsoftEnabled?: boolean;
+          chatgptEnabled?: boolean;
           allowMicrosoftPersonalAccounts?: boolean;
           revision?: string;
         } | null)
       : null;
     if (
       !policy?.active ||
-      !policy.microsoftEnabled ||
-      !policy.allowMicrosoftPersonalAccounts ||
+      (input.provider === "microsoft"
+        ? !policy.microsoftEnabled || !policy.allowMicrosoftPersonalAccounts
+        : !policy.chatgptEnabled) ||
       policy.revision !== input.revision
     )
-      return c.json({ error: "Microsoft linking not authorized" }, 403);
+      return c.json({ error: "Federated linking not authorized" }, 403);
     const member = await db
       .prepare(
         "SELECT p.id FROM identity_principal p JOIN identity_tenant_membership m ON m.principal_id=p.id JOIN tenants t ON t.id=m.tenant_id WHERE p.issuer='savia:better-auth' AND p.subject=? AND p.email=? AND p.is_active=1 AND m.tenant_id=? AND m.is_active=1 AND t.is_active=1 AND NOT EXISTS(SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin')",

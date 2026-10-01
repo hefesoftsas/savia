@@ -167,5 +167,21 @@ export const tenantRegistrationMessages = {
     "Carregando configurações de cadastro…",
   ],
   "Saving…": ["Guardando…", "Saving…", "Salvando…"],
+  "Your session has expired. Sign in again to configure registration.": [
+    "Tu sesión venció. Inicia sesión de nuevo para configurar el registro.",
+    "Your session has expired. Sign in again to configure registration.",
+    "Sua sessão expirou. Entre novamente para configurar o cadastro.",
+  ],
+  "You need tenant administrator access to configure registration.": [
+    "Necesitas acceso de administrador del tenant para configurar el registro.",
+    "You need tenant administrator access to configure registration.",
+    "Você precisa de acesso de administrador do tenant para configurar o cadastro.",
+  ],
+  "The registration service is unavailable. Retry or contact your administrator.":
+    [
+      "El servicio de registro no está disponible. Reintenta o consulta con tu administrador.",
+      "The registration service is unavailable. Retry or contact your administrator.",
+      "O serviço de cadastro está indisponível. Tente novamente ou consulte seu administrador.",
+    ],
   Retry: ["Reintentar", "Retry", "Tentar novamente"],
 } satisfies MessageCatalog;

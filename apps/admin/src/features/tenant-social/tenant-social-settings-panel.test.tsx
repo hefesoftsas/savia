@@ -10,14 +10,15 @@ afterEach(cleanup);
 function renderPanel(
   apiClient: Record<string, ReturnType<typeof vi.fn>>,
   locale: "en" | "es" = "en",
+  tenantId = 42,
 ) {
-  render(
+  return render(
     <StoreContextProvider value={memoryStore({ locale })}>
       <AppLocaleProvider>
         <MemoryRouter>
           <TenantSocialSettingsPanel
             services={{ apiClient } as never}
-            tenantId={42}
+            tenantId={tenantId}
           />
         </MemoryRouter>
       </AppLocaleProvider>
@@ -333,4 +334,117 @@ it("omits the email prerequisite notice when email delivery is ready", async () 
       "First-time personal Microsoft sign-in requires Savia email verification. Existing verified Microsoft accounts can continue signing in.",
     ),
   ).toBeNull();
+});
+
+it("defaults ChatGPT sign-in off and keeps it disabled when unavailable", async () => {
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      ...defaults,
+      chatgptEnabled: false,
+      chatgptAvailable: false,
+      chatgptCallbackUrl: "",
+    }),
+    put: vi.fn(),
+    delete: vi.fn(),
+  };
+  renderPanel(apiClient);
+
+  const chatgpt = await screen.findByRole("checkbox", {
+    name: "Enable ChatGPT sign-in",
+  });
+  expect(chatgpt).not.toBeChecked();
+  expect(chatgpt).toBeDisabled();
+});
+
+it("saves ChatGPT sign-in and exposes its callback and email prerequisite", async () => {
+  const callbackUrl = "https://auth.example.test/api/auth/callback/chatgpt";
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({
+      ...defaults,
+      chatgptEnabled: false,
+      chatgptAvailable: true,
+      chatgptCallbackUrl: callbackUrl,
+      emailReady: false,
+    }),
+    put: vi.fn().mockResolvedValue({
+      ...defaults,
+      chatgptEnabled: true,
+      chatgptAvailable: true,
+      chatgptCallbackUrl: callbackUrl,
+      emailReady: false,
+    }),
+    delete: vi.fn(),
+  };
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  renderPanel(apiClient);
+
+  const callback = await screen.findByRole("textbox", {
+    name: "ChatGPT callback URL",
+  });
+  expect(callback).toHaveValue(callbackUrl);
+  expect(callback).toHaveAttribute("readonly");
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Enable ChatGPT sign-in" }),
+  );
+  expect(
+    screen.getByRole("link", { name: "Configure email delivery" }),
+  ).toHaveAttribute("href", "/service-credentials?tenantId=42&tab=email");
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "Copy ChatGPT callback URL" }),
+  );
+  expect(writeText).toHaveBeenCalledWith(callbackUrl);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save social sign-in settings" }),
+  );
+  await screen.findByText("Social sign-in settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith("/v1/tenants/42/social-settings", {
+    googleEnabled: false,
+    microsoftEnabled: false,
+    microsoftTenantId: "",
+    allowRegistration: false,
+    allowMicrosoftPersonalAccounts: false,
+    chatgptEnabled: true,
+  });
+});
+
+it("resets ChatGPT enablement when the selected tenant changes", async () => {
+  const apiClient = {
+    get: vi.fn((path: string) =>
+      Promise.resolve({
+        ...defaults,
+        chatgptEnabled: path.includes("/42/"),
+        chatgptAvailable: true,
+        chatgptCallbackUrl:
+          "https://auth.example.test/api/auth/callback/chatgpt",
+      }),
+    ),
+    put: vi.fn(),
+    delete: vi.fn(),
+  };
+  const view = renderPanel(apiClient);
+  expect(
+    await screen.findByRole("checkbox", { name: "Enable ChatGPT sign-in" }),
+  ).toBeChecked();
+
+  view.rerender(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <AppLocaleProvider>
+        <MemoryRouter>
+          <TenantSocialSettingsPanel
+            services={{ apiClient } as never}
+            tenantId={43}
+          />
+        </MemoryRouter>
+      </AppLocaleProvider>
+    </StoreContextProvider>,
+  );
+
+  expect(
+    await screen.findByRole("checkbox", { name: "Enable ChatGPT sign-in" }),
+  ).not.toBeChecked();
 });

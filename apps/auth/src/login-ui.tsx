@@ -7,7 +7,12 @@ import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 
 type Screen =
-  "login" | "enroll" | "consent" | "verified" | "microsoft-verification";
+  | "login"
+  | "enroll"
+  | "consent"
+  | "verified"
+  | "microsoft-verification"
+  | "chatgpt-verification";
 
 function SaviaMark({ branding }: { branding?: TenantBranding }) {
   return (
@@ -404,6 +409,17 @@ function LoginContent({
                 </svg>
                 <span>Microsoft</span>
               </Button>
+              <Button
+                className="oauth-provider"
+                type="button"
+                variant="outline"
+                size="lg"
+                aria-label="Continuar con ChatGPT"
+                data-social-provider="chatgpt"
+                hidden
+              >
+                <span>ChatGPT</span>
+              </Button>
             </div>
           </div>
           <section
@@ -745,10 +761,12 @@ export function renderOAuthSurface(
   },
 ): string {
   const content =
-    screen === "microsoft-verification" ? (
+    screen === "microsoft-verification" || screen === "chatgpt-verification" ? (
       <Shell screen="verified" branding={options?.branding}>
         <div className="oauth-heading">
-          <p className="oauth-kicker">Microsoft</p>
+          <p className="oauth-kicker">
+            {screen === "chatgpt-verification" ? "ChatGPT" : "Microsoft"}
+          </p>
           <h1>Verifica tu correo para continuar</h1>
           <p>
             Confirma que este correo te pertenece para acceder a tu equipo. Abre
@@ -760,7 +778,7 @@ export function renderOAuthSurface(
         )}
         <form
           method="post"
-          action="/api/auth/microsoft-email-verification/send"
+          action={`/api/auth/${screen === "chatgpt-verification" ? "chatgpt" : "microsoft"}-email-verification/send`}
         >
           <input type="hidden" name="id" value={options?.verification?.id} />
           <Label htmlFor="verification-email">Correo electrónico</Label>

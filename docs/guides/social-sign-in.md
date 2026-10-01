@@ -1,14 +1,14 @@
-# Google and Microsoft sign-in
+# Federated sign-in with Google, Microsoft and ChatGPT
 
-Savia can let existing tenant members sign in with Google or Microsoft. Provider credentials are deployment-wide; each tenant separately chooses which configured provider its members may use. Tenant login pages display deployment-configured providers; Savia enforces tenant eligibility after the provider identifies the user. By default, an administrator must precreate users and tenant memberships. A tenant can enable self-registration to create new users with Viewer membership on their first verified provider sign-in. Social sign-in never provides platform-administrator access.
+Savia can let existing tenant members sign in with Google, Microsoft or an approved ChatGPT website client. Provider credentials are deployment-wide; each tenant separately chooses which configured provider its members may use. Tenant login pages display deployment-configured providers; Savia enforces tenant eligibility after the provider identifies the user. By default, an administrator must precreate users and tenant memberships. A tenant can enable self-registration to create new users with Viewer membership on their first verified provider sign-in. Social sign-in never provides platform-administrator access.
 
 The main platform login (including the plain localhost Docker origin) offers only local email/password access and recovery: it renders no federated provider controls or SSO discovery form. Members use their dedicated tenant hostname for optional federated access.
 
-The tenant login screen places compact Google and Microsoft buttons below the email and password form, followed by a smaller organization SSO action. Provider buttons and their divider disappear when no providers are configured or when a recovery, verification, or SSO panel is open. Provider marks are decorative; the full button labels provide accessible names.
+The tenant login screen places compact Google, Microsoft and ChatGPT buttons below the email and password form, followed by a smaller organization SSO action. Provider buttons and their divider disappear when no providers are configured or when a recovery, verification, or SSO panel is open. Provider marks are decorative; the full button labels provide accessible names.
 
 ## Register provider applications
 
-Register Savia as a confidential web application with [Google Cloud](https://developers.google.com/identity/protocols/oauth2/web-server) or [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret). Use the callback URL shown in **Settings → Service credentials → Google / Microsoft** for each provider. The callback must use the same public origin configured as `BETTER_AUTH_URL` and end in one of these paths:
+Register Savia as a confidential web application with [Google Cloud](https://developers.google.com/identity/protocols/oauth2/web-server) or [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret). Use the callback URL shown in **Settings → Service credentials → Social sign-in** for each provider. The callback must use the same public origin configured as `BETTER_AUTH_URL` and end in one of these paths:
 
 ```text
 {BETTER_AUTH_URL}/api/auth/callback/google
@@ -40,7 +40,7 @@ Restart or redeploy the auth service after changing deployment credentials. The 
 
 ## Enable sign-in for a tenant
 
-Open **Settings → Service credentials → Google / Microsoft** for the tenant. Select Google, Microsoft, or both, then save. A Microsoft connection also requires the tenant's Microsoft Entra directory tenant ID as a UUID. The ID is the `tid` value for the organization's directory; it is not the application/client ID.
+Open **Settings → Service credentials → Social sign-in** for the tenant. Select Google, Microsoft, or both, then save. A Microsoft connection also requires the tenant's Microsoft Entra directory tenant ID as a UUID. The ID is the `tid` value for the organization's directory; it is not the application/client ID.
 
 The Microsoft section also includes **Allow personal Microsoft accounts**, off by default. Enable it to admit personal Outlook/Hotmail/Microsoft accounts in addition to the configured organizational directory. The directory UUID still identifies the allowed work/school directory; do not replace it with `common`, `consumers`, or the Microsoft consumer directory UUID. This option does not enable user registration. When federated registration remains off, personal accounts must already have an eligible verified Savia user and membership. Turning the option off invalidates prior social challenges and revokes existing tenant sessions, like other social policy changes.
 
@@ -67,3 +67,26 @@ Automated tests cover configuration, callback policy, tenant isolation, account 
 If personal Microsoft provisioning loses its service response, the unbound account remains guarded. A fresh email proof retries the owned provisioning attempt under current tenant policy without deleting accounts or administrator edits. Provider binding and sessions become available only after successful finalization.
 
 An unfinished personal Microsoft provisioning record blocks every native session path, including password sign-in after password recovery, until a fresh Microsoft proof successfully finishes provisioning. Administrative account edits are preserved.
+
+## Sign in with ChatGPT
+
+ChatGPT is an optional third tenant identity provider. OpenAI currently offers website sign-in through a limited partner trial; request an approved website OAuth client through [OpenAI's client registration guide](https://developers.openai.com/siwc/request-client-id). A Codex client, API key or dynamically registered loopback/OSS client cannot be used for hosted Savia. Follow the [website integration contract](https://developers.openai.com/siwc/website), including exact callback registration for every environment:
+
+```text
+{BETTER_AUTH_URL}/api/auth/callback/chatgpt
+```
+
+Configure the approved website client server-side:
+
+```text
+SAVIA_CHATGPT_CLIENT_ID=oaiapp_...
+SAVIA_CHATGPT_TOKEN_AUTH_METHOD=none
+```
+
+Use `none` only for a registered public client. A confidential client must specify its registered `client_secret_post` or `client_secret_basic` method and supply `SAVIA_CHATGPT_CLIENT_SECRET`; a secret with `none`, or a confidential method without a secret, is rejected. Docker forwards these environment values. In Cloudflare deployments, put the client ID and optional secret in the GitHub environment secrets and `SAVIA_CHATGPT_TOKEN_AUTH_METHOD` in its environment variables. No credentials are exposed through tenant settings.
+
+The **Social sign-in** settings show the callback and an independent ChatGPT switch, disabled until deployment credentials exist. All tenants default to off. Savia requests only `openid profile email`, uses Authorization Code with PKCE S256 and a browser-bound OIDC nonce, and verifies signed ID tokens against OpenAI discovery. The provider issuer is pinned to `https://auth.openai.com`; immutable identity is scoped to issuer, client ID and subject. Sign-out clears the Savia session. This integration grants no conversation access, API inference access, or ChatGPT plan usage.
+
+A first ChatGPT account link always requires Savia email verification in the initiating browser, even when OpenAI reports a verified email. Upstream email matching alone cannot link an existing Savia account. Tenant email delivery must be ready. Existing active, precreated members can complete this proof with federated registration disabled; their access stays unchanged. New users are provisioned only when the independent **Allow new users to register with federated sign-in** option is enabled, with Viewer membership and the same tenant quota. Cross-tenant, banned, platform-administrator and SSO-only identities are denied. Every unfinished provisioning record blocks native session creation until fresh proof finishes provisioning; local MFA still applies after linking.
+
+Automated tests use synthetic discovery, signing keys and tokens. A live sign-in requires OpenAI approval, registered credentials, the exact deployed callback and an eligible tenant member or enabled registration. Merely enabling the UI switch cannot supply this approval.

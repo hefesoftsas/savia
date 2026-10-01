@@ -689,7 +689,7 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Tenant Google and Microsoft sign-in settings */
+        /** @description Tenant Google, Microsoft, and ChatGPT sign-in settings */
         200: {
           headers: {
             [name: string]: unknown;
@@ -700,6 +700,8 @@ export interface paths {
               googleEnabled: boolean;
               microsoftEnabled: boolean;
               /** @default false */
+              chatgptEnabled: boolean;
+              /** @default false */
               allowRegistration: boolean;
               /** @default false */
               allowMicrosoftPersonalAccounts: boolean;
@@ -707,8 +709,12 @@ export interface paths {
               emailReady?: boolean;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
+              /** @default false */
+              chatgptAvailable: boolean;
               googleCallbackUrl: string;
               microsoftCallbackUrl: string;
+              /** @default  */
+              chatgptCallbackUrl: string;
             };
           };
         };
@@ -729,6 +735,8 @@ export interface paths {
             googleEnabled: boolean;
             microsoftEnabled: boolean;
             /** @default false */
+            chatgptEnabled?: boolean;
+            /** @default false */
             allowRegistration?: boolean;
             /** @default false */
             allowMicrosoftPersonalAccounts?: boolean;
@@ -737,7 +745,7 @@ export interface paths {
         };
       };
       responses: {
-        /** @description Saved tenant Google and Microsoft sign-in settings */
+        /** @description Saved tenant Google, Microsoft, and ChatGPT sign-in settings */
         200: {
           headers: {
             [name: string]: unknown;
@@ -748,6 +756,8 @@ export interface paths {
               googleEnabled: boolean;
               microsoftEnabled: boolean;
               /** @default false */
+              chatgptEnabled: boolean;
+              /** @default false */
               allowRegistration: boolean;
               /** @default false */
               allowMicrosoftPersonalAccounts: boolean;
@@ -755,8 +765,12 @@ export interface paths {
               emailReady?: boolean;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
+              /** @default false */
+              chatgptAvailable: boolean;
               googleCallbackUrl: string;
               microsoftCallbackUrl: string;
+              /** @default  */
+              chatgptCallbackUrl: string;
             };
           };
         };
@@ -785,6 +799,8 @@ export interface paths {
               googleEnabled: boolean;
               microsoftEnabled: boolean;
               /** @default false */
+              chatgptEnabled: boolean;
+              /** @default false */
               allowRegistration: boolean;
               /** @default false */
               allowMicrosoftPersonalAccounts: boolean;
@@ -792,8 +808,12 @@ export interface paths {
               emailReady?: boolean;
               googleAvailable: boolean;
               microsoftAvailable: boolean;
+              /** @default false */
+              chatgptAvailable: boolean;
               googleCallbackUrl: string;
               microsoftCallbackUrl: string;
+              /** @default  */
+              chatgptCallbackUrl: string;
             };
           };
         };

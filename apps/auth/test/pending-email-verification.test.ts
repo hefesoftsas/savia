@@ -169,3 +169,39 @@ it("bounds mail across separate intents for the same tenant and address", async 
     }),
   ).rejects.toThrow();
 });
+
+it("routes ChatGPT link proofs through the ChatGPT verification endpoint", async () => {
+  let url = "";
+  const pending = await createPendingVerification(
+    {
+      ...input,
+      purpose: "chatgpt_link",
+      providerSubject: "a".repeat(64),
+      providerTenantId: "oaiapp_test",
+    },
+    environment,
+  );
+
+  await sendPendingVerification(
+    {
+      id: pending.id,
+      browserNonce: input.browserNonce,
+      origin: input.returnOrigin,
+    },
+    environment,
+    {
+      sendTransactionalEmail: async (mail) => {
+        url = mail.text.match(/https:\/\/[^\s]+/)?.[0] ?? "";
+      },
+    },
+  );
+
+  expect(new URL(url).pathname).toBe(
+    "/api/auth/chatgpt-email-verification/verify",
+  );
+  expect(pending).toMatchObject({
+    purpose: "chatgpt_link",
+    providerSubject: "a".repeat(64),
+    providerTenantId: "oaiapp_test",
+  });
+});

@@ -69,11 +69,27 @@ export function TenantRegistrationSettingsPanel({
         setCaptchaMode(response.captchaMode);
         setSiteKey(response.siteKey);
       })
-      .catch(() => {
-        if (active)
-          setError(
-            t("Registration settings could not be loaded. Retry the request."),
-          );
+      .catch((caught) => {
+        if (!active) return;
+        const status =
+          caught instanceof ApiClientError ? caught.status : undefined;
+        setError(
+          status === 401
+            ? t(
+                "Your session has expired. Sign in again to configure registration.",
+              )
+            : status === 403
+              ? t(
+                  "You need tenant administrator access to configure registration.",
+                )
+              : status === 503
+                ? t(
+                    "The registration service is unavailable. Retry or contact your administrator.",
+                  )
+                : t(
+                    "Registration settings could not be loaded. Retry the request.",
+                  ),
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -145,8 +161,7 @@ export function TenantRegistrationSettingsPanel({
     }
   }
 
-  const readiness =
-    settings?.registrationReady && settings.emailReady && settings.captchaReady;
+  const readiness = settings?.emailReady && settings.captchaReady;
   const passwordAllowed = settings?.passwordAllowed !== false;
   const activationDisabled =
     busy || (!allowEmailRegistration && (!readiness || !passwordAllowed));

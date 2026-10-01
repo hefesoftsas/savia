@@ -17,6 +17,23 @@ export function buildSecretUploads(environment, values) {
         `${clientId} and ${clientSecret} must be configured together`,
       );
   }
+  const chatgptId = values.SAVIA_CHATGPT_CLIENT_ID?.trim();
+  const chatgptSecret = values.SAVIA_CHATGPT_CLIENT_SECRET?.trim();
+  const chatgptMethod =
+    values.SAVIA_CHATGPT_TOKEN_AUTH_METHOD?.trim() || "none";
+  if (chatgptId || chatgptSecret || chatgptMethod !== "none") {
+    if (
+      !chatgptId ||
+      !/^oaiapp_[A-Za-z0-9_-]+$/.test(chatgptId) ||
+      !["none", "client_secret_post", "client_secret_basic"].includes(
+        chatgptMethod,
+      ) ||
+      (chatgptMethod === "none" ? !!chatgptSecret : !chatgptSecret)
+    )
+      throw new Error(
+        "ChatGPT requires a registered website client and matching token authentication method",
+      );
+  }
   if (values.SQL_BRIDGE_URL || values.SQL_BRIDGE_SECRET) {
     if (!values.SQL_BRIDGE_URL || !values.SQL_BRIDGE_SECRET)
       throw new Error(
@@ -104,6 +121,11 @@ export function buildSecretUploads(environment, values) {
       secrets.SQL_BRIDGE_SECRET = values.SQL_BRIDGE_SECRET;
     }
     if (app === "auth") {
+      if (chatgptId) {
+        secrets.SAVIA_CHATGPT_CLIENT_ID = chatgptId;
+        secrets.SAVIA_CHATGPT_TOKEN_AUTH_METHOD = chatgptMethod;
+        if (chatgptSecret) secrets.SAVIA_CHATGPT_CLIENT_SECRET = chatgptSecret;
+      }
       for (const [clientId, clientSecret] of oauthCredentialPairs) {
         if (values[clientId]) {
           secrets[clientId] = values[clientId];

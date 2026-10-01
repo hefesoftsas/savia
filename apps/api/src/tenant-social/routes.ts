@@ -13,6 +13,7 @@ const settingsInput = z
   .object({
     googleEnabled: z.boolean(),
     microsoftEnabled: z.boolean(),
+    chatgptEnabled: z.boolean().default(false),
     allowRegistration: z.boolean().default(false),
     allowMicrosoftPersonalAccounts: z.boolean().default(false),
     microsoftTenantId: z
@@ -42,14 +43,17 @@ const settingsResponse = z.object({
   configured: z.boolean(),
   googleEnabled: z.boolean(),
   microsoftEnabled: z.boolean(),
+  chatgptEnabled: z.boolean().default(false),
   allowRegistration: z.boolean().default(false),
   allowMicrosoftPersonalAccounts: z.boolean().default(false),
   microsoftTenantId: z.string(),
   emailReady: z.boolean().optional(),
   googleAvailable: z.boolean(),
   microsoftAvailable: z.boolean(),
+  chatgptAvailable: z.boolean().default(false),
   googleCallbackUrl: z.string(),
   microsoftCallbackUrl: z.string(),
+  chatgptCallbackUrl: z.string().default(""),
 });
 
 type SocialBridge = Pick<AuthService, "fetch">;
@@ -223,7 +227,7 @@ export function registerTenantSocialRoutes(
       request: { params: tenantIdParam },
       responses: {
         200: {
-          description: "Tenant Google and Microsoft sign-in settings",
+          description: "Tenant Google, Microsoft, and ChatGPT sign-in settings",
           content: { "application/json": { schema: settingsResponse } },
         },
       },
@@ -250,7 +254,8 @@ export function registerTenantSocialRoutes(
       },
       responses: {
         200: {
-          description: "Saved tenant Google and Microsoft sign-in settings",
+          description:
+            "Saved tenant Google, Microsoft, and ChatGPT sign-in settings",
           content: { "application/json": { schema: settingsResponse } },
         },
       },

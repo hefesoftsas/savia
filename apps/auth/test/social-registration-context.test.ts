@@ -11,6 +11,7 @@ function fixture() {
     active: true,
     googleEnabled: true,
     microsoftEnabled: true,
+    chatgptEnabled: false,
     allowRegistration: true,
     revision: "r1",
   };
@@ -135,4 +136,56 @@ describe("trusted social registration context", () => {
       ),
     ).toBeNull();
   });
+});
+
+it("permits a trusted ChatGPT linking intent with creation disabled but rejects a disabled provider", async () => {
+  const f = fixture();
+  f.settings.allowRegistration = false;
+  expect(
+    await beginSocialRegistration(
+      f.request(),
+      "chatgpt",
+      f.environment,
+      f.adapter,
+    ),
+  ).toBeNull();
+  f.settings.chatgptEnabled = true;
+  expect(
+    await beginSocialRegistration(
+      f.request(false),
+      "chatgpt",
+      f.environment,
+      f.adapter,
+    ),
+  ).toBeNull();
+  const attempt = await beginSocialRegistration(
+    f.request(),
+    "chatgpt",
+    f.environment,
+    f.adapter,
+  );
+  expect(attempt).toMatchObject({ tenantId: 4, provider: "chatgpt" });
+  expect(
+    await readSocialRegistration(
+      f.adapter,
+      {
+        callbackURL:
+          "https://savia-team.savia-preview.hefesoft.com/api/auth/sso-complete",
+        serverContext: { socialAttemptId: attempt!.attemptId },
+      },
+      "chatgpt",
+    ),
+  ).toMatchObject({ tenantId: 4, provider: "chatgpt" });
+  f.settings.chatgptEnabled = false;
+  await expect(
+    readSocialRegistration(
+      f.adapter,
+      {
+        callbackURL:
+          "https://savia-team.savia-preview.hefesoft.com/api/auth/sso-complete",
+        serverContext: { socialAttemptId: attempt!.attemptId },
+      },
+      "chatgpt",
+    ),
+  ).rejects.toThrow();
 });

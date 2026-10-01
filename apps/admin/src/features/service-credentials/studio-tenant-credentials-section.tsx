@@ -296,10 +296,10 @@ export function StudioTenantCredentialsSection({
           </CredentialTab>
           <CredentialTab
             value="social"
-            tooltip={socialT("Google / Microsoft")}
+            tooltip={socialT("Social sign-in")}
             disabled
           >
-            {socialT("Google / Microsoft")}
+            {socialT("Social sign-in")}
           </CredentialTab>
           <CredentialTab
             value="registration"
@@ -392,10 +392,10 @@ export function StudioTenantCredentialsSection({
             </CredentialTab>
             <CredentialTab
               value="social"
-              tooltip={socialT("Google / Microsoft")}
+              tooltip={socialT("Social sign-in")}
               disabled
             >
-              {socialT("Google / Microsoft")}
+              {socialT("Social sign-in")}
             </CredentialTab>
             <CredentialTab
               value="registration"
@@ -643,8 +643,8 @@ export function StudioTenantCredentialsSection({
       )}
       {isPlatformWorkspace ? (
         <p className="max-w-2xl text-sm text-muted-foreground">
-          {signInT(
-            "SSO and Google / Microsoft are configured per tenant. Select a tenant workspace to manage its sign-in methods.",
+          {socialT(
+            "SSO and social sign-in are configured per tenant. Select a tenant workspace to manage its sign-in methods.",
           )}
         </p>
       ) : null}
@@ -703,11 +703,8 @@ export function StudioTenantCredentialsSection({
               <CredentialTab value="sso" tooltip={ssoT("Tenant SAML SSO")}>
                 {ssoT("Tenant SAML SSO")}
               </CredentialTab>
-              <CredentialTab
-                value="social"
-                tooltip={socialT("Google / Microsoft")}
-              >
-                {socialT("Google / Microsoft")}
+              <CredentialTab value="social" tooltip={socialT("Social sign-in")}>
+                {socialT("Social sign-in")}
               </CredentialTab>
               <CredentialTab
                 value="registration"

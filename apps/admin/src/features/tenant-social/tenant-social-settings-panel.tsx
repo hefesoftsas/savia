@@ -19,6 +19,9 @@ type Settings = {
   microsoftAvailable: boolean;
   googleCallbackUrl: string;
   microsoftCallbackUrl: string;
+  chatgptEnabled?: boolean;
+  chatgptAvailable?: boolean;
+  chatgptCallbackUrl?: string;
   emailReady?: boolean;
 };
 
@@ -33,6 +36,9 @@ const emptySettings: Settings = {
   microsoftAvailable: false,
   googleCallbackUrl: "",
   microsoftCallbackUrl: "",
+  chatgptEnabled: false,
+  chatgptAvailable: false,
+  chatgptCallbackUrl: "",
 };
 
 export function TenantSocialSettingsPanel({
@@ -46,6 +52,7 @@ export function TenantSocialSettingsPanel({
   const [settings, setSettings] = useState<Settings>();
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+  const [chatgptEnabled, setChatgptEnabled] = useState(false);
   const [allowRegistration, setAllowRegistration] = useState(false);
   const [allowMicrosoftPersonalAccounts, setAllowMicrosoftPersonalAccounts] =
     useState(false);
@@ -64,6 +71,7 @@ export function TenantSocialSettingsPanel({
     setSettings(undefined);
     setGoogleEnabled(false);
     setMicrosoftEnabled(false);
+    setChatgptEnabled(false);
     setAllowRegistration(false);
     setAllowMicrosoftPersonalAccounts(false);
     setMicrosoftTenantId("");
@@ -74,6 +82,7 @@ export function TenantSocialSettingsPanel({
         setSettings(response);
         setGoogleEnabled(response.googleEnabled);
         setMicrosoftEnabled(response.microsoftEnabled);
+        setChatgptEnabled(response.chatgptEnabled ?? false);
         setAllowRegistration(response.allowRegistration ?? false);
         setAllowMicrosoftPersonalAccounts(
           response.allowMicrosoftPersonalAccounts ?? false,
@@ -107,6 +116,9 @@ export function TenantSocialSettingsPanel({
         {
           googleEnabled,
           microsoftEnabled,
+          ...(settings && "chatgptEnabled" in settings
+            ? { chatgptEnabled }
+            : {}),
           microsoftTenantId: microsoftTenantId.trim(),
           allowRegistration,
           allowMicrosoftPersonalAccounts,
@@ -115,6 +127,7 @@ export function TenantSocialSettingsPanel({
       setSettings(saved);
       setGoogleEnabled(saved.googleEnabled);
       setMicrosoftEnabled(saved.microsoftEnabled);
+      setChatgptEnabled(saved.chatgptEnabled ?? false);
       setAllowRegistration(saved.allowRegistration ?? false);
       setAllowMicrosoftPersonalAccounts(
         saved.allowMicrosoftPersonalAccounts ?? false,
@@ -148,6 +161,7 @@ export function TenantSocialSettingsPanel({
         configured: false,
         googleEnabled: false,
         microsoftEnabled: false,
+        chatgptEnabled: false,
         allowRegistration: false,
         allowMicrosoftPersonalAccounts: false,
         microsoftTenantId: "",
@@ -155,6 +169,7 @@ export function TenantSocialSettingsPanel({
       setSettings(result);
       setGoogleEnabled(false);
       setMicrosoftEnabled(false);
+      setChatgptEnabled(false);
       setAllowRegistration(false);
       setAllowMicrosoftPersonalAccounts(false);
       setMicrosoftTenantId("");
@@ -178,7 +193,11 @@ export function TenantSocialSettingsPanel({
     >
       <header className="credentials-group-header">
         <h2 id="tenant-social-heading">{t("Social sign-in")}</h2>
-        <p>{t("Let tenant members use Google or Microsoft to sign in.")}</p>
+        <p>
+          {t(
+            "Let tenant members use Google, Microsoft, or ChatGPT to sign in.",
+          )}
+        </p>
       </header>
       <div className="credentials-group-body">
         {loading ? (
@@ -307,6 +326,78 @@ export function TenantSocialSettingsPanel({
                     </div>
                   ) : null}
                 </div>
+                <div className="grid gap-2 border-t pt-3">
+                  <label className="flex items-start gap-2 text-sm">
+                    <Checkbox
+                      checked={chatgptEnabled}
+                      onCheckedChange={(checked) =>
+                        setChatgptEnabled(checked === true)
+                      }
+                      disabled={busy || current.chatgptAvailable !== true}
+                      aria-describedby="tenant-social-chatgpt-availability"
+                    />
+                    <span>{t("Enable ChatGPT sign-in")}</span>
+                  </label>
+                  <p
+                    id="tenant-social-chatgpt-availability"
+                    className="pl-6 text-xs leading-relaxed text-muted-foreground"
+                  >
+                    {current.chatgptAvailable
+                      ? t(
+                          "ChatGPT sign-in requires an OpenAI-approved OAuth client, currently available through a limited commercial trial.",
+                        )
+                      : t(
+                          "ChatGPT credentials are not available in this deployment.",
+                        )}
+                  </p>
+                  {current.chatgptAvailable && current.chatgptCallbackUrl ? (
+                    <div className="grid gap-1.5 pl-6 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <Input
+                        aria-label={t("ChatGPT callback URL")}
+                        value={current.chatgptCallbackUrl}
+                        readOnly
+                        autoComplete="off"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void navigator.clipboard?.writeText(
+                            current.chatgptCallbackUrl ?? "",
+                          )
+                        }
+                      >
+                        {t("Copy ChatGPT callback URL")}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {current.chatgptAvailable ? (
+                    <a
+                      className="w-fit pl-6 text-xs text-primary underline-offset-4 hover:underline"
+                      href="https://developers.openai.com/siwc/request-client-id"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t("Request an approved OpenAI OAuth client")}
+                    </a>
+                  ) : null}
+                  {chatgptEnabled && settings?.emailReady === false ? (
+                    <div className="grid gap-1 rounded-md bg-muted/50 p-2 text-xs leading-relaxed sm:ml-6">
+                      <p role="note">
+                        {t(
+                          "First-time ChatGPT sign-in requires Savia email verification. Configure email delivery before enabling it for new accounts.",
+                        )}
+                      </p>
+                      <Link
+                        className="w-fit text-primary underline-offset-4 hover:underline"
+                        to={`/service-credentials?tenantId=${tenantId}&tab=email`}
+                      >
+                        {t("Configure email delivery")}
+                      </Link>
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <label className="grid max-w-xl gap-1.5 text-sm">
                 {t("Microsoft Entra tenant ID")}
@@ -373,6 +464,7 @@ export function TenantSocialSettingsPanel({
                     loading ||
                     (!googleEnabled &&
                       !microsoftEnabled &&
+                      !chatgptEnabled &&
                       !configured &&
                       !allowRegistration)
                   }
