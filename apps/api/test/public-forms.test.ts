@@ -575,9 +575,9 @@ it("replaces the Savia-only short URL for existing links when external shortenin
   const listed = (await listing.json()) as {
     data: Array<{ id: string; shortUrl?: string }>;
   };
-  expect(
-    listed.data.find((item) => item.id === link.id)?.shortUrl,
-  ).toBeUndefined();
+  expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toMatch(
+    /^https:\/\/forms\.savia\.test\/s\/[a-f0-9]{16}$/,
+  );
 
   const retry = await externalApp.request(
     `https://api.test/v1/public-forms/${link.id}/short-url`,
@@ -645,6 +645,16 @@ it("keeps publishing the canonical URL when the external shortener is unavailabl
   const { data } = (await retry.json()) as { data: { shortUrl: string } };
   expect(data.shortUrl).toMatch(
     /^https:\/\/forms\.savia\.test\/s\/[a-f0-9]{16}$/,
+  );
+  const listing = await instance.request(
+    `https://api.test/v1/public-forms?tenantId=880011&objectName=${name}`,
+  );
+  expect(listing.status).toBe(200);
+  const listed = (await listing.json()) as {
+    data: Array<{ id: string; shortUrl?: string }>;
+  };
+  expect(listed.data.find((item) => item.id === link.id)?.shortUrl).toBe(
+    data.shortUrl,
   );
 });
 it("restricts short URL creation to platform administrators", async () => {

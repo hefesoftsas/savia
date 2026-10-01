@@ -264,7 +264,7 @@ export function registerPublicFormRoutes(
       return c.json(
         {
           data: result.results.map((row) =>
-            managedForm(row, options.publicOrigin, Boolean(options.shortener)),
+            managedForm(row, options.publicOrigin),
           ),
         },
         200,

@@ -243,11 +243,7 @@ export function tenantKey(tenantId: number) {
 function tenantIdFromKey(key: string) {
   return Number(key.slice("tenant:".length));
 }
-export function managedForm(
-  row: PublicFormRow,
-  publicOrigin?: string,
-  externalShortenerConfigured = false,
-) {
+export function managedForm(row: PublicFormRow, publicOrigin?: string) {
   const active =
     row.revoked_at === null &&
     (row.expires_at === null || Date.parse(row.expires_at) > Date.now());
@@ -257,7 +253,7 @@ export function managedForm(
       : {}),
     ...(publicOrigin && row.short_url && active
       ? { shortUrl: row.short_url }
-      : publicOrigin && row.short_code && active && !externalShortenerConfigured
+      : publicOrigin && row.short_code && active
         ? { shortUrl: new URL("/s/" + row.short_code, publicOrigin).href }
         : {}),
     id: row.id,
