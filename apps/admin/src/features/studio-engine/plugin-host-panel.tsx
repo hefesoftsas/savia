@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { useMessages, type MessageCatalog } from "@/i18n/core";
@@ -19,6 +19,8 @@ const messages = {
 } satisfies MessageCatalog;
 export function PluginHostPanel({
   title,
+  open = true,
+  retained = false,
   busy,
   confirming,
   onClose,
@@ -29,6 +31,8 @@ export function PluginHostPanel({
   children,
 }: {
   title: string;
+  open?: boolean;
+  retained?: boolean;
   busy: boolean;
   confirming: boolean;
   onClose: () => void;
@@ -39,16 +43,46 @@ export function PluginHostPanel({
   children: ReactNode;
 }) {
   const t = useMessages(messages);
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!retained || !open) return;
+    const content = contentRef.current;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const siblings = Array.from(document.body.children).filter((el): el is HTMLElement =>
+      el instanceof HTMLElement && !el.contains(content) && !el.hasAttribute("data-plugin-overlay"));
+    const prior = siblings.map(el => ({ el, inert: el.inert }));
+    for (const { el } of prior) el.inert = true;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    const trap = (event: FocusEvent) => {
+      if (!content?.contains(event.target as Node) && !confirming) closeRef.current?.focus();
+    };
+    document.addEventListener("focusin", trap);
+    return () => {
+      for (const { el, inert } of prior) el.inert = inert;
+      document.body.style.overflow = overflow;
+      document.removeEventListener("focusin", trap);
+      previousFocus?.focus();
+    };
+  }, [retained, open, confirming, closeRef]);
   return (
     <Dialog.Root
-      open
+      open={open}
+      modal={!retained}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[150] bg-black/40" />
+      <Dialog.Portal forceMount={retained ? true : undefined}>
+        {retained ? (open && <div data-plugin-overlay className="fixed inset-0 z-[150] bg-black/40" onClick={() => { if (!confirming) onClose(); }} />) : <Dialog.Overlay className="fixed inset-0 z-[150] bg-black/40" />}
         <Dialog.Content
+          ref={contentRef}
+          forceMount={retained ? true : undefined}
+          hidden={!open}
+          inert={!open}
+          style={!open ? { display: "none" } : undefined}
+          aria-modal={open ? true : undefined}
           aria-describedby={undefined}
           className="fixed inset-y-0 right-0 z-[151] flex h-dvh w-full max-w-[640px] flex-col bg-background text-foreground shadow-xl outline-none motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200"
           onEscapeKeyDown={(event) => {

@@ -801,3 +801,26 @@ it("opens a host editor from the store viewer without a selected screen", () => 
   expect(new URL(editor.src).pathname).toBe(new URL(owner.src).pathname);
   expect(new URL(editor.src).searchParams.get("panel")).toBe("1");
 });
+
+it("retains an inert prepared frame across cancellable loading and fresh activations", () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector('iframe[src*="standby=1"]') as HTMLIFrameElement;
+  expect(editor).not.toBeNull();
+  expect(editor.closest('[inert]')).not.toBeNull();
+  const child = handshake(editor);
+  const request = { view: "record-editor", title: "Editor", params: {} };
+  uiMessage(list, { type: "open", id: "first", request, session: main.session });
+  expect(screen.getByRole("dialog")).toBeVisible();
+  const activation = child.send.mock.calls.find(([m]) => m.type === "activate")![0];
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(document.querySelector('iframe[src*="standby=1"]')).toBe(editor);
+  uiMessage(list, { type: "open", id: "second", request, session: main.session });
+  expect(document.querySelector('iframe[src*="standby=1"]')).toBe(editor);
+  const activations = child.send.mock.calls.filter(([m]) => m.type === "activate");
+  expect(activations).toHaveLength(2);
+  expect(activations[1][0].panel.panelId).not.toBe(activation.panel.panelId);
+});

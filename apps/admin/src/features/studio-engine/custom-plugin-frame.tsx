@@ -16,11 +16,12 @@ import { automationMessages } from "@/i18n/locales/automation";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
-  type: "request" | "ready" | "error";
+  type: "request" | "ready" | "error" | "prepared";
   id: string;
   path: string;
   method?: string;
   body?: unknown;
+  panelId?: string;
 };
 
 type PrefetchedSettings = {
@@ -82,7 +83,8 @@ export function CustomPluginFrame({
   screen?: { object: string; view: string };
   heightClassName?: string;
   panelBinding?: {
-    context: PluginPanelContext;
+    context: PluginPanelContext | null;
+    reusable?: boolean;
     onEvent: (message: Record<string, unknown>, frame: Window) => void;
     onFrame: (frame: Window | null, session: string) => void;
     onFailure: () => void;
@@ -96,6 +98,7 @@ export function CustomPluginFrame({
   panelBindingRef.current = panelBinding;
   const controller = useRef(createPluginPanelController());
   const [panel, setPanel] = useState<ActivePluginPanel | null>(null);
+  const [prepared, setPrepared] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const retryAction = useRef<(() => void) | null>(null);
@@ -114,15 +117,16 @@ export function CustomPluginFrame({
       },
       "*",
     );
+    if (prepared) child.current?.frame.postMessage({ ns: "savia-plugin-ui", version: 1, type: "deactivate", session: child.current.session, panelId: active.id }, "*");
     controller.current.dispose();
     retryAction.current = null;
     setPanel(null);
     setConfirming(false);
-    child.current = null;
+    if (!prepared) child.current = null;
   }
   function requestClose(discard = false) {
     const active = controller.current.current;
-    if (!active || active.state.busy) return;
+    if (!active || (active.phase === "active" && active.state.busy)) return;
     if (active.state.dirty && !discard) {
       setConfirming(true);
       return;
@@ -167,7 +171,7 @@ export function CustomPluginFrame({
       document.documentElement.classList.contains("dark") ? "dark" : "light",
     [screenUrl],
   );
-  const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}${panelBinding ? "&panel=1" : ""}`;
+  const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}${panelBinding ? `&panel=1${panelBinding.reusable ? "&standby=1" : ""}` : ""}`;
   const frameKey = `${shellUrl}#${attempt}:${sessionRevision}`;
   const settingsPath = `/extensions/${encodeURIComponent(pluginId)}/settings`;
 
@@ -184,6 +188,7 @@ export function CustomPluginFrame({
       child.current = null;
       setConfirming(false);
       setPanel(null);
+      setPrepared(false);
       frameRef.current?.contentWindow?.postMessage(
         {
           ns: "savia-plugin-ui",
@@ -208,7 +213,7 @@ export function CustomPluginFrame({
   // Start that authenticated tenant request alongside the shell/entry fetch;
   // widgets do not need package settings and therefore skip this prefetch.
   useEffect(() => {
-    if (!screen) {
+    if (!screen || panelBinding?.reusable) {
       prefetchedSettings.current = null;
       return;
     }
@@ -280,18 +285,20 @@ export function CustomPluginFrame({
               type: "init",
               nonce: ui.nonce,
               session: uiSession.current,
-              panel: binding?.context ?? null,
+              panel: binding?.reusable ? null : binding?.context ?? null,
             },
             "*",
           );
+          if (binding?.reusable && binding.context) frame.postMessage({ ns: "savia-plugin-ui", version: 1, type: "activate", session: uiSession.current, panel: binding.context }, "*");
           return;
         }
         if (!uiSession.current || ui.session !== uiSession.current) return;
         if (binding) {
-          if (ui.panelId === binding.context.panelId)
+          if (binding.context && ui.panelId === binding.context.panelId)
             binding.onEvent(ui, frame);
           return;
         }
+        if (ui.type === "prepare") { setPrepared(true); return; }
         if (ui.type === "open" && typeof ui.id === "string") {
           const active = controller.current.open(ui.id, ui.request);
           if (active) setPanel({ ...active });
@@ -312,6 +319,12 @@ export function CustomPluginFrame({
       }
       const message = event.data as Partial<PluginFrameRequest>;
       if (!message || message.ns !== "savia-plugin") return;
+      if (panelBindingRef.current?.reusable && message.type !== "prepared" &&
+          (!panelBindingRef.current.context || message.panelId !== panelBindingRef.current.context.panelId)) return;
+      if (message.type === "prepared") {
+        if (panelBindingRef.current?.reusable) { setReadyFrame(frameKey); setLoadedUrl(frameKey); setFailedFrame(null); sendTheme(); }
+        return;
+      }
       if (message.type === "ready") {
         setLoadedUrl(frameKey);
         setReadyFrame(frameKey);
@@ -330,6 +343,7 @@ export function CustomPluginFrame({
             ns: "savia-plugin",
             type: "response",
             id: message.id,
+            panelId: message.panelId,
             ok: false,
             error: "Ruta no permitida para este plugin.",
           },
@@ -362,12 +376,14 @@ export function CustomPluginFrame({
           ));
         // A previous frame must never deliver a pending response to its replacement.
         if (source !== frameRef.current?.contentWindow) return;
+        if (panelBindingRef.current?.reusable && message.panelId !== panelBindingRef.current.context?.panelId) return;
         if (requestGeneration !== sessionGeneration.current) {
           frameRef.current?.contentWindow?.postMessage(
             {
               ns: "savia-plugin",
               type: "response",
               id: message.id,
+            panelId: message.panelId,
               ok: false,
               error: "La sesión cambió durante la solicitud.",
             },
@@ -380,6 +396,7 @@ export function CustomPluginFrame({
             ns: "savia-plugin",
             type: "response",
             id: message.id,
+            panelId: message.panelId,
             ok: true,
             data,
           },
@@ -387,11 +404,13 @@ export function CustomPluginFrame({
         );
       } catch (error) {
         if (source !== frameRef.current?.contentWindow) return;
+        if (panelBindingRef.current?.reusable && message.panelId !== panelBindingRef.current.context?.panelId) return;
         frameRef.current?.contentWindow?.postMessage(
           {
             ns: "savia-plugin",
             type: "response",
             id: message.id,
+            panelId: message.panelId,
             ok: false,
             error: error instanceof Error ? error.message : "Error del host.",
           },
@@ -421,10 +440,17 @@ export function CustomPluginFrame({
       child.current = null;
       setConfirming(false);
       setPanel(null);
+      setPrepared(false);
       window.removeEventListener("message", onMessage);
       observer.disconnect();
     };
   }, [frameKey]);
+
+  useEffect(() => {
+    if (!panelBinding?.reusable || !uiSession.current) return;
+    const context = panelBinding.context;
+    if (context) frameRef.current?.contentWindow?.postMessage({ ns: "savia-plugin-ui", version: 1, type: "activate", session: uiSession.current, panel: context }, "*");
+  }, [panelBinding?.context?.panelId, frameKey]);
 
   return (
     <>
@@ -467,10 +493,12 @@ export function CustomPluginFrame({
           className={`h-full w-full border-0 ${loadedUrl === frameKey ? "" : "invisible"}`}
         />
       </div>
-      {panel && !panelBinding && (
+      {(panel || prepared) && !panelBinding && (
         <PluginHostPanel
-          title={panel.request.title}
-          busy={panel.state.busy}
+          open={!!panel}
+          retained={prepared}
+          title={panel?.request.title ?? title}
+          busy={panel?.phase === "active" && panel.state.busy}
           confirming={confirming}
           closeRef={closeRef}
           onClose={() => requestClose()}
@@ -483,12 +511,13 @@ export function CustomPluginFrame({
         >
           <CustomPluginFrame
             pluginId={pluginId}
-            title={panel.request.title}
+            title={panel?.request.title ?? `${title} editor`}
             src={src}
             screen={screen}
             heightClassName="h-full border-0 rounded-none"
             panelBinding={{
-              context: { panelId: panel.id, request: panel.request },
+              context: panel ? { panelId: panel.id, request: panel.request } : null,
+              reusable: prepared,
               onFrame: (frame, session) => {
                 child.current = frame ? { frame, session } : null;
               },
@@ -501,7 +530,7 @@ export function CustomPluginFrame({
               },
               onRetry: (retry) => {
                 const active = controller.current.current;
-                if (!active || active.state.busy) return;
+                if (!active || (active.phase === "active" && active.state.busy)) return;
                 if (active.state.dirty) {
                   retryAction.current = retry;
                   setConfirming(true);
