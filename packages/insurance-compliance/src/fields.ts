@@ -7,9 +7,9 @@ export const stages = [
   { value: "waived", label: "Exento" },
 ];
 export const fields: Field[] = [
-  { key: "name", label: "Requisito", required: true, maxLength: 160 },
-  { key: "customer", label: "Cliente", required: true },
-  { key: "owner", label: "Responsable", required: true, maxLength: 120 },
+  { key: "name", lookup: true, label: "Requisito", required: true, maxLength: 160 },
+  { key: "customer", lookup: true, label: "Cliente", required: true },
+  { key: "owner", lookup: true, label: "Responsable", required: true, maxLength: 120 },
   {
     key: "due_date",
     label: "Compromiso de revisión",
@@ -24,7 +24,7 @@ export const fields: Field[] = [
     required: true,
   },
   {
-    key: "evidence",
+    key: "evidence", lookup: true,
     label: "Referencia de evidencia",
     requiredStages: ["approved"],
     maxLength: 500,

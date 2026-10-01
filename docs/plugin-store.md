@@ -575,3 +575,38 @@ and bulk operations do not gain offline persistence.
 refresh without remounting the editor or resetting its filters. Call its returned
 unsubscribe function when unmounting. See [local-first collections](local-first-collections.md)
 for preparation, authorization and conflict behavior.
+
+## Tenant-configured field lookups
+
+Store screens can opt compatible text fields into tenant customization with
+`lookupFields: ["customer", "owner"]` in their `store.json` screen declaration.
+The installed, enabled version controls which fields are offered in **Screens →
+Configure → Connected fields**. Workbench fields opt in with `lookup: true`.
+Custom renderers can read the same metadata through `collection.describe()`;
+declaring a field does not automatically change a custom renderer.
+
+A tenant administrator chooses a readable/listable collection, display field,
+one to five search fields, and an optional equality filter. The configuration
+lives in the source object's existing versioned schema as
+`fields.<field>.config.pluginLookup`. Saving uses the schema authorization,
+validation, version-conflict and audit path. It does not store provider
+credentials in the plugin. Connected collections use their normal adapter and
+its capabilities; unsupported searches remain explicit errors.
+
+The lookup records a label snapshot in the original text field and the selected
+record ID in a separate optional text field. This is a logical reference, not a
+database foreign key or an automatic synchronization of customer names. Writes do
+not enforce target existence; consumers must resolve stored IDs through the normal
+target collection API and its ACL, never treat an ID as authorization. Legacy
+text is preserved and never matched automatically. Changing the source collection
+allocates a new ID field, retaining previous references without interpreting them
+against a different collection. Disabling a lookup retains the fields and data.
+
+The picker searches in bounded pages rather than loading the entire collection.
+It uses the normal ACL-filtered collection API, including field and row access,
+and the existing local transport when supported. Connected sources still need
+their server connection. The plugin never acquires permissions beyond the signed-in
+user. A missing/inaccessible selection keeps its existing text snapshot; users
+can explicitly replace or clear it. Editing search text alone does not overwrite
+a saved selection. Selecting a result saves its ID and text together in the
+normal record mutation (and local outbox when supported).

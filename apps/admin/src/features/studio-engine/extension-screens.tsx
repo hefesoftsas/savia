@@ -1,4 +1,7 @@
-import { resolveLocalizedContent, type PluginLocale } from "@savia/studio-shared/plugin-localization";
+import {
+  resolveLocalizedContent,
+  type PluginLocale,
+} from "@savia/studio-shared/plugin-localization";
 import {
   releaseCatalog,
   type ExtensionScreenContribution,
@@ -18,6 +21,7 @@ export type ExtensionScreenInstallation = {
 };
 
 export type StoreScreenDeclaration = {
+  lookupFields?: string[];
   object: string;
   view: string;
   hidden?: boolean;
@@ -154,4 +158,22 @@ export function localizedExtensionObjectLabel(
   return manifest
     ? resolveLocalizedContent(label, manifest.labels, locale)
     : label;
+}
+
+/** Only active installed plugin declarations expose configurable field bindings. */
+export function pluginLookupFields(
+  object: string,
+  extensions: readonly StoreScreenInstallation[] | undefined,
+): string[] {
+  return [
+    ...new Set(
+      (extensions ?? [])
+        .filter((e) => e.installed?.enabled === true)
+        .flatMap((e) =>
+          (e.screens ?? [])
+            .filter((s) => s.object === object)
+            .flatMap((s) => s.lookupFields ?? []),
+        ),
+    ),
+  ];
 }

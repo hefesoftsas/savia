@@ -3,6 +3,7 @@ import { useWorkbenchMessages } from "./localization";
 import { Attachments } from "./attachments";
 import { Drawer } from "./drawer";
 import { linkedFields } from "./linked-fields";
+import { RecordLookup } from "./record-lookup";
 import { validateFields } from "./schema";
 import type { Field } from "./types";
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
@@ -53,7 +54,12 @@ export function RecordEditor({
       alive = false;
     };
   }, [savia, config, record]);
-  const allFields = [...config.fields, ...extraFields];
+  const extrasByKey = new Map(extraFields.map((field) => [field.key, field]));
+  const configuredKeys = new Set(config.fields.map((field) => field.key));
+  const allFields = [
+    ...config.fields.map((field) => ({ ...field, ...extrasByKey.get(field.key) })),
+    ...extraFields.filter((field) => !configuredKeys.has(field.key)),
+  ];
   const [mode, setMode] = useState(
     savia.ui?.panel?.request.params.mode ?? "details",
   );
@@ -212,7 +218,8 @@ export function RecordEditor({
             if (
               event.key === "Enter" &&
               event.target instanceof HTMLInputElement &&
-              event.target.type !== "file"
+              event.target.type !== "file" &&
+              !event.target.closest("[data-iw-lookup-picker]")
             ) {
               event.preventDefault();
               if (formRef.current?.reportValidity()) void save(event);
@@ -272,7 +279,7 @@ export function RecordEditor({
                 </label>
               </>
             ) : (
-              allFields.map((field) => (
+              allFields.filter((field) => !field.hidden).map((field) => (
                 <div
                   key={field.key}
                   className={field.type === "textarea" ? "iw-wide" : undefined}
@@ -284,7 +291,32 @@ export function RecordEditor({
                       <span aria-hidden="true"> *</span>
                     )}
                   </label>
-                  {field.type === "select" ? (
+                  {field.lookup === true && field.lookupConfig ? (
+                    <RecordLookup
+                      savia={savia}
+                      fieldKey={field.key}
+                      label={field.label}
+                      mapping={field.lookupConfig}
+                      snapshot={String(values[field.key] ?? "")}
+                      referenceId={String(values[field.lookupConfig.idField] ?? "")}
+                      disabled={busy || operationBusy}
+                      t={t}
+                      onSelect={(id, label) =>
+                        setValues((current) => ({
+                          ...current,
+                          [field.key]: label,
+                          [field.lookupConfig!.idField]: id,
+                        }))
+                      }
+                      onClear={() =>
+                        setValues((current) => ({
+                          ...current,
+                          [field.key]: null,
+                          [field.lookupConfig!.idField]: null,
+                        }))
+                      }
+                    />
+                  ) : field.type === "select" ? (
                     <select
                       id={`iw-field-${field.key}`}
                       aria-describedby={

@@ -149,6 +149,7 @@ import {
   isStorePluginScreen,
   storeScreenDefaultHidden,
   storeScreenFor,
+  pluginLookupFields,
   type StoreScreenInstallation,
 } from "./extension-screens";
 import { CustomPluginFrame } from "./custom-plugin-frame";
@@ -167,6 +168,7 @@ const Records = lazy(() => import("./records"));
 const CollectionSourcesPanel = lazy(() => import("./collection-sources-panel"));
 const ServiceCredentials = lazy(() => import("./service-credentials"));
 const Operations = lazy(() => import("./operations"));
+const PluginLookupSettings = lazy(() => import("./plugin-lookup-settings"));
 const CollectionRelations = lazy(() => import("./collection-relations"));
 const RecordDetail = lazy(() => import("./record-detail"));
 const Designer = lazy(() => import("./designer"));
@@ -1251,7 +1253,11 @@ function App({
           ) : storeScreen ? (
             <CustomPluginFrame
               pluginId={storeScreen.extensionId}
-              installationVersion={extensionInstallations?.find(entry => entry.manifest.id === storeScreen.extensionId)?.installed?.version}
+              installationVersion={
+                extensionInstallations?.find(
+                  (entry) => entry.manifest.id === storeScreen.extensionId,
+                )?.installed?.version
+              }
               title={object?.label ?? storeScreen.object}
               screen={{ object: storeScreen.object, view: storeScreen.view }}
             />
@@ -1626,6 +1632,17 @@ function App({
                 )}
               </Suspense>
             </>
+          ) : view === "screen-lookups" &&
+            objects.some((o) => o.name === selected) ? (
+            <Suspense fallback={<Loading />}>
+              <PluginLookupSettings
+                object={objects.find((o) => o.name === selected)!}
+                objects={objects}
+                fields={pluginLookupFields(selected, extensionInstallations)}
+                onSaved={refresh}
+                onBack={() => navigate(selected, "admin-screen")}
+              />
+            </Suspense>
           ) : view === "relations" || view === "screen-relations" ? (
             <Suspense fallback={<Loading />}>
               <CollectionRelations

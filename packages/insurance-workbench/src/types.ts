@@ -2,6 +2,7 @@ import type { PluginMessages } from "@savia/studio-shared/plugin-localization";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import type { ReactNode } from "react";
 import type { WorkRecord } from "./data";
+import type { PluginLookup } from "@savia/studio-shared/plugin-field-lookups";
 export type Field = {
   key: string;
   label: string;
@@ -13,6 +14,12 @@ export type Field = {
   maxLength?: number;
   options?: readonly { value: string; label: string }[];
   help?: string;
+  /** Render as a remote collection picker when the tenant field has a lookup mapping. */
+  lookup?: boolean;
+  /** Runtime mapping resolved from tenant field metadata. */
+  lookupConfig?: PluginLookup;
+  /** Retain in mutation patches without rendering a second input. */
+  hidden?: boolean;
 };
 export type WorkbenchConfig = {
   messages?: PluginMessages;

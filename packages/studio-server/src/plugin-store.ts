@@ -1126,6 +1126,9 @@ function collection(name, local = false) {
       if (options.q) {
         params.set("q", options.q);
       }
+      if (options.searchFields?.length) {
+        params.set("searchFields", options.searchFields.join(","));
+      }
       return send("/records/" + resource + "?" + params, "GET");
     },
     async get(id) {
