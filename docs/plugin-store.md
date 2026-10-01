@@ -613,3 +613,6 @@ normal record mutation (and local outbox when supported).
 
 Plugin screens, hosted forms, and the plugin catalog reuse Savia’s branded loading
 indicator within their content area. Failed frame startup retains its retry action.
+
+For scaffolding, shared SDK/UI packages, automated local rebuilds, and test doubles,
+see [Plugin development](guides/plugin-development.md).

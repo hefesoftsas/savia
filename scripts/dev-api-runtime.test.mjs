@@ -50,6 +50,10 @@ test("isolates core and connector configs while supplying their scoped secret va
     const config = JSON.parse(await readFile(path, "utf8"));
     assert.equal(config.d1_databases[0].database_id, "local");
     assert.equal(config.vars, undefined);
+    assert.equal(
+      config.main,
+      resolve(root, "scripts/plugin-development/worker.ts"),
+    );
     const file = resolve(path, "../.dev.vars");
     const vars = parseEnv(await readFile(file, "utf8"));
     assert.equal(vars.NANGO_API_KEY, "environment-key");
@@ -62,6 +66,11 @@ test("isolates core and connector configs while supplying their scoped secret va
   );
   assert.equal(coreVars.EXTENSION_CONNECTIONS_ENCRYPTION_KEY, "connector-key");
   assert.match(coreVars.STUDIO_INTEGRATION_KEY, /^[a-f0-9]{64}$/);
+  assert.match(coreVars.SAVIA_PLUGIN_DEV_KEY, /^[a-f0-9]{64}$/);
+  assert.notEqual(
+    coreVars.SAVIA_PLUGIN_DEV_KEY,
+    coreVars.STUDIO_INTEGRATION_KEY,
+  );
   const keyFile = resolve(
     root,
     "apps/api/.wrangler/local-runtime/studio-integration-key",

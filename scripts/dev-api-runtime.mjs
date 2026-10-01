@@ -109,6 +109,20 @@ export async function prepareApiRuntime(
       }
       await chmod(keyFile, 0o600);
     }
+    if (name === "core") {
+      const devKeyFile = resolve(runtime, "plugin-development-key");
+      try {
+        await writeFile(devKeyFile, randomBytes(32).toString("hex"), {
+          flag: "wx",
+          mode: 0o600,
+        });
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+      await chmod(devKeyFile, 0o600);
+      vars.SAVIA_PLUGIN_DEV_KEY = await readFile(devKeyFile, "utf8");
+      config.main = resolve(root, "scripts/plugin-development/worker.ts");
+    }
     const configFile = resolve(target, "wrangler.json");
     const variablesFile = resolve(target, ".dev.vars");
     await writeFile(configFile, JSON.stringify(config, null, 2), {

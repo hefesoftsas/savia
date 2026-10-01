@@ -1,6 +1,13 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLocalSession, clearSessionCache } from "./session";
+import {
+  createLocalSession,
+  clearSessionCache,
+  readWorkspaceMetadata,
+  removeWorkspaceMetadata,
+  removeWorkspacePluginMetadata,
+  writeWorkspaceMetadata,
+} from "./session";
 import type { AuthSession } from "@/auth/auth-session";
 const permissions = {
   canReadDocuments: true,
@@ -149,3 +156,23 @@ it("coalesces concurrent ensureLease calls when verifying remote credentials", a
   expect(proof).toHaveBeenCalledTimes(1);
 });
 
+it("plugin development invalidation clears current-principal transport caches only", async () => {
+  const principal = JSON.stringify(["test-api", "plugin-user"]);
+  const transport = JSON.stringify([principal, "/api", { canRead: true }]);
+  const otherPrincipal = JSON.stringify(["test-api", "another-user"]);
+  const keys = [
+    `${principal}:local-catalog`,
+    `${transport}:metadata:/api/objects`,
+    `${transport}:metadata:/api/extensions`,
+    `${transport}:objects`,
+    `${JSON.stringify([otherPrincipal, "/api", {}])}:metadata:/api/objects`,
+  ];
+  await Promise.all(keys.map((key) => writeWorkspaceMetadata(key, key)));
+
+  await removeWorkspacePluginMetadata(principal);
+
+  for (const key of keys.slice(0, 4))
+    expect(await readWorkspaceMetadata(key)).toBeUndefined();
+  expect(await readWorkspaceMetadata(keys[4])).toBe(keys[4]);
+  await Promise.all(keys.map((key) => removeWorkspaceMetadata(key)));
+});
