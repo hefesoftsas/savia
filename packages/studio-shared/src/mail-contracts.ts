@@ -13,7 +13,10 @@ export const mailContextReferenceSchema = z
       .trim()
       .min(1)
       .max(200)
-      .refine((value) => !/[\u0000-\u001f]/.test(value)),
+      .refine(
+        (value) =>
+          !/[\u0000-\u001f]/.test(value) && value !== "." && value !== "..",
+      ),
     fields: z
       .array(identifier)
       .min(1)
@@ -34,7 +37,11 @@ export const sendPersonalMailSchema = z
         (value) => !/[\r\n\u0000]/.test(value),
         "Subject must not contain line breaks",
       ),
-    body: z.string().trim().min(1).max(10000),
+    body: z
+      .string()
+      .min(1)
+      .max(10000)
+      .refine((value) => value.trim().length > 0, "Message must not be blank"),
     context: z.array(mailContextReferenceSchema).max(10).optional(),
   })
   .strict();

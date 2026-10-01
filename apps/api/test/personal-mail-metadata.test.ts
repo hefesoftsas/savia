@@ -8,13 +8,11 @@ import type {
 function setup(provider: "gmail" | "outlook", responses: unknown[]) {
   const paths: string[] = [];
   const repository = {
-    findActiveConnection: vi
-      .fn()
-      .mockResolvedValue({
-        status: "connected",
-        provider,
-        externalAccountLabel: "member@gmail.com",
-      }),
+    findActiveConnection: vi.fn().mockResolvedValue({
+      status: "connected",
+      provider,
+      externalAccountLabel: "member@gmail.com",
+    }),
   } as unknown as PersonalIntegrationRepository;
   const nango = {
     proxy: vi.fn(async ({ path }: { path: string }) => {
@@ -104,5 +102,42 @@ describe("personal inbox", () => {
       new URL(paths[0]!, "https://example.test").searchParams.get("$filter"),
     ).toBe("contains(subject,'renewal')");
     expect(messages[0]?.webLink).toBeNull();
+  });
+});
+
+it("keeps failed Gmail hydration rows and bounds provider metadata concurrency", async () => {
+  let active = 0;
+  let maximum = 0;
+  let reads = 0;
+  const repository = {
+    findActiveConnection: async () => ({ status: "connected" }),
+  } as unknown as PersonalIntegrationRepository;
+  const nango = {
+    proxy: async ({ path }: { path: string }) => {
+      if (path.includes("messages?"))
+        return Response.json({
+          messages: Array.from({ length: 30 }, (_, id) => ({ id: String(id) })),
+        });
+      ++active;
+      maximum = Math.max(maximum, active);
+      ++reads;
+      await Promise.resolve();
+      await Promise.resolve();
+      --active;
+      return new Response(null, { status: 502 });
+    },
+  } as unknown as PersonalIntegrationNangoClient;
+  const messages = await new PersonalIntegrationOperations(
+    repository,
+    nango,
+  ).listMessages({ principalId: "owner", provider: "gmail" });
+  expect(messages).toHaveLength(25);
+  expect(reads).toBe(25);
+  expect(maximum).toBeLessThanOrEqual(4);
+  expect(messages[0]).toMatchObject({
+    id: "0",
+    subject: null,
+    receivedAt: null,
+    webLink: null,
   });
 });

@@ -217,21 +217,30 @@ export function useMyDayWidgets(
   );
 
   const reorder = useCallback(
-    (activeId: string, overId: string) => {
-      const widgets = layout?.widgets ?? [];
+    (activeId: string, overId: string, visibleIds?: string[]) => {
+      const all = layout?.widgets ?? [];
+      const widgets = visibleIds
+        ? all.filter((widget) => visibleIds.includes(widget.id))
+        : all;
       const from = widgets.findIndex((widget) => widget.id === activeId);
       const to = widgets.findIndex((widget) => widget.id === overId);
       if (from < 0 || to < 0 || from === to) return Promise.resolve(false);
       const next = [...widgets];
       const [entry] = next.splice(from, 1);
       next.splice(to, 0, entry);
-      return persist({ version: 1, widgets: next }, null);
+      let position = 0;
+      const ordered = visibleIds
+        ? all.map((widget) =>
+            visibleIds.includes(widget.id) ? next[position++]! : widget,
+          )
+        : next;
+      return persist({ version: 1, widgets: ordered }, null);
     },
     [layout, persist],
   );
 
   const hasSystemWidget = useCallback(
-    (kind: "agenda" | "quick_task") =>
+    (kind: "agenda" | "quick_task" | "mail") =>
       (layout?.widgets ?? []).some((widget) => widget.kind === kind),
     [layout],
   );

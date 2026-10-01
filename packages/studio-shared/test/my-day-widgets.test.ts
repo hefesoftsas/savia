@@ -6,12 +6,13 @@ import {
 } from "../src/my-day-widgets";
 
 describe("my-day widgets layout", () => {
-  it("defaults to agenda plus quick task", () => {
+  it("defaults to agenda, quick task, and personal mail", () => {
     expect(defaultMyDayWidgets()).toEqual({
       version: 1,
       widgets: [
         { id: "agenda", kind: "agenda", size: "lg" },
         { id: "quick_task", kind: "quick_task", size: "md" },
+        { id: "mail", kind: "mail", size: "md" },
       ],
     });
   });
@@ -118,4 +119,18 @@ describe("my-day widgets layout", () => {
       expect(id).toMatch(/^[a-z0-9_-]{1,48}$/);
     }
   });
+});
+
+it("accepts mail without a collection and preserves existing layouts", () => {
+  expect(
+    parseMyDayWidgets({ version: 1, widgets: [{ id: "mail", kind: "mail" }] })
+      .widgets[0],
+  ).toEqual({ id: "mail", kind: "mail", size: "md" });
+  expect(parseMyDayWidgets({ version: 1, widgets: [] }).widgets).toEqual([]);
+  expect(() =>
+    parseMyDayWidgets({
+      version: 1,
+      widgets: [{ id: "mail", kind: "mail", collection: "contacts" }],
+    }),
+  ).toThrow();
 });

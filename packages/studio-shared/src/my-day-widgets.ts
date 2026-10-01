@@ -7,7 +7,7 @@ export const myDayWidgetKinds = [
   "actions",
 ] as const;
 
-export const myDaySystemWidgetKinds = ["agenda", "quick_task"] as const;
+export const myDaySystemWidgetKinds = ["agenda", "quick_task", "mail"] as const;
 
 export type MyDayWidgetKind = (typeof myDayWidgetKinds)[number];
 export type MyDaySystemWidgetKind = (typeof myDaySystemWidgetKinds)[number];
@@ -105,6 +105,7 @@ export function defaultMyDayWidgets(): MyDayWidgetsLayout {
     widgets: [
       { id: "agenda", kind: "agenda", size: "lg" },
       { id: "quick_task", kind: "quick_task", size: "md" },
+      { id: "mail", kind: "mail", size: "md" },
     ],
   };
 }
@@ -159,7 +160,11 @@ export function createMyDayWidgetId(): string {
 export function isMyDaySystemWidget(
   widget: MyDayWidget,
 ): widget is z.infer<typeof myDaySystemWidgetSchema> {
-  return widget.kind === "agenda" || widget.kind === "quick_task";
+  return (
+    widget.kind === "agenda" ||
+    widget.kind === "quick_task" ||
+    widget.kind === "mail"
+  );
 }
 
 export function isMyDayCollectionWidget(

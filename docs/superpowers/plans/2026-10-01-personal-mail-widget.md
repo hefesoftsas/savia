@@ -124,3 +124,24 @@ and are best integrated in dependency order. A focused independent final review
 should inspect provider ownership, context authorization, and identity lifecycle
 before completion. Preserve the current worktree and contributors' edits; do not
 create a sidebar task or publish a deployment for this implementation.
+
+## Execution results
+
+Implemented all six task areas in the current worktree. Tasks 1–2 were committed
+together because they modify the same routes and operations. Final integration
+includes the generated OpenAPI types and a regression for the preferences schema.
+The independent review found two issues (hidden connection errors and trimmed
+message whitespace); both were corrected and covered by regression tests.
+
+Verification: 75 focused admin tests, 51 focused API tests, and 18 final preferences
+tests passed. The complete shared suite passed 258 tests; studio-server passed
+307 with 7 skipped. Type checking passed in admin, API, shared, and studio-server.
+Changed-file formatting and diff whitespace checks passed. Broad regression runs
+reported a screen-management timeout and an API contract failure while its schema
+was being corrected; the affected files passed isolated reruns after the fix.
+
+Desktop and mobile layouts were inspected with controlled provider responses.
+Temporary preview files and the preview server were removed. Live Gmail/Outlook
+accounts and real email sending were not tested. Gmail returns no supported native
+message link, so its rows show the documented unavailable-link state; Outlook
+links open in a new tab.

@@ -71,3 +71,34 @@ describe("mail context authorization", () => {
     expect(sendPersonalMailSchema.safeParse(valid).success).toBe(true);
   });
 });
+it("preserves deliberate whitespace in the editable plain-text body", () => {
+  const body = "\n  Formatted introduction\n\n";
+  expect(
+    sendPersonalMailSchema.parse({
+      provider: "gmail",
+      to: ["ana@example.com"],
+      subject: "Hi",
+      body,
+    }).body,
+  ).toBe(body);
+  expect(
+    sendPersonalMailSchema.safeParse({
+      provider: "gmail",
+      to: ["ana@example.com"],
+      subject: "Hi",
+      body: "  \n",
+    }).success,
+  ).toBe(false);
+});
+it("rejects dot record IDs that normalize as path traversal", () => {
+  for (const recordId of [".", ".."])
+    expect(
+      sendPersonalMailSchema.safeParse({
+        provider: "gmail",
+        to: ["ana@example.com"],
+        subject: "Hi",
+        body: "Hello",
+        context: [{ ...reference, recordId }],
+      }).success,
+    ).toBe(false);
+});

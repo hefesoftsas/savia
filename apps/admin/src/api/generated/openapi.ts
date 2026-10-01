@@ -6126,7 +6126,7 @@ export interface paths {
       parameters: {
         query: {
           provider: "gmail" | "outlook";
-          query: string;
+          query?: string;
         };
         header?: never;
         path?: never;
@@ -6146,6 +6146,7 @@ export interface paths {
                 subject: string | null;
                 sender: string | null;
                 receivedAt: string | null;
+                webLink: string | null;
               }[];
             };
           };
@@ -6174,7 +6175,85 @@ export interface paths {
       };
     };
     put?: never;
-    post?: never;
+    /** Send caller-confirmed mail from a personal mailbox */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            provider: "gmail" | "outlook";
+            to: string[];
+            subject: string;
+            body: string;
+            context?: {
+              apiBasePath: string;
+              collection: string;
+              recordId: string;
+              fields: string[];
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Mail submitted */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                provider: "gmail" | "outlook";
+                /** @enum {string} */
+                action: "send-email";
+              };
+            };
+          };
+        };
+        /** @description Invalid mail */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Context access denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Context record missing */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Provider request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Connection unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
     delete?: never;
     options?: never;
     head?: never;
@@ -6769,7 +6848,7 @@ export interface paths {
                   | {
                       id: string;
                       /** @enum {string} */
-                      kind: "agenda" | "quick_task";
+                      kind: "agenda" | "quick_task" | "mail";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";
@@ -6829,7 +6908,7 @@ export interface paths {
                   | {
                       id: string;
                       /** @enum {string} */
-                      kind: "agenda" | "quick_task";
+                      kind: "agenda" | "quick_task" | "mail";
                       title?: string;
                       /** @enum {string} */
                       size?: "sm" | "md" | "lg";

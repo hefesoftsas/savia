@@ -374,6 +374,7 @@ describe("user sidebar navigation preferences", () => {
         widgets: [
           { id: "agenda", kind: "agenda", size: "lg" },
           { id: "quick_task", kind: "quick_task", size: "md" },
+          { id: "mail", kind: "mail", size: "md" },
         ],
       },
     });
@@ -419,6 +420,7 @@ describe("user sidebar navigation preferences", () => {
         widgets: [
           { id: "agenda", kind: "agenda", size: "lg" },
           { id: "quick_task", kind: "quick_task", size: "md" },
+          { id: "mail", kind: "mail", size: "md" },
         ],
       },
     });
@@ -477,46 +479,49 @@ describe("user sidebar navigation preferences", () => {
     await expect(response.json()).resolves.toEqual({ data: layout });
   });
 
-  it("persists agenda system widgets without a collection", async () => {
-    const layout = {
-      version: 1 as const,
-      widgets: [
-        { id: "agenda", kind: "agenda" as const, size: "lg" as const },
-        {
-          id: "w_clientes1",
-          apiBasePath: "/v1/dynamic-crm/101",
-          collection: "clientes",
-          kind: "items" as const,
-        },
-      ],
-    };
-    const response = await appFor("principal-a").request(
-      "https://savia.test/v1/user-preferences/my-day-widgets",
-      {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(layout),
-      },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      data: {
-        version: 1,
+  it.each(["agenda", "mail"] as const)(
+    "persists %s system widgets without a collection",
+    async (kind) => {
+      const layout = {
+        version: 1 as const,
         widgets: [
-          { id: "agenda", kind: "agenda", size: "lg" },
+          { id: kind, kind, size: "lg" as const },
           {
             id: "w_clientes1",
             apiBasePath: "/v1/dynamic-crm/101",
             collection: "clientes",
-            kind: "items",
-            size: "md",
-            config: { limit: 5, sort: "updated_at", order: "DESC" },
+            kind: "items" as const,
           },
         ],
-      },
-    });
-  });
+      };
+      const response = await appFor("principal-a").request(
+        "https://savia.test/v1/user-preferences/my-day-widgets",
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(layout),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        data: {
+          version: 1,
+          widgets: [
+            { id: kind, kind, size: "lg" },
+            {
+              id: "w_clientes1",
+              apiBasePath: "/v1/dynamic-crm/101",
+              collection: "clientes",
+              kind: "items",
+              size: "md",
+              config: { limit: 5, sort: "updated_at", order: "DESC" },
+            },
+          ],
+        },
+      });
+    },
+  );
 });
 
 it("round trips the navigation preset version and newly addressable tools", () => {
@@ -531,4 +536,16 @@ it("round trips the navigation preset version and newly addressable tools", () =
       "tenant-branding",
     ]),
   );
+});
+
+it("documents the persisted mail system widget in generated OpenAPI", () => {
+  const document = appFor("principal-a").getOpenAPI31Document({
+    openapi: "3.1.0",
+    info: { title: "Test", version: "1" },
+  });
+  const response =
+    document.paths?.["/v1/user-preferences/my-day-widgets"]?.get?.responses?.[
+      "200"
+    ];
+  expect(JSON.stringify(response)).toContain('"mail"');
 });
