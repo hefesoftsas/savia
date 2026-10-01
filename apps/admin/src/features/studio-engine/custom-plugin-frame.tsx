@@ -18,11 +18,12 @@ import { automationMessages } from "@/i18n/locales/automation";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
-  type: "request" | "ready" | "error" | "prepared";
+  type: "request" | "ready" | "error" | "prepared" | "resize";
   id: string;
   path: string;
   method?: string;
   body?: unknown;
+  height?: number;
   panelId?: string;
   consistency?: string;
 };
@@ -77,9 +78,7 @@ export function CustomPluginFrame({
   src,
   screen,
   panelBinding,
-  heightClassName = screen
-    ? "h-[calc(100dvh-7rem)] min-h-[32rem]"
-    : "h-[480px]",
+  heightClassName,
 }: {
   pluginId: string;
   installationVersion?: string;
@@ -175,6 +174,13 @@ export function CustomPluginFrame({
   const [failedFrame, setFailedFrame] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [sessionRevision, setSessionRevision] = useState(0);
+  const [contentSize, setContentSize] = useState<{
+    frameKey: string;
+    height: number;
+  } | null>(null);
+  const fitContent =
+    Boolean(screen) && !panelBinding && heightClassName === undefined;
+  const frameHeightClass = heightClassName ?? (screen ? "" : "h-[480px]");
   const sessionGeneration = useRef(0);
   const prefetchedSettings = useRef<PrefetchedSettings | null>(null);
   const shellPath =
@@ -356,6 +362,20 @@ export function CustomPluginFrame({
       }
       const message = event.data as Partial<PluginFrameRequest>;
       if (!message || message.ns !== "savia-plugin") return;
+      if (message.type === "resize") {
+        if (
+          fitContent &&
+          typeof message.height === "number" &&
+          Number.isFinite(message.height) &&
+          message.height > 0
+        ) {
+          setContentSize({
+            frameKey,
+            height: Math.min(100_000, Math.ceil(message.height)),
+          });
+        }
+        return;
+      }
       if (
         panelBindingRef.current?.reusable &&
         message.type !== "prepared" &&
@@ -501,7 +521,7 @@ export function CustomPluginFrame({
       window.removeEventListener("message", onMessage);
       observer.disconnect();
     };
-  }, [frameKey]);
+  }, [frameKey, fitContent]);
 
   useEffect(() => {
     if (!panelBinding?.reusable || !uiSession.current) return;
@@ -586,7 +606,7 @@ export function CustomPluginFrame({
   ) : (
     <>
       <div
-        className={`relative w-full overflow-hidden rounded-md border bg-background ${heightClassName}`}
+        className={`relative w-full overflow-hidden rounded-md border bg-background ${frameHeightClass}`}
       >
         {failedFrame === frameKey ? (
           <div
@@ -618,7 +638,17 @@ export function CustomPluginFrame({
           title={title}
           onLoad={() => setLoadedUrl(frameKey)}
           onError={() => setFailedFrame(frameKey)}
-          className={`h-full w-full border-0 ${loadedUrl === frameKey ? "" : "invisible"}`}
+          style={
+            fitContent
+              ? {
+                  height:
+                    contentSize?.frameKey === frameKey
+                      ? contentSize.height
+                      : 512,
+                }
+              : undefined
+          }
+          className={`block h-full w-full border-0 ${loadedUrl === frameKey ? "" : "invisible"}`}
         />
       </div>
       {(panel || prepared) && !panelBinding && (

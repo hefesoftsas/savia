@@ -414,20 +414,20 @@ export function InsurancePackageAdminScreen({
 
   return (
     <main
-      className="extension-policy-screen"
+      className="insurance-package-screen"
       aria-label={t("Administrar Seguros")}
     >
-      <header className="extension-policy-heading">
+      <header className="insurance-package-heading">
         <div>
-          <p className="extension-policy-eyebrow">{t("Seguros")}</p>
+          <p className="insurance-package-eyebrow">{t("Seguros")}</p>
           <h1>{t("Administrar Seguros")}</h1>
-          <p className="extension-policy-empty">
+          <p className="insurance-package-description">
             {t("Controla qué se cotiza en este tenant.")}{" "}
           </p>
         </div>
       </header>
       {error ? (
-        <p className="extension-policy-error" role="alert">
+        <p className="insurance-package-error" role="alert">
           {t(error)}
         </p>
       ) : null}

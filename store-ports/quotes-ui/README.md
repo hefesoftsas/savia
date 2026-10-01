@@ -16,7 +16,7 @@ reales cuando esa extensión está activa en el tenant.
 
 ```bash
 pnpm store:pack store-ports/quotes-ui
-# dist/plugin-store/custom.quotes-ui-1.0.0.store.zip + SHA-256
+# dist/plugin-store/custom.quotes-ui-1.0.2.store.zip + SHA-256
 ```
 
 Luego súbelo en **Administrar pantallas → Paquetes y extensiones →
@@ -51,3 +51,9 @@ rm -f .tmp-gen-defaults.ts
 - Sin provisión de colecciones: el tenant necesita `clientes` /
   `cotizaciones_detalle` o el plugin muestra avisos.
   Ver `docs/plugin-store.md`.
+
+## Screen styles
+
+The adapter imports the shared quote tab stylesheet from `../quotes/entry.css`.
+Configuration and loading styles belong to the quote package and are embedded
+in the executable ZIP; they do not depend on Admin or the portfolio plugin.
