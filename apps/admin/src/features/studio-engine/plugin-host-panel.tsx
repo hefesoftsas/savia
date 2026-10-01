@@ -50,7 +50,7 @@ export function PluginHostPanel({
         <Dialog.Overlay className="fixed inset-0 z-[150] bg-black/40" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-[151] flex h-dvh w-full max-w-[960px] flex-col bg-background text-foreground shadow-xl outline-none"
+          className="fixed inset-y-0 right-0 z-[151] flex h-dvh w-full max-w-[640px] flex-col bg-background text-foreground shadow-xl outline-none motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200"
           onEscapeKeyDown={(event) => {
             event.preventDefault();
             if (!confirming) onClose();

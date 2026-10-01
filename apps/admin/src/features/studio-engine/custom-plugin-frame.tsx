@@ -453,7 +453,7 @@ export function CustomPluginFrame({
             role="status"
             className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm text-muted-foreground"
           >
-            {t("Cargando plugins…")}
+            {t(panelBinding ? "Cargando formulario…" : "Cargando plugins…")}
           </div>
         ) : null}
         <iframe

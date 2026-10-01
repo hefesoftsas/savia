@@ -12,13 +12,30 @@ export async function linkedFields(
     throw new Error(
       "No se pudo leer la colección. Cierra y actualiza antes de editar vínculos.",
     );
+  const entries = Object.entries(definition.config?.fields ?? {});
+  const relationLoads = new Map<string, ReturnType<typeof loadRecords>>();
+  for (const [key, field] of entries) {
+    if (configured.some((f) => f.key === key) || field.hidden || field.readOnly)
+      continue;
+    const relation = field.config?.relation;
+    if (
+      typeof relation === "string" &&
+      relation &&
+      !field.config?.multiple &&
+      !relationLoads.has(relation)
+    ) {
+      relationLoads.set(relation, loadRecords(savia, relation));
+    }
+  }
+  await Promise.all(relationLoads.values());
+
   const fields: Field[] = [];
-  for (const [key, field] of Object.entries(definition.config?.fields ?? {})) {
+  for (const [key, field] of entries) {
     if (configured.some((f) => f.key === key) || field.hidden || field.readOnly)
       continue;
     const relation = field.config?.relation;
     if (typeof relation === "string" && relation && !field.config?.multiple) {
-      const records = await loadRecords(savia, relation);
+      const records = await relationLoads.get(relation)!;
       const options = records.map((r) => ({
         value: r.id,
         label: text(r.name) || r.id,
