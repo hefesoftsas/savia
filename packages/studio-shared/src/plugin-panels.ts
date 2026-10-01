@@ -11,6 +11,7 @@ export type PluginPanelContext = {
 };
 export type PluginPanelApi = {
   panel: PluginPanelContext | null;
+  preparePanel?(): void;
   openPanel(request: PluginPanelRequest): Promise<PluginPanelResult>;
   setPanelState(state: PluginPanelState): void;
   requestClose(): void;
@@ -53,6 +54,7 @@ export function parsePanelRequest(value: unknown): PluginPanelRequest | null {
 export function connectPluginPanelHost(
   win: Window,
   panelExpected: boolean,
+  options?: { standby?: boolean; onChange?: (api: PluginPanelApi | null) => void },
 ): Promise<PluginPanelApi | undefined> {
   return new Promise((resolve, reject) => {
     const nonce = win.crypto.randomUUID();
@@ -115,7 +117,7 @@ export function connectPluginPanelHost(
           typeof m.session === "string" &&
           m.session
         ) {
-          if (panelExpected && !m.panel) return;
+          if (panelExpected && !m.panel && !options?.standby) return;
           initialized = true;
           session = m.session;
           context = m.panel ?? null;
@@ -124,6 +126,16 @@ export function connectPluginPanelHost(
           return;
         }
         if (!initialized || m.session !== session) return;
+        if (options?.standby && m.type === "activate" && !context &&
+            typeof m.panel?.panelId === "string" && m.panel.panelId &&
+            m.panel.request?.view === "record-editor") {
+          context = m.panel;
+          options.onChange?.(handlers.snapshot(context!));
+        }
+        if (options?.standby && m.type === "deactivate" && context && m.panelId === context.panelId) {
+          context = null;
+          options.onChange?.(null);
+        }
         if (m.type === "result" && pending && m.id === pending.id) {
           const slot = pending;
           pending = undefined;
@@ -137,9 +149,25 @@ export function connectPluginPanelHost(
         }
         if (m.type === "dispose") handlers.dispose();
       },
+      snapshot(activation: PluginPanelContext): PluginPanelApi {
+        return {
+          panel: activation,
+          openPanel: api.openPanel,
+          setPanelState(state) {
+            if (!disposed && context === activation) handlers.send("state", { panelId: activation.panelId, state });
+          },
+          requestClose() {
+            if (!disposed && context === activation) handlers.send("close", { panelId: activation.panelId });
+          },
+          completePanel(result) {
+            if (!disposed && context === activation) handlers.send("complete", { panelId: activation.panelId, result });
+          },
+        };
+      },
       dispose() {
         if (disposed) return;
         disposed = true;
+        if (context) { context = null; options?.onChange?.(null); }
         win.clearTimeout(timer);
         win.removeEventListener("message", handlers.onMessage);
         win.document.removeEventListener("keydown", handlers.onKey, true);
@@ -156,6 +184,9 @@ export function connectPluginPanelHost(
     const api: PluginPanelApi = {
       get panel() {
         return context;
+      },
+      preparePanel() {
+        if (!disposed && !panelExpected) handlers.send("prepare");
       },
       openPanel(request) {
         if (disposed || context || pending)

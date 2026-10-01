@@ -1064,11 +1064,15 @@ if (entryUrl.origin !== bootstrapUrl.origin ||
 const ENTRY_URL = entryUrl.href;
 const pending = new Map();
 let seq = 0;
-function callHost(path, method, body) {
+const standby = params.get("standby") === "1";
+let activePanelId = null;
+function requestHost(path, method, body, panelId) {
+  if (standby && (!panelId || panelId !== activePanelId))
+    return Promise.reject(new Error("The editor activation ended."));
   return new Promise((resolve, reject) => {
     const id = String(++seq);
-    pending.set(id, { resolve, reject });
-    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body }, "*");
+    pending.set(id, { resolve, reject, panelId });
+    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body, panelId }, "*");
     setTimeout(() => {
       if (pending.has(id)) {
         pending.delete(id);
@@ -1092,11 +1096,13 @@ addEventListener("message", (event) => {
   }
   if (!message || message.ns !== "savia-plugin" || message.type !== "response") return;
   const slot = pending.get(message.id);
-  if (!slot) return;
+  if (!slot || (standby && (slot.panelId !== activePanelId || message.panelId !== slot.panelId))) return;
   pending.delete(message.id);
   if (message.ok) slot.resolve(message.data);
   else slot.reject(new Error(message.error || "Error del host."));
 });
+function createSavia(panelId) {
+const callHost = (path, method, body) => requestHost(path, method, body, panelId);
 function collection(name) {
   const resource = encodeURIComponent(name);
   return {
@@ -1182,6 +1188,9 @@ const savia = {
     },
   },
 };
+return savia;
+}
+const savia = createSavia(null);
 // The sandbox has no direct network access. Forward /api/* calls to
 // the parent, which uses the current user's session and permissions.
 const nativeFetch = window.fetch.bind(window);
@@ -1193,7 +1202,7 @@ window.fetch = (resource, init) => {
     if (init && init.body !== undefined && typeof init.body === "string") {
       try { body = JSON.parse(init.body); } catch { body = undefined; }
     }
-    return callHost(url.slice("/api".length), method, body).then((data) =>
+    return requestHost(url.slice("/api".length), method, body, null).then((data) =>
       Response.json(data, { status: 200 }),
     );
   }
@@ -1204,8 +1213,41 @@ function selectRender(module, widgetId) {
   return module.widgets?.[widgetId] ?? module.renderWidget ?? module.render;
 }
 try {
-  savia.ui = await (${connectPluginPanelHost.toString()})(window, params.get("panel") === "1");
-  const module = await import(ENTRY_URL);
+  let module;
+  let cleanup;
+  let queuedApi = null;
+  const lifecycle = {
+    change(api) {
+      activePanelId = null;
+      const previous = cleanup;
+      cleanup = undefined;
+      if (previous) previous();
+      for (const [id, slot] of pending) {
+        pending.delete(id);
+        slot.reject(new Error("The editor activation ended."));
+      }
+      queuedApi = api;
+      if (!api || !module) return;
+      try {
+        if (typeof module.renderPanel !== "function") throw new Error("Reusable editor unavailable.");
+        activePanelId = api.panel.panelId;
+        const editor = createSavia(activePanelId);
+        editor.ui = api;
+        cleanup = module.renderPanel(document.getElementById("root"), editor);
+        if (typeof cleanup !== "function") throw new Error("Reusable editor must return cleanup.");
+        parent.postMessage({ ns: "savia-plugin", type: "ready", panelId: activePanelId }, "*");
+      } catch (error) {
+        parent.postMessage({ ns: "savia-plugin", type: "error", panelId: activePanelId }, "*");
+      }
+    }
+  };
+  savia.ui = await (${connectPluginPanelHost.toString()})(window, params.get("panel") === "1", { standby, onChange: (api) => lifecycle.change(api) });
+  module = await import(ENTRY_URL);
+  if (standby) {
+    if (typeof module.renderPanel !== "function") throw new Error("Reusable editor unavailable.");
+    parent.postMessage({ ns: "savia-plugin", type: "prepared" }, "*");
+    if (queuedApi) lifecycle.change(queuedApi);
+  } else {
   const widgetId = params.get("widget") ?? "";
   const widgetCollection = params.get("collection") ?? "";
   const screenObject = params.get("screen") ?? "";
@@ -1222,6 +1264,7 @@ try {
       screenObject ? { object: screenObject, view: screenView } : undefined);
   }
   parent.postMessage({ ns: "savia-plugin", type: "ready" }, "*");
+  }
 } catch (error) {
   document.getElementById("root").innerHTML =
     '<p class="plugin-error">' + String((error && error.message) || error) + "</p>";
@@ -1475,7 +1518,7 @@ export function registerPluginStore(
     );
     const screen = c.req.query("screen");
     const view = c.req.query("view");
-    const context = { ...(screen ? { screen, view: view || "records" } : {}), ...(c.req.query("panel") === "1" ? { panel: "1" } : {}) };
+    const context = { ...(screen ? { screen, view: view || "records" } : {}), ...(c.req.query("panel") === "1" ? { panel: "1", ...(c.req.query("standby") === "1" ? { standby: "1" } : {}) } : {}) };
     return new Response(
       shellHtml(
         id,
