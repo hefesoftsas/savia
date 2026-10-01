@@ -610,3 +610,6 @@ user. A missing/inaccessible selection keeps its existing text snapshot; users
 can explicitly replace or clear it. Editing search text alone does not overwrite
 a saved selection. Selecting a result saves its ID and text together in the
 normal record mutation (and local outbox when supported).
+
+Plugin screens, hosted forms, and the plugin catalog reuse Savia’s branded loading
+indicator within their content area. Failed frame startup retains its retry action.
