@@ -510,7 +510,8 @@ an inline editor when `savia.ui` is absent. Use
 from the list, omitting `recordId` to create a record. A saved result refreshes
 the list; cancellation preserves its filters, page and scroll.
 
-The host derives a second shell from the owning plugin and selected screen. It
+The host derives a second shell from the owning plugin and selected screen, when
+available. The store viewer can open panels without a selected screen. It
 passes `savia.ui.panel` through a source-checked, nonce-correlated handshake; the
 plugin renders only its editor in that frame. Arbitrary URLs, tenant overrides,
 unknown views and nested panels are rejected. Both frames retain the existing

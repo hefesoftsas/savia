@@ -785,3 +785,19 @@ it("allows closing failed editors and removes panels when identity changes", () 
   fireEvent(window, new Event("savia:identity-changed"));
   expect(screen.queryByTitle("Editor")).toBeNull();
 });
+it("opens a host editor from the store viewer without a selected screen", () => {
+  render(
+    <CustomPluginFrame pluginId="insurance.collections" title="Store viewer" />,
+  );
+  const owner = screen.getByTitle("Store viewer") as HTMLIFrameElement;
+  const host = handshake(owner);
+  uiMessage(owner, {
+    type: "open",
+    id: "store-editor",
+    session: host.session,
+    request: { view: "record-editor", title: "Store editor", params: {} },
+  });
+  const editor = screen.getByTitle("Store editor") as HTMLIFrameElement;
+  expect(new URL(editor.src).pathname).toBe(new URL(owner.src).pathname);
+  expect(new URL(editor.src).searchParams.get("panel")).toBe("1");
+});

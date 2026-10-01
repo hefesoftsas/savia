@@ -222,3 +222,53 @@ it("reports attachment uploads as busy until the operation settles", async () =>
     }),
   );
 });
+
+import { Screen as ActivitiesScreen } from "../../insurance-activities/src/admin";
+
+import { CollectionsScreen as CollectionsScreen } from "../../insurance-collections/src/admin";
+
+import { Screen as CommissionsScreen } from "../../insurance-commissions/src/admin";
+
+import { Screen as ClaimsScreen } from "../../insurance-claims/src/admin";
+
+import { Screen as ComplianceScreen } from "../../insurance-compliance/src/admin";
+
+import { Screen as IssuanceScreen } from "../../insurance-issuance/src/admin";
+
+import { Screen as EndorsementsScreen } from "../../insurance-endorsements/src/admin";
+
+import { Screen as DocumentsScreen } from "../../insurance-documents/src/admin";
+
+import { Screen as OpportunitiesScreen } from "../../insurance-opportunities/src/admin";
+
+import { Screen as ServiceScreen } from "../../insurance-service/src/admin";
+
+import { RenewalsScreen as RenewalsScreen } from "../../insurance-renewals/src/admin";
+
+it.each([
+  ActivitiesScreen,
+  CollectionsScreen,
+  CommissionsScreen,
+  ClaimsScreen,
+  ComplianceScreen,
+  IssuanceScreen,
+  EndorsementsScreen,
+  DocumentsScreen,
+  OpportunitiesScreen,
+  ServiceScreen,
+  RenewalsScreen,
+])(
+  "renders only the editor for each migrated plugin (%#)",
+  async (PluginScreen) => {
+    const a = api(true);
+    a.ui.panel!.request.params = {} as never;
+    const { container } = render(<PluginScreen savia={a.savia} />);
+    await waitFor(() =>
+      expect(container.querySelector("fieldset")).not.toBeDisabled(),
+    );
+    expect(container.querySelectorAll("form")).toHaveLength(1);
+    expect(container.querySelectorAll(".iw-workbench")).toHaveLength(1);
+    expect(container.querySelector(".iw-tools")).toBeNull();
+    expect(a.collection.list).not.toHaveBeenCalled();
+  },
+);

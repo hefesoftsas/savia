@@ -293,9 +293,7 @@ export function CustomPluginFrame({
           return;
         }
         if (ui.type === "open" && typeof ui.id === "string") {
-          const active = screen
-            ? controller.current.open(ui.id, ui.request)
-            : null;
+          const active = controller.current.open(ui.id, ui.request);
           if (active) setPanel({ ...active });
           else
             frame.postMessage(

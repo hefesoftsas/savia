@@ -40,6 +40,8 @@ export function HostedRecordEditor({
           const collection = savia.collections.collection(...args);
           return {
             ...collection,
+            get: (...a: Parameters<typeof collection.get>) =>
+              track(() => collection.get(...a)),
             create: (...a: Parameters<typeof collection.create>) =>
               track(() => collection.create(...a)),
             update: (...a: Parameters<typeof collection.update>) =>
