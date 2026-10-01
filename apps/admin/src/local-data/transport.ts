@@ -204,9 +204,12 @@ export function createLocalTransport(
               (!existing || existing.deleted_at != null)
             )
               return response("Registro no encontrado.", 404);
+            const deleteVersion = action === "delete" ? url.searchParams.get("version") : null;
+            if (deleteVersion !== null && (!/^\d+$/.test(deleteVersion) || !Number.isSafeInteger(Number(deleteVersion)) || Number(deleteVersion) < 1))
+              return response("La versión del registro no es válida.", 422);
             const input =
               action === "delete"
-                ? {}
+                ? (deleteVersion === null ? {} : { _version: Number(deleteVersion) })
                 : (JSON.parse(String(init.body ?? "{}")) as Record<
                     string,
                     unknown
@@ -230,7 +233,7 @@ export function createLocalTransport(
                 : typeof input._version === "number"
                   ? input._version
                   : existing?._version;
-            const data = await store.mutate(
+            const { data, mutationId } = await store.mutateWithReceipt(
               collection,
               action,
               id,
@@ -239,7 +242,7 @@ export function createLocalTransport(
             );
             // A durable local transaction, not a network acknowledgement, is success here.
             return Response.json(
-              { data, local: true },
+              { data, local: true, mutationId },
               { status: action === "create" ? 201 : 200 },
             );
           }

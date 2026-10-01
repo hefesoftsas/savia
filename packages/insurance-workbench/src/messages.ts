@@ -432,6 +432,8 @@ export const messages = {
     "Next",
     "Próxima"
   ],
+  "Revisa la sincronización: hay cambios que requieren atención.": ["Revisa la sincronización: hay cambios que requieren atención.", "Check synchronization: some changes need attention.", "Verifique a sincronização: há alterações que precisam de atenção."],
+  "Guardado en este dispositivo. Pendiente de sincronización.": ["Guardado en este dispositivo. Pendiente de sincronización.", "Saved on this device. Pending synchronization.", "Salvo neste dispositivo. Sincronização pendente."],
   "Cambios guardados.": [
     "Cambios guardados.",
     "Changes saved.",

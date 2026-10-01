@@ -14,7 +14,7 @@ export type { ExtensionScreenContribution } from "@savia/release-catalog";
 export type ExtensionScreenInstallation = {
   manifest: { id: string };
   builtIn: boolean;
-  installed: { enabled: boolean } | null;
+  installed: { enabled: boolean; version?: string } | null;
 };
 
 export type StoreScreenDeclaration = {

@@ -109,3 +109,9 @@ hosts. See [the panel protocol](../plugin-store.md#host-managed-editor-panels)
 for close/save lifecycle and release requirements. The shared Workbench provides
 this behavior for activities, collections, commissions, claims, compliance,
 issuance, endorsements, documents, opportunities, service and renewals.
+
+Workbench ports also export `renderPanel(element, savia)` with an unmount callback.
+This allows a hidden prepared frame to serve repeated drawer openings, each with
+fresh form state. Use the activation's `savia` object, not ambient fetch, for editor
+requests. Ordinary record forms opt into `localRecords` and distinguish durable
+local receipts from backend acknowledgement; business actions stay remote.

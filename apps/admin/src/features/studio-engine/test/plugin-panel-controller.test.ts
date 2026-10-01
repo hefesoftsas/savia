@@ -28,3 +28,13 @@ it("rejects scope overrides and invalid state", () => {
   c.dispose();
   expect(c.current).toBeNull();
 });
+it("allows cancellation during startup but blocks an active write", () => {
+  const c = createPluginPanelController();
+  c.open("a", { view: "record-editor", title: "A", params: {} });
+  expect(c.current?.phase).toBe("loading");
+  expect(c.close()).toBe("closed");
+  c.open("b", { view: "record-editor", title: "B", params: {} });
+  c.update({ dirty: true, busy: true });
+  expect(c.current?.phase).toBe("active");
+  expect(c.close()).toBe("blocked");
+});

@@ -421,7 +421,7 @@ function App({
           StoreScreenInstallation & {
             manifest: { id: string };
             builtIn: boolean;
-            installed: { enabled: boolean } | null;
+            installed: { enabled: boolean; version?: string } | null;
           }
         >;
       }>("/extensions"),
@@ -1251,6 +1251,7 @@ function App({
           ) : storeScreen ? (
             <CustomPluginFrame
               pluginId={storeScreen.extensionId}
+              installationVersion={extensionInstallations?.find(entry => entry.manifest.id === storeScreen.extensionId)?.installed?.version}
               title={object?.label ?? storeScreen.object}
               screen={{ object: storeScreen.object, view: storeScreen.view }}
             />

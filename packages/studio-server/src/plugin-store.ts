@@ -1063,12 +1063,17 @@ if (entryUrl.origin !== bootstrapUrl.origin ||
   throw new Error("URL de entrada no válida.");
 const ENTRY_URL = entryUrl.href;
 const pending = new Map();
+const recordListeners = new Set();
 let seq = 0;
-function callHost(path, method, body) {
+const standby = params.get("standby") === "1";
+let activePanelId = null;
+function requestHost(path, method, body, panelId, consistency) {
+  if (standby && (!panelId || panelId !== activePanelId))
+    return Promise.reject(new Error("The editor activation ended."));
   return new Promise((resolve, reject) => {
     const id = String(++seq);
-    pending.set(id, { resolve, reject });
-    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body }, "*");
+    pending.set(id, { resolve, reject, panelId });
+    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body, panelId, consistency }, "*");
     setTimeout(() => {
       if (pending.has(id)) {
         pending.delete(id);
@@ -1090,14 +1095,22 @@ addEventListener("message", (event) => {
     document.documentElement.style.colorScheme = message.dark ? "dark" : "light";
     return;
   }
+  if (message?.ns === "savia-plugin" && message.type === "records-changed" && !standby) {
+    for (const listener of recordListeners) listener(message.status);
+    return;
+  }
   if (!message || message.ns !== "savia-plugin" || message.type !== "response") return;
   const slot = pending.get(message.id);
-  if (!slot) return;
+  if (!slot || (standby && (slot.panelId !== activePanelId || message.panelId !== slot.panelId))) return;
   pending.delete(message.id);
   if (message.ok) slot.resolve(message.data);
   else slot.reject(new Error(message.error || "Error del host."));
 });
-function collection(name) {
+function createSavia(panelId) {
+const callHost = (path, method, body, consistency) => requestHost(path, method, body, panelId, consistency);
+function collection(name, local = false) {
+  const send = (path, method, body) => callHost(path, method, body, local ? "local-first" : undefined);
+  const receipt = (result) => local ? { data: result?.data, persistence: result?.local === true ? "local" : "server", ...(result?.mutationId ? { mutationId: result.mutationId } : {}) } : result?.data;
   const resource = encodeURIComponent(name);
   return {
     async list(options = {}) {
@@ -1113,35 +1126,39 @@ function collection(name) {
       if (options.q) {
         params.set("q", options.q);
       }
-      return callHost("/records/" + resource + "?" + params, "GET");
+      return send("/records/" + resource + "?" + params, "GET");
     },
     async get(id) {
-      return (await callHost("/records/" + resource + "/" + encodeURIComponent(id), "GET")).data;
+      return (await send("/records/" + resource + "/" + encodeURIComponent(id), "GET")).data;
     },
     async create(input) {
-      return (await callHost("/records/" + resource, "POST", input)).data;
+      return receipt(await send("/records/" + resource, "POST", input));
     },
     async update(id, input, update = {}) {
-      return (await callHost("/records/" + resource + "/" + encodeURIComponent(id), "PATCH",
-        update.version === undefined ? input : { ...input, _version: update.version })).data;
+      return receipt(await send("/records/" + resource + "/" + encodeURIComponent(id), "PATCH",
+        update.version === undefined ? input : { ...input, _version: update.version }));
     },
     async remove(id, update = {}) {
       const params = new URLSearchParams();
       if (update.version !== undefined) params.set("version", String(update.version));
       const suffix = params.size ? "?" + params : "";
-      await callHost("/records/" + resource + "/" + encodeURIComponent(id) + suffix, "DELETE");
+      return receipt(await send("/records/" + resource + "/" + encodeURIComponent(id) + suffix, "DELETE"));
     },
     async describe() {
-      return (await callHost("/objects", "GET")).data.find((c) => c.name === name);
+      return (await send("/objects", "GET")).data.find((c) => c.name === name);
     },
     async removeMany(records) {
-      return (await callHost("/records/" + resource + "/bulk", "POST", { action: "delete", records })).data;
+      return (await send("/records/" + resource + "/bulk", "POST", { action: "delete", records })).data;
     },
   };
 }
 const extensionPath = "/extensions/" + encodeURIComponent(PLUGIN_ID);
 const savia = {
   pluginId: PLUGIN_ID,
+  localRecords: {
+    collection: (name) => collection(name, true),
+    subscribe(listener) { recordListeners.add(listener); return () => recordListeners.delete(listener); }
+  },
   collections: {
     async list() {
       return (await callHost("/objects", "GET")).data;
@@ -1182,6 +1199,9 @@ const savia = {
     },
   },
 };
+return savia;
+}
+const savia = createSavia(null);
 // The sandbox has no direct network access. Forward /api/* calls to
 // the parent, which uses the current user's session and permissions.
 const nativeFetch = window.fetch.bind(window);
@@ -1193,7 +1213,7 @@ window.fetch = (resource, init) => {
     if (init && init.body !== undefined && typeof init.body === "string") {
       try { body = JSON.parse(init.body); } catch { body = undefined; }
     }
-    return callHost(url.slice("/api".length), method, body).then((data) =>
+    return requestHost(url.slice("/api".length), method, body, null).then((data) =>
       Response.json(data, { status: 200 }),
     );
   }
@@ -1204,8 +1224,42 @@ function selectRender(module, widgetId) {
   return module.widgets?.[widgetId] ?? module.renderWidget ?? module.render;
 }
 try {
-  savia.ui = await (${connectPluginPanelHost.toString()})(window, params.get("panel") === "1");
-  const module = await import(ENTRY_URL);
+  let module;
+  let cleanup;
+  let queuedApi = null;
+  const lifecycle = {
+    change(api) {
+      activePanelId = null;
+      const previous = cleanup;
+      cleanup = undefined;
+      if (previous) previous();
+      for (const [id, slot] of pending) {
+        pending.delete(id);
+        slot.reject(new Error("The editor activation ended."));
+      }
+      queuedApi = api;
+      if (!api || !module) return;
+      try {
+        if (typeof module.renderPanel !== "function") throw new Error("Reusable editor unavailable.");
+        activePanelId = api.panel.panelId;
+        const editor = createSavia(activePanelId);
+        editor.ui = api;
+        cleanup = module.renderPanel(document.getElementById("root"), editor);
+        if (typeof cleanup !== "function") throw new Error("Reusable editor must return cleanup.");
+        parent.postMessage({ ns: "savia-plugin", type: "ready", panelId: activePanelId }, "*");
+      } catch (error) {
+        parent.postMessage({ ns: "savia-plugin", type: "error", panelId: activePanelId }, "*");
+      }
+    }
+  };
+  savia.ui = await (${connectPluginPanelHost.toString()})(window, params.get("panel") === "1", { standby, onChange: (api) => lifecycle.change(api) });
+  module = await import(ENTRY_URL);
+  if (standby) {
+    if (typeof module.renderPanel !== "function") throw new Error("Reusable editor unavailable.");
+    parent.postMessage({ ns: "savia-plugin", type: "prepared" }, "*");
+    if (queuedApi) lifecycle.change(queuedApi);
+  } else {
+  if (savia.ui && typeof module.renderPanel !== "function") savia.ui.preparePanel = undefined;
   const widgetId = params.get("widget") ?? "";
   const widgetCollection = params.get("collection") ?? "";
   const screenObject = params.get("screen") ?? "";
@@ -1222,6 +1276,7 @@ try {
       screenObject ? { object: screenObject, view: screenView } : undefined);
   }
   parent.postMessage({ ns: "savia-plugin", type: "ready" }, "*");
+  }
 } catch (error) {
   document.getElementById("root").innerHTML =
     '<p class="plugin-error">' + String((error && error.message) || error) + "</p>";
@@ -1475,7 +1530,7 @@ export function registerPluginStore(
     );
     const screen = c.req.query("screen");
     const view = c.req.query("view");
-    const context = { ...(screen ? { screen, view: view || "records" } : {}), ...(c.req.query("panel") === "1" ? { panel: "1" } : {}) };
+    const context = { ...(screen ? { screen, view: view || "records" } : {}), ...(c.req.query("panel") === "1" ? { panel: "1", ...(c.req.query("standby") === "1" ? { standby: "1" } : {}) } : {}) };
     return new Response(
       shellHtml(
         id,

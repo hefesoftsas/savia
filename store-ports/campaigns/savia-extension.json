@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.campaigns",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "label": "Campañas",
   "description": "Segmentación y ejecución con consentimiento verificable.",
   "labels": {

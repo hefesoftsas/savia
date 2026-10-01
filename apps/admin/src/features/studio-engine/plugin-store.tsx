@@ -706,6 +706,7 @@ export default function PluginStoreManager({
                     <div className="pt-3">
                       <CustomPluginFrame
                         pluginId={item.manifest.id}
+                        installationVersion={item.installed?.version}
                         title={label}
                       />
                     </div>

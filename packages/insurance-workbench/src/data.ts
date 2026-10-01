@@ -80,7 +80,7 @@ export async function loadRecords(
   savia: PluginApi,
   object: string,
 ): Promise<WorkRecord[]> {
-  const collection = savia.collections.collection<WorkRecord>(object);
+  const collection = (savia.localRecords ?? savia.collections).collection<WorkRecord>(object);
   if (!(await collection.describe()))
     throw new Error(
       "Falta la colección requerida. Repara la instalación en Paquetes y extensiones.",

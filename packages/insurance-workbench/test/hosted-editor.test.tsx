@@ -303,3 +303,98 @@ it("allows drafting and cancelling while links load, but gates saving without st
   expect(cancel).toHaveFocus();
   expect(a.collection.create).not.toHaveBeenCalled();
 });
+it("prepares the editor only after the list has loaded", async () => {
+  const a = api(false);
+  const preparePanel = vi.fn();
+  a.savia.ui!.preparePanel = preparePanel;
+  render(<Workbench savia={a.savia} config={config} />);
+  await waitFor(() => expect(preparePanel).toHaveBeenCalledTimes(1));
+  expect(a.collection.list).toHaveBeenCalled();
+});
+it("uses a durable local receipt for details and reports pending without a network write", async () => {
+  const a = api(true);
+  const local = {
+    ...a.collection,
+    update: vi
+      .fn()
+      .mockResolvedValue({
+        data: { id: "r1" },
+        persistence: "local",
+        mutationId: "m1",
+      }),
+  };
+  a.savia.localRecords = { collection: () => local } as never;
+  render(<Workbench savia={a.savia} config={config} />);
+  const input = await screen.findByLabelText(/Reference/);
+  fireEvent.change(input, { target: { value: "Local" } });
+  const save = screen.getByRole("button", {
+    name: /Guardar cambios|Save changes/,
+  });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  await waitFor(() =>
+    expect(a.ui.completePanel).toHaveBeenCalledWith({
+      status: "saved",
+      persistence: "local",
+      mutationId: "m1",
+    }),
+  );
+  expect(a.collection.update).not.toHaveBeenCalled();
+});
+it("keeps payment writes on the network even when local records are available", async () => {
+  const a = api(true);
+  const local = { ...a.collection, update: vi.fn() };
+  a.savia.localRecords = { collection: () => local } as never;
+  const paymentConfig = {
+    ...(config as object),
+    payment: { balance: () => 100, patch: () => ({ paid: 1 }) },
+  } as never;
+  render(<Workbench savia={a.savia} config={paymentConfig} />);
+  await screen.findByLabelText(/Reference/);
+  fireEvent.click(
+    screen.getByRole("button", { name: /Registrar abono|Record payment/ }),
+  );
+  fireEvent.change(screen.getByLabelText(/Valor del abono|Payment amount/), {
+    target: { value: "1" },
+  });
+  const save = screen.getByRole("button", {
+    name: /Guardar abono|Save payment/,
+  });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  await waitFor(() => expect(a.collection.update).toHaveBeenCalled());
+  expect(a.collection.get).toHaveBeenCalledTimes(2);
+  expect(local.update).not.toHaveBeenCalled();
+  expect(a.ui.completePanel).toHaveBeenCalledWith({ status: "saved" });
+});
+it("reconciles the local pending notice and shows synchronization attention", async () => {
+  const a = api(false);
+  let notify!: (status: {
+    pending: number;
+    conflicts: number;
+    errors: number;
+  }) => void;
+  a.savia.localRecords = {
+    collection: () => a.collection,
+    subscribe: (fn: typeof notify) => {
+      notify = fn;
+      return () => {};
+    },
+  } as never;
+  a.ui.openPanel.mockResolvedValue({
+    status: "saved",
+    persistence: "local",
+    mutationId: "m1",
+  } as never);
+  render(<Workbench savia={a.savia} config={config} />);
+  const create = await screen.findByRole("button", { name: "New account" });
+  await waitFor(() => expect(create).toBeEnabled());
+  fireEvent.click(create);
+  await screen.findByText(/Pendiente de sincronización/);
+  const { act } = await import("@testing-library/react");
+  await act(async () => notify({ pending: 0, conflicts: 1, errors: 0 }));
+  expect(screen.queryByText(/Pendiente de sincronización/)).toBeNull();
+  expect(screen.getByText(/Revisa la sincronización/)).toBeInTheDocument();
+  await act(async () => notify({ pending: 0, conflicts: 0, errors: 0 }));
+  expect(screen.queryByText(/Revisa la sincronización/)).toBeNull();
+});

@@ -6,7 +6,7 @@ import { linkedFields } from "./linked-fields";
 import { validateFields } from "./schema";
 import type { Field } from "./types";
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
-import type { PluginApi } from "@savia/studio-shared/plugin-api";
+import type { PluginApi, PluginRecordReceipt } from "@savia/studio-shared/plugin-api";
 import { errorMessage, money, text, today, type WorkRecord } from "./data";
 import type { WorkbenchConfig } from "./types";
 
@@ -23,7 +23,7 @@ export function RecordEditor({
   record: WorkRecord | null;
   savia: PluginApi;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (receipt?: PluginRecordReceipt<WorkRecord>) => void;
   embedded?: boolean;
   operationBusy?: boolean;
 }) {
@@ -93,10 +93,15 @@ export function RecordEditor({
     if (busy || linksLoading || linksError) return;
     setError("");
     let patch: Record<string, unknown>;
+    let version = record?._version;
+    setBusy(true);
     try {
-      if (mode === "payment" && record && config.payment)
-        patch = config.payment.patch(record, payment, paymentDate);
-      else {
+      if (mode === "payment" && record && config.payment) {
+        const current = await savia.collections.collection<WorkRecord>(config.object).get(record.id);
+        if (!Number.isInteger(current._version)) throw new Error(t("Falta la versión del registro. Cierra el panel y actualiza antes de editar."));
+        version = current._version;
+        patch = config.payment.patch(current, payment, paymentDate);
+      } else {
         patch = Object.fromEntries(
           allFields.map((field) => {
             const value = values[field.key];
@@ -116,20 +121,25 @@ export function RecordEditor({
           config.validate(patch) ?? validateFields(extraFields, patch, locale);
         if (problem) throw new Error(problem);
       }
-      if (record && !Number.isInteger(record._version))
+      if (record && !savia.localRecords && !Number.isInteger(record._version))
         throw new Error(
           t(
             "Falta la versión del registro. Cierra el panel y actualiza antes de editar.",
           ),
         );
       setBusy(true);
-      const collection = savia.collections.collection<WorkRecord>(
-        config.object,
-      );
-      if (record)
-        await collection.update(record.id, patch, { version: record._version });
-      else await collection.create(patch);
-      onSaved();
+      if (mode !== "payment" && savia.localRecords) {
+        const collection = savia.localRecords.collection<WorkRecord>(config.object);
+        const receipt = record
+          ? await collection.update(record.id, patch, { version: record._version })
+          : await collection.create(patch);
+        onSaved(receipt);
+      } else {
+        const collection = savia.collections.collection<WorkRecord>(config.object);
+        if (record) await collection.update(record.id, patch, { version });
+        else await collection.create(patch);
+        onSaved();
+      }
     } catch (cause) {
       setError(
         errorMessage(cause) +

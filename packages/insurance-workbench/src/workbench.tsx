@@ -44,6 +44,7 @@ function WorkbenchList({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [syncAttention, setSyncAttention] = useState(false);
   const [revision, setRevision] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -62,7 +63,7 @@ function WorkbenchList({
     setAsOf(today());
     loadRecords(savia, config.object)
       .then((result) => {
-        if (active) setRecords(result);
+        if (active) { setRecords(result); savia.ui?.preparePanel?.(); }
       })
       .catch((cause) => {
         if (active) setError(errorMessage(cause));
@@ -74,6 +75,14 @@ function WorkbenchList({
       active = false;
     };
   }, [savia, config.object, revision]);
+  useEffect(() => savia.localRecords?.subscribe?.((status) => {
+    setRevision(n => n + 1);
+    if (status) {
+      setSyncAttention(status.conflicts + status.errors > 0);
+      if (status.pending === 0 || status.conflicts + status.errors > 0)
+        setNotice(current => current === "Guardado en este dispositivo. Pendiente de sincronización." ? "" : current);
+    }
+  }), [savia]);
   const filtered = useMemo(() => {
     const normalize = (value: string) =>
       value
@@ -118,7 +127,7 @@ function WorkbenchList({
       });
       if (result.status === "saved") {
         setRevision((n) => n + 1);
-        setNotice("Cambios guardados.");
+        setNotice(result.persistence === "local" ? "Guardado en este dispositivo. Pendiente de sincronización." : "Cambios guardados.");
       }
     } catch (cause) {
       setNotice(errorMessage(cause));
@@ -160,6 +169,7 @@ function WorkbenchList({
       </header>
       <div className="iw-announcements" aria-live="polite">
         {notice && <p className="iw-notice">{t(notice)}</p>}
+        {syncAttention && <p role="status" className="iw-notice">{t("Revisa la sincronización: hay cambios que requieren atención.")}</p>}
       </div>
       {error && (
         <div className="iw-error" role="alert">
