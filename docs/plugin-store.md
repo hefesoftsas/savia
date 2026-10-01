@@ -528,3 +528,9 @@ alongside the host and shell. Catalog upload alone does not replace an installed
 version: update existing installations explicitly, preserving optional plugins
 that are uninstalled or disabled. Verify the installed version in each target
 workspace before considering the rollout complete.
+
+Shared Workbench styles also enter other ports through package exports. Version
+every rebuilt deployment artifact whose bytes change: the tenant catalog rejects
+replacing an existing plugin ID and version with different contents. Keep the
+release set in `deployment/plugins/sources.json` consistent when shared code or
+styles change.

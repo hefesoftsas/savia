@@ -2,7 +2,7 @@
   "format": "savia.extension",
   "formatVersion": 1,
   "id": "insurance.communications",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "label": "Comunicaciones",
   "description": "Plantillas, envíos y seguimiento de entrega.",
   "labels": {
