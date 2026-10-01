@@ -182,3 +182,43 @@ it("validates required fields before writes and saves on input Enter inside the 
     ),
   );
 });
+it("reports attachment uploads as busy until the operation settles", async () => {
+  const a = api(true);
+  let finish!: (value: unknown) => void;
+  const upload = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  a.savia.files = {
+    list: vi.fn().mockResolvedValue([]),
+    upload,
+    remove: vi.fn(),
+    download: vi.fn(),
+  } as never;
+  render(<Workbench savia={a.savia} config={config} />);
+  const file = await screen.findByLabelText(/Adjuntar archivo|Attach file/);
+  await waitFor(() => expect(file).toBeEnabled());
+  fireEvent.change(file, {
+    target: {
+      files: [new File(["sample"], "sample.txt", { type: "text/plain" })],
+    },
+  });
+  await waitFor(() =>
+    expect(a.ui.setPanelState).toHaveBeenLastCalledWith({
+      dirty: false,
+      busy: true,
+    }),
+  );
+  expect(
+    screen.getByRole("button", { name: /Cancelar|Cancel/ }),
+  ).toBeDisabled();
+  finish({ id: "file-1" });
+  await waitFor(() =>
+    expect(a.ui.setPanelState).toHaveBeenLastCalledWith({
+      dirty: false,
+      busy: false,
+    }),
+  );
+});
