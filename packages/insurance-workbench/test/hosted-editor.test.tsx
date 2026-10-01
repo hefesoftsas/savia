@@ -1,3 +1,4 @@
+import "@testing-library/jest-dom/vitest";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -7,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { Workbench } from "../../../../../../packages/insurance-workbench/src/workbench";
+import { Workbench } from "../src/workbench";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
 afterEach(cleanup);
 const config = {
@@ -159,4 +160,25 @@ it("focuses the first field and treats a date-only payment change as dirty", asy
     dirty: true,
     busy: false,
   });
+});
+it("validates required fields before writes and saves on input Enter inside the sandbox", async () => {
+  const a = api(true);
+  render(<Workbench savia={a.savia} config={config} />);
+  const input = await screen.findByLabelText(/Reference/);
+  const save = screen.getByRole("button", {
+    name: /Guardar cambios|Save changes/,
+  });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.change(input, { target: { value: "" } });
+  fireEvent.click(save);
+  expect(a.collection.update).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: "Keyboard save" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  await waitFor(() =>
+    expect(a.collection.update).toHaveBeenCalledWith(
+      "r1",
+      { name: "Keyboard save" },
+      { version: 3 },
+    ),
+  );
 });

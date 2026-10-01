@@ -5,7 +5,7 @@ import { Drawer } from "./drawer";
 import { linkedFields } from "./linked-fields";
 import { validateFields } from "./schema";
 import type { Field } from "./types";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
 import type { PluginApi } from "@savia/studio-shared/plugin-api";
 import { errorMessage, money, text, today, type WorkRecord } from "./data";
 import type { WorkbenchConfig } from "./types";
@@ -88,7 +88,7 @@ export function RecordEditor({
   }, []);
   const change = (key: string, value: unknown) =>
     setValues((current) => ({ ...current, [key]: value }));
-  async function save(event: FormEvent) {
+  async function save(event: SyntheticEvent) {
     event.preventDefault();
     if (busy || linksLoading || linksError) return;
     setError("");
@@ -192,7 +192,23 @@ export function RecordEditor({
         </div>
       )}
       <div className="iw-editor-body">
-        <form ref={formRef} id={formId} onSubmit={save}>
+        <form
+          ref={formRef}
+          id={formId}
+          onSubmit={save}
+          onKeyDown={(event) => {
+            // The isolated shell intentionally has no allow-forms permission.
+            // Handle input Enter without invoking native form navigation.
+            if (
+              event.key === "Enter" &&
+              event.target instanceof HTMLInputElement &&
+              event.target.type !== "file"
+            ) {
+              event.preventDefault();
+              if (formRef.current?.reportValidity()) void save(event);
+            }
+          }}
+        >
           {error && (
             <div role="alert" className="iw-error">
               {error}
@@ -352,8 +368,11 @@ export function RecordEditor({
         </button>
         <button
           className="iw-primary"
-          type="submit"
+          type="button"
           form={formId}
+          onClick={(event) => {
+            if (formRef.current?.reportValidity()) void save(event);
+          }}
           disabled={busy || operationBusy || linksLoading || !!linksError}
         >
           {busy
