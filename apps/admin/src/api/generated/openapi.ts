@@ -6127,6 +6127,7 @@ export interface paths {
         query: {
           provider: "gmail" | "outlook";
           query?: string;
+          cursor?: string;
         };
         header?: never;
         path?: never;
@@ -6148,8 +6149,18 @@ export interface paths {
                 receivedAt: string | null;
                 webLink: string | null;
               }[];
+              pagination: {
+                nextCursor: string | null;
+              };
             };
           };
+        };
+        /** @description Invalid message cursor */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
         };
         /** @description Connection belongs to a different user */
         403: {

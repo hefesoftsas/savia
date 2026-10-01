@@ -54,3 +54,7 @@ export type PersonalMailMessage = {
   receivedAt: string | null;
   webLink: string | null;
 };
+export type PersonalMailPage = {
+  messages: PersonalMailMessage[];
+  nextCursor: string | null;
+};

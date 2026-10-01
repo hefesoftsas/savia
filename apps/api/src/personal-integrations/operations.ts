@@ -1,5 +1,6 @@
 import {
   sendPersonalMailSchema,
+  type PersonalMailPage,
   type SendPersonalMailInput,
 } from "@savia/studio-shared/mail-contracts";
 import {
@@ -65,6 +66,132 @@ function safeSearchTerm(value: string): string {
   if (!normalized || normalized.length > 100 || /['"\\]/.test(normalized))
     throw new PersonalIntegrationUnavailableError("The file search is invalid");
   return normalized;
+}
+
+type MailContinuation =
+  | { provider: "gmail"; kind: "page-token"; token: string }
+  | {
+      provider: "outlook";
+      kind: "skip" | "skip-token";
+      value: string;
+    };
+
+type MailCursor = {
+  version: 1;
+  provider: "gmail" | "outlook";
+  query: string | null;
+  connectionId: string;
+  continuation: MailContinuation;
+};
+
+function encodeMailCursor(cursor: MailCursor): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(cursor));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function decodeMailCursor(
+  value: string,
+  expected: Omit<MailCursor, "continuation">,
+): MailContinuation {
+  if (!/^[A-Za-z0-9_-]{1,2048}$/.test(value))
+    return invalidAction("The mail cursor is invalid");
+  try {
+    const standard = value.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(standard + "=".repeat((4 - (standard.length % 4)) % 4));
+    const bytes = Uint8Array.from(binary, (character) =>
+      character.charCodeAt(0),
+    );
+    const cursor = JSON.parse(new TextDecoder().decode(bytes)) as MailCursor;
+    if (
+      cursor.version !== 1 ||
+      cursor.provider !== expected.provider ||
+      cursor.query !== expected.query ||
+      cursor.connectionId !== expected.connectionId ||
+      !cursor.continuation ||
+      cursor.continuation.provider !== expected.provider
+    )
+      return invalidAction("The mail cursor is invalid");
+    if (
+      cursor.provider === "gmail" &&
+      cursor.continuation.kind === "page-token" &&
+      typeof cursor.continuation.token === "string" &&
+      cursor.continuation.token.length > 0 &&
+      cursor.continuation.token.length <= 1024
+    )
+      return cursor.continuation;
+    if (
+      cursor.provider === "outlook" &&
+      cursor.continuation.kind === "skip-token" &&
+      typeof cursor.continuation.value === "string" &&
+      cursor.continuation.value.length > 0 &&
+      cursor.continuation.value.length <= 1024
+    )
+      return cursor.continuation;
+    if (
+      cursor.provider === "outlook" &&
+      cursor.continuation.kind === "skip" &&
+      typeof cursor.continuation.value === "string" &&
+      /^(?:0|[1-9][0-9]{0,6})$/.test(cursor.continuation.value)
+    )
+      return cursor.continuation;
+  } catch {
+    // Invalid cursors are a client input error, with no upstream request made.
+  }
+  return invalidAction("The mail cursor is invalid");
+}
+
+function outlookContinuation(
+  value: unknown,
+  path: string,
+  parameters: URLSearchParams,
+): MailContinuation | null {
+  if (typeof value !== "string" || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "graph.microsoft.com" ||
+      url.port !== "" ||
+      url.username ||
+      url.password ||
+      url.pathname !== path ||
+      url.hash
+    )
+      return null;
+    const fixedKeys = new Set(
+      [...parameters.keys()].filter(
+        (key) => key !== "$skip" && key !== "$skiptoken",
+      ),
+    );
+    for (const key of url.searchParams.keys()) {
+      if (fixedKeys.has(key)) {
+        if (url.searchParams.getAll(key).length !== 1) return null;
+        if (url.searchParams.get(key) !== parameters.get(key)) return null;
+      } else if (key !== "$skip" && key !== "$skiptoken") {
+        return null;
+      }
+    }
+    const skipToken = url.searchParams.getAll("$skiptoken");
+    const skip = url.searchParams.getAll("$skip");
+    if (skipToken.length === 1 && skip.length === 0 && skipToken[0])
+      return skipToken[0].length <= 1024
+        ? { provider: "outlook", kind: "skip-token", value: skipToken[0] }
+        : null;
+    if (
+      skip.length === 1 &&
+      skipToken.length === 0 &&
+      /^(?:0|[1-9][0-9]{0,6})$/.test(skip[0] ?? "")
+    )
+      return { provider: "outlook", kind: "skip", value: skip[0] ?? "" };
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function stringValue(value: unknown): string | null {
@@ -654,6 +781,15 @@ export class PersonalIntegrationOperations {
     provider: "gmail" | "outlook";
     query?: string;
   }): Promise<PersonalMessage[]> {
+    return (await this.listMessagePage(input)).messages;
+  }
+
+  async listMessagePage(input: {
+    principalId: string;
+    provider: "gmail" | "outlook";
+    query?: string;
+    cursor?: string;
+  }): Promise<PersonalMailPage> {
     const connection = await this.connectedConnection(
       input.principalId,
       input.provider,
@@ -673,10 +809,31 @@ export class PersonalIntegrationOperations {
               ? { $orderby: "receivedDateTime desc" }
               : { $filter: `contains(subject,'${term}')` }),
           });
-    const path =
+    const expectedCursor = {
+      version: 1 as const,
+      provider: input.provider,
+      query: term ?? null,
+      connectionId: connection.id,
+    };
+    const continuation = input.cursor
+      ? decodeMailCursor(input.cursor, expectedCursor)
+      : undefined;
+    if (
+      continuation?.provider !== undefined &&
+      continuation.provider !== input.provider
+    )
+      return invalidAction("The mail cursor is invalid");
+    if (input.provider === "gmail" && continuation?.kind === "page-token")
+      parameters.set("pageToken", continuation.token);
+    if (input.provider === "outlook" && continuation?.kind === "skip-token")
+      parameters.set("$skiptoken", continuation.value);
+    if (input.provider === "outlook" && continuation?.kind === "skip")
+      parameters.set("$skip", continuation.value);
+    const providerPath =
       input.provider === "gmail"
-        ? `/gmail/v1/users/me/messages?${parameters}`
-        : `${term === undefined ? "/v1.0/me/mailFolders/inbox/messages" : "/v1.0/me/messages"}?${parameters}`;
+        ? "/gmail/v1/users/me/messages"
+        : `${term === undefined ? "/v1.0/me/mailFolders/inbox/messages" : "/v1.0/me/messages"}`;
+    const path = `${providerPath}?${parameters}`;
     const response = await this.nango.proxy({
       method: "GET",
       path,
@@ -684,14 +841,32 @@ export class PersonalIntegrationOperations {
     });
     if (!response.ok) throw new PersonalIntegrationUpstreamError();
     const payload = (await response.json().catch(() => undefined)) as
-      { messages?: unknown[]; value?: unknown[] } | undefined;
-    if (input.provider === "outlook")
-      return (Array.isArray(payload?.value) ? payload.value : [])
+      | {
+          messages?: unknown[];
+          value?: unknown[];
+          nextPageToken?: unknown;
+          "@odata.nextLink"?: unknown;
+        }
+      | undefined;
+    let next: MailContinuation | null = null;
+    if (input.provider === "outlook") {
+      const nextLink = payload?.["@odata.nextLink"];
+      next = outlookContinuation(nextLink, providerPath, parameters);
+      if (nextLink !== undefined && nextLink !== null && !next)
+        throw new PersonalIntegrationUpstreamError();
+      const messages = (Array.isArray(payload?.value) ? payload.value : [])
         .slice(0, 25)
         .flatMap((item) => {
           const message = normalizeOutlookMessage(item);
           return message ? [message] : [];
         });
+      return {
+        messages,
+        nextCursor: next
+          ? encodeMailCursor({ ...expectedCursor, continuation: next })
+          : null,
+      };
+    }
     const rows = (Array.isArray(payload?.messages) ? payload.messages : [])
       .slice(0, 25)
       .flatMap((item) => {
@@ -722,7 +897,19 @@ export class PersonalIntegrationOperations {
         )),
       );
     }
-    return messages;
+    const nextPageToken = payload?.nextPageToken;
+    if (
+      typeof nextPageToken === "string" &&
+      nextPageToken.length > 0 &&
+      nextPageToken.length <= 1024
+    )
+      next = { provider: "gmail", kind: "page-token", token: nextPageToken };
+    return {
+      messages,
+      nextCursor: next
+        ? encodeMailCursor({ ...expectedCursor, continuation: next })
+        : null,
+    };
   }
 
   async listEvents(input: {

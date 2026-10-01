@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   PersonalMailMessage,
+  PersonalMailPage,
   PersonalMailProvider,
   SendPersonalMailInput,
 } from "@savia/studio-shared/mail-contracts";
@@ -22,6 +23,10 @@ export type PersonalMailLike = {
     provider: PersonalMailProvider;
     query?: string;
   }): Promise<PersonalMailMessage[]>;
+  listMessagePage?(input: {
+    provider: PersonalMailProvider;
+    cursor?: string;
+  }): Promise<PersonalMailPage>;
   sendMail(
     input: SendPersonalMailInput,
   ): Promise<{ provider: PersonalMailProvider; action: "send-email" }>;
@@ -35,6 +40,9 @@ export type MailState = {
   reconnectRequired: PersonalMailProvider[];
   messages: MailRow[];
   loading: boolean;
+  loadingMore?: boolean;
+  hasMore?: Partial<Record<PersonalMailProvider, boolean>>;
+  loadMore?(providers?: PersonalMailProvider[]): Promise<void>;
   errors: string[];
   sessionRevision: number;
   newMessageCount?: number;
@@ -57,11 +65,29 @@ const empty = {
   connections: [] as MailConnection[],
   messages: [] as MailRow[],
   loading: false,
+  loadingMore: false,
+  hasMore: {} as Partial<Record<PersonalMailProvider, boolean>>,
   errors: [] as string[],
   newMessageCount: 0,
 };
 const REFRESH_INTERVAL_MS = 60_000;
 const MAX_RETRY_INTERVAL_MS = 300_000;
+const accountKey = (connection: MailConnection) =>
+  `${connection.provider}:${connection.externalAccountLabel ?? ""}`;
+function sortedRows(rows: MailRow[]) {
+  const unique = [
+    ...new Map(rows.map((row) => [`${row.provider}:${row.id}`, row])).values(),
+  ];
+  const date = (row: MailRow) => {
+    const value = Date.parse(row.receivedAt ?? "");
+    return Number.isFinite(value) ? value : -Infinity;
+  };
+  return unique.sort(
+    (a, b) =>
+      date(b) - date(a) ||
+      `${a.provider}:${a.id}`.localeCompare(`${b.provider}:${b.id}`),
+  );
+}
 function canRefreshMail() {
   return document.visibilityState === "visible" && navigator.onLine;
 }
@@ -75,6 +101,8 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
   const revision = useRef(0);
   const pending = useRef<Promise<void> | null>(null);
   const knownMessages = useRef(new Map<string, Set<string>>());
+  const continuations = useRef(new Map<string, string | null>());
+  const history = useRef(new Map<string, MailRow[]>());
   const refresh = useCallback((): Promise<void> => {
     // Manual, periodic, focus, and realtime refreshes share one read.
     if (pending.current) return pending.current;
@@ -100,11 +128,15 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
             entry.status === "connected" &&
             (entry.provider === "gmail" || entry.provider === "outlook"),
         );
-        const accountKey = (connection: MailConnection) =>
-          `${connection.provider}:${connection.externalAccountLabel ?? ""}`;
         const currentAccounts = new Set(connections.map(accountKey));
         for (const key of knownMessages.current.keys()) {
           if (!currentAccounts.has(key)) knownMessages.current.delete(key);
+        }
+        for (const key of continuations.current.keys()) {
+          if (!currentAccounts.has(key)) {
+            continuations.current.delete(key);
+            history.current.delete(key);
+          }
         }
         const previous =
           snapshotRef.current.owner === client ? snapshotRef.current : empty;
@@ -128,16 +160,24 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
         });
         const results = await Promise.allSettled(
           connections.map(async (connection) => {
-            const messages = await client.listMessages({
-              provider: connection.provider,
-            });
-            return messages.map((message) => ({
-              ...message,
-              provider: connection.provider,
-              accountLabel:
-                connection.externalAccountLabel ??
-                mailProviderLabel(connection.provider),
-            }));
+            const page = client.listMessagePage
+              ? await client.listMessagePage({ provider: connection.provider })
+              : {
+                  messages: await client.listMessages({
+                    provider: connection.provider,
+                  }),
+                  nextCursor: null,
+                };
+            return {
+              nextCursor: page.nextCursor,
+              messages: page.messages.map((message) => ({
+                ...message,
+                provider: connection.provider,
+                accountLabel:
+                  connection.externalAccountLabel ??
+                  mailProviderLabel(connection.provider),
+              })),
+            };
           }),
         );
         if (request !== revision.current) return;
@@ -151,6 +191,8 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
               [401, 403].includes(result.reason.status);
             if (denied) {
               knownMessages.current.delete(key);
+              continuations.current.delete(key);
+              history.current.delete(key);
               return [];
             }
             return retained.filter(
@@ -159,25 +201,23 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
           }
           const known = knownMessages.current.get(key);
           if (known)
-            discovered += result.value.filter(
+            discovered += result.value.messages.filter(
               (row) => !known.has(row.id),
             ).length;
           // Keep only the current bounded page; the first successful read is a baseline.
           knownMessages.current.set(
             key,
-            new Set(result.value.map((row) => row.id)),
+            new Set(result.value.messages.map((row) => row.id)),
           );
-          return result.value;
+          if (!history.current.has(key))
+            continuations.current.set(key, result.value.nextCursor);
+          const rows = sortedRows([
+            ...(history.current.get(key) ?? []),
+            ...result.value.messages,
+          ]);
+          if (history.current.has(key)) history.current.set(key, rows);
+          return rows;
         });
-        const date = (row: MailRow) => {
-          const value = Date.parse(row.receivedAt ?? "");
-          return Number.isFinite(value) ? value : -Infinity;
-        };
-        messages.sort(
-          (a, b) =>
-            date(b) - date(a) ||
-            `${a.provider}:${a.id}`.localeCompare(`${b.provider}:${b.id}`),
-        );
         const errors = results.flatMap((result, index) =>
           result.status === "rejected"
             ? [
@@ -193,8 +233,15 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
         setSnapshot((current) => ({
           connections,
           reconnectRequired,
-          messages,
+          messages: sortedRows(messages),
           loading: false,
+          loadingMore: false,
+          hasMore: Object.fromEntries(
+            connections.map((connection) => [
+              connection.provider,
+              Boolean(continuations.current.get(accountKey(connection))),
+            ]),
+          ),
           owner: client,
           errors,
           newMessageCount: current.newMessageCount + discovered,
@@ -205,7 +252,11 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
           const denied =
             error instanceof ApiClientError &&
             [401, 403].includes(error.status);
-          if (denied) knownMessages.current.clear();
+          if (denied) {
+            knownMessages.current.clear();
+            continuations.current.clear();
+            history.current.clear();
+          }
           setSnapshot((current) => ({
             ...(denied || current.owner !== client ? empty : current),
             loading: false,
@@ -223,8 +274,95 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
     pending.current = promise;
     return promise;
   }, [client]);
+  const loadMore = useCallback(
+    (providers?: PersonalMailProvider[]): Promise<void> => {
+      if (pending.current) return pending.current;
+      if (!client?.listMessagePage) return Promise.resolve();
+      const request = revision.current;
+      const previous = snapshotRef.current;
+      const targets = previous.connections.filter(
+        (connection) =>
+          (!providers || providers.includes(connection.provider)) &&
+          continuations.current.get(accountKey(connection)),
+      );
+      if (!targets.length) return Promise.resolve();
+      setSnapshot((current) => ({ ...current, loadingMore: true, errors: [] }));
+      const read = async () => {
+        const results = await Promise.allSettled(
+          targets.map(async (connection) => {
+            const cursor = continuations.current.get(accountKey(connection))!;
+            const page = await client.listMessagePage!({
+              provider: connection.provider,
+              cursor,
+            });
+            return { cursor, page };
+          }),
+        );
+        if (request !== revision.current) return;
+        let rows = [...previous.messages];
+        const errors: string[] = [];
+        for (const [index, result] of results.entries()) {
+          const connection = targets[index]!;
+          const key = accountKey(connection);
+          if (result.status === "rejected") {
+            if (
+              result.reason instanceof ApiClientError &&
+              [401, 403].includes(result.reason.status)
+            ) {
+              rows = rows.filter((row) => row.provider !== connection.provider);
+              history.current.delete(key);
+              continuations.current.delete(key);
+              knownMessages.current.delete(key);
+            }
+            errors.push(
+              `No pudimos cargar más correos de ${mailProviderLabel(connection.provider)}. Reintenta.`,
+            );
+            continue;
+          }
+          const { cursor, page } = result.value;
+          // A repeating upstream cursor cannot make progress. Stop that stream.
+          continuations.current.set(
+            key,
+            page.nextCursor === cursor ? null : page.nextCursor,
+          );
+          const additions = page.messages.map((message) => ({
+            ...message,
+            provider: connection.provider,
+            accountLabel:
+              connection.externalAccountLabel ??
+              mailProviderLabel(connection.provider),
+          }));
+          rows = sortedRows([...rows, ...additions]);
+          history.current.set(
+            key,
+            rows.filter((row) => row.provider === connection.provider),
+          );
+        }
+        setSnapshot((current) => ({
+          ...current,
+          messages: rows,
+          errors,
+          loadingMore: false,
+          hasMore: Object.fromEntries(
+            previous.connections.map((connection) => [
+              connection.provider,
+              Boolean(continuations.current.get(accountKey(connection))),
+            ]),
+          ),
+        }));
+      };
+      const promise = read().finally(() => {
+        if (request === revision.current) pending.current = null;
+      });
+      pending.current = promise;
+      return promise;
+    },
+    [client],
+  );
   useEffect(() => {
     knownMessages.current.clear();
+    continuations.current.clear();
+    history.current.clear();
     snapshotRef.current = { ...empty, owner: client };
     setSnapshot(snapshotRef.current);
     setRetryDelay(REFRESH_INTERVAL_MS);
@@ -233,6 +371,8 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
       ++revision.current;
       pending.current = null;
       knownMessages.current.clear();
+      continuations.current.clear();
+      history.current.clear();
       snapshotRef.current = { ...empty, owner: client };
       setSnapshot(snapshotRef.current);
       setSessionRevision((value) => value + 1);
@@ -270,6 +410,7 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
       !client ||
       !active ||
       snapshot.loading ||
+      snapshot.loadingMore ||
       (!snapshot.connections.length && !snapshot.errors.length)
     )
       return;
@@ -292,6 +433,7 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
       : { ...empty, loading: Boolean(client) }),
     sessionRevision,
     refresh,
+    loadMore,
     dismissNewMessages,
   };
 }
