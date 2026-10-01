@@ -51,7 +51,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Tenant SAML SSO](guides/tenant-sso.md) — tenant identity providers, SSO-only access and account policy.
 - [Keycloak SAML testing](guides/keycloak-saml-testing.md) — disposable real SAML integration tests.
 - [Account email](guides/account-email.md) — email verification, password recovery, tenant SMTP settings and local Mailpit testing.
-- [Social sign-in](guides/social-sign-in.md) — optional Google and Microsoft sign-in, provider registration and tenant controls.
+- [Social sign-in](guides/social-sign-in.md) — optional Google, Microsoft and ChatGPT sign-in, provider registration and tenant controls.
 
 - [public-forms.md](public-forms.md) — optional public links, captcha, submission-only access and quotas.
 - [cookie-consent.md](cookie-consent.md) — mandatory once-per-user cookie consent banner for the SPA and public forms.
