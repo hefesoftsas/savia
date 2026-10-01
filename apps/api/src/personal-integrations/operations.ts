@@ -153,13 +153,18 @@ function outlookContinuation(
   if (typeof value !== "string" || value.length > 4096) return null;
   try {
     const url = new URL(value);
+    // Graph canonicalizes the same Inbox with OData key syntax in nextLink.
+    const matchesPath =
+      url.pathname === path ||
+      (path === "/v1.0/me/mailFolders/inbox/messages" &&
+        url.pathname === "/v1.0/me/mailFolders('inbox')/messages");
     if (
       url.protocol !== "https:" ||
       url.hostname !== "graph.microsoft.com" ||
       url.port !== "" ||
       url.username ||
       url.password ||
-      url.pathname !== path ||
+      !matchesPath ||
       url.hash
     )
       return null;

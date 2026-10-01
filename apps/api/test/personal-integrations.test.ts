@@ -528,6 +528,7 @@ describe("personal integration providers", () => {
     const first = await app.request(
       "https://savia.test/v1/personal-integrations/messages?provider=gmail&query=renewal",
     );
+    expect(first.status).toBe(200);
     const firstBody = (await first.json()) as {
       pagination: { nextCursor: string };
     };
@@ -621,93 +622,99 @@ describe("personal integration providers", () => {
     expect(nango.proxy).toHaveBeenCalledTimes(1);
   });
 
-  it("follows only a fixed Microsoft Graph continuation and ignores unsafe next links", async () => {
-    const nango = fakeNango();
-    nango.proxy
-      .mockResolvedValueOnce(
-        Response.json({
-          value: [],
-          "@odata.nextLink":
-            "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=25&$select=id%2Csubject%2Cfrom%2CreceivedDateTime%2CwebLink&$orderby=receivedDateTime%20desc&$skiptoken=opaque-page-2",
-        }),
-      )
-      .mockResolvedValueOnce(
-        Response.json({
-          value: [],
-          "@odata.nextLink":
-            "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=25&$select=id%2Csubject%2Cfrom%2CreceivedDateTime%2CwebLink&$orderby=receivedDateTime%20desc&$skip=50",
-        }),
-      )
-      .mockResolvedValueOnce(Response.json({ value: [] }));
-    await env.DB.prepare(
-      `INSERT INTO personal_integration_connections (
+  it.each([
+    "/v1.0/me/mailFolders/inbox/messages",
+    "/v1.0/me/mailFolders('inbox')/messages",
+  ])(
+    "follows scoped Graph continuation at %s and rejects unsafe links",
+    async (nextPath) => {
+      const nango = fakeNango();
+      nango.proxy
+        .mockResolvedValueOnce(
+          Response.json({
+            value: [],
+            "@odata.nextLink": `https://graph.microsoft.com${nextPath}?$top=25&$select=id%2Csubject%2Cfrom%2CreceivedDateTime%2CwebLink&$orderby=receivedDateTime%20desc&$skiptoken=opaque-page-2`,
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            value: [],
+            "@odata.nextLink": `https://graph.microsoft.com${nextPath}?$top=25&$select=id%2Csubject%2Cfrom%2CreceivedDateTime%2CwebLink&$orderby=receivedDateTime%20desc&$skip=50`,
+          }),
+        )
+        .mockResolvedValueOnce(Response.json({ value: [] }));
+      await env.DB.prepare(
+        `INSERT INTO personal_integration_connections (
         id, principal_id, provider, nango_connection_id, nango_integration_id,
         status, scopes, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        "personal-outlook-page-connection",
-        "test-agency-member",
-        "outlook",
-        "nango-outlook-page-connection",
-        "outlook-savia",
-        "connected",
-        "[]",
-        "2026-01-01T00:00:00.000Z",
-        "2026-01-01T00:00:00.000Z",
       )
-      .run();
-    const app = configuredApp(nango);
+        .bind(
+          "personal-outlook-page-connection",
+          "test-agency-member",
+          "outlook",
+          "nango-outlook-page-connection",
+          "outlook-savia",
+          "connected",
+          "[]",
+          "2026-01-01T00:00:00.000Z",
+          "2026-01-01T00:00:00.000Z",
+        )
+        .run();
+      const app = configuredApp(nango);
 
-    const first = await app.request(
-      "https://savia.test/v1/personal-integrations/messages?provider=outlook",
-    );
-    const firstBody = (await first.json()) as {
-      pagination: { nextCursor: string };
-    };
-    expect(firstBody.pagination.nextCursor).toEqual(expect.any(String));
-    const second = await app.request(
-      `https://savia.test/v1/personal-integrations/messages?provider=outlook&cursor=${encodeURIComponent(firstBody.pagination.nextCursor)}`,
-    );
-    expect(second.status).toBe(200);
-    const secondBody = (await second.json()) as {
-      pagination: { nextCursor: string };
-    };
-    expect(secondBody.pagination.nextCursor).toEqual(expect.any(String));
-    const continuationPath = nango.proxy.mock.calls[1]?.[0]?.path as string;
-    const params = new URL(continuationPath, "https://graph.microsoft.com")
-      .searchParams;
-    expect(params.get("$top")).toBe("25");
-    expect(params.get("$select")).toBe(
-      "id,subject,from,receivedDateTime,webLink",
-    );
-    expect(params.get("$orderby")).toBe("receivedDateTime desc");
-    expect(params.get("$skiptoken")).toBe("opaque-page-2");
-    const third = await app.request(
-      `https://savia.test/v1/personal-integrations/messages?provider=outlook&cursor=${encodeURIComponent(secondBody.pagination.nextCursor)}`,
-    );
-    expect(third.status).toBe(200);
-    const thirdPath = nango.proxy.mock.calls[2]?.[0]?.path as string;
-    expect(
-      new URL(thirdPath, "https://graph.microsoft.com").searchParams.get(
-        "$skip",
-      ),
-    ).toBe("50");
-
-    for (const unsafeNextLink of [
-      "https://attacker.example/v1.0/me/mailFolders/inbox/messages?$skiptoken=stolen",
-      "https://graph.microsoft.com/v1.0/me/messages?$skiptoken=stolen",
-      "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=10&$skiptoken=stolen",
-    ]) {
-      nango.proxy.mockResolvedValueOnce(
-        Response.json({ value: [], "@odata.nextLink": unsafeNextLink }),
-      );
-      const unsafe = await app.request(
+      const first = await app.request(
         "https://savia.test/v1/personal-integrations/messages?provider=outlook",
       );
-      expect(unsafe.status).toBe(502);
-    }
-  });
+      expect(first.status).toBe(200);
+      const firstBody = (await first.json()) as {
+        pagination: { nextCursor: string };
+      };
+      expect(firstBody.pagination.nextCursor).toEqual(expect.any(String));
+      const second = await app.request(
+        `https://savia.test/v1/personal-integrations/messages?provider=outlook&cursor=${encodeURIComponent(firstBody.pagination.nextCursor)}`,
+      );
+      expect(second.status).toBe(200);
+      const secondBody = (await second.json()) as {
+        pagination: { nextCursor: string };
+      };
+      expect(secondBody.pagination.nextCursor).toEqual(expect.any(String));
+      const continuationPath = nango.proxy.mock.calls[1]?.[0]?.path as string;
+      const params = new URL(continuationPath, "https://graph.microsoft.com")
+        .searchParams;
+      expect(params.get("$top")).toBe("25");
+      expect(params.get("$select")).toBe(
+        "id,subject,from,receivedDateTime,webLink",
+      );
+      expect(params.get("$orderby")).toBe("receivedDateTime desc");
+      expect(params.get("$skiptoken")).toBe("opaque-page-2");
+      const third = await app.request(
+        `https://savia.test/v1/personal-integrations/messages?provider=outlook&cursor=${encodeURIComponent(secondBody.pagination.nextCursor)}`,
+      );
+      expect(third.status).toBe(200);
+      const thirdPath = nango.proxy.mock.calls[2]?.[0]?.path as string;
+      expect(
+        new URL(thirdPath, "https://graph.microsoft.com").searchParams.get(
+          "$skip",
+        ),
+      ).toBe("50");
+
+      for (const unsafeNextLink of [
+        "https://attacker.example/v1.0/me/mailFolders/inbox/messages?$skiptoken=stolen",
+        "https://graph.microsoft.com/v1.0/me/messages?$skiptoken=stolen",
+        "https://graph.microsoft.com/v1.0/me/mailFolders('sentitems')/messages?$skiptoken=stolen",
+        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=10&$skiptoken=stolen",
+      ]) {
+        nango.proxy.mockResolvedValueOnce(
+          Response.json({ value: [], "@odata.nextLink": unsafeNextLink }),
+        );
+        const unsafe = await app.request(
+          "https://savia.test/v1/personal-integrations/messages?provider=outlook",
+        );
+        expect(unsafe.status).toBe(502);
+      }
+    },
+  );
 
   it("lists Google Calendar events through a fixed personal operation", async () => {
     const nango = fakeNango();
