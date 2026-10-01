@@ -333,7 +333,10 @@ export function TenantSocialSettingsPanel({
                       onCheckedChange={(checked) =>
                         setChatgptEnabled(checked === true)
                       }
-                      disabled={busy || current.chatgptAvailable !== true}
+                      disabled={
+                        busy ||
+                        (!chatgptEnabled && current.chatgptAvailable !== true)
+                      }
                       aria-describedby="tenant-social-chatgpt-availability"
                     />
                     <span>{t("Enable ChatGPT sign-in")}</span>

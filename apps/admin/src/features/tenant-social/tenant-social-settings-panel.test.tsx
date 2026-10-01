@@ -356,6 +356,38 @@ it("defaults ChatGPT sign-in off and keeps it disabled when unavailable", async 
   expect(chatgpt).toBeDisabled();
 });
 
+it("allows disabling ChatGPT after deployment credentials are removed", async () => {
+  const unavailable = {
+    ...defaults,
+    configured: true,
+    chatgptAvailable: false,
+    chatgptCallbackUrl: "",
+  };
+  const apiClient = {
+    get: vi.fn().mockResolvedValue({ ...unavailable, chatgptEnabled: true }),
+    put: vi.fn().mockResolvedValue({ ...unavailable, chatgptEnabled: false }),
+    delete: vi.fn(),
+  };
+  renderPanel(apiClient);
+
+  const chatgpt = await screen.findByRole("checkbox", {
+    name: "Enable ChatGPT sign-in",
+  });
+  expect(chatgpt).toBeChecked();
+  expect(chatgpt).toBeEnabled();
+  fireEvent.click(chatgpt);
+  expect(chatgpt).not.toBeChecked();
+  expect(chatgpt).toBeDisabled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save social sign-in settings" }),
+  );
+  await screen.findByText("Social sign-in settings saved.");
+  expect(apiClient.put).toHaveBeenCalledWith(
+    "/v1/tenants/42/social-settings",
+    expect.objectContaining({ chatgptEnabled: false }),
+  );
+});
+
 it("saves ChatGPT sign-in and exposes its callback and email prerequisite", async () => {
   const callbackUrl = "https://auth.example.test/api/auth/callback/chatgpt";
   const apiClient = {
