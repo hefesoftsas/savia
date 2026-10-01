@@ -1,3 +1,12 @@
+import type {
+  PluginPanelContext,
+  PluginPanelResult,
+} from "@savia/studio-shared/plugin-panels";
+import {
+  createPluginPanelController,
+  type ActivePluginPanel,
+} from "./plugin-panel-controller";
+import { PluginHostPanel } from "./plugin-host-panel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { pluginApiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
@@ -62,6 +71,7 @@ export function CustomPluginFrame({
   title,
   src,
   screen,
+  panelBinding,
   heightClassName = screen
     ? "h-[calc(100dvh-7rem)] min-h-[32rem]"
     : "h-[480px]",
@@ -71,9 +81,74 @@ export function CustomPluginFrame({
   src?: string;
   screen?: { object: string; view: string };
   heightClassName?: string;
+  panelBinding?: {
+    context: PluginPanelContext;
+    onEvent: (message: Record<string, unknown>, frame: Window) => void;
+    onFrame: (frame: Window | null, session: string) => void;
+    onFailure: () => void;
+    onRetry: (retry: () => void) => void;
+  };
 }) {
   const t = useMessages(automationMessages);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const uiSession = useRef("");
+  const panelBindingRef = useRef(panelBinding);
+  panelBindingRef.current = panelBinding;
+  const controller = useRef(createPluginPanelController());
+  const [panel, setPanel] = useState<ActivePluginPanel | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const retryAction = useRef<(() => void) | null>(null);
+  const child = useRef<{ frame: Window; session: string } | null>(null);
+  function finishPanel(result: PluginPanelResult) {
+    const active = controller.current.current;
+    if (!active) return;
+    frameRef.current?.contentWindow?.postMessage(
+      {
+        ns: "savia-plugin-ui",
+        version: 1,
+        type: "result",
+        session: uiSession.current,
+        id: active.requestId,
+        result,
+      },
+      "*",
+    );
+    controller.current.dispose();
+    retryAction.current = null;
+    setPanel(null);
+    setConfirming(false);
+    child.current = null;
+  }
+  function requestClose(discard = false) {
+    const active = controller.current.current;
+    if (!active || active.state.busy) return;
+    if (active.state.dirty && !discard) {
+      setConfirming(true);
+      return;
+    }
+    if (retryAction.current) {
+      const retry = retryAction.current;
+      retryAction.current = null;
+      setConfirming(false);
+      retry();
+      return;
+    }
+    finishPanel({ status: "cancelled" });
+  }
+  function focusEditor(backwards = false) {
+    child.current?.frame.postMessage(
+      {
+        ns: "savia-plugin-ui",
+        version: 1,
+        type: "focus-editor",
+        session: child.current.session,
+        backwards,
+      },
+      "*",
+    );
+  }
+
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const [readyFrame, setReadyFrame] = useState<string | null>(null);
   const [failedFrame, setFailedFrame] = useState<string | null>(null);
@@ -92,8 +167,8 @@ export function CustomPluginFrame({
       document.documentElement.classList.contains("dark") ? "dark" : "light",
     [screenUrl],
   );
-  const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}`;
-  const frameKey = `${shellUrl}#${attempt}`;
+  const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}${panelBinding ? "&panel=1" : ""}`;
+  const frameKey = `${shellUrl}#${attempt}:${sessionRevision}`;
   const settingsPath = `/extensions/${encodeURIComponent(pluginId)}/settings`;
 
   useEffect(() => {
@@ -102,7 +177,24 @@ export function CustomPluginFrame({
       prefetchedSettings.current = null;
       if (restartForNewIdentity) setSessionRevision(sessionGeneration.current);
     };
-    const onSessionCleared = () => invalidatePrefetch(false);
+    const onSessionCleared = () => {
+      invalidatePrefetch(false);
+      controller.current.dispose();
+      retryAction.current = null;
+      child.current = null;
+      setConfirming(false);
+      setPanel(null);
+      frameRef.current?.contentWindow?.postMessage(
+        {
+          ns: "savia-plugin-ui",
+          version: 1,
+          type: "dispose",
+          session: uiSession.current,
+        },
+        "*",
+      );
+      uiSession.current = "";
+    };
     const onIdentityChanged = () => invalidatePrefetch(true);
     window.addEventListener("savia:session-cleared", onSessionCleared);
     window.addEventListener("savia:identity-changed", onIdentityChanged);
@@ -144,6 +236,11 @@ export function CustomPluginFrame({
   }, [frameKey, readyFrame]);
 
   useEffect(() => {
+    if (failedFrame === frameKey) panelBindingRef.current?.onFailure();
+  }, [failedFrame, frameKey]);
+
+  useEffect(() => {
+    let handshakeNonce = "";
     function sendTheme() {
       const host = getComputedStyle(document.documentElement);
       frameRef.current?.contentWindow?.postMessage(
@@ -163,6 +260,56 @@ export function CustomPluginFrame({
     }
     async function onMessage(event: MessageEvent) {
       if (event.source !== frameRef.current?.contentWindow) return;
+      const ui = event.data;
+      if (ui?.ns === "savia-plugin-ui" && ui.version === 1) {
+        const frame = frameRef.current!.contentWindow!;
+        const binding = panelBindingRef.current;
+        if (
+          ui.type === "hello" &&
+          typeof ui.nonce === "string" &&
+          ui.nonce.length <= 128
+        ) {
+          if (handshakeNonce && handshakeNonce !== ui.nonce) return;
+          if (!handshakeNonce) uiSession.current = crypto.randomUUID();
+          handshakeNonce = ui.nonce;
+          binding?.onFrame(frame, uiSession.current);
+          frame.postMessage(
+            {
+              ns: "savia-plugin-ui",
+              version: 1,
+              type: "init",
+              nonce: ui.nonce,
+              session: uiSession.current,
+              panel: binding?.context ?? null,
+            },
+            "*",
+          );
+          return;
+        }
+        if (!uiSession.current || ui.session !== uiSession.current) return;
+        if (binding) {
+          if (ui.panelId === binding.context.panelId)
+            binding.onEvent(ui, frame);
+          return;
+        }
+        if (ui.type === "open" && typeof ui.id === "string") {
+          const active = controller.current.open(ui.id, ui.request);
+          if (active) setPanel({ ...active });
+          else
+            frame.postMessage(
+              {
+                ns: "savia-plugin-ui",
+                version: 1,
+                type: "result",
+                session: uiSession.current,
+                id: ui.id,
+                error: "Panel unavailable.",
+              },
+              "*",
+            );
+        }
+        return;
+      }
       const message = event.data as Partial<PluginFrameRequest>;
       if (!message || message.ns !== "savia-plugin") return;
       if (message.type === "ready") {
@@ -259,46 +406,126 @@ export function CustomPluginFrame({
       attributeFilter: ["class", "style", "data-color-theme"],
     });
     return () => {
+      frameRef.current?.contentWindow?.postMessage(
+        {
+          ns: "savia-plugin-ui",
+          version: 1,
+          type: "dispose",
+          session: uiSession.current,
+        },
+        "*",
+      );
+      uiSession.current = "";
+      controller.current.dispose();
+      retryAction.current = null;
+      child.current = null;
+      setConfirming(false);
+      setPanel(null);
       window.removeEventListener("message", onMessage);
       observer.disconnect();
     };
   }, [frameKey]);
 
   return (
-    <div
-      className={`relative w-full overflow-hidden rounded-md border bg-background ${heightClassName}`}
-    >
-      {failedFrame === frameKey ? (
-        <div
-          role="alert"
-          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center"
-        >
-          <p>{t("Plugin could not be loaded.")}</p>
-          <Button
-            variant="outline"
-            onClick={() => setAttempt((value) => value + 1)}
+    <>
+      <div
+        className={`relative w-full overflow-hidden rounded-md border bg-background ${heightClassName}`}
+      >
+        {failedFrame === frameKey ? (
+          <div
+            role="alert"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center"
           >
-            {t("Reintentar")}
-          </Button>
-        </div>
-      ) : readyFrame !== frameKey ? (
-        <div
-          role="status"
-          className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm text-muted-foreground"
+            <p>{t("Plugin could not be loaded.")}</p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const retry = () => setAttempt((value) => value + 1);
+                if (panelBinding) panelBinding.onRetry(retry);
+                else retry();
+              }}
+            >
+              {t("Reintentar")}
+            </Button>
+          </div>
+        ) : readyFrame !== frameKey ? (
+          <div
+            role="status"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm text-muted-foreground"
+          >
+            {t("Cargando plugins…")}
+          </div>
+        ) : null}
+        <iframe
+          key={frameKey}
+          ref={frameRef}
+          src={shellUrl}
+          sandbox="allow-scripts allow-downloads"
+          title={title}
+          onLoad={() => setLoadedUrl(frameKey)}
+          onError={() => setFailedFrame(frameKey)}
+          className={`h-full w-full border-0 ${loadedUrl === frameKey ? "" : "invisible"}`}
+        />
+      </div>
+      {panel && !panelBinding && (
+        <PluginHostPanel
+          title={panel.request.title}
+          busy={panel.state.busy}
+          confirming={confirming}
+          closeRef={closeRef}
+          onClose={() => requestClose()}
+          onDiscard={() => requestClose(true)}
+          onKeep={() => {
+            retryAction.current = null;
+            setConfirming(false);
+          }}
+          onFocusEditor={focusEditor}
         >
-          {t("Cargando plugins…")}
-        </div>
-      ) : null}
-      <iframe
-        key={frameKey}
-        ref={frameRef}
-        src={shellUrl}
-        sandbox="allow-scripts allow-downloads"
-        title={title}
-        onLoad={() => setLoadedUrl(frameKey)}
-        onError={() => setFailedFrame(frameKey)}
-        className={`h-full w-full border-0 ${loadedUrl === frameKey ? "" : "invisible"}`}
-      />
-    </div>
+          <CustomPluginFrame
+            pluginId={pluginId}
+            title={panel.request.title}
+            src={src}
+            screen={screen}
+            heightClassName="h-full border-0 rounded-none"
+            panelBinding={{
+              context: { panelId: panel.id, request: panel.request },
+              onFrame: (frame, session) => {
+                child.current = frame ? { frame, session } : null;
+              },
+              onFailure: () => {
+                const active = controller.current.current;
+                if (active) {
+                  controller.current.update({ ...active.state, busy: false });
+                  setPanel({ ...active });
+                }
+              },
+              onRetry: (retry) => {
+                const active = controller.current.current;
+                if (!active || active.state.busy) return;
+                if (active.state.dirty) {
+                  retryAction.current = retry;
+                  setConfirming(true);
+                } else retry();
+              },
+              onEvent: (message) => {
+                const active = controller.current.current;
+                if (!active || message.panelId !== active.id) return;
+                if (message.type === "state") {
+                  controller.current.update(message.state);
+                  setPanel({ ...active });
+                }
+                if (message.type === "close") requestClose();
+                if (message.type === "focus-host") closeRef.current?.focus();
+                if (
+                  message.type === "complete" &&
+                  (message.result as PluginPanelResult)?.status === "saved"
+                )
+                  finishPanel({ status: "saved" });
+              },
+            }}
+          />
+        </PluginHostPanel>
+      )}
+    </>
   );
 }

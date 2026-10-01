@@ -500,3 +500,31 @@ satisfy them. Invalid collection declarations are rejected during ZIP upload.
 ## Shared private registry
 
 An optional [shared private plugin registry](guides/plugin-registry.md) stores immutable ZIP releases in a dedicated R2 bucket outside environment databases. Tenant administrators can import a pinned release from **Shared catalog** into their local store. Execution, installation state, data and credentials remain local. Exact tenant mappings and server-only read credentials control access; existing uploads are not automatically published.
+
+### Host-managed editor panels
+
+Screen shells negotiate the optional `savia.ui` capability with their parent
+before rendering. An older host falls back after two seconds; plugins must keep
+an inline editor when `savia.ui` is absent. Use
+`await savia.ui.openPanel({ view: "record-editor", title, params: { recordId } })`
+from the list, omitting `recordId` to create a record. A saved result refreshes
+the list; cancellation preserves its filters, page and scroll.
+
+The host derives a second shell from the owning plugin and selected screen, when
+available. The store viewer can open panels without a selected screen. It
+passes `savia.ui.panel` through a source-checked, nonce-correlated handshake; the
+plugin renders only its editor in that frame. Arbitrary URLs, tenant overrides,
+unknown views and nested panels are rejected. Both frames retain the existing
+sandbox and authenticated API bridge. Session changes dispose the panel.
+
+Editors report `{ dirty, busy }` with `setPanelState`, use `requestClose` for
+Cancel, and call `completePanel({ status: "saved" })` only after a successful
+mutation. The host owns discard confirmation, full-viewport framing and focus
+transfer; the plugin owns fields, validation and a fixed action footer. Failed
+saves keep the draft in memory. No draft is persisted in browser storage.
+
+The eleven Workbench ports share this editor implementation. Release their ZIPs
+alongside the host and shell. Catalog upload alone does not replace an installed
+version: update existing installations explicitly, preserving optional plugins
+that are uninstalled or disabled. Verify the installed version in each target
+workspace before considering the rollout complete.

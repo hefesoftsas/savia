@@ -208,19 +208,18 @@ it("drops a pending settings prefetch when the authenticated identity changes", 
       Response.json({ data: { value: { owner: "previous" }, version: 1 } }),
     ),
   );
-  expect(send).toHaveBeenCalledWith(
-    expect.objectContaining({
-      type: "response",
-      id: "old-settings",
-      ok: false,
-    }),
+  expect(send).not.toHaveBeenCalledWith(
+    expect.objectContaining({ type: "response", id: "old-settings" }),
     "*",
   );
+  const currentFrame = screen.getByTitle("Cotizador") as HTMLIFrameElement;
+  expect(currentFrame).not.toBe(frame);
+  const currentSend = vi.spyOn(currentFrame.contentWindow!, "postMessage");
 
   fireEvent(
     window,
     new MessageEvent("message", {
-      source: frame.contentWindow,
+      source: currentFrame.contentWindow,
       data: {
         ns: "savia-plugin",
         type: "request",
@@ -230,7 +229,7 @@ it("drops a pending settings prefetch when the authenticated identity changes", 
     }),
   );
   await waitFor(() =>
-    expect(send).toHaveBeenCalledWith(
+    expect(currentSend).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "response",
         id: "current-settings",
@@ -675,3 +674,130 @@ it.each(["https://example.com/api/users", "//example.com", "/%2e%2e/users"])(
     );
   },
 );
+
+function uiMessage(frame: HTMLIFrameElement, data: Record<string, unknown>) {
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin-ui", version: 1, ...data },
+    }),
+  );
+}
+function handshake(frame: HTMLIFrameElement) {
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  uiMessage(frame, { type: "hello", nonce: "test" });
+  const init = send.mock.calls.find(([message]) => message.type === "init")![0];
+  return { send, session: init.session, panelId: init.panel?.panelId };
+}
+it("hosts only verified owner requests, keeps the list mounted and confirms dirty closes", () => {
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.collections"
+      title="List"
+      screen={{ object: "accounts", view: "records" }}
+    />,
+  );
+  const owner = screen.getByTitle("List") as HTMLIFrameElement;
+  const host = handshake(owner);
+  const request = {
+    view: "record-editor",
+    title: "Edit account",
+    params: { recordId: "r1" },
+  };
+  uiMessage(owner, { type: "open", id: "request1", session: "stale", request });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  uiMessage(owner, {
+    type: "open",
+    id: "request1",
+    session: host.session,
+    request,
+  });
+  const editor = screen.getByTitle("Edit account") as HTMLIFrameElement;
+  expect(new URL(editor.src).searchParams.get("panel")).toBe("1");
+  expect(screen.getByTitle("List")).toBe(owner);
+  const child = handshake(editor);
+  uiMessage(editor, {
+    type: "state",
+    session: child.session,
+    panelId: child.panelId,
+    state: { dirty: true, busy: false },
+  });
+  uiMessage(editor, {
+    type: "close",
+    session: child.session,
+    panelId: child.panelId,
+  });
+  expect(screen.getByText("Discard changes?")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Keep editing"));
+  uiMessage(editor, {
+    type: "state",
+    session: child.session,
+    panelId: child.panelId,
+    state: { dirty: true, busy: true },
+  });
+  uiMessage(editor, {
+    type: "close",
+    session: child.session,
+    panelId: child.panelId,
+  });
+  expect(screen.queryByText("Discard changes?")).toBeNull();
+  uiMessage(editor, {
+    type: "complete",
+    session: child.session,
+    panelId: child.panelId,
+    result: { status: "saved" },
+  });
+  expect(screen.queryByTitle("Edit account")).toBeNull();
+  expect(host.send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "result",
+      id: "request1",
+      result: { status: "saved" },
+    }),
+    "*",
+  );
+});
+it("allows closing failed editors and removes panels when identity changes", () => {
+  render(
+    <CustomPluginFrame
+      pluginId="insurance.collections"
+      title="List"
+      screen={{ object: "accounts", view: "records" }}
+    />,
+  );
+  const owner = screen.getByTitle("List") as HTMLIFrameElement;
+  const host = handshake(owner);
+  uiMessage(owner, {
+    type: "open",
+    id: "request1",
+    session: host.session,
+    request: { view: "record-editor", title: "Editor", params: {} },
+  });
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: (screen.getByTitle("Editor") as HTMLIFrameElement).contentWindow,
+      data: { ns: "savia-plugin", type: "error" },
+    }),
+  );
+  expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+  fireEvent(window, new Event("savia:identity-changed"));
+  expect(screen.queryByTitle("Editor")).toBeNull();
+});
+it("opens a host editor from the store viewer without a selected screen", () => {
+  render(
+    <CustomPluginFrame pluginId="insurance.collections" title="Store viewer" />,
+  );
+  const owner = screen.getByTitle("Store viewer") as HTMLIFrameElement;
+  const host = handshake(owner);
+  uiMessage(owner, {
+    type: "open",
+    id: "store-editor",
+    session: host.session,
+    request: { view: "record-editor", title: "Store editor", params: {} },
+  });
+  const editor = screen.getByTitle("Store editor") as HTMLIFrameElement;
+  expect(new URL(editor.src).pathname).toBe(new URL(owner.src).pathname);
+  expect(new URL(editor.src).searchParams.get("panel")).toBe("1");
+});

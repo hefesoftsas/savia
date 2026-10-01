@@ -226,7 +226,7 @@ const config = useMemo(() => createConfig(locale), [locale]);
   const [revision, setRevision] = useState(0);
   return (
     <>
-      <Backfill savia={savia} onSaved={() => setRevision(revision + 1)} />
+      {!savia.ui?.panel && <Backfill savia={savia} onSaved={() => setRevision(revision + 1)} />}
       <Workbench key={revision} savia={savia} config={config} />
     </>
   );

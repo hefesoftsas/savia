@@ -345,6 +345,9 @@
 .iw-drawer textarea {
   resize: vertical;
 }
+.iw-drawer > .iw-editor-footer {
+  margin: 1.1rem;
+}
 .iw-editor-footer {
   display: flex;
   justify-content: flex-end;
@@ -888,5 +891,50 @@
   .iw-finance .iw-controls > label {
     min-width: 0;
     width: 100%;
+  }
+}
+
+/* Hosted editors use the full panel frame; only the field area scrolls. */
+.iw-hosted-workbench {
+  height: 100dvh;
+  padding: 0;
+  max-width: none;
+}
+.iw-embedded-editor {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 0;
+  box-shadow: none;
+  animation: none;
+}
+.iw-embedded-editor form {
+  padding: 0;
+}
+.iw-embedded-editor .iw-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+.iw-embedded-editor .iw-editor-footer {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 1rem 1.5rem max(1rem, env(safe-area-inset-bottom));
+  background: var(--iw-bg);
+}
+.iw-embedded-editor .iw-editor-footer button {
+  min-height: 44px;
+}
+.iw-embedded-editor .iw-editor-tabs {
+  flex-shrink: 0;
+}
+.iw-embedded-editor .iw-wide {
+  grid-column: 1 / -1;
+}
+@media (min-width: 720px) {
+  .iw-embedded-editor fieldset {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1.5rem;
   }
 }

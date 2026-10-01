@@ -1,3 +1,4 @@
+import { HostedRecordEditor } from "./hosted-record-editor";
 import { usePluginLocale } from "@savia/studio-shared/plugin-locale-react";
 import { useWorkbenchMessages } from "./localization";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,15 +20,25 @@ import "./workbench.css";
 // STORY: identify priority, inspect an account or case, save the next action.
 // FIRST VIEWPORT: title/action, operational totals, priority filters, table/editor.
 // FORM: existing administrative worklist extended with a responsive inline panel.
-export function Workbench({
+export function Workbench(props: {
+  savia: PluginApi;
+  config: WorkbenchConfig;
+}) {
+  return props.savia.ui?.panel ? (
+    <HostedRecordEditor {...props} />
+  ) : (
+    <WorkbenchList {...props} />
+  );
+}
+function WorkbenchList({
   savia,
   config,
 }: {
   savia: PluginApi;
   config: WorkbenchConfig;
 }) {
-const locale = usePluginLocale();
-const t = useWorkbenchMessages(config.messages);
+  const locale = usePluginLocale();
+  const t = useWorkbenchMessages(config.messages);
 
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +58,7 @@ const t = useWorkbenchMessages(config.messages);
     let active = true;
     setLoading(true);
     setError("");
-    setRecords([]);
+
     setAsOf(today());
     loadRecords(savia, config.object)
       .then((result) => {
@@ -90,7 +101,30 @@ const t = useWorkbenchMessages(config.messages);
   const metrics = config.metrics(records, asOf);
   function close() {
     setEditor(null);
-    requestAnimationFrame(() => opener.current?.focus());
+    requestAnimationFrame(() => opener.current?.focus({ preventScroll: true }));
+  }
+  async function openEditor(record: WorkRecord | null) {
+    setNotice("");
+    if (!savia.ui) {
+      setEditor({ record });
+      return;
+    }
+    setEditor({ record });
+    try {
+      const result = await savia.ui.openPanel({
+        view: "record-editor",
+        title: config.singular,
+        params: record ? { recordId: record.id } : {},
+      });
+      if (result.status === "saved") {
+        setRevision((n) => n + 1);
+        setNotice("Cambios guardados.");
+      }
+    } catch (cause) {
+      setNotice(errorMessage(cause));
+    } finally {
+      close();
+    }
   }
   function exportCsv() {
     const blob = new Blob(
@@ -106,52 +140,53 @@ const t = useWorkbenchMessages(config.messages);
   }
   return (
     <section className="iw-workbench" aria-label={config.title}>
-       <header className="iw-heading">
-         <div>
-           <p className="iw-context">{t("Seguros / Operación diaria")} </p>
-           <h1>{config.title}</h1>
-           <p>{config.description}</p>
-         </div>
-         <button
+      <header className="iw-heading">
+        <div>
+          <p className="iw-context">{t("Seguros / Operación diaria")} </p>
+          <h1>{config.title}</h1>
+          <p>{config.description}</p>
+        </div>
+        <button
           className="iw-primary"
           disabled={loading || !!error || !!editor}
           onClick={(event) => {
             opener.current = event.currentTarget;
             setNotice("");
-            setEditor({ record: null });
+            void openEditor(null);
           }}
         >
-           {config.createLabel}
-         </button>
-       </header>
-       <div className="iw-announcements" aria-live="polite">
-         {notice && <p className="iw-notice">{t(notice)}</p>}
-       </div>
-       {error && (
+          {config.createLabel}
+        </button>
+      </header>
+      <div className="iw-announcements" aria-live="polite">
+        {notice && <p className="iw-notice">{t(notice)}</p>}
+      </div>
+      {error && (
         <div className="iw-error" role="alert">
-           <strong>{t("No se pudo cargar la lista.")} </strong>
-           <p>{error}</p>
-           <button onClick={() => setRevision((value) => value + 1)}>
-            {t("Reintentar")} </button>
-         </div>
+          <strong>{t("No se pudo cargar la lista.")} </strong>
+          <p>{error}</p>
+          <button onClick={() => setRevision((value) => value + 1)}>
+            {t("Reintentar")}{" "}
+          </button>
+        </div>
       )}
-       <dl
+      <dl
         className="iw-metrics"
         aria-label={t("Resumen de la colección")}
         aria-busy={loading}
       >
-         {metrics.map((metric) => (
+        {metrics.map((metric) => (
           <div key={metric.label}>
-             <dt>{metric.label}</dt>
-             <dd>{loading || error ? "—" : metric.value}</dd>
-             <small>{metric.detail}</small>
-           </div>
+            <dt>{metric.label}</dt>
+            <dd>{loading || error ? "—" : metric.value}</dd>
+            <small>{metric.detail}</small>
+          </div>
         ))}
-       </dl>
-       <div className="iw-layout">
-         <div className="iw-list">
-           <nav className="iw-filters" aria-label={t("Prioridad")}>
-             {config.filters.map((item) => (
+      </dl>
+      <div className="iw-layout">
+        <div className="iw-list">
+          <nav className="iw-filters" aria-label={t("Prioridad")}>
+            {config.filters.map((item) => (
               <button
                 key={item.value}
                 aria-pressed={filter === item.value}
@@ -160,21 +195,21 @@ const t = useWorkbenchMessages(config.messages);
                   setPage(1);
                 }}
               >
-                 {item.label}
-                 <span>
-                   {loading || error
+                {item.label}
+                <span>
+                  {loading || error
                     ? "—"
                     : records.filter((record) =>
                         config.matches(record, item.value, asOf),
                       ).length}
-                 </span>
-               </button>
+                </span>
+              </button>
             ))}
-           </nav>
-           <div className="iw-toolbar">
-             <label className="iw-search">
-               <span className="iw-sr-only">{t("Buscar registros")} </span>
-               <input
+          </nav>
+          <div className="iw-toolbar">
+            <label className="iw-search">
+              <span className="iw-sr-only">{t("Buscar registros")} </span>
+              <input
                 type="search"
                 placeholder={t("Buscar cliente, póliza o responsable…")}
                 value={query}
@@ -183,59 +218,67 @@ const t = useWorkbenchMessages(config.messages);
                   setPage(1);
                 }}
               />
-             </label>
-             <label>
-               <span className="iw-sr-only">{t("Filtrar por etapa")} </span>
-               <select
+            </label>
+            <label>
+              <span className="iw-sr-only">{t("Filtrar por etapa")} </span>
+              <select
                 value={stage}
                 onChange={(event) => {
                   setStage(event.target.value);
                   setPage(1);
                 }}
               >
-                 <option value="">{t("Todas las etapas")} </option>
-                 {config.stages.map((item) => (
+                <option value="">{t("Todas las etapas")} </option>
+                {config.stages.map((item) => (
                   <option key={item.value} value={item.value}>
-                     {item.label}
-                   </option>
+                    {item.label}
+                  </option>
                 ))}
-               </select>
-             </label>
-             <button
+              </select>
+            </label>
+            <button
               aria-label={t("Actualizar lista")}
               disabled={loading || !!editor}
               onClick={() => setRevision((value) => value + 1)}
             >
-              {t("Actualizar")} </button>
-             <button
+              {t("Actualizar")}{" "}
+            </button>
+            <button
               disabled={loading || !!error || !filtered.length}
               onClick={exportCsv}
             >
-              {t("Exportar CSV")} </button>
-           </div>
-           {loading ? (
+              {t("Exportar CSV")}{" "}
+            </button>
+          </div>
+          {loading && !records.length ? (
             <div className="iw-loading" role="status">
-               <p>{t("Cargando registros…")} </p>
-               {[0, 1, 2, 3].map((row) => (
+              <p>{t("Cargando registros…")} </p>
+              {[0, 1, 2, 3].map((row) => (
                 <div key={row} />
               ))}
-             </div>
+            </div>
           ) : (
             !error && (
               <>
-                 {!filtered.length ? (
+                {!filtered.length ? (
                   <div className="iw-empty">
-                     <h2>
-                       {records.length
+                    <h2>
+                      {records.length
                         ? t("No hay coincidencias")
-                        : t("Tu gestión de %{title} empieza aquí", { title: config.title.toLowerCase() })}
-                     </h2>
-                     <p>
-                       {records.length
-                        ? t("Prueba otra búsqueda o elimina los filtros para ver más registros.")
-                        : t("Crea el primer registro para organizar vencimientos, responsables y próximas acciones.")}
-                     </p>
-                     {records.length > 0 && (
+                        : t("Tu gestión de %{title} empieza aquí", {
+                            title: config.title.toLowerCase(),
+                          })}
+                    </h2>
+                    <p>
+                      {records.length
+                        ? t(
+                            "Prueba otra búsqueda o elimina los filtros para ver más registros.",
+                          )
+                        : t(
+                            "Crea el primer registro para organizar vencimientos, responsables y próximas acciones.",
+                          )}
+                    </p>
+                    {records.length > 0 && (
                       <button
                         onClick={() => {
                           setQuery("");
@@ -244,9 +287,10 @@ const t = useWorkbenchMessages(config.messages);
                           setPage(1);
                         }}
                       >
-                        {t("Limpiar filtros")} </button>
+                        {t("Limpiar filtros")}{" "}
+                      </button>
                     )}
-                   </div>
+                  </div>
                 ) : (
                   <div
                     className="iw-table-scroll"
@@ -254,12 +298,14 @@ const t = useWorkbenchMessages(config.messages);
                     role="region"
                     aria-label={t("Lista de registros")}
                   >
-                     <table>
-                       <caption className="iw-sr-only">
-                         {config.title}: {filtered.length} {t("registros encontrados")} </caption>
-                       <thead>
-                         <tr>
-                           {config.columns.map((column) => (
+                    <table>
+                      <caption className="iw-sr-only">
+                        {config.title}: {filtered.length}{" "}
+                        {t("registros encontrados")}{" "}
+                      </caption>
+                      <thead>
+                        <tr>
+                          {config.columns.map((column) => (
                             <th
                               key={column.key}
                               scope="col"
@@ -267,21 +313,21 @@ const t = useWorkbenchMessages(config.messages);
                                 column.numeric ? "iw-numeric" : undefined
                               }
                             >
-                               {column.label}
-                             </th>
+                              {column.label}
+                            </th>
                           ))}
-                           <th scope="col">
-                             <span className="iw-sr-only">{t("Acciones")} </span>
-                           </th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {visible.map((record) => (
+                          <th scope="col">
+                            <span className="iw-sr-only">{t("Acciones")} </span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.map((record) => (
                           <tr
                             key={record.id}
                             data-selected={editor?.record?.id === record.id}
                           >
-                             {config.columns.map((column) => (
+                            {config.columns.map((column) => (
                               <td
                                 key={column.key}
                                 data-label={column.label}
@@ -289,57 +335,62 @@ const t = useWorkbenchMessages(config.messages);
                                   column.numeric ? "iw-numeric" : undefined
                                 }
                               >
-                                 {column.render(record, asOf)}
-                               </td>
+                                {column.render(record, asOf)}
+                              </td>
                             ))}
-                             <td>
-                               <button
-                                aria-label={t("Gestionar %{name}", { name: text(record.name) })}
+                            <td>
+                              <button
+                                aria-label={t("Gestionar %{name}", {
+                                  name: text(record.name),
+                                })}
                                 disabled={!!editor}
                                 onClick={(event) => {
                                   opener.current = event.currentTarget;
                                   setNotice("");
-                                  setEditor({ record });
+                                  void openEditor(record);
                                 }}
                               >
-                                {t("Gestionar")} <span aria-hidden="true">↗</span>
-                               </button>
-                             </td>
-                           </tr>
+                                {t("Gestionar")}{" "}
+                                <span aria-hidden="true">↗</span>
+                              </button>
+                            </td>
+                          </tr>
                         ))}
-                       </tbody>
-                     </table>
-                   </div>
+                      </tbody>
+                    </table>
+                  </div>
                 )}
-                 <footer className="iw-pagination">
-                   <span>
-                     {filtered.length}{" "}
-                     {filtered.length === 1 ? t("registro") : t("registros")} ·{" "}
-                     {config.footerNote ?? t("Valores en COP")}
-                   </span>
-                   <div>
-                     <button
+                <footer className="iw-pagination">
+                  <span>
+                    {filtered.length}{" "}
+                    {filtered.length === 1 ? t("registro") : t("registros")} ·{" "}
+                    {config.footerNote ?? t("Valores en COP")}
+                  </span>
+                  <div>
+                    <button
                       aria-label={t("Página anterior")}
                       disabled={currentPage <= 1}
                       onClick={() => setPage(currentPage - 1)}
                     >
-                      {t("Anterior")} </button>
-                     <span>
-                       {currentPage} / {pages}
-                     </span>
-                     <button
+                      {t("Anterior")}{" "}
+                    </button>
+                    <span>
+                      {currentPage} / {pages}
+                    </span>
+                    <button
                       aria-label={t("Página siguiente")}
                       disabled={currentPage >= pages}
                       onClick={() => setPage(currentPage + 1)}
                     >
-                      {t("Siguiente")} </button>
-                   </div>
-                 </footer>
-               </>
+                      {t("Siguiente")}{" "}
+                    </button>
+                  </div>
+                </footer>
+              </>
             )
           )}
-         </div>
-         {editor && (
+        </div>
+        {editor && !savia.ui && (
           <RecordEditor
             key={editor.record?.id ?? "new"}
             config={config}
@@ -353,7 +404,7 @@ const t = useWorkbenchMessages(config.messages);
             }}
           />
         )}
-       </div>
-     </section>
+      </div>
+    </section>
   );
 }
