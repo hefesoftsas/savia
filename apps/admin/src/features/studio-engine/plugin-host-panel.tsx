@@ -44,6 +44,8 @@ export function PluginHostPanel({
 }) {
   const t = useMessages(messages);
   const contentRef = useRef<HTMLDivElement>(null);
+  const confirmingRef = useRef(confirming);
+  confirmingRef.current = confirming;
   useEffect(() => {
     if (!retained || !open) return;
     const content = contentRef.current;
@@ -56,7 +58,7 @@ export function PluginHostPanel({
     document.body.style.overflow = "hidden";
     closeRef.current?.focus();
     const trap = (event: FocusEvent) => {
-      if (!content?.contains(event.target as Node) && !confirming) closeRef.current?.focus();
+      if (!content?.contains(event.target as Node) && !confirmingRef.current) closeRef.current?.focus();
     };
     document.addEventListener("focusin", trap);
     return () => {
@@ -65,7 +67,7 @@ export function PluginHostPanel({
       document.removeEventListener("focusin", trap);
       previousFocus?.focus();
     };
-  }, [retained, open, confirming, closeRef]);
+  }, [retained, open, closeRef]);
   return (
     <Dialog.Root
       open={open}

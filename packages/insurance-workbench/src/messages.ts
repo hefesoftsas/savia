@@ -432,6 +432,7 @@ export const messages = {
     "Next",
     "Próxima"
   ],
+  "Guardado en este dispositivo. Pendiente de sincronización.": ["Guardado en este dispositivo. Pendiente de sincronización.", "Saved on this device. Pending synchronization.", "Salvo neste dispositivo. Sincronização pendente."],
   "Cambios guardados.": [
     "Cambios guardados.",
     "Changes saved.",

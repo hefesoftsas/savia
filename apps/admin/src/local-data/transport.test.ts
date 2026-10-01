@@ -20,7 +20,7 @@ function store() {
       syncState: { get: async () => ({ hydrated: true }) },
     },
     get: async () => document,
-    mutate: vi.fn().mockResolvedValue({ ...document, name: "Updated" }),
+    mutateWithReceipt: vi.fn().mockResolvedValue({ data: { ...document, name: "Updated" }, mutationId: "m1" }),
   };
 }
 describe("local CRM transport", () => {
@@ -76,7 +76,7 @@ it("forwards bulk operations without mistaking the reserved name for a record id
   });
   expect(result.ok).toBe(true);
   expect(network).toHaveBeenCalledOnce();
-  expect(local.mutate).not.toHaveBeenCalled();
+  expect(local.mutateWithReceipt).not.toHaveBeenCalled();
 });
 it("returns 404 for locally deleted detail records", async () => {
   const local = store();
@@ -122,7 +122,7 @@ it("does not turn record-detail endpoints into write routes", async () => {
     body: JSON.stringify({ name: "Wrong route" }),
   });
   expect(result.status).toBe(405);
-  expect(local.mutate).not.toHaveBeenCalled();
+  expect(local.mutateWithReceipt).not.toHaveBeenCalled();
 });
 
 it("reuses complete metadata on fetch failure even when the browser reports online", async () => {

@@ -7,7 +7,7 @@ export async function linkedFields(
   configured: readonly Field[],
   current: Record<string, unknown>,
 ) {
-  const definition = await savia.collections.collection(object).describe();
+  const definition = await (savia.localRecords ?? savia.collections).collection(object).describe();
   if (!definition)
     throw new Error(
       "No se pudo leer la colección. Cierra y actualiza antes de editar vínculos.",

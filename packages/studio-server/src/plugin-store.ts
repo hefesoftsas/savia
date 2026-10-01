@@ -1063,16 +1063,17 @@ if (entryUrl.origin !== bootstrapUrl.origin ||
   throw new Error("URL de entrada no válida.");
 const ENTRY_URL = entryUrl.href;
 const pending = new Map();
+const recordListeners = new Set();
 let seq = 0;
 const standby = params.get("standby") === "1";
 let activePanelId = null;
-function requestHost(path, method, body, panelId) {
+function requestHost(path, method, body, panelId, consistency) {
   if (standby && (!panelId || panelId !== activePanelId))
     return Promise.reject(new Error("The editor activation ended."));
   return new Promise((resolve, reject) => {
     const id = String(++seq);
     pending.set(id, { resolve, reject, panelId });
-    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body, panelId }, "*");
+    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body, panelId, consistency }, "*");
     setTimeout(() => {
       if (pending.has(id)) {
         pending.delete(id);
@@ -1094,6 +1095,10 @@ addEventListener("message", (event) => {
     document.documentElement.style.colorScheme = message.dark ? "dark" : "light";
     return;
   }
+  if (message?.ns === "savia-plugin" && message.type === "records-changed" && !standby) {
+    for (const listener of recordListeners) listener();
+    return;
+  }
   if (!message || message.ns !== "savia-plugin" || message.type !== "response") return;
   const slot = pending.get(message.id);
   if (!slot || (standby && (slot.panelId !== activePanelId || message.panelId !== slot.panelId))) return;
@@ -1102,8 +1107,10 @@ addEventListener("message", (event) => {
   else slot.reject(new Error(message.error || "Error del host."));
 });
 function createSavia(panelId) {
-const callHost = (path, method, body) => requestHost(path, method, body, panelId);
-function collection(name) {
+const callHost = (path, method, body, consistency) => requestHost(path, method, body, panelId, consistency);
+function collection(name, local = false) {
+  const send = (path, method, body) => callHost(path, method, body, local ? "local-first" : undefined);
+  const receipt = (result) => local ? { data: result?.data, persistence: result?.local === true ? "local" : "server", ...(result?.mutationId ? { mutationId: result.mutationId } : {}) } : result?.data;
   const resource = encodeURIComponent(name);
   return {
     async list(options = {}) {
@@ -1119,35 +1126,39 @@ function collection(name) {
       if (options.q) {
         params.set("q", options.q);
       }
-      return callHost("/records/" + resource + "?" + params, "GET");
+      return send("/records/" + resource + "?" + params, "GET");
     },
     async get(id) {
-      return (await callHost("/records/" + resource + "/" + encodeURIComponent(id), "GET")).data;
+      return (await send("/records/" + resource + "/" + encodeURIComponent(id), "GET")).data;
     },
     async create(input) {
-      return (await callHost("/records/" + resource, "POST", input)).data;
+      return receipt(await send("/records/" + resource, "POST", input));
     },
     async update(id, input, update = {}) {
-      return (await callHost("/records/" + resource + "/" + encodeURIComponent(id), "PATCH",
-        update.version === undefined ? input : { ...input, _version: update.version })).data;
+      return receipt(await send("/records/" + resource + "/" + encodeURIComponent(id), "PATCH",
+        update.version === undefined ? input : { ...input, _version: update.version }));
     },
     async remove(id, update = {}) {
       const params = new URLSearchParams();
       if (update.version !== undefined) params.set("version", String(update.version));
       const suffix = params.size ? "?" + params : "";
-      await callHost("/records/" + resource + "/" + encodeURIComponent(id) + suffix, "DELETE");
+      return receipt(await send("/records/" + resource + "/" + encodeURIComponent(id) + suffix, "DELETE"));
     },
     async describe() {
-      return (await callHost("/objects", "GET")).data.find((c) => c.name === name);
+      return (await send("/objects", "GET")).data.find((c) => c.name === name);
     },
     async removeMany(records) {
-      return (await callHost("/records/" + resource + "/bulk", "POST", { action: "delete", records })).data;
+      return (await send("/records/" + resource + "/bulk", "POST", { action: "delete", records })).data;
     },
   };
 }
 const extensionPath = "/extensions/" + encodeURIComponent(PLUGIN_ID);
 const savia = {
   pluginId: PLUGIN_ID,
+  localRecords: {
+    collection: (name) => collection(name, true),
+    subscribe(listener) { recordListeners.add(listener); return () => recordListeners.delete(listener); }
+  },
   collections: {
     async list() {
       return (await callHost("/objects", "GET")).data;
@@ -1248,6 +1259,7 @@ try {
     parent.postMessage({ ns: "savia-plugin", type: "prepared" }, "*");
     if (queuedApi) lifecycle.change(queuedApi);
   } else {
+  if (savia.ui && typeof module.renderPanel !== "function") savia.ui.preparePanel = undefined;
   const widgetId = params.get("widget") ?? "";
   const widgetCollection = params.get("collection") ?? "";
   const screenObject = params.get("screen") ?? "";

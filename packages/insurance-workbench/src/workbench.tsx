@@ -74,6 +74,7 @@ function WorkbenchList({
       active = false;
     };
   }, [savia, config.object, revision]);
+  useEffect(() => savia.localRecords?.subscribe?.(() => setRevision(n => n + 1)), [savia]);
   const filtered = useMemo(() => {
     const normalize = (value: string) =>
       value
@@ -118,7 +119,7 @@ function WorkbenchList({
       });
       if (result.status === "saved") {
         setRevision((n) => n + 1);
-        setNotice("Cambios guardados.");
+        setNotice(result.persistence === "local" ? "Guardado en este dispositivo. Pendiente de sincronización." : "Cambios guardados.");
       }
     } catch (cause) {
       setNotice(errorMessage(cause));

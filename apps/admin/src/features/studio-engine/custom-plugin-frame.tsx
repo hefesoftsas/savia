@@ -8,6 +8,7 @@ import {
 } from "./plugin-panel-controller";
 import { PluginHostPanel } from "./plugin-host-panel";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { pluginRecordFetch } from "./plugin-record-transport";
 import { pluginApiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ type PluginFrameRequest = {
   method?: string;
   body?: unknown;
   panelId?: string;
+  consistency?: string;
 };
 
 type PrefetchedSettings = {
@@ -94,6 +96,7 @@ export function CustomPluginFrame({
   const t = useMessages(automationMessages);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const uiSession = useRef("");
+  const revoked = useRef(false);
   const panelBindingRef = useRef(panelBinding);
   panelBindingRef.current = panelBinding;
   const controller = useRef(createPluginPanelController());
@@ -182,6 +185,7 @@ export function CustomPluginFrame({
       if (restartForNewIdentity) setSessionRevision(sessionGeneration.current);
     };
     const onSessionCleared = () => {
+      revoked.current = true;
       invalidatePrefetch(false);
       controller.current.dispose();
       retryAction.current = null;
@@ -200,7 +204,7 @@ export function CustomPluginFrame({
       );
       uiSession.current = "";
     };
-    const onIdentityChanged = () => invalidatePrefetch(true);
+    const onIdentityChanged = () => { revoked.current = false; invalidatePrefetch(true); };
     window.addEventListener("savia:session-cleared", onSessionCleared);
     window.addEventListener("savia:identity-changed", onIdentityChanged);
     return () => {
@@ -264,7 +268,7 @@ export function CustomPluginFrame({
       );
     }
     async function onMessage(event: MessageEvent) {
-      if (event.source !== frameRef.current?.contentWindow) return;
+      if (revoked.current || event.source !== frameRef.current?.contentWindow) return;
       const ui = event.data;
       if (ui?.ns === "savia-plugin-ui" && ui.version === 1) {
         const frame = frameRef.current!.contentWindow!;
@@ -368,11 +372,12 @@ export function CustomPluginFrame({
       if (reusableSettings) prefetchedSettings.current = null;
       try {
         const data = await (reusableSettings ??
-          pluginApiFetch<unknown>(
+          pluginRecordFetch<unknown>(
             "/api" + message.path,
             message.body === undefined
               ? { method }
               : { method, body: JSON.stringify(message.body) },
+            message.consistency,
           ));
         // A previous frame must never deliver a pending response to its replacement.
         if (source !== frameRef.current?.contentWindow) return;
@@ -451,6 +456,21 @@ export function CustomPluginFrame({
     const context = panelBinding.context;
     if (context) frameRef.current?.contentWindow?.postMessage({ ns: "savia-plugin-ui", version: 1, type: "activate", session: uiSession.current, panel: context }, "*");
   }, [panelBinding?.context?.panelId, frameKey]);
+
+  useEffect(() => {
+    if (panelBinding) return;
+    const workspace = getStudioRuntime().localWorkspace;
+    if (!workspace) return;
+    return workspace.store.subscribeQueryChanges(change => {
+      if (change.authorizationError) {
+        revoked.current = true;
+        controller.current.dispose(); setPanel(null); setPrepared(false);
+        frameRef.current?.contentWindow?.postMessage({ ns: "savia-plugin-ui", version: 1, session: uiSession.current, type: "dispose" }, "*");
+        return;
+      }
+      if (change.changed.size || change.metadataChanged) frameRef.current?.contentWindow?.postMessage({ ns: "savia-plugin", type: "records-changed" }, "*");
+    });
+  }, [frameKey]);
 
   return (
     <>
@@ -549,7 +569,7 @@ export function CustomPluginFrame({
                   message.type === "complete" &&
                   (message.result as PluginPanelResult)?.status === "saved"
                 )
-                  finishPanel({ status: "saved" });
+                  finishPanel({ status: "saved", ...((message.result as PluginPanelResult).persistence === "local" ? { persistence: "local", mutationId: (message.result as PluginPanelResult).mutationId } : {}) });
               },
             }}
           />

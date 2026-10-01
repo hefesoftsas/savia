@@ -208,3 +208,18 @@ The collection workspace keeps the pending-change count visible while disconnect
 Transient synchronization failures now appear in the status bar while the existing bounded automatic backoff continues. **Reintentar sincronización** requests one full pass using the same durable mutation IDs; it never clears the outbox or schedules an extra pass after success. The manual button is disabled while offline or while this workspace is synchronizing. Storage-capacity and authorization failures keep their existing stop/recovery rules. Quarantined edits remain preserved but are excluded from visible pending/problem counts and recovery exports.
 
 The status view reports local storage read failures instead of silently presenting stale success, and ignores stale asynchronous snapshots after newer updates. Activity reflects this tab's coordinator; committed queue changes and the last full-check timestamp are observed across tabs. Synchronization runs while the collection workspace is open, not as an operating-system background service.
+
+## Plugin editor opt-in
+
+Upgraded Workbench ports use `savia.localRecords` for list/detail reads and ordinary
+form saves. Legacy plugin collection methods still require a backend acknowledgement.
+The host routes the opt-in through this same workspace transport; no additional
+replica or outbox is created. Receipts expose the mutation ID from the transaction
+that persisted both the document and queued operation.
+
+An offline save closes the form only after local persistence and reports
+“Saved on this device. Pending synchronization.” The workspace sync indicator is
+the current authority for pending work and conflicts. Scoped replica notifications
+refresh lists while leaving active drafts untouched. Payments obtain a fresh server
+record and remain online operations. Reusable editor code must already have loaded
+in the current authorized page; preparation is not an offline application installer.

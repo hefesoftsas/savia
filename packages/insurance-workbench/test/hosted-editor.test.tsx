@@ -311,3 +311,33 @@ it("prepares the editor only after the list has loaded", async () => {
   await waitFor(() => expect(preparePanel).toHaveBeenCalledTimes(1));
   expect(a.collection.list).toHaveBeenCalled();
 });
+it("uses a durable local receipt for details and reports pending without a network write", async () => {
+  const a = api(true);
+  const local = { ...a.collection, update: vi.fn().mockResolvedValue({ data: { id: "r1" }, persistence: "local", mutationId: "m1" }) };
+  a.savia.localRecords = { collection: () => local } as never;
+  render(<Workbench savia={a.savia} config={config} />);
+  const input = await screen.findByLabelText(/Reference/);
+  fireEvent.change(input, { target: { value: "Local" } });
+  const save = screen.getByRole("button", { name: /Guardar cambios|Save changes/ });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  await waitFor(() => expect(a.ui.completePanel).toHaveBeenCalledWith({ status: "saved", persistence: "local", mutationId: "m1" }));
+  expect(a.collection.update).not.toHaveBeenCalled();
+});
+it("keeps payment writes on the network even when local records are available", async () => {
+  const a = api(true);
+  const local = { ...a.collection, update: vi.fn() };
+  a.savia.localRecords = { collection: () => local } as never;
+  const paymentConfig = { ...(config as object), payment: { balance: () => 100, patch: () => ({ paid: 1 }) } } as never;
+  render(<Workbench savia={a.savia} config={paymentConfig} />);
+  await screen.findByLabelText(/Reference/);
+  fireEvent.click(screen.getByRole("button", { name: /Registrar abono|Record payment/ }));
+  fireEvent.change(screen.getByLabelText(/Valor del abono|Payment amount/), { target: { value: "1" } });
+  const save = screen.getByRole("button", { name: /Guardar abono|Save payment/ });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  await waitFor(() => expect(a.collection.update).toHaveBeenCalled());
+  expect(a.collection.get).toHaveBeenCalledTimes(2);
+  expect(local.update).not.toHaveBeenCalled();
+  expect(a.ui.completePanel).toHaveBeenCalledWith({ status: "saved" });
+});

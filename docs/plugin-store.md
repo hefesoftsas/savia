@@ -539,3 +539,39 @@ every rebuilt deployment artifact whose bytes change: the tenant catalog rejects
 replacing an existing plugin ID and version with different contents. Keep the
 release set in `deployment/plugins/sources.json` consistent when shared code or
 styles change.
+
+### Prepared editor lifecycle
+
+Ports can additionally export `renderPanel(element, savia)`, synchronously returning
+an unmount function. With that export, `savia.ui.preparePanel?.()` prepares one
+hidden, inert iframe after the list is ready. It imports code without rendering
+the list or running record effects. Each opening receives a fresh `ui.panel`
+activation and SDK; closing invokes cleanup and revokes that SDK. Do not use
+ambient `fetch` in reusable editors: use the activation-bound `savia` API.
+
+The iframe remains in the same mounted drawer container between openings. Loading
+can be cancelled; writes and dirty drafts retain busy/discard protection. Host
+messages and responses are checked against the source, session and activation.
+Old ports continue using a new frame per opening. Identity changes, navigation
+and workspace authorization revocation discard prepared frames. This optimization
+does not persist executable code or make an unprepared app start offline.
+
+### Opt-in local records
+
+`localRecords.collection<T>(name)` exposes `list`, `get`, `describe`, `create`,
+`update` and `remove`. Reads have the normal collection shapes. Writes return
+`{ data, persistence: "local" | "server", mutationId? }`. A local receipt follows
+an atomic record/outbox transaction; it is **not** confirmation from the backend.
+The existing workspace sync panel reports pending operations, conflicts and errors.
+
+Only record CRUD and object metadata can request this transport. Eligibility,
+hydration, schema and authorization belong to the selected workspace, not the
+plugin. Remote collections use the network. Legacy `collections` semantics stay
+network-confirmed, including business actions and payment writes. A payment reads
+a fresh backend version before computing its update. Files, settings, integrations
+and bulk operations do not gain offline persistence.
+
+`localRecords.subscribe?.(listener)` reports scoped replica changes so a list can
+refresh without remounting the editor or resetting its filters. Call its returned
+unsubscribe function when unmounting. See [local-first collections](local-first-collections.md)
+for preparation, authorization and conflict behavior.

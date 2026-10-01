@@ -230,7 +230,7 @@ export function createLocalTransport(
                 : typeof input._version === "number"
                   ? input._version
                   : existing?._version;
-            const data = await store.mutate(
+            const { data, mutationId } = await store.mutateWithReceipt(
               collection,
               action,
               id,
@@ -239,7 +239,7 @@ export function createLocalTransport(
             );
             // A durable local transaction, not a network acknowledgement, is success here.
             return Response.json(
-              { data, local: true },
+              { data, local: true, mutationId },
               { status: action === "create" ? 201 : 200 },
             );
           }

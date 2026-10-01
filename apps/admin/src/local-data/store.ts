@@ -120,6 +120,15 @@ export class LocalStore {
     data?: Record<string, unknown>,
     baseVersion?: number,
   ) {
+    return (await this.mutateWithReceipt(collection, action, id, data, baseVersion)).data;
+  }
+  async mutateWithReceipt(
+    collection: string,
+    action: Exclude<Mutation["action"], "bundle">,
+    id: string,
+    data?: Record<string, unknown>,
+    baseVersion?: number,
+  ) {
     return this.db.transaction(
       "rw",
       [this.db.records, this.db.syncState, this.db.outbox, this.db.collections],
@@ -148,7 +157,7 @@ export class LocalStore {
         await this.db.records.put(await this.row(collection, document));
         await this.db.outbox.add(mutation);
         await this.touch(collection);
-        return document;
+        return { data: document, mutationId: mutation.mutationId };
       },
     );
   }

@@ -449,7 +449,8 @@ it("does not prefetch again after the session is cleared", async () => {
       },
     }),
   );
-  await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
+  await act(async () => Promise.resolve());
+  expect(transport).toHaveBeenCalledTimes(1);
 });
 
 it("sends the current host theme when the plugin becomes ready", () => {
@@ -823,4 +824,15 @@ it("retains an inert prepared frame across cancellable loading and fresh activat
   const activations = child.send.mock.calls.filter(([m]) => m.type === "activate");
   expect(activations).toHaveLength(2);
   expect(activations[1][0].panel.panelId).not.toBe(activation.panel.panelId);
+});
+it("blocks new requests from a disposed frame after logout", async () => {
+  const transport = vi.fn().mockResolvedValue(Response.json({ data: [] }));
+  setStudioRuntime({ embedded: false, pluginTransport: transport });
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const frame = screen.getByTitle("List") as HTMLIFrameElement;
+  handshake(frame);
+  fireEvent(window, new Event("savia:session-cleared"));
+  fireEvent(window, new MessageEvent("message", { source: frame.contentWindow, data: { ns: "savia-plugin", type: "request", id: "late", path: "/records/contacts", method: "POST", body: {} } }));
+  await act(async () => {});
+  expect(transport).not.toHaveBeenCalled();
 });

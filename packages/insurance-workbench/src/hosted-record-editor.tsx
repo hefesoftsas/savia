@@ -65,7 +65,7 @@ export function HostedRecordEditor({
     let active = true;
     setLoading(true);
     setError("");
-    savia.collections
+    (context.request.params.mode === "payment" ? savia.collections : (savia.localRecords ?? savia.collections))
       .collection<WorkRecord>(config.object)
       .get(recordId)
       .then((value) => {
@@ -107,7 +107,7 @@ export function HostedRecordEditor({
           embedded
           operationBusy={operations > 0}
           onClose={() => savia.ui!.requestClose()}
-          onSaved={() => savia.ui!.completePanel({ status: "saved" })}
+          onSaved={(receipt) => savia.ui!.completePanel({ status: "saved", ...(receipt ? { persistence: receipt.persistence, mutationId: receipt.mutationId } : {}) })}
         />
       )}
     </section>

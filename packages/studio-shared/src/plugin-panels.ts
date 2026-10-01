@@ -3,7 +3,7 @@ export type PluginPanelRequest = {
   title: string;
   params: { recordId?: string; mode?: "details" | "payment" };
 };
-export type PluginPanelResult = { status: "saved" | "cancelled" };
+export type PluginPanelResult = { status: "saved" | "cancelled"; persistence?: "local" | "server"; mutationId?: string };
 export type PluginPanelState = { dirty: boolean; busy: boolean };
 export type PluginPanelContext = {
   panelId: string;
