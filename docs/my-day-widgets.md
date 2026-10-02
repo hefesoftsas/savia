@@ -91,9 +91,15 @@ metadata is loaded through bounded header-only requests. A failed provider
 shows a recovery notice while the other provider's messages remain available.
 Reconnect unavailable accounts through Personal integrations.
 
-Outlook's native message link opens another browser tab. Unsafe or missing
-links are unavailable. Gmail's API has no supported native message web link;
-Gmail messages display **Link unavailable** rather than an unverified URL.
+Clicking anywhere in a linked message row opens its provider in another browser
+tab. Outlook uses its native message link. Gmail uses a browser permalink from
+the thread ID, falling back to the message ID when needed. A bounded profile read
+verifies the Gmail address before selecting that account in the link; Savia's
+identity and saved display labels are not used for account selection. If the
+profile cannot be verified, the link omits account selection and the user may
+need to choose the correct account in Gmail. Gmail's web URL format is not an
+API contract and may change; the browser must be signed in to the mailbox.
+Unsafe or missing links remain unavailable.
 Savia does not render email HTML, bodies, or attachments in the widget.
 
 ## Compose with record context

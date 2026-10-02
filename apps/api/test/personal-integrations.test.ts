@@ -684,22 +684,27 @@ describe("personal integration providers", () => {
 
   it("lists Gmail message metadata through a fixed personal operation", async () => {
     const nango = fakeNango();
-    nango.proxy.mockResolvedValueOnce(
-      Response.json({
-        messages: [
-          {
-            id: "gmail-message-1",
-            threadId: "gmail-thread-1",
-          },
-        ],
-        nextPageToken: "gmail-page-2",
-      }),
-    );
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json({
+          messages: [
+            {
+              id: "ab12",
+              threadId: "cd34",
+            },
+          ],
+          nextPageToken: "gmail-page-2",
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({}))
+      .mockResolvedValueOnce(
+        Response.json({ emailAddress: "actual@savia.test" }),
+      );
     await env.DB.prepare(
       `INSERT INTO personal_integration_connections (
         id, principal_id, provider, nango_connection_id, nango_integration_id,
-        status, scopes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        status, external_account_label, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         "personal-gmail-read-connection",
@@ -708,6 +713,7 @@ describe("personal integration providers", () => {
         "nango-gmail-read-connection",
         "gmail-savia",
         "connected",
+        "wrong-account@savia.test",
         "[]",
         "2026-01-01T00:00:00.000Z",
         "2026-01-01T00:00:00.000Z",
@@ -723,11 +729,12 @@ describe("personal integration providers", () => {
     await expect(response.json()).resolves.toEqual({
       data: [
         {
-          id: "gmail-message-1",
+          id: "ab12",
           subject: null,
           sender: null,
           receivedAt: null,
-          webLink: null,
+          webLink:
+            "https://mail.google.com/mail/u/?authuser=actual%40savia.test#all/cd34",
         },
       ],
       pagination: { nextCursor: expect.any(String) },
@@ -829,12 +836,12 @@ describe("personal integration providers", () => {
 
     expect(second.status).toBe(200);
     expect(nango.proxy).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.objectContaining({
         path: expect.stringContaining("/gmail/v1/users/me/messages?"),
       }),
     );
-    const continuationPath = nango.proxy.mock.calls[1]?.[0]?.path as string;
+    const continuationPath = nango.proxy.mock.calls[2]?.[0]?.path as string;
     expect(
       new URL(
         continuationPath,
@@ -907,7 +914,10 @@ describe("personal integration providers", () => {
       `https://savia.test/v1/personal-integrations/messages?provider=outlook&cursor=${encodeURIComponent(gmailPage.pagination.nextCursor)}`,
     );
     expect(mismatched.status).toBe(400);
-    expect(nango.proxy).toHaveBeenCalledTimes(1);
+    expect(nango.proxy).toHaveBeenCalledTimes(2);
+    expect(nango.proxy.mock.calls[1]?.[0]?.path).toBe(
+      "/gmail/v1/users/me/profile",
+    );
   });
 
   it.each([
