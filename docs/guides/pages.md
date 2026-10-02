@@ -8,6 +8,8 @@ Owner: Savia API and Admin. Reviewed: 2026-10-01.
 
 Use the **+** beside Pages or a tree item to create a page or folder inside it. Expand/collapse folders and pages with children using their chevrons. Opening a folder shows its contents, with controls to add a page or subfolder. Rename it using the title field; folders have no editable document body or record binding. A folder and all its descendants inherit the existing root sharing policy. A folder must be empty before deletion. Moving existing pages between roots is not included in this release.
 
+Owners can use the trash button that appears on a page or folder row on hover or keyboard focus. A confirmation dialog names the item before deletion. Cancel leaves it in place; deleting a page with subpages requires removing those subpages first.
+
 The **…** menu holds subpage creation, history, Markdown export and deletion. **Export as Markdown** is available to anyone who can read the page and downloads the saved title and supported document blocks as a `.md` file. Issue cards export their original link, collections export a reference, and attachments export their filename; fetched issue preview details, collection rows and private attachment identifiers are not included. Share and the current save status stay visible. A privacy icon beside Share exposes the team access label on hover or keyboard focus; it does not occupy a row above the title. The same tree is available through the main navigation drawer on mobile.
 
 ## Writing and linked work

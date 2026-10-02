@@ -356,6 +356,7 @@ export const pagesMessages = {
   Attachment: ["Imagen o archivo", "Image or file", "Imagem ou arquivo"],
   Download: ["Descargar", "Download", "Baixar"],
   Delete: ["Eliminar página", "Delete page", "Excluir página"],
+  "Delete item": ["Eliminar", "Delete", "Excluir"],
   "Delete hint": [
     "Se eliminará esta página. Elimina primero sus subpáginas.",
     "This page will be deleted. Delete its subpages first.",
