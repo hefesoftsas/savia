@@ -73,6 +73,7 @@ import {
   ensureAuthNoticeSchema,
   readAuthNoticeEvents,
 } from "./notification-events";
+import { ensureLegacyAccountIssuerOptional } from "./legacy-account-issuer";
 
 export type AuthWorkerEnvironment = SocialEnvironment & {
   AUTH_DB: D1Database;
@@ -367,16 +368,23 @@ async function ensureSchema(
 ): Promise<void> {
   const existing = schemaInitializations.get(database);
   if (existing) return existing;
-  const initialization = getMigrations(auth.options)
-    .then(({ runMigrations }) => runMigrations())
-    .then(() => {
-      if (!noticeSchemaInitialized.has(database)) {
-        noticeSchemaInitialized.add(database);
-        return ensureAuthNoticeSchema(database);
-      }
-    });
+  const initialization = (async () => {
+    await ensureLegacyAccountIssuerOptional(database);
+    const { runMigrations } = await getMigrations(auth.options);
+    await runMigrations();
+    if (!noticeSchemaInitialized.has(database)) {
+      await ensureAuthNoticeSchema(database);
+      noticeSchemaInitialized.add(database);
+    }
+  })();
   schemaInitializations.set(database, initialization);
-  return initialization;
+  try {
+    await initialization;
+  } catch (error) {
+    if (schemaInitializations.get(database) === initialization)
+      schemaInitializations.delete(database);
+    throw error;
+  }
 }
 
 /** Initialize native auth schema without creating users, sessions or OAuth clients. */

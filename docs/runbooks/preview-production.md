@@ -101,6 +101,13 @@ is created only after this authenticated check succeeds.
    workflow before promotion.
 4. Approve the pending `production` environment deployment.
 5. Review the ordered Worker deployments and domain migrations.
+6. Verify authentication separately from `/health`: an anonymous
+   `/api/auth/get-session` request must return HTTP 200 (an empty session is
+   expected), and `/api/auth/admin/authorize` must redirect to sign-in. The
+   gateway health response checks the domain database; it does not establish
+   that Better Auth can initialize its separate authentication schema.
+   Complete a browser sign-in or reuse an existing session to verify the
+   deployed UI before declaring the release ready.
 
 There is no automatic production trigger, emergency CI bypass, or database reset
 input. Running preview never changes production Worker bindings or databases.
