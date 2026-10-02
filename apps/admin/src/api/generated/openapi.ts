@@ -7569,7 +7569,8 @@ export interface paths {
                   | "onedrive_personal"
                   | "onedrive_business"
                   | "jira"
-                  | "linear";
+                  | "linear"
+                  | "github";
                 /** @enum {string} */
                 kind: "personal-integration-provider";
                 attributes: {
@@ -7630,7 +7631,8 @@ export interface paths {
                     | "onedrive_personal"
                     | "onedrive_business"
                     | "jira"
-                    | "linear";
+                    | "linear"
+                    | "github";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -7767,7 +7769,8 @@ export interface paths {
                     | "onedrive_personal"
                     | "onedrive_business"
                     | "jira"
-                    | "linear";
+                    | "linear"
+                    | "github";
                   /** @enum {string} */
                   status:
                     | "pending"
@@ -8009,8 +8012,8 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Preview a linked issue from a caller-owned Jira or Linear account
-     * @description Parses supported Jira Cloud and Linear issue links, then reads safe summary metadata through the caller's active personal connection.
+     * Preview a linked issue from a caller-owned integration
+     * @description Parses supported Jira Cloud, Linear, and GitHub issue or pull request links, then reads safe summary metadata through the caller's active personal connection.
      */
     post: {
       parameters: {
@@ -8036,13 +8039,16 @@ export interface paths {
             "application/json": {
               data: {
                 /** @enum {string} */
-                provider: "jira" | "linear";
+                provider: "jira" | "linear" | "github";
                 /** Format: uri */
                 url: string;
                 identifier: string;
                 title: string;
                 status: string | null;
                 assignee: string | null;
+                repository?: string;
+                /** @enum {string} */
+                kind?: "issue" | "pull_request";
               };
             };
           };

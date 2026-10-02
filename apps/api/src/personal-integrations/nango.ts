@@ -242,7 +242,9 @@ export function createPersonalIntegrationNangoClient(
                 ? { "base-url-override": "https://api.atlassian.com" }
                 : request.connection.provider === "linear"
                   ? { "base-url-override": "https://api.linear.app" }
-                  : {}),
+                  : request.connection.provider === "github"
+                    ? { "base-url-override": "https://api.github.com" }
+                    : {}),
             ...(hasBody
               ? { "content-type": request.contentType ?? "application/json" }
               : {}),

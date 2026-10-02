@@ -51,6 +51,7 @@ function apiConfig({
   documentsBucket,
   domainD1Id,
   jiraIntegrationId,
+  githubIntegrationId,
   publicOrigin,
 }) {
   return {
@@ -104,6 +105,9 @@ function apiConfig({
       NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID: "one-drive-personal",
       NANGO_OUTLOOK_INTEGRATION_ID: "outlook",
       NANGO_LINEAR_INTEGRATION_ID: "linear",
+      ...(githubIntegrationId
+        ? { NANGO_GITHUB_INTEGRATION_ID: githubIntegrationId }
+        : {}),
       ...(jiraIntegrationId
         ? { NANGO_JIRA_INTEGRATION_ID: jiraIntegrationId }
         : {}),
@@ -229,6 +233,7 @@ export async function renderProductionConfigs({
   domainD1Id,
   documentsBucket = defaultDocumentsBucket,
   jiraIntegrationId,
+  githubIntegrationId,
   outputRoot,
   publicOrigin = defaultPublicOrigin,
 }) {
@@ -250,6 +255,14 @@ export async function renderProductionConfigs({
     domainD1Id: requiredValue(domainD1Id, "SAVIA_DOMAIN_D1_ID"),
     outputRoot: requiredValue(outputRoot, "SAVIA_DEPLOY_CONFIG_ROOT"),
     publicOrigin: originValue(publicOrigin),
+    ...(githubIntegrationId?.trim()
+      ? {
+          githubIntegrationId: requiredValue(
+            githubIntegrationId,
+            "NANGO_GITHUB_INTEGRATION_ID",
+          ),
+        }
+      : {}),
     ...(jiraIntegrationId?.trim()
       ? {
           jiraIntegrationId: requiredValue(
@@ -305,6 +318,7 @@ async function main() {
     documentsBucket: process.env.SAVIA_DOCUMENTS_BUCKET,
     domainD1Id: process.env.SAVIA_DOMAIN_D1_ID,
     jiraIntegrationId: process.env.NANGO_JIRA_INTEGRATION_ID,
+    githubIntegrationId: process.env.NANGO_GITHUB_INTEGRATION_ID,
     outputRoot: process.env.SAVIA_DEPLOY_CONFIG_ROOT ?? process.cwd(),
     publicOrigin: process.env.SAVIA_PUBLIC_ORIGIN,
   });

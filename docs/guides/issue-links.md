@@ -1,17 +1,18 @@
-# Jira and Linear issue links
+# Jira, Linear, and GitHub issue links
 
-Owner: Savia API and Studio. Reviewed: 2026-10-01.
+Owner: Savia API and Studio. Reviewed: 2026-10-02.
 
-Savia can show a transient preview for Jira Cloud and Linear issue links on Pages. Each preview uses the viewing user's personal connection. Savia never fetches a pasted URL, stores issue metadata in shared page content, or writes to an issue.
+Savia can show a transient preview for Jira Cloud, Linear, and GitHub issue links and GitHub pull requests on Pages. Each preview uses the viewing user's personal connection. Savia never fetches a pasted URL, stores issue metadata in shared page content, or writes to an issue.
 
 ## Configure Nango
 
-Register Jira Cloud and Linear as separate Nango integrations, with read access only. Configure these server environment variables with each integration's Nango integration ID:
+Register Jira Cloud, Linear, and GitHub as separate Nango integrations. Savia only reads issue and pull request previews. Configure these server environment variables with each integration's Nango integration ID:
 
 - `NANGO_JIRA_INTEGRATION_ID`
 - `NANGO_LINEAR_INTEGRATION_ID`
+- `NANGO_GITHUB_INTEGRATION_ID`
 
-Both integrations also use the existing `NANGO_BASE_URL`, `NANGO_CONNECT_URL`, and `NANGO_API_KEY` settings. When an integration ID is absent, its provider is marked **Requires setup** in Integrations, without deployment instructions in the personal connections screen. Deployment-level Nango credentials remain server settings; the personal connections screen does not edit or expose secrets. No user token or Nango credential is sent to the browser.
+All integrations also use the existing `NANGO_BASE_URL`, `NANGO_CONNECT_URL`, and `NANGO_API_KEY` settings. When an integration ID is absent, its provider is marked **Requires setup** in Integrations, without deployment instructions in the personal connections screen. Deployment-level Nango credentials remain server settings; the personal connections screen does not edit or expose secrets. No user token or Nango credential is sent to the browser.
 
 The Jira connection needs permission to read issues and user display names (`read:jira-work` and `read:jira-user`). The Linear connection needs its read scope. Savia requests only issue previews, and its server routes only issue reads.
 
@@ -29,9 +30,34 @@ Jira OAuth applications remain private until live privacy and cleanup checks pas
 
 Provider references: [Jira Cloud OAuth scopes and accessible resources](https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/), [Jira Cloud issue API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/), [Linear OAuth scopes](https://linear.app/developers/oauth-2-0-authentication), and [Linear GraphQL issue queries](https://linear.app/developers/graphql).
 
+## GitHub configuration
+
+Apply migration `0017_github_issue_connections.sql` through the normal deployment
+flow before connecting GitHub accounts. The SQLite and PostgreSQL migrations
+extend the provider constraint while preserving existing connections and audits.
+
+Create a GitHub integration in Nango and configure its integration ID in
+`NANGO_GITHUB_INTEGRATION_ID`. For hosted deployments, set the matching GitHub
+Actions environment variable; preview and production rendering pass it only to
+the API Worker. Local development loads it from the existing backend environment,
+including `infra/secrets/assistant-api.dev.env`. GitHub remains unavailable when
+the variable is absent. Register the callback URL shown by your Nango deployment
+in the GitHub application.
+
+Use the least permissions supported by the configured application. A GitHub App
+can grant **Issues: read** and **Pull requests: read** for selected repositories.
+A GitHub OAuth App can read public resources without repository scopes, but
+access to private repositories requires the broader `repo` scope, which also
+allows writes at GitHub. Savia still exposes only preview reads; do not describe
+that OAuth grant itself as read-only. Organization restrictions and repository
+access still apply to each reader's connection. See the official
+[GitHub OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps),
+[issue reads](https://docs.github.com/en/rest/issues/issues#get-an-issue), and
+[pull request reads](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request).
+
 ## Connect your account
 
-Open **Integrations → Accounts & Connections → Issue management**. Jira and Linear explain their read-only Pages previews. An enabled provider offers **Connect** and opens the existing Nango authorization flow. Connected accounts can be disconnected, and expired/failed connections can be reauthorized. Providers awaiting server setup display their availability and administrator prerequisite. Deployment variables are documented here rather than in the personal connections screen.
+Open **Integrations → Accounts & Connections → Issue management**. Jira, Linear, and GitHub explain their read-only Pages previews. An enabled provider offers **Connect** and opens the existing Nango authorization flow. Connected accounts can be disconnected, and expired/failed connections can be reauthorized. Providers awaiting server setup display their availability and administrator prerequisite. Deployment variables are documented here rather than in the personal connections screen.
 
 The editor offers only the provider commands that are enabled and connected for the current reader. It rechecks on entry, after connection changes, and on returning to the browser. Unknown/error states hide provider commands. Existing issue blocks retain a normal clickable link when disconnected, and ordinary pasted links never require OAuth.
 
@@ -43,16 +69,18 @@ Savia accepts HTTPS links in these forms:
 
 - Jira Cloud: `https://<site>.atlassian.net/browse/<KEY>`
 - Linear: `https://linear.app/<workspace>/issue/<KEY>` with an optional single slug segment
+- GitHub issue: `https://github.com/<owner>/<repository>/issues/<number>`
+- GitHub pull request: `https://github.com/<owner>/<repository>/pull/<number>`
 
-Credentials, ports, query strings, fragments, malformed paths, and other hosts are rejected. Jira site names are matched against the current connection's Atlassian accessible resources before using the cloud ID. The Jira API destination and Linear GraphQL endpoint are fixed in server code; a pasted host cannot choose an upstream destination.
+Credentials, ports, query strings, fragments, malformed paths, and other hosts are rejected. Jira site names are matched against the current connection's Atlassian accessible resources before using the cloud ID. The Jira API destination, Linear GraphQL endpoint, and GitHub API host are fixed in server code; a pasted host cannot choose an upstream destination.
 
-The authenticated `POST /v1/personal-integrations/issue-preview` endpoint returns the provider, canonical link, issue identifier, title, status, and assignee. For Linear, Savia verifies that the resolved issue URL has the same workspace and identifier as the pasted link before showing metadata. Responses use `Cache-Control: no-store`. A missing connection returns an unavailable response, and provider access failures return a controlled access error without forwarding upstream bodies.
+The authenticated `POST /v1/personal-integrations/issue-preview` endpoint returns the provider, canonical link, issue identifier, title, status, and assignee. For Linear, Savia verifies that the resolved issue URL has the same workspace and identifier as the pasted link before showing metadata. GitHub previews verify the returned URL, repository identity, resource kind, and number. Cards show the repository, number, title, status, and assignee; merged pull requests display `merged`. Repository and resource-kind fields are optional in the preview response for compatibility with Jira and Linear. Responses use `Cache-Control: no-store`. A missing connection returns an unavailable response, and provider access failures return a controlled access error without forwarding upstream bodies.
 
-If an issue cannot be previewed, its HTTPS link remains available as a regular link. Reconnect Jira or Linear from **Accounts & Connections** to restore previews.
+If an issue cannot be previewed, its HTTPS link remains available as a regular link. Reconnect Jira, Linear, or GitHub from **Accounts & Connections** to restore previews.
 
 ## Verification
 
-The shared parser tests accepted link forms, deceptive hosts, credentials, ports, query strings, fragments, and malformed paths. API tests cover Jira site identity verification, fixed Linear GraphQL previews, transient response headers, and rejection before any upstream request. These tests use mocked Nango responses and do not access real issue trackers.
+The shared parser tests accepted link forms, deceptive hosts, credentials, ports, query strings, fragments, and malformed paths. API tests cover Jira site identity verification, fixed Linear GraphQL previews, transient response headers, and rejection before any upstream request. GitHub tests cover issues, merged pull requests, mismatched resource identity, missing connections, provider access failures, and the fixed proxy host. These tests use mocked Nango responses and do not access real issue trackers. GitHub live OAuth and preview verification has not been performed as part of this change.
 
 ### Local live verification (2026-10-01)
 
