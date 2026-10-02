@@ -270,6 +270,7 @@ export async function createApplication(
         "NANGO_JIRA_INTEGRATION_ID",
         "NANGO_JIRA_REPORTING_CONNECTION_ID",
         "NANGO_LINEAR_INTEGRATION_ID",
+        "NANGO_GITHUB_INTEGRATION_ID",
         "PLUGIN_REGISTRY_TENANTS",
         "SQL_BRIDGE_URL",
         "SQL_BRIDGE_SECRET",
