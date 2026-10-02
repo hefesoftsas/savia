@@ -173,8 +173,8 @@ export function oauthPageResponse(
     case "/api/auth/sso-complete":
       return htmlResponse(
         page(
-          "Completando inicio de sesión | Savia",
-          '<main class="oauth-shell"><section data-sso-complete><h1>Completando inicio de sesión</h1><p id="oauth-status" role="status">Validando tu acceso…</p><a href="/api/auth/login">Volver al inicio de sesión</a></section></main>',
+          `Completando inicio de sesión | ${branding?.displayName ?? "Savia"}`,
+          renderOAuthSurface("sso-complete", { branding }),
           options?.restartUrl,
         ),
       );
@@ -742,7 +742,7 @@ export function federatedEmailVerificationPage(
 ): Response {
   return htmlResponse(
     page(
-      "Verifica tu correo | Savia",
+      `Verifica tu correo | ${branding?.displayName ?? "Savia"}`,
       renderOAuthSurface(
         provider === "chatgpt"
           ? "chatgpt-verification"

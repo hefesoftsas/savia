@@ -45,6 +45,7 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import {
   cookieDomainForHost,
   isAllowedPublicOrigin,
+  isAllowedTenantOrigin,
   normalizeCanonicalHost,
   parseTenantSlugFromHostname,
 } from "@savia/tenant-host/tenant-host";
@@ -130,11 +131,21 @@ function requiredValue(value: string | undefined, name: string): string {
   throw new Error(`${name} is required`);
 }
 
-function adminLoginUrl(environment: AuthWorkerEnvironment): string {
-  const url = new URL(
+function adminLoginUrl(
+  environment: AuthWorkerEnvironment,
+  requestUrl?: string,
+): string {
+  let url = new URL(
     environment.SAVIA_ADMIN_REDIRECT_URI ??
       "http://127.0.0.1:5173/auth/callback",
   );
+  // Direct SSO/social login has no OAuth transaction to restore the tenant.
+  // Keep its validated public host when starting a fresh Admin authorization.
+  if (requestUrl) {
+    const requested = new URL(requestUrl);
+    if (isAllowedTenantOrigin(requested.origin, url.hostname))
+      url = new URL(requested.origin);
+  }
   url.pathname = "/";
   url.search = "";
   url.hash = "/login";
@@ -904,7 +915,7 @@ export function createAuthHandler(
         request.method === "GET" &&
         ["/api/auth/login", "/api/auth/forgot-password"].includes(pathname);
       const oauthPage = oauthPageResponse(request, {
-        restartUrl: adminLoginUrl(environment),
+        restartUrl: adminLoginUrl(environment, request.url),
         allowEmailRegistration:
           loginUiRequest &&
           pathname === "/api/auth/login" &&
