@@ -1,6 +1,6 @@
 # Jira public distribution and personal data reporting
 
-Date: 2026-10-02. Status: proposed specification awaiting written review.
+Date: 2026-10-02. Status: approved by the user for implementation planning.
 
 ## Outcome
 
@@ -9,8 +9,9 @@ and preview authorized issues on Pages. Preserve the existing read-only issue
 integration and viewer-scoped previews. Complete the privacy reporting prerequisite
 before sharing the production Atlassian OAuth application or enabling its card.
 
-The user approved completing Jira for all users and adding reporting to the existing
-scheduled process. This document specifies that design for review; it does not claim
+The user approved completing Jira for all users, adding reporting to the existing
+scheduled process, and this written specification. This document specifies that
+design; it does not claim
 that reporting, public distribution, or production verification has been completed.
 
 ## Current evidence
