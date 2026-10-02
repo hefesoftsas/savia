@@ -8051,6 +8051,194 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/pages/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Export all pages owned by the caller with referenced attachments */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Portable Pages archive */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                /** @enum {string} */
+                format: "savia-pages";
+                /** @enum {number} */
+                version: 1;
+                exportedAt: string;
+                pages: {
+                  id: string;
+                  parentId: string | null;
+                  title: string;
+                  /** @enum {string} */
+                  kind: "page" | "folder";
+                  content: {
+                    [key: string]: unknown;
+                  }[];
+                }[];
+                files: {
+                  id: string;
+                  pageId: string;
+                  name: string;
+                  mimeType: string;
+                  size: number;
+                  data: string;
+                }[];
+              };
+            };
+          };
+        };
+        /** @description Export source changed or contains unavailable content */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Archive exceeds the size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/pages/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Import a portable Pages archive as private copies */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            format: "savia-pages";
+            /** @enum {number} */
+            version: 1;
+            exportedAt: string;
+            pages: {
+              id: string;
+              parentId: string | null;
+              title: string;
+              /** @enum {string} */
+              kind: "page" | "folder";
+              content: {
+                [key: string]: unknown;
+              }[];
+            }[];
+            files: {
+              id: string;
+              pageId: string;
+              name: string;
+              mimeType: string;
+              size: number;
+              data: string;
+            }[];
+          };
+        };
+      };
+      responses: {
+        /** @description Imported private copies */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                pages: number;
+                folders: number;
+                files: number;
+              };
+            };
+          };
+        };
+        /** @description Archive is invalid */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Archive exceeds the size limit */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/pages": {
     parameters: {
       query?: never;

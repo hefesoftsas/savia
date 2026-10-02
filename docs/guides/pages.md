@@ -36,6 +36,48 @@ Page permissions, autosave, conflict protection and revision history apply to th
 
 ## Saving, sharing and history
 
+### Transfer pages to another Savia instance
+
+Open **Work → Pages** and use **Export all my pages** to download a
+`.savia-pages.json` archive. In the destination instance, sign in, open Pages,
+choose **Import pages**, select the archive and confirm the import.
+
+The archive contains the current saved content of your own pages and folders in
+the current tenant, their parent/child structure, rich formatting and referenced
+image/file attachments. Export is independent of search and the 200-result page
+list limit. Pages shared with you by another owner are not included. Save any
+pending edits before exporting.
+
+Import creates new private copies owned by the importing user. It preserves
+the hierarchy and rewrites attachment references to newly stored files; existing
+pages are not overwritten. Importing the same archive again creates another
+copy. Historical revisions, member permissions and public links are not
+transferred. Imported pages start with a new revision history.
+
+Collection records, saved collection views and record bindings belong to the
+source instance and are not transferred. Collection blocks become explanatory
+text, and record bindings are removed, so matching identifiers in the destination
+cannot accidentally connect imported pages to unrelated records. Ordinary
+external links remain links; issue previews still depend on the reader's own
+integration access.
+
+Archives use a versioned JSON format with embedded attachment data and are
+limited to 50 MiB, including the encoded files. The existing 10 MB attachment
+limit and supported file types still apply. An export exceeding the archive
+limit fails explicitly rather than silently omitting pages or files. Keep the
+downloaded archive private: it contains the exported document and file content.
+Import validates the archive, page hierarchy, document blocks and file
+references before writing pages; a failed database import does not leave a
+partial page tree.
+
+Deployment CPU, memory, database and storage quotas also apply, so a large
+archive can fail below the file-size limit on a constrained instance. The
+database import stays atomic instead of exposing a partially imported tree;
+uploaded blobs are cleaned up on a handled failure. See the deployment's
+[D1 limits](https://developers.cloudflare.com/d1/platform/limits/) when running
+on Cloudflare. Process termination or storage-cleanup failures may leave
+unreferenced blobs for operational cleanup.
+
 Autosave waits briefly after an edit and sends sequential versioned updates. A stale version produces a conflict instead of overwriting another user's update. The editor preserves the current draft and offers **Download draft** and **Reopen**. A downloaded draft is an explicit user export; Savia introduces no localStorage or IndexedDB document cache. A failed draft must be exported before closing the browser or reopening the page.
 
 **Share → Members** assigns reader or editor access to active teammates. Changing member sharing on a subpage changes its root's sharing. Removed memberships stop granting access. An empty member list means there are no other active teammates available; a failed request offers a retry instead of presenting an unusable save action.
@@ -67,6 +109,14 @@ Search examines titles and the first 10,000 normalized content characters. Searc
 The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
 
 ## Verification
+
+Portable transfer tests in `apps/api/test/pages-transfer.test.ts` cover export
+beyond the page-list limit, private imports into another tenant with real local
+R2 attachment bytes, nested pages/folders, new revision snapshots, repeat imports,
+collection detachment, malformed archives and rollback/cleanup on failure. UI
+tests cover downloading archives, file validation, progress, server errors,
+same-file retries and refreshing the page navigation. Native PostgreSQL transfer
+and deployed-instance transfer still require deployment-specific verification.
 
 Automated coverage checks folder creation and containment, folder renaming in the sidebar, slash-menu selection and focus recovery, page authorization, inherited sharing, revoked membership, version conflicts, history, attachments, safe document nodes, rich-block round trips and structure limits, code whitespace, task updates, table operations, URL paste, preview fallback, serial autosave and authorized record properties. Public sharing tests cover owner-only publishing, scoped anonymous reading, expiry, revocation, current attachment references, retryable member loading, and isolated public bootstrap. Native PostgreSQL coverage is in `apps/self-hosted/test/pages-postgres.test.ts` and `apps/self-hosted/test/pages-public-postgres.test.ts`; it uses disposable databases through `SAVIA_TEST_POSTGRES_URL` and checks migrations, inherited permissions, concurrent edits, revision restores, attachment metadata and the bootstrap administrator’s platform membership. Run `pnpm --filter @savia/self-hosted test:postgres` against an isolated PostgreSQL test server. Desktop/mobile visual review also uses the real Pages UI. Live Jira/Linear OAuth and production storage are not validated by mocked provider tests.
 

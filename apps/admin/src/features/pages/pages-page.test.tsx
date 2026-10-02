@@ -9,7 +9,7 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
-import { ApiClient } from "@/api/api-client";
+import { ApiClient, ApiClientError } from "@/api/api-client";
 import { PagesPage } from "./pages-page";
 import type { PageDocument } from "./client";
 vi.mock("./editor", () => ({
@@ -279,4 +279,332 @@ it("blocks navigation while an attachment is uploading", async () => {
   });
   expect(router.state.location.pathname).toBe("/pages/one");
   expect(screen.getByRole("textbox", { name: "Document body" })).toBeVisible();
+});
+
+function renderPagesHome(fetcher: typeof fetch) {
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => null },
+    fetcher,
+  });
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/pages/:pageId?",
+        element: <PagesPage services={{ apiClient: api }} />,
+      },
+    ],
+    { initialEntries: ["/pages"] },
+  );
+  render(<RouterProvider router={router} />);
+  return { api, router };
+}
+
+async function openPagesOptions(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", { name: "Pages options" }),
+  );
+}
+
+it("downloads the archive returned by the all-pages export endpoint", async () => {
+  const archive = {
+    format: "savia-pages",
+    version: 1,
+    exportedAt: "2026-10-02T10:00:00.000Z",
+    pages: [],
+    files: [],
+  };
+  let exported = false;
+  renderPagesHome(async (input, init) => {
+    if (new URL(String(input)).pathname === "/v1/pages/export") {
+      exported = init?.method === undefined || init.method === "GET";
+      return Response.json({ data: archive });
+    }
+    return Response.json({ data: [] });
+  });
+  const createDescriptor = Object.getOwnPropertyDescriptor(
+    URL,
+    "createObjectURL",
+  );
+  const revokeDescriptor = Object.getOwnPropertyDescriptor(
+    URL,
+    "revokeObjectURL",
+  );
+  const clickDescriptor = Object.getOwnPropertyDescriptor(
+    HTMLAnchorElement.prototype,
+    "click",
+  );
+  const createObjectURL = vi.fn(() => "blob:pages-export");
+  const click = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectURL,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: vi.fn(),
+  });
+  Object.defineProperty(HTMLAnchorElement.prototype, "click", {
+    configurable: true,
+    value: click,
+  });
+  try {
+    const user = userEvent.setup();
+    await openPagesOptions(user);
+    await user.click(
+      screen.getByRole("menuitem", { name: "Export all my pages" }),
+    );
+    await waitFor(() => expect(exported).toBe(true));
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(click).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Pages exported.")).toBeVisible();
+  } finally {
+    if (createDescriptor)
+      Object.defineProperty(URL, "createObjectURL", createDescriptor);
+    else Reflect.deleteProperty(URL, "createObjectURL");
+    if (revokeDescriptor)
+      Object.defineProperty(URL, "revokeObjectURL", revokeDescriptor);
+    else Reflect.deleteProperty(URL, "revokeObjectURL");
+    if (clickDescriptor)
+      Object.defineProperty(
+        HTMLAnchorElement.prototype,
+        "click",
+        clickDescriptor,
+      );
+    else Reflect.deleteProperty(HTMLAnchorElement.prototype, "click");
+  }
+});
+
+it("imports new pages and refreshes the Pages navigation", async () => {
+  let imported = false;
+  let listRequests = 0;
+  const archive = {
+    format: "savia-pages",
+    version: 1,
+    exportedAt: "2026-10-02T10:00:00.000Z",
+    pages: [
+      {
+        id: "source",
+        parentId: null,
+        title: "Imported idea",
+        kind: "page",
+        content: [],
+      },
+    ],
+    files: [],
+  };
+  renderPagesHome(async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/v1/pages/import" && init?.method === "POST") {
+      imported = JSON.parse(String(init.body)).format === "savia-pages";
+      return Response.json({ data: { pages: 1, folders: 0, files: 0 } });
+    }
+    if (url.pathname === "/v1/pages") {
+      listRequests++;
+      return Response.json({
+        data: imported
+          ? [
+              {
+                id: "copy",
+                parentId: null,
+                rootId: "copy",
+                title: "Imported idea",
+                kind: "page",
+                version: 1,
+                updatedAt: "2026-10-02T10:00:00Z",
+                ownerId: "user",
+                role: "owner",
+                isShared: false,
+              },
+            ]
+          : [],
+      });
+    }
+    return Response.json({ data: archive });
+  });
+  const user = userEvent.setup();
+  await openPagesOptions(user);
+  await user.click(screen.getByRole("menuitem", { name: "Import pages" }));
+  await user.upload(
+    screen.getByLabelText("Choose archive"),
+    new File([JSON.stringify(archive)], "ideas.savia-pages.json", {
+      type: "application/json",
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  await screen.findByText("Imported idea");
+  expect(imported).toBe(true);
+  expect(listRequests).toBeGreaterThan(1);
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Imported content as private copies. Pages: 1; folders: 0; attachments: 0.",
+  );
+});
+
+it("rejects malformed and oversized archives before making an import request", async () => {
+  let importRequests = 0;
+  renderPagesHome(async (input, init) => {
+    if (
+      new URL(String(input)).pathname === "/v1/pages/import" &&
+      init?.method === "POST"
+    )
+      importRequests++;
+    return Response.json({ data: [] });
+  });
+  const user = userEvent.setup();
+  await openPagesOptions(user);
+  await user.click(screen.getByRole("menuitem", { name: "Import pages" }));
+  const input = screen.getByLabelText("Choose archive");
+  await user.upload(
+    input,
+    new File(["{"], "broken.savia-pages.json", { type: "application/json" }),
+  );
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The archive is not valid JSON",
+  );
+  expect(importRequests).toBe(0);
+
+  const oversized = new File(["{}"], "large.savia-pages.json", {
+    type: "application/json",
+  });
+  Object.defineProperty(oversized, "size", {
+    configurable: true,
+    value: 50 * 1024 * 1024 + 1,
+  });
+  await user.upload(input, oversized);
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The archive exceeds the 50 MiB limit",
+  );
+  expect(importRequests).toBe(0);
+});
+
+it("allows the same file to be selected again after an import request fails", async () => {
+  let importRequests = 0;
+  const archive = {
+    format: "savia-pages",
+    version: 1,
+    exportedAt: "2026-10-02T10:00:00.000Z",
+    pages: [],
+    files: [],
+  };
+  renderPagesHome(async (input, init) => {
+    if (
+      new URL(String(input)).pathname === "/v1/pages/import" &&
+      init?.method === "POST"
+    ) {
+      importRequests++;
+      if (importRequests === 1)
+        return Response.json(
+          { error: { code: "UNAVAILABLE" } },
+          { status: 503 },
+        );
+      return Response.json({ data: { pages: 0, folders: 0, files: 0 } });
+    }
+    return Response.json({ data: [] });
+  });
+  const user = userEvent.setup();
+  await openPagesOptions(user);
+  await user.click(screen.getByRole("menuitem", { name: "Import pages" }));
+  const input = screen.getByLabelText("Choose archive");
+  const file = new File([JSON.stringify(archive)], "retry.savia-pages.json", {
+    type: "application/json",
+  });
+  await user.upload(input, file);
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Could not import pages",
+  );
+  expect(input).toHaveValue("");
+  await user.upload(input, file);
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  await screen.findByText(/Pages: 0; folders: 0; attachments: 0/);
+  expect(importRequests).toBe(2);
+});
+
+it("shows the size limit when the server rejects a large export", async () => {
+  renderPagesHome(async (input) =>
+    new URL(String(input)).pathname === "/v1/pages/export"
+      ? Response.json(
+          { error: { code: "ARCHIVE_TOO_LARGE", message: "too large" } },
+          { status: 413 },
+        )
+      : Response.json({ data: [] }),
+  );
+  const user = userEvent.setup();
+  await openPagesOptions(user);
+  await user.click(
+    screen.getByRole("menuitem", { name: "Export all my pages" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The archive exceeds the 50 MiB limit",
+  );
+});
+
+it("explains when the server rejects an invalid Pages archive", async () => {
+  const archive = {
+    format: "savia-pages",
+    version: 1,
+    exportedAt: "2026-10-02T10:00:00.000Z",
+    pages: [],
+    files: [],
+  };
+  renderPagesHome(async (input, init) => {
+    if (
+      new URL(String(input)).pathname === "/v1/pages/import" &&
+      init?.method === "POST"
+    )
+      return Response.json(
+        { error: { code: "INVALID_ARCHIVE", message: "invalid" } },
+        { status: 400 },
+      );
+    return Response.json({ data: [] });
+  });
+  const user = userEvent.setup();
+  await openPagesOptions(user);
+  await user.click(screen.getByRole("menuitem", { name: "Import pages" }));
+  await user.upload(
+    screen.getByLabelText("Choose archive"),
+    new File([JSON.stringify(archive)], "valid.json", {
+      type: "application/json",
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "This file is not a valid Pages archive",
+  );
+});
+
+it("shows the archive size limit when the server rejects an import", async () => {
+  const archive = {
+    format: "savia-pages",
+    version: 1,
+    exportedAt: "2026-10-02T10:00:00.000Z",
+    pages: [],
+    files: [],
+  };
+  renderPagesHome(async (input, init) => {
+    if (
+      new URL(String(input)).pathname === "/v1/pages/import" &&
+      init?.method === "POST"
+    )
+      return Response.json(
+        { error: { code: "ARCHIVE_TOO_LARGE", message: "too large" } },
+        { status: 413 },
+      );
+    return Response.json({ data: [] });
+  });
+  const user = userEvent.setup();
+  await openPagesOptions(user);
+  await user.click(screen.getByRole("menuitem", { name: "Import pages" }));
+  await user.upload(
+    screen.getByLabelText("Choose archive"),
+    new File([JSON.stringify(archive)], "valid.json", {
+      type: "application/json",
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The archive exceeds the 50 MiB limit",
+  );
 });

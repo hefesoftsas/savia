@@ -380,4 +380,86 @@ export const pagesMessages = {
   ],
   "View revision": ["Ver versión", "View version", "Ver versão"],
   More: ["Más acciones", "More actions", "Mais ações"],
+  "Pages options": [
+    "Opciones de páginas",
+    "Pages options",
+    "Opções de páginas",
+  ],
+  "Export all my pages": [
+    "Exportar todas mis páginas",
+    "Export all my pages",
+    "Exportar todas as minhas páginas",
+  ],
+  "Import pages": ["Importar páginas", "Import pages", "Importar páginas"],
+  "Pages exported": [
+    "Páginas exportadas.",
+    "Pages exported.",
+    "Páginas exportadas.",
+  ],
+  "Pages imported": [
+    "Contenido importado como copias privadas. Páginas: %{pages}; carpetas: %{folders}; archivos adjuntos: %{files}.",
+    "Imported content as private copies. Pages: %{pages}; folders: %{folders}; attachments: %{files}.",
+    "Conteúdo importado como cópias privadas. Páginas: %{pages}; pastas: %{folders}; anexos: %{files}.",
+  ],
+  "Could not export pages": [
+    "No se pudieron exportar las páginas. Inténtalo de nuevo.",
+    "Could not export pages. Try again.",
+    "Não foi possível exportar as páginas. Tente novamente.",
+  ],
+  "Could not import pages": [
+    "No se pudieron importar las páginas. Inténtalo de nuevo.",
+    "Could not import pages. Try again.",
+    "Não foi possível importar as páginas. Tente novamente.",
+  ],
+  "Import pages description": [
+    "El archivo añade páginas y carpetas como copias privadas; no reemplaza contenido existente. Incluye bloques y archivos adjuntos. No conserva historial, permisos, enlaces públicos ni vínculos a colecciones; tampoco incluye datos de colecciones.",
+    "The archive adds pages and folders as private copies; it never replaces existing content. It includes rich blocks and attachments. History, sharing, public links, collection bindings, and collection data are not included.",
+    "O arquivo adiciona páginas e pastas como cópias privadas; nunca substitui conteúdo existente. Inclui blocos e anexos. O histórico, o compartilhamento, os links públicos, os vínculos com coleções e os dados das coleções não são incluídos.",
+  ],
+  "Choose archive": [
+    "Seleccionar archivo",
+    "Choose archive",
+    "Selecionar arquivo",
+  ],
+  "Selected archive": [
+    "Archivo seleccionado",
+    "Selected archive",
+    "Arquivo selecionado",
+  ],
+  "Select archive first": [
+    "Selecciona un archivo para continuar.",
+    "Choose an archive to continue.",
+    "Selecione um arquivo para continuar.",
+  ],
+  "Invalid archive JSON": [
+    "El archivo no contiene JSON válido.",
+    "The archive is not valid JSON.",
+    "O arquivo não contém JSON válido.",
+  ],
+  "Invalid archive format": [
+    "Este archivo no es una exportación de páginas válida.",
+    "This file is not a valid Pages archive.",
+    "Este arquivo não é uma exportação válida de páginas.",
+  ],
+  "Archive too large": [
+    "El archivo supera el límite de 50 MiB.",
+    "The archive exceeds the 50 MiB limit.",
+    "O arquivo excede o limite de 50 MiB.",
+  ],
+  "Import pages hint": [
+    "Selecciona el archivo .savia-pages.json que quieres importar. Tamaño máximo: 50 MiB.",
+    "Choose the .savia-pages.json file you want to import. Maximum size: 50 MiB.",
+    "Selecione o arquivo .savia-pages.json que deseja importar. Tamanho máximo: 50 MiB.",
+  ],
+  "Importing pages": [
+    "Importando páginas…",
+    "Importing pages…",
+    "Importando páginas…",
+  ],
+  "Exporting pages": [
+    "Exportando páginas…",
+    "Exporting pages…",
+    "Exportando páginas…",
+  ],
+  "Import archive": ["Importar archivo", "Import archive", "Importar arquivo"],
 } as const satisfies MessageCatalog;
