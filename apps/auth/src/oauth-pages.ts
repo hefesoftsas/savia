@@ -269,6 +269,19 @@ const oauthUiScript = String.raw`(() => {
     let robotGreetingPending = false;
     let robotTriggerTimer;
     let robotHideTimer;
+    let replayTimer;
+    let pageHidden = false;
+
+    function scheduleReplay() {
+      if (reducedMotion || !finished || document.hidden || pageHidden) return;
+      clearTimeout(replayTimer);
+      replayTimer = setTimeout(() => {
+        replayTimer = undefined;
+        if (reducedMotion || document.hidden || pageHidden || !finished) return;
+        finished = false;
+        animation.goToAndPlay(0, true);
+      }, 5000);
+    }
 
     function replayClass(element, name) {
       if (reducedMotion) return;
@@ -310,7 +323,10 @@ const oauthUiScript = String.raw`(() => {
         finished = true;
       } else if (!document.hidden) animation.play();
     });
-    animation.addEventListener("complete", () => { finished = true; });
+    animation.addEventListener("complete", () => {
+      finished = true;
+      scheduleReplay();
+    });
     robotAnimation?.addEventListener("DOMLoaded", () => {
       robotReady = true;
       if (robotGreetingPending) greetWithRobot();
@@ -339,12 +355,34 @@ const oauthUiScript = String.raw`(() => {
       if (document.hidden) {
         cancelRobotGreeting();
         clearTimeout(robotHideTimer);
+        clearTimeout(replayTimer);
+        replayTimer = undefined;
         robotAnimation?.pause();
         robot?.classList.remove("robot-visible");
       }
-      if (!ready || finished) return;
+      if (!ready) return;
       if (document.hidden) animation.pause();
-      else animation.play();
+      else if (finished) scheduleReplay();
+      else if (!reducedMotion) animation.play();
+    });
+    window.addEventListener("pagehide", () => {
+      pageHidden = true;
+      clearTimeout(replayTimer);
+      clearTimeout(robotTriggerTimer);
+      clearTimeout(robotHideTimer);
+      replayTimer = undefined;
+      robotTriggerTimer = undefined;
+      robotHideTimer = undefined;
+      robotGreetingPending = false;
+      animation.pause();
+      robotAnimation?.pause();
+    });
+    window.addEventListener("pageshow", () => {
+      pageHidden = false;
+      if (!ready) return;
+      if (document.hidden) animation.pause();
+      else if (finished) scheduleReplay();
+      else if (!reducedMotion) animation.play();
     });
   }
 

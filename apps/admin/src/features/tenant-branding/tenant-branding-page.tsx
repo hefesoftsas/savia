@@ -24,6 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTenantBranding } from "./tenant-branding-provider";
 import "./tenant-branding.css";
+import { AnimationCatalog, type CatalogAnimation } from "./animation-catalog";
+import { LottiePreview } from "./lottie-preview";
+import { animationCatalogMessages } from "./animation-catalog-messages";
 
 type Tenant = {
   id: number;
@@ -267,6 +270,7 @@ function BrandingEditor({
 }) {
   const t = useMessages(settingsMessages);
   const { refetch } = useTenantBranding();
+  const animationT = useMessages(animationCatalogMessages);
   const [saved, setSaved] = useState<TenantBranding>();
   const [draft, setDraft] = useState<TenantBranding>();
   const [canManage, setCanManage] = useState(false);
@@ -280,6 +284,7 @@ function BrandingEditor({
     Partial<Record<"logo" | "cover", string>>
   >({});
   const [animationName, setAnimationName] = useState("");
+  const [animationPreview, setAnimationPreview] = useState<unknown>();
   const objectUrls = useRef<Partial<Record<Asset, string>>>({});
   const alive = useRef(true);
   const busy = useRef(false);
@@ -291,6 +296,7 @@ function BrandingEditor({
     objectUrls.current = {};
     setPreviews({});
     setAnimationName("");
+    setAnimationPreview(undefined);
   }
   useEffect(() => {
     alive.current = true;
@@ -452,6 +458,7 @@ function BrandingEditor({
         throw new Error("Invalid asset URL");
       if (kind === "login-animation") {
         setAnimationName(file.name);
+        setAnimationPreview(undefined);
         edit("loginAnimationUrl", url);
         setNotice(
           "Animación lista en la vista previa. Guarda los cambios para publicarla.",
@@ -474,9 +481,51 @@ function BrandingEditor({
       if (alive.current) setPending(undefined);
     }
   }
+  async function importAnimation(entry: CatalogAnimation, data: unknown) {
+    if (!draft || !canManage || busy.current || entry.license !== "MIT") return;
+    busy.current = true;
+    setPending("login-animation");
+    setError("");
+    setNotice("");
+    const controller = new AbortController();
+    uploadRequest.current = controller;
+    try {
+      const response = await services.apiClient.requestResponse(
+        `${path}/animations/${encodeURIComponent(entry.id)}`,
+        { method: "POST", signal: controller.signal },
+      );
+      if (!response.ok)
+        throw new ApiClientError(
+          response.status,
+          "import_failed",
+          "Import failed",
+        );
+      const result = (await response.json()) as { data?: { url?: unknown } };
+      if (!alive.current || controller.signal.aborted) return;
+      const url = result.data?.url;
+      if (
+        typeof url !== "string" ||
+        !url.startsWith(`/api/public/tenant-branding/assets/${tenantId}/`) ||
+        !parseTenantBranding({ ...draft, loginAnimationUrl: url })
+      )
+        throw new Error("Invalid asset URL");
+      setAnimationName(entry.name);
+      setAnimationPreview(data);
+      edit("loginAnimationUrl", url);
+      setNotice(
+        animationT("Animación lista. Guarda los cambios para publicarla."),
+      );
+    } catch (cause) {
+      if (alive.current && !controller.signal.aborted) setError(message(cause));
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(undefined);
+    }
+  }
   function removeImage(kind: Asset) {
     if (kind === "login-animation") {
       setAnimationName("");
+      setAnimationPreview(undefined);
       edit("loginAnimationUrl", null);
       return;
     }
@@ -595,6 +644,12 @@ function BrandingEditor({
               "Archivo Lottie JSON de hasta 2 MB. Reemplaza la animación de Savia y tiene prioridad sobre la portada. Sin animación se muestra la de Savia.",
             )}
           </p>
+          <AnimationCatalog
+            apiClient={services.apiClient}
+            path={path}
+            disabled={disabled}
+            onSelect={(entry, data) => void importAnimation(entry, data)}
+          />
           <div className="tenant-branding-field">
             <label htmlFor="branding-login-animation">
               {t("Subir animación Lottie")}
@@ -718,9 +773,13 @@ function BrandingEditor({
         </div>
         <div className="tenant-branding-preview-content">
           {draft.loginAnimationUrl ? (
-            <p className="tenant-branding-preview-animation" role="status">
-              {t("Se mostrará tu animación Lottie en lugar de la portada.")}
-            </p>
+            animationPreview ? (
+              <LottiePreview data={animationPreview} name={animationName} />
+            ) : (
+              <p className="tenant-branding-preview-animation" role="status">
+                {t("Se mostrará tu animación Lottie en lugar de la portada.")}
+              </p>
+            )
           ) : (
             (previews.cover ?? draft.coverUrl) && (
               <img
