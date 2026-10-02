@@ -129,9 +129,11 @@ export function PagesSidebar({ onNavigate }: { onNavigate(): void }) {
     setDeleting(true);
     setDeleteError(false);
     try {
+      const currentPage = pages.find((page) => page.id === deleteTarget.id);
+      if (!currentPage) throw new Error("Page no longer available");
       await new PagesClient(apiClient).remove(
-        deleteTarget.id,
-        deleteTarget.version,
+        currentPage.id,
+        currentPage.version,
       );
       if (currentId === deleteTarget.id) navigate("/pages");
       setDeleteTarget(null);

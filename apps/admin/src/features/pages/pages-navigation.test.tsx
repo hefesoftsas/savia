@@ -14,7 +14,7 @@ import type { AppServices } from "@/app-services";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
 import { PagesSidebar } from "./pages-sidebar";
 import { PagesPage } from "./pages-page";
-import type { PageDocument } from "./client";
+import { PagesClient, type PageDocument } from "./client";
 
 vi.mock("./editor", () => ({
   PageEditor: () => <textarea aria-label="Document body" />,
@@ -109,8 +109,22 @@ function setup(route = "/pages/project") {
       <RouterProvider router={router} />
     </StrictMode>,
   );
-  return { router, creates, deletes };
+  return { router, creates, deletes, api };
 }
+it("uses the latest saved version when deleting from an open sidebar dialog", async () => {
+  const { api, deletes } = setup("/pages/notes");
+  await screen.findByRole("link", { name: "Launch notes" });
+  await userEvent.click(
+    screen.getByRole("button", { name: "Delete Launch notes" }),
+  );
+  await new PagesClient(api).save("notes", {
+    title: "Launch notes",
+    content: [],
+    version: 1,
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Delete page" }));
+  await waitFor(() => expect(deletes).toEqual(["notes?version=2"]));
+});
 it("confirms sidebar deletion and removes the page only after confirmation", async () => {
   const { deletes } = setup("/pages/project");
   await userEvent.click(
