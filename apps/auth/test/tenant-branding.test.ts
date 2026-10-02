@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import authWorker from "../src/index";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   oauthPageResponse,
   tenantBrandingFromHeader,
@@ -32,6 +32,7 @@ function fakeAnimation() {
     playCalls: 0,
     pauseCalls: 0,
     stoppedFrames: [] as number[],
+    playedFrames: [] as number[],
     addEventListener(name: string, listener: () => void) {
       listeners.set(name, listener);
     },
@@ -43,6 +44,9 @@ function fakeAnimation() {
     },
     goToAndStop(frame: number) {
       this.stoppedFrames.push(frame);
+    },
+    goToAndPlay(frame: number) {
+      this.playedFrames.push(frame);
     },
     emit(name: string) {
       listeners.get(name)?.();
@@ -76,13 +80,19 @@ async function startOAuthAnimation(reducedMotion = false) {
     querySelector: (selector: string) =>
       selector === "[data-oauth-login-animation]" ? panel : null,
     querySelectorAll: () => [],
-    addEventListener(_name: string, listener: () => void) {
-      onVisibilityChange = listener;
+    addEventListener(name: string, listener: () => void) {
+      if (name === "visibilitychange") onVisibilityChange = listener;
     },
   };
+  let onPageHide: (() => void) | undefined;
+  let onPageShow: (() => void) | undefined;
   const paths: string[] = [];
   new Function("document", "window", script)(document, {
     location: { search: "" },
+    addEventListener(name: string, listener: () => void) {
+      if (name === "pagehide") onPageHide = listener;
+      if (name === "pageshow") onPageShow = listener;
+    },
     matchMedia: () => ({ matches: reducedMotion }),
     lottie: {
       loadAnimation(options: { path: string }) {
@@ -102,8 +112,16 @@ async function startOAuthAnimation(reducedMotion = false) {
       document.hidden = false;
       onVisibilityChange?.();
     },
+    pagehide() {
+      onPageHide?.();
+    },
+    pageshow() {
+      onPageShow?.();
+    },
   };
 }
+
+afterEach(() => vi.useRealTimers());
 
 describe("tenant identity on OAuth surfaces", () => {
   it.each(["login", "login?mode=forgot", "forgot-password"])(
@@ -168,7 +186,67 @@ describe("tenant identity on OAuth surfaces", () => {
     expect(css).not.toContain("#071421");
   });
 
+  it("replays the completed logo every five seconds", async () => {
+    vi.useFakeTimers();
+    const { animation } = await startOAuthAnimation();
+    animation.emit("DOMLoaded");
+    animation.emit("complete");
+
+    vi.advanceTimersByTime(4999);
+    expect(animation.playedFrames).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(animation.playedFrames).toEqual([0]);
+
+    animation.emit("complete");
+    vi.advanceTimersByTime(5000);
+    expect(animation.playedFrames).toEqual([0, 0]);
+  });
+
+  it("waits a fresh five seconds after a completed logo returns from a hidden tab", async () => {
+    vi.useFakeTimers();
+    const { animation, hide, show } = await startOAuthAnimation();
+    animation.emit("DOMLoaded");
+    animation.emit("complete");
+    vi.advanceTimersByTime(2500);
+    hide();
+    vi.advanceTimersByTime(10000);
+    expect(animation.playedFrames).toEqual([]);
+
+    show();
+    vi.advanceTimersByTime(4999);
+    expect(animation.playedFrames).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(animation.playedFrames).toEqual([0]);
+  });
+
+  it("clears logo replay timers when the page is hidden by navigation", async () => {
+    vi.useFakeTimers();
+    const { animation, pagehide } = await startOAuthAnimation();
+    animation.emit("DOMLoaded");
+    animation.emit("complete");
+    pagehide();
+    vi.advanceTimersByTime(10000);
+    expect(animation.playedFrames).toEqual([]);
+  });
+
+  it("resumes logo replay after a pagehide and pageshow cycle", async () => {
+    vi.useFakeTimers();
+    const { animation, pagehide, pageshow } = await startOAuthAnimation();
+    animation.emit("DOMLoaded");
+    animation.emit("complete");
+    pagehide();
+    vi.advanceTimersByTime(10000);
+    expect(animation.playedFrames).toEqual([]);
+
+    pageshow();
+    vi.advanceTimersByTime(4999);
+    expect(animation.playedFrames).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(animation.playedFrames).toEqual([0]);
+  });
+
   it("plays the logo once and pauses while the tab is hidden", async () => {
+    vi.useFakeTimers();
     const { animation, paths, hide, show } = await startOAuthAnimation();
     expect(paths).toEqual([
       "/login/savia-logo.json",
@@ -185,6 +263,8 @@ describe("tenant identity on OAuth surfaces", () => {
     hide();
     show();
     expect(animation.playCalls).toBe(2);
+    vi.advanceTimersByTime(5000);
+    expect(animation.playedFrames).toEqual([0]);
   });
 
   it("shows the completed logo without motion when requested", async () => {
@@ -195,6 +275,9 @@ describe("tenant identity on OAuth surfaces", () => {
     hide();
     show();
     expect(animation.playCalls).toBe(0);
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(30000);
+    expect(animation.playedFrames).toEqual([]);
   });
 
   it("passes the internal tenant header through worker HTML and stylesheet routes", async () => {

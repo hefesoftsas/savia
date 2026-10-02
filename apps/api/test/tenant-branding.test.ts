@@ -1,7 +1,7 @@
 import { createTestApp } from "./test-app";
 import { env } from "cloudflare:workers";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
 import { registerTenantBrandingRoutes } from "../src/tenant-branding/routes";
@@ -307,6 +307,213 @@ it("stores validated Lottie animations and only serves them when referenced by s
       .status,
   ).toBe(200);
   expect((await instance.request("https://api.test" + url)).status).toBe(404);
+});
+it("lists the free MIT animation catalogue to authorized tenant viewers", async () => {
+  const a = await tenant(),
+    b = await tenant(),
+    instance = app(member(a.id, "viewer"));
+  const response = await instance.request(
+    `https://api.test/v1/tenants/${a.id}/branding/animations?q=estrella`,
+  );
+  expect(response.status).toBe(200);
+  const { data } = (await response.json()) as any;
+  expect(data.length).toBeGreaterThan(0);
+  expect(data.every((item: any) => item.license === "MIT")).toBe(true);
+  expect(data.every((item: any) => item.author && item.licenseUrl)).toBe(true);
+  expect(data.some((item: any) => item.id === "favorite-star")).toBe(true);
+  expect(
+    (
+      await app(member(a.id)).request(
+        `https://api.test/v1/tenants/${b.id}/branding/animations`,
+      )
+    ).status,
+  ).toBe(403);
+});
+it("serves only pinned approved source JSON and embeds its MIT notice", async () => {
+  const t = await tenant(),
+    instance = app(member(t.id));
+  const originalFetch = globalThis.fetch;
+  const animation = JSON.stringify({
+    v: "4.6.8",
+    fr: 30,
+    ip: 0,
+    op: 51,
+    w: 80,
+    h: 80,
+    assets: [],
+    layers: [],
+  });
+  const upstream = vi.fn(async (input: RequestInfo | URL) => {
+    expect(String(input)).toBe(
+      "https://raw.githubusercontent.com/spemer/lottie-animations-json/d5bc5ecf1db13f1a051224b5c76f4d07756b57d8/ic_fav/ic_fav.json",
+    );
+    return new Response(animation, {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
+    });
+  });
+  vi.stubGlobal("fetch", upstream);
+  const digest = vi
+    .spyOn(globalThis.crypto.subtle, "digest")
+    .mockImplementation(
+      async () =>
+        Uint8Array.from(
+          "a11bf8c9cd305ddf3f1925be34d24966d8a1f68647c9f551cc3358f57ad6e82e"
+            .match(/.{2}/g)!
+            .map((byte) => Number.parseInt(byte, 16)),
+        ).buffer,
+    );
+  try {
+    const response = await instance.request(
+      `https://api.test/v1/tenants/${t.id}/branding/animations/favorite-star`,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as any;
+    expect(body.v).toBe("4.6.8");
+    expect(body.saviaLicense).toMatchObject({
+      license: "MIT",
+      author: "Hyouk Seo",
+    });
+    expect(upstream).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+    digest.mockRestore();
+    globalThis.fetch = originalFetch;
+  }
+});
+it("rejects redirected, oversized, and hash-mismatched catalogue sources", async () => {
+  const t = await tenant(),
+    instance = app(member(t.id));
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { Location: "https://evil.test/animation.json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response("{}", {
+        status: 200,
+        headers: { "Content-Length": String(2 * 1024 * 1024 + 1) },
+      }),
+    )
+    .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    for (let index = 0; index < 3; index++) {
+      const response = await instance.request(
+        `https://api.test/v1/tenants/${t.id}/branding/animations/favorite-star`,
+      );
+      expect(response.status).toBe(502);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    for (const [url, options] of fetcher.mock.calls) {
+      expect(String(url)).toMatch(
+        /^https:\/\/raw\.githubusercontent\.com\/spemer\/lottie-animations-json\/d5bc5ecf1db13f1a051224b5c76f4d07756b57d8\//,
+      );
+      expect(options?.redirect).toBe("manual");
+    }
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+it("imports a catalogue animation through the existing login-animation upload without saving branding", async () => {
+  const t = await tenant(),
+    instance = app(member(t.id), env.DOCUMENTS);
+  const originalFetch = globalThis.fetch;
+  const animation = JSON.stringify({
+    v: "4.6.8",
+    fr: 30,
+    ip: 0,
+    op: 51,
+    w: 80,
+    h: 80,
+    assets: [],
+    layers: [],
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(animation, { status: 200 })),
+  );
+  const digest = vi
+    .spyOn(globalThis.crypto.subtle, "digest")
+    .mockImplementation(
+      async () =>
+        Uint8Array.from(
+          "a11bf8c9cd305ddf3f1925be34d24966d8a1f68647c9f551cc3358f57ad6e82e"
+            .match(/.{2}/g)!
+            .map((byte) => Number.parseInt(byte, 16)),
+        ).buffer,
+    );
+  try {
+    const response = await instance.request(
+      `https://api.test/v1/tenants/${t.id}/branding/animations/favorite-star`,
+      { method: "POST" },
+    );
+    expect(response.status, await response.clone().text()).toBe(201);
+    const { data } = (await response.json()) as any;
+    expect(data.url).toMatch(
+      new RegExp(`^/api/public/tenant-branding/assets/${t.id}/`),
+    );
+    expect((await read(instance, t.id)).data.loginAnimationUrl).toBeNull();
+    expect(
+      await env.DB.prepare(
+        "SELECT kind,content_type FROM tenant_branding_assets WHERE tenant_id=?",
+      )
+        .bind(t.id)
+        .first(),
+    ).toEqual({ kind: "login-animation", content_type: "application/json" });
+  } finally {
+    vi.unstubAllGlobals();
+    digest.mockRestore();
+    globalThis.fetch = originalFetch;
+  }
+});
+it("requires tenant management before fetching a catalogue import and rejects unknown catalogue ids", async () => {
+  const a = await tenant(),
+    b = await tenant();
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const viewer = app(member(a.id, "viewer"));
+    expect(
+      (
+        await viewer.request(
+          `https://api.test/v1/tenants/${a.id}/branding/animations/favorite-star`,
+          { method: "POST" },
+        )
+      ).status,
+    ).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+    const admin = app(member(a.id));
+    expect(
+      (
+        await admin.request(
+          `https://api.test/v1/tenants/${a.id}/branding/animations/not-approved`,
+          { method: "POST" },
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await admin.request(
+          `https://api.test/v1/tenants/${a.id}/branding/animations/not-approved`,
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await app(member(a.id)).request(
+          `https://api.test/v1/tenants/${b.id}/branding/animations/favorite-star`,
+          { method: "POST" },
+        )
+      ).status,
+    ).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 it("rejects forged MIME, oversized files, wrong roles, and unsupported uploads", async () => {
   const t = await tenant(),
