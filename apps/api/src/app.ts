@@ -1,3 +1,5 @@
+import { PersonalIntegrationOperations } from "./personal-integrations/operations";
+import { createPersonalIntegrationRepository } from "./personal-integrations/repository";
 import { registerPagesRoutes } from "./routes/pages";
 import { registerPublicPagesRoutes } from "./pages/public-routes";
 import {
@@ -137,7 +139,22 @@ export function createApp(
     identityBridgeKey,
     publicForms,
   );
-  registerCompanionRoutes(app, companion);
+  registerCompanionRoutes(
+    app,
+    companion
+      ? {
+          ...companion,
+          personalFiles:
+            companion.personalFiles ??
+            (personalIntegrations?.nango
+              ? new PersonalIntegrationOperations(
+                  createPersonalIntegrationRepository(db),
+                  personalIntegrations.nango,
+                )
+              : undefined),
+        }
+      : undefined,
+  );
   registerRealtimeMutationHints(app, realtime, db);
   registerTenantEmailRoutes(app, db, resolvedAuthService, identityBridgeKey);
   registerTenantSSORoutes(app, db, resolvedAuthService, identityBridgeKey);

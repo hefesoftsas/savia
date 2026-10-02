@@ -4,6 +4,7 @@ import {
   CompanionService,
   validateAudio,
   summarySchema,
+  summarizeSchema,
 } from "../src/companion/service";
 function audio(seconds = 0.1) {
   const bytes = new Uint8Array(44 + Math.round(seconds * 16000) * 2);
@@ -203,5 +204,11 @@ describe("Companion bounded provider adapter", () => {
         actions: [{ description: "x" }],
       }).success,
     ).toBe(false);
+    expect(
+      summarizeSchema.safeParse({
+        transcripts: [{ source: "upload", text: "t".repeat(60000) }],
+        consent: true,
+      }).success,
+    ).toBe(true);
   });
 });

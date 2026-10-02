@@ -4,6 +4,7 @@ import {
   ChevronRight,
   LoaderCircle,
   RefreshCw,
+  Upload,
 } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import {
   type Recording,
   type RecordingNotes,
 } from "./client";
+
+import { RecordingUpload } from "./recording-upload";
 
 // Operate: an owner-private audio inbox, using Savia's neutral surfaces and
 // emerald actions. The list leads to one listening/review workspace; generated
@@ -41,11 +44,20 @@ export function CompanionRecordingsPage({
   const [error, setError] = useState(""),
     [consent, setConsent] = useState(false),
     [processing, setProcessing] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false),
+    [uploading, setUploading] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const mounted = useRef(true),
     inFlight = useRef(false);
   const source = (r: Recording) =>
-    t(r.source === "microphone" ? "Microphone" : "System audio");
+    r.name ??
+    t(
+      r.source === "upload"
+        ? "Uploaded audio"
+        : r.source === "microphone"
+          ? "Microphone"
+          : "System audio",
+    );
   const date = (r: Recording) =>
     new Date(r.createdAt).toLocaleString(intlLocale(locale), {
       dateStyle: "medium",
@@ -154,25 +166,53 @@ export function CompanionRecordingsPage({
   };
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
-      <header className="mb-6 flex items-start justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("Recordings")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t("Audio uploaded from Savia Companion. Private to your account.")}
+            {t(
+              "Your recordings from Companion, local disk and connected drives. Private to your account.",
+            )}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loading || processing}
-          onClick={() => void load()}
-        >
-          <RefreshCw className="size-4" aria-hidden="true" />
-          {t("Refresh")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={loading || processing || uploading}
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="size-4" aria-hidden="true" />
+            {t("Upload recording")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading || processing || uploading}
+            onClick={() => void load()}
+          >
+            <RefreshCw className="size-4" aria-hidden="true" />
+            {t("Refresh")}
+          </Button>
+        </div>
       </header>
+      {uploadOpen && (
+        <RecordingUpload
+          client={client}
+          onBusy={setUploading}
+          onClose={() => setUploadOpen(false)}
+          onSaved={(recording) => {
+            setRecordings((previous) => [
+              recording,
+              ...previous.filter((r) => r.id !== recording.id),
+            ]);
+            setSelected(recording);
+            setUploadOpen(false);
+            setError("");
+          }}
+        />
+      )}
       {error && (
         <p
           role="alert"
@@ -196,7 +236,7 @@ export function CompanionRecordingsPage({
           />
           <h2 className="text-xl font-medium">{t("No recordings yet")}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {t("Record a sample in Companion and upload it to see it here.")}
+            {t("Upload an audio file or record in Companion to get started.")}
           </p>
         </section>
       ) : (
@@ -207,12 +247,14 @@ export function CompanionRecordingsPage({
                 <li key={r.id}>
                   <button
                     className={`flex w-full items-center justify-between gap-2 rounded-lg p-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring ${selected?.id === r.id ? "bg-muted" : ""}`}
-                    disabled={processing}
+                    disabled={processing || uploading}
                     aria-current={selected?.id === r.id ? "true" : undefined}
                     onClick={() => setSelected(r)}
                   >
                     <span className="min-w-0">
-                      <span className="block font-medium">{source(r)}</span>
+                      <span className="block break-words font-medium">
+                        {source(r)}
+                      </span>
                       <time
                         className="mt-1 block text-xs text-muted-foreground"
                         dateTime={r.createdAt}
@@ -220,7 +262,9 @@ export function CompanionRecordingsPage({
                         {date(r)}
                       </time>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        {r.durationSeconds.toFixed(1)}s ·{" "}
+                        {r.durationSeconds != null
+                          ? `${r.durationSeconds.toFixed(1)}s · `
+                          : ""}
                         {Math.round(r.bytes / 1024)} KiB
                       </span>
                     </span>
@@ -237,7 +281,7 @@ export function CompanionRecordingsPage({
                 className="mt-3 w-full"
                 variant="ghost"
                 size="sm"
-                disabled={loading || processing}
+                disabled={loading || processing || uploading}
                 onClick={() => void load(cursor)}
               >
                 {t("Load more")}
@@ -247,7 +291,9 @@ export function CompanionRecordingsPage({
           <section className="min-w-0" aria-label={t("Meeting notes")}>
             {selected && (
               <>
-                <h2 className="text-lg font-medium">{source(selected)}</h2>
+                <h2 className="break-words text-lg font-medium">
+                  {source(selected)}
+                </h2>
                 <p className="mb-5 mt-1 text-sm text-muted-foreground">
                   {date(selected)}
                 </p>
@@ -268,7 +314,7 @@ export function CompanionRecordingsPage({
                       onError={() =>
                         setError(
                           t(
-                            "Your browser cannot play this audio. Download it or use a browser that supports Ogg Opus.",
+                            "Your browser cannot play this audio. Download it to listen in another application.",
                           ),
                         )
                       }
@@ -278,7 +324,9 @@ export function CompanionRecordingsPage({
                     />
                     <a
                       href={audio}
-                      download={`${selected.id}.ogg`}
+                      download={
+                        selected.name ?? `${selected.id}.${selected.format}`
+                      }
                       className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-4"
                     >
                       {t("Download audio")}
@@ -300,7 +348,7 @@ export function CompanionRecordingsPage({
                         type="checkbox"
                         className="mt-1 size-4 accent-primary"
                         checked={consent}
-                        disabled={processing}
+                        disabled={processing || uploading}
                         onChange={(e) => setConsent(e.target.checked)}
                       />
                       <span>
@@ -312,7 +360,11 @@ export function CompanionRecordingsPage({
                     <Button
                       className="mt-4"
                       disabled={
-                        !consent || loadingDetail || processing || !audio
+                        !consent ||
+                        loadingDetail ||
+                        processing ||
+                        uploading ||
+                        !audio
                       }
                       onClick={() => void generate()}
                     >

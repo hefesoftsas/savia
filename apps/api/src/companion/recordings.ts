@@ -7,6 +7,11 @@ import {
   transcriptSchema,
 } from "./service";
 import { inspectOggOpus, MAX_OPUS_BYTES } from "./ogg";
+import {
+  importedAudioFormatSchema,
+  inspectImportedAudio,
+  MAX_RECORDING_BYTES,
+} from "./imported-audio";
 export const recordingIdSchema = z.string().uuid();
 export const saveRecordingSchema = z
   .object({
@@ -27,11 +32,15 @@ export const saveRecordingSchema = z
 export const recordingSchema = z.object({
   id: recordingIdSchema,
   source: sourceSchema,
-  format: z.literal("ogg"),
-  bytes: z.number().int().positive().max(MAX_OPUS_BYTES),
-  durationSeconds: z.number().positive().max(60),
+  format: importedAudioFormatSchema,
+  bytes: z.number().int().positive().max(MAX_RECORDING_BYTES),
+  durationSeconds: z.number().positive().nullable(),
   createdAt: z.string().datetime(),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  name: z.string().min(1).max(255).optional(),
+  origin: z
+    .enum(["local", "google_drive", "onedrive_personal", "onedrive_business"])
+    .optional(),
 });
 export const recordingListSchema = z.object({
   recordings: z.array(recordingSchema),
@@ -47,18 +56,42 @@ export type Recording = z.infer<typeof recordingSchema>;
 export type RecordingNotes = z.infer<typeof recordingNotesSchema>;
 export type RecordingAudio = {
   source: Recording["source"];
-  durationSeconds: number;
+  format: Recording["format"];
+  durationSeconds: number | null;
+  name?: string;
   bytes: Uint8Array;
 };
+export const saveImportedRecordingSchema = z
+  .object({
+    id: recordingIdSchema,
+    name: z.string().trim().min(1).max(255),
+    origin: z.enum([
+      "local",
+      "google_drive",
+      "onedrive_personal",
+      "onedrive_business",
+    ]),
+    bytes: z
+      .instanceof(Uint8Array)
+      .refine(
+        (bytes) =>
+          bytes.byteLength > 0 && bytes.byteLength <= MAX_RECORDING_BYTES,
+      ),
+    format: importedAudioFormatSchema,
+  })
+  .strict();
 const MAX_NOTES_BYTES = 128 * 1024;
 const processingByBucket = new WeakMap<R2Bucket, Map<string, Promise<void>>>();
-const digest = async (bytes: Uint8Array) =>
-  Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer),
-    ),
+const digest = async (bytes: Uint8Array) => {
+  const exactBytes =
+    bytes.buffer instanceof ArrayBuffer
+      ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      : new Uint8Array(bytes);
+  return Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", exactBytes)),
     (b) => b.toString(16).padStart(2, "0"),
   ).join("");
+};
 const missing = () =>
   new CompanionError("RECORDING_NOT_FOUND", "Recording not found.", 404);
 export class CompanionRecordings {
@@ -129,12 +162,16 @@ export class CompanionRecordings {
     const metadata = object.customMetadata ?? {};
     const parsed = recordingSchema.safeParse({
       id: metadata.id,
-      source: metadata.source,
-      format: "ogg",
+      source: metadata.source ?? "microphone",
+      format: metadata.format ?? "ogg",
       bytes: object.size,
-      durationSeconds: Number(metadata.durationSeconds),
+      durationSeconds: metadata.durationSeconds
+        ? Number(metadata.durationSeconds)
+        : null,
       createdAt: metadata.createdAt,
       sha256: metadata.sha256,
+      ...(metadata.name ? { name: metadata.name } : {}),
+      ...(metadata.origin ? { origin: metadata.origin } : {}),
     });
     if (!parsed.success)
       throw new CompanionError(
@@ -178,6 +215,7 @@ export class CompanionRecordings {
         customMetadata: {
           id: parsed.data.id,
           source: parsed.data.source,
+          format: "ogg",
           durationSeconds: String(durationSeconds),
           createdAt: new Date().toISOString(),
           sha256,
@@ -202,6 +240,99 @@ export class CompanionRecordings {
       throw new CompanionError(
         "RECORDING_CONFLICT",
         "This identifier belongs to a different sample.",
+        409,
+      );
+    return result;
+  }
+  async saveImported(
+    owner: string,
+    input: z.input<typeof saveImportedRecordingSchema>,
+  ): Promise<Recording> {
+    if (
+      input?.bytes instanceof Uint8Array &&
+      input.bytes.byteLength > MAX_RECORDING_BYTES
+    )
+      throw new CompanionError(
+        "AUDIO_TOO_LARGE",
+        "Imported audio exceeds the 50 MB limit.",
+        413,
+      );
+    const bucket = this.storage(),
+      parsed = saveImportedRecordingSchema.safeParse(input);
+    if (!parsed.success)
+      throw new CompanionError(
+        "INVALID_REQUEST",
+        "Invalid imported recording request.",
+      );
+    let durationSeconds: number | null;
+    try {
+      durationSeconds = inspectImportedAudio(
+        parsed.data.bytes,
+        parsed.data.format,
+      ).durationSeconds;
+    } catch (error) {
+      const tooLarge =
+        error instanceof Error && error.message.includes("50 MB");
+      throw new CompanionError(
+        tooLarge ? "AUDIO_TOO_LARGE" : "INVALID_AUDIO",
+        tooLarge
+          ? "Imported audio exceeds the 50 MB limit."
+          : "Expected a valid imported audio file.",
+        tooLarge ? 413 : 400,
+      );
+    }
+    const key = await this.key(owner, parsed.data.id),
+      sha256 = await digest(parsed.data.bytes);
+    let object: R2Object | null;
+    try {
+      object = await bucket.put(key, parsed.data.bytes, {
+        onlyIf: { etagDoesNotMatch: "*" },
+        httpMetadata: {
+          contentType:
+            parsed.data.format === "m4a"
+              ? "audio/mp4"
+              : parsed.data.format === "mp3"
+                ? "audio/mpeg"
+                : `audio/${parsed.data.format}`,
+          cacheControl: "private, no-store",
+        },
+        customMetadata: {
+          id: parsed.data.id,
+          source: "upload",
+          format: parsed.data.format,
+          durationSeconds:
+            durationSeconds == null ? "" : String(durationSeconds),
+          createdAt: new Date().toISOString(),
+          sha256,
+          name: parsed.data.name,
+          origin: parsed.data.origin,
+        },
+      });
+      if (!object) object = await bucket.head(key);
+    } catch {
+      throw new CompanionError(
+        "STORAGE_UNAVAILABLE",
+        "Could not save the recording; retry with the same identifier.",
+        503,
+      );
+    }
+    if (!object)
+      throw new CompanionError(
+        "STORAGE_UNAVAILABLE",
+        "Could not confirm the saved recording.",
+        503,
+      );
+    const result = this.metadata(object);
+    if (
+      result.sha256 !== sha256 ||
+      result.source !== "upload" ||
+      result.format !== parsed.data.format ||
+      result.origin !== parsed.data.origin ||
+      result.name !== parsed.data.name
+    )
+      throw new CompanionError(
+        "RECORDING_CONFLICT",
+        "This identifier belongs to a different recording.",
         409,
       );
     return result;
@@ -231,7 +362,9 @@ export class CompanionRecordings {
     const metadata = this.metadata(object);
     return {
       source: metadata.source,
+      format: metadata.format,
       durationSeconds: metadata.durationSeconds,
+      ...(metadata.name ? { name: metadata.name } : {}),
       bytes: new Uint8Array(await object.arrayBuffer()),
     };
   }

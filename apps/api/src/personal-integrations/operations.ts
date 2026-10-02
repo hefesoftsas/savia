@@ -393,6 +393,199 @@ function documentFolderId(value: unknown): string {
   return value;
 }
 
+const recordingFileLimit = 50_000_000;
+const recordingExtensions = new Set([
+  ".aac",
+  ".flac",
+  ".m4a",
+  ".mp3",
+  ".oga",
+  ".ogg",
+  ".opus",
+  ".wav",
+  ".webm",
+]);
+const recordingMimeTypes = new Set([
+  "audio/aac",
+  "audio/flac",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/opus",
+  "audio/wav",
+  "audio/webm",
+  "audio/x-flac",
+  "audio/x-m4a",
+  "audio/x-wav",
+]);
+
+function recordingFileId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 512 ||
+    value === "." ||
+    value === ".." ||
+    /[\\/\\?#\u0000-\u001f\u007f]/.test(value)
+  )
+    return invalidAction("The recording file ID is invalid");
+  return value;
+}
+
+function recordingMetadata(
+  payload: unknown,
+  expectedId: string,
+  provider: "google_drive" | "onedrive_personal" | "onedrive_business",
+): { name: string; mimeType: string; size?: number } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    throw new PersonalIntegrationUpstreamError();
+  const item = payload as Record<string, unknown>;
+  if (item.id !== expectedId) throw new PersonalIntegrationUpstreamError();
+  const name = documentName(item.name);
+  let mimeType: unknown;
+  if (provider === "google_drive") {
+    if (item.mimeType === "application/vnd.google-apps.folder")
+      return invalidAction("Folders cannot be imported as recordings");
+    mimeType = item.mimeType;
+  } else {
+    if (item.folder && typeof item.folder === "object")
+      return invalidAction("Folders cannot be imported as recordings");
+    const file = item.file;
+    if (!file || typeof file !== "object" || Array.isArray(file))
+      return invalidAction("The selected file is not a supported recording");
+    mimeType = (file as Record<string, unknown>).mimeType;
+  }
+  const normalizedMimeType =
+    typeof mimeType === "string"
+      ? mimeType.split(";", 1)[0]?.trim().toLowerCase()
+      : "";
+  const extension = name.includes(".")
+    ? name.slice(name.lastIndexOf(".")).toLowerCase()
+    : "";
+  if (
+    !recordingExtensions.has(extension) ||
+    (normalizedMimeType !== "application/octet-stream" &&
+      !recordingMimeTypes.has(normalizedMimeType))
+  )
+    return invalidAction("The selected file is not a supported recording");
+  let size: number | undefined;
+  if (item.size !== undefined && item.size !== null) {
+    const rawSize = item.size;
+    const parsedSize =
+      typeof rawSize === "number"
+        ? rawSize
+        : typeof rawSize === "string" && /^\d{1,16}$/.test(rawSize)
+          ? Number(rawSize)
+          : Number.NaN;
+    if (!Number.isSafeInteger(parsedSize) || parsedSize < 0)
+      throw new PersonalIntegrationUpstreamError();
+    if (parsedSize > recordingFileLimit)
+      return invalidAction("The selected recording exceeds 50 MB");
+    size = parsedSize;
+  }
+  return {
+    name,
+    mimeType:
+      normalizedMimeType === "application/octet-stream"
+        ? "application/octet-stream"
+        : normalizedMimeType,
+    ...(size === undefined ? {} : { size }),
+  };
+}
+
+function microsoftDownloadUrl(value: string, baseUrl: string): string {
+  if (value.length > 8192) throw new PersonalIntegrationUpstreamError();
+  try {
+    const url = new URL(value, baseUrl);
+    const host = url.hostname.toLowerCase();
+    const allowedHost =
+      host === "sharepoint.com" ||
+      host.endsWith(".sharepoint.com") ||
+      host === "sharepoint-df.com" ||
+      host.endsWith(".sharepoint-df.com") ||
+      host === "1drv.com" ||
+      host.endsWith(".1drv.com") ||
+      host === "onedrive.live.com";
+    if (
+      url.protocol !== "https:" ||
+      !allowedHost ||
+      url.port ||
+      url.username ||
+      url.password ||
+      url.hash
+    )
+      throw new Error("Unsafe redirect");
+    return url.toString();
+  } catch {
+    throw new PersonalIntegrationUpstreamError();
+  }
+}
+
+async function boundedRecordingBytes(
+  response: Response,
+  advertisedSize?: number,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength !== null) {
+    if (!/^\d{1,16}$/.test(contentLength))
+      throw new PersonalIntegrationUpstreamError();
+    const length = Number(contentLength);
+    if (!Number.isSafeInteger(length))
+      throw new PersonalIntegrationUpstreamError();
+    if (length > recordingFileLimit)
+      return invalidAction("The selected recording exceeds 50 MB");
+  }
+  const bodyMimeType = response.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (
+    bodyMimeType &&
+    bodyMimeType !== "application/octet-stream" &&
+    !recordingMimeTypes.has(bodyMimeType)
+  )
+    return invalidAction("The selected file is not a supported recording");
+  if (!response.body) throw new PersonalIntegrationUpstreamError();
+  const reader = response.body.getReader();
+  let bytes = new Uint8Array(0);
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > recordingFileLimit) {
+        await reader.cancel().catch(() => undefined);
+        return invalidAction("The selected recording exceeds 50 MB");
+      }
+      if (total > bytes.byteLength) {
+        const capacity = Math.min(
+          recordingFileLimit,
+          Math.max(
+            total,
+            bytes.byteLength === 0 ? 65_536 : bytes.byteLength * 2,
+          ),
+        );
+        const expanded = new Uint8Array(capacity);
+        expanded.set(bytes);
+        bytes = expanded;
+      }
+      bytes.set(value, total - value.byteLength);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    if (error instanceof PersonalIntegrationInputError) throw error;
+    throw new PersonalIntegrationUpstreamError();
+  } finally {
+    reader.releaseLock();
+  }
+  if (total === 0) return invalidAction("The selected recording is empty");
+  if (advertisedSize !== undefined && total !== advertisedSize)
+    throw new PersonalIntegrationUpstreamError();
+  return bytes.subarray(0, total);
+}
+
 function assertExpectedConnectionKey(
   connection: ActivePersonalIntegrationConnection,
   expectedConnectionKey: string | undefined,
@@ -955,6 +1148,92 @@ export class PersonalIntegrationOperations {
     return input.provider === "google_drive"
       ? filesFromGoogle(payload)
       : filesFromOneDrive(payload);
+  }
+
+  async downloadRecordingFile(input: {
+    principalId: string;
+    provider: "google_drive" | "onedrive_personal" | "onedrive_business";
+    fileId: string;
+  }): Promise<{
+    name: string;
+    bytes: Uint8Array<ArrayBuffer>;
+    mimeType: string;
+  }> {
+    const fileId = recordingFileId(input.fileId);
+    const connection = await this.connectedConnection(
+      input.principalId,
+      input.provider,
+    );
+    const encodedId = encodeURIComponent(fileId);
+    const metadataPath =
+      input.provider === "google_drive"
+        ? `/drive/v3/files/${encodedId}?${new URLSearchParams({
+            fields: "id,name,mimeType,size",
+          })}`
+        : `/v1.0/me/drive/items/${encodedId}?${new URLSearchParams({
+            $select: "id,name,size,file,folder",
+          })}`;
+    const metadataResponse = await this.nango.proxy({
+      method: "GET",
+      redirect: "manual",
+      path: metadataPath,
+      connection,
+    });
+    if (!metadataResponse.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await metadataResponse.json().catch(() => undefined);
+    const metadata = recordingMetadata(payload, fileId, input.provider);
+    const contentPath =
+      input.provider === "google_drive"
+        ? `/drive/v3/files/${encodedId}?alt=media`
+        : `/v1.0/me/drive/items/${encodedId}/content`;
+    let response = await this.nango.proxy({
+      method: "GET",
+      redirect: "manual",
+      path: contentPath,
+      connection,
+    });
+    if (
+      input.provider !== "google_drive" &&
+      response.status >= 300 &&
+      response.status < 400
+    ) {
+      const location = response.headers.get("location");
+      if (!location) throw new PersonalIntegrationUpstreamError();
+      const safeUrl = microsoftDownloadUrl(
+        location,
+        "https://graph.microsoft.com",
+      );
+      try {
+        // Graph content redirects to a short-lived download URL. This request
+        // carries no Nango or provider credentials and never follows a second redirect.
+        response = await fetch(safeUrl, {
+          method: "GET",
+          redirect: "manual",
+          credentials: "omit",
+        });
+      } catch {
+        throw new PersonalIntegrationUpstreamError();
+      }
+    }
+    if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    const bytes = await boundedRecordingBytes(response, metadata.size);
+    const mimeType =
+      metadata.mimeType === "application/octet-stream"
+        ? ({
+            ".aac": "audio/aac",
+            ".flac": "audio/flac",
+            ".m4a": "audio/mp4",
+            ".mp3": "audio/mpeg",
+            ".oga": "audio/ogg",
+            ".ogg": "audio/ogg",
+            ".opus": "audio/opus",
+            ".wav": "audio/wav",
+            ".webm": "audio/webm",
+          }[
+            metadata.name.slice(metadata.name.lastIndexOf(".")).toLowerCase()
+          ] ?? metadata.mimeType)
+        : metadata.mimeType;
+    return { name: metadata.name, bytes, mimeType };
   }
 
   async listMessages(input: {

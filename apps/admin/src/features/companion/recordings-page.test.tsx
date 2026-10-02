@@ -72,3 +72,116 @@ it("exposes an empty state without fictional samples", async () => {
   expect(await screen.findByText("No recordings yet")).toBeVisible();
   expect(client.audio).not.toHaveBeenCalled();
 });
+it("uploads from disk and selects the saved recording without processing it", async () => {
+  const client = {
+    ...mockClient(),
+    connectedDrives: vi.fn().mockResolvedValue([]),
+    upload: vi.fn().mockResolvedValue({
+      ...recording,
+      id: "uploaded",
+      source: "upload",
+      name: "Meeting.mp3",
+      durationSeconds: null,
+    }),
+  };
+  const user = userEvent.setup();
+  show(client);
+  await user.click(
+    await screen.findByRole("button", { name: "Upload recording" }),
+  );
+  await user.upload(
+    screen.getByLabelText("Audio file"),
+    new File(["audio"], "Meeting.mp3", { type: "audio/mpeg" }),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Meeting.mp3" }),
+  ).toBeVisible();
+  expect(client.generate).not.toHaveBeenCalled();
+  expect(client.upload).toHaveBeenCalledTimes(1);
+});
+it("only offers connected drives and imports a search result", async () => {
+  const client = {
+    ...mockClient(),
+    connectedDrives: vi
+      .fn()
+      .mockResolvedValue([{ provider: "google_drive", label: "Google Drive" }]),
+    searchFiles: vi
+      .fn()
+      .mockResolvedValue([
+        { id: "cloud-one", name: "Cloud meeting.mp3", mimeType: "audio/mpeg" },
+      ]),
+    importFile: vi.fn().mockResolvedValue({
+      ...recording,
+      id: "cloud-upload",
+      source: "upload",
+      name: "Cloud meeting.mp3",
+    }),
+  };
+  const user = userEvent.setup();
+  show(client);
+  await user.click(
+    await screen.findByRole("button", { name: "Upload recording" }),
+  );
+  await user.selectOptions(
+    await screen.findByLabelText("Source"),
+    "google_drive",
+  );
+  expect(
+    screen.queryByRole("option", { name: "OneDrive Personal" }),
+  ).not.toBeInTheDocument();
+  await user.type(screen.getByLabelText("Search audio files"), "meeting");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Import Cloud meeting.mp3" }),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Cloud meeting.mp3" }),
+  ).toBeVisible();
+  expect(client.importFile).toHaveBeenCalledWith("google_drive", "cloud-one");
+  expect(client.generate).not.toHaveBeenCalled();
+});
+it("rejects local files larger than 50 MB before uploading", async () => {
+  const client = {
+    ...mockClient(),
+    connectedDrives: vi.fn().mockResolvedValue([]),
+    upload: vi.fn(),
+  };
+  const user = userEvent.setup();
+  show(client);
+  await user.click(
+    await screen.findByRole("button", { name: "Upload recording" }),
+  );
+  const file = new File(["audio"], "large.wav", { type: "audio/wav" });
+  Object.defineProperty(file, "size", { value: 50_000_001 });
+  await user.upload(screen.getByLabelText("Audio file"), file);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Choose an audio file up to 50 MB.",
+  );
+  expect(client.upload).not.toHaveBeenCalled();
+});
+it("waits for the initial list before enabling uploads", async () => {
+  let resolveList!: (value: {
+    recordings: (typeof recording)[];
+    cursor: null;
+  }) => void;
+  const client = {
+    ...mockClient(),
+    connectedDrives: vi.fn().mockResolvedValue([]),
+  };
+  client.list.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+  );
+  show(client);
+  expect(
+    screen.getByRole("button", { name: "Upload recording" }),
+  ).toBeDisabled();
+  resolveList({ recordings: [], cursor: null });
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Upload recording" }),
+    ).toBeEnabled(),
+  );
+});

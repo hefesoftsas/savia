@@ -73,3 +73,5 @@ formatting and local documentation links were checked during integration. These
 checks validate this scaffold only. That foundation check preceded desktop implementation; current build/test results
 are recorded in the implementation status. The [live-flow smoke test](live-flow-smoke.md) records subsequent real provider
 evidence and the remaining native capture failure.
+
+See [Import recordings](recording-imports.md) for local disk, Google Drive, and OneDrive uploads up to 50 MB.

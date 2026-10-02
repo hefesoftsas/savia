@@ -1,10 +1,15 @@
 import { z } from "@hono/zod-openapi";
 import { inspectOggOpus, MAX_OPUS_BYTES } from "./ogg";
 import type { EffectiveAssistantConfiguration } from "../assistant/configuration";
+import {
+  importedAudioFormatSchema,
+  inspectImportedAudio,
+  MAX_RECORDING_BYTES,
+} from "./imported-audio";
 
 export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 export const MAX_AUDIO_BASE64 = 4 * Math.ceil(MAX_AUDIO_BYTES / 3);
-export const sourceSchema = z.enum(["microphone", "system"]);
+export const sourceSchema = z.enum(["microphone", "system", "upload"]);
 export const transcribeSchema = z
   .object({
     source: sourceSchema,
@@ -28,7 +33,7 @@ export const summarizeSchema = z
         z
           .object({
             source: sourceSchema,
-            text: z.string().trim().min(1).max(30000),
+            text: z.string().trim().min(1).max(60000),
           })
           .strict(),
       )
@@ -59,7 +64,7 @@ export const transcriptSchema = z.object({
   text: z.string().max(60000),
   source: sourceSchema,
   model: z.string(),
-  durationSeconds: z.number(),
+  durationSeconds: z.number().nullable(),
 });
 
 export class CompanionError extends Error {
@@ -235,7 +240,11 @@ export class CompanionService {
           authorization: `Bearer ${configuration.apiKey}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify(body),
+        body:
+          typeof ReadableStream !== "undefined" &&
+          body instanceof ReadableStream
+            ? (body as ReadableStream<Uint8Array>)
+            : JSON.stringify(body),
         signal: controller.signal,
         redirect: "manual",
       });
@@ -286,6 +295,95 @@ export class CompanionService {
         502,
       );
     return { text: output.text, source, model, durationSeconds };
+  }
+  async transcribeRecording(
+    configuration: EffectiveAssistantConfiguration,
+    input: {
+      bytes: Uint8Array;
+      format: z.infer<typeof importedAudioFormatSchema>;
+      source: z.infer<typeof sourceSchema>;
+      durationSeconds: number | null;
+    },
+  ) {
+    if (
+      input?.bytes instanceof Uint8Array &&
+      input.bytes.byteLength > MAX_RECORDING_BYTES
+    )
+      throw new CompanionError(
+        "AUDIO_TOO_LARGE",
+        "Imported audio exceeds the 50 MB limit.",
+        413,
+      );
+    if (
+      !(input.bytes instanceof Uint8Array) ||
+      input.bytes.byteLength === 0 ||
+      input.bytes.byteLength > MAX_RECORDING_BYTES ||
+      !importedAudioFormatSchema.safeParse(input.format).success ||
+      !sourceSchema.safeParse(input.source).success
+    )
+      throw new CompanionError(
+        "INVALID_REQUEST",
+        "Invalid imported transcription request.",
+      );
+    try {
+      inspectImportedAudio(input.bytes, input.format);
+    } catch {
+      throw new CompanionError(
+        "INVALID_AUDIO",
+        "Expected a valid imported audio file.",
+      );
+    }
+    const model = configuration.transcriptionModel ?? this.sttModel;
+    const encoder = new TextEncoder();
+    const prefix = `{"model":${JSON.stringify(model)},"input_audio":{"data":"`;
+    const suffix = `","format":${JSON.stringify(input.format)}}}`;
+    let audioOffset = 0;
+    let phase: "prefix" | "audio" | "suffix" | "done" = "prefix";
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (phase === "prefix") {
+          controller.enqueue(encoder.encode(prefix));
+          phase = "audio";
+          return;
+        }
+        if (phase === "audio") {
+          if (audioOffset < input.bytes.length) {
+            // 0x6000 is divisible by three, so only the final chunk can pad.
+            const end = Math.min(audioOffset + 0x6000, input.bytes.length);
+            let binary = "";
+            for (let i = audioOffset; i < end; i++)
+              binary += String.fromCharCode(input.bytes[i]);
+            controller.enqueue(encoder.encode(btoa(binary)));
+            audioOffset = end;
+            return;
+          }
+          phase = "suffix";
+        }
+        if (phase === "suffix") {
+          controller.enqueue(encoder.encode(suffix));
+          phase = "done";
+          return;
+        }
+        controller.close();
+      },
+    });
+    const output = await this.request(
+      configuration,
+      "audio/transcriptions",
+      body,
+    );
+    if (typeof output?.text !== "string" || output.text.length > 60000)
+      throw new CompanionError(
+        "PROVIDER_INVALID_RESPONSE",
+        "Provider returned an invalid transcript.",
+        502,
+      );
+    return {
+      text: output.text,
+      source: input.source,
+      model,
+      durationSeconds: input.durationSeconds,
+    };
   }
   async summarize(
     configuration: EffectiveAssistantConfiguration,
