@@ -51,6 +51,9 @@ export class PagesClient {
     publishPageChange({ api: this.api, page });
     return page;
   }
+  async resolveBinding(input: { title: string; binding: RecordBinding }) {
+    return this.create(input);
+  }
   async save(
     id: string,
     input: { title: string; content: Value; version: number },

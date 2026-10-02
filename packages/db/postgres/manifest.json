@@ -49,6 +49,10 @@
     {
       "filename": "0012_page_public_short_links.sql",
       "sha256": "668ac37d0f6f864ae094156151f2b3531ce09fe42f315c280f725c9ea990283e"
+    },
+    {
+      "filename": "0013_pages_record_binding_uniqueness.sql",
+      "sha256": "39bbba566146e58644c26b905a3112b3e5a972789370c7f8a65460eab51bb764"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -232,6 +236,11 @@
     {
       "type": "index",
       "name": "pages_root",
+      "table": "pages"
+    },
+    {
+      "type": "index",
+      "name": "pages_record_binding_unique",
       "table": "pages"
     },
     {

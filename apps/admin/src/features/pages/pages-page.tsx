@@ -139,19 +139,10 @@ export function PagesPage({
     setBusy(true);
     let request = bindingRequests.get(key);
     if (!request) {
-      request = client.list().then(
-        (existing) =>
-          existing.find(
-            (page) =>
-              page.binding?.domain === domain &&
-              page.binding.collection === collection &&
-              page.binding.recordId === recordId,
-          ) ??
-          client.create({
-            title: `${collection} · ${recordId}`.slice(0, 200),
-            binding: { domain, collection, recordId },
-          }),
-      );
+      request = client.resolveBinding({
+        title: `${collection} · ${recordId}`.slice(0, 200),
+        binding: { domain, collection, recordId },
+      });
       bindingRequests.set(key, request);
     }
     void request

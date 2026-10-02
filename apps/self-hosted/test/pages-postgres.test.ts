@@ -150,6 +150,31 @@ live("Pages on native PostgreSQL", () => {
       const reader = new PagesService(db, actor("page-reader"));
       const outsider = new PagesService(db, actor("page-outsider", 9202));
       const platform = new PagesService(db, actor("page-platform", 0));
+      const recordBinding = {
+        domain: "/v1/studio/1",
+        collection: "tasks",
+        recordId: "private-task",
+      };
+      const boundPages = await Promise.all([
+        owner.create({ title: "Private task", binding: recordBinding }),
+        owner.create({ title: "Private task", binding: recordBinding }),
+      ]);
+      expect(boundPages.map((page) => page.id)).toEqual([
+        boundPages[0].id,
+        boundPages[0].id,
+      ]);
+      await expect(
+        reader.create({ title: "Private task", binding: recordBinding }),
+      ).rejects.toMatchObject({ status: 404, code: "PAGE_NOT_FOUND" });
+      expect(
+        await db
+          .prepare(
+            `SELECT count(*) AS count FROM pages
+             WHERE tenant_id=9201 AND binding_json=?`,
+          )
+          .bind(JSON.stringify(recordBinding))
+          .first("count"),
+      ).toBe(1);
       const platformPage = await platform.create({ title: "Platform notes" });
       const updatedPlatformPage = await platform.save(platformPage.id, {
         title: "Platform notes updated",

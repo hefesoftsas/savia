@@ -10,6 +10,7 @@ import type {
   PageShares,
   PlateNode,
 } from "@savia/studio-shared/pages";
+import { dialectFor } from "@savia/db/dialect";
 import { parseIssueLink } from "@savia/studio-shared/issue-links";
 import type { AppActor } from "../auth/types";
 
@@ -639,6 +640,10 @@ export class PagesService {
         "FOLDER_BINDING_NOT_ALLOWED",
         "Folders cannot be bound to records",
       );
+    if (binding) {
+      const existing = await this.findBinding(tenantId, binding);
+      if (existing) return this.get(existing.id);
+    }
     const writeGuard = id();
     const activeScopeSql = `EXISTS(SELECT 1 FROM identity_principal actor WHERE actor.id=? AND actor.is_active=1 AND ${activeTenantScope("actor.id", "?")})`;
     const parentAccessSql = parent
@@ -693,6 +698,10 @@ export class PagesService {
           .bind(writeGuard),
       ]);
     } catch (error) {
+      if (binding) {
+        const existing = await this.findBinding(tenantId, binding);
+        if (existing) return this.get(existing.id);
+      }
       if (parent) await this.load(parent.id, "editor");
       else await this.tenant();
       if (isPostgresSerializationFailure(error))
@@ -704,6 +713,18 @@ export class PagesService {
       .bind(pageId)
       .first<PageRow>();
     return this.document(row!, creatorRole);
+  }
+
+  private async findBinding(tenantId: number, binding: PageBinding) {
+    const dialect = dialectFor(this.db);
+    return this.db
+      .prepare(
+        `SELECT id FROM pages WHERE tenant_id=? AND ${dialect.jsonText("binding_json", "$.domain")}=?
+         AND ${dialect.jsonText("binding_json", "$.collection")}=?
+         AND ${dialect.jsonText("binding_json", "$.recordId")}=? ORDER BY created_at,id LIMIT 1`,
+      )
+      .bind(tenantId, binding.domain, binding.collection, binding.recordId)
+      .first<{ id: string }>();
   }
 
   async get(pageId: string) {

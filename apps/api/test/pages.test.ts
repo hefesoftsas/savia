@@ -161,6 +161,151 @@ describe("Pages API", () => {
     expect(stale.status).toBe(409);
   });
 
+  it("resolves a record-bound page beyond the first 200 entries and serializes concurrent requests", async () => {
+    const binding = {
+      domain: "/v1/studio/1",
+      collection: "tasks",
+      recordId: "task-older-than-page-window",
+    };
+    const fillerPages = Array.from({ length: 200 }, (_, index) => {
+      const id = `page-filler-${index}`;
+      return env.DB.prepare(
+        `INSERT INTO pages (id,tenant_id,owner_id,root_id,title,content_json,search_text,binding_json,version,share_version,created_at,updated_at,kind)
+         VALUES (?,9201,'page-owner',?,'Filler','[]','',NULL,1,1,?,?,'page')`,
+      ).bind(
+        id,
+        id,
+        `2026-09-${String((index % 28) + 1).padStart(2, "0")}`,
+        `2026-09-${String((index % 28) + 1).padStart(2, "0")}`,
+      );
+    });
+    await env.DB.batch(fillerPages);
+    await env.DB.prepare(
+      `INSERT INTO pages (id,tenant_id,owner_id,root_id,title,content_json,search_text,binding_json,version,share_version,created_at,updated_at,kind)
+       VALUES ('page-hidden-binding',9201,'page-owner','page-hidden-binding','Existing record page','[]','',?,1,1,'2020-01-01','2020-01-01','page')`,
+    )
+      .bind(JSON.stringify(binding))
+      .run();
+
+    const app = appFor(actor("page-owner", 9201));
+    const list = (await app
+      .request("/v1/pages")
+      .then((response) => response.json())) as any;
+    expect(list.data).toHaveLength(200);
+    expect(
+      list.data.some((page: any) => page.id === "page-hidden-binding"),
+    ).toBe(false);
+
+    const request = () =>
+      app.request("/v1/pages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "tasks · task-older-than-page-window",
+          binding,
+        }),
+      });
+    const responses = await Promise.all([request(), request()]);
+    expect(responses.map((response) => response.status)).toEqual([201, 201]);
+    const ids = await Promise.all(
+      responses.map(
+        async (response) => ((await response.json()) as any).data.id,
+      ),
+    );
+    expect(ids).toEqual(["page-hidden-binding", "page-hidden-binding"]);
+    const matches = await env.DB.prepare(
+      "SELECT id FROM pages WHERE tenant_id=9201 AND binding_json=?",
+    )
+      .bind(JSON.stringify(binding))
+      .all<{ id: string }>();
+    expect(matches.results).toHaveLength(1);
+
+    const concurrentBinding = {
+      ...binding,
+      recordId: "task-created-concurrently",
+    };
+    const createConcurrently = () =>
+      app.request("/v1/pages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Concurrent task",
+          binding: concurrentBinding,
+        }),
+      });
+    const concurrentResponses = await Promise.all([
+      createConcurrently(),
+      createConcurrently(),
+    ]);
+    expect(concurrentResponses.map((response) => response.status)).toEqual([
+      201, 201,
+    ]);
+    const concurrentIds = await Promise.all(
+      concurrentResponses.map(
+        async (response) => ((await response.json()) as any).data.id,
+      ),
+    );
+    expect(concurrentIds[0]).toBe(concurrentIds[1]);
+  });
+
+  it("preserves duplicate record-page content while migration detaches extra bindings", async () => {
+    await env.DB.prepare("DROP INDEX pages_record_binding_unique").run();
+    const binding = JSON.stringify({
+      domain: "/v1/studio/1",
+      collection: "tasks",
+      recordId: "legacy-duplicate",
+    });
+    const contents = [
+      JSON.stringify([{ type: "p", children: [{ text: "First note" }] }]),
+      JSON.stringify([{ type: "p", children: [{ text: "Second note" }] }]),
+    ];
+    for (const [index, id] of [
+      "legacy-bound-one",
+      "legacy-bound-two",
+    ].entries())
+      await env.DB.prepare(
+        `INSERT INTO pages (id,tenant_id,owner_id,root_id,title,content_json,search_text,binding_json,version,share_version,created_at,updated_at,kind)
+         VALUES (?,9201,'page-owner',?,? ,?,'',?,1,1,?,?,'page')`,
+      )
+        .bind(
+          id,
+          id,
+          `Legacy note ${index + 1}`,
+          contents[index],
+          binding,
+          `2020-01-0${index + 1}`,
+          `2020-01-0${index + 1}`,
+        )
+        .run();
+
+    const migration = migrations.find(([path]) =>
+      path.endsWith("0013_pages_record_binding_uniqueness.sql"),
+    )?.[1];
+    expect(migration).toBeDefined();
+    for (const statement of migration!
+      .split("--> statement-breakpoint")
+      .map((entry) =>
+        entry
+          .replace(/^--.*$/gm, "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      )
+      .filter(Boolean))
+      await env.DB.exec(statement);
+
+    const legacyPages = await env.DB.prepare(
+      "SELECT id,binding_json,content_json FROM pages WHERE id LIKE 'legacy-bound-%' ORDER BY id",
+    ).all<{ id: string; binding_json: string | null; content_json: string }>();
+    expect(legacyPages.results).toEqual([
+      {
+        id: "legacy-bound-one",
+        binding_json: binding,
+        content_json: contents[0],
+      },
+      { id: "legacy-bound-two", binding_json: null, content_json: contents[1] },
+    ]);
+  });
+
   it("creates folders with inherited access and only allows empty folder saves", async () => {
     const ownerApp = appFor(actor("page-owner", 9201));
     const created = await ownerApp.request("/v1/pages", {
