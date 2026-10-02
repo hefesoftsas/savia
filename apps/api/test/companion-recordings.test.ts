@@ -10,7 +10,94 @@ const input = () => ({
   audio: { data, format: "ogg" as const },
   consent: true as const,
 });
+function importedWav(seconds = 75) {
+  const dataBytes = seconds * 16000 * 2;
+  const bytes = new Uint8Array(44 + dataBytes);
+  const view = new DataView(bytes.buffer);
+  const put = (offset: number, value: string) =>
+    Array.from(value).forEach((c, i) => (bytes[offset + i] = c.charCodeAt(0)));
+  put(0, "RIFF");
+  view.setUint32(4, bytes.length - 8, true);
+  put(8, "WAVE");
+  put(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 16000, true);
+  view.setUint32(28, 32000, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  put(36, "data");
+  view.setUint32(40, dataBytes, true);
+  return bytes;
+}
 describe("private compressed Companion recordings", () => {
+  it("stores imported long audio and round-trips its format, name, origin and unknown-capable duration", async () => {
+    const repo = new CompanionRecordings(env.DOCUMENTS),
+      owner = crypto.randomUUID(),
+      id = crypto.randomUUID();
+    const bytes = importedWav();
+    try {
+      const saved = await repo.saveImported(owner, {
+        id,
+        name: "Interview.wav",
+        origin: "google_drive",
+        bytes,
+        format: "wav",
+      });
+      expect(saved).toMatchObject({
+        source: "upload",
+        format: "wav",
+        bytes: bytes.length,
+        durationSeconds: 75,
+        name: "Interview.wav",
+        origin: "google_drive",
+      });
+      const audio = await new CompanionRecordings(env.DOCUMENTS).getAudio(
+        owner,
+        id,
+      );
+      expect(audio).toMatchObject({
+        source: "upload",
+        format: "wav",
+        durationSeconds: 75,
+        name: "Interview.wav",
+      });
+      expect(audio.bytes.byteLength).toBe(bytes.byteLength);
+      expect(audio.bytes[0]).toBe(bytes[0]);
+      expect((await repo.list(owner)).recordings).toContainEqual(saved);
+    } finally {
+      await repo.remove(owner, id).catch(() => {});
+    }
+  }, 45000);
+  it("hashes only the persisted bytes when importing a Uint8Array view", async () => {
+    const repo = new CompanionRecordings(env.DOCUMENTS);
+    const owner = crypto.randomUUID();
+    const id = crypto.randomUUID();
+    const fixture = opusFixture();
+    const backing = new Uint8Array(fixture.length + 14).fill(0xa5);
+    backing.set(fixture, 7);
+    const view = backing.subarray(7, 7 + fixture.length);
+    try {
+      const saved = await repo.saveImported(owner, {
+        id,
+        name: "clip.ogg",
+        origin: "local",
+        bytes: view,
+        format: "ogg",
+      });
+      const expected = new Uint8Array(
+        await crypto.subtle.digest("SHA-256", fixture),
+      );
+      const sha256 = Array.from(expected, (byte) =>
+        byte.toString(16).padStart(2, "0"),
+      ).join("");
+      expect(saved.sha256).toBe(sha256);
+      expect((await repo.getAudio(owner, id)).bytes).toEqual(fixture);
+    } finally {
+      await repo.remove(owner, id).catch(() => {});
+    }
+  });
   it("stores compressed bytes, lists durable metadata, reads privately and deletes", async () => {
     const repo = new CompanionRecordings(env.DOCUMENTS),
       owner = crypto.randomUUID(),

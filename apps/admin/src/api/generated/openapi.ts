@@ -599,7 +599,7 @@ export interface paths {
         content: {
           "application/json": {
             /** @enum {string} */
-            source: "microphone" | "system";
+            source: "microphone" | "system" | "upload";
             audio: {
               data: string;
               /** @enum {string} */
@@ -622,9 +622,9 @@ export interface paths {
             "application/json": {
               text: string;
               /** @enum {string} */
-              source: "microphone" | "system";
+              source: "microphone" | "system" | "upload";
               model: string;
-              durationSeconds: number;
+              durationSeconds: number | null;
             };
           };
         };
@@ -762,6 +762,390 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/companion/recordings/upload": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Upload a private audio recording up to 50 MB */
+    post: {
+      parameters: {
+        query: {
+          id: string;
+          name: string;
+          format: "wav" | "ogg" | "mp3" | "m4a";
+          consent: "true";
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/octet-stream": string;
+        };
+      };
+      responses: {
+        /** @description Saved private recording */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              /** @enum {string} */
+              source: "microphone" | "system" | "upload";
+              /** @enum {string} */
+              format: "wav" | "ogg" | "mp3" | "m4a";
+              bytes: number;
+              durationSeconds: number | null;
+              /** Format: date-time */
+              createdAt: string;
+              sha256: string;
+              name?: string;
+              /** @enum {string} */
+              origin?:
+                | "local"
+                | "google_drive"
+                | "onedrive_personal"
+                | "onedrive_business";
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        504: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/companion/recordings/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Import a selected recording from the current user's connected drive */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider:
+              "google_drive" | "onedrive_personal" | "onedrive_business";
+            fileId: string;
+            /** @enum {boolean} */
+            consent: true;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved private recording */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** Format: uuid */
+              id: string;
+              /** @enum {string} */
+              source: "microphone" | "system" | "upload";
+              /** @enum {string} */
+              format: "wav" | "ogg" | "mp3" | "m4a";
+              bytes: number;
+              durationSeconds: number | null;
+              /** Format: date-time */
+              createdAt: string;
+              sha256: string;
+              name?: string;
+              /** @enum {string} */
+              origin?:
+                | "local"
+                | "google_drive"
+                | "onedrive_personal"
+                | "onedrive_business";
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Personal connection access denied */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        409: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Request unavailable or rejected */
+        504: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/companion/recordings": {
     parameters: {
       query?: never;
@@ -792,14 +1176,21 @@ export interface paths {
                 /** Format: uuid */
                 id: string;
                 /** @enum {string} */
-                source: "microphone" | "system";
+                source: "microphone" | "system" | "upload";
                 /** @enum {string} */
-                format: "ogg";
+                format: "wav" | "ogg" | "mp3" | "m4a";
                 bytes: number;
-                durationSeconds: number;
+                durationSeconds: number | null;
                 /** Format: date-time */
                 createdAt: string;
                 sha256: string;
+                name?: string;
+                /** @enum {string} */
+                origin?:
+                  | "local"
+                  | "google_drive"
+                  | "onedrive_personal"
+                  | "onedrive_business";
               }[];
               cursor: string | null;
             };
@@ -948,7 +1339,7 @@ export interface paths {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            source: "microphone" | "system";
+            source: "microphone" | "system" | "upload";
             audio: {
               data: string;
               /** @enum {string} */
@@ -970,14 +1361,21 @@ export interface paths {
               /** Format: uuid */
               id: string;
               /** @enum {string} */
-              source: "microphone" | "system";
+              source: "microphone" | "system" | "upload";
               /** @enum {string} */
-              format: "ogg";
+              format: "wav" | "ogg" | "mp3" | "m4a";
               bytes: number;
-              durationSeconds: number;
+              durationSeconds: number | null;
               /** Format: date-time */
               createdAt: string;
               sha256: string;
+              name?: string;
+              /** @enum {string} */
+              origin?:
+                | "local"
+                | "google_drive"
+                | "onedrive_personal"
+                | "onedrive_business";
             };
           };
         };
@@ -1134,13 +1532,16 @@ export interface paths {
       };
       requestBody?: never;
       responses: {
-        /** @description Ogg/Opus audio */
+        /** @description Original recording audio */
         200: {
           headers: {
             [name: string]: unknown;
           };
           content: {
             "audio/ogg": string;
+            "audio/mpeg": string;
+            "audio/wav": string;
+            "audio/mp4": string;
           };
         };
         /** @description Request unavailable or rejected */
@@ -1454,9 +1855,9 @@ export interface paths {
               transcript: {
                 text: string;
                 /** @enum {string} */
-                source: "microphone" | "system";
+                source: "microphone" | "system" | "upload";
                 model: string;
-                durationSeconds: number;
+                durationSeconds: number | null;
               } | null;
               summary: {
                 summary: string;
@@ -1629,9 +2030,9 @@ export interface paths {
               transcript: {
                 text: string;
                 /** @enum {string} */
-                source: "microphone" | "system";
+                source: "microphone" | "system" | "upload";
                 model: string;
-                durationSeconds: number;
+                durationSeconds: number | null;
               } | null;
               summary: {
                 summary: string;
@@ -1802,7 +2203,7 @@ export interface paths {
           "application/json": {
             transcripts: {
               /** @enum {string} */
-              source: "microphone" | "system";
+              source: "microphone" | "system" | "upload";
               text: string;
             }[];
             /** @enum {boolean} */
@@ -8134,6 +8535,20 @@ export interface paths {
             };
           };
         };
+        /** @description Attachment storage is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
       };
     };
     put?: never;
@@ -8222,6 +8637,20 @@ export interface paths {
         };
         /** @description Archive exceeds the size limit */
         413: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Attachment storage is unavailable */
+        503: {
           headers: {
             [name: string]: unknown;
           };

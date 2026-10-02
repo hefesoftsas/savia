@@ -229,6 +229,7 @@ export function createPersonalIntegrationNangoClient(
           request.body !== undefined || request.rawBody !== undefined;
         return await fetcher(nangoUrl(nango.baseUrl, `/proxy${request.path}`), {
           method: request.method,
+          ...(request.redirect ? { redirect: request.redirect } : {}),
           headers: {
             ...Object.fromEntries(headers(nango.apiKey)),
             "connection-id": request.connection.nangoConnectionId,

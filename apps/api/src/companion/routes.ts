@@ -14,6 +14,17 @@ import {
   summarySchema,
 } from "./service";
 
+import {
+  MAX_RECORDING_BYTES,
+  importedAudioFormatSchema,
+} from "./imported-audio";
+import type { PersonalIntegrationOperations } from "../personal-integrations/operations";
+import {
+  PersonalIntegrationInputError,
+  PersonalIntegrationUnavailableError,
+  PersonalIntegrationUpstreamError,
+  PersonalIntegrationAccessError,
+} from "../personal-integrations/contracts";
 import { MAX_OPUS_BYTES } from "./ogg";
 import {
   CompanionRecordings,
@@ -26,6 +37,7 @@ import {
 
 export type CompanionOptions = {
   storage?: R2Bucket;
+  personalFiles?: Pick<PersonalIntegrationOperations, "downloadRecordingFile">;
   enabled: boolean;
   sttModel?: string;
   configuration?: Pick<
@@ -46,6 +58,43 @@ const failures = Object.fromEntries(
     },
   ]),
 );
+const cloudImportSchema = z
+  .object({
+    id: recordingIdSchema,
+    provider: z.enum([
+      "google_drive",
+      "onedrive_personal",
+      "onedrive_business",
+    ]),
+    fileId: z.string().min(1).max(1024),
+    consent: z.literal(true),
+  })
+  .strict();
+const uploadQuerySchema = z.object({
+  id: recordingIdSchema,
+  name: z.string().trim().min(1).max(255),
+  format: importedAudioFormatSchema,
+  consent: z.literal("true"),
+});
+const recordingMimeTypes = {
+  ogg: "audio/ogg",
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+} as const;
+function cloudFormat(name: string) {
+  const result = importedAudioFormatSchema.safeParse(
+    ["opus", "oga"].includes(name.split(".").pop()?.toLowerCase() ?? "")
+      ? "ogg"
+      : name.split(".").pop()?.toLowerCase(),
+  );
+  if (!result.success)
+    throw new CompanionError(
+      "INVALID_AUDIO",
+      "Choose an MP3, WAV, M4A or OGG/Opus file.",
+    );
+  return result.data;
+}
 const capabilitiesSchema = z.object({
   sttModel: z.string(),
   summaryModel: z.string(),
@@ -115,6 +164,7 @@ export function registerCompanionRoutes(
   app: OpenAPIHono,
   options?: CompanionOptions,
 ) {
+  const uploadBodies = new WeakMap<Request, Uint8Array<ArrayBuffer>>();
   const service =
     options?.service ?? new CompanionService({ sttModel: options?.sttModel });
   app.use("/v1/companion/*", async (c, next) => {
@@ -132,13 +182,26 @@ export function registerCompanionRoutes(
       );
     // Count actual body bytes even if Content-Length is absent or incorrect.
     if (c.req.method === "POST") {
-      const max = c.req.path.endsWith("/transcribe")
-        ? 12 * 1024 * 1024
-        : c.req.path.endsWith("/recordings")
-          ? 768 * 1024
-          : 128 * 1024;
+      const max = c.req.path.endsWith("/recordings/upload")
+        ? MAX_RECORDING_BYTES
+        : c.req.path.endsWith("/transcribe")
+          ? 12 * 1024 * 1024
+          : c.req.path.endsWith("/recordings")
+            ? 768 * 1024
+            : 128 * 1024;
+      const advertised = Number(c.req.header("content-length"));
+      if (advertised > max)
+        return c.json(
+          {
+            error: {
+              code: "PAYLOAD_TOO_LARGE",
+              message: "The recording exceeds its size limit.",
+            },
+          },
+          413,
+        );
       const reader = c.req.raw.body?.getReader();
-      const chunks: Uint8Array[] = [];
+      let bodyBuffer = new Uint8Array(0);
       let size = 0;
       if (reader) {
         try {
@@ -156,25 +219,34 @@ export function registerCompanionRoutes(
                 },
                 413,
               );
-            chunks.push(item.value);
+            if (size > bodyBuffer.byteLength) {
+              const capacity = Math.min(
+                max,
+                Math.max(size, 65536, bodyBuffer.byteLength * 2),
+              );
+              const expanded = new Uint8Array(capacity);
+              expanded.set(bodyBuffer);
+              bodyBuffer = expanded;
+            }
+            bodyBuffer.set(item.value, size - item.value.byteLength);
           }
         } finally {
           await reader.cancel().catch(() => {});
         }
       }
-      const body = new Uint8Array(size);
-      let offset = 0;
-      for (const chunk of chunks) {
-        body.set(chunk, offset);
-        offset += chunk.length;
+      const body = bodyBuffer.subarray(0, size);
+      bodyBuffer = new Uint8Array(0);
+      if (c.req.path.endsWith("/recordings/upload")) {
+        uploadBodies.set(c.req.raw, body);
+      } else {
+        const headers = new Headers(c.req.raw.headers);
+        headers.delete("content-length");
+        c.req.raw = new Request(c.req.url, {
+          method: c.req.method,
+          headers,
+          body,
+        });
       }
-      const headers = new Headers(c.req.raw.headers);
-      headers.delete("content-length");
-      c.req.raw = new Request(c.req.url, {
-        method: c.req.method,
-        headers,
-        body,
-      });
     }
     try {
       await next();
@@ -225,6 +297,114 @@ export function registerCompanionRoutes(
     tags: ["Companion"],
     security: [{ oauth2: ["savia.api.write"] }],
   };
+  app.openapi(
+    createRoute({
+      ...base,
+      method: "post",
+      path: "/v1/companion/recordings/upload",
+      summary: "Upload a private audio recording up to 50 MB",
+      request: {
+        query: uploadQuerySchema,
+        body: {
+          required: true,
+          content: {
+            "application/octet-stream": {
+              schema: z.string().openapi({ format: "binary" }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Saved private recording",
+          content: { "application/json": { schema: recordingSchema } },
+        },
+        ...failures,
+      },
+    }),
+    async (c) => {
+      const input = c.req.valid("query");
+      const bytes = uploadBodies.get(c.req.raw);
+      if (!bytes)
+        throw new CompanionError("INVALID_AUDIO", "Missing audio file.");
+      uploadBodies.delete(c.req.raw);
+      return c.json(
+        await recordings.saveImported(actorFromContext(c).principal.id, {
+          id: input.id,
+          name: input.name,
+          format: input.format,
+          origin: "local",
+          bytes,
+        }),
+        200,
+      );
+    },
+  );
+  app.openapi(
+    createRoute({
+      ...base,
+      method: "post",
+      path: "/v1/companion/recordings/import",
+      summary:
+        "Import a selected recording from the current user's connected drive",
+      request: {
+        body: {
+          required: true,
+          content: { "application/json": { schema: cloudImportSchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: "Saved private recording",
+          content: { "application/json": { schema: recordingSchema } },
+        },
+        ...failures,
+        403: {
+          description: "Personal connection access denied",
+          content: { "application/json": { schema: errorSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      if (!options?.personalFiles)
+        throw new CompanionError(
+          "CLOUD_UNAVAILABLE",
+          "Cloud file connections are unavailable.",
+          503,
+        );
+      const input = c.req.valid("json");
+      try {
+        const file = await options.personalFiles.downloadRecordingFile({
+          principalId: actorFromContext(c).principal.id,
+          provider: input.provider,
+          fileId: input.fileId,
+        });
+        return c.json(
+          await recordings.saveImported(actorFromContext(c).principal.id, {
+            id: input.id,
+            name: file.name,
+            origin: input.provider,
+            bytes: file.bytes,
+            format: cloudFormat(file.name),
+          }),
+          200,
+        );
+      } catch (error) {
+        if (error instanceof PersonalIntegrationInputError)
+          throw new CompanionError(error.code, error.message);
+        if (error instanceof PersonalIntegrationUnavailableError)
+          throw new CompanionError(error.code, error.message, 503);
+        if (error instanceof PersonalIntegrationUpstreamError)
+          throw new CompanionError(error.code, error.message, 502);
+        if (error instanceof PersonalIntegrationAccessError)
+          return c.json(
+            { error: { code: error.code, message: error.message } },
+            403,
+          );
+        throw error;
+      }
+    },
+  );
   app.openapi(
     createRoute({
       ...base,
@@ -290,9 +470,12 @@ export function registerCompanionRoutes(
       request: { params },
       responses: {
         200: {
-          description: "Ogg/Opus audio",
+          description: "Original recording audio",
           content: {
             "audio/ogg": { schema: z.string().openapi({ format: "binary" }) },
+            "audio/mpeg": { schema: z.string().openapi({ format: "binary" }) },
+            "audio/wav": { schema: z.string().openapi({ format: "binary" }) },
+            "audio/mp4": { schema: z.string().openapi({ format: "binary" }) },
           },
         },
         ...failures,
@@ -301,12 +484,16 @@ export function registerCompanionRoutes(
     async (c) => {
       const id = c.req.valid("param").id;
       const object = await recordings.get(actorFromContext(c).principal.id, id);
+      const format = importedAudioFormatSchema.parse(
+        object.customMetadata?.format ?? "ogg",
+      );
+      const name = object.customMetadata?.name ?? `${id}.${format}`;
       return new Response(object.body, {
         headers: {
-          "Content-Type": "audio/ogg",
+          "Content-Type": recordingMimeTypes[format],
           "Cache-Control": "private, no-store",
           "Content-Length": String(object.size),
-          "Content-Disposition": `attachment; filename="${id}.ogg"`,
+          "Content-Disposition": `attachment; filename="${id}.${format}"; filename*=UTF-8''${encodeURIComponent(name)}`,
         },
       });
     },
@@ -371,17 +558,24 @@ export function registerCompanionRoutes(
         if (!notes.transcript) {
           const audio = await recordings.getAudio(owner, id);
           let binary = "";
-          for (let offset = 0; offset < audio.bytes.length; offset += 0x8000) {
+          for (
+            let offset = 0;
+            audio.source !== "upload" && offset < audio.bytes.length;
+            offset += 0x8000
+          ) {
             binary += String.fromCharCode(
               ...audio.bytes.subarray(offset, offset + 0x8000),
             );
           }
-          const transcript = await service.transcribe(config, {
-            source: audio.source,
-            audio: { data: btoa(binary), format: "ogg" },
-            language: "es",
-            consent: true,
-          });
+          const transcript =
+            audio.source === "upload"
+              ? await service.transcribeRecording(config, audio)
+              : await service.transcribe(config, {
+                  source: audio.source,
+                  audio: { data: btoa(binary), format: "ogg" },
+                  language: "es",
+                  consent: true,
+                });
           notes = { transcript, summary: null };
           await recordings.storeNotes(owner, id, notes);
         }

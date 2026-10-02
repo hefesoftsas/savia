@@ -94,6 +94,7 @@ export type PersonalIntegrationNangoClient = {
     body?: unknown;
     rawBody?: string | Uint8Array<ArrayBuffer>;
     contentType?: string;
+    redirect?: "manual";
     upstreamHeaders?: Partial<Record<"if-match" | "prefer", string>>;
   }): Promise<Response>;
 };
