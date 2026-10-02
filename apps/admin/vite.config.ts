@@ -89,11 +89,17 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       workbox: {
+        // Custom registration (injectRegister:false) must explicitly activate
+        // updates. DeploymentUpdateNotice lets users reload after saving.
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: "index.html",
         navigateFallbackDenylist: [
           /^\/api/,
           /^\/v1/,
           /^\/public\/forms/,
+          /^\/public\/pages(?:\/|\?|$)/,
+          /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
         ],

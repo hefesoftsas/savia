@@ -28,7 +28,8 @@ const providerTemplates: readonly ProviderTemplate[] = [
     id: "gmail",
     displayName: "Gmail",
     capabilities: ["messages:read", "messages:send"],
-    integrationId: (configuration) => configured(configuration.gmailIntegrationId),
+    integrationId: (configuration) =>
+      configured(configuration.gmailIntegrationId),
   },
   {
     id: "google_calendar",
@@ -40,8 +41,14 @@ const providerTemplates: readonly ProviderTemplate[] = [
   {
     id: "outlook",
     displayName: "Outlook",
-    capabilities: ["messages:read", "messages:send", "events:read", "events:create"],
-    integrationId: (configuration) => configured(configuration.outlookIntegrationId),
+    capabilities: [
+      "messages:read",
+      "messages:send",
+      "events:read",
+      "events:create",
+    ],
+    integrationId: (configuration) =>
+      configured(configuration.outlookIntegrationId),
   },
   {
     id: "onedrive_personal",
@@ -57,11 +64,28 @@ const providerTemplates: readonly ProviderTemplate[] = [
     integrationId: (configuration) =>
       configured(configuration.oneDriveBusinessIntegrationId),
   },
+  {
+    id: "jira",
+    displayName: "Jira Cloud",
+    capabilities: ["issues:read"],
+    integrationId: (configuration) =>
+      configured(configuration.jiraIntegrationId),
+  },
+  {
+    id: "linear",
+    displayName: "Linear",
+    capabilities: ["issues:read"],
+    integrationId: (configuration) =>
+      configured(configuration.linearIntegrationId),
+  },
 ];
 
 export function createPersonalIntegrationProviderRegistry(
   configuration: NangoConfiguration,
-): Record<PersonalIntegrationProviderId, PersonalIntegrationProviderDefinition> {
+): Record<
+  PersonalIntegrationProviderId,
+  PersonalIntegrationProviderDefinition
+> {
   return Object.fromEntries(
     providerTemplates.map((template) => {
       const integrationId = template.integrationId(configuration);
@@ -76,5 +100,8 @@ export function createPersonalIntegrationProviderRegistry(
         },
       ];
     }),
-  ) as Record<PersonalIntegrationProviderId, PersonalIntegrationProviderDefinition>;
+  ) as Record<
+    PersonalIntegrationProviderId,
+    PersonalIntegrationProviderDefinition
+  >;
 }

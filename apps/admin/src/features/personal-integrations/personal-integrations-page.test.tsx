@@ -54,6 +54,18 @@ const providers = [
     availability: "enabled",
     capabilities: ["files:read"],
   },
+  {
+    id: "jira",
+    displayName: "Jira Cloud",
+    availability: "enabled",
+    capabilities: ["issues:read"],
+  },
+  {
+    id: "linear",
+    displayName: "Linear",
+    availability: "enabled",
+    capabilities: ["issues:read"],
+  },
 ] as const;
 
 function createServices() {
@@ -67,6 +79,7 @@ function createServices() {
         connectUrl: "https://connect.nango.example.test",
         apiUrl: "https://nango.example.test",
       }),
+      previewIssue: vi.fn(),
       complete: vi.fn().mockResolvedValue({
         id: "connection-1",
         provider: "google_drive",
@@ -205,7 +218,84 @@ describe("PersonalIntegrationsPage", () => {
     }
   });
 
-  it("keeps the six integrations visible and offers retry when their status cannot load", async () => {
+  it("shows unavailable Jira and Linear without deployment instructions", async () => {
+    const services = createServices();
+    vi.mocked(services.personalIntegrations.listProviders).mockResolvedValue(
+      providers.map((provider) => ({
+        ...provider,
+        capabilities: [...provider.capabilities],
+        availability:
+          provider.id === "jira" || provider.id === "linear"
+            ? "unavailable"
+            : "enabled",
+      })),
+    );
+
+    render(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={services} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText(
+        "Un administrador debe habilitar Jira en Nango. Después podrás conectar tu cuenta aquí.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByText("Requiere configuración")).toHaveLength(2);
+    expect(
+      screen.getAllByRole("button", { name: "No disponible" }),
+    ).toHaveLength(2);
+    expect(screen.queryByText("Ver configuración")).not.toBeInTheDocument();
+  });
+
+  it("shows connected and reconnect-required states for issue trackers", async () => {
+    const services = createServices();
+    vi.mocked(services.personalIntegrations.listConnections).mockResolvedValue([
+      {
+        id: "jira-connection",
+        provider: "jira",
+        status: "reconnect_required",
+        externalAccountLabel: null,
+        scopes: [],
+        lastValidatedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "linear-connection",
+        provider: "linear",
+        status: "connected",
+        externalAccountLabel: "acme",
+        scopes: [],
+        lastValidatedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <PersonalIntegrationsPage services={services} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText(
+        "La sesión expiró. Vuelve a conectar para continuar usándola.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("Conectado como acme.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reconectar" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
+  });
+
+  it("keeps all eight integrations visible and offers retry when their status cannot load", async () => {
     const user = userEvent.setup();
     const services = createServices();
     const missingRoute = new ApiClientError(404, "NOT_FOUND", "Not found");
@@ -232,7 +322,7 @@ describe("PersonalIntegrationsPage", () => {
     }
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(6);
+    ).toHaveLength(8);
     expect(
       screen.queryByText("No hay integraciones disponibles."),
     ).not.toBeInTheDocument();

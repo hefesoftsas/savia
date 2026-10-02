@@ -6,7 +6,9 @@ export type PersonalIntegrationProviderId =
   | "google_calendar"
   | "outlook"
   | "onedrive_personal"
-  | "onedrive_business";
+  | "onedrive_business"
+  | "jira"
+  | "linear";
 export type PersonalIntegrationAvailability = "enabled" | "unavailable";
 export type PersonalIntegrationConnectionStatus =
   "pending" | "connected" | "reconnect_required" | "disconnected" | "failed";
@@ -44,6 +46,14 @@ export type PersonalCalendarEvent = {
   webLink: string | null;
 };
 export type PersonalCalendarProvider = "google_calendar" | "outlook";
+export type PersonalIssuePreview = {
+  provider: "jira" | "linear";
+  url: string;
+  identifier: string;
+  title: string;
+  status: string | null;
+  assignee: string | null;
+};
 
 type ProviderDocument = {
   id: PersonalIntegrationProviderId;
@@ -70,6 +80,11 @@ function connectionFromDocument(
 
 function providerPath(provider: PersonalIntegrationProviderId): string {
   return encodeURIComponent(provider);
+}
+
+function announcePersonalIntegrationsChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("savia:personal-integrations-changed"));
 }
 
 export class PersonalIntegrationsClient {
@@ -153,7 +168,7 @@ export class PersonalIntegrationsClient {
     provider: PersonalIntegrationProviderId,
     connectionId: string,
   ): Promise<PersonalIntegrationConnection> {
-    return connectionFromDocument(
+    const connection = connectionFromDocument(
       (
         await this.api.post<{ data: ConnectionDocument }>(
           `/v1/personal-integrations/connections/${providerPath(provider)}/complete`,
@@ -161,12 +176,17 @@ export class PersonalIntegrationsClient {
         )
       ).data,
     );
+    this.clearCache();
+    announcePersonalIntegrationsChanged();
+    return connection;
   }
 
-  disconnect(provider: PersonalIntegrationProviderId): Promise<void> {
-    return this.api.delete(
+  async disconnect(provider: PersonalIntegrationProviderId): Promise<void> {
+    await this.api.delete(
       `/v1/personal-integrations/connections/${providerPath(provider)}`,
     );
+    this.clearCache();
+    announcePersonalIntegrationsChanged();
   }
 
   async listEvents(input: {
@@ -208,6 +228,15 @@ export class PersonalIntegrationsClient {
       await this.api.post<{ data: PersonalCalendarEvent }>(
         "/v1/personal-integrations/events",
         input,
+      )
+    ).data;
+  }
+
+  async previewIssue(url: string): Promise<PersonalIssuePreview> {
+    return (
+      await this.api.post<{ data: PersonalIssuePreview }>(
+        "/v1/personal-integrations/issue-preview",
+        { url },
       )
     ).data;
   }

@@ -2,7 +2,8 @@ import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import nodemailer from "nodemailer";
+import { expect, it, vi } from "vitest";
 import { createApplication } from "../src/application";
 import { loadConfiguration } from "../src/config";
 import { makeConfig } from "../../../packages/studio-shared/src/metadata";
@@ -95,7 +96,20 @@ it.skipIf(!postgresTestUrl)(
         return response.json() as Promise<any>;
       }
       try {
-        app = await createApplication(config, {});
+        vi.spyOn(nodemailer, "createTransport").mockImplementation(
+          () =>
+            ({
+              sendMail: vi.fn().mockResolvedValue({}),
+              close: vi.fn(),
+            }) as never,
+        );
+        app = await createApplication(config, {
+          SAVIA_SMTP_HOST: "127.0.0.1",
+          SAVIA_SMTP_PORT: "1025",
+          SAVIA_SMTP_SECURITY: "plain",
+          SAVIA_SMTP_ALLOW_INSECURE: "true",
+          SAVIA_SMTP_FROM: "no-reply@savia.test",
+        });
         await json("/api/auth/sign-in/email", "POST", { email, password });
         const enrollment = await json("/api/auth/two-factor/enable", "POST", {
           password,
@@ -288,6 +302,7 @@ it.skipIf(!postgresTestUrl)(
         });
         expect((await json(brandingPath)).data).toEqual(saved);
       } finally {
+        vi.restoreAllMocks();
         await app?.close();
         rmSync(directory, { recursive: true, force: true });
       }

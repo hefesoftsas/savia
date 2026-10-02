@@ -71,3 +71,14 @@
 .integrations-feedback {
   margin-bottom: 1rem;
 }
+
+@media (max-width: 640px) {
+  .integrations-row__identity {
+    flex-basis: 100%;
+  }
+  .integrations-row__actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}

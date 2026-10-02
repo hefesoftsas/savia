@@ -30,6 +30,45 @@ export const personalIntegrationsMessages = {
     "Funcionários Virtuais (IA)",
   ],
   CRM: ["CRM", "CRM", "CRM"],
+  "Gestión de incidencias": [
+    "Gestión de incidencias",
+    "Issue tracking",
+    "Rastreamento de issues",
+  ],
+  "Un administrador debe habilitar Jira en Nango. Después podrás conectar tu cuenta aquí.":
+    [
+      "Un administrador debe habilitar Jira en Nango. Después podrás conectar tu cuenta aquí.",
+      "An administrator must enable Jira in Nango. Then you can connect your account here.",
+      "Um administrador precisa habilitar o Jira no Nango. Depois você poderá conectar sua conta aqui.",
+    ],
+  "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.":
+    [
+      "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
+      "An administrator must enable Linear in Nango. Then you can connect your account here.",
+      "Um administrador precisa habilitar o Linear no Nango. Depois você poderá conectar sua conta aqui.",
+    ],
+  "Conecta Jira Cloud para previsualizar incidencias en Páginas.": [
+    "Conecta Jira Cloud para previsualizar incidencias en Páginas.",
+    "Connect Jira Cloud to preview issues in Pages.",
+    "Conecte o Jira Cloud para visualizar issues nas Páginas.",
+  ],
+  "Conecta Linear para previsualizar incidencias en Páginas.": [
+    "Conecta Linear para previsualizar incidencias en Páginas.",
+    "Connect Linear to preview issues in Pages.",
+    "Conecte o Linear para visualizar issues nas Páginas.",
+  ],
+  "Ver configuración": ["Ver configuración", "View setup", "Ver configuração"],
+  "Registra cada proveedor como una integración de Nango con permisos de solo lectura. Configura estas variables en el servidor y reinicia Savia:":
+    [
+      "Registra cada proveedor como una integración de Nango con permisos de solo lectura. Configura estas variables en el servidor y reinicia Savia:",
+      "Register each provider as a Nango integration with read-only access. Set these server variables and restart Savia:",
+      "Registre cada provedor como uma integração do Nango com acesso somente de leitura. Configure estas variáveis no servidor e reinicie o Savia:",
+    ],
+  "Requiere configuración": [
+    "Requiere configuración",
+    "Setup required",
+    "Configuração necessária",
+  ],
   "No pudimos cargar el estado de las integraciones.": [
     "No pudimos cargar el estado de las integraciones.",
     "We couldn't load the integrations status.",

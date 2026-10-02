@@ -5,10 +5,12 @@ import type {
   PersonalIntegrationRepository,
 } from "./contracts";
 import {
+  PersonalIntegrationAccessError,
   PersonalIntegrationInputError,
   PersonalIntegrationUnavailableError,
   PersonalIntegrationUpstreamError,
 } from "./contracts";
+import { parseIssueLink } from "@savia/studio-shared/issue-links";
 
 export type PersonalFile = {
   id: string;
@@ -30,6 +32,15 @@ export type PersonalEvent = {
   startsAt: string | null;
   endsAt: string | null;
   webLink: string | null;
+};
+
+export type PersonalIssuePreview = {
+  provider: "jira" | "linear";
+  url: string;
+  identifier: string;
+  title: string;
+  status: string | null;
+  assignee: string | null;
 };
 
 export type PersonalIntegrationActionResult = {
@@ -60,6 +71,27 @@ function safeSearchTerm(value: string): string {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function requiredIssueText(value: unknown, maximum: number): string {
+  if (typeof value !== "string") throw new PersonalIntegrationUpstreamError();
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maximum)
+    throw new PersonalIntegrationUpstreamError();
+  return normalized;
+}
+
+function nestedIssueText(
+  value: unknown,
+  property: string,
+  maximum: number,
+): string | null {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new PersonalIntegrationUpstreamError();
+  const text = (value as Record<string, unknown>)[property];
+  if (text === null || text === undefined) return null;
+  return requiredIssueText(text, maximum);
 }
 
 function secureWebLink(value: unknown): string | null {
@@ -139,11 +171,7 @@ function uploadProvider(
 
 function uploadName(input: Record<string, unknown>): string {
   const name = requiredActionText(input, "name", 200);
-  if (
-    name === "." ||
-    name === ".." ||
-    /[\\/\u0000]/.test(name)
-  )
+  if (name === "." || name === ".." || /[\\/\u0000]/.test(name))
     return invalidAction("The file name is invalid");
   return name;
 }
@@ -176,7 +204,8 @@ function microsoftDocumentProvider(
 }
 
 function documentName(value: unknown): string {
-  if (typeof value !== "string") return invalidAction("The file name is required");
+  if (typeof value !== "string")
+    return invalidAction("The file name is required");
   const name = value.trim();
   if (
     !name ||
@@ -199,7 +228,10 @@ function documentMimeType(value: unknown): string {
   return value;
 }
 
-function documentBytes(value: unknown, maximum: number): Uint8Array<ArrayBuffer> {
+function documentBytes(
+  value: unknown,
+  maximum: number,
+): Uint8Array<ArrayBuffer> {
   if (!(value instanceof Uint8Array) || value.byteLength > maximum)
     return invalidAction("The file content is invalid or too large");
   return new Uint8Array(value);
@@ -231,7 +263,9 @@ function assertExpectedConnectionKey(
     );
 }
 
-function foldersFromOneDrive(payload: unknown): Array<{ id: string; name: string }> {
+function foldersFromOneDrive(
+  payload: unknown,
+): Array<{ id: string; name: string }> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     throw new PersonalIntegrationUpstreamError();
   const items = (payload as { value?: unknown }).value;
@@ -251,7 +285,10 @@ function foldersFromOneDrive(payload: unknown): Array<{ id: string; name: string
   });
 }
 
-function nextFolderPagePath(payload: unknown, collectionPath: string): string | null {
+function nextFolderPagePath(
+  payload: unknown,
+  collectionPath: string,
+): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return null;
   const record = payload as Record<string, unknown>;
@@ -365,11 +402,15 @@ function gmailRawMessage(input: {
   );
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 }
 
 function filesFromGoogle(payload: unknown): PersonalFile[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const files = (payload as { files?: unknown }).files;
   if (!Array.isArray(files)) return [];
   return files.flatMap((file) => {
@@ -378,17 +419,20 @@ function filesFromGoogle(payload: unknown): PersonalFile[] {
     const id = stringValue(item.id);
     const name = stringValue(item.name);
     if (!id || !name) return [];
-    return [{
-      id,
-      name,
-      mimeType: stringValue(item.mimeType),
-      modifiedAt: stringValue(item.modifiedTime),
-    }];
+    return [
+      {
+        id,
+        name,
+        mimeType: stringValue(item.mimeType),
+        modifiedAt: stringValue(item.modifiedTime),
+      },
+    ];
   });
 }
 
 function filesFromOneDrive(payload: unknown): PersonalFile[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const files = (payload as { value?: unknown }).value;
   if (!Array.isArray(files)) return [];
   return files.flatMap((file) => {
@@ -401,32 +445,38 @@ function filesFromOneDrive(payload: unknown): PersonalFile[] {
       item.file && typeof item.file === "object" && !Array.isArray(item.file)
         ? (item.file as Record<string, unknown>)
         : undefined;
-    return [{
-      id,
-      name,
-      mimeType: stringValue(fileMetadata?.mimeType),
-      modifiedAt: stringValue(item.lastModifiedDateTime),
-    }];
+    return [
+      {
+        id,
+        name,
+        mimeType: stringValue(fileMetadata?.mimeType),
+        modifiedAt: stringValue(item.lastModifiedDateTime),
+      },
+    ];
   });
 }
 
 function messagesFromGmail(payload: unknown): PersonalMessage[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const messages = (payload as { messages?: unknown }).messages;
   if (!Array.isArray(messages)) return [];
   return messages.flatMap((message) => {
-    if (!message || typeof message !== "object" || Array.isArray(message)) return [];
+    if (!message || typeof message !== "object" || Array.isArray(message))
+      return [];
     const id = stringValue((message as Record<string, unknown>).id);
     return id ? [{ id, subject: null, sender: null, receivedAt: null }] : [];
   });
 }
 
 function messagesFromOutlook(payload: unknown): PersonalMessage[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const messages = (payload as { value?: unknown }).value;
   if (!Array.isArray(messages)) return [];
   return messages.flatMap((message) => {
-    if (!message || typeof message !== "object" || Array.isArray(message)) return [];
+    if (!message || typeof message !== "object" || Array.isArray(message))
+      return [];
     const item = message as Record<string, unknown>;
     const id = stringValue(item.id);
     if (!id) return [];
@@ -434,17 +484,20 @@ function messagesFromOutlook(payload: unknown): PersonalMessage[] {
       item.from && typeof item.from === "object" && !Array.isArray(item.from)
         ? (item.from as { emailAddress?: { address?: unknown } }).emailAddress
         : undefined;
-    return [{
-      id,
-      subject: stringValue(item.subject),
-      sender: stringValue(from?.address),
-      receivedAt: stringValue(item.receivedDateTime),
-    }];
+    return [
+      {
+        id,
+        subject: stringValue(item.subject),
+        sender: stringValue(from?.address),
+        receivedAt: stringValue(item.receivedDateTime),
+      },
+    ];
   });
 }
 
 function eventsFromGoogle(payload: unknown): PersonalEvent[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const events = (payload as { items?: unknown }).items;
   if (!Array.isArray(events)) return [];
   return events.flatMap((event) => {
@@ -452,20 +505,24 @@ function eventsFromGoogle(payload: unknown): PersonalEvent[] {
     const item = event as Record<string, unknown>;
     const id = stringValue(item.id);
     if (!id) return [];
-    const start = item.start as { dateTime?: unknown; date?: unknown } | undefined;
+    const start = item.start as
+      { dateTime?: unknown; date?: unknown } | undefined;
     const end = item.end as { dateTime?: unknown; date?: unknown } | undefined;
-    return [{
-      id,
-      title: stringValue(item.summary),
-      startsAt: stringValue(start?.dateTime) ?? stringValue(start?.date),
-      endsAt: stringValue(end?.dateTime) ?? stringValue(end?.date),
-      webLink: secureWebLink(item.htmlLink),
-    }];
+    return [
+      {
+        id,
+        title: stringValue(item.summary),
+        startsAt: stringValue(start?.dateTime) ?? stringValue(start?.date),
+        endsAt: stringValue(end?.dateTime) ?? stringValue(end?.date),
+        webLink: secureWebLink(item.htmlLink),
+      },
+    ];
   });
 }
 
 function eventsFromOutlook(payload: unknown): PersonalEvent[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return [];
   const events = (payload as { value?: unknown }).value;
   if (!Array.isArray(events)) return [];
   return events.flatMap((event) => {
@@ -475,13 +532,15 @@ function eventsFromOutlook(payload: unknown): PersonalEvent[] {
     if (!id) return [];
     const start = item.start;
     const end = item.end;
-    return [{
-      id,
-      title: stringValue(item.subject),
-      startsAt: graphResponseDateTime(start),
-      endsAt: graphResponseDateTime(end),
-      webLink: secureWebLink(item.webLink),
-    }];
+    return [
+      {
+        id,
+        title: stringValue(item.subject),
+        startsAt: graphResponseDateTime(start),
+        endsAt: graphResponseDateTime(end),
+        webLink: secureWebLink(item.webLink),
+      },
+    ];
   });
 }
 
@@ -491,6 +550,148 @@ export class PersonalIntegrationOperations {
     private readonly nango: PersonalIntegrationNangoClient,
   ) {}
 
+  async previewIssue(input: {
+    principalId: string;
+    url: string;
+  }): Promise<PersonalIssuePreview> {
+    const issueLink = parseIssueLink(input.url);
+    if (!issueLink)
+      throw new PersonalIntegrationInputError("The issue link is invalid");
+    const connection = await this.connectedConnection(
+      input.principalId,
+      issueLink.provider,
+    );
+    if (issueLink.provider === "jira")
+      return this.previewJiraIssue(connection, issueLink);
+    return this.previewLinearIssue(connection, issueLink);
+  }
+
+  private async previewJiraIssue(
+    connection: ActivePersonalIntegrationConnection,
+    issueLink: NonNullable<ReturnType<typeof parseIssueLink>> & {
+      provider: "jira";
+      site: string;
+    },
+  ): Promise<PersonalIssuePreview> {
+    const resourcesResponse = await this.nango.proxy({
+      method: "GET",
+      path: "/oauth/token/accessible-resources",
+      connection,
+    });
+    if (resourcesResponse.status === 401 || resourcesResponse.status === 403)
+      throw new PersonalIntegrationAccessError();
+    if (!resourcesResponse.ok) throw new PersonalIntegrationUpstreamError();
+    const resources = await resourcesResponse.json().catch(() => undefined);
+    if (!Array.isArray(resources)) throw new PersonalIntegrationUpstreamError();
+    const resource = resources.find((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry))
+        return false;
+      const candidate = entry as Record<string, unknown>;
+      if (typeof candidate.url !== "string") return false;
+      try {
+        const url = new URL(candidate.url);
+        return (
+          url.protocol === "https:" &&
+          url.hostname === issueLink.site &&
+          !url.username &&
+          !url.password
+        );
+      } catch {
+        return false;
+      }
+    }) as Record<string, unknown> | undefined;
+    const cloudId = stringValue(resource?.id);
+    if (!cloudId) throw new PersonalIntegrationAccessError();
+    const issueResponse = await this.nango.proxy({
+      method: "GET",
+      path: `/ex/jira/${encodeURIComponent(cloudId)}/rest/api/3/issue/${encodeURIComponent(issueLink.identifier)}?fields=summary%2Cstatus%2Cassignee%2Ckey`,
+      connection,
+    });
+    if (issueResponse.status === 401 || issueResponse.status === 403)
+      throw new PersonalIntegrationAccessError();
+    if (!issueResponse.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await issueResponse.json().catch(() => undefined);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new PersonalIntegrationUpstreamError();
+    const issue = payload as Record<string, unknown>;
+    const fields = issue.fields;
+    if (
+      typeof issue.key !== "string" ||
+      issue.key.toUpperCase() !== issueLink.identifier ||
+      !fields ||
+      typeof fields !== "object" ||
+      Array.isArray(fields)
+    )
+      throw new PersonalIntegrationUpstreamError();
+    const values = fields as Record<string, unknown>;
+    const status = values.status;
+    const assignee = values.assignee;
+    return {
+      provider: "jira",
+      url: issueLink.url,
+      identifier: issueLink.identifier,
+      title: requiredIssueText(values.summary, 2000),
+      status: nestedIssueText(status, "name", 255),
+      assignee: nestedIssueText(assignee, "displayName", 255),
+    };
+  }
+
+  private async previewLinearIssue(
+    connection: ActivePersonalIntegrationConnection,
+    issueLink: NonNullable<ReturnType<typeof parseIssueLink>> & {
+      provider: "linear";
+    },
+  ): Promise<PersonalIssuePreview> {
+    const response = await this.nango.proxy({
+      method: "POST",
+      path: "/graphql",
+      connection,
+      body: {
+        query:
+          "query SaviaIssuePreview($id: String!) { issue(id: $id) { identifier url title state { name } assignee { name } } }",
+        variables: { id: issueLink.identifier },
+      },
+    });
+    if (response.status === 401 || response.status === 403)
+      throw new PersonalIntegrationAccessError();
+    if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await response.json().catch(() => undefined);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new PersonalIntegrationUpstreamError();
+    const root = payload as Record<string, unknown>;
+    if (Array.isArray(root.errors) && root.errors.length > 0)
+      throw new PersonalIntegrationUpstreamError();
+    const data = root.data;
+    const issue =
+      data && typeof data === "object" && !Array.isArray(data)
+        ? (data as Record<string, unknown>).issue
+        : undefined;
+    if (!issue || typeof issue !== "object" || Array.isArray(issue))
+      throw new PersonalIntegrationUpstreamError();
+    const values = issue as Record<string, unknown>;
+    if (
+      typeof values.identifier !== "string" ||
+      values.identifier.toUpperCase() !== issueLink.identifier
+    )
+      throw new PersonalIntegrationUpstreamError();
+    const resolvedLink =
+      typeof values.url === "string" ? parseIssueLink(values.url) : null;
+    if (
+      resolvedLink?.provider !== "linear" ||
+      resolvedLink.identifier !== issueLink.identifier ||
+      resolvedLink.workspace !== issueLink.workspace
+    )
+      throw new PersonalIntegrationUpstreamError();
+    return {
+      provider: "linear",
+      url: issueLink.url,
+      identifier: issueLink.identifier,
+      title: requiredIssueText(values.title, 2000),
+      status: nestedIssueText(values.state, "name", 255),
+      assignee: nestedIssueText(values.assignee, "name", 255),
+    };
+  }
+
   async listDocumentFolders(input: {
     principalId: string;
     provider: "onedrive_personal" | "onedrive_business";
@@ -498,8 +699,13 @@ export class PersonalIntegrationOperations {
   }): Promise<Array<{ id: string; name: string }>> {
     const provider = microsoftDocumentProvider(input.provider);
     const parentId =
-      input.parentId === undefined ? undefined : documentFolderId(input.parentId);
-    const connection = await this.connectedConnection(input.principalId, provider);
+      input.parentId === undefined
+        ? undefined
+        : documentFolderId(input.parentId);
+    const connection = await this.connectedConnection(
+      input.principalId,
+      provider,
+    );
     const path = parentId
       ? `/v1.0/me/drive/items/${encodeURIComponent(parentId)}/children?$top=100&$select=id,name,folder`
       : "/v1.0/me/drive/root/children?$top=100&$select=id,name,folder";
@@ -532,11 +738,16 @@ export class PersonalIntegrationOperations {
   }): Promise<{ id: string; name: string; webUrl: string | null }> {
     const provider = microsoftDocumentProvider(input.provider);
     const folderId =
-      input.folderId === undefined ? undefined : documentFolderId(input.folderId);
+      input.folderId === undefined
+        ? undefined
+        : documentFolderId(input.folderId);
     const name = documentName(input.name);
     const mimeType = documentMimeType(input.mimeType);
     const content = documentBytes(input.content, 5 * 1024 * 1024);
-    const connection = await this.connectedConnection(input.principalId, provider);
+    const connection = await this.connectedConnection(
+      input.principalId,
+      provider,
+    );
     assertExpectedConnectionKey(connection, input.expectedConnectionKey);
     const basePath = folderId
       ? `/v1.0/me/drive/items/${encodeURIComponent(folderId)}`
@@ -572,7 +783,10 @@ export class PersonalIntegrationOperations {
     const name = documentName(file.name);
     const mimeType = documentMimeType(file.mimeType);
     const content = documentBytes(file.content, 2 * 1024 * 1024);
-    const connection = await this.connectedConnection(input.principalId, "outlook");
+    const connection = await this.connectedConnection(
+      input.principalId,
+      "outlook",
+    );
     assertExpectedConnectionKey(connection, input.expectedConnectionKey);
     await this.write(connection, "send-email", {
       method: "POST",
@@ -582,12 +796,14 @@ export class PersonalIntegrationOperations {
           subject,
           body: { contentType: "Text", content: body },
           toRecipients: to.map((address) => ({ emailAddress: { address } })),
-          attachments: [{
-            "@odata.type": "#microsoft.graph.fileAttachment",
-            name,
-            contentType: mimeType,
-            contentBytes: fileBase64(content),
-          }],
+          attachments: [
+            {
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name,
+              contentType: mimeType,
+              contentBytes: fileBase64(content),
+            },
+          ],
         },
         saveToSentItems: true,
       },
@@ -619,11 +835,17 @@ export class PersonalIntegrationOperations {
             fields: "files(id,name,mimeType,modifiedTime)",
             q: `name contains '${term}' and trashed = false`,
           }).toString()}`
-        : `/v1.0/me/drive/root/search(q='${encodeURIComponent(term)}')?${new URLSearchParams({
-            "$top": "25",
-            "$select": "id,name,file,lastModifiedDateTime",
-          }).toString()}`;
-    const response = await this.nango.proxy({ method: "GET", path, connection });
+        : `/v1.0/me/drive/root/search(q='${encodeURIComponent(term)}')?${new URLSearchParams(
+            {
+              $top: "25",
+              $select: "id,name,file,lastModifiedDateTime",
+            },
+          ).toString()}`;
+    const response = await this.nango.proxy({
+      method: "GET",
+      path,
+      connection,
+    });
     if (!response.ok) throw new PersonalIntegrationUpstreamError();
     const payload = await response.json().catch(() => undefined);
     return input.provider === "google_drive"
@@ -652,11 +874,15 @@ export class PersonalIntegrationOperations {
             q: term,
           }).toString()}`
         : `/v1.0/me/messages?${new URLSearchParams({
-            "$top": "25",
-            "$select": "id,subject,from,receivedDateTime",
-            "$filter": `contains(subject,'${term}')`,
+            $top: "25",
+            $select: "id,subject,from,receivedDateTime",
+            $filter: `contains(subject,'${term}')`,
           }).toString()}`;
-    const response = await this.nango.proxy({ method: "GET", path, connection });
+    const response = await this.nango.proxy({
+      method: "GET",
+      path,
+      connection,
+    });
     if (!response.ok) throw new PersonalIntegrationUpstreamError();
     const payload = await response.json().catch(() => undefined);
     return input.provider === "gmail"
@@ -701,13 +927,13 @@ export class PersonalIntegrationOperations {
           ? `/v1.0/me/calendarView?${new URLSearchParams({
               startDateTime: input.from.toISOString(),
               endDateTime: input.to.toISOString(),
-              "$top": "50",
-              "$orderby": "start/dateTime",
-              "$select": "id,subject,start,end,webLink",
+              $top: "50",
+              $orderby: "start/dateTime",
+              $select: "id,subject,start,end,webLink",
             }).toString()}`
           : `/v1.0/me/events?${new URLSearchParams({
-              "$top": "25",
-              "$select": "id,subject,start,end,webLink",
+              $top: "25",
+              $select: "id,subject,start,end,webLink",
             }).toString()}`;
     const response = await this.nango.proxy({
       method: "GET",
@@ -736,7 +962,10 @@ export class PersonalIntegrationOperations {
     const endsAt = eventDate(input, "endsAt");
     if (endsAt <= startsAt)
       return invalidAction("The event end must be after its start");
-    const connection = await this.connectedConnection(input.principalId, input.provider);
+    const connection = await this.connectedConnection(
+      input.principalId,
+      input.provider,
+    );
     const response = await this.write(
       connection,
       "create-event",
@@ -781,7 +1010,10 @@ export class PersonalIntegrationOperations {
       const to = emailRecipients(action, "to", true);
       const subject = requiredActionText(action, "subject", 2000);
       const body = requiredActionText(action, "body", 10_000);
-      const connection = await this.connectedConnection(input.principalId, provider);
+      const connection = await this.connectedConnection(
+        input.principalId,
+        provider,
+      );
       const request =
         provider === "gmail"
           ? {
@@ -814,7 +1046,10 @@ export class PersonalIntegrationOperations {
       if (endsAt <= startsAt)
         return invalidAction("The event end must be after its start");
       const attendees = emailRecipients(action, "attendees", false);
-      const connection = await this.connectedConnection(input.principalId, provider);
+      const connection = await this.connectedConnection(
+        input.principalId,
+        provider,
+      );
       const request =
         provider === "google_calendar"
           ? {
@@ -849,7 +1084,10 @@ export class PersonalIntegrationOperations {
       const name = uploadName(action);
       const content = uploadContent(action);
       const mimeType = uploadMimeType(action);
-      const connection = await this.connectedConnection(input.principalId, provider);
+      const connection = await this.connectedConnection(
+        input.principalId,
+        provider,
+      );
       const request =
         provider === "google_drive"
           ? {

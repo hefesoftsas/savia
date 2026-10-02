@@ -44,6 +44,8 @@ const providerDocumentSchema = z.object({
     "outlook",
     "onedrive_personal",
     "onedrive_business",
+    "jira",
+    "linear",
   ]),
   kind: z.literal("personal-integration-provider"),
   attributes: z.object({
@@ -57,7 +59,7 @@ const providerListRoute = createRoute({
   method: "get",
   path: "/v1/personal-integrations/providers",
   tags: ["Personal integrations"],
-  summary: "List personal Google and Microsoft integrations",
+  summary: "List the available personal integrations",
   description:
     "Lists the personal provider registry without returning Nango credentials or integration identifiers.",
   security: [{ oauth2: ["savia.api.read"] }],
@@ -84,6 +86,8 @@ const connectionAttributesSchema = z.object({
     "outlook",
     "onedrive_personal",
     "onedrive_business",
+    "jira",
+    "linear",
   ]),
   status: z.enum([
     "pending",
@@ -220,7 +224,11 @@ const fileSearchRoute = createRoute({
   security: [{ oauth2: ["savia.api.read"] }],
   request: {
     query: z.object({
-      provider: z.enum(["google_drive", "onedrive_personal", "onedrive_business"]),
+      provider: z.enum([
+        "google_drive",
+        "onedrive_personal",
+        "onedrive_business",
+      ]),
       query: z.string().trim().min(1).max(100),
     }),
   },
@@ -246,6 +254,47 @@ const fileSearchRoute = createRoute({
     502: { description: "Provider request failed" },
     503: { description: "Provider or connection unavailable" },
     409: { description: "Connection is not ready" },
+  },
+});
+
+const issuePreviewSchema = z.object({
+  provider: z.enum(["jira", "linear"]),
+  url: z.string().url().max(2048),
+  identifier: z.string(),
+  title: z.string(),
+  status: z.string().nullable(),
+  assignee: z.string().nullable(),
+});
+
+const issuePreviewRoute = createRoute({
+  method: "post",
+  path: "/v1/personal-integrations/issue-preview",
+  tags: ["Personal integrations"],
+  summary: "Preview a linked issue from a caller-owned Jira or Linear account",
+  description:
+    "Parses supported Jira Cloud and Linear issue links, then reads safe summary metadata through the caller's active personal connection.",
+  security: [{ oauth2: ["savia.api.read"] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ url: z.string().trim().min(1).max(2048) }),
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: z.object({ data: issuePreviewSchema }) },
+      },
+      description: "Transient issue preview for the current viewer",
+    },
+    400: { description: "Unsupported issue link" },
+    403: { description: "The connected account cannot access this issue" },
+    502: { description: "Issue provider request failed" },
+    503: { description: "Issue provider connection is unavailable" },
   },
 });
 
@@ -468,7 +517,9 @@ function errorBody(code: string, message: string) {
   return { error: { code, message } };
 }
 
-function scopesFromMetadata(metadata: Record<string, string | string[]>): string[] {
+function scopesFromMetadata(
+  metadata: Record<string, string | string[]>,
+): string[] {
   const scopes = metadata.scopes;
   return Array.isArray(scopes)
     ? scopes
@@ -487,13 +538,25 @@ function personalErrorResponse(exception: unknown) {
       ),
     } as const;
   if (exception instanceof PersonalIntegrationAccessError)
-    return { status: 403, body: errorBody(exception.code, exception.message) } as const;
+    return {
+      status: 403,
+      body: errorBody(exception.code, exception.message),
+    } as const;
   if (exception instanceof PersonalIntegrationUnavailableError)
-    return { status: 503, body: errorBody(exception.code, exception.message) } as const;
+    return {
+      status: 503,
+      body: errorBody(exception.code, exception.message),
+    } as const;
   if (exception instanceof PersonalIntegrationUpstreamError)
-    return { status: 502, body: errorBody(exception.code, exception.message) } as const;
+    return {
+      status: 502,
+      body: errorBody(exception.code, exception.message),
+    } as const;
   if (exception instanceof PersonalIntegrationInputError)
-    return { status: 400, body: errorBody(exception.code, exception.message) } as const;
+    return {
+      status: 400,
+      body: errorBody(exception.code, exception.message),
+    } as const;
   return undefined;
 }
 
@@ -541,7 +604,10 @@ export function registerPersonalIntegrationRoutes(
       context.req.valid("param").provider,
     );
     if (isProviderError(resolved))
-      return context.json(errorBody(resolved.code, resolved.message), resolved.status);
+      return context.json(
+        errorBody(resolved.code, resolved.message),
+        resolved.status,
+      );
     if (!nango || !resolved.provider.integrationId)
       return context.json(
         errorBody(
@@ -571,7 +637,10 @@ export function registerPersonalIntegrationRoutes(
       context.req.valid("param").provider,
     );
     if (isProviderError(resolved))
-      return context.json(errorBody(resolved.code, resolved.message), resolved.status);
+      return context.json(
+        errorBody(resolved.code, resolved.message),
+        resolved.status,
+      );
     if (!nango || !resolved.provider.integrationId)
       return context.json(
         errorBody(
@@ -599,7 +668,8 @@ export function registerPersonalIntegrationRoutes(
         nangoIntegrationId: resolved.provider.integrationId,
         status: "connected",
         externalAccountLabel:
-          (typeof metadata.account_name === "string" && metadata.account_name) ||
+          (typeof metadata.account_name === "string" &&
+            metadata.account_name) ||
           (typeof metadata.email === "string" && metadata.email) ||
           actor.principal.email,
         externalAccountId:
@@ -629,7 +699,10 @@ export function registerPersonalIntegrationRoutes(
       context.req.valid("param").provider,
     );
     if (isProviderError(resolved))
-      return context.json(errorBody(resolved.code, resolved.message), resolved.status);
+      return context.json(
+        errorBody(resolved.code, resolved.message),
+        resolved.status,
+      );
     if (!nango || !resolved.provider.integrationId)
       return context.json(
         errorBody(
@@ -671,7 +744,10 @@ export function registerPersonalIntegrationRoutes(
       context.req.valid("param").provider,
     );
     if (isProviderError(resolved))
-      return context.json(errorBody(resolved.code, resolved.message), resolved.status);
+      return context.json(
+        errorBody(resolved.code, resolved.message),
+        resolved.status,
+      );
     if (!nango || !resolved.provider.integrationId)
       return context.json(
         errorBody(
@@ -698,7 +774,10 @@ export function registerPersonalIntegrationRoutes(
         connection.nangoConnectionId,
         connection.nangoIntegrationId,
       );
-      await repository.markDisconnected(actor.principal.id, resolved.provider.id);
+      await repository.markDisconnected(
+        actor.principal.id,
+        resolved.provider.id,
+      );
       return context.body(null, 204);
     } catch (exception) {
       const response = personalErrorResponse(exception);
@@ -725,6 +804,31 @@ export function registerPersonalIntegrationRoutes(
         query: query.query,
       });
       return context.json({ data: files }, 200);
+    } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(issuePreviewRoute, async (context) => {
+    const actor = actorFromContext(context);
+    context.header("Cache-Control", "no-store");
+    if (!operations)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    try {
+      const { url } = context.req.valid("json");
+      const preview = await operations.previewIssue({
+        principalId: actor.principal.id,
+        url,
+      });
+      return context.json({ data: preview }, 200);
     } catch (exception) {
       const response = personalErrorResponse(exception);
       if (!response) throw exception;

@@ -20,6 +20,8 @@ export type NangoConfiguration = {
   outlookIntegrationId?: string;
   oneDrivePersonalIntegrationId?: string;
   oneDriveBusinessIntegrationId?: string;
+  jiraIntegrationId?: string;
+  linearIntegrationId?: string;
 };
 
 type ConfiguredNango = {
@@ -147,17 +149,54 @@ function allowedHubSpotProxyPath(path: string): boolean {
   if (url.origin !== "https://savia.invalid") return false;
   if (url.pathname === "/account-info/v3/details") return !url.search;
   if (url.pathname === "/crm/v3/owners") return true;
-  const objectPaths = ["contacts", "companies", "deals", "tickets", "products", "line_items", "quotes", "tasks", "notes", "meetings", "calls", "emails"];
-  const associationLabels = /^\/crm\/v4\/associations\/([^/]+)\/([^/]+)\/labels$/.exec(url.pathname);
-  if (associationLabels) return objectPaths.includes(associationLabels[1]) && objectPaths.includes(associationLabels[2]);
-  const associationWrite = /^\/crm\/v4\/objects\/([^/]+)\/\d+\/associations\/(?:default\/)?([^/]+)\/\d+$/.exec(url.pathname);
-  if (associationWrite) return objectPaths.includes(associationWrite[1]) && objectPaths.includes(associationWrite[2]);
-  if (objectPaths.some(object => url.pathname === `/crm/v3/properties/${object}` || url.pathname === `/crm/v3/pipelines/${object}` || url.pathname === `/crm/v3/objects/${object}/batch/read`)) return true;
-  if (/^\/crm\/v3\/objects\/[^/]+\/\d+\/associations\/[^/]+$/.test(url.pathname)) {
+  const objectPaths = [
+    "contacts",
+    "companies",
+    "deals",
+    "tickets",
+    "products",
+    "line_items",
+    "quotes",
+    "tasks",
+    "notes",
+    "meetings",
+    "calls",
+    "emails",
+  ];
+  const associationLabels =
+    /^\/crm\/v4\/associations\/([^/]+)\/([^/]+)\/labels$/.exec(url.pathname);
+  if (associationLabels)
+    return (
+      objectPaths.includes(associationLabels[1]) &&
+      objectPaths.includes(associationLabels[2])
+    );
+  const associationWrite =
+    /^\/crm\/v4\/objects\/([^/]+)\/\d+\/associations\/(?:default\/)?([^/]+)\/\d+$/.exec(
+      url.pathname,
+    );
+  if (associationWrite)
+    return (
+      objectPaths.includes(associationWrite[1]) &&
+      objectPaths.includes(associationWrite[2])
+    );
+  if (
+    objectPaths.some(
+      (object) =>
+        url.pathname === `/crm/v3/properties/${object}` ||
+        url.pathname === `/crm/v3/pipelines/${object}` ||
+        url.pathname === `/crm/v3/objects/${object}/batch/read`,
+    )
+  )
+    return true;
+  if (
+    /^\/crm\/v3\/objects\/[^/]+\/\d+\/associations\/[^/]+$/.test(url.pathname)
+  ) {
     const parts = url.pathname.split("/");
     return objectPaths.includes(parts[4]) && objectPaths.includes(parts[7]);
   }
-  if (/^\/crm\/v3\/associations\/[^/]+\/[^/]+\/batch\/create$/.test(url.pathname)) {
+  if (
+    /^\/crm\/v3\/associations\/[^/]+\/[^/]+\/batch\/create$/.test(url.pathname)
+  ) {
     const parts = url.pathname.split("/");
     return objectPaths.includes(parts[4]) && objectPaths.includes(parts[5]);
   }

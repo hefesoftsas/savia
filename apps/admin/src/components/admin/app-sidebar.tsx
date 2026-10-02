@@ -1,3 +1,4 @@
+import { PagesSidebar } from "@/features/pages/pages-sidebar";
 import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
 import { useMessages } from "@/i18n/core";
 import { settingsMessages } from "@/i18n/locales/settings";
@@ -1485,6 +1486,8 @@ function SortableNavigationItem({
             <Plus className="size-4" />
           </Button>
         </div>
+      ) : item.id === "pages" ? (
+        <PagesSidebar onNavigate={onNavigate} />
       ) : item.id === "provider-credentials" && saviaRequestActive ? (
         <SaviaRequestCollapsibleMenu item={item} onNavigate={onNavigate} />
       ) : (

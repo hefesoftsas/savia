@@ -58,6 +58,8 @@ const configuredProviders = createPersonalIntegrationProviderRegistry({
   outlookIntegrationId: "outlook-savia",
   oneDrivePersonalIntegrationId: "onedrive-personal-savia",
   oneDriveBusinessIntegrationId: "onedrive-business-savia",
+  jiraIntegrationId: "jira-savia",
+  linearIntegrationId: "linear-savia",
 });
 const payloadCipher = new PersonalActionPayloadCipher("test-mcp-shared-secret");
 
@@ -140,7 +142,7 @@ describe("personal integration providers", () => {
     await seedPrincipal();
   });
 
-  it("lists the six personal providers for an authenticated user", async () => {
+  it("lists all eight personal providers for an authenticated user", async () => {
     const app = createApp(
       env.DB,
       undefined,
@@ -161,6 +163,18 @@ describe("personal integration providers", () => {
         expect.objectContaining({ id: "outlook" }),
         expect.objectContaining({ id: "onedrive_personal" }),
         expect.objectContaining({ id: "onedrive_business" }),
+        expect.objectContaining({
+          id: "jira",
+          attributes: expect.objectContaining({
+            capabilities: ["issues:read"],
+          }),
+        }),
+        expect.objectContaining({
+          id: "linear",
+          attributes: expect.objectContaining({
+            capabilities: ["issues:read"],
+          }),
+        }),
       ]),
     });
   });
@@ -172,6 +186,8 @@ describe("personal integration providers", () => {
     ["outlook", "outlook-savia"],
     ["onedrive_personal", "onedrive-personal-savia"],
     ["onedrive_business", "onedrive-business-savia"],
+    ["jira", "jira-savia"],
+    ["linear", "linear-savia"],
   ] as const)(
     "creates a scoped Nango session for %s",
     async (provider, integrationId) => {
@@ -327,6 +343,278 @@ describe("personal integration providers", () => {
         }),
       }),
     );
+  });
+
+  it("previews a Jira issue only after matching the connected account's site", async () => {
+    const nango = fakeNango();
+    nango.proxy
+      .mockResolvedValueOnce(
+        Response.json([{ id: "cloud-1", url: "https://acme.atlassian.net" }]),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          key: "OPS-42",
+          fields: {
+            summary: "Review the renewal",
+            status: { name: "In Progress" },
+            assignee: { displayName: "Alex Rivera" },
+          },
+        }),
+      );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-jira-connection",
+        "test-agency-member",
+        "jira",
+        "nango-jira-connection",
+        "jira-savia",
+        "connected",
+        '["read:jira-work"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://acme.atlassian.net/browse/OPS-42",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        provider: "jira",
+        url: "https://acme.atlassian.net/browse/OPS-42",
+        identifier: "OPS-42",
+        title: "Review the renewal",
+        status: "In Progress",
+        assignee: "Alex Rivera",
+      },
+    });
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: "GET",
+        path: "/oauth/token/accessible-resources",
+      }),
+    );
+    expect(nango.proxy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "GET",
+        path: "/ex/jira/cloud-1/rest/api/3/issue/OPS-42?fields=summary%2Cstatus%2Cassignee%2Ckey",
+      }),
+    );
+  });
+
+  it("previews a Linear issue with a fixed GraphQL operation", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        data: {
+          issue: {
+            identifier: "ENG-7",
+            url: "https://linear.app/acme/issue/ENG-7/fix-the-dashboard",
+            title: "Fix the dashboard",
+            state: { name: "Todo" },
+            assignee: null,
+          },
+        },
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-linear-connection",
+        "test-agency-member",
+        "linear",
+        "nango-linear-connection",
+        "linear-savia",
+        "connected",
+        '["read"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://linear.app/acme/issue/ENG-7/fix-the-dashboard",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        provider: "linear",
+        url: "https://linear.app/acme/issue/ENG-7/fix-the-dashboard",
+        identifier: "ENG-7",
+        title: "Fix the dashboard",
+        status: "Todo",
+        assignee: null,
+      },
+    });
+    expect(nango.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "POST", path: "/graphql" }),
+    );
+  });
+
+  it("rejects a Linear issue resolved from a different workspace", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json({
+        data: {
+          issue: {
+            identifier: "ENG-7",
+            url: "https://linear.app/another-team/issue/ENG-7/fix-the-dashboard",
+            title: "A different team's issue",
+            state: { name: "Todo" },
+            assignee: null,
+          },
+        },
+      }),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-linear-workspace-mismatch",
+        "test-agency-member",
+        "linear",
+        "nango-linear-connection",
+        "linear-savia",
+        "connected",
+        '["read"]',
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://linear.app/acme/issue/ENG-7/fix-the-dashboard",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(502);
+  });
+
+  it("rejects issue links outside the allow-listed hosts without contacting Nango", async () => {
+    const nango = fakeNango();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://linear.app.attacker.test/acme/issue/ENG-7",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(nango.proxy).not.toHaveBeenCalled();
+  });
+
+  it("returns a controlled access error when the connected Jira account lacks the linked site", async () => {
+    const nango = fakeNango();
+    nango.proxy.mockResolvedValueOnce(
+      Response.json([
+        { id: "other-cloud", url: "https://other.atlassian.net" },
+      ]),
+    );
+    await env.DB.prepare(
+      `INSERT INTO personal_integration_connections (
+        id, principal_id, provider, nango_connection_id, nango_integration_id,
+        status, scopes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "personal-jira-site-mismatch",
+        "test-agency-member",
+        "jira",
+        "nango-jira-connection",
+        "jira-savia",
+        "connected",
+        "[]",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      )
+      .run();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://acme.atlassian.net/browse/OPS-42",
+        }),
+      },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "PERSONAL_INTEGRATION_ACCESS_DENIED",
+        message: "The personal integration does not belong to this user",
+      },
+    });
+    expect(nango.proxy).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a controlled unavailable response when the caller has no issue connection", async () => {
+    const nango = fakeNango();
+    const app = configuredApp(nango);
+
+    const response = await app.request(
+      "https://savia.test/v1/personal-integrations/issue-preview",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: "https://linear.app/acme/issue/ENG-7" }),
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(nango.proxy).not.toHaveBeenCalled();
   });
 
   it("searches a caller-owned OneDrive connection through its fixed Graph operation", async () => {

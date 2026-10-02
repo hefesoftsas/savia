@@ -29,6 +29,13 @@ vi.mock("./features/public-forms/public-form-page", () => ({
     <div>Public form {token}</div>
   ),
 }));
+vi.mock("./features/pages/public-page", () => ({
+  PublicPage: ({ token, pageId }: { token: string; pageId?: string }) => (
+    <div>
+      Public page {token} {pageId}
+    </div>
+  ),
+}));
 import { ApplicationRoot } from "./bootstrap";
 afterEach(cleanup);
 it("opens a public form without importing admin services or touching private persistence", async () => {
@@ -39,6 +46,16 @@ it("opens a public form without importing admin services or touching private per
   expect(calls.admin).not.toHaveBeenCalled();
   expect(calls.appearance).not.toHaveBeenCalled();
   expect(calls.worker).not.toHaveBeenCalled();
+});
+it("opens an anonymous public page route without importing the private application", async () => {
+  const previous = calls.admin.mock.calls.length;
+  render(
+    <ApplicationRoot pathname="/public/pages/0123456789abcdefghijkl/page-2" />,
+  );
+  expect(
+    await screen.findByText("Public page 0123456789abcdefghijkl page-2"),
+  ).toBeInTheDocument();
+  expect(calls.admin.mock.calls.length).toBe(previous);
 });
 it("rejects malformed public paths without falling through to private login", () => {
   render(<ApplicationRoot pathname="/public/forms/invalid/nested" />);

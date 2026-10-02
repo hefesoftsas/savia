@@ -5,6 +5,8 @@ export const personalIntegrationProviderIds = [
   "outlook",
   "onedrive_personal",
   "onedrive_business",
+  "jira",
+  "linear",
 ] as const;
 
 export const personalIntegrationConnectionStatuses = [
@@ -19,9 +21,7 @@ export type PersonalIntegrationProviderId =
   (typeof personalIntegrationProviderIds)[number];
 export type PersonalIntegrationConnectionStatus =
   (typeof personalIntegrationConnectionStatuses)[number];
-export type PersonalIntegrationProviderAvailability =
-  | "enabled"
-  | "unavailable";
+export type PersonalIntegrationProviderAvailability = "enabled" | "unavailable";
 
 export type PersonalIntegrationProviderDefinition = {
   id: PersonalIntegrationProviderId;
@@ -106,7 +106,9 @@ export type PersonalIntegrationCompletion = {
 };
 
 export type PersonalIntegrationRepository = {
-  listConnections(principalId: string): Promise<PersonalIntegrationConnection[]>;
+  listConnections(
+    principalId: string,
+  ): Promise<PersonalIntegrationConnection[]>;
   findActiveConnection(
     principalId: string,
     provider: PersonalIntegrationProviderId,
@@ -140,7 +142,9 @@ export class PersonalIntegrationUnavailableError extends Error {
 export class PersonalIntegrationUpstreamError extends Error {
   readonly code = "PERSONAL_INTEGRATION_REQUEST_FAILED" as const;
 
-  constructor(message = "The personal integration request could not be completed") {
+  constructor(
+    message = "The personal integration request could not be completed",
+  ) {
     super(message);
     this.name = "PersonalIntegrationUpstreamError";
   }
@@ -149,7 +153,9 @@ export class PersonalIntegrationUpstreamError extends Error {
 export class PersonalIntegrationAccessError extends Error {
   readonly code = "PERSONAL_INTEGRATION_ACCESS_DENIED" as const;
 
-  constructor(message = "The personal integration does not belong to this user") {
+  constructor(
+    message = "The personal integration does not belong to this user",
+  ) {
     super(message);
     this.name = "PersonalIntegrationAccessError";
   }

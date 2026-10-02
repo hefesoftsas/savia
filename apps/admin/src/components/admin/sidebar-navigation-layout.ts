@@ -63,7 +63,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
     ...normalizeSidebarNavigationLayout({
       version: 1,
       sections: {
-        operation: ["my-day", "dashboard", "studio"],
+        operation: ["my-day", "pages", "dashboard", "studio"],
         productivity: [
           "page-administrator",
           "domain-sources",
@@ -398,6 +398,7 @@ export function defaultSectionForItem(
     dashboard: "operation",
     studio: "operation",
     "my-day": "operation",
+    pages: "operation",
     integrations: "productivity",
     "provider-credentials": "productivity",
     "service-credentials": "administration",

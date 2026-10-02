@@ -214,7 +214,12 @@ describe("edge gateway", () => {
   });
 });
 
-it.each(["/public/forms/fixture", "/register"])(
+it.each([
+  "/public/forms/fixture",
+  "/public/pages/fixture",
+  "/public/pages/fixture/child",
+  "/register",
+])(
   "serves public page %s without leaking its link or caching",
   async (path) => {
     const api = { fetch: vi.fn(async () => Response.json({})) };

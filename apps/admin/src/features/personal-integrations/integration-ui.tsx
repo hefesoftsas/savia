@@ -13,11 +13,7 @@ import { useMessages } from "@/i18n/core";
 import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
 import "./personal-integrations.css";
 
-export function IntegrationsPageShell({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function IntegrationsPageShell({ children }: { children: ReactNode }) {
   return (
     <main className="integrations-page mx-auto w-full max-w-3xl pb-10">
       {children}
@@ -177,7 +173,7 @@ export function IntegrationProviderRow({
             {name}
           </p>
           {hint ? (
-            <p className="integrations-row__hint truncate text-xs leading-5 text-muted-foreground">
+            <p className="integrations-row__hint whitespace-normal text-xs leading-5 text-muted-foreground">
               {hint}
             </p>
           ) : null}
@@ -218,9 +214,7 @@ export function IntegrationProviderRow({
 }
 
 export function IntegrationGroupEmpty({ message }: { message: string }) {
-  return (
-    <li className="px-5 py-8 text-sm text-muted-foreground">{message}</li>
-  );
+  return <li className="px-5 py-8 text-sm text-muted-foreground">{message}</li>;
 }
 
 export function IntegrationGroupsSkeleton({ groups = 2 }: { groups?: number }) {

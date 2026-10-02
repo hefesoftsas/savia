@@ -12,6 +12,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   CalendarDays,
+  FileText,
   Workflow,
   House,
   Link2,
@@ -137,6 +138,13 @@ export const navigationDefinitions: Record<
     route: "/",
     section: "operation",
     icon: House,
+  },
+  pages: {
+    id: "pages",
+    labelKey: "savia.sidebar.items.pages",
+    route: "/pages",
+    section: "operation",
+    icon: FileText,
   },
   "my-day": {
     id: "my-day",
