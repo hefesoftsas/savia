@@ -6,19 +6,26 @@ import type {
   PersonalIntegrationNangoClient,
 } from "../src/personal-integrations/contracts";
 
-function setup(provider: "gmail" | "outlook", responses: unknown[]) {
+function setup(
+  provider: "gmail" | "outlook",
+  responses: Array<unknown | Response>,
+  externalAccountLabel = "member@gmail.com",
+) {
   const paths: string[] = [];
   const repository = {
     findActiveConnection: vi.fn().mockResolvedValue({
       status: "connected",
       provider,
-      externalAccountLabel: "member@gmail.com",
+      externalAccountLabel,
     }),
   } as unknown as PersonalIntegrationRepository;
   const nango = {
     proxy: vi.fn(async ({ path }: { path: string }) => {
       paths.push(path);
-      return Response.json(responses.shift() ?? {});
+      const response = responses.shift();
+      return response instanceof Response
+        ? response
+        : Response.json(response ?? {});
     }),
   } as unknown as PersonalIntegrationNangoClient;
   return {
@@ -41,6 +48,7 @@ describe("personal inbox", () => {
           ],
         },
       },
+      { emailAddress: "member@gmail.com" },
     ]);
     const messages = await operations.listMessages({
       principalId: "owner",
@@ -61,6 +69,45 @@ describe("personal inbox", () => {
     ).toBe("INBOX");
     expect(paths[1]).toContain("format=metadata");
     expect(paths[1]).not.toContain("format=full");
+    expect(paths[2]).toBe("/gmail/v1/users/me/profile");
+  });
+
+  it("uses the Gmail profile address instead of the saved connection label", async () => {
+    const { operations } = setup(
+      "gmail",
+      [
+        { messages: [{ id: "message-not-hex", threadId: "deadbeef" }] },
+        { id: "message-not-hex" },
+        { emailAddress: "actual@gmail.com" },
+      ],
+      "wrong-account@gmail.com",
+    );
+    const messages = await operations.listMessages({
+      principalId: "owner",
+      provider: "gmail",
+    } as never);
+
+    expect(messages[0]?.webLink).toBe(
+      "https://mail.google.com/mail/u/?authuser=actual%40gmail.com#all/deadbeef",
+    );
+  });
+
+  it("retains Gmail rows and uses an unscoped permalink when profile lookup fails", async () => {
+    const { operations } = setup("gmail", [
+      { messages: [{ id: "message-not-hex", threadId: "deadbeef" }] },
+      { id: "message-not-hex", payload: { headers: [] } },
+      new Response(null, { status: 502 }),
+    ]);
+    const messages = await operations.listMessages({
+      principalId: "owner",
+      provider: "gmail",
+    } as never);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "message-not-hex",
+      webLink: "https://mail.google.com/mail/u/#all/deadbeef",
+    });
   });
   it("uses Outlook inbox ordering and exposes native links", async () => {
     const { operations, paths } = setup("outlook", [
@@ -137,7 +184,9 @@ describe("Gmail browser permalinks", () => {
     expect(
       normalizeGmailMessage({ id: "a1b2" }, "member@gmail.com/evil")?.webLink,
     ).toBeNull();
-    expect(normalizeGmailMessage({ id: "a1b2" })?.webLink).toBeNull();
+    expect(normalizeGmailMessage({ id: "a1b2" })?.webLink).toBe(
+      "https://mail.google.com/mail/u/#all/a1b2",
+    );
   });
 });
 
@@ -168,12 +217,12 @@ it("keeps failed Gmail hydration rows and bounds provider metadata concurrency",
     nango,
   ).listMessages({ principalId: "owner", provider: "gmail" });
   expect(messages).toHaveLength(25);
-  expect(reads).toBe(25);
+  expect(reads).toBe(26);
   expect(maximum).toBeLessThanOrEqual(4);
   expect(messages[0]).toMatchObject({
     id: "0",
     subject: null,
     receivedAt: null,
-    webLink: null,
+    webLink: "https://mail.google.com/mail/u/#all/0",
   });
 });

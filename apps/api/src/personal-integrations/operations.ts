@@ -4,6 +4,8 @@ import {
   type SendPersonalMailInput,
 } from "@savia/studio-shared/mail-contracts";
 import {
+  credibleGmailAccountAddress,
+  gmailMessageLink,
   normalizeGmailMessage,
   normalizeOutlookMessage,
 } from "./mail-metadata";
@@ -875,13 +877,13 @@ export class PersonalIntegrationOperations {
     const rows = (Array.isArray(payload?.messages) ? payload.messages : [])
       .slice(0, 25)
       .flatMap((item) => {
-        const message = normalizeGmailMessage(
-          item,
-          connection.externalAccountLabel,
-        );
-        return message ? [message] : [];
+        const message = normalizeGmailMessage(item);
+        return message ? [{ message, linkPayload: item }] : [];
       });
-    const messages: PersonalMessage[] = [];
+    const messages: Array<{
+      message: PersonalMessage;
+      linkPayload: unknown;
+    }> = [];
     for (let offset = 0; offset < rows.length; offset += 4) {
       messages.push(
         ...(await Promise.all(
@@ -892,16 +894,13 @@ export class PersonalIntegrationOperations {
               query.append("metadataHeaders", "From");
               const detail = await this.nango.proxy({
                 method: "GET",
-                path: `/gmail/v1/users/me/messages/${encodeURIComponent(row.id)}?${query}`,
+                path: `/gmail/v1/users/me/messages/${encodeURIComponent(row.message.id)}?${query}`,
                 connection,
               });
               if (!detail.ok) return row;
               const detailPayload = await detail.json();
-              const message = normalizeGmailMessage(
-                detailPayload,
-                connection.externalAccountLabel,
-              );
-              if (message?.id !== row.id) return row;
+              const message = normalizeGmailMessage(detailPayload);
+              if (message?.id !== row.message.id) return row;
               const detailItem =
                 detailPayload &&
                 typeof detailPayload === "object" &&
@@ -912,13 +911,15 @@ export class PersonalIntegrationOperations {
                 typeof detailItem.threadId === "string" &&
                 /^[a-f0-9]+$/i.test(detailItem.threadId);
               return {
-                ...row,
-                subject: message.subject ?? row.subject,
-                sender: message.sender ?? row.sender,
-                receivedAt: message.receivedAt ?? row.receivedAt,
-                webLink: detailHasThreadId
-                  ? (message.webLink ?? row.webLink)
-                  : (row.webLink ?? message.webLink),
+                message: {
+                  ...row.message,
+                  subject: message.subject ?? row.message.subject,
+                  sender: message.sender ?? row.message.sender,
+                  receivedAt: message.receivedAt ?? row.message.receivedAt,
+                },
+                linkPayload: detailHasThreadId
+                  ? detailPayload
+                  : row.linkPayload,
               };
             } catch {
               return row;
@@ -926,6 +927,26 @@ export class PersonalIntegrationOperations {
           }),
         )),
       );
+    }
+    let profileAddress: string | null = null;
+    try {
+      const profile = await this.nango.proxy({
+        method: "GET",
+        path: "/gmail/v1/users/me/profile",
+        connection,
+      });
+      if (profile.ok) {
+        const profilePayload = await profile.json().catch(() => undefined);
+        profileAddress = credibleGmailAccountAddress(
+          profilePayload &&
+            typeof profilePayload === "object" &&
+            !Array.isArray(profilePayload)
+            ? (profilePayload as Record<string, unknown>).emailAddress
+            : undefined,
+        );
+      }
+    } catch {
+      // Profile metadata is only used to scope links; message rows remain useful without it.
     }
     const nextPageToken = payload?.nextPageToken;
     if (
@@ -935,7 +956,10 @@ export class PersonalIntegrationOperations {
     )
       next = { provider: "gmail", kind: "page-token", token: nextPageToken };
     return {
-      messages,
+      messages: messages.map(({ message, linkPayload }) => ({
+        ...message,
+        webLink: gmailMessageLink(linkPayload, profileAddress),
+      })),
       nextCursor: next
         ? encodeMailCursor({ ...expectedCursor, continuation: next })
         : null,
