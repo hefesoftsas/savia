@@ -7,6 +7,7 @@ export const personalIntegrationProviderIds = [
   "onedrive_business",
   "jira",
   "linear",
+  "github",
 ] as const;
 
 export const personalIntegrationConnectionStatuses = [
@@ -95,7 +96,9 @@ export type PersonalIntegrationNangoClient = {
     rawBody?: string | Uint8Array<ArrayBuffer>;
     contentType?: string;
     redirect?: "manual";
-    upstreamHeaders?: Partial<Record<"if-match" | "prefer", string>>;
+    upstreamHeaders?: Partial<
+      Record<"if-match" | "prefer" | "accept" | "x-github-api-version", string>
+    >;
   }): Promise<Response>;
 };
 

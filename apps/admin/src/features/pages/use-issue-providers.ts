@@ -5,7 +5,7 @@ import type {
   PersonalIntegrationProvider,
 } from "@/api/personal-integrations-client";
 
-export type IssueProvider = "jira" | "linear";
+export type IssueProvider = "jira" | "linear" | "github";
 type Resource<T> = { id: string; attributes: T };
 
 /** Server availability and the current reader's authorization both gate previews. */
@@ -32,7 +32,7 @@ export function useIssueProviders(api: ApiClient): IssueProvider[] {
         ]);
         if (!active || request.signal.aborted) return;
         setProviders(
-          (["jira", "linear"] as const).filter(
+          (["jira", "linear", "github"] as const).filter(
             (provider) =>
               catalog.data.some(
                 (item) =>

@@ -78,6 +78,13 @@ const providerTemplates: readonly ProviderTemplate[] = [
     integrationId: (configuration) =>
       configured(configuration.linearIntegrationId),
   },
+  {
+    id: "github",
+    displayName: "GitHub",
+    capabilities: ["issues:read"],
+    integrationId: (configuration) =>
+      configured(configuration.githubIntegrationId),
+  },
 ];
 
 export function createPersonalIntegrationProviderRegistry(

@@ -112,6 +112,7 @@ describe("personal Nango proxy", () => {
     ["onedrive_personal", "https://graph.microsoft.com"],
     ["jira", "https://api.atlassian.com"],
     ["linear", "https://api.linear.app"],
+    ["github", "https://api.github.com"],
     ["google_drive", null],
   ] as const)(
     "pins only the configured provider API destination for %s",
@@ -149,7 +150,9 @@ describe("personal Nango proxy", () => {
             ? "https://api.atlassian.com"
             : provider === "linear"
               ? "https://api.linear.app"
-              : null,
+              : provider === "github"
+                ? "https://api.github.com"
+                : null,
       );
     },
   );

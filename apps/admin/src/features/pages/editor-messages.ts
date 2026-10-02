@@ -33,6 +33,11 @@ export const editorMessages = {
   ],
   "Jira issue": ["Tarea de Jira", "Jira issue", "Tarefa do Jira"],
   "Linear issue": ["Tarea de Linear", "Linear issue", "Tarefa do Linear"],
+  "GitHub issue or pull request": [
+    "Incidencia o solicitud de cambios de GitHub",
+    "GitHub issue or pull request",
+    "Issue ou pull request do GitHub",
+  ],
   "Jira issue hint": [
     "Pega el enlace de una tarea de Jira conectada.",
     "Paste a link to an issue from a connected Jira site.",
@@ -42,6 +47,11 @@ export const editorMessages = {
     "Pega el enlace de una tarea de Linear conectada.",
     "Paste a link to an issue from a connected Linear workspace.",
     "Cole o link de uma tarefa de um Linear conectado.",
+  ],
+  "GitHub issue hint": [
+    "Pega el enlace de una incidencia o solicitud de cambios de GitHub conectada.",
+    "Paste a link to an issue or pull request from a connected GitHub account.",
+    "Cole o link de uma issue ou pull request de uma conta GitHub conectada.",
   ],
   Code: ["Código", "Code", "Código"],
   "Code language": [
