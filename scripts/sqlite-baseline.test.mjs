@@ -3,6 +3,83 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
 import { sqliteBaseline } from "./sqlite-baseline.mjs";
+
+test("GitHub connection migration preserves existing connections and audits", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec("PRAGMA foreign_keys=ON");
+    const files = readdirSync("packages/db/migrations")
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+    const upgrade = "0017_github_issue_connections.sql";
+    for (const file of files.filter((f) => f < upgrade))
+      db.exec(readFileSync(`packages/db/migrations/${file}`, "utf8"));
+    db.exec(
+      "INSERT INTO identity_principal(id,issuer,subject,email,display_name,created_at,updated_at) VALUES('github-test-user','test','github-test','github@example.test','Test','now','now')",
+    );
+    const insertConnection = db.prepare(
+      "INSERT INTO personal_integration_connections(id,principal_id,provider,nango_connection_id,nango_integration_id,status,created_at,updated_at,jira_privacy_generation) VALUES(?,'github-test-user',?,? ,?,'connected','now','now',?)",
+    );
+    insertConnection.run(
+      "jira-existing",
+      "jira",
+      "jira-nango",
+      "jira",
+      "privacy-generation",
+    );
+    db.exec(
+      "INSERT INTO personal_integration_audit_events(id,connection_id,principal_id,provider,event_type,outcome,created_at) VALUES('audit-existing','jira-existing','github-test-user','jira','connect','success','now')",
+    );
+    const connections = db
+      .prepare("SELECT * FROM personal_integration_connections")
+      .all();
+    const audits = db
+      .prepare("SELECT * FROM personal_integration_audit_events")
+      .all();
+    for (const file of files.filter((f) => f >= upgrade))
+      db.exec(readFileSync(`packages/db/migrations/${file}`, "utf8"));
+    assert.deepEqual(
+      db.prepare("SELECT * FROM personal_integration_connections").all(),
+      connections,
+    );
+    assert.deepEqual(
+      db.prepare("SELECT * FROM personal_integration_audit_events").all(),
+      audits,
+    );
+    insertConnection.run(
+      "github-new",
+      "github",
+      "github-nango",
+      "github",
+      null,
+    );
+    assert.throws(
+      () =>
+        insertConnection.run(
+          "github-duplicate",
+          "github",
+          "other-nango",
+          "github",
+          null,
+        ),
+      /UNIQUE/,
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.throws(
+      () =>
+        insertConnection.run(
+          "unknown-new",
+          "unknown",
+          "unknown-nango",
+          "unknown",
+          null,
+        ),
+      /CHECK/,
+    );
+  } finally {
+    db.close();
+  }
+});
 for (const directory of [
   "packages/db/migrations",
   "packages/studio-server/migrations",

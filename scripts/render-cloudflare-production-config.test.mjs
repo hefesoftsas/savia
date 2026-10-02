@@ -17,6 +17,38 @@ async function config(outputRoot, worker) {
   );
 }
 
+test("renders GitHub only when its integration ID is configured", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "savia-github-config-"));
+  try {
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      githubIntegrationId: " github-read ",
+      outputRoot,
+    });
+    assert.equal(
+      (await config(outputRoot, "api")).vars.NANGO_GITHUB_INTEGRATION_ID,
+      "github-read",
+    );
+    assert.equal(
+      "NANGO_GITHUB_INTEGRATION_ID" in
+        ((await config(outputRoot, "admin")).vars ?? {}),
+      false,
+    );
+    await renderProductionConfigs({
+      authD1Id: "auth-d1-id",
+      domainD1Id: "domain-d1-id",
+      outputRoot,
+    });
+    assert.equal(
+      "NANGO_GITHUB_INTEGRATION_ID" in (await config(outputRoot, "api")).vars,
+      false,
+    );
+  } finally {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});
+
 test("writes only the supported production workers and retains their runtime settings", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "savia-cloudflare-config-"));
 

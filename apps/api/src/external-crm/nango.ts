@@ -23,6 +23,7 @@ export type NangoConfiguration = {
   jiraIntegrationId?: string;
   jiraReportingConnectionId?: string;
   linearIntegrationId?: string;
+  githubIntegrationId?: string;
 };
 
 type ConfiguredNango = {

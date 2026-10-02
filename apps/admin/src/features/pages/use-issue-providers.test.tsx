@@ -6,13 +6,18 @@ import { useIssueProviders } from "./use-issue-providers";
 function fixture() {
   let status = "connected";
   let availability = "enabled";
+  let githubAvailability = "enabled";
   const get = vi.fn(async (path: string) => ({
     data: path.endsWith("/providers")
       ? [
           { id: "jira", attributes: { availability } },
           { id: "linear", attributes: { availability: "enabled" } },
+          { id: "github", attributes: { availability: githubAvailability } },
         ]
-      : [{ id: "connection-1", attributes: { provider: "jira", status } }],
+      : [
+          { id: "connection-1", attributes: { provider: "jira", status } },
+          { id: "connection-2", attributes: { provider: "github", status } },
+        ],
   }));
   return {
     api: { get } as unknown as ApiClient,
@@ -23,6 +28,9 @@ function fixture() {
     setAvailability: (value: string) => {
       availability = value;
     },
+    setGithubAvailability: (value: string) => {
+      githubAvailability = value;
+    },
   };
 }
 
@@ -31,7 +39,7 @@ describe("page issue provider visibility", () => {
     const source = fixture();
     const { result } = renderHook(() => useIssueProviders(source.api));
     expect(result.current).toEqual([]);
-    await waitFor(() => expect(result.current).toEqual(["jira"]));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
   });
 
   it.each(["pending", "reconnect_required", "disconnected", "failed"])(
@@ -45,18 +53,26 @@ describe("page issue provider visibility", () => {
     },
   );
 
-  it("hides a previously connected provider if its server configuration is unavailable", async () => {
+  it("hides Jira but keeps GitHub when only Jira server configuration is unavailable", async () => {
     const source = fixture();
     source.setAvailability("unavailable");
     const { result } = renderHook(() => useIssueProviders(source.api));
     await act(async () => {});
-    expect(result.current).toEqual([]);
+    expect(result.current).toEqual(["github"]);
+  });
+
+  it("hides GitHub if its server configuration is unavailable", async () => {
+    const source = fixture();
+    source.setGithubAvailability("unavailable");
+    const { result } = renderHook(() => useIssueProviders(source.api));
+    await act(async () => {});
+    expect(result.current).toEqual(["jira"]);
   });
 
   it("rechecks after disconnect and on returning to the app", async () => {
     const source = fixture();
     const { result } = renderHook(() => useIssueProviders(source.api));
-    await waitFor(() => expect(result.current).toEqual(["jira"]));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
     source.setStatus("disconnected");
     await act(async () =>
       window.dispatchEvent(new Event("savia:personal-integrations-changed")),
@@ -64,13 +80,13 @@ describe("page issue provider visibility", () => {
     expect(result.current).toEqual([]);
     source.setStatus("connected");
     await act(async () => window.dispatchEvent(new Event("focus")));
-    expect(result.current).toEqual(["jira"]);
+    expect(result.current).toEqual(["jira", "github"]);
   });
 
   it("fails closed when refreshing connections fails", async () => {
     const source = fixture();
     const { result } = renderHook(() => useIssueProviders(source.api));
-    await waitFor(() => expect(result.current).toEqual(["jira"]));
+    await waitFor(() => expect(result.current).toEqual(["jira", "github"]));
     source.get.mockRejectedValue(new Error("Unavailable"));
     await act(async () => window.dispatchEvent(new Event("focus")));
     expect(result.current).toEqual([]);

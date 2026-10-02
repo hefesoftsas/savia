@@ -47,12 +47,14 @@ export type PersonalEvent = {
 };
 
 export type PersonalIssuePreview = {
-  provider: "jira" | "linear";
+  provider: "jira" | "linear" | "github";
   url: string;
   identifier: string;
   title: string;
   status: string | null;
   assignee: string | null;
+  repository?: string;
+  kind?: "issue" | "pull_request";
 };
 
 export type PersonalIntegrationActionResult = {
@@ -860,7 +862,85 @@ export class PersonalIntegrationOperations {
     );
     if (issueLink.provider === "jira")
       return this.previewJiraIssue(connection, issueLink);
+    if (issueLink.provider === "github")
+      return this.previewGitHubIssue(connection, issueLink);
     return this.previewLinearIssue(connection, issueLink);
+  }
+
+  private async previewGitHubIssue(
+    connection: ActivePersonalIntegrationConnection,
+    issueLink: NonNullable<ReturnType<typeof parseIssueLink>> & {
+      provider: "github";
+    },
+  ): Promise<PersonalIssuePreview> {
+    const pathKind = issueLink.kind === "pull_request" ? "pulls" : "issues";
+    const response = await this.nango.proxy({
+      method: "GET",
+      path: `/repos/${encodeURIComponent(issueLink.owner)}/${encodeURIComponent(issueLink.repository)}/${pathKind}/${encodeURIComponent(issueLink.number)}`,
+      connection,
+      upstreamHeaders: {
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+      },
+    });
+    if (response.status === 401 || response.status === 403)
+      throw new PersonalIntegrationAccessError();
+    if (!response.ok) throw new PersonalIntegrationUpstreamError();
+    const payload = await response.json().catch(() => undefined);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new PersonalIntegrationUpstreamError();
+    const values = payload as Record<string, unknown>;
+    const resolvedLink =
+      typeof values.html_url === "string"
+        ? parseIssueLink(values.html_url)
+        : null;
+    if (
+      typeof values.number !== "number" ||
+      values.number !== Number(issueLink.number) ||
+      resolvedLink?.provider !== "github" ||
+      resolvedLink.kind !== issueLink.kind ||
+      resolvedLink.number !== issueLink.number ||
+      resolvedLink.owner.toLowerCase() !== issueLink.owner.toLowerCase() ||
+      resolvedLink.repository.toLowerCase() !==
+        issueLink.repository.toLowerCase()
+    )
+      throw new PersonalIntegrationUpstreamError();
+
+    const state = stringValue(values.state)?.toLowerCase();
+    if (state !== "open" && state !== "closed")
+      throw new PersonalIntegrationUpstreamError();
+    const status =
+      issueLink.kind === "pull_request" &&
+      typeof values.merged_at === "string" &&
+      values.merged_at.length > 0
+        ? "merged"
+        : state;
+    const assignee = values.assignee;
+    const repositoryValue =
+      issueLink.kind === "pull_request" ? values.base : values.repository;
+    const repository = nestedIssueText(
+      repositoryValue && typeof repositoryValue === "object"
+        ? ((repositoryValue as Record<string, unknown>).repo ?? repositoryValue)
+        : repositoryValue,
+      "full_name",
+      255,
+    );
+    if (
+      repository &&
+      repository.toLowerCase() !==
+        `${issueLink.owner}/${issueLink.repository}`.toLowerCase()
+    )
+      throw new PersonalIntegrationUpstreamError();
+    return {
+      provider: "github",
+      url: issueLink.url,
+      identifier: issueLink.identifier,
+      title: requiredIssueText(values.title, 2000),
+      status,
+      assignee: nestedIssueText(assignee, "login", 255),
+      repository: `${issueLink.owner}/${issueLink.repository}`,
+      kind: issueLink.kind,
+    };
   }
 
   private async previewJiraIssue(

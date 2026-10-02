@@ -51,6 +51,7 @@ const providerDocumentSchema = z.object({
     "onedrive_business",
     "jira",
     "linear",
+    "github",
   ]),
   kind: z.literal("personal-integration-provider"),
   attributes: z.object({
@@ -93,6 +94,7 @@ const connectionAttributesSchema = z.object({
     "onedrive_business",
     "jira",
     "linear",
+    "github",
   ]),
   status: z.enum([
     "pending",
@@ -263,21 +265,23 @@ const fileSearchRoute = createRoute({
 });
 
 const issuePreviewSchema = z.object({
-  provider: z.enum(["jira", "linear"]),
+  provider: z.enum(["jira", "linear", "github"]),
   url: z.string().url().max(2048),
   identifier: z.string(),
   title: z.string(),
   status: z.string().nullable(),
   assignee: z.string().nullable(),
+  repository: z.string().optional(),
+  kind: z.enum(["issue", "pull_request"]).optional(),
 });
 
 const issuePreviewRoute = createRoute({
   method: "post",
   path: "/v1/personal-integrations/issue-preview",
   tags: ["Personal integrations"],
-  summary: "Preview a linked issue from a caller-owned Jira or Linear account",
+  summary: "Preview a linked issue from a caller-owned integration",
   description:
-    "Parses supported Jira Cloud and Linear issue links, then reads safe summary metadata through the caller's active personal connection.",
+    "Parses supported Jira Cloud, Linear, and GitHub issue or pull request links, then reads safe summary metadata through the caller's active personal connection.",
   security: [{ oauth2: ["savia.api.read"] }],
   request: {
     body: {

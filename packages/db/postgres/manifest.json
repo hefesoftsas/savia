@@ -65,6 +65,10 @@
     {
       "filename": "0016_admin_session_origins.sql",
       "sha256": "e6dcf9b01ce84f1a42ad85f5b4970804e5ea8be6f19bdb5243080e6bce27fdcd"
+    },
+    {
+      "filename": "0017_github_issue_connections.sql",
+      "sha256": "202711425facd93253847e2a8ebf9c1bf36190cf3224791f6ca381e833190bcc"
     }
   ],
   "sqliteOnlyDerivedTables": [

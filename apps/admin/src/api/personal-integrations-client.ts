@@ -14,7 +14,8 @@ export type PersonalIntegrationProviderId =
   | "onedrive_personal"
   | "onedrive_business"
   | "jira"
-  | "linear";
+  | "linear"
+  | "github";
 export type PersonalIntegrationAvailability = "enabled" | "unavailable";
 export type PersonalIntegrationConnectionStatus =
   "pending" | "connected" | "reconnect_required" | "disconnected" | "failed";
@@ -53,12 +54,14 @@ export type PersonalCalendarEvent = {
 };
 export type PersonalCalendarProvider = "google_calendar" | "outlook";
 export type PersonalIssuePreview = {
-  provider: "jira" | "linear";
+  provider: "jira" | "linear" | "github";
   url: string;
   identifier: string;
   title: string;
   status: string | null;
   assignee: string | null;
+  repository?: string;
+  kind?: "issue" | "pull_request";
 };
 
 type ProviderDocument = {

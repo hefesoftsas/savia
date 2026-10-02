@@ -66,6 +66,12 @@ const providers = [
     availability: "enabled",
     capabilities: ["issues:read"],
   },
+  {
+    id: "github",
+    displayName: "GitHub",
+    availability: "enabled",
+    capabilities: ["issues:read"],
+  },
 ] as const;
 
 function createServices() {
@@ -218,14 +224,16 @@ describe("PersonalIntegrationsPage", () => {
     }
   });
 
-  it("shows unavailable Jira and Linear without deployment instructions", async () => {
+  it("shows unavailable issue providers without deployment instructions", async () => {
     const services = createServices();
     vi.mocked(services.personalIntegrations.listProviders).mockResolvedValue(
       providers.map((provider) => ({
         ...provider,
         capabilities: [...provider.capabilities],
         availability:
-          provider.id === "jira" || provider.id === "linear"
+          provider.id === "jira" ||
+          provider.id === "linear" ||
+          provider.id === "github"
             ? "unavailable"
             : "enabled",
       })),
@@ -247,10 +255,15 @@ describe("PersonalIntegrationsPage", () => {
         "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
       ),
     ).toBeVisible();
-    expect(screen.getAllByText("Requiere configuración")).toHaveLength(2);
+    expect(
+      screen.getByText(
+        "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.",
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByText("Requiere configuración")).toHaveLength(3);
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(screen.queryByText("Ver configuración")).not.toBeInTheDocument();
   });
 
@@ -295,7 +308,7 @@ describe("PersonalIntegrationsPage", () => {
     expect(screen.getByRole("button", { name: "Desconectar" })).toBeVisible();
   });
 
-  it("keeps all eight integrations visible and offers retry when their status cannot load", async () => {
+  it("keeps all nine integrations visible and offers retry when their status cannot load", async () => {
     const user = userEvent.setup();
     const services = createServices();
     const missingRoute = new ApiClientError(404, "NOT_FOUND", "Not found");
@@ -322,7 +335,7 @@ describe("PersonalIntegrationsPage", () => {
     }
     expect(
       screen.getAllByRole("button", { name: "No disponible" }),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
     expect(
       screen.queryByText("No hay integraciones disponibles."),
     ).not.toBeInTheDocument();
