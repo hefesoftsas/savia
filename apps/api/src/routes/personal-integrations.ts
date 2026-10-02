@@ -46,6 +46,8 @@ const providerDocumentSchema = z.object({
     "outlook",
     "onedrive_personal",
     "onedrive_business",
+    "jira",
+    "linear",
   ]),
   kind: z.literal("personal-integration-provider"),
   attributes: z.object({
@@ -59,7 +61,7 @@ const providerListRoute = createRoute({
   method: "get",
   path: "/v1/personal-integrations/providers",
   tags: ["Personal integrations"],
-  summary: "List personal Google and Microsoft integrations",
+  summary: "List the available personal integrations",
   description:
     "Lists the personal provider registry without returning Nango credentials or integration identifiers.",
   security: [{ oauth2: ["savia.api.read"] }],
@@ -86,6 +88,8 @@ const connectionAttributesSchema = z.object({
     "outlook",
     "onedrive_personal",
     "onedrive_business",
+    "jira",
+    "linear",
   ]),
   status: z.enum([
     "pending",
@@ -252,6 +256,47 @@ const fileSearchRoute = createRoute({
     502: { description: "Provider request failed" },
     503: { description: "Provider or connection unavailable" },
     409: { description: "Connection is not ready" },
+  },
+});
+
+const issuePreviewSchema = z.object({
+  provider: z.enum(["jira", "linear"]),
+  url: z.string().url().max(2048),
+  identifier: z.string(),
+  title: z.string(),
+  status: z.string().nullable(),
+  assignee: z.string().nullable(),
+});
+
+const issuePreviewRoute = createRoute({
+  method: "post",
+  path: "/v1/personal-integrations/issue-preview",
+  tags: ["Personal integrations"],
+  summary: "Preview a linked issue from a caller-owned Jira or Linear account",
+  description:
+    "Parses supported Jira Cloud and Linear issue links, then reads safe summary metadata through the caller's active personal connection.",
+  security: [{ oauth2: ["savia.api.read"] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ url: z.string().trim().min(1).max(2048) }),
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: z.object({ data: issuePreviewSchema }) },
+      },
+      description: "Transient issue preview for the current viewer",
+    },
+    400: { description: "Unsupported issue link" },
+    403: { description: "The connected account cannot access this issue" },
+    502: { description: "Issue provider request failed" },
+    503: { description: "Issue provider connection is unavailable" },
   },
 });
 
@@ -799,6 +844,31 @@ export function registerPersonalIntegrationRoutes(
         query: query.query,
       });
       return context.json({ data: files }, 200);
+    } catch (exception) {
+      const response = personalErrorResponse(exception);
+      if (!response) throw exception;
+      return context.json(response.body, response.status);
+    }
+  });
+
+  app.openapi(issuePreviewRoute, async (context) => {
+    const actor = actorFromContext(context);
+    context.header("Cache-Control", "no-store");
+    if (!operations)
+      return context.json(
+        errorBody(
+          "PERSONAL_INTEGRATION_UNAVAILABLE",
+          "The requested personal integration is unavailable",
+        ),
+        503,
+      );
+    try {
+      const { url } = context.req.valid("json");
+      const preview = await operations.previewIssue({
+        principalId: actor.principal.id,
+        url,
+      });
+      return context.json({ data: preview }, 200);
     } catch (exception) {
       const response = personalErrorResponse(exception);
       if (!response) throw exception;

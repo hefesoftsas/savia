@@ -10,6 +10,7 @@ export const sidebarNavigationItemIds = [
   "dashboard",
   "studio",
   "my-day",
+  "pages",
   "integrations",
   "provider-credentials",
   "assistant-configuration",
@@ -190,7 +191,7 @@ export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
     ...normalizeSidebarNavigationLayout({
       version: 1,
       sections: {
-        operation: ["my-day", "dashboard", "studio", "domain-reports"],
+        operation: ["my-day", "pages", "dashboard", "studio", "domain-reports"],
         productivity: [
           "page-administrator",
           "domain-sources",

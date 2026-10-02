@@ -57,6 +57,8 @@ export async function prepareAppReload(): Promise<void> {
     pathname === "/register" ||
     pathname === "/public/forms" ||
     pathname.startsWith("/public/forms/") ||
+    pathname === "/public/pages" ||
+    pathname.startsWith("/public/pages/") ||
     pathname === "/office" ||
     pathname.startsWith("/office/") ||
     !("serviceWorker" in navigator)

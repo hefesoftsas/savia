@@ -60,8 +60,13 @@ describe("personal Nango proxy", () => {
 
     expect(response.ok).toBe(true);
   });
-  it.each(["onedrive_personal", "google_drive"] as const)(
-    "pins the Graph destination only for OneDrive Personal (%s)",
+  it.each([
+    ["onedrive_personal", "https://graph.microsoft.com"],
+    ["jira", "https://api.atlassian.com"],
+    ["linear", "https://api.linear.app"],
+    ["google_drive", null],
+  ] as const)(
+    "pins only the configured provider API destination for %s",
     async (provider) => {
       const fetcher = vi.fn(async () => Response.json({ value: [] }));
       const client = createPersonalIntegrationNangoClient(
@@ -90,8 +95,44 @@ describe("personal Nango proxy", () => {
         fetcher.mock.calls[0] as unknown as [unknown, RequestInit]
       )[1];
       expect(new Headers(init.headers).get("base-url-override")).toBe(
-        provider === "onedrive_personal" ? "https://graph.microsoft.com" : null,
+        provider === "onedrive_personal"
+          ? "https://graph.microsoft.com"
+          : provider === "jira"
+            ? "https://api.atlassian.com"
+            : provider === "linear"
+              ? "https://api.linear.app"
+              : null,
       );
     },
   );
+
+  it("rejects proxy paths that could escape the configured Nango endpoint", async () => {
+    const fetcher = vi.fn(async () => Response.json({}));
+    const client = createPersonalIntegrationNangoClient(
+      { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+      fetcher,
+    );
+
+    await expect(
+      client.proxy({
+        method: "GET",
+        path: "//attacker.example.test/api",
+        connection: {
+          id: "connection",
+          principalId: "principal",
+          provider: "jira",
+          status: "connected",
+          externalAccountLabel: null,
+          externalAccountId: null,
+          scopes: [],
+          lastValidatedAt: null,
+          createdAt: "2026-01-01",
+          updatedAt: "2026-01-01",
+          nangoConnectionId: "nango-connection",
+          nangoIntegrationId: "jira-integration",
+        },
+      }),
+    ).rejects.toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

@@ -7,6 +7,8 @@ import GoogleDrive from "@thesvg/react/google-drive";
 import Gmail from "@thesvg/react/gmail";
 import MicrosoftOnedrive from "@thesvg/react/microsoft-onedrive";
 import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
+import Jira from "@thesvg/react/jira";
+import Linear from "@thesvg/react/linear";
 import { CircleAlert } from "lucide-react";
 import type { AppServices } from "@/app-services";
 import type {
@@ -81,6 +83,18 @@ const unavailableProviders: PersonalIntegrationProvider[] = [
     availability: "unavailable",
     capabilities: [],
   },
+  {
+    id: "jira",
+    displayName: "Jira Cloud",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "linear",
+    displayName: "Linear",
+    availability: "unavailable",
+    capabilities: [],
+  },
 ];
 
 function eventType(event: unknown): string | undefined {
@@ -112,6 +126,8 @@ function providerIcon(provider: PersonalIntegrationProviderId) {
     outlook: MicrosoftOutlook,
     onedrive_personal: MicrosoftOnedrive,
     onedrive_business: MicrosoftOnedrive,
+    jira: Jira,
+    linear: Linear,
   }[provider];
 }
 
@@ -123,21 +139,38 @@ function providerHint(
   provider: PersonalIntegrationProvider,
   connection: PersonalIntegrationConnection | undefined,
 ): string {
-  if (provider.availability === "unavailable") return "";
+  if (provider.availability === "unavailable") {
+    if (provider.id === "jira")
+      return t(
+        "Un administrador debe habilitar Jira en Nango. Después podrás conectar tu cuenta aquí.",
+      );
+    if (provider.id === "linear")
+      return t(
+        "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
+      );
+    return "";
+  }
+  const issueDescription =
+    provider.id === "jira"
+      ? t("Conecta Jira Cloud para previsualizar incidencias en Páginas.")
+      : provider.id === "linear"
+        ? t("Conecta Linear para previsualizar incidencias en Páginas.")
+        : undefined;
   if (connection?.status === "connected")
     return connection.externalAccountLabel
       ? t("Conectado como %{label}.", {
           label: connection.externalAccountLabel,
         })
-      : t("Conexión autorizada y lista para usarse.");
+      : (issueDescription ?? t("Conexión autorizada y lista para usarse."));
   if (connection?.status === "reconnect_required")
     return t("La sesión expiró. Vuelve a conectar para continuar usándola.");
   if (connection?.status === "failed")
     return t("La última sincronización falló. Intenta reconectar la cuenta.");
   if (connection?.status === "pending")
     return t("Finalizando la autorización en segundo plano…");
-  return t(
-    "Requiere tu autorización antes de que Savia pueda interactuar con ella.",
+  return (
+    issueDescription ??
+    t("Requiere tu autorización antes de que Savia pueda interactuar con ella.")
   );
 }
 
@@ -158,6 +191,18 @@ function connectionStatusLabel(
     default:
       return t("Desconectada");
   }
+}
+
+function providerStatusLabel(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  provider: PersonalIntegrationProvider,
+  connection: PersonalIntegrationConnection | undefined,
+): string | undefined {
+  if (provider.availability === "unavailable")
+    return provider.id === "jira" || provider.id === "linear"
+      ? t("Requiere configuración")
+      : undefined;
+  return connection ? connectionStatusLabel(t, connection) : undefined;
 }
 
 function connectionStatusTone(
@@ -383,6 +428,13 @@ export function PersonalIntegrationsPage({
           provider.id === "outlook" || provider.id.startsWith("onedrive"),
       ),
     },
+    {
+      id: "issue-tracker-integrations",
+      title: t("Gestión de incidencias"),
+      providers: providers.filter(
+        (provider) => provider.id === "jira" || provider.id === "linear",
+      ),
+    },
   ];
 
   return (
@@ -448,25 +500,30 @@ export function PersonalIntegrationsPage({
                     const enabled = provider.availability === "enabled";
                     const connected = connection?.status === "connected";
                     const showStatus =
-                      !!connection &&
-                      (connected ||
-                        connection.status === "reconnect_required" ||
-                        connection.status === "failed" ||
-                        connection.status === "pending");
+                      provider.availability === "unavailable" &&
+                      (provider.id === "jira" || provider.id === "linear")
+                        ? true
+                        : !!connection &&
+                          (connected ||
+                            connection.status === "reconnect_required" ||
+                            connection.status === "failed" ||
+                            connection.status === "pending");
                     return (
                       <IntegrationProviderRow
                         key={provider.id}
                         name={provider.displayName}
                         hint={providerHint(t, provider, connection)}
-                        statusLabel={
-                          connection
-                            ? connectionStatusLabel(t, connection)
-                            : undefined
-                        }
+                        statusLabel={providerStatusLabel(
+                          t,
+                          provider,
+                          connection,
+                        )}
                         statusTone={
-                          connection
-                            ? connectionStatusTone(connection)
-                            : "neutral"
+                          provider.availability === "unavailable"
+                            ? "warning"
+                            : connection
+                              ? connectionStatusTone(connection)
+                              : "neutral"
                         }
                         showStatus={showStatus}
                         actionLabel={actionLabel(t, provider, connection)}

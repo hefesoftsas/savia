@@ -1,3 +1,5 @@
+import { registerPagesRoutes } from "./routes/pages";
+import { registerPublicPagesRoutes } from "./pages/public-routes";
 import { registerEmailRegistrationRoutes } from "./tenant-registration/provisioning";
 import {
   registerTenantRegistrationSettingsRoutes,
@@ -220,6 +222,8 @@ export function createApp(
   registerTenantWorkspaceRoutes(app, db);
   registerTenantUserCapacityRoutes(app, db);
   registerPersonalIntegrationRoutes(app, db, personalIntegrations);
+  registerPagesRoutes(app, db, documents);
+  registerPublicPagesRoutes(app, db, documents, publicForms);
   registerUserPreferenceRoutes(app, db);
   const notificationAuth = authenticationMiddleware(
     db,

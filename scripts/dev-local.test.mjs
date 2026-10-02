@@ -23,7 +23,7 @@ async function localDevelopmentCommands({
   await mkdir(secrets);
   await writeFile(
     join(secrets, "assistant-api.dev.env"),
-    "OPENROUTER_API_KEY=openrouter-test-key\nASSISTANT_SETTINGS_ENCRYPTION_KEY=base64-test-key\nOPENROUTER_MODEL=test-model\nNANGO_BASE_URL=https://nango.test\nNANGO_CONNECT_URL=https://connect.nango.test\nNANGO_API_KEY=nango-test-key\nNANGO_HUBSPOT_INTEGRATION_ID=hubspot\nNANGO_GOOGLE_DRIVE_INTEGRATION_ID=google-drive\nNANGO_GMAIL_INTEGRATION_ID=gmail\nNANGO_GOOGLE_CALENDAR_INTEGRATION_ID=google-calendar\nNANGO_OUTLOOK_INTEGRATION_ID=outlook\nNANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID=onedrive-personal\nNANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID=onedrive-business\n",
+    "OPENROUTER_API_KEY=openrouter-test-key\nASSISTANT_SETTINGS_ENCRYPTION_KEY=base64-test-key\nOPENROUTER_MODEL=test-model\nNANGO_BASE_URL=https://nango.test\nNANGO_CONNECT_URL=https://connect.nango.test\nNANGO_API_KEY=nango-test-key\nNANGO_HUBSPOT_INTEGRATION_ID=hubspot\nNANGO_GOOGLE_DRIVE_INTEGRATION_ID=google-drive\nNANGO_GMAIL_INTEGRATION_ID=gmail\nNANGO_GOOGLE_CALENDAR_INTEGRATION_ID=google-calendar\nNANGO_OUTLOOK_INTEGRATION_ID=outlook\nNANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID=onedrive-personal\nNANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID=onedrive-business\nNANGO_JIRA_INTEGRATION_ID=jira\nNANGO_LINEAR_INTEGRATION_ID=linear\n",
   );
   await writeFile(
     join(secrets, "auth.dev.env"),

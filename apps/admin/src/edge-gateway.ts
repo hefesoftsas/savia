@@ -118,7 +118,9 @@ export async function gatewayFetch(
     if (
       pathname === "/register" ||
       pathname === "/public/forms" ||
-      pathname.startsWith("/public/forms/")
+      pathname.startsWith("/public/forms/") ||
+      pathname === "/public/pages" ||
+      pathname.startsWith("/public/pages/")
     ) {
       const publicPage = new Response(response.body, response);
       publicPage.headers.set("Cache-Control", "no-store");

@@ -45,6 +45,8 @@ describe("personal Nango integration configuration", () => {
       NANGO_OUTLOOK_INTEGRATION_ID: "outlook-production",
       NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID: "onedrive-personal-production",
       NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID: "onedrive-business-production",
+      NANGO_JIRA_INTEGRATION_ID: "jira-production",
+      NANGO_LINEAR_INTEGRATION_ID: "linear-production",
     } as Record<string, string>);
 
     expect(configuration).toMatchObject({
@@ -54,6 +56,8 @@ describe("personal Nango integration configuration", () => {
       outlookIntegrationId: "outlook-production",
       oneDrivePersonalIntegrationId: "onedrive-personal-production",
       oneDriveBusinessIntegrationId: "onedrive-business-production",
+      jiraIntegrationId: "jira-production",
+      linearIntegrationId: "linear-production",
     });
   });
 });

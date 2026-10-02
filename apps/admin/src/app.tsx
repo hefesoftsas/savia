@@ -51,6 +51,12 @@ const PersonalIntegrationsPage = lazy(async () => {
     await import("@/features/personal-integrations/personal-integrations-page");
   return { default: module.PersonalIntegrationsPage };
 });
+const PagesPage = lazy(() =>
+  import("@/features/pages/pages-page").then((module) => ({
+    default: module.PagesPage,
+  })),
+);
+
 const MyDayPage = lazy(async () => {
   const module = await import("@/features/personal-integrations/my-day-page");
   return { default: module.MyDayPage };
@@ -317,6 +323,14 @@ function AppContent({ services }: { services?: AppServices } = {}) {
               }
             />
             <Route path="/" element={<Navigate to="/my-day" replace />} />
+            <Route
+              path="/pages/:pageId?"
+              element={
+                <Suspense fallback={<RouteLoading />}>
+                  <PagesPage services={appServices} />
+                </Suspense>
+              }
+            />
             <Route
               path="/studio"
               element={<StudioRoute services={appServices} />}

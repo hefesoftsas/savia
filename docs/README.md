@@ -85,6 +85,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Tenant user capacity](guides/tenant-user-capacity.md)
 
 - [Documents and deliveries](guides/document-delivery.md): saved attachments, OneDrive copies and confirmed Outlook sends.
+- [Personal pages](guides/pages.md): private and shared documents, collection views, history and attachments.
+- [Jira and Linear issue links](guides/issue-links.md): read-only personal connections and safe transient previews.
 
 - [Initial database baseline](guides/database-initial-baseline.md) — fresh installation and pre-production reset.
 

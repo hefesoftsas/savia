@@ -1,0 +1,421 @@
+.page-editor-shell {
+  position: relative;
+}
+
+.page-editor-gutter-trigger {
+  position: absolute;
+  z-index: 2;
+  left: -2.4rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--muted-foreground);
+  opacity: 0.45;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.page-editor-gutter-trigger:hover,
+.page-editor-gutter-trigger:focus-visible {
+  color: var(--foreground);
+  opacity: 1;
+  background: var(--muted);
+}
+
+.page-editor-selection-tools {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 5px 18px rgb(0 0 0 / 12%);
+  transform: translateX(-50%);
+}
+
+.page-editor-selection-tools button {
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+
+.page-editor-selection-tools button:hover,
+.page-editor-selection-tools button:focus-visible {
+  color: var(--foreground);
+}
+
+.page-editor-slash-anchor {
+  position: fixed;
+  z-index: 10;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.page-editor-slash-menu {
+  display: grid;
+  width: min(19rem, calc(100vw - 1.5rem));
+  max-height: min(24rem, calc(100vh - 2rem));
+  gap: 0.25rem;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+.page-editor-slash-label {
+  padding: 0.125rem 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.page-editor-command-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-inline: 0.5rem;
+  color: var(--muted-foreground);
+}
+
+.page-editor-command-search svg {
+  position: absolute;
+  left: 0.75rem;
+  z-index: 1;
+  width: 1rem;
+  height: 1rem;
+}
+
+.page-editor-command-search input {
+  height: 2.25rem;
+  padding-left: 2rem;
+  border: 0;
+  box-shadow: none;
+}
+
+.page-editor-command-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.page-editor-command-list {
+  display: grid;
+  gap: 0.125rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.page-editor-command-list > button {
+  min-height: 2.25rem;
+  justify-content: flex-start;
+  gap: 0.625rem;
+  padding-inline: 0.625rem;
+}
+
+.page-editor-command-list > button svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+
+.page-editor-empty-commands {
+  margin: 0;
+  padding: 0.75rem 0.625rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.page-issue-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 640px) {
+  .page-editor-gutter-trigger {
+    left: -0.15rem;
+    opacity: 0.7;
+  }
+
+  .page-editor-content {
+    padding-inline-start: 2rem;
+  }
+}
+
+.page-editor-content {
+  counter-reset: page-number;
+}
+
+.page-code-block {
+  position: relative;
+  margin: 1rem 0;
+  padding: 2.75rem 1rem 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--muted) 42%, var(--background));
+  color: var(--foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  tab-size: 2;
+}
+
+.page-code-block code {
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.page-editor-content :not(pre) > code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.2rem;
+  background: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.page-code-toolbar {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-family: var(--font-sans, inherit);
+  font-size: 0.75rem;
+}
+
+.page-code-toolbar > span {
+  margin-right: auto;
+}
+
+.page-code-toolbar select {
+  max-width: 10rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.page-code-toolbar select:focus-visible,
+.page-code-toolbar button:focus-visible,
+.page-toggle-trigger:focus-visible,
+.page-table-controls button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.page-todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-block: 0.4rem;
+}
+
+.page-todo input {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
+  accent-color: var(--primary);
+}
+
+.page-todo-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.page-todo-text.is-checked {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.page-numbered {
+  counter-set: page-number 1;
+}
+
+.page-numbered + .page-numbered {
+  counter-set: none;
+  counter-increment: page-number;
+}
+
+.page-numbered::before {
+  display: inline-block;
+  width: 1.8rem;
+  color: var(--muted-foreground);
+  content: counter(page-number) ".";
+}
+
+.page-callout {
+  margin-block: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--muted) 65%, var(--background));
+}
+
+.page-divider {
+  margin-block: 1rem;
+  padding-block: 0.3rem;
+}
+
+.page-divider hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.page-toggle {
+  position: relative;
+  margin-block: 0.35rem;
+  padding-left: 1.75rem;
+}
+
+.page-toggle-trigger {
+  position: absolute;
+  top: 0.15rem;
+  left: 0;
+  display: grid;
+  width: 1.4rem;
+  height: 1.4rem;
+  place-items: center;
+  border-radius: 0.25rem;
+  color: var(--muted-foreground);
+}
+
+.page-toggle-trigger:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.page-toggle-trigger svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.page-toggle.is-collapsed > .page-toggle-content > :not(:first-child) {
+  display: none;
+}
+
+.page-table-block {
+  margin-block: 1rem;
+  overflow-x: auto;
+}
+
+.page-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.page-table-controls button {
+  min-height: 1.8rem;
+  gap: 0.3rem;
+  padding-inline: 0.45rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.page-table-controls button svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.page-table-block table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.page-table-block td {
+  min-width: 8rem;
+  overflow-wrap: anywhere;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.page-table-block td p {
+  margin: 0;
+}
+
+.page-editor-block-controls {
+  position: absolute;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  padding: 3px;
+  margin-top: -6px;
+  transform: translateY(-100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 10%);
+}
+.page-editor-block-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+.page-editor-block-controls button[draggable] {
+  cursor: grab;
+}
+.page-editor-block-controls button[draggable]:active {
+  cursor: grabbing;
+}
+.page-editor-block-controls button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.page-editor-block-controls button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.page-editor-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Bridge the gap so the actions stay reachable from their highlighted block. */
+.page-editor-block-controls::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 8px;
+}
+
+/* Follow the same block as the toolbar, including while its actions have focus. */
+.page-editor-content > [data-block-highlighted="true"] {
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--primary) 6%, var(--background));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 6%, var(--background));
+}

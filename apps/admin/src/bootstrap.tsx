@@ -29,6 +29,10 @@ const PublicForm = lazy(async () => {
     await import("./features/public-forms/public-form-page");
   return { default: PublicFormPage };
 });
+const PublicPageRoute = lazy(async () => {
+  const { PublicPage } = await import("./features/pages/public-page");
+  return { default: PublicPage };
+});
 const PublicRegistration = lazy(async () => {
   const { RegistrationPage } =
     await import("./features/tenant-registration/registration-page");
@@ -43,7 +47,9 @@ export function ApplicationRoot({
   const publicPath =
     pathname === "/register" ||
     pathname === "/public/forms" ||
-    pathname.startsWith("/public/forms/");
+    pathname.startsWith("/public/forms/") ||
+    pathname === "/public/pages" ||
+    pathname.startsWith("/public/pages/");
   if (publicPath) return <PublicApplication pathname={pathname} />;
   return (
     <Suspense
@@ -84,6 +90,10 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
   const locale = useAppLocale();
   const setLocale = useSetLocale();
   const match = /^\/public\/forms\/([A-Za-z0-9_-]{20,128})\/?$/.exec(pathname);
+  const publicPageMatch =
+    /^\/public\/pages\/([A-Za-z0-9_-]{20,128})(?:\/([A-Za-z0-9_-]+))?\/?$/.exec(
+      pathname,
+    );
   return (
     <>
       <div className="flex justify-end gap-2 px-6 py-3">
@@ -108,6 +118,11 @@ function PublicApplicationContent({ pathname }: { pathname: string }) {
       <Suspense fallback={<PwaSplash message={t("Cargando…")} />}>
         {pathname === "/register" ? (
           <PublicRegistration />
+        ) : publicPageMatch ? (
+          <PublicPageRoute
+            token={publicPageMatch[1]}
+            pageId={publicPageMatch[2]}
+          />
         ) : match ? (
           <PublicForm token={match[1]} />
         ) : (

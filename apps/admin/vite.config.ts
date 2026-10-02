@@ -101,6 +101,8 @@ export default defineConfig({
           /^\/api/,
           /^\/v1/,
           /^\/public\/forms/,
+          /^\/public\/pages(?:\/|\?|$)/,
+          /^\/s\/p(?:\/|\?|$)/,
           /^\/register(?:\/|\?|$)/,
           /^\/office(?:\/|$)/,
         ],

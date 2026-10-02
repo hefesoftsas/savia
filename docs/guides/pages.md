@@ -1,0 +1,130 @@
+# Personal pages
+
+Owner: Savia API and Admin. Reviewed: 2026-10-01.
+
+**Work → Pages** expands directly in the main sidebar. It contains your page and folder tree; there is no second navigation panel. Select Pages itself to search the workspace, create a root page or folder, or browse its contents. The document breadcrumb returns to a parent or the workspace. Create a page, edit its title and body, and wait for **Saved** before navigating away. Search matches accessible page titles and text. Pages are private until their owner grants member access or explicitly creates a public link. Subpages inherit the root's reader/editor permissions for member access. Administrators do not automatically receive private document access.
+
+## Folders and navigation
+
+Use the **+** beside Pages or a tree item to create a page or folder inside it. Expand/collapse folders and pages with children using their chevrons. Opening a folder shows its contents, with controls to add a page or subfolder. Rename it using the title field; folders have no editable document body or record binding. A folder and all its descendants inherit the existing root sharing policy. A folder must be empty before deletion. Moving existing pages between roots is not included in this release.
+
+The **…** menu holds subpage creation, history, Markdown export and deletion. **Export as Markdown** is available to anyone who can read the page and downloads the saved title and supported document blocks as a `.md` file. Issue cards export their original link, collections export a reference, and attachments export their filename; fetched issue preview details, collection rows and private attachment identifiers are not included. Share and the current save status stay visible. A privacy icon beside Share exposes the team access label on hover or keyboard focus; it does not occupy a row above the title. The same tree is available through the main navigation drawer on mobile.
+
+## Writing and linked work
+
+The Plate editor supports paragraphs, headings, quotes, bullet lists, bold and italic text. Select text to show contextual formatting controls. Use the **+** beside the current block or type `/` in an empty block to open a searchable block menu. It includes paragraphs, three heading levels, quotes, bulleted and numbered lists, tasks, code, dividers, callouts, toggles, simple tables, collection views and attachments, and supports arrow keys, Enter and Escape. Pasting a single HTTP, HTTPS or mailto URL makes a clickable link. Links open in a new tab.
+
+In an empty paragraph, `#`, `##` or `###` followed by Space creates a heading; `>`, `-`, `*`, `1.` or `[]` followed by Space creates a quote, list item or task. Typing three backticks at the start of an empty paragraph immediately creates a code block through Plate’s native input rules; choose its language in the toolbar. Existing plain-text fences with a language still convert on Enter or Space; `js`, `ts`, `py` and `sh` are accepted aliases. Pasting a complete Markdown fenced code snippet into an empty paragraph creates a code block and preserves its indentation. Inside code, Enter inserts a newline, Tab inserts two spaces, and Cmd/Ctrl+Enter exits the block. Cmd/Ctrl+E and the selection toolbar toggle inline code. Use the block toolbar to insert a paragraph below a block.
+
+Jira and Linear block commands appear only when that provider is enabled on the server and the current reader has a connected account. Configure the personal account from **Integrations → Accounts & Connections → Issue management**. An unavailable, disconnected, pending, failed or expired connection is not offered in the editor. Each reader uses their own connection, so sharing a page never grants access to the author's issue tracker. Existing issue blocks render as regular clickable links when the reader has no active connection; they do not request a preview or show connection prompts inside the document. Ordinary pasted links remain clickable without an integration. See [Jira and Linear issue links](issue-links.md) for Nango setup.
+
+### Rich blocks
+
+- **Code** preserves indentation and multiline source. Choose a language, copy the source, use Enter for a newline and Tab for indentation, or Ctrl/Cmd+Enter to continue in a paragraph. Pasted source remains plain text instead of becoming links or separate blocks. Source is displayed, never executed. Inline code is also available in contextual formatting.
+- **Tasks** have checkboxes that save with the page. **Numbered lists** number consecutive items. Enter continues a list or task; Enter on an empty item returns to a paragraph. Shift+Enter adds a line within the item.
+- **Divider** inserts a horizontal separator followed by a place to continue writing. **Callout** highlights a note using the current theme.
+- **Toggle** has an editable summary and body. Expanding or collapsing is temporary viewing state; the body stays in the saved document. Readers may expand it without editing the document.
+- **Simple table** supports editable cells and row/column controls, bounded to 20 rows and 10 columns. Tab and Shift+Tab move between cells; Tab in the last cell adds a row while below the limit. Cells contain text and inline formatting. These tables live in the document; use a collection view for records, filters and other database features.
+
+Page permissions, autosave, conflict protection and revision history apply to these blocks as they do to ordinary text. Reader mode disables document mutations.
+
+**Collection view** embeds an existing authorized collection as a table or board, optionally using a saved view's filters and columns. Records remain in their collection. The embed displays 20 records per page; board groups describe only the current page. Open the collection for its full editing capabilities. **Record page** opens or creates a private page bound to the selected record; its properties load from the viewer's collection API, independently of page sharing. The server resolves the binding independently of the page-list limit and enforces one bound page per tenant, domain, collection and record, including concurrent requests. Existing page permissions still apply. The uniqueness migration preserves duplicate notes and their content, retaining the oldest binding and detaching the others.
+
+**Image or file** uploads PNG, JPEG, GIF, WebP, PDF or plain text, up to 10 MB, through the authenticated API into the configured document bucket. Access to attachments follows the page permissions. Browser object URLs are temporary and revoked when unmounted.
+
+## Saving, sharing and history
+
+Autosave waits briefly after an edit and sends sequential versioned updates. A stale version produces a conflict instead of overwriting another user's update. The editor preserves the current draft and offers **Download draft** and **Reopen**. A downloaded draft is an explicit user export; Savia introduces no localStorage or IndexedDB document cache. A failed draft must be exported before closing the browser or reopening the page.
+
+**Share → Members** assigns reader or editor access to active teammates. Changing member sharing on a subpage changes its root's sharing. Removed memberships stop granting access. An empty member list means there are no other active teammates available; a failed request offers a retry instead of presenting an unusable save action.
+
+**Share → Public link** creates a separate, read-only link for the selected page or folder and its descendants. Publishing a child does not publish its parent or siblings. Only the owner can create or revoke links. An optional expiration limits their lifetime; revoking a link immediately stops new page and file requests through it. Public links show the current saved content, so later edits are visible. Links are not created automatically when opening the sharing dialog.
+
+Anyone holding an active public URL can read its scope without signing in. The public view has no editing, member management, revision history, or bound-record properties. Collections remain private placeholders and issue cards become ordinary external links; the public view never uses the owner's Studio permissions or Jira/Linear connections. Referenced attachments are served through the same scoped link, and removing an attachment from the document removes its public download access. Public routes bypass the administrative service worker. New private-app workers activate in the background and the deployment notice offers a user-controlled reload after saving. Public HTML, API responses, and downloads use no-store and no-referrer headers; public documents request no indexing. Expired or revoked links do not expose document titles or contents.
+
+**History** opens a side panel with saved dates and versions. Selecting a version loads
+its read-only document in the main area, with loading/error states and protection
+against out-of-order preview responses. **Back to note** returns to the live
+editor without modifying it. On small screens the version selector sits above
+the document. Restoring a selected snapshot creates a new version.
+
+Owners can choose **Clear history**, then confirm permanent deletion of all
+previous versions of that note. The current document and its current snapshot
+are preserved; editors and readers cannot clear history. A concurrent edit
+rejects the deletion rather than deleting versions against a stale page version.
+Public links never expose history. Linked issue previews and collection data
+remain live references; revision snapshots preserve the note's blocks, not a
+historical copy of external provider data. This release does not merge simultaneous edits. Delete subpages before deleting their parent.
+
+## Operations and limits
+
+Apply migrations `0008_pages.sql`, `0009_issue_connections.sql`, `0010_pages_folders.sql`, `0011_page_public_links.sql`, `0012_page_public_short_links.sql` and `0013_pages_record_binding_uniqueness.sql` using the existing deployment migration process; PostgreSQL equivalents are registered in its migration manifest. This feature does not deploy or apply production migrations automatically. Existing document storage and authenticated API configuration are reused. The API reference is generated from the Pages OpenAPI route declarations.
+
+Search examines titles and the first 10,000 normalized content characters. Search/list returns the 200 most recently updated matching pages. The member picker returns up to 50 members. Documents and revisions are bounded by server validation. There is no CRDT collaboration, inline comment system, external guest editing, or remote issue mutation. Deleting a page removes its attachment metadata and attempts to delete every stored attachment blob from the document bucket. It is not a retention mechanism: preserve any required copies before deleting the page. Failed bucket deletions may leave orphaned blobs for deployment cleanup. Revision retention is unbounded unless the owner explicitly clears prior versions.
+
+The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
+
+## Verification
+
+Automated coverage checks folder creation and containment, folder renaming in the sidebar, slash-menu selection and focus recovery, page authorization, inherited sharing, revoked membership, version conflicts, history, attachments, safe document nodes, rich-block round trips and structure limits, code whitespace, task updates, table operations, URL paste, preview fallback, serial autosave and authorized record properties. Public sharing tests cover owner-only publishing, scoped anonymous reading, expiry, revocation, current attachment references, retryable member loading, and isolated public bootstrap. Native PostgreSQL coverage is in `apps/self-hosted/test/pages-postgres.test.ts` and `apps/self-hosted/test/pages-public-postgres.test.ts`; it uses disposable databases through `SAVIA_TEST_POSTGRES_URL` and checks migrations, inherited permissions, concurrent edits, revision restores, attachment metadata and the bootstrap administrator’s platform membership. Run `pnpm --filter @savia/self-hosted test:postgres` against an isolated PostgreSQL test server. Desktop/mobile visual review also uses the real Pages UI. Live Jira/Linear OAuth and production storage are not validated by mocked provider tests.
+
+### Moving and deleting blocks
+
+In editable pages, hover over a top-level block to reveal its drag handle and
+delete button in the left gutter. Drag the handle above or below another block;
+a line marks the insertion point. Cards, tables, and other nested blocks move
+as a whole. The move handle also accepts the Up and Down arrow keys. Deleting
+the last block leaves an empty paragraph, and changes use the normal page
+autosave and editor undo history. Read-only pages do not expose these controls.
+
+Typing the third backtick at the start of an empty paragraph immediately creates
+a code block through Plate's native `createBlockFenceInputRule` (`on: "match"`).
+No Enter or space is required. Select the language in the code toolbar afterward.
+The legacy Enter shortcut still accepts an existing plain-text fence with a
+language, and complete fenced clipboard snippets retain their language.
+
+Block actions appear in a horizontal floating toolbar above the active block.
+A continuous pointer corridor connects the block to its toolbar. A 400 ms dismissal delay allows brief pointer detours; entering the
+toolbar cancels dismissal. Keyboard focus pins the toolbar to its
+current block until focus leaves, preventing an action from targeting a neighbor.
+
+Use **Write above** or **Write below** in a block's toolbar to insert a paragraph
+at that position and immediately focus it. Moving a block returns focus to the
+editor. Unmodified Up/Down arrows cross top-level text edges, skip non-editable
+cards, and create an exit paragraph at a document-edge code block. Native arrow
+movement inside text and extended selections remain untouched.
+
+Contextual controls follow Plate's `onSelectionChange` after the editor has
+synchronized native selection. They must not synchronously rerender the editor
+from document `selectionchange` or key-up events: Slate can otherwise restore
+its previous selection and cancel clicks or arrow-key caret movement.
+
+Large documents keep a stable editor instance and initial value across draft and
+save-status updates. Editor service context is memoized so moving contextual
+controls does not invalidate every issue, attachment, or collection block.
+Block hover and drag targeting use Slate's cached DOM-to-node paths rather than
+scanning all top-level DOM siblings. Selection controls reuse unchanged positions
+and remain scheduled after Slate selection synchronization.
+
+Autosave snapshots are serialized lazily after the debounce (or when navigation
+requires a dirty check), then cached by immutable draft identity. Rapid typing
+therefore does not repeatedly serialize the entire document. The serial save
+queue and protection for edits made during an in-flight save remain in place.
+
+The active toolbar block receives a subtle theme-aware background highlight. It
+stays visible while using the block actions and clears with their dismissal,
+without adding document nodes or changing block dimensions.
+
+### Short public links
+
+In **Share → Public link**, choose **Create short link** on an active link. The
+saved short URL then becomes the destination for **Copy link** and **Open link**.
+Generating a short link reuses the existing public grant; it does not publish a
+second copy or extend its expiry. Revoking the public link disables access
+through its short URL too.
+
+Pages reuse the configured Shlink service when it accepts the public HTTPS
+destination. Local or unavailable-provider fallback links use `/s/p/{code}` on
+the current Savia host and are stored on the backend. A localhost link remains
+local to that machine; public sharing outside the machine requires a deployed
+public origin. Shortening failure leaves the original full link usable.

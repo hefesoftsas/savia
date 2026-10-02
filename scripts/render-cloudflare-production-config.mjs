@@ -98,6 +98,7 @@ function apiConfig({ documentsBucket, domainD1Id, publicOrigin }) {
       NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID: "one-drive",
       NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID: "one-drive-personal",
       NANGO_OUTLOOK_INTEGRATION_ID: "outlook",
+      NANGO_LINEAR_INTEGRATION_ID: "linear",
       SAVIA_API_RESOURCE: publicOrigin,
       SAVIA_OAUTH_ISSUER: `${publicOrigin}/api/auth`,
       SAVIA_PUBLIC_ORIGIN: publicOrigin,

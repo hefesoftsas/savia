@@ -367,8 +367,8 @@ describe("AppSidebar navigation preferences", () => {
       screen.getByRole("button", { name: "Reordenar Empresas" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: "Reordenar Páginas" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Reordenar Páginas" }),
+    ).toBeVisible();
     await user.click(
       screen.getByRole("button", { name: "Mover Empresas al grupo siguiente" }),
     );

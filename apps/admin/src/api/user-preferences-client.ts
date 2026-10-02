@@ -12,6 +12,7 @@ export const sidebarNavigationItemIds = [
   "dashboard",
   "studio",
   "my-day",
+  "pages",
   "integrations",
   "provider-credentials",
   "assistant-configuration",
