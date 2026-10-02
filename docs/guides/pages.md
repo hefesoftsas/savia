@@ -137,7 +137,8 @@ language, and complete fenced clipboard snippets retain their language.
 
 Selecting text shows the formatting toolbar above the selection, including the
 first line of the editor. At the top of the viewport, it appears below the
-selection instead. Block actions are hidden while the formatting toolbar is
+selection instead. For selections extending beyond the viewport, the toolbar
+stays within the visible bottom edge. Block actions are hidden while the formatting toolbar is
 visible to keep the selected text unobstructed.
 
 Block actions appear in a horizontal floating toolbar above the active block.

@@ -326,8 +326,9 @@ it.each([
     expectedTop: -36,
   },
   { contentTop: 10, selectionTop: 12, selectionBottom: 32, expectedTop: 30 },
+  { contentTop: 10, selectionTop: 12, selectionBottom: 1000, expectedTop: 714 },
 ])(
-  "keeps formatting tools outside the selection at $selectionTop px",
+  "keeps formatting tools visible for selection bounds $selectionTop–$selectionBottom",
   async ({ contentTop, selectionTop, selectionBottom, expectedTop }) => {
     const { container } = render(
       <PageEditor
