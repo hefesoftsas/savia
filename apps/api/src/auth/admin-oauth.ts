@@ -26,6 +26,7 @@ type OAuthTransaction = {
   clientId: string;
   codeVerifier: string;
   redirectUri: string;
+  initiatedOrigin: string | null;
 };
 
 const transactionLifetimeMilliseconds = 5 * 60 * 1000;
@@ -302,6 +303,7 @@ async function adminClient(
 async function createTransaction(
   d1: D1Database,
   client: AdminOAuthClient,
+  initiatedOrigin: string,
 ): Promise<{ codeChallenge: string; state: string }> {
   const state = randomValue();
   const codeVerifier = randomValue(64);
@@ -316,8 +318,8 @@ async function createTransaction(
     d1
       .prepare(
         `INSERT INTO admin_oauth_transactions
-          (state, client_id, redirect_uri, code_verifier, expires_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+          (state, client_id, redirect_uri, code_verifier, expires_at, created_at, initiated_origin)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         state,
@@ -326,6 +328,7 @@ async function createTransaction(
         codeVerifier,
         expiresAt,
         now.toISOString(),
+        initiatedOrigin,
       ),
   ]);
   return { state, codeChallenge: await codeChallenge(codeVerifier) };
@@ -339,21 +342,50 @@ async function consumeTransaction(
     .prepare(
       `DELETE FROM admin_oauth_transactions
        WHERE state = ? AND expires_at > ?
-       RETURNING client_id, redirect_uri, code_verifier`,
+       RETURNING client_id, redirect_uri, code_verifier, initiated_origin`,
     )
     .bind(state, new Date().toISOString())
     .first<{
       client_id: string;
       code_verifier: string;
       redirect_uri: string;
+      initiated_origin: string | null;
     }>();
   return row
     ? {
         clientId: row.client_id,
         codeVerifier: row.code_verifier,
         redirectUri: row.redirect_uri,
+        initiatedOrigin: row.initiated_origin,
       }
     : undefined;
+}
+
+async function rememberSessionOrigin(
+  d1: D1Database,
+  token: string,
+  origin: string,
+  previousHash?: string,
+): Promise<void> {
+  const now = new Date();
+  await d1.batch([
+    d1
+      .prepare(
+        "DELETE FROM admin_oauth_session_origins WHERE expires_at <= ? OR token_hash = ?",
+      )
+      .bind(now.toISOString(), previousHash ?? ""),
+    d1
+      .prepare(
+        "INSERT INTO admin_oauth_session_origins (token_hash, origin, expires_at) VALUES (?, ?, ?)",
+      )
+      .bind(
+        await codeChallenge(token),
+        origin,
+        new Date(
+          now.getTime() + refreshTokenLifetimeSeconds * 1000,
+        ).toISOString(),
+      ),
+  ]);
 }
 
 function callbackInput(
@@ -466,6 +498,56 @@ export function registerAdminOAuthRoutes(
   const cookieDomain = (url: string) =>
     cookieDomainForHost(new URL(url).hostname, canonicalHost);
 
+  async function signOutSession(
+    request: Request,
+    headers: Headers,
+  ): Promise<void> {
+    const token = refreshTokenFromRequest(request);
+    if (token)
+      await d1
+        .prepare("DELETE FROM admin_oauth_session_origins WHERE token_hash = ?")
+        .bind(await codeChallenge(token))
+        .run();
+    for (const cookie of clearRefreshCookies(
+      request.url,
+      cookieDomain(request.url),
+    )) {
+      headers.append("set-cookie", cookie);
+    }
+    for (const name of betterAuthSessionCookieNames) {
+      for (const cookie of clearBetterAuthCookies(
+        name,
+        request.url,
+        cookieDomain(request.url),
+      )) {
+        headers.append("set-cookie", cookie);
+      }
+    }
+    const authHeaders = new Headers({
+      accept: "application/json",
+      "content-type": "application/json",
+      origin: request.headers.get("origin") ?? new URL(request.url).origin,
+    });
+    const cookie = request.headers.get("cookie");
+    if (cookie) authHeaders.set("cookie", cookie);
+    try {
+      const signOut = await service!.fetch(
+        new Request("https://savia-auth.internal/api/auth/sign-out", {
+          method: "POST",
+          headers: authHeaders,
+          body: "{}",
+        }),
+      );
+      if (!signOut.ok) {
+        console.error("Savia Better Auth sign-out failed", signOut.status);
+      }
+      appendSetCookies(signOut.headers, headers);
+    } catch {
+      // The browser and bridge session stay signed out if the provider is unavailable.
+      console.error("Savia Better Auth sign-out unavailable");
+    }
+  }
+
   app.get("/api/auth/admin/authorize", async (context) => {
     if (!service)
       return error(
@@ -480,7 +562,12 @@ export function registerAdminOAuthRoutes(
         "Authentication service is unavailable",
         503,
       );
-    const transaction = await createTransaction(d1, client);
+    const initiatedOrigin =
+      resolveInitiatedOrigin(context.req.raw, canonicalHost) ??
+      (isAllowedPublicOrigin(new URL(context.req.url).origin, canonicalHost)
+        ? new URL(context.req.url).origin
+        : new URL(client.redirectUri).origin);
+    const transaction = await createTransaction(d1, client, initiatedOrigin);
     const authorization = new URL(
       "/api/auth/oauth2/authorize",
       context.req.url,
@@ -492,6 +579,7 @@ export function registerAdminOAuthRoutes(
       redirect_uri: client.redirectUri,
       resource: client.resource,
       response_type: "code",
+      prompt: "login",
       scope: client.scopes.join(" "),
       state: transaction.state,
     }).toString();
@@ -592,6 +680,7 @@ export function registerAdminOAuthRoutes(
     const transaction = await consumeTransaction(d1, input.state);
     if (
       !transaction ||
+      !transaction.initiatedOrigin ||
       transaction.clientId !== client.clientId ||
       transaction.redirectUri !== client.redirectUri
     ) {
@@ -630,10 +719,14 @@ export function registerAdminOAuthRoutes(
     const token = response.ok ? tokenResponse(payload) : undefined;
     const nextRefreshToken = token ? refreshToken(token) : undefined;
     const domain = cookieDomain(context.req.url);
-    const returnOrigin = returnOriginFromRequest(
-      context.req.raw,
+    // The transaction is authoritative; a shared return cookie may belong to
+    // another tab or an earlier tenant login.
+    const returnOrigin = isAllowedTenantOrigin(
+      transaction.initiatedOrigin,
       canonicalHost,
-    );
+    )
+      ? transaction.initiatedOrigin
+      : undefined;
     for (const cookie of clearReturnOriginCookies(context.req.url, domain)) {
       headers.append("set-cookie", cookie);
     }
@@ -655,6 +748,11 @@ export function registerAdminOAuthRoutes(
         { status: 401, headers },
       );
     }
+    await rememberSessionOrigin(
+      d1,
+      nextRefreshToken,
+      transaction.initiatedOrigin,
+    );
     headers.append(
       "set-cookie",
       refreshCookie(nextRefreshToken, context.req.url, domain),
@@ -690,6 +788,41 @@ export function registerAdminOAuthRoutes(
           error: {
             code: "AUTHENTICATION_REQUIRED",
             message: "An administrator session is required",
+          },
+        },
+        { status: 401, headers },
+      );
+    }
+    const requestOrigin =
+      context.req.header("origin") ?? new URL(context.req.url).origin;
+    if (
+      requestOrigin !== new URL(client.redirectUri).origin &&
+      !isAllowedPublicOrigin(requestOrigin, canonicalHost)
+    ) {
+      return Response.json(
+        {
+          error: {
+            code: "INVALID_ORIGIN",
+            message: "The request origin is not allowed",
+          },
+        },
+        { status: 403, headers },
+      );
+    }
+    const tokenHash = await codeChallenge(currentRefreshToken);
+    const session = await d1
+      .prepare(
+        "SELECT origin FROM admin_oauth_session_origins WHERE token_hash = ? AND expires_at > ?",
+      )
+      .bind(tokenHash, new Date().toISOString())
+      .first<{ origin: string }>();
+    if (!session || session.origin !== requestOrigin) {
+      await signOutSession(context.req.raw, headers);
+      return Response.json(
+        {
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            message: "Sign in again for this workspace URL",
           },
         },
         { status: 401, headers },
@@ -731,6 +864,12 @@ export function registerAdminOAuthRoutes(
         { status: 401, headers },
       );
     }
+    await rememberSessionOrigin(
+      d1,
+      nextRefreshToken,
+      session.origin,
+      tokenHash,
+    );
     headers.append(
       "set-cookie",
       refreshCookie(
@@ -751,43 +890,7 @@ export function registerAdminOAuthRoutes(
         503,
       );
     const headers = cors(context.req.header("origin") ?? null, client);
-    for (const cookie of clearRefreshCookies(
-      context.req.url,
-      cookieDomain(context.req.url),
-    )) {
-      headers.append("set-cookie", cookie);
-    }
-    for (const name of betterAuthSessionCookieNames) {
-      for (const cookie of clearBetterAuthCookies(
-        name,
-        context.req.url,
-        cookieDomain(context.req.url),
-      )) {
-        headers.append("set-cookie", cookie);
-      }
-    }
-    const authHeaders = new Headers({
-      accept: "application/json",
-      "content-type": "application/json",
-      origin: context.req.header("origin") ?? new URL(context.req.url).origin,
-    });
-    const cookie = context.req.header("cookie");
-    if (cookie) authHeaders.set("cookie", cookie);
-    const signOut = await service!.fetch(
-      new Request("https://savia-auth.internal/api/auth/sign-out", {
-        method: "POST",
-        headers: authHeaders,
-        body: "{}",
-      }),
-    );
-    if (!signOut.ok) {
-      console.error(
-        "Savia Better Auth sign-out failed",
-        signOut.status,
-        await signOut.text().catch(() => ""),
-      );
-    }
-    appendSetCookies(signOut.headers, headers);
+    await signOutSession(context.req.raw, headers);
     return new Response(null, { status: 204, headers });
   });
 }

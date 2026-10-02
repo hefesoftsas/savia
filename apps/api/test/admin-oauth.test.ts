@@ -43,6 +43,7 @@ describe("admin OAuth bridge", () => {
   beforeAll(applyMigrations);
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM admin_oauth_transactions");
+    await env.DB.exec("DELETE FROM admin_oauth_session_origins");
   });
 
   it("rotates an HttpOnly refresh cookie for the admin OAuth session", async () => {
@@ -391,7 +392,9 @@ describe("admin OAuth bridge", () => {
     expect(authorize.status).toBe(302);
     const authSetCookie = authorize.headers.get("set-cookie") ?? "";
     expect(authSetCookie).toContain("savia.return_origin=");
-    expect(authSetCookie).toContain(encodeURIComponent("https://merkaseguros.savia.app.hefesoft.com"));
+    expect(authSetCookie).toContain(
+      encodeURIComponent("https://merkaseguros.savia.app.hefesoft.com"),
+    );
     expect(authSetCookie).toContain("Domain=.savia.app.hefesoft.com");
 
     const location = new URL(authorize.headers.get("location")!);
@@ -412,10 +415,217 @@ describe("admin OAuth bridge", () => {
     );
     expect(callback.status).toBe(200);
     const payload = (await callback.json()) as { returnOrigin?: string };
-    expect(payload.returnOrigin).toBe("https://merkaseguros.savia.app.hefesoft.com");
+    expect(payload.returnOrigin).toBe(
+      "https://merkaseguros.savia.app.hefesoft.com",
+    );
     const callbackSetCookie = callback.headers.get("set-cookie") ?? "";
     expect(callbackSetCookie).toContain("savia.return_origin=");
     expect(callbackSetCookie).toContain("Max-Age=0");
   });
-});
+  describe("URL-scoped sessions", () => {
+    const tenantOrigin = "https://savia-team.savia-preview.hefesoft.com";
+    const canonicalOrigin = "https://savia-preview.hefesoft.com";
 
+    function fixture() {
+      let tokenNumber = 0;
+      const authFetch = vi.fn(async (request: Request) => {
+        const url = new URL(request.url);
+        if (url.pathname === "/_internal/oauth/admin-client")
+          return Response.json({
+            ...adminClient,
+            redirectUri: `${canonicalOrigin}/auth/callback`,
+          });
+        if (url.pathname === "/api/auth/oauth2/authorize")
+          return Response.json({
+            redirect: true,
+            url: `/api/auth/login?${url.searchParams}`,
+          });
+        if (url.pathname === "/api/auth/oauth2/token") {
+          tokenNumber += 1;
+          return Response.json({
+            access_token: `access-${tokenNumber}`,
+            refresh_token: `refresh-${crypto.randomUUID()}`,
+            token_type: "Bearer",
+            expires_in: 300,
+          });
+        }
+        if (url.pathname === "/api/auth/sign-out")
+          return Response.json({ success: true });
+        return new Response("Not found", { status: 404 });
+      });
+      const app = createApp(
+        env.DB,
+        env.DOCUMENTS,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { fetch: authFetch },
+      );
+      const cookieFrom = (response: Response) => {
+        const cookie = response.headers
+          .getSetCookie()
+          .find(
+            (value) =>
+              value.startsWith("savia.admin_refresh_token=") &&
+              !value.includes("Max-Age=0"),
+          );
+        expect(cookie).toBeDefined();
+        return cookie!.split(";")[0];
+      };
+      const signIn = async (origin: string, cookie = "") => {
+        const authorize = await app.request(
+          `${origin}/api/auth/admin/authorize`,
+        );
+        expect(authorize.status).toBe(302);
+        const state = new URL(
+          authorize.headers.get("location")!,
+        ).searchParams.get("state");
+        return app.request(`${canonicalOrigin}/api/auth/admin/callback`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: canonicalOrigin,
+            cookie,
+          },
+          body: JSON.stringify({ code: "authorization-code", state }),
+        });
+      };
+      const refresh = (origin: string, cookie: string) =>
+        app.request(`${origin}/api/auth/admin/refresh`, {
+          method: "POST",
+          headers: { origin, cookie },
+        });
+      return { app, authFetch, cookieFrom, signIn, refresh };
+    }
+
+    it.each([
+      [tenantOrigin, canonicalOrigin],
+      [canonicalOrigin, tenantOrigin],
+      [tenantOrigin, "https://other.savia-preview.hefesoft.com"],
+      [tenantOrigin, "https://savia.app.hefesoft.com"],
+    ])(
+      "requires a new login when moving from %s to %s",
+      async (source, destination) => {
+        const f = fixture();
+        const callback = await f.signIn(source);
+        expect(callback.status).toBe(200);
+        const cookie = f.cookieFrom(callback);
+        const response = await f.refresh(
+          destination,
+          `${cookie}; savia.session_token=old-provider-session`,
+        );
+        expect(response.status).toBe(401);
+        expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+        expect(response.headers.get("set-cookie")).toContain(
+          "savia.session_token=",
+        );
+        // A rejected switch also invalidates the old refresh session server-side.
+        expect((await f.refresh(source, cookie)).status).toBe(401);
+        expect(
+          f.authFetch.mock.calls.filter(
+            ([request]) =>
+              new URL(request.url).pathname === "/api/auth/oauth2/token",
+          ),
+        ).toHaveLength(1);
+        expect(
+          f.authFetch.mock.calls.some(
+            ([request]) =>
+              new URL(request.url).pathname === "/api/auth/sign-out",
+          ),
+        ).toBe(true);
+      },
+    );
+
+    it("keeps the initiating tenant through the canonical callback and token rotation", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      expect(await callback.json()).toMatchObject({
+        returnOrigin: tenantOrigin,
+      });
+      const renewed = await f.refresh(tenantOrigin, f.cookieFrom(callback));
+      expect(renewed.status).toBe(200);
+      const rotated = f.cookieFrom(renewed);
+      expect((await f.refresh(tenantOrigin, rotated)).status).toBe(200);
+      expect((await f.refresh(canonicalOrigin, rotated)).status).toBe(401);
+    });
+
+    it("does not let a stale return cookie change the session origin", async () => {
+      const f = fixture();
+      const callback = await f.signIn(
+        canonicalOrigin,
+        `savia.return_origin=${encodeURIComponent(tenantOrigin)}`,
+      );
+      expect((await callback.json()).returnOrigin).toBeUndefined();
+      expect(
+        (await f.refresh(canonicalOrigin, f.cookieFrom(callback))).status,
+      ).toBe(200);
+    });
+
+    it("rejects legacy and expired refresh sessions without contacting the token endpoint", async () => {
+      const f = fixture();
+      const legacy = await f.refresh(
+        tenantOrigin,
+        "savia.admin_refresh_token=legacy-token",
+      );
+      expect(legacy.status).toBe(401);
+      const callback = await f.signIn(tenantOrigin);
+      await env.DB.exec(
+        "UPDATE admin_oauth_session_origins SET expires_at = '2000-01-01T00:00:00.000Z'",
+      );
+      expect(
+        (await f.refresh(tenantOrigin, f.cookieFrom(callback))).status,
+      ).toBe(401);
+      expect(
+        f.authFetch.mock.calls.filter(
+          ([request]) =>
+            new URL(request.url).pathname === "/api/auth/oauth2/token",
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("invalidates the server-side refresh binding on logout", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      const cookie = f.cookieFrom(callback);
+      const logout = await f.app.request(
+        `${tenantOrigin}/api/auth/admin/logout`,
+        {
+          method: "POST",
+          headers: { origin: tenantOrigin, cookie },
+        },
+      );
+      expect(logout.status).toBe(204);
+      expect((await f.refresh(tenantOrigin, cookie)).status).toBe(401);
+    });
+
+    it("rejects an untrusted origin without destroying the legitimate session", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      const cookie = f.cookieFrom(callback);
+      const response = await f.app.request(
+        `${tenantOrigin}/api/auth/admin/refresh`,
+        {
+          method: "POST",
+          headers: { origin: "https://evil.example", cookie },
+        },
+      );
+      expect(response.status).toBe(403);
+      expect((await f.refresh(tenantOrigin, cookie)).status).toBe(200);
+    });
+
+    it("requires explicit login even with an existing provider session", async () => {
+      const f = fixture();
+      const response = await f.app.request(
+        `${tenantOrigin}/api/auth/admin/authorize`,
+        {
+          headers: { cookie: "savia.session_token=old-provider-session" },
+        },
+      );
+      expect(response.status).toBe(302);
+      expect(
+        new URL(response.headers.get("location")!).searchParams.get("prompt"),
+      ).toBe("login");
+    });
+  });
+});
