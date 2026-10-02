@@ -566,20 +566,41 @@ async function createUser(
       { status: 400 },
     );
   }
-  const created = await auth.api.createUser({
-    body: {
-      email: input.email,
-      name: input.name,
-      password: input.password,
-      role: input.role ?? "user",
-      data: {
-        emailVerified: input.emailVerified === true,
-        ...(typeof input.tenantId === "number"
-          ? { emailTenantId: input.tenantId }
-          : {}),
+  const created = await auth.api
+    .createUser({
+      body: {
+        email: input.email,
+        name: input.name,
+        password: input.password,
+        role: input.role ?? "user",
+        data: {
+          emailVerified: input.emailVerified === true,
+          ...(typeof input.tenantId === "number"
+            ? { emailTenantId: input.tenantId }
+            : {}),
+        },
       },
-    },
-  });
+    })
+    .catch((error: unknown) => {
+      if (
+        isAPIError(error) &&
+        error.body?.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
+      )
+        return null;
+      throw error;
+    });
+  if (!created) {
+    return Response.json(
+      {
+        error: {
+          code: "IDENTITY_EMAIL_CONFLICT",
+          message:
+            "An account with this email already exists. Use an existing user or a different email.",
+        },
+      },
+      { status: 409 },
+    );
+  }
   if (input.emailVerified !== true) {
     try {
       await auth.api.sendVerificationEmail({

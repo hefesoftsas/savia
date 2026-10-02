@@ -1267,6 +1267,46 @@ it("allows bridge administrators to explicitly bypass verification for one user"
   expect(account).toEqual({ emailVerified: 1, emailTenantId: 42 });
 });
 
+it("returns a conflict when bridge provisioning reuses an existing email", async () => {
+  const bridgeKey = "test-only-duplicate-email-bridge";
+  const handler = createAuthHandler({
+    ...env,
+    SAVIA_INTERNAL_BRIDGE_KEY: bridgeKey,
+  });
+  const email = `duplicate-${crypto.randomUUID()}@savia.test`;
+  const provision = (tenantId: number) =>
+    handler.fetch(
+      new Request(`${origin}/_internal/users`, {
+        method: "POST",
+        headers: {
+          "x-savia-bridge-key": bridgeKey,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          name: "Existing User",
+          password: "Duplicate-Fixture-Password-123!",
+          emailVerified: true,
+          tenantId,
+        }),
+      }),
+    );
+  const created = await provision(42);
+  expect(created.status).toBe(201);
+  const original = (await created.json()) as { user: { id: string } };
+  const duplicate = await provision(43);
+  expect(duplicate.status).toBe(409);
+  expect(await duplicate.json()).toMatchObject({
+    error: { code: "IDENTITY_EMAIL_CONFLICT" },
+  });
+  const account = await env.AUTH_DB.prepare(
+    'SELECT id,emailTenantId FROM "user" WHERE email=?',
+  )
+    .bind(email)
+    .first();
+  expect(account).toMatchObject({ id: original.user.id, emailTenantId: 42 });
+});
+
 it("uses generic password recovery responses and consumes reset tokens once", async () => {
   const delivered: Array<{ to: string; subject: string; text: string }> = [];
   const auth = createBetterAuth(env, {

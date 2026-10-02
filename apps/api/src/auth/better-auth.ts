@@ -190,11 +190,22 @@ async function serviceJson<T>(
   service: AuthService,
   path: string,
   init: RequestInit = {},
+  knownConflict?: { code: string; message: string },
 ): Promise<{ response: Response; body: T }> {
   const response = await service.fetch(
     new Request(`https://savia-auth.internal${path}`, init),
   );
   if (!response.ok) {
+    if (knownConflict && response.status === 409) {
+      const body = (await response.json().catch(() => undefined)) as
+        { error?: { code?: unknown } } | undefined;
+      if (body?.error?.code === knownConflict.code) {
+        throw new AuthenticationError(
+          "IDENTITY_EMAIL_CONFLICT",
+          knownConflict.message,
+        );
+      }
+    }
     throw new AuthenticationError(
       "AUTHENTICATION_UNAVAILABLE",
       "Authentication service is unavailable",
@@ -374,6 +385,11 @@ export function betterAuthUserAdministrator(
               ? {}
               : { tenantId: input.tenantId }),
           }),
+        },
+        {
+          code: "IDENTITY_EMAIL_CONFLICT",
+          message:
+            "An account with this email already exists. Use an existing user or a different email.",
         },
       );
       return managedUser(body.user);
