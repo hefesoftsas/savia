@@ -158,5 +158,8 @@ Live selected-model compatibility, billing and quality remain unverified.
 R2 uses a hashed principal prefix plus client-generated UUID. Conditional writes
 prevent replacement; content hashes distinguish idempotent retries from conflicts.
 List/download/delete derive the same prefix from the authenticated principal.
-The pilot is restricted to platform administrators, with 60-second/512 KiB limits.
-Tenant meeting records, uploads/jobs, retention and quotas require the later epics.
+Active tenant members of any role and platform administrators can access their
+owner-private recordings. Accounts without an active membership are rejected.
+Short native captures retain their 60-second/512 KiB limits; imported recordings
+accept up to 50 MB without a duration cap. Shared tenant meeting records, jobs,
+retention and quotas require the later epics.

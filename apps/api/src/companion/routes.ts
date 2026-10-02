@@ -1,8 +1,6 @@
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
-import {
-  actorFromContext,
-  requirePlatformAdministrator,
-} from "../auth/middleware";
+import { actorFromContext } from "../auth/middleware";
+import { AuthenticationError, type AppActor } from "../auth/types";
 import type { AssistantConfigurationRepository } from "../assistant/configuration";
 import {
   CompanionError,
@@ -82,6 +80,25 @@ const recordingMimeTypes = {
   mp3: "audio/mpeg",
   m4a: "audio/mp4",
 } as const;
+function requireCompanionAccess(actor: AppActor) {
+  if (!actor.principal.isActive)
+    throw new AuthenticationError(
+      "AUTHORIZATION_FORBIDDEN",
+      "An active tenant membership or platform administrator role is required",
+    );
+  if (actor.globalRoles.includes("platform_admin")) return;
+  if (
+    actor.memberships.some(
+      (membership) =>
+        membership.isActive && (membership.tenantId ?? membership.agencyId) > 0,
+    )
+  )
+    return;
+  throw new AuthenticationError(
+    "AUTHORIZATION_FORBIDDEN",
+    "An active tenant membership or platform administrator role is required",
+  );
+}
 function cloudFormat(name: string) {
   const result = importedAudioFormatSchema.safeParse(
     ["opus", "oga"].includes(name.split(".").pop()?.toLowerCase() ?? "")
@@ -169,7 +186,7 @@ export function registerCompanionRoutes(
     options?.service ?? new CompanionService({ sttModel: options?.sttModel });
   app.use("/v1/companion/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
-    requirePlatformAdministrator(actorFromContext(c));
+    requireCompanionAccess(actorFromContext(c));
     if (!options?.enabled || !options.configuration)
       return c.json(
         {
