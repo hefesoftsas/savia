@@ -1,6 +1,6 @@
 # Tenant branding
 
-Owner: Savia platform team. Last reviewed: 2026-09-29.
+Owner: Savia platform team. Last reviewed: 2026-10-02.
 
 Commercial tenants can customize their public identity without changing authentication
 or access to application data. Open **Administración → Identidad del espacio** from the sidebar.
@@ -56,6 +56,11 @@ to the auth worker. It removes any caller-supplied branding header and supplies 
 validated, encoded public identity. Authentication pages render the brand on the
 server; arbitrary HTML, scripts, CSS and third-party images are not accepted. If a
 branding lookup fails, authentication remains available with Savia's default identity.
+
+SSO and federated sign-in retain this identity on the completion, email verification,
+and recovery pages, including verification form responses. Direct sign-in from a tenant
+hostname restarts Admin authorization on that validated tenant origin when no signed
+OAuth transaction is present; unrelated hosts use the configured Admin origin.
 
 The default web login shows Savia's animated logo and wordmark on a navy panel. The
 Lottie player, animation JSON and wordmark font are served from the admin site's

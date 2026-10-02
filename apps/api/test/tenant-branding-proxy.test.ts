@@ -155,6 +155,43 @@ it("renders server-owned branding on dedicated and canonical OAuth pages", async
     );
   }
 });
+it.each([
+  ["GET", "sso-complete"],
+  ["GET", "email-verified"],
+  ["GET", "chatgpt-email-verification"],
+  ["GET", "chatgpt-email-verification/verify"],
+  ["POST", "chatgpt-email-verification/send"],
+  ["POST", "microsoft-email-verification/send"],
+])("preserves tenant identity on %s %s", async (method, path) => {
+  const fetch = vi.fn(async (request: Request) =>
+    Response.json({
+      branding: JSON.parse(
+        decodeURIComponent(
+          request.headers.get("x-savia-tenant-branding") ?? "null",
+        ),
+      ),
+    }),
+  );
+  const app = createTestApp({ authService: { fetch } });
+  for (const hostname of [
+    "branding-preview.savia.app.hefesoft.com",
+    "savia.app.hefesoft.com",
+  ]) {
+    const response = await app.request(`https://${hostname}/api/auth/${path}`, {
+      method,
+      headers: {
+        "x-savia-tenant-branding": "spoofed",
+        cookie:
+          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.app.hefesoft.com",
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as any).branding?.displayName).toBe(
+      "Agencia Ñ",
+    );
+  }
+});
+
 it("ignores an external OAuth return origin for branding", async () => {
   const fetch = vi.fn(async (request: Request) =>
     Response.json({ branding: request.headers.get("x-savia-tenant-branding") }),

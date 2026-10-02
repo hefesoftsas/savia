@@ -237,6 +237,97 @@ describe("tenant identity on OAuth surfaces", () => {
     );
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
+  it("preserves tenant identity while completing SSO and federated sign-in", async () => {
+    const response = oauthPageResponse(request("sso-complete"), { branding })!;
+    const html = await response.text();
+    expect(html).toContain(
+      `<title>Completando inicio de sesión | ${branding.displayName}</title>`,
+    );
+    expect(html).toContain('data-tenant-branding="true"');
+    expect(html).toContain(branding.logoUrl!);
+    expect(html).toContain("data-sso-complete");
+    expect(html).toContain('id="oauth-status"');
+    expect(html).toContain('href="/api/auth/login"');
+  });
+  it.each(["login", "mfa-enroll", "sso-complete"])(
+    "keeps direct tenant %s on its own host when restarting authorization",
+    async (path) => {
+      const environment = {
+        ...env,
+        SAVIA_ADMIN_REDIRECT_URI:
+          "https://savia-preview.hefesoft.com/auth/callback",
+      };
+      const response = await authWorker.fetch(
+        new Request(
+          `https://agency.savia-preview.hefesoft.com/api/auth/${path}`,
+        ),
+        environment,
+      );
+      expect(response.status).toBe(200);
+      expect(
+        (await response.text()).includes(
+          'data-oauth-restart-url="https://agency.savia-preview.hefesoft.com/#/login"',
+        ),
+      ).toBe(true);
+    },
+  );
+  it("does not restart authorization on an unrelated request host", async () => {
+    const environment = {
+      ...env,
+      SAVIA_ADMIN_REDIRECT_URI:
+        "https://savia-preview.hefesoft.com/auth/callback",
+    };
+    const response = await authWorker.fetch(
+      new Request("https://unrelated.example/api/auth/login"),
+      environment,
+    );
+    expect(
+      (await response.text()).includes(
+        'data-oauth-restart-url="https://savia-preview.hefesoft.com/#/login"',
+      ),
+    ).toBe(true);
+  });
+  it.each(["microsoft", "chatgpt"])(
+    "keeps tenant branding on %s verification recovery pages",
+    async (provider) => {
+      const origin = "http://127.0.0.1:8787";
+      for (const method of ["GET", "POST"]) {
+        const id = "12345678-1234-4234-8234-123456789012";
+        const url =
+          method === "GET"
+            ? `${origin}/api/auth/${provider}-email-verification?id=${id}`
+            : `${origin}/api/auth/${provider}-email-verification/send`;
+        const response = await authWorker.fetch(
+          new Request(url, {
+            method,
+            headers: {
+              origin,
+              "content-type": "application/json",
+              "x-savia-tenant-branding": encodeURIComponent(
+                JSON.stringify(branding),
+              ),
+            },
+            ...(method === "POST"
+              ? {
+                  body: JSON.stringify({
+                    id,
+                    email: "user@example.test",
+                  }),
+                }
+              : {}),
+          }),
+          env,
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain('data-tenant-branding="true"');
+        expect(html).toContain(branding.logoUrl!);
+        expect(html).toContain(
+          `<title>Verifica tu correo | ${branding.displayName}</title>`,
+        );
+      }
+    },
+  );
   it("renders a tenant login animation instead of the Savia emblem, robot and cover", async () => {
     const response = oauthPageResponse(request("login"), {
       branding: { ...branding, loginAnimationUrl: animationUrl },

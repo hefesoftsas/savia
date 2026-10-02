@@ -8,6 +8,7 @@ import { Label } from "./components/ui/label";
 
 type Screen =
   | "login"
+  | "sso-complete"
   | "enroll"
   | "consent"
   | "verified"
@@ -795,6 +796,21 @@ export function renderOAuthSurface(
         <a className="oauth-action-link" href="/api/auth/login">
           Volver al inicio de sesión
         </a>
+      </Shell>
+    ) : screen === "sso-complete" ? (
+      <Shell screen="sso-complete" branding={options?.branding}>
+        <section className="oauth-heading" data-sso-complete>
+          <p className="oauth-kicker">
+            {options?.branding?.displayName ?? "Savia"}
+          </p>
+          <h1>Completando inicio de sesión</h1>
+          <p id="oauth-status" role="status">
+            Validando tu acceso…
+          </p>
+          <a className="oauth-action-link" href="/api/auth/login">
+            Volver al inicio de sesión
+          </a>
+        </section>
       </Shell>
     ) : screen === "login" ? (
       <LoginContent

@@ -523,16 +523,25 @@ export function createApiShell(
     // This envelope is created below from the request hostname and is honored
     // by auth only when accompanied by the API's internal bridge key.
     if (
-      context.req.method === "GET" &&
-      [
-        "/api/auth/login",
-        "/api/auth/forgot-password",
-        "/api/auth/microsoft-email-verification",
-        "/api/auth/microsoft-email-verification/verify",
-        "/api/auth/mfa-enroll",
-        "/api/auth/consent",
-        "/api/auth/oauth-ui.css",
-      ].includes(context.req.path)
+      (context.req.method === "GET" &&
+        [
+          "/api/auth/login",
+          "/api/auth/sso-complete",
+          "/api/auth/email-verified",
+          "/api/auth/forgot-password",
+          "/api/auth/microsoft-email-verification",
+          "/api/auth/microsoft-email-verification/verify",
+          "/api/auth/chatgpt-email-verification",
+          "/api/auth/chatgpt-email-verification/verify",
+          "/api/auth/mfa-enroll",
+          "/api/auth/consent",
+          "/api/auth/oauth-ui.css",
+        ].includes(context.req.path)) ||
+      (context.req.method === "POST" &&
+        [
+          "/api/auth/microsoft-email-verification/send",
+          "/api/auth/chatgpt-email-verification/send",
+        ].includes(context.req.path))
     ) {
       try {
         const returnOrigin =

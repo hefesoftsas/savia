@@ -798,8 +798,13 @@ function federatedVerificationEndpoints(
         throw new APIError("BAD_REQUEST", { message: "Request required" });
       const url = new URL(request.url),
         origin = url.origin;
+      const branding = tenantBrandingFromHeader(
+        request.headers.get("x-savia-tenant-branding"),
+      );
       if (method === "POST" && request.headers.get("origin") !== origin)
-        throw new APIError("FORBIDDEN", { message: "Invalid request origin" });
+        throw new APIError("FORBIDDEN", {
+          message: "Invalid request origin",
+        });
       const body =
         method === "POST" ? ((ctx.body ?? {}) as Record<string, unknown>) : {};
       const id = method === "POST" ? body.id : url.searchParams.get("id");
@@ -807,18 +812,23 @@ function federatedVerificationEndpoints(
         throw new APIError("BAD_REQUEST", {
           message: "Invalid verification intent",
         });
-      const cookie = ctx.context.createAuthCookie(cookieName, { maxAge: 1200 });
+      const cookie = ctx.context.createAuthCookie(cookieName, {
+        maxAge: 1200,
+      });
       const browserNonce = await ctx.getSignedCookie(
         cookie.name,
         ctx.context.secret,
       );
       if (!browserNonce)
-        return pageFor({
-          id,
-          email: "",
-          notice:
-            "Abre el enlace en el navegador donde comenzaste. Si no lo tienes, inicia sesión otra vez.",
-        });
+        return pageFor(
+          {
+            id,
+            email: "",
+            notice:
+              "Abre el enlace en el navegador donde comenzaste. Si no lo tienes, inicia sesión otra vez.",
+          },
+          branding,
+        );
       const expected = { browserNonce, origin, purpose };
       let pending: PendingVerification;
       try {
@@ -830,12 +840,15 @@ function federatedVerificationEndpoints(
           pending.revision,
         );
       } catch {
-        return pageFor({
-          id,
-          email: "",
-          notice:
-            "Este intento venció o ya no está autorizado. Inicia sesión otra vez.",
-        });
+        return pageFor(
+          {
+            id,
+            email: "",
+            notice:
+              "Este intento venció o ya no está autorizado. Inicia sesión otra vez.",
+          },
+          branding,
+        );
       }
       let notice: string | undefined;
       if (path.endsWith("/send")) {
@@ -910,12 +923,7 @@ function federatedVerificationEndpoints(
             "No se pudo completar la verificación. Vuelve a iniciar sesión en este navegador o consulta con tu administrador.";
         }
       }
-      return pageFor(
-        { id, email: pending.email, notice },
-        tenantBrandingFromHeader(
-          request.headers.get("x-savia-tenant-branding"),
-        ),
-      );
+      return pageFor({ id, email: pending.email, notice }, branding);
     });
   return {
     [`${provider}EmailVerification`]: route(base, "GET"),
