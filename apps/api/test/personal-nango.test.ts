@@ -2,6 +2,35 @@ import { describe, expect, it, vi } from "vitest";
 import { createPersonalIntegrationNangoClient } from "../src/personal-integrations/nango";
 
 describe("personal Nango proxy", () => {
+  it("completes a retry when deployed Nango returns unknown_connection", async () => {
+    const client = createPersonalIntegrationNangoClient(
+      { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+      async () =>
+        Response.json(
+          { error: { code: "unknown_connection" } },
+          { status: 400 },
+        ),
+    );
+    await expect(
+      client.deleteConnection("removed-connection", "jira"),
+    ).resolves.toBeUndefined();
+  });
+
+  it.each([
+    { error: { code: "invalid_provider_config" } },
+    { error: { code: "invalid_secret_key_format" } },
+    { code: "unknown_connection" },
+    null,
+  ])("keeps unrelated bad requests retryable: %j", async (body) => {
+    const client = createPersonalIntegrationNangoClient(
+      { baseUrl: "https://nango.example.test", apiKey: "test-key" },
+      async () => Response.json(body, { status: 400 }),
+    );
+    await expect(client.deleteConnection("connection", "jira")).rejects.toThrow(
+      "The personal integration request could not be completed",
+    );
+  });
+
   it("completes cleanup when a connection is already absent in Nango", async () => {
     const client = createPersonalIntegrationNangoClient(
       { baseUrl: "https://nango.example.test", apiKey: "test-key" },

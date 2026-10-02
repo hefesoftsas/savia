@@ -199,8 +199,21 @@ export function createPersonalIntegrationNangoClient(
         method: "DELETE",
         headers: headers(nango.apiKey),
       }).catch(() => undefined);
-      if (!response?.ok && response?.status !== 404)
-        throw new PersonalIntegrationUpstreamError();
+      if (response?.ok || response?.status === 404) return;
+      if (response?.status === 400) {
+        const payload: unknown = await response.json().catch(() => undefined);
+        if (payload && typeof payload === "object" && "error" in payload) {
+          const error = payload.error;
+          if (
+            error &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "unknown_connection"
+          )
+            return;
+        }
+      }
+      throw new PersonalIntegrationUpstreamError();
     },
 
     async proxy(request) {
