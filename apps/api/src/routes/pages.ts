@@ -1,7 +1,9 @@
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
+import { bodyLimit } from "hono/body-limit";
 import type { Context } from "hono";
 import { actorFromContext } from "../auth/middleware";
 import { PagesError, PagesService } from "../pages/service";
+import { exportPages, importPages } from "../pages/transfer";
 
 const errorResponse = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
@@ -58,6 +60,29 @@ const pageFileSchema = z.object({
   mimeType: z.string(),
   size: z.number().int(),
 });
+const transferPageSchema = z.object({
+  id: z.string(),
+  parentId: z.string().nullable(),
+  title: z.string(),
+  kind: z.enum(["page", "folder"]),
+  content: z.array(z.record(z.string(), z.unknown())),
+});
+const transferFileSchema = z.object({
+  id: z.string(),
+  pageId: z.string(),
+  name: z.string(),
+  mimeType: z.string(),
+  size: z.number().int(),
+  data: z.string(),
+});
+const archiveSchema = z.object({
+  format: z.literal("savia-pages"),
+  version: z.literal(1),
+  exportedAt: z.string(),
+  pages: z.array(transferPageSchema),
+  files: z.array(transferFileSchema),
+});
+const importArchiveSchema = archiveSchema.strict();
 const envelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
 const shareSchema = z.object({
   principalId: z.string().trim().min(1).max(128),
@@ -87,6 +112,73 @@ const response = <T extends z.ZodType>(schema: T, description: string) => ({
   409: {
     content: { "application/json": { schema: errorResponse } },
     description: "Version conflict",
+  },
+});
+
+const exportRoute = createRoute({
+  method: "get",
+  path: "/v1/pages/export",
+  tags: ["Pages"],
+  summary: "Export all pages owned by the caller with referenced attachments",
+  security: apiSecurity,
+  responses: {
+    200: {
+      content: { "application/json": { schema: envelope(archiveSchema) } },
+      description: "Portable Pages archive",
+    },
+    409: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Export source changed or contains unavailable content",
+    },
+    413: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Archive exceeds the size limit",
+    },
+    503: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Attachment storage is unavailable",
+    },
+  },
+});
+const importRoute = createRoute({
+  method: "post",
+  path: "/v1/pages/import",
+  tags: ["Pages"],
+  summary: "Import a portable Pages archive as private copies",
+  security: writeSecurity,
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: importArchiveSchema } },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: envelope(
+            z.object({
+              pages: z.number().int(),
+              folders: z.number().int(),
+              files: z.number().int(),
+            }),
+          ),
+        },
+      },
+      description: "Imported private copies",
+    },
+    400: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Archive is invalid",
+    },
+    413: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Archive exceeds the size limit",
+    },
+    503: {
+      content: { "application/json": { schema: errorResponse } },
+      description: "Attachment storage is unavailable",
+    },
   },
 });
 
@@ -374,6 +466,20 @@ export function registerPagesRoutes(
 ) {
   const service = (context: Context) =>
     new PagesService(db, actorFromContext(context));
+  app.use(
+    "/v1/pages/import",
+    bodyLimit({
+      maxSize: 50 * 1024 * 1024,
+      onError: () =>
+        error(
+          new PagesError(
+            413,
+            "ARCHIVE_TOO_LARGE",
+            "The Pages archive exceeds the 50 MB limit",
+          ),
+        ),
+    }),
+  );
   const noStore = async (c: Context, next: () => Promise<void>) => {
     await next();
     c.header("cache-control", "no-store");
@@ -385,6 +491,14 @@ export function registerPagesRoutes(
     route: unknown,
     handler: (context: Context) => Promise<Response>,
   ) => app.openapi(route as never, handler as never);
+  register(exportRoute, (c) =>
+    run(() => exportPages(db, actorFromContext(c), documents)),
+  );
+  register(importRoute, (c) =>
+    withBody<unknown>(c, (input) =>
+      run(() => importPages(db, actorFromContext(c), documents, input)),
+    ),
+  );
   register(listRoute, (c) =>
     run(() => service(c).list(c.req.query("q") ?? "")),
   );

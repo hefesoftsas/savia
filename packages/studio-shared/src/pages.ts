@@ -32,6 +32,33 @@ export type PlateNode = {
 
 export type PageDocument = PageSummary & { content: PlateNode[] };
 
+export type PagesArchive = {
+  format: "savia-pages";
+  version: 1;
+  exportedAt: string;
+  pages: Array<{
+    id: string;
+    parentId: string | null;
+    title: string;
+    kind: PageKind;
+    content: PlateNode[];
+  }>;
+  files: Array<{
+    id: string;
+    pageId: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    data: string;
+  }>;
+};
+
+export type PagesImportResult = {
+  pages: number;
+  folders: number;
+  files: number;
+};
+
 export type PageMember = {
   principalId: string;
   displayName: string;

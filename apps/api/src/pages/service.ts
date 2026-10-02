@@ -45,7 +45,7 @@ function versionConflict(message: string): PagesError {
   return new PagesError(409, "VERSION_CONFLICT", message);
 }
 
-function activeTenantScope(principal: string, tenant: string): string {
+export function activeTenantScope(principal: string, tenant: string): string {
   return `((${tenant}=0 AND
     (NOT EXISTS(SELECT 1 FROM identity_tenant_membership m WHERE m.principal_id=${principal} AND m.is_active=1) OR
      EXISTS(SELECT 1 FROM identity_tenant_membership m JOIN tenants t ON t.id=m.tenant_id AND t.is_active=1 WHERE m.principal_id=${principal} AND m.tenant_id=0 AND m.is_active=1))) OR
@@ -438,7 +438,10 @@ function bindingFrom(value: unknown): PageBinding | null {
   };
 }
 
-async function activeTenant(db: D1Database, actor: AppActor): Promise<number> {
+export async function activeTenant(
+  db: D1Database,
+  actor: AppActor,
+): Promise<number> {
   const membership = actor.memberships.find((item) => item.isActive);
   const activePrincipal = await db
     .prepare("SELECT 1 FROM identity_principal WHERE id=? AND is_active=1")

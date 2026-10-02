@@ -7,6 +7,7 @@ import {
   Link,
 } from "react-router-dom";
 import type { AppServices } from "@/app-services";
+import { ApiClientError } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { useMessages } from "@/i18n/core";
 import {
@@ -36,16 +38,22 @@ import {
   Users,
   ChevronRight,
   Download,
+  Upload,
 } from "lucide-react";
 import { pagesMessages } from "./messages";
-import { PagesClient, type PageDocument, type PageSummary } from "./client";
+import {
+  PagesClient,
+  type PageDocument,
+  type PageSummary,
+  type PagesArchive,
+} from "./client";
 import { PageSaveQueue } from "./save-queue";
 import { PageEditor } from "./editor";
 import { SharePanel } from "./share-panel";
 import { HistoryWorkspace } from "./history-workspace";
 import { RecordProperties } from "./record-properties";
 import type { Value } from "platejs";
-import { subscribePageChanges } from "./page-events";
+import { publishPageChange, subscribePageChanges } from "./page-events";
 import { exportPageMarkdown } from "./markdown-export";
 import { useIssueProviders, type IssueProvider } from "./use-issue-providers";
 import {
@@ -56,6 +64,43 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import "./pages.css";
+
+const MAX_PAGES_ARCHIVE_BYTES = 50 * 1024 * 1024;
+
+function isPagesArchive(value: unknown): value is PagesArchive {
+  if (!value || typeof value !== "object") return false;
+  const archive = value as Record<string, unknown>;
+  return (
+    archive.format === "savia-pages" &&
+    archive.version === 1 &&
+    typeof archive.exportedAt === "string" &&
+    Array.isArray(archive.pages) &&
+    archive.pages.every((page) => {
+      if (!page || typeof page !== "object") return false;
+      const item = page as Record<string, unknown>;
+      return (
+        typeof item.id === "string" &&
+        (typeof item.parentId === "string" || item.parentId === null) &&
+        typeof item.title === "string" &&
+        (item.kind === "page" || item.kind === "folder") &&
+        Array.isArray(item.content)
+      );
+    }) &&
+    Array.isArray(archive.files) &&
+    archive.files.every((file) => {
+      if (!file || typeof file !== "object") return false;
+      const item = file as Record<string, unknown>;
+      return (
+        typeof item.id === "string" &&
+        typeof item.pageId === "string" &&
+        typeof item.name === "string" &&
+        typeof item.mimeType === "string" &&
+        typeof item.size === "number" &&
+        typeof item.data === "string"
+      );
+    })
+  );
+}
 
 export function PagesPage({
   services,
@@ -78,6 +123,13 @@ export function PagesPage({
     [error, setError] = useState(false),
     [busy, setBusy] = useState(false),
     [generation, setGeneration] = useState(0);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false),
+    [archiveFile, setArchiveFile] = useState<File | null>(null),
+    [archiveBusy, setArchiveBusy] = useState(false),
+    [exportingArchive, setExportingArchive] = useState(false),
+    [archiveError, setArchiveError] = useState<string | null>(null),
+    [archiveNotice, setArchiveNotice] = useState<string | null>(null);
+  const archiveInput = useRef<HTMLInputElement>(null);
   const canLeave = useRef<() => boolean>(() => true);
   const bindingRequests = useMemo(
     () => new Map<string, Promise<PageSummary>>(),
@@ -223,6 +275,100 @@ export function PagesPage({
     };
   }, [pageId, requestKind, requestParent, client, navigate, t, refresh]);
   const byId = new Map(pages.map((page) => [page.id, page]));
+  async function exportAllPages() {
+    setArchiveBusy(true);
+    setExportingArchive(true);
+    setArchiveNotice(null);
+    setArchiveError(null);
+    try {
+      const archive = await client.exportAll();
+      const blob = new Blob([JSON.stringify(archive)], {
+        type: "application/json;charset=utf-8",
+      });
+      if (blob.size > MAX_PAGES_ARCHIVE_BYTES) {
+        setArchiveError(t("Archive too large"));
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = "my-pages.savia-pages.json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setArchiveNotice(t("Pages exported"));
+    } catch (failure) {
+      setArchiveError(
+        failure instanceof ApiClientError &&
+          (failure.status === 413 || failure.code === "ARCHIVE_TOO_LARGE")
+          ? t("Archive too large")
+          : t("Could not export pages"),
+      );
+    } finally {
+      setExportingArchive(false);
+      setArchiveBusy(false);
+    }
+  }
+  async function importPages() {
+    if (!archiveFile) {
+      setArchiveError(t("Select archive first"));
+      return;
+    }
+    if (archiveFile.size > MAX_PAGES_ARCHIVE_BYTES) {
+      setArchiveError(t("Archive too large"));
+      if (archiveInput.current) archiveInput.current.value = "";
+      return;
+    }
+    setArchiveBusy(true);
+    setArchiveError(null);
+    try {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await archiveFile.text());
+      } catch {
+        setArchiveError(t("Invalid archive JSON"));
+        if (archiveInput.current) archiveInput.current.value = "";
+        return;
+      }
+      if (!isPagesArchive(parsed)) {
+        setArchiveError(t("Invalid archive format"));
+        if (archiveInput.current) archiveInput.current.value = "";
+        return;
+      }
+      const result = await client.importArchive(parsed);
+      setQuery("");
+      setArchiveNotice(
+        t("Pages imported", {
+          pages: result.pages,
+          folders: result.folders,
+          files: result.files,
+        }),
+      );
+      setArchiveDialogOpen(false);
+      setArchiveFile(null);
+      if (archiveInput.current) archiveInput.current.value = "";
+      publishPageChange({ api: services.apiClient });
+      await refresh();
+    } catch (failure) {
+      setArchiveError(
+        failure instanceof ApiClientError &&
+          (failure.status === 413 || failure.code === "ARCHIVE_TOO_LARGE")
+          ? t("Archive too large")
+          : failure instanceof ApiClientError &&
+              failure.code === "INVALID_ARCHIVE"
+            ? t("Invalid archive format")
+            : t("Could not import pages"),
+      );
+      if (archiveInput.current) archiveInput.current.value = "";
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+  function closeArchiveDialog() {
+    setArchiveDialogOpen(false);
+    setArchiveError(null);
+    setArchiveFile(null);
+    if (archiveInput.current) archiveInput.current.value = "";
+  }
   const ancestors: PageSummary[] = [];
   let parent = document?.parentId;
   const seen = new Set<string>();
@@ -310,8 +456,70 @@ export function PagesPage({
                   <Plus size={16} />
                   {t("New page")}
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={t("Pages options")}
+                      disabled={busy || archiveBusy}
+                    >
+                      <MoreHorizontal size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      disabled={archiveBusy}
+                      onSelect={() => void exportAllPages()}
+                    >
+                      <Download size={16} />
+                      {t("Export all my pages")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={archiveBusy}
+                      onSelect={() => {
+                        setArchiveError(null);
+                        setArchiveNotice(null);
+                        setArchiveDialogOpen(true);
+                      }}
+                    >
+                      <Upload size={16} />
+                      {t("Import pages")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
+            {archiveNotice && (
+              <p className="mb-3 text-sm text-muted-foreground" role="status">
+                {archiveNotice}
+              </p>
+            )}
+            {exportingArchive && (
+              <p
+                className="mb-3 text-sm text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                {t("Exporting pages")}
+              </p>
+            )}
+            {archiveError && !archiveDialogOpen && (
+              <div
+                className="mb-3 flex flex-wrap items-center gap-3 text-sm text-destructive"
+                role="alert"
+              >
+                {archiveError}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void exportAllPages()}
+                  disabled={archiveBusy}
+                >
+                  {t("Retry")}
+                </Button>
+              </div>
+            )}
             <div className="pages-search">
               <Search size={16} aria-hidden />
               <Input
@@ -337,6 +545,74 @@ export function PagesPage({
                 empty={query ? t("No results") : t("Empty")}
               />
             )}
+            <Dialog
+              open={archiveDialogOpen}
+              onOpenChange={(open) => {
+                if (archiveBusy) return;
+                if (open) setArchiveDialogOpen(true);
+                else closeArchiveDialog();
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("Import pages")}</DialogTitle>
+                  <DialogDescription>
+                    {t("Import pages description")}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                  <label
+                    className="text-sm font-medium"
+                    htmlFor="pages-archive-file"
+                  >
+                    {t("Choose archive")}
+                  </label>
+                  <Input
+                    ref={archiveInput}
+                    id="pages-archive-file"
+                    type="file"
+                    accept=".savia-pages.json,application/json,.json"
+                    disabled={archiveBusy}
+                    aria-describedby="pages-archive-hint"
+                    onChange={(event) => {
+                      setArchiveFile(event.currentTarget.files?.[0] ?? null);
+                      setArchiveError(null);
+                    }}
+                  />
+                  <p
+                    id="pages-archive-hint"
+                    className="text-sm text-muted-foreground"
+                  >
+                    {t("Import pages hint")}
+                  </p>
+                  {archiveFile && (
+                    <p className="break-all text-sm text-muted-foreground">
+                      {t("Selected archive")}: {archiveFile.name}
+                    </p>
+                  )}
+                  {archiveError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {archiveError}
+                    </p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    disabled={archiveBusy}
+                    onClick={closeArchiveDialog}
+                  >
+                    {t("Cancel")}
+                  </Button>
+                  <Button
+                    disabled={archiveBusy || !archiveFile}
+                    onClick={() => void importPages()}
+                  >
+                    {archiveBusy ? t("Importing pages") : t("Import archive")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </section>
